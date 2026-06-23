@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — General Ledger</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>General Ledger</h1>
+      <p>Double-entry journal entries auto-posted by each step, the trial balance, and the chart of accounts.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="flow-nav" id="glTabs" style="border:none;">
+      <a class="flow-tab active" data-tab="tb" onclick="showTab('tb')">Trial Balance</a>
+      <a class="flow-tab" data-tab="journal" onclick="showTab('journal')">Journal</a>
+      <a class="flow-tab" data-tab="coa" onclick="showTab('coa')">Chart of Accounts</a>
+      <button class="btn btn-sm btn-secondary" style="margin-left:auto;" onclick="loadAll()">Refresh</button>
+    </div>
+
+    <div id="tab-tb" class="chart-card">
+      <div id="tbStatus" style="font-size:0.85rem;font-weight:700;margin-bottom:0.6rem;"></div>
+      <div id="tbContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+
+    <div id="tab-journal" class="chart-card" style="display:none;">
+      <div class="flow-actions">
+        <label style="font-size:0.78rem;color:var(--text-muted,#64748b);">Filter source:</label>
+        <select id="srcFilter" onchange="renderJournal()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--surface-2,#1e293b);color:var(--text-primary,#f1f5f9);">
+          <option value="">All</option>
+          <option value="PO">Purchase Order</option>
+          <option value="APPAY">AP Payment</option>
+          <option value="MR">Materials Receiving</option>
+          <option value="INV">Invoice</option>
+        </select>
+      </div>
+      <div id="journalContainer" style="overflow-x:auto;"></div>
+    </div>
+
+    <div id="tab-coa" class="chart-card" style="display:none;">
+      <div id="coaContainer" style="overflow-x:auto;"></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-ledger.js"></script>
+</body>
+</html>

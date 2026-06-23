@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Accounting</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .acc-so { border: 1px solid var(--border, #334155); border-radius: 10px; margin-bottom: 0.6rem; overflow: hidden; }
+    .acc-so-head { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr 0.9fr 0.9fr 0.9fr 0.5rem; gap: 0.5rem; align-items: center; padding: 0.7rem 0.9rem; cursor: pointer; }
+    .acc-so-head:hover { background: rgba(59,130,246,0.05); }
+    .acc-so-head .so-no { font-weight: 700; color: var(--text-primary, #f1f5f9); }
+    .acc-so-head .lbl { font-size: 0.66rem; text-transform: uppercase; color: var(--text-muted, #64748b); display: block; }
+    .acc-so-body { display: none; padding: 0.5rem 0.9rem 1rem; border-top: 1px solid var(--border, #334155); }
+    .acc-so.open .acc-so-body { display: block; }
+    .acc-sec { margin-top: 0.9rem; }
+    .acc-sec h4 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--accent, #3b82f6); margin-bottom: 0.35rem; font-weight: 700; }
+    .acc-sub { margin: 0.4rem 0 0.4rem 0.9rem; padding-left: 0.6rem; border-left: 2px solid var(--border, #334155); }
+    .acc-chevron { transition: transform .15s; }
+    .acc-so.open .acc-chevron { transform: rotate(90deg); }
+    .acc-muted { color: var(--text-muted, #64748b); }
+    .acc-summary { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 0.6rem; font-weight: 700; }
+    .acc-summary span small { display: block; font-size: 0.66rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted, #64748b); }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Accounting</h1>
+      <p>Full detail of every Sales Order across the whole flow — quotation, procurement, payables, receiving, invoice and journal. Read-only.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="inv-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.25rem;">
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiCount">--</div><div style="font-size:0.7rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Sales Orders</div></div>
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiSales">--</div><div style="font-size:0.7rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Total Sales</div></div>
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiCogs">--</div><div style="font-size:0.7rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Total COGS</div></div>
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiGp">--</div><div style="font-size:0.7rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Gross Profit</div></div>
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiAp">--</div><div style="font-size:0.7rem;color:var(--text-muted,#64748b);text-transform:uppercase;">AP Outstanding</div></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <input type="text" id="search" placeholder="Search SO no., customer, quotation, PO..." oninput="render()" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--surface-2,#1e293b);color:var(--text-primary,#f1f5f9);">
+        <button class="btn btn-sm btn-secondary" onclick="loadAll()">Refresh</button>
+      </div>
+      <div id="container"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-accounting.js"></script>
+</body>
+</html>

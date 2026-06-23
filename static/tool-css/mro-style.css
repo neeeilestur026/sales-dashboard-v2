@@ -1,0 +1,5 @@
+/* MRO-specific overrides — variables and base from tool-shared.css */
+body { background-color: #f8fafc; }
+.card { border-radius: 12px; }
+.table th, .table td { vertical-align: middle; }
+pre { background-color: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; }

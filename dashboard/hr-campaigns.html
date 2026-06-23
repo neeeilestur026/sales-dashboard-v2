@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing — Marketing Campaigns</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .camp-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .camp-form .full { grid-column: 1 / -1; }
+    .camp-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .camp-form input, .camp-form select, .camp-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .camp-form textarea { resize: vertical; min-height: 60px; }
+    .camp-form input:focus, .camp-form select:focus, .camp-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .camp-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .camp-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .camp-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .camp-table tr:hover td { background: #e2e8f0; }
+    .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .status-planning { background: rgba(148,163,184,0.12); color: #94a3b8; }
+    .status-active { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .status-paused { background: rgba(234,179,8,0.12); color: #eab308; }
+    .status-completed { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .channel-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: rgba(249,115,22,0.12); color: #f97316; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+    .mini-stat { background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }
+    .mini-stat .num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
+    .mini-stat .lbl { font-size: 0.68rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-bar select { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select:focus { outline: none; border-color: var(--accent, #f97316); }
+    @media(max-width: 640px) { .camp-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Marketing Campaigns</h1>
+      <p>Plan, track, and measure marketing campaign performance.</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-cards">
+      <div class="mini-stat"><div class="num" id="statActive">-</div><div class="lbl">Active Campaigns</div></div>
+      <div class="mini-stat"><div class="num" id="statBudget">-</div><div class="lbl">Total Budget</div></div>
+      <div class="mini-stat"><div class="num" id="statSpend">-</div><div class="lbl">Total Spend</div></div>
+      <div class="mini-stat"><div class="num" id="statLeads">-</div><div class="lbl">Total Leads</div></div>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Campaign
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="campForm" onsubmit="submitCampaign(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="camp-form">
+            <div>
+              <label for="campName">Campaign Name <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="campName" placeholder="e.g. Summer Social Blitz" required>
+            </div>
+            <div>
+              <label for="campChannel">Channel <span style="color:#ef4444;">*</span></label>
+              <select id="campChannel" required>
+                <option value="">Select channel...</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Email">Email</option>
+                <option value="Print">Print</option>
+                <option value="Events">Events</option>
+                <option value="Digital">Digital</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="campStartDate">Start Date</label>
+              <input type="date" id="campStartDate">
+            </div>
+            <div>
+              <label for="campEndDate">End Date</label>
+              <input type="date" id="campEndDate">
+            </div>
+            <div>
+              <label for="campBudget">Budget</label>
+              <input type="number" id="campBudget" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div>
+              <label for="campSpend">Spend</label>
+              <input type="number" id="campSpend" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div>
+              <label for="campLeads">Leads Generated</label>
+              <input type="number" id="campLeads" placeholder="0" min="0" step="1">
+            </div>
+            <div>
+              <label for="campStatus">Status</label>
+              <select id="campStatus">
+                <option value="Planning">Planning</option>
+                <option value="Active">Active</option>
+                <option value="Paused">Paused</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+            <div class="full">
+              <label for="campNotes">Notes</label>
+              <textarea id="campNotes" placeholder="Campaign details, goals, target audience..."></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Add Campaign</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Filter Bar & Campaign Table -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Campaigns</h3>
+      <div class="filter-bar">
+        <select id="filterStatus" onchange="filterCampaigns()">
+          <option value="">All Statuses</option>
+          <option value="Planning">Planning</option>
+          <option value="Active">Active</option>
+          <option value="Paused">Paused</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <select id="filterChannel" onchange="filterCampaigns()">
+          <option value="">All Channels</option>
+          <option value="Social Media">Social Media</option>
+          <option value="Email">Email</option>
+          <option value="Print">Print</option>
+          <option value="Events">Events</option>
+          <option value="Digital">Digital</option>
+        </select>
+      </div>
+      <div id="campContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-campaigns.js"></script>
+</body>
+</html>

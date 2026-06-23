@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR & Marketing — Daily Report</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .report-container { max-width: 1000px; margin: 0 auto; }
+    .section-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1.25rem; margin-bottom:1.25rem; }
+    .section-title { font-size:.85rem; font-weight:700; color:var(--text-primary,#f1f5f9); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.75rem; display:flex; align-items:center; gap:.5rem; }
+    .section-title .count-pill { background:rgba(59,130,246,.15); color:#60a5fa; padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:600; margin-left:auto; }
+    .feed-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    .feed-table th { text-align:left; padding:.5rem .5rem; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#334155); font-weight:600; font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+    .feed-table td { padding:.55rem .5rem; border-bottom:1px solid rgba(148,163,184,.1); color:var(--text-primary,#e2e8f0); vertical-align:top; }
+    .feed-table tr:last-child td { border-bottom:none; }
+    .empty-state { padding:1rem; text-align:center; color:var(--text-muted,#64748b); font-size:.82rem; font-style:italic; }
+    .status-pill { display:inline-block; padding:.15rem .55rem; border-radius:999px; font-size:.7rem; font-weight:600; background:rgba(148,163,184,.15); color:#cbd5e1; }
+    .status-completed,.status-done,.status-approved,.status-published { background:rgba(34,197,94,.15); color:#4ade80; }
+    .status-pending,.status-in-progress,.status-draft { background:rgba(251,191,36,.15); color:#fbbf24; }
+    .status-rejected,.status-cancelled { background:rgba(239,68,68,.15); color:#f87171; }
+    .notes-textarea { width:100%; padding:.75rem; background:var(--bg-primary,#0f172a); border:1px solid var(--border,#334155); border-radius:8px; color:var(--text-primary,#f1f5f9); font-size:.88rem; font-family:inherit; resize:vertical; min-height:120px; box-sizing:border-box; }
+    .submitted-banner { background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.3); border-radius:10px; padding:1rem 1.25rem; margin-bottom:1.25rem; color:#22c55e; font-weight:600; display:none; }
+    .form-msg { margin-top:1rem; font-size:.85rem; font-weight:500; text-align:center; }
+    .form-msg.success { color:#22c55e; }
+    .form-msg.error { color:#ef4444; }
+    .btn-submit { display:block; width:100%; padding:.85rem; background:var(--primary,#3b82f6); color:#fff; border:none; border-radius:8px; font-size:.95rem; font-weight:600; cursor:pointer; margin-top:.5rem; }
+    .btn-submit:hover { opacity:.9; }
+    .btn-submit:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-refresh { background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.3); color:#60a5fa; padding:.45rem .85rem; border-radius:6px; font-size:.8rem; font-weight:500; cursor:pointer; }
+    .page-header-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; }
+    .summary-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.75rem; margin-bottom:1.25rem; }
+    .summary-tile { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:10px; padding:.75rem .9rem; }
+    .summary-tile .label { font-size:.7rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:.05em; }
+    .summary-tile .value { font-size:1.35rem; font-weight:700; color:var(--text-primary,#f1f5f9); margin-top:.2rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="report-container">
+      <div class="page-header-row">
+        <div>
+          <h1 style="margin:0;">HR & Marketing Daily Report</h1>
+          <p id="reportDate" style="margin:.25rem 0 0; color:var(--text-muted,#94a3b8);"></p>
+        </div>
+        <button type="button" class="btn-refresh" id="refreshBtn">Refresh</button>
+      </div>
+
+      <div id="submittedBanner" class="submitted-banner">
+        You have already submitted today's report. The data below is live for reference.
+      </div>
+
+      <div class="summary-row" id="summaryRow"></div>
+
+      <div class="section-card">
+        <div class="section-title">Recruitment Pipeline <span class="count-pill" id="recCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Candidate</th><th>Position</th><th>Stage</th><th>Notes</th></tr></thead>
+          <tbody id="recBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Onboarding <span class="count-pill" id="onbCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Employee</th><th>Position</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody id="onbBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">HR Tasks <span class="count-pill" id="tasksCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody id="tasksBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Memos <span class="count-pill" id="memoCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Title</th><th>Type</th><th>Target</th><th>Priority</th></tr></thead>
+          <tbody id="memoBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Marketing Campaigns <span class="count-pill" id="campCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Name</th><th>Channel</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody id="campBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Content Calendar <span class="count-pill" id="contentCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Title</th><th>Platform</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody id="contentBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Sent Emails (GoDaddy) <span class="count-pill" id="emailCount">0</span></div>
+        <div style="overflow-x:auto;"><table class="feed-table">
+          <thead><tr><th>Time</th><th>Recipient</th><th>Subject</th></tr></thead>
+          <tbody id="emailBody"></tbody>
+        </table></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">Notes / Other Tasks</div>
+        <textarea id="notesField" class="notes-textarea" placeholder="Interviews, walk-ins, escalations, marketing notes, follow-ups..."></textarea>
+      </div>
+
+      <button type="button" class="btn-submit" id="submitBtn">Submit Daily Report</button>
+      <div id="formMsg" class="form-msg"></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-daily-report.js"></script>
+</body>
+</html>

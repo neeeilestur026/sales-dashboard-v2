@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing — Grievances &amp; Complaints</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .grv-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .grv-form .full { grid-column: 1 / -1; }
+    .grv-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .grv-form input, .grv-form select, .grv-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .grv-form textarea { resize: vertical; min-height: 60px; }
+    .grv-form input:focus, .grv-form select:focus, .grv-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .grv-form .checkbox-row { display: flex; align-items: center; gap: 0.5rem; }
+    .grv-form .checkbox-row input[type="checkbox"] { width: auto; }
+    .grv-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .grv-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .grv-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .grv-table tr:hover td { background: #e2e8f0; }
+    .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .status-open { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .status-investigation { background: rgba(234,179,8,0.12); color: #eab308; }
+    .status-resolved { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .status-dismissed { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .cat-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .cat-workplace { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .cat-harassment { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .cat-compensation { background: rgba(234,179,8,0.12); color: #eab308; }
+    .cat-policy { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .cat-general { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .edit-only { display: none; }
+    .edit-only.visible { display: block; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent, #f97316); }
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+    .mini-stat { background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }
+    .mini-stat .num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
+    .mini-stat .lbl { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
+    @media(max-width: 640px) { .grv-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Grievances &amp; Complaints</h1>
+      <p>Submit, track, and resolve employee grievances and workplace complaints.</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-cards" id="statsRow">
+      <div class="mini-stat"><div class="num" id="statOpen">-</div><div class="lbl">Open</div></div>
+      <div class="mini-stat"><div class="num" id="statInvestigation">-</div><div class="lbl">Under Investigation</div></div>
+      <div class="mini-stat"><div class="num" id="statResolved">-</div><div class="lbl">Resolved</div></div>
+      <div class="mini-stat"><div class="num" id="statDismissed">-</div><div class="lbl">Dismissed</div></div>
+    </div>
+
+    <!-- Submit Grievance Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Submit Grievance
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="grievanceForm" onsubmit="submitGrievance(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="grv-form">
+            <div class="full">
+              <label for="grvSubject">Subject <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="grvSubject" placeholder="e.g. Unfair overtime policy" required>
+            </div>
+            <div class="full">
+              <label for="grvDescription">Description <span style="color:#ef4444;">*</span></label>
+              <textarea id="grvDescription" placeholder="Describe the grievance in detail..." required style="min-height:120px;"></textarea>
+            </div>
+            <div>
+              <label for="grvSubmittedBy">Submitted By</label>
+              <input type="text" id="grvSubmittedBy" placeholder="Your name">
+            </div>
+            <div>
+              <label for="grvCategory">Category</label>
+              <select id="grvCategory">
+                <option value="Workplace">Workplace</option>
+                <option value="Harassment">Harassment</option>
+                <option value="Compensation">Compensation</option>
+                <option value="Policy">Policy</option>
+                <option value="General">General</option>
+              </select>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <div class="checkbox-row">
+                <input type="checkbox" id="grvAnonymous">
+                <label for="grvAnonymous" style="margin-bottom:0;cursor:pointer;">Submit Anonymously</label>
+              </div>
+            </div>
+
+            <!-- Edit-only fields -->
+            <div class="edit-only" id="editFieldStatus">
+              <label for="grvStatus">Status</label>
+              <select id="grvStatus">
+                <option value="Open">Open</option>
+                <option value="Under Investigation">Under Investigation</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Dismissed">Dismissed</option>
+              </select>
+            </div>
+            <div class="edit-only" id="editFieldAssigned">
+              <label for="grvAssignedTo">Assigned To</label>
+              <input type="text" id="grvAssignedTo" placeholder="e.g. HR Manager">
+            </div>
+            <div class="edit-only full" id="editFieldResolution">
+              <label for="grvResolution">Resolution</label>
+              <textarea id="grvResolution" placeholder="Describe the resolution..."></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Submit Grievance</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Grievance Table -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Grievances</h3>
+      <div class="filter-bar">
+        <select id="filterStatus" onchange="filterGrievances()">
+          <option value="">All Statuses</option>
+          <option value="Open">Open</option>
+          <option value="Under Investigation">Under Investigation</option>
+          <option value="Resolved">Resolved</option>
+          <option value="Dismissed">Dismissed</option>
+        </select>
+        <select id="filterCategory" onchange="filterGrievances()">
+          <option value="">All Categories</option>
+          <option value="Workplace">Workplace</option>
+          <option value="Harassment">Harassment</option>
+          <option value="Compensation">Compensation</option>
+          <option value="Policy">Policy</option>
+          <option value="General">General</option>
+        </select>
+      </div>
+      <div id="grievanceContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-grievances.js"></script>
+</body>
+</html>

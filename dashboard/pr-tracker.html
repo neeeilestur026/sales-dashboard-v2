@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Dashboard — PR Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .tracker-toolbar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .tracker-toolbar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+    }
+    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted, #64748b); }
+    .tracker-toolbar select {
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .tracker-table-wrap { overflow-x: auto; }
+    .tracker-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .tracker-table th {
+      text-align: left;
+      padding: 0.65rem 0.9rem;
+      color: var(--text-muted, #64748b);
+      border-bottom: 1px solid var(--border, #334155);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tracker-table td {
+      padding: 0.7rem 0.9rem;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: middle;
+      color: var(--text-primary, #f1f5f9);
+    }
+    .tracker-table tr:hover td { background: #e2e8f0; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-pending      { background: rgba(234,179,8,0.15);   color: #eab308; }
+    .badge-for-pricing   { background: rgba(59,130,246,0.15);  color: #3b82f6; }
+    .badge-for-quotation { background: rgba(168,85,247,0.15);  color: #a855f7; }
+    .badge-approved      { background: rgba(34,197,94,0.2);    color: #22c55e; }
+    .badge-rejected      { background: rgba(239,68,68,0.15);   color: #ef4444; }
+    .days-badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .days-fresh  { background: rgba(34,197,94,0.12);  color: #22c55e; }
+    .days-ok     { background: rgba(234,179,8,0.12);  color: #eab308; }
+    .days-old    { background: rgba(249,115,22,0.12); color: #f97316; }
+    .days-stale  { background: rgba(239,68,68,0.12);  color: #ef4444; }
+    .tracker-count {
+      font-size: 0.8rem;
+      color: var(--text-muted, #64748b);
+      margin-bottom: 0.75rem;
+    }
+    .no-results {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted, #64748b);
+    }
+    .status-select {
+      display: inline-block;
+      padding: 0.2rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      text-align: center;
+      min-width: 70px;
+    }
+    .status-select.badge-pending      { background: rgba(234,179,8,0.15);   color: #eab308; }
+    .status-select.badge-for-pricing   { background: rgba(59,130,246,0.15);  color: #3b82f6; }
+    .status-select.badge-for-quotation { background: rgba(168,85,247,0.15);  color: #a855f7; }
+    .status-select.badge-approved      { background: rgba(34,197,94,0.2);    color: #22c55e; }
+    .status-select.badge-rejected      { background: rgba(239,68,68,0.15);   color: #ef4444; }
+    .status-select option { background: #1e293b; color: #f1f5f9; }
+    .followup-input {
+      background: transparent;
+      border: 1px solid var(--border, #334155);
+      border-radius: 6px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.78rem;
+      padding: 0.2rem 0.4rem;
+      cursor: pointer;
+      width: 120px;
+    }
+    .followup-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+    .followup-due { background: rgba(239,68,68,0.1); }
+    .followup-due .followup-input { border-color: #ef4444; color: #ef4444; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>PR Tracker — All Agents</h1>
+      <p>Track all Purchase Requests across all sales agents.</p>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div class="tracker-toolbar">
+        <input type="text" id="searchInput" placeholder="Search client, PR #, agent, or item..." oninput="applyFilters()">
+        <select id="agentFilter" onchange="applyFilters()">
+          <option value="">All Agents</option>
+        </select>
+        <select id="statusFilter" onchange="applyFilters()">
+          <option value="">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="For Pricing">For Pricing</option>
+          <option value="For Quotation">For Quotation</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+        <select id="dateRange" onchange="applyFilters()">
+          <option value="30d">Last 30 days</option>
+          <option value="7d">Last 7 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="year">This year</option>
+          <option value="all">All time</option>
+        </select>
+        <select id="archiveFilter" onchange="applyFilters()">
+          <option value="active">Active</option>
+          <option value="archive">Archive</option>
+          <option value="all">All</option>
+        </select>
+        <button class="btn" onclick="loadPRs()" title="Refresh">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+        <button class="btn" onclick="exportPRsExcel()" title="Export Excel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </button>
+      </div>
+
+      <div id="trackerCount" class="tracker-count"></div>
+
+      <div id="trackerContainer" class="tracker-table-wrap">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/pr-tracker.js"></script>
+</body>
+</html>

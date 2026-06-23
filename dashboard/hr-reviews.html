@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing — Performance Reviews</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .review-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .review-form .full { grid-column: 1 / -1; }
+    .review-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .review-form input, .review-form select, .review-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .review-form textarea { resize: vertical; min-height: 60px; }
+    .review-form input:focus, .review-form select:focus, .review-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .review-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .review-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .review-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .review-table tr:hover td { background: #e2e8f0; }
+    .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .status-draft { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .status-progress { background: rgba(234,179,8,0.12); color: #eab308; }
+    .status-completed { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .rating-badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; min-width: 2.2rem; text-align: center; }
+    .rating-low { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .rating-mid { background: rgba(234,179,8,0.15); color: #eab308; }
+    .rating-high { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent, #f97316); }
+    @media(max-width: 640px) { .review-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Performance Reviews</h1>
+      <p>Create and manage employee performance reviews, ratings, and feedback.</p>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Review
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="reviewForm" onsubmit="submitReview(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="review-form">
+            <div>
+              <label for="revEmployee">Employee Name <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="revEmployee" placeholder="e.g. Juan Dela Cruz" required>
+            </div>
+            <div>
+              <label for="revReviewer">Reviewer <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="revReviewer" placeholder="e.g. Maria Santos" required>
+            </div>
+            <div>
+              <label for="revPeriod">Period <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="revPeriod" placeholder="e.g. Q1 2026" required>
+            </div>
+            <div>
+              <label for="revRating">Overall Rating (1-5)</label>
+              <input type="number" id="revRating" min="1" max="5" step="0.5" placeholder="e.g. 4.5">
+            </div>
+            <div class="full">
+              <label for="revCategories">Category Scores</label>
+              <textarea id="revCategories" placeholder="e.g. Communication: 4, Teamwork: 5, Leadership: 3.5"></textarea>
+            </div>
+            <div class="full">
+              <label for="revStrengths">Strengths</label>
+              <textarea id="revStrengths" placeholder="Key strengths observed..."></textarea>
+            </div>
+            <div class="full">
+              <label for="revImprovements">Areas for Improvement</label>
+              <textarea id="revImprovements" placeholder="Areas that need development..."></textarea>
+            </div>
+            <div>
+              <label for="revStatus">Status</label>
+              <select id="revStatus">
+                <option value="Draft">Draft</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Add Review</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Reviews Table -->
+    <div class="chart-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);">All Reviews</h3>
+        <div id="reviewCount" style="font-size:0.8rem;color:var(--text-muted,#64748b);"></div>
+      </div>
+      <div class="filter-bar">
+        <select id="filterStatus" onchange="filterReviews()">
+          <option value="">All Statuses</option>
+          <option value="Draft">Draft</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <input type="text" id="filterPeriod" placeholder="Filter by period (e.g. Q1 2026)" oninput="filterReviews()">
+        <input type="text" id="searchInput" placeholder="Search by employee..." oninput="renderTable()">
+      </div>
+      <div id="reviewContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-reviews.js"></script>
+</body>
+</html>

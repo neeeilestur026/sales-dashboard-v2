@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: hi-escorp-portal
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --timeout 120 --workers 2
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: PO_GOOGLE_APPS_SCRIPT_URL
+        sync: false
+      - key: PR_GOOGLE_APPS_SCRIPT_URL
+        sync: false
+      - key: MRO_GOOGLE_APPS_SCRIPT_URL
+        sync: false
+      - key: QUOTATION_GOOGLE_APPS_SCRIPT_URL
+        sync: false
+      - key: MI_GOOGLE_APPS_SCRIPT_URL
+        sync: false
+      - key: INVENTORY_SHEET_ID
+        sync: false
+      - key: MRO_SHEET_ID
+        sync: false
+      - key: MI_SHEET_ID
+        sync: false
+      - key: DASHBOARD_APPS_SCRIPT_URL
+        sync: false
+      - key: PAYMENT_REQUEST_APPS_SCRIPT_URL
+        sync: false
+      - key: EMAIL_CRED_KEY
+        sync: false
+      - key: INTERNAL_SHARED_SECRET
+        sync: false
+      - key: GODADDY_IMAP_HOST
+        value: imap.secureserver.net

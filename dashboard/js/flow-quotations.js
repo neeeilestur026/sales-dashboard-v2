@@ -1,0 +1,319 @@
+/* flow-quotations.js — quotations that load items from inventory */
+let qInventory = [];
+let qList = [];
+let qSession = null;
+
+let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
+
+document.addEventListener('DOMContentLoaded', async () => {
+  qSession = requireQuotationAccess();
+  if (!qSession) return;
+  qIsOversight = qSession.role !== 'sales';
+  renderNavbar('flow-quotations');
+  // Only admin/accounting can open the rest of the flow — show the sub-nav to them.
+  if (qSession.role === 'admin' || qSession.role === 'accounting') renderFlowNav('flow-quotations.html');
+  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  await loadInventory();
+  addRow();
+  await loadQuotations();
+});
+
+async function loadInventory() {
+  try { const r = await fetchFlow('getInventory'); qInventory = (r && r.data) || []; }
+  catch (e) { qInventory = []; }
+}
+
+function itemOptions(selected) {
+  return '<option value="">— select item —</option>' + qInventory.map(i =>
+    `<option value="${flowEsc(i.itemNo)}"${i.itemNo === selected ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+}
+
+function addRow(item) {
+  const tb = document.getElementById('itemRows');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select onchange="onItemPick(this)">${itemOptions(item && item.itemNo)}</select></td>
+    <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
+    <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
+    <td class="num lineTotal">0.00</td>
+    <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
+  tb.appendChild(tr);
+  recalc();
+}
+
+function onItemPick(sel) { recalc(); }
+
+function recalc() {
+  let total = 0;
+  document.querySelectorAll('#itemRows tr').forEach(tr => {
+    const qty = flowNum(tr.children[1].querySelector('input').value);
+    const price = flowNum(tr.children[2].querySelector('input').value);
+    const lt = qty * price;
+    tr.querySelector('.lineTotal').textContent = lt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    total += lt;
+  });
+  document.getElementById('grandTotal').textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function collectItems() {
+  const items = [];
+  document.querySelectorAll('#itemRows tr').forEach(tr => {
+    const itemNo = tr.children[0].querySelector('select').value;
+    if (!itemNo) return;
+    const inv = qInventory.find(i => i.itemNo === itemNo);
+    items.push({
+      itemNo,
+      itemName: inv ? inv.description : itemNo,
+      qty: flowNum(tr.children[1].querySelector('input').value),
+      price: flowNum(tr.children[2].querySelector('input').value)
+    });
+  });
+  return items;
+}
+
+function toggleNewItem() {
+  const b = document.getElementById('newItemBox');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+}
+
+async function createInventoryItem() {
+  const payload = {
+    itemNo: document.getElementById('niItemNo').value.trim(),
+    description: document.getElementById('niDesc').value.trim(),
+    balance: document.getElementById('niBal').value || 0,
+    purchasePrice: document.getElementById('niPP').value || 0,
+    shippingCost: document.getElementById('niSC').value || 0,
+    currency: 'PHP'
+  };
+  if (!payload.itemNo || !payload.description) { flowMsg('niMsg', 'Item No and Description required.', false); return; }
+  try {
+    const res = await postFlow('addInventoryItem', payload);
+    if (!res.success) throw new Error(res.message);
+    flowMsg('niMsg', 'Added to inventory.', true);
+    await loadInventory();
+    document.querySelectorAll('#itemRows select').forEach(sel => {
+      const cur = sel.value; sel.innerHTML = itemOptions(cur);
+    });
+    document.getElementById('niItemNo').value = '';
+    document.getElementById('niDesc').value = '';
+  } catch (e) { flowMsg('niMsg', e.message, false); }
+}
+
+async function saveQuotation() {
+  const items = collectItems();
+  const customer = document.getElementById('customer').value.trim();
+  if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
+  if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
+  const btn = document.getElementById('saveBtn');
+  const quotationNo = document.getElementById('quotationNo').value;
+  const payload = {
+    quotationNo, customer, date: document.getElementById('date').value,
+    createdBy: qSession.name, items: JSON.stringify(items)
+  };
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const res = await postFlow(quotationNo ? 'updateQuotation' : 'createQuotation', payload);
+    if (!res.success) throw new Error(res.message);
+    flowMsg('formMsg', `${res.message} (${res.quotationNo || quotationNo})`, true);
+    resetForm();
+    await loadQuotations();
+  } catch (e) { flowMsg('formMsg', e.message, false); }
+  finally { btn.disabled = false; btn.textContent = 'Save Quotation'; }
+}
+
+function resetForm() {
+  document.getElementById('quotationNo').value = '';
+  document.getElementById('customer').value = '';
+  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('itemRows').innerHTML = '';
+  document.getElementById('formTitle').textContent = 'New Quotation';
+  document.getElementById('formMsg').style.display = 'none';
+  addRow();
+}
+
+async function loadQuotations() {
+  const c = document.getElementById('listContainer');
+  c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
+  try {
+    // Sales see only their own; oversight roles (admin/accounting/management/director) see all.
+    const params = qIsOversight ? {} : { createdBy: qSession.name };
+    const res = await fetchFlow('getQuotations', params);
+    qList = (res && res.data) || [];
+    if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
+    c.innerHTML = qIsOversight ? renderGroupedByRep() : renderQuotationTable(qList);
+  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+function quotationActions(q) {
+  const no = flowEsc(q.quotationNo);
+  const role = qSession.role, st = q.status || 'Draft';
+  const isSales = role === 'sales', isAdmin = role === 'admin';
+  const isMgmt = role === 'management' || role === 'director';
+  const editable = st === 'Draft' || st === 'Rejected';
+  const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.5rem;">${label}</button>`;
+  let a = `<button class="link-btn" onclick='openPdfModal("${no}")'>PDF</button>` + B(`openDocsModal("Quotation","${no}")`, 'Docs');
+  // Approver actions (in-page)
+  if (isAdmin && st === 'Pending Admin') a += B(`approveQuotationAction("${no}")`, 'Approve') + B(`rejectQuotationAction("${no}")`, 'Reject', 'del-btn');
+  if (isMgmt && st === 'Pending Management') a += B(`approveQuotationAction("${no}")`, 'Approve') + B(`rejectQuotationAction("${no}")`, 'Reject', 'del-btn');
+  // Owner (sales) workflow
+  if (isSales && editable) a += B(`submitQuotationAction("${no}")`, 'Submit') + B(`editQuotation("${no}")`, 'Edit') + B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
+  if (isSales && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
+  // Admin may still correct/edit any quotation
+  if (isAdmin) a += B(`editQuotation("${no}")`, 'Edit');
+  return a;
+}
+
+function quotationRow(q) {
+  const st = q.status || 'Draft';
+  const noteTip = (st === 'Rejected' && q.approvalNote) ? ` title="Reason: ${flowEsc(q.approvalNote)}"` : '';
+  const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
+  return `<tr><td>${flowEsc(q.quotationNo)}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
+    <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
+    <td class="num">${flowMoney(q.total, 'PHP')}</td><td>${q.items.length}</td>
+    <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+    <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
+}
+
+// ─── Approval actions ─────────────────────────────
+async function _qAction(action, no, extra) {
+  try {
+    const res = await postFlow(action, Object.assign({ quotationNo: no }, extra || {}));
+    if (!res.success) throw new Error(res.message);
+    await loadQuotations();
+  } catch (e) { alert(e.message); }
+}
+function submitQuotationAction(no) {
+  if (!confirm('Submit quotation ' + no + ' for approval?')) return;
+  _qAction('submitQuotationApproval', no);
+}
+function approveQuotationAction(no) { _qAction('approveQuotation', no); }
+function rejectQuotationAction(no) {
+  const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
+  if (reason === null) return;
+  _qAction('rejectQuotation', no, { reason });
+}
+function sendQuotationAction(no) {
+  if (!confirm('Mark quotation ' + no + ' as sent to the client?')) return;
+  _qAction('sendQuotation', no);
+}
+
+function renderQuotationTable(rows) {
+  return `<table class="flow-table"><thead><tr><th>Quotation No</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${rows.map(quotationRow).join('')}</tbody></table>`;
+}
+
+// Oversight: group all reps' quotations into collapsible sections (one per Created By).
+function renderGroupedByRep() {
+  const groups = {};
+  qList.forEach(q => { const k = q.createdBy || 'Unassigned'; (groups[k] = groups[k] || []).push(q); });
+  const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  return names.map((name, i) => {
+    const rows = groups[name];
+    const total = rows.reduce((s, q) => s + flowNum(q.total), 0);
+    return `<details class="rep-group"${i === 0 ? ' open' : ''}>
+      <summary><span class="rep-name">${flowEsc(name)}</span>
+        <span class="rep-meta">${rows.length} quotation(s) · ${flowMoney(total, 'PHP')}</span></summary>
+      <div style="overflow-x:auto;margin-top:0.5rem;">${renderQuotationTable(rows)}</div>
+    </details>`;
+  }).join('');
+}
+
+function editQuotation(no) {
+  const q = qList.find(x => x.quotationNo === no);
+  if (!q) return;
+  document.getElementById('quotationNo').value = q.quotationNo;
+  document.getElementById('customer').value = q.customer;
+  document.getElementById('date').value = flowDate(q.date);
+  document.getElementById('formTitle').textContent = 'Edit ' + q.quotationNo;
+  document.getElementById('itemRows').innerHTML = '';
+  (q.items || []).forEach(addRow);
+  if (!q.items || !q.items.length) addRow();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteQuotation(no) {
+  if (!confirm('Delete quotation ' + no + '?')) return;
+  try {
+    const res = await postFlow('deleteQuotation', { quotationNo: no });
+    if (!res.success) throw new Error(res.message);
+    await loadQuotations();
+  } catch (e) { alert(e.message); }
+}
+
+// ─── PDF generation ───────────────────────────────
+let pdfQuote = null;            // the quotation being printed
+const pdfImages = {};           // itemNo → data URL
+
+function openPdfModal(no) {
+  const q = qList.find(x => x.quotationNo === no);
+  if (!q) return;
+  pdfQuote = q;
+  Object.keys(pdfImages).forEach(k => delete pdfImages[k]);
+  document.getElementById('pdfQuotationNo').value = q.quotationNo;
+  document.getElementById('pdfModalSub').textContent = `${q.quotationNo} · ${q.customer} · ${q.items.length} item(s)`;
+  document.getElementById('pdfSubject').value = 'Quotation for ' + q.customer;
+  // restore remembered defaults (terms, signatory)
+  const d = flowLoadDefaults('quotation');
+  ['Address', 'Attention', 'Designation', 'Email', 'Validity', 'Delivery', 'Payment', 'Warranty',
+   'SigName', 'SigDesignation', 'SigViber', 'SigMobile', 'SigEmail'].forEach(f => {
+    const el = document.getElementById('pdf' + f);
+    if (el && d[f] !== undefined && d[f] !== '') el.value = d[f];
+  });
+  // item image pickers
+  document.getElementById('pdfItems').innerHTML = (q.items || []).map((it, i) => `
+    <div class="pdf-item-row">
+      <span class="grow">${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)} · ${flowNum(it.qty)} × ${flowMoney(it.price, 'PHP')}</span>
+      <input type="file" accept="image/png,image/jpeg" onchange="pickPdfImage(this, '${flowEsc(it.itemNo)}')">
+    </div>`).join('');
+  document.getElementById('pdfModalMsg').style.display = 'none';
+  document.getElementById('pdfModal').classList.add('open');
+}
+
+function closePdfModal() { document.getElementById('pdfModal').classList.remove('open'); }
+
+async function pickPdfImage(input, itemNo) {
+  const file = input.files && input.files[0];
+  if (!file) { delete pdfImages[itemNo]; return; }
+  if (file.size > 5 * 1024 * 1024) { flowMsg('pdfModalMsg', 'Image too large (max 5MB): ' + file.name, false); input.value = ''; return; }
+  try { pdfImages[itemNo] = await fileToDataURL(file); } catch (e) { /* ignore */ }
+}
+
+async function submitPdf() {
+  if (!pdfQuote) return;
+  const btn = document.getElementById('pdfGenBtn');
+  const g = id => document.getElementById('pdf' + id).value.trim();
+  const doc = {
+    address: g('Address'), attention: g('Attention'), designation: g('Designation'), email: g('Email'),
+    subject: g('Subject'), rfqNo: g('RfqNo'), note: g('Note'),
+    validity: g('Validity'), delivery: g('Delivery'), payment: g('Payment'), warranty: g('Warranty'),
+    sigName: g('SigName'), sigDesignation: g('SigDesignation'), sigViber: g('SigViber'),
+    sigMobile: g('SigMobile'), sigEmail: g('SigEmail'), descMode: document.getElementById('pdfDescMode').value
+  };
+  flowSaveDefaults('quotation', {
+    Address: doc.address, Attention: doc.attention, Designation: doc.designation, Email: doc.email,
+    Validity: doc.validity, Delivery: doc.delivery, Payment: doc.payment, Warranty: doc.warranty,
+    SigName: doc.sigName, SigDesignation: doc.sigDesignation, SigViber: doc.sigViber,
+    SigMobile: doc.sigMobile, SigEmail: doc.sigEmail
+  });
+  const payload = {
+    quotationNo: pdfQuote.quotationNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
+    vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc,
+    items: (pdfQuote.items || []).map(it => {
+      const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo));
+      return {
+        itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
+        description: (inv && inv.description) || it.itemName || '',  // multi-line desc from inventory
+        imageDataUrl: pdfImages[it.itemNo] || ''
+      };
+    })
+  };
+  btn.disabled = true; btn.textContent = 'Generating...';
+  try {
+    const { link } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
+      'quotationNo', pdfQuote.quotationNo, `Quotation_${pdfQuote.quotationNo}.pdf`);
+    flowMsg('pdfModalMsg', link ? 'PDF generated and saved to Drive.' : 'PDF generated (Drive save skipped — backend not configured).', true);
+    await loadQuotations();
+    if (link) setTimeout(closePdfModal, 900);
+  } catch (e) {
+    flowMsg('pdfModalMsg', e.message, false);
+  } finally { btn.disabled = false; btn.textContent = 'Generate & Save'; }
+}

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Dashboard — Home</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/training-mode.css">
+  <style>
+    /* ── Scoped redesign tokens (additive, don't touch styles.css) ─ */
+    .hero {
+      position: relative;
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.5rem;
+      background:
+        radial-gradient(1200px 200px at 0% 0%, rgba(251,146,60,0.10), transparent 60%),
+        radial-gradient(800px 200px at 100% 100%, rgba(99,102,241,0.10), transparent 60%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid var(--border, #e2e8f0);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .hero-row {
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 1rem;
+    }
+    .hero h1 {
+      font-size: 1.6rem; font-weight: 700; color: var(--text-primary);
+      margin: 0; letter-spacing: -0.01em;
+    }
+    .hero p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
+    .hero-meta { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .hero-pill {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.4rem 0.85rem; border-radius: 999px;
+      font-size: 0.78rem; font-weight: 600;
+      background: #fff; border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .hero-pill.warn { background: var(--warning-light); color: var(--warning); border-color: rgba(217,119,6,0.25); }
+    .hero-pill.ok   { background: var(--success-light); color: var(--success); border-color: rgba(22,163,74,0.25); }
+    .hero-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    /* KPI strip */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 0.85rem; margin-bottom: 1.5rem;
+    }
+    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    .kpi-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1rem 1.1rem;
+      box-shadow: var(--shadow-xs);
+      display: flex; flex-direction: column; gap: 0.4rem;
+      transition: var(--transition);
+    }
+    .kpi-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+    .kpi-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .kpi-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .kpi-value { font-size: 1.85rem; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+    .kpi-foot { font-size: 0.78rem; color: var(--text-muted); }
+
+    /* Section headings */
+    .sect-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 0.5rem 0 0.75rem;
+    }
+    .sect-head h2 {
+      font-size: 0.78rem; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em; margin: 0;
+    }
+    .sect-head .muted { font-size: 0.78rem; color: var(--text-muted); }
+
+    /* Two-column main layout */
+    .home-grid {
+      display: grid; grid-template-columns: 2fr 1fr;
+      gap: 1.25rem; align-items: start;
+    }
+    @media (max-width: 1100px) { .home-grid { grid-template-columns: 1fr; } }
+
+    /* App cards — refreshed */
+    .app-grid-v2 {
+      display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 0.85rem;
+    }
+    @media (max-width: 700px) { .app-grid-v2 { grid-template-columns: 1fr; } }
+    .acard {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem 1.1rem;
+      transition: var(--transition);
+      box-shadow: var(--shadow-xs);
+      display: flex; flex-direction: column; gap: 0.5rem;
+    }
+    .acard:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--border-strong); }
+    .acard-top {
+      display: flex; align-items: center; gap: 0.7rem;
+    }
+    .acard-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .acard-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+    .acard-desc { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
+    .acard-stat {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.8rem; color: var(--text-secondary);
+      padding: 0.45rem 0.6rem; background: var(--bg-inset);
+      border-radius: 8px; margin-top: 0.2rem;
+    }
+    .acard-stat .stat-number { font-weight: 700; color: var(--text-primary); }
+    .acard-cta {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+      padding: 0.5rem 0.9rem; border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600;
+      background: var(--accent); color: #fff !important;
+      transition: var(--transition); margin-top: 0.25rem;
+    }
+    .acard-cta:hover { background: var(--accent-hover); transform: translateX(2px); }
+    .acard-cta.subtle { background: var(--bg-inset); color: var(--text-primary) !important; }
+    .acard-cta.subtle:hover { background: var(--border); }
+
+    /* Side panel */
+    .side-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.1rem 1.2rem;
+      box-shadow: var(--shadow-xs); margin-bottom: 1rem;
+    }
+    .side-card h3 {
+      font-size: 0.88rem; font-weight: 700; color: var(--text-primary);
+      margin: 0 0 0.85rem; display: flex; align-items: center; gap: 0.45rem;
+    }
+    .side-card.alert {
+      border-color: rgba(220,38,38,0.3);
+      background: linear-gradient(180deg, var(--danger-light), #fff);
+    }
+    .side-card.alert h3 { color: var(--danger); }
+
+    .progress-row { margin-bottom: 0.95rem; }
+    .progress-row:last-child { margin-bottom: 0; }
+    .progress-label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.8rem; margin-bottom: 0.35rem; color: var(--text-secondary);
+    }
+    .progress-label strong { color: var(--text-primary); font-weight: 700; }
+    .progress-bar-bg {
+      width: 100%; height: 8px; border-radius: 999px;
+      background: var(--bg-inset); overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; border-radius: 999px;
+      transition: width 0.6s ease;
+      background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    }
+
+    .overdue-item {
+      padding: 0.55rem 0; border-bottom: 1px solid var(--border);
+      font-size: 0.82rem; display: flex; flex-direction: column; gap: 0.15rem;
+    }
+    .overdue-item:last-child { border-bottom: none; }
+    .overdue-item .name { font-weight: 600; color: var(--text-primary); }
+    .overdue-item .meta { color: var(--text-muted); font-size: 0.74rem; }
+    .overdue-item .due  { color: var(--danger); font-size: 0.74rem; font-weight: 600; }
+
+    .empty-mini {
+      font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-row">
+        <div>
+          <h1 class="greeting" id="greeting">Good morning!</h1>
+          <p id="todayLabel">Here's your sales hub overview.</p>
+        </div>
+        <div class="hero-meta">
+          <span class="hero-pill" id="reportPill">
+            <span class="dot"></span>
+            <span id="reportStatus">Loading…</span>
+          </span>
+          <a href="report.html" class="hero-pill" style="background:var(--accent);color:#fff;border-color:var(--accent);">
+            Submit Daily Report →
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI STRIP -->
+    <div class="kpi-grid stagger">
+      <div class="kpi-card">
+        <div class="kpi-head">
+          Quotations Today
+          <span class="kpi-icon" style="background:var(--accent-light);color:var(--accent-dark);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value" id="quotationToday">—</div>
+        <div class="kpi-foot">This month: <strong id="monthQuotations">—</strong></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          PRs Today
+          <span class="kpi-icon" style="background:#eef2ff;color:#6366f1;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value" id="prToday">—</div>
+        <div class="kpi-foot">This month: <strong id="monthPRs">—</strong></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          Clients
+          <span class="kpi-icon" style="background:#f3e8ff;color:#a855f7;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value" id="clientCount">—</div>
+        <div class="kpi-foot"><a href="clients.html" style="color:var(--accent);font-weight:600;">Manage clients →</a></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          Pending Actions
+          <span class="kpi-icon" style="background:#fffbeb;color:#d97706;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value" id="pendingCount">—</div>
+        <div class="kpi-foot"><a href="pending-items.html" style="color:var(--accent);font-weight:600;">View pending →</a></div>
+      </div>
+    </div>
+
+    <!-- MAIN GRID: APPS + SIDE PANEL -->
+    <div class="home-grid">
+      <!-- LEFT: APPS -->
+      <div>
+        <div class="sect-head">
+          <h2>Quick Actions</h2>
+          <span class="muted">Tools you use daily</span>
+        </div>
+        <div class="app-grid-v2 stagger">
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Purchase Requests</h3>
+                <p class="acard-desc">Request pricing for items from suppliers</p>
+              </div>
+            </div>
+            <div class="acard-stat">Request &rarr; sourcing &rarr; pricing &rarr; quote</div>
+            <a href="flow-pricing-request.html" class="acard-cta">New Purchase Request</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Quotations</h3>
+                <p class="acard-desc">Create quotations in the process flow</p>
+              </div>
+            </div>
+            <div class="acard-stat">Quote items &amp; generate PDFs</div>
+            <a href="flow-quotations.html" class="acard-cta">Open Quotations</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Inventory</h3>
+                <p class="acard-desc">Add &amp; browse item master</p>
+              </div>
+            </div>
+            <div class="acard-stat">Add items (removal is admin-only)</div>
+            <a href="flow-inventory.html" class="acard-cta">Open Inventory</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Quotation Generator</h3>
+                <p class="acard-desc">Send quotations to clients</p>
+              </div>
+            </div>
+            <div class="acard-stat"><span class="stat-number" id="quotationToday2">—</span> sent today</div>
+            <a id="quotationLink" href="#" target="_blank" class="acard-cta">Open App</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:#eef2ff;color:#6366f1;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">PR Generator</h3>
+                <p class="acard-desc">Create purchase requests</p>
+              </div>
+            </div>
+            <div class="acard-stat"><span class="stat-number" id="prToday2">—</span> sent today</div>
+            <a id="prLink" href="#" target="_blank" class="acard-cta">Open App</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:#f0fdf4;color:#16a34a;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Daily Report</h3>
+                <p class="acard-desc">End-of-day activity report</p>
+              </div>
+            </div>
+            <div class="acard-stat" id="reportStatusInline">Loading…</div>
+            <a href="report.html" class="acard-cta">Open Report</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:#f3e8ff;color:#a855f7;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Client List</h3>
+                <p class="acard-desc">Manage your client database</p>
+              </div>
+            </div>
+            <div class="acard-stat"><span class="stat-number" id="clientCount2">—</span> clients</div>
+            <a href="clients.html" class="acard-cta subtle">Open Client List</a>
+          </div>
+        </div>
+
+        <div class="sect-head" style="margin-top:1.5rem;">
+          <h2>Tracking & Reports</h2>
+          <span class="muted">Historical & pending</span>
+        </div>
+        <div class="app-grid-v2">
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:#fffbeb;color:#d97706;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Pending Items</h3>
+                <p class="acard-desc">PRs needing pricing & quotation approvals</p>
+              </div>
+            </div>
+            <a href="pending-items.html" class="acard-cta subtle">View Pending</a>
+          </div>
+
+          <div class="acard">
+            <div class="acard-top">
+              <span class="acard-icon" style="background:#ecfeff;color:#06b6d4;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </span>
+              <div>
+                <h3 class="acard-title">Quotation Summary</h3>
+                <p class="acard-desc">All past quotations & PO conversions</p>
+              </div>
+            </div>
+            <a href="quotation-summary.html" class="acard-cta subtle">View Summary</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: SIDE PANEL -->
+      <div>
+        <!-- Target progress -->
+        <div class="side-card" id="targetSection" style="display:none;">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            Monthly Target Progress
+          </h3>
+          <div id="targetBars"></div>
+        </div>
+
+        <!-- Overdue alerts -->
+        <div class="side-card alert" id="overdueSection" style="display:none;">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Overdue Follow-ups
+            <span id="overdueCount" style="background:var(--danger);color:#fff;padding:0.1rem 0.55rem;border-radius:999px;font-size:0.7rem;font-weight:700;margin-left:auto;"></span>
+          </h3>
+          <div id="overdueList"></div>
+          <a href="performance.html" class="acard-cta subtle" style="margin-top:0.75rem;color:var(--danger) !important;background:rgba(220,38,38,0.08);">Open Client Tracker →</a>
+        </div>
+
+        <!-- Empty placeholder if neither shown -->
+        <div class="side-card" id="quietState">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            All caught up
+          </h3>
+          <p class="empty-mini" id="quietMsg">No overdue follow-ups. Targets and progress will appear here once set.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/training-mode.js"></script>
+  <script>
+    // Mirror values into duplicate kpi/acard slots that share the same data.
+    // Watches the canonical IDs that dashboard.js writes to.
+    (function mirrorStats() {
+      const pairs = [
+        ['quotationToday', 'quotationToday2'],
+        ['prToday', 'prToday2'],
+        ['clientCount', 'clientCount2'],
+        ['reportStatus', 'reportStatusInline']
+      ];
+      const sync = () => {
+        pairs.forEach(([src, dst]) => {
+          const a = document.getElementById(src), b = document.getElementById(dst);
+          if (a && b && b.innerHTML !== a.innerHTML) b.innerHTML = a.innerHTML;
+        });
+        // Report pill styling
+        const status = (document.getElementById('reportStatus')?.textContent || '').toLowerCase();
+        const pill = document.getElementById('reportPill');
+        if (pill) {
+          pill.classList.remove('warn', 'ok');
+          if (status.includes('submitted')) pill.classList.add('ok');
+          else if (status.includes('not')) pill.classList.add('warn');
+        }
+        // Hide quiet state if either side card is visible
+        const quiet = document.getElementById('quietState');
+        const overdue = document.getElementById('overdueSection');
+        const target = document.getElementById('targetSection');
+        if (quiet && ((overdue && overdue.style.display !== 'none') || (target && target.style.display !== 'none'))) {
+          quiet.style.display = 'none';
+        }
+      };
+      const obs = new MutationObserver(sync);
+      pairs.forEach(([src]) => {
+        const el = document.getElementById(src);
+        if (el) obs.observe(el, { childList: true, characterData: true, subtree: true });
+      });
+      // Also watch overdue/target sections for visibility
+      ['overdueSection', 'targetSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) obs.observe(el, { attributes: true, attributeFilter: ['style'] });
+      });
+      // Today label
+      const tl = document.getElementById('todayLabel');
+      if (tl) {
+        const d = new Date();
+        tl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      }
+      // Run periodic sync until first paint completes
+      let n = 0;
+      const t = setInterval(() => { sync(); if (++n > 20) clearInterval(t); }, 250);
+    })();
+
+    // Pending count from existing endpoint(s) — best effort, silent on failure
+    (async function loadPending() {
+      const el = document.getElementById('pendingCount');
+      if (!el) return;
+      try {
+        const session = JSON.parse(sessionStorage.getItem('session') || 'null') || JSON.parse(localStorage.getItem('session') || 'null');
+        if (!session) { el.textContent = '—'; return; }
+        // Try a lightweight call; if endpoint not present, fall back gracefully
+        if (typeof apiGetPendingCount === 'function') {
+          const r = await apiGetPendingCount(session.name);
+          if (r && r.success) { el.textContent = r.count ?? '—'; return; }
+        }
+        el.textContent = '—';
+      } catch (e) { el.textContent = '—'; }
+    })();
+  </script>
+</body>
+</html>

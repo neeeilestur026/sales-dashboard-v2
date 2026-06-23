@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Dashboard — Quotation Approvals</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .tracker-toolbar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .tracker-toolbar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+    }
+    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted, #64748b); }
+    .tracker-toolbar select {
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .tracker-table-wrap { overflow-x: auto; }
+    .tracker-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .tracker-table th {
+      text-align: left;
+      padding: 0.65rem 0.9rem;
+      color: var(--text-muted, #64748b);
+      border-bottom: 1px solid var(--border, #334155);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tracker-table td {
+      padding: 0.7rem 0.9rem;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: middle;
+      color: var(--text-primary, #f1f5f9);
+    }
+    .tracker-table tr:hover td { background: #e2e8f0; }
+    .tracker-count {
+      font-size: 0.8rem;
+      color: var(--text-muted, #64748b);
+      margin-bottom: 0.75rem;
+    }
+    .no-results {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted, #64748b);
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-pending-approval { background: rgba(234,179,8,0.15); color: #eab308; }
+    .badge-partially-approved { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-approved { background: rgba(34,197,94,0.2); color: #22c55e; }
+    .badge-rejected { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-pending { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .approval-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .btn-approve, .btn-reject {
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-approve {
+      background: rgba(34,197,94,0.15);
+      color: #22c55e;
+    }
+    .btn-approve:hover { background: rgba(34,197,94,0.3); }
+    .btn-reject {
+      background: rgba(239,68,68,0.15);
+      color: #ef4444;
+    }
+    .btn-reject:hover { background: rgba(239,68,68,0.3); }
+    .btn-approve:disabled, .btn-reject:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .pdf-link {
+      color: #3b82f6;
+      text-decoration: none;
+      font-size: 0.78rem;
+    }
+    .pdf-link:hover { text-decoration: underline; }
+
+    /* ─── Preview Modal ─── */
+    .preview-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-overlay.open { display: flex; }
+    .preview-modal {
+      background: var(--surface, #0f172a);
+      border: 1px solid var(--border, #334155);
+      border-radius: 16px;
+      width: 92vw;
+      max-width: 1000px;
+      height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border, #334155);
+    }
+    .preview-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #f1f5f9); }
+    .preview-close {
+      background: none; border: none; color: var(--text-muted, #64748b);
+      cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem;
+    }
+    .preview-close:hover { color: var(--text-primary, #f1f5f9); }
+    .preview-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    .preview-details {
+      width: 300px;
+      min-width: 260px;
+      padding: 1.25rem;
+      overflow-y: auto;
+      border-right: 1px solid var(--border, #334155);
+      font-size: 0.82rem;
+    }
+    .preview-details .detail-row {
+      margin-bottom: 0.85rem;
+    }
+    .preview-details .detail-label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted, #64748b);
+      margin-bottom: 0.2rem;
+    }
+    .preview-details .detail-value {
+      color: var(--text-primary, #f1f5f9);
+      word-break: break-word;
+    }
+    .preview-pdf {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+    }
+    .preview-pdf iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .preview-pdf .no-pdf {
+      text-align: center;
+      color: var(--text-muted, #64748b);
+      padding: 2rem;
+    }
+    .preview-pdf .no-pdf svg { margin-bottom: 0.75rem; opacity: 0.5; }
+    .preview-actions {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border, #334155);
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .btn-preview {
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      background: rgba(59,130,246,0.15);
+      color: #3b82f6;
+    }
+    .btn-preview:hover { background: rgba(59,130,246,0.3); }
+    @media (max-width: 700px) {
+      .preview-body { flex-direction: column; }
+      .preview-details { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border, #334155); max-height: 35vh; }
+      .preview-modal { width: 98vw; height: 92vh; }
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Quotation Approvals</h1>
+      <p>Review and approve quotations before they are sent to clients.</p>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div class="tracker-toolbar">
+        <input type="text" id="searchInput" placeholder="Search agent, client, ref #..." oninput="applyFilters()">
+        <select id="statusFilter" onchange="applyFilters()">
+          <option value="">All Statuses</option>
+          <option value="Pending Approval">Pending Approval</option>
+          <option value="Partially Approved">Partially Approved</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+        <select id="dateRange" onchange="applyFilters()">
+          <option value="30d">Last 30 days</option>
+          <option value="7d">Last 7 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="year">This year</option>
+          <option value="all">All time</option>
+        </select>
+        <select id="archiveFilter" onchange="applyFilters()">
+          <option value="active">Active</option>
+          <option value="archive">Archive</option>
+          <option value="all">All</option>
+        </select>
+        <button class="btn" onclick="loadApprovals()" title="Refresh">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <div id="trackerCount" class="tracker-count"></div>
+
+      <div id="trackerContainer" class="tracker-table-wrap">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Quotation Preview Modal -->
+  <div class="preview-overlay" id="previewOverlay" onclick="if(event.target===this)closePreview()">
+    <div class="preview-modal">
+      <div class="preview-header">
+        <h3 id="previewTitle">Quotation Preview</h3>
+        <button class="preview-close" onclick="closePreview()" title="Close">&times;</button>
+      </div>
+      <div class="preview-body">
+        <div class="preview-details" id="previewDetails"></div>
+        <div class="preview-pdf" id="previewPdf"></div>
+      </div>
+      <div class="preview-actions" id="previewActions"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/quotation-approvals.js"></script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard -- Pricing Submissions</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .toolbar {
+      display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;
+    }
+    .toolbar input[type="text"] {
+      padding: 0.45rem 0.75rem; border-radius: 8px; border: 1px solid var(--border, #334155);
+      background: var(--surface, #1e293b); color: var(--text-primary, #f1f5f9);
+      font-size: 0.85rem; min-width: 200px; font-family: inherit;
+    }
+    .toolbar input:focus { outline: none; border-color: var(--accent, #3b82f6); }
+    .sub-count { font-size: 0.82rem; color: var(--text-secondary, #94a3b8); }
+
+    .sub-card {
+      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
+      border-radius: 12px; padding: 1.15rem; margin-bottom: 1rem;
+      cursor: default;
+    }
+    .sub-header {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .sub-id { font-weight: 700; font-size: 0.92rem; color: var(--text-primary, #f1f5f9); }
+    .sub-meta {
+      display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary, #94a3b8);
+    }
+    .sub-meta span { display: flex; align-items: center; gap: 0.3rem; }
+    .badge-pending { background: rgba(234,179,8,0.12); color: #eab308; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-forwarded { background: rgba(59,130,246,0.12); color: #3b82f6; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-priced { background: rgba(34,197,94,0.12); color: #22c55e; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-applied { background: rgba(168,85,247,0.12); color: #a855f7; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-sent { background: rgba(20,184,166,0.12); color: #14b8a6; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+
+    .btn-apply {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.3rem 0.7rem; background: rgba(34,197,94,0.12); color: #22c55e;
+      border: 1px solid rgba(34,197,94,0.25); border-radius: 6px;
+      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-apply:hover { background: rgba(34,197,94,0.2); }
+    .btn-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-forward-sales {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.3rem 0.7rem; background: rgba(20,184,166,0.12); color: #14b8a6;
+      border: 1px solid rgba(20,184,166,0.25); border-radius: 6px;
+      font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-left: 0.5rem;
+    }
+    .btn-forward-sales:hover { background: rgba(20,184,166,0.2); }
+    .btn-forward-sales:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .items-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .items-table th {
+      text-align: left; padding: 0.5rem 0.75rem; font-size: 0.72rem; font-weight: 600;
+      text-transform: uppercase; color: var(--text-muted, #64748b);
+      border-bottom: 1px solid var(--border, #334155);
+    }
+    .items-table td {
+      padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e8f0;
+    }
+    .items-table .td-num {
+      text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .items-table tr:last-child td { border-bottom: none; }
+
+    .no-results {
+      text-align: center; padding: 3rem 1rem; color: var(--text-muted, #64748b);
+    }
+
+    .loading-overlay {
+      display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+      padding: 3rem 1rem; color: var(--text-secondary, #94a3b8);
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Pricing Submissions</h1>
+      <p>View pricing submitted by management. Shows model numbers, descriptions, and final prices.</p>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Search submissions..." oninput="applyFilter()">
+      <select id="statusFilter" onchange="applyFilter()" style="padding:0.45rem 0.75rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--text-primary,#f1f5f9);font-size:0.85rem;font-family:inherit;">
+        <option value="">All Statuses</option>
+        <option value="Pending">Pending</option>
+        <option value="Forwarded">Forwarded</option>
+        <option value="Priced">Priced</option>
+        <option value="Applied">Applied</option>
+        <option value="Sent to Sales">Sent to Sales</option>
+      </select>
+      <span class="sub-count" id="subCount"></span>
+    </div>
+
+    <div id="subsContainer">
+      <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let allSubmissions = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const session = requireAdmin();
+      if (!session) return;
+      renderNavbar('pricing-submissions');
+      await loadSubmissions();
+    });
+
+    async function loadSubmissions() {
+      const container = document.getElementById('subsContainer');
+      try {
+        const res = await apiGetPricingSubmissions();
+        if (!res.success) throw new Error(res.message || 'Failed to load');
+        allSubmissions = res.data || [];
+        applyFilter();
+      } catch (err) {
+        container.innerHTML = `<div class="no-results"><p>Error: ${esc(err.message)}</p></div>`;
+      }
+    }
+
+    function applyFilter() {
+      const search = document.getElementById('searchInput').value.trim().toLowerCase();
+      const statusVal = document.getElementById('statusFilter').value;
+      const filtered = allSubmissions.filter(s => {
+        if (statusVal && s.status !== statusVal) return false;
+        if (!search) return true;
+        const hay = [s.id, s.submittedBy, s.principal, s.destination, s.itemsJson, s.forwardedBy || ''].join(' ').toLowerCase();
+        return hay.includes(search);
+      });
+      renderSubmissions(filtered);
+    }
+
+    function statusBadgeClass(status) {
+      switch ((status || '').toLowerCase()) {
+        case 'forwarded': return 'badge-forwarded';
+        case 'priced': return 'badge-priced';
+        case 'applied': return 'badge-applied';
+        case 'sent to sales': return 'badge-sent';
+        default: return 'badge-pending';
+      }
+    }
+
+    function renderSubmissions(subs) {
+      const container = document.getElementById('subsContainer');
+      document.getElementById('subCount').textContent = `${subs.length} submission${subs.length !== 1 ? 's' : ''}`;
+
+      if (subs.length === 0) {
+        container.innerHTML = `<div class="no-results"><p>No pricing submissions found.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = subs.map(s => {
+        let items = [];
+        try { items = JSON.parse(s.itemsJson); } catch {}
+
+        const hasPrRefs = s.prRefsJson && s.prRefsJson !== '' && s.prRefsJson !== '[]';
+        const showApply = s.status === 'Priced' && hasPrRefs;
+        const showForwardSales = (s.status === 'Applied' && hasPrRefs) || ((s.status === 'Priced' || s.status === 'Pending') && !hasPrRefs);
+
+        let prRefs = [];
+        try { prRefs = JSON.parse(s.prRefsJson || '[]'); } catch {}
+        const clients = [...new Set(prRefs.map(r => r.clientName).filter(Boolean))];
+        const agents = [...new Set(prRefs.map(r => r.agentName).filter(Boolean))];
+        const clientLine = clients.length
+          ? `<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.35rem;">Client: ${clients.map(c => esc(c)).join(', ')}${agents.length ? ` <span style="font-weight:400;color:var(--text-secondary,#94a3b8);">(Agent: ${agents.map(a => esc(a)).join(', ')})</span>` : ''}</div>`
+          : '';
+
+        const itemRows = items.map((it, idx) => `
+          <tr>
+            <td style="text-align:center;color:var(--text-muted);">${idx + 1}</td>
+            <td style="font-weight:600;">${esc(it.modelNo || it.modelPartNo) || '—'}</td>
+            <td>${esc(it.name || it.itemDescription) || '—'}</td>
+            <td class="td-num">${Number(it.qty || it.quantity || 0)}</td>
+            <td class="td-num" style="font-weight:700;color:#22c55e;">${peso(it.unitPriceVatEx)}</td>
+          </tr>
+        `).join('');
+
+        return `
+          <div class="sub-card">
+            <div class="sub-header">
+              <span class="sub-id">${esc(s.id)}</span>
+              <div class="sub-meta">
+                <span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
+                  ${esc(s.submittedBy || '—')}
+                </span>
+                <span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  ${esc(s.date)}${s.updatedDate ? ` (edited ${esc(s.updatedDate)})` : ''}
+                </span>
+                <span>${esc(s.principal)}</span>
+                <span>${s.destination ? esc(s.destination) : 'Local Pickup'}</span>
+                ${s.forwardedBy ? `<span style="color:#3b82f6;">Fwd by: ${esc(s.forwardedBy)}</span>` : ''}
+                <span class="${statusBadgeClass(s.status)}">${esc(s.status)}</span>
+              </div>
+            </div>
+            ${clientLine}
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th style="width:36px;">#</th>
+                  <th>Model No.</th>
+                  <th>Item Description</th>
+                  <th style="width:60px;">Qty</th>
+                  <th>Unit Price (VAT Excl.)</th>
+                </tr>
+              </thead>
+              <tbody>${itemRows || '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;">No items</td></tr>'}</tbody>
+            </table>
+            ${(showApply || showForwardSales) ? `
+              <div style="margin-top:0.75rem;text-align:right;">
+                ${showApply ? `
+                  <button class="btn-apply" onclick="applyToPR('${esc(s.id)}', this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Apply Pricing to PR
+                  </button>
+                ` : ''}
+                ${showForwardSales ? `
+                  <button class="btn-forward-sales" onclick="forwardToSales('${esc(s.id)}', this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Forward to Sales
+                  </button>
+                ` : ''}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function applyToPR(submissionId, btn) {
+      if (!confirm('Apply the VAT-exclusive unit prices from this submission to the original PR items?')) return;
+      btn.disabled = true;
+      btn.textContent = 'Applying...';
+      try {
+        const res = await apiApplyPricingToPR(submissionId);
+        if (res.success) {
+          alert('Pricing applied to ' + res.applied + ' PR item(s)!' + (res.errors && res.errors.length ? '\nErrors: ' + res.errors.join('; ') : ''));
+          await loadSubmissions();
+        } else {
+          alert('Failed: ' + (res.message || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Apply Pricing to PR';
+      }
+    }
+
+    async function forwardToSales(submissionId, btn) {
+      const sub = allSubmissions.find(s => s.id === submissionId);
+      let prRefs = [];
+      try { prRefs = JSON.parse((sub && sub.prRefsJson) || '[]'); } catch {}
+      const agents = [...new Set(prRefs.map(r => r.agentName).filter(Boolean))];
+      const agentStr = agents.length ? agents.join(', ') : 'the sales agent';
+      if (!confirm(`Mark this submission as sent to ${agentStr}? The agent will see updated pricing in their Pending Items.`)) return;
+      btn.disabled = true;
+      btn.textContent = 'Forwarding...';
+      try {
+        const res = await apiMarkSentToSales(submissionId);
+        if (res.success) {
+          await loadSubmissions();
+        } else {
+          alert('Failed: ' + (res.message || 'Unknown error'));
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Forward to Sales';
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Forward to Sales';
+      }
+    }
+
+    function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function peso(n) { return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function fmt(n) { return Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accounting Dashboard — Daily Report</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .report { max-width: 1040px; margin: 0 auto; }
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
+    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
+    .report-body { padding: 1.4rem 1.6rem; }
+    .dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
+    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
+    .dr-sect { margin-bottom: 1.6rem; }
+    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+    .dr-sect-title .pill { margin-left: auto; background: var(--accent-light); color: var(--accent-dark); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; }
+    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
+    .mod-Quotation { background: #f0fdfa; color: #0f766e; }
+    .mod-SalesOrder, .mod-Sales.Order { background: #f0fdf4; color: #15803d; }
+    .mod-PurchaseOrder { background: #eff6ff; color: #1d4ed8; }
+    .mod-APAging { background: #fff7ed; color: #c2410c; }
+    .mod-Receiving { background: #ecfeff; color: #0e7490; }
+    .mod-Invoice { background: #f0fdfa; color: #0f766e; }
+    .mod-Inventory { background: #f8fafc; color: #475569; }
+    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
+    .dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+    .notes-area { width: 100%; padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.88rem; font-family: inherit; resize: vertical; min-height: 110px; box-sizing: border-box; }
+    @media print {
+      .navbar, .no-print { display: none !important; }
+      body { background: #fff; }
+      .main-content { padding: 0 !important; margin: 0 !important; }
+      .report-sheet { border: none; box-shadow: none; }
+      .dr-tile, table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="report">
+      <div class="report-sheet">
+        <div class="report-head">
+          <div>
+            <h1>Accounting Daily Report</h1>
+            <div class="meta" id="reportMeta">—</div>
+          </div>
+          <div class="report-controls no-print">
+            <input type="date" id="datePicker">
+            <button class="btn btn-sm btn-secondary" id="refreshBtn">Refresh</button>
+            <button class="btn btn-sm btn-primary" id="printBtn">Print</button>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="dr-summary" id="summaryRow">
+            <div class="dr-tile"><div class="l">Total Movements</div><div class="v" id="sumMovements">—</div></div>
+            <div class="dr-tile"><div class="l">Documents Created</div><div class="v" id="sumDocs">—</div></div>
+            <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="sumSales">—</div></div>
+            <div class="dr-tile"><div class="l">AP Paid</div><div class="v" id="sumPaid">—</div></div>
+            <div class="dr-tile"><div class="l">Received Value</div><div class="v" id="sumReceived">—</div></div>
+            <div class="dr-tile"><div class="l">PDFs Generated</div><div class="v" id="sumPdfs">—</div></div>
+          </div>
+
+          <div class="dr-sect">
+            <div class="dr-sect-title">Activity Timeline <span class="pill" id="tlCount">0</span></div>
+            <div style="overflow-x:auto;"><table class="flow-table">
+              <thead><tr><th>Time</th><th>User</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
+              <tbody id="timelineBody"></tbody>
+            </table></div>
+          </div>
+
+          <div id="moduleSections"></div>
+
+          <div class="dr-sect">
+            <div class="dr-sect-title">Sent Emails (GoDaddy) <span class="pill" id="emailCount">0</span></div>
+            <div style="overflow-x:auto;"><table class="flow-table">
+              <thead><tr><th>Time</th><th>Recipient</th><th>Subject</th><th>Category</th></tr></thead>
+              <tbody id="emailBody"></tbody>
+            </table></div>
+          </div>
+
+          <div class="dr-sect">
+            <div class="dr-sect-title">Notes / Other Tasks <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);" id="notesMsg"></span></div>
+            <textarea id="notesField" class="notes-area" placeholder="Bank rec, follow-ups, blockers, manual tasks..."></textarea>
+            <button class="btn btn-sm btn-primary no-print" id="saveNotesBtn" style="margin-top:0.5rem;">Save Notes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/accounting-daily-report.js"></script>
+</body>
+</html>

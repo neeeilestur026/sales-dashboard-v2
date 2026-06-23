@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Orders — Management Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .mso-toolbar {
+      display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;
+      margin-bottom:1rem;
+    }
+    .mso-toolbar input, .mso-toolbar select {
+      padding:0.5rem 0.65rem; border:1px solid var(--border,#334155); border-radius:8px;
+      background:var(--surface-2,#1e293b); color:var(--text-primary,#f1f5f9); font-size:0.85rem;
+    }
+    .mso-search { flex:1; min-width:220px; }
+    .mso-tab {
+      padding:0.4rem 0.85rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:transparent; color:var(--text-muted,#64748b); font-size:0.8rem; cursor:pointer; font-weight:600;
+    }
+    .mso-tab.active { background:#14b8a6; border-color:#14b8a6; color:#fff; }
+    .mso-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin-bottom:1rem; }
+    .mso-kpi {
+      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px;
+      padding:0.85rem 1rem;
+    }
+    .mso-kpi .lbl { font-size:0.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .mso-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color:var(--text-primary,#f1f5f9); }
+    .mso-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; overflow:hidden; }
+    .mso-table-wrap { overflow-x:auto; }
+    .mso-table { width:100%; border-collapse:collapse; font-size:0.85rem; min-width:980px; table-layout:fixed; }
+    .mso-table th {
+      text-align:left; padding:0.55rem 0.6rem; color:var(--text-muted,#94a3b8);
+      border-bottom:1px solid var(--border,#334155); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em;
+      background:rgba(15,23,42,0.4);
+    }
+    .mso-table td { padding:0.55rem 0.6rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
+    .mso-table td.nowrap { white-space:nowrap; }
+    .mso-table td.wrap { word-break:break-word; overflow-wrap:anywhere; }
+    .mso-table tr.main-row { cursor:pointer; }
+    .mso-table tr.main-row:hover td { background:rgba(20,184,166,0.06); }
+    .mso-table tr.items-row td { padding:0; background:rgba(20,184,166,0.04); }
+    .mso-table tr.items-row.hidden { display:none; }
+    .mso-inner { padding:0.7rem 1rem 0.85rem 2rem; }
+    .mso-items { width:100%; border-collapse:collapse; font-size:0.8rem; }
+    .mso-items th { text-align:left; padding:0.35rem 0.5rem; color:var(--text-muted,#94a3b8); font-size:0.68rem; text-transform:uppercase; }
+    .mso-items td { padding:0.35rem 0.5rem; color:var(--text-primary,#e2e8f0); border-top:1px solid rgba(148,163,184,0.08); }
+    .badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; }
+    .badge-pending   { background:rgba(234,179,8,0.15);  color:#eab308; }
+    .badge-delivered { background:rgba(34,197,94,0.15);  color:#22c55e; }
+    .badge-cancelled { background:rgba(239,68,68,0.15);  color:#ef4444; }
+    .mso-count { font-size:0.8rem; color:var(--text-muted,#94a3b8); margin-bottom:0.5rem; }
+    .mso-chevron { display:inline-block; transition:transform 0.15s; color:var(--text-muted,#94a3b8); }
+    .mso-chevron.open { transform:rotate(90deg); }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div style="max-width:1400px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div>
+          <h1 style="margin:0;">Sales Orders</h1>
+          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+            Full sales order history with monthly and yearly filters.
+          </p>
+        </div>
+        <button class="btn" onclick="loadSalesOrders()">🔄 Refresh</button>
+      </div>
+
+      <div class="mso-kpis" id="msoKpis">
+        <div class="mso-kpi"><div class="lbl">Total Orders</div><div class="val" id="kpiTotal">—</div></div>
+        <div class="mso-kpi"><div class="lbl">Pending</div><div class="val" id="kpiPending" style="color:#f97316;">—</div></div>
+        <div class="mso-kpi"><div class="lbl">Delivered</div><div class="val" id="kpiDelivered" style="color:#22c55e;">—</div></div>
+        <div class="mso-kpi"><div class="lbl">Total Amount</div><div class="val" id="kpiAmount" style="color:#3b82f6;">—</div></div>
+      </div>
+
+      <div class="mso-toolbar">
+        <input type="text" id="msoSearch" class="mso-search" placeholder="Search SO No, customer, invoice…" oninput="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+        <input type="month" id="msoMonth" onchange="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Year</label>
+        <select id="msoYear" onchange="applyFilters()"><option value="">All</option></select>
+        <button class="mso-tab" onclick="setStatus('all')" id="tabAll">All</button>
+        <button class="mso-tab" onclick="setStatus('Pending')" id="tabPending">Pending</button>
+        <button class="mso-tab" onclick="setStatus('Delivered')" id="tabDelivered">Delivered</button>
+        <button class="mso-tab" onclick="clearAllFilters()">Clear</button>
+      </div>
+
+      <div class="mso-count" id="msoCount"></div>
+
+      <div class="mso-card">
+        <div class="mso-table-wrap">
+        <table class="mso-table" id="msoTable">
+          <colgroup>
+            <col style="width:34px;">
+            <col style="width:120px;">
+            <col style="width:100px;">
+            <col>
+            <col style="width:110px;">
+            <col style="width:130px;">
+            <col style="width:150px;">
+          </colgroup>
+          <thead>
+            <tr>
+              <th></th>
+              <th>SO No</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Status</th>
+              <th>Invoice #</th>
+              <th style="text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="msoBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      var session = (typeof requireManagement === 'function') ? requireManagement() : null;
+      if (typeof requireManagement === 'function' && !session) return;
+      if (typeof renderNavbar === 'function') renderNavbar('management-sales-orders');
+
+      var allOrders = [];
+      var activeStatus = 'all';
+      var expanded = {};
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function php(n) {
+        return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function dateVal(o) { return new Date(o.date || o.soDate || 0); }
+      function fmtDate(d) {
+        var dt = (d instanceof Date) ? d : new Date(d);
+        if (isNaN(dt.getTime())) return String(d || '');
+        return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+      }
+
+      function populateYears(orders) {
+        var sel = document.getElementById('msoYear');
+        var years = {};
+        orders.forEach(function (o) {
+          var d = dateVal(o);
+          if (!isNaN(d.getTime())) years[d.getFullYear()] = true;
+        });
+        var cur = sel.value;
+        var list = Object.keys(years).sort(function (a, b) { return b - a; });
+        sel.innerHTML = '<option value="">All</option>' + list.map(function (y) {
+          return '<option value="' + y + '"' + (y === cur ? ' selected' : '') + '>' + y + '</option>';
+        }).join('');
+      }
+
+      function setActiveTab() {
+        ['All', 'Pending', 'Delivered'].forEach(function (s) {
+          var el = document.getElementById('tab' + s);
+          if (el) el.classList.toggle('active', activeStatus === (s === 'All' ? 'all' : s));
+        });
+      }
+
+      window.setStatus = function (s) {
+        activeStatus = s;
+        setActiveTab();
+        applyFilters();
+      };
+
+      window.clearAllFilters = function () {
+        document.getElementById('msoSearch').value = '';
+        document.getElementById('msoMonth').value = '';
+        document.getElementById('msoYear').value = '';
+        activeStatus = 'all';
+        setActiveTab();
+        applyFilters();
+      };
+
+      window.applyFilters = function () {
+        var search = (document.getElementById('msoSearch').value || '').toLowerCase().trim();
+        var month = document.getElementById('msoMonth').value || '';
+        var year = document.getElementById('msoYear').value || '';
+
+        var filtered = allOrders.filter(function (o) {
+          if (activeStatus !== 'all') {
+            var st = String(o.status || 'Pending');
+            if (st !== activeStatus) return false;
+          }
+          var d = dateVal(o);
+          if (!isNaN(d.getTime())) {
+            if (month) {
+              var ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              if (ym !== month) return false;
+            }
+            if (year && String(d.getFullYear()) !== String(year)) return false;
+          } else if (month || year) {
+            return false;
+          }
+          if (search) {
+            var hay = ((o.soNo || o.soNumber || '') + ' ' + (o.customerName || o.customer || '') + ' ' + (o.invoiceNo || '')).toLowerCase();
+            if (hay.indexOf(search) < 0) return false;
+          }
+          return true;
+        });
+
+        renderKpis(filtered);
+        renderTable(filtered);
+      };
+
+      function renderKpis(orders) {
+        var pending = 0, delivered = 0, amount = 0;
+        orders.forEach(function (o) {
+          var st = String(o.status || 'Pending');
+          if (st === 'Pending') pending++;
+          else if (st === 'Delivered') delivered++;
+          amount += Number(o.grandTotal || o.totalAmount || o.amount || 0);
+        });
+        document.getElementById('kpiTotal').textContent = orders.length;
+        document.getElementById('kpiPending').textContent = pending;
+        document.getElementById('kpiDelivered').textContent = delivered;
+        document.getElementById('kpiAmount').textContent = php(amount);
+      }
+
+      function renderTable(orders) {
+        var body = document.getElementById('msoBody');
+        var count = document.getElementById('msoCount');
+        count.textContent = 'Showing ' + orders.length + ' order' + (orders.length === 1 ? '' : 's');
+
+        if (!orders.length) {
+          body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No sales orders match these filters.</td></tr>';
+          return;
+        }
+        orders.sort(function (a, b) { return dateVal(b) - dateVal(a); });
+
+        body.innerHTML = orders.map(function (o) {
+          var soNo = o.soNo || o.soNumber || '';
+          var st = String(o.status || 'Pending');
+          var stClass = st.toLowerCase() === 'delivered' ? 'badge-delivered'
+                      : st.toLowerCase() === 'cancelled' ? 'badge-cancelled'
+                      : 'badge-pending';
+          var amount = o.grandTotal || o.totalAmount || o.amount || 0;
+          var isOpen = !!expanded[soNo];
+          var items = Array.isArray(o.items) ? o.items : [];
+          var itemsHtml = '';
+          if (items.length) {
+            itemsHtml = '<table class="mso-items">' +
+              '<thead><tr><th>Product Code</th><th>Description</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Amount</th></tr></thead><tbody>' +
+              items.map(function (it) {
+                return '<tr>' +
+                  '<td>' + esc(it.productCode || '') + '</td>' +
+                  '<td>' + esc(it.productDescription || '') + '</td>' +
+                  '<td style="text-align:right;">' + Number(it.qty || 0) + '</td>' +
+                  '<td style="text-align:right;">' + php(it.unitPrice) + '</td>' +
+                  '<td style="text-align:right;">' + php(it.amount) + '</td>' +
+                  '</tr>';
+              }).join('') +
+              '</tbody></table>';
+          } else {
+            itemsHtml = '<div style="color:var(--text-muted);font-size:0.8rem;">No line items.</div>';
+          }
+
+          return '<tr class="main-row" onclick="toggleRow(\'' + esc(soNo).replace(/'/g, "\\'") + '\')">' +
+              '<td class="nowrap"><span class="mso-chevron ' + (isOpen ? 'open' : '') + '" id="chev-' + esc(soNo) + '">▶</span></td>' +
+              '<td class="nowrap"><strong>' + esc(soNo) + '</strong></td>' +
+              '<td class="nowrap" style="color:var(--text-muted);">' + esc(fmtDate(o.date || o.soDate)) + '</td>' +
+              '<td class="wrap">' + esc(o.customerName || o.customer || '') + '</td>' +
+              '<td class="nowrap"><span class="badge ' + stClass + '">' + esc(st) + '</span></td>' +
+              '<td class="wrap" style="color:var(--text-muted);font-size:0.82rem;">' + esc(o.invoiceNo || '—') + '</td>' +
+              '<td class="nowrap" style="font-weight:600;text-align:right;">' + php(amount) + '</td>' +
+            '</tr>' +
+            '<tr class="items-row ' + (isOpen ? '' : 'hidden') + '" id="items-' + esc(soNo) + '">' +
+              '<td colspan="7"><div class="mso-inner">' + itemsHtml + '</div></td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      window.toggleRow = function (soNo) {
+        expanded[soNo] = !expanded[soNo];
+        var row = document.getElementById('items-' + soNo);
+        var chev = document.getElementById('chev-' + soNo);
+        if (row) row.classList.toggle('hidden', !expanded[soNo]);
+        if (chev) chev.classList.toggle('open', !!expanded[soNo]);
+      };
+
+      window.loadSalesOrders = function () {
+        var body = document.getElementById('msoBody');
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>';
+        return fetchFromAPI({ action: 'getSalesOrders' }, { noCache: true })
+          .then(function (res) {
+            if (!res || !res.success) throw new Error((res && res.message) || 'Failed to load');
+            allOrders = res.data || [];
+            populateYears(allOrders);
+            setActiveTab();
+            applyFilters();
+          })
+          .catch(function (err) {
+            console.error('loadSalesOrders failed', err);
+            body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:1.5rem;">Failed to load sales orders.</td></tr>';
+          });
+      };
+
+      document.addEventListener('DOMContentLoaded', function () {
+        setActiveTab();
+        loadSalesOrders();
+      });
+    })();
+  </script>
+</body>
+</html>

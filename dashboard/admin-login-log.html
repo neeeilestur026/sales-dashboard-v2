@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Login Log</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Navigation -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1>Login Activity Log</h1>
+      <p>View all login events across the team.</p>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <button class="btn" onclick="loadLoginLog(50)">Last 50</button>
+      <button class="btn active" onclick="loadLoginLog(100)">Last 100</button>
+      <button class="btn" onclick="loadLoginLog(500)">All</button>
+    </div>
+
+    <!-- Login Log Table -->
+    <div class="section">
+      <div class="card">
+        <div class="table-wrapper" id="loginLogContainer">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading login log...</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/admin-login-log.js"></script>
+</body>
+</html>

@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Sales Orders</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* ─── Form ──────────────────────────────────────── */
+    .so-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .so-form-grid .full { grid-column: 1 / -1; }
+    .so-form-grid label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .so-form-grid input, .so-form-grid select {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .so-form-grid input:focus, .so-form-grid select:focus { outline: none; border-color: #14b8a6; }
+    /* ─── Items Table in Form ────────────────────────── */
+    .items-wrapper { overflow-x: auto; margin-bottom: 0.75rem; }
+    .items-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 640px; }
+    .items-table th { text-align: left; padding: 0.45rem 0.5rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .items-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid #e2e8f0; }
+    .items-table input {
+      width: 100%; padding: 0.35rem 0.5rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 6px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.82rem; font-family: inherit;
+    }
+    .items-table input:focus { outline: none; border-color: #14b8a6; }
+    .items-table .amt-cell { text-align: right; color: var(--text-secondary, #94a3b8); font-size: 0.82rem; padding: 0.35rem 0.5rem; white-space: nowrap; }
+    .rm-btn { background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.75rem; line-height: 1; }
+    .rm-btn:hover { background: rgba(239,68,68,0.22); }
+    /* ─── Summary Box ────────────────────────────────── */
+    .so-summary { background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
+    .so-summary-row { display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0; border-bottom: 1px solid #e2e8f0; }
+    .so-summary-row:last-child { border-bottom: none; font-weight: 700; font-size: 0.95rem; color: #14b8a6; }
+    .so-summary-row .lbl { color: var(--text-muted, #64748b); }
+    .so-summary-row .val { font-weight: 600; }
+    /* ─── Records Table ──────────────────────────────── */
+    .so-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; min-width: 800px; }
+    .so-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .so-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .so-table tr.main-row:hover td { background: #e2e8f0; }
+    .so-table tr.items-row td { background: rgba(20,184,166,0.04); padding: 0; }
+    .so-table tr.items-row .inner { padding: 0.7rem 1rem 0.7rem 2.5rem; }
+    .so-table tr.items-row.hidden { display: none; }
+    .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-pending { background: rgba(234,179,8,0.15); color: #eab308; }
+    .badge-delivered { background: rgba(34,197,94,0.15); color: #22c55e; }
+    /* ─── Filter bar ─────────────────────────────────── */
+    .filter-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.25rem; }
+    .filter-bar input { flex: 1; min-width: 180px; padding: 0.5rem 0.75rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem; }
+    .filter-bar input::placeholder { color: var(--text-muted, #64748b); }
+    .filter-tab { padding: 0.4rem 0.85rem; border-radius: 8px; border: 1px solid var(--border, #334155); background: transparent; color: var(--text-muted, #64748b); font-size: 0.8rem; cursor: pointer; }
+    .filter-tab.active { background: #14b8a6; border-color: #14b8a6; color: #fff; }
+    .count-label { font-size: 0.8rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+    /* ─── Status Modal ───────────────────────────────── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal-box { background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 14px; padding: 1.5rem; width: 100%; max-width: 400px; }
+    .modal-box h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 1rem; }
+    .modal-box label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .modal-box select, .modal-box input { width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit; }
+    .modal-box select:focus, .modal-box input:focus { outline: none; border-color: #14b8a6; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
+    /* ─── Form visible/hidden ────────────────────────── */
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    @media(max-width: 640px) { .so-form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Sales Orders</h1>
+      <p>Record client POs — one SO can contain multiple items with auto-calculated VAT (12%).</p>
+    </div>
+
+    <!-- ─── New SO Form (collapsible) ─────────────────────── -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Sales Order
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="soForm" onsubmit="submitSO(event)">
+          <!-- Header fields -->
+          <div class="so-form-grid">
+            <div>
+              <label for="soDate">Date <span style="color:#ef4444;">*</span></label>
+              <input type="date" id="soDate" required>
+            </div>
+            <div>
+              <label for="soNo">SO No. <span style="color:var(--text-muted,#64748b);font-weight:400;">(auto-generated if empty)</span></label>
+              <input type="text" id="soNo" placeholder="e.g. SO-202604-001">
+            </div>
+            <div>
+              <label for="soCustomerId">Customer ID</label>
+              <input type="text" id="soCustomerId" placeholder="e.g. CUS-001">
+            </div>
+            <div>
+              <label for="soCustomerName">Customer Name <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="soCustomerName" required placeholder="Company or person name">
+            </div>
+            <div>
+              <label for="soStatus">Status</label>
+              <select id="soStatus">
+                <option value="Pending">Pending</option>
+                <option value="Delivered">Delivered</option>
+              </select>
+            </div>
+            <div>
+              <label for="soVatType">VAT Type</label>
+              <select id="soVatType" onchange="recalcSummary()">
+                <option value="VAT Exclusive">VAT Exclusive (price + 12% VAT)</option>
+                <option value="VAT Inclusive">VAT Inclusive (12% already in price)</option>
+                <option value="Zero Rated">Zero Rated (0% VAT)</option>
+                <option value="VAT Exempt">VAT Exempt (no VAT)</option>
+              </select>
+            </div>
+            <div class="full">
+              <label for="soInvoiceNo">Invoice No. <span style="color:var(--text-muted,#64748b);font-weight:400;">(optional)</span></label>
+              <input type="text" id="soInvoiceNo" placeholder="e.g. INV-2026-001">
+            </div>
+          </div>
+
+          <!-- Items table -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+            <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted,#64748b);">LINE ITEMS</span>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addItemRow()" style="font-size:0.75rem;padding:0.25rem 0.6rem;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Item
+            </button>
+          </div>
+          <div class="items-wrapper">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th style="min-width:100px;">Product Code</th>
+                  <th style="min-width:180px;">Product Description</th>
+                  <th style="min-width:70px;">Qty</th>
+                  <th style="min-width:110px;">Unit Price</th>
+                  <th style="min-width:110px;">Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="itemsBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Order Summary -->
+          <div class="so-summary" id="soSummary">
+            <div class="so-summary-row">
+              <span class="lbl">Total Amount (Subtotal)</span>
+              <span class="val" id="sumTotal">₱0.00</span>
+            </div>
+            <div class="so-summary-row">
+              <span class="lbl" id="sumSalesLbl">Sales (Net)</span>
+              <span class="val" id="sumSales">₱0.00</span>
+            </div>
+            <div class="so-summary-row">
+              <span class="lbl" id="sumVATLbl">VAT (12%)</span>
+              <span class="val" id="sumVAT">₱0.00</span>
+            </div>
+            <div class="so-summary-row">
+              <span class="lbl" id="sumGrandLbl">TOTAL AMOUNT (w/ VAT)</span>
+              <span class="val" id="sumGrand">₱0.00</span>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="soSubmitBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Save Sales Order
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Clear</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.55rem 0.75rem;border-radius:8px;font-size:0.85rem;margin-top:0.75rem;"></div>
+      </div>
+    </div>
+
+    <!-- ─── Records List ───────────────────────────────────── -->
+    <div class="chart-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;flex-wrap:wrap;gap:0.5rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);">Sales Order Records</h3>
+        <button class="btn btn-sm btn-secondary" onclick="exportExcel()" id="exportBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Excel
+        </button>
+      </div>
+      <div class="filter-bar">
+        <button class="filter-tab active" id="tab-all"      onclick="setFilter('all')">All</button>
+        <button class="filter-tab"        id="tab-pending"  onclick="setFilter('pending')">Pending</button>
+        <button class="filter-tab"        id="tab-delivered" onclick="setFilter('delivered')">Delivered</button>
+        <input type="text" id="soSearch" placeholder="Search SO No, customer, invoice..." oninput="renderTable()">
+        <select id="dateRange" onchange="renderTable()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+          <option value="30d">Last 30 days</option>
+          <option value="7d">Last 7 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="year">This year</option>
+          <option value="all">All time</option>
+        </select>
+        <button class="btn btn-sm btn-secondary" onclick="loadRecords()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div id="soCount" class="count-label"></div>
+      <div id="soContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ─── Edit Sales Order Modal (full edit) ─────────────── -->
+  <div class="modal-overlay" id="statusModal" onclick="closeModal(event)">
+    <div class="modal-box" onclick="event.stopPropagation()" style="max-width:880px;width:96%;max-height:92vh;overflow-y:auto;">
+      <h4 style="margin-bottom:0.25rem;">Edit Sales Order — <span id="editSoNoTitle" style="color:#14b8a6;"></span></h4>
+      <p style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-bottom:1rem;">All fields are editable. Saving replaces the existing rows; uploaded documents and original creator are preserved.</p>
+
+      <input type="hidden" id="modalSONo">
+      <input type="hidden" id="modalCustomerName">
+
+      <div class="so-form-grid">
+        <div>
+          <label for="editSoDate">Date</label>
+          <input type="date" id="editSoDate">
+        </div>
+        <div>
+          <label for="modalSONoDisplay">SO No. <span style="color:var(--text-muted,#64748b);font-weight:400;">(read-only)</span></label>
+          <input type="text" id="modalSONoDisplay" readonly style="opacity:0.6;">
+        </div>
+        <div>
+          <label for="editCustomerId">Customer ID</label>
+          <input type="text" id="editCustomerId" placeholder="e.g. CUS-001">
+        </div>
+        <div>
+          <label for="editCustomerName">Customer Name</label>
+          <input type="text" id="editCustomerName" placeholder="Company or person name">
+        </div>
+        <div>
+          <label for="modalStatus">Status</label>
+          <select id="modalStatus" onchange="onStatusChange()">
+            <option value="Pending">Pending</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+        </div>
+        <div>
+          <label for="editVatType">VAT Type</label>
+          <select id="editVatType" onchange="editRecalcSummary()">
+            <option value="VAT Exclusive">VAT Exclusive</option>
+            <option value="VAT Inclusive">VAT Inclusive</option>
+            <option value="Zero Rated">Zero Rated</option>
+            <option value="VAT Exempt">VAT Exempt</option>
+          </select>
+        </div>
+        <div class="full">
+          <label for="modalInvoiceNo">Invoice No.</label>
+          <input type="text" id="modalInvoiceNo" placeholder="e.g. INV-2026-001">
+        </div>
+      </div>
+
+      <!-- Editable items -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;margin-top:0.5rem;">
+        <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted,#64748b);">LINE ITEMS</span>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="editAddItemRow()" style="font-size:0.75rem;padding:0.25rem 0.6rem;">+ Add Item</button>
+      </div>
+      <div class="items-wrapper">
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th style="min-width:100px;">Product Code</th>
+              <th style="min-width:180px;">Description</th>
+              <th style="min-width:70px;">Qty</th>
+              <th style="min-width:110px;">Unit Price</th>
+              <th style="min-width:110px;">Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="editItemsBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Edit summary -->
+      <div class="so-summary" id="editSoSummary" style="margin-top:0.5rem;">
+        <div class="so-summary-row"><span class="lbl">Subtotal</span><span class="val" id="editSumTotal">₱0.00</span></div>
+        <div class="so-summary-row"><span class="lbl" id="editSumSalesLbl">Sales (Net)</span><span class="val" id="editSumSales">₱0.00</span></div>
+        <div class="so-summary-row"><span class="lbl" id="editSumVATLbl">VAT (12%)</span><span class="val" id="editSumVAT">₱0.00</span></div>
+        <div class="so-summary-row"><span class="lbl" id="editSumGrandLbl">TOTAL (w/ VAT)</span><span class="val" id="editSumGrand">₱0.00</span></div>
+      </div>
+
+      <!-- Upload section — shown when status = Delivered -->
+      <div id="uploadSection" style="display:none;margin-top:0.75rem;">
+        <label style="display:block;margin-bottom:0.3rem;">Upload SI Documents (optional)</label>
+        <input type="file" id="modalFiles" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx" style="width:100%;font-size:0.82rem;">
+        <div id="uploadProgress" style="display:none;margin-top:0.4rem;font-size:0.8rem;color:#14b8a6;">Uploading files…</div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" style="flex:1;" onclick="saveStatus()" id="editSaveBtn">Save Changes</button>
+        <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('statusModal').classList.remove('open')">Cancel</button>
+      </div>
+      <div id="modalMsg" style="display:none;margin-top:0.5rem;font-size:0.82rem;padding:0.4rem 0.6rem;border-radius:8px;"></div>
+    </div>
+  </div>
+
+  <!-- ─── Documents Mini-Window ─────────────────────────────── -->
+  <div class="modal-overlay" id="docsModal" onclick="closeDocsModal(event)">
+    <div class="modal-box" onclick="event.stopPropagation()" style="max-width:640px;width:95%;">
+      <h4 style="margin-bottom:0.25rem;">Documents — <span id="docsModalSONo" style="color:#14b8a6;"></span></h4>
+      <div id="docsModalList" style="margin:1rem 0;min-height:60px;"></div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <a id="docsModalFolderLink" href="#" target="_blank" style="display:none;font-size:0.82rem;color:#3b82f6;text-decoration:underline;">Open folder in Drive ↗</a>
+        <button class="btn btn-secondary" style="margin-left:auto;" onclick="closeDocsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    /* ─── State ─────────────────────────────────────────── */
+    let soRecords = [];        // raw data from API
+    let activeFilter = 'all';  // 'all' | 'pending' | 'delivered'
+    let expandedRows = new Set();
+
+    /* ─── Init ──────────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', async () => {
+      const session = requireAdmin();
+      if (!session) return;
+      renderNavbar('sales-orders');
+      document.getElementById('soDate').value = today();
+      addItemRow(); // start with one blank item row
+      await loadRecords();
+    });
+
+    /* ─── Helpers ───────────────────────────────────────── */
+    function today() { return new Date().toISOString().slice(0, 10); }
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    // For values embedded inside single-quoted onclick="fn('...')" attributes
+    function escQ(s) { return esc(s).replace(/'/g, '&#39;'); }
+    function php(n) {
+      return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    /* ─── Form: toggle ──────────────────────────────────── */
+    function toggleForm() {
+      const s = document.getElementById('formSection');
+      const l = document.getElementById('toggleLabel');
+      s.classList.toggle('open');
+      l.textContent = s.classList.contains('open') ? 'Hide Form' : 'Show Form';
+    }
+
+    // ─── Form: item rows ─────────────────────────────────
+    let itemCount = 0;
+    function addItemRow() {
+      itemCount++;
+      const id = itemCount;
+      const tbody = document.getElementById('itemsBody');
+      const tr = document.createElement('tr');
+      tr.id = 'item-row-' + id;
+      tr.innerHTML = `
+        <td style="color:var(--text-muted,#64748b);font-size:0.78rem;padding:0.35rem 0.5rem;">${id}</td>
+        <td><input type="text" id="iCode${id}" placeholder="e.g. PRD-001"></td>
+        <td><input type="text" id="iDesc${id}" placeholder="Description" required></td>
+        <td><input type="number" id="iQty${id}"   min="0" step="any" value="1"   oninput="calcRow(${id})" style="width:70px;"></td>
+        <td><input type="number" id="iPrice${id}" min="0" step="0.01" value="0" oninput="calcRow(${id})" style="width:110px;"></td>
+        <td class="amt-cell" id="iAmt${id}">₱0.00</td>
+        <td><button type="button" class="rm-btn" onclick="removeItemRow(${id})">✕</button></td>`;
+      tbody.appendChild(tr);
+      recalcSummary();
+    }
+
+    function removeItemRow(id) {
+      const tbody = document.getElementById('itemsBody');
+      if (tbody.rows.length <= 1) return; // keep at least one
+      document.getElementById('item-row-' + id).remove();
+      recalcSummary();
+    }
+
+    function calcRow(id) {
+      const qty   = parseFloat(document.getElementById('iQty'  + id).value) || 0;
+      const price = parseFloat(document.getElementById('iPrice' + id).value) || 0;
+      document.getElementById('iAmt' + id).textContent = php(qty * price);
+      recalcSummary();
+    }
+
+    function getItemRows() {
+      const items = [];
+      const tbody = document.getElementById('itemsBody');
+      for (const tr of tbody.rows) {
+        const id = tr.id.replace('item-row-', '');
+        const qty   = parseFloat(document.getElementById('iQty'  + id).value) || 0;
+        const price = parseFloat(document.getElementById('iPrice' + id).value) || 0;
+        items.push({
+          productCode:        (document.getElementById('iCode' + id).value || '').trim(),
+          productDescription: (document.getElementById('iDesc' + id).value || '').trim(),
+          qty:   qty,
+          unitPrice: price
+        });
+      }
+      return items;
+    }
+
+    function recalcSummary() {
+      const items = getItemRows();
+      const total = items.reduce((s, it) => s + (it.qty * it.unitPrice), 0);
+      const vatType = document.getElementById('soVatType').value;
+      let sales, vat, grand;
+      if (vatType === 'VAT Inclusive') {
+        grand = total;
+        vat   = total * (12 / 112);
+        sales = total - vat;
+        document.getElementById('sumSalesLbl').textContent = 'Sales (Net, VAT removed)';
+        document.getElementById('sumVATLbl').textContent   = 'VAT (12%, included)';
+        document.getElementById('sumGrandLbl').textContent = 'TOTAL AMOUNT (VAT Inclusive)';
+      } else if (vatType === 'Zero Rated' || vatType === 'VAT Exempt') {
+        sales = total;
+        vat   = 0;
+        grand = total;
+        document.getElementById('sumSalesLbl').textContent = 'Sales';
+        document.getElementById('sumVATLbl').textContent   = vatType === 'Zero Rated' ? 'VAT (0%)' : 'VAT (Exempt)';
+        document.getElementById('sumGrandLbl').textContent = 'TOTAL AMOUNT (' + vatType + ')';
+      } else {
+        sales = total;
+        vat   = total * 0.12;
+        grand = total + vat;
+        document.getElementById('sumSalesLbl').textContent = 'Sales (Net)';
+        document.getElementById('sumVATLbl').textContent   = 'VAT (12%)';
+        document.getElementById('sumGrandLbl').textContent = 'TOTAL AMOUNT (w/ VAT)';
+      }
+      document.getElementById('sumTotal').textContent = php(total);
+      document.getElementById('sumSales').textContent = php(sales);
+      document.getElementById('sumVAT').textContent   = php(vat);
+      document.getElementById('sumGrand').textContent = php(grand);
+    }
+
+    function resetForm() {
+      // clear header fields
+      document.getElementById('soDate').value = today();
+      document.getElementById('soNo').value = '';
+      document.getElementById('soCustomerId').value = '';
+      document.getElementById('soCustomerName').value = '';
+      document.getElementById('soStatus').value = 'Pending';
+      document.getElementById('soVatType').value = 'VAT Exclusive';
+      document.getElementById('soInvoiceNo').value = '';
+      // clear items
+      document.getElementById('itemsBody').innerHTML = '';
+      itemCount = 0;
+      addItemRow();
+      recalcSummary();
+      const msg = document.getElementById('formMsg');
+      msg.style.display = 'none';
+    }
+
+    /* ─── Form: submit ──────────────────────────────────── */
+    async function submitSO(e) {
+      e.preventDefault();
+      const btn = document.getElementById('soSubmitBtn');
+      const msg = document.getElementById('formMsg');
+      const items = getItemRows();
+
+      if (!items.some(it => it.productDescription)) {
+        showFormMsg('Please fill in at least one item description.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      msg.style.display = 'none';
+
+      try {
+        const _ses = (typeof getSession === 'function') ? getSession() : null;
+        const result = await apiCreateSalesOrder({
+          soNo:         document.getElementById('soNo').value.trim(),
+          date:         document.getElementById('soDate').value,
+          customerId:   document.getElementById('soCustomerId').value.trim(),
+          customerName: document.getElementById('soCustomerName').value.trim(),
+          status:       document.getElementById('soStatus').value,
+          vatType:      document.getElementById('soVatType').value,
+          invoiceNo:    document.getElementById('soInvoiceNo').value.trim(),
+          items:        JSON.stringify(items),
+          createdBy:    (_ses && _ses.name) || ''
+        });
+
+        if (result.success) {
+          showFormMsg('Sales Order ' + result.soNo + ' saved successfully!', 'success');
+          resetForm();
+          clearApiCache();
+          await loadRecords();
+        } else {
+          throw new Error(result.message || 'Failed to save');
+        }
+      } catch (err) {
+        showFormMsg('Error: ' + err.message, 'error');
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Sales Order';
+    }
+
+    function showFormMsg(text, type) {
+      const msg = document.getElementById('formMsg');
+      msg.style.display = 'block';
+      msg.style.background = type === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
+      msg.style.color = type === 'success' ? '#22c55e' : '#ef4444';
+      msg.textContent = text;
+    }
+
+    /* ─── Records: load ─────────────────────────────────── */
+    async function loadRecords() {
+      const container = document.getElementById('soContainer');
+      container.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
+      try {
+        const result = await apiGetSalesOrders();
+        if (!result.success) throw new Error(result.message || 'Failed');
+        soRecords = result.data || [];
+        expandedRows.clear();
+        renderTable();
+      } catch (err) {
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+      }
+    }
+
+    /* ─── Records: filter + render ──────────────────────── */
+    function setFilter(f) {
+      activeFilter = f;
+      ['all','pending','delivered'].forEach(id => {
+        document.getElementById('tab-' + id).classList.toggle('active', id === f);
+      });
+      renderTable();
+    }
+
+    function renderTable() {
+      const search = (document.getElementById('soSearch').value || '').toLowerCase();
+      const range = document.getElementById('dateRange') ? document.getElementById('dateRange').value : 'all';
+      let rows = soRecords;
+
+      // Date range filter
+      if (range !== 'all') {
+        rows = rows.filter(function(r) {
+          var d = new Date(r.date || r.soDate);
+          if (isNaN(d)) return false;
+          var cutoff = new Date();
+          if (range === '7d') cutoff.setDate(cutoff.getDate() - 7);
+          else if (range === '30d') cutoff.setDate(cutoff.getDate() - 30);
+          else if (range === '90d') cutoff.setDate(cutoff.getDate() - 90);
+          else if (range === 'year') { cutoff.setMonth(0); cutoff.setDate(1); }
+          return d >= cutoff;
+        });
+      }
+
+      if (activeFilter === 'pending')   rows = rows.filter(r => r.status === 'Pending');
+      if (activeFilter === 'delivered') rows = rows.filter(r => r.status === 'Delivered');
+      if (search) rows = rows.filter(r =>
+        (r.soNo || '').toLowerCase().includes(search) ||
+        (r.customerName || '').toLowerCase().includes(search) ||
+        (r.invoiceNo || '').toLowerCase().includes(search) ||
+        (r.customerId || '').toLowerCase().includes(search)
+      );
+
+      document.getElementById('soCount').textContent =
+        rows.length + ' sales order' + (rows.length !== 1 ? 's' : '');
+
+      const container = document.getElementById('soContainer');
+      if (rows.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted,#64748b);">No sales orders found.</div>';
+        return;
+      }
+
+      let html = '<table class="so-table"><thead><tr>' +
+        '<th></th><th>SO No.</th><th>Date</th><th>Customer ID</th><th>Customer Name</th>' +
+        '<th style="text-align:center;">Items</th>' +
+        '<th style="text-align:right;">Total Amount</th>' +
+        '<th style="text-align:right;">Sales</th>' +
+        '<th style="text-align:right;">VAT</th>' +
+        '<th style="text-align:right;">Grand Total</th>' +
+        '<th>VAT Type</th>' +
+        '<th>Status</th><th>Invoice No.</th><th>Actions</th>' +
+        '</tr></thead><tbody>';
+
+      rows.forEach(r => {
+        const expanded = expandedRows.has(r.soNo);
+        const badgeClass = r.status === 'Delivered' ? 'badge-delivered' : 'badge-pending';
+        const expandIcon = expanded
+          ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>'
+          : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+
+        html += `<tr class="main-row" id="main-${esc(r.soNo)}">
+          <td><button onclick="toggleItems('${escQ(r.soNo)}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted,#64748b);display:flex;align-items:center;">${expandIcon}</button></td>
+          <td><strong style="color:#14b8a6;">${esc(r.soNo)}</strong></td>
+          <td style="white-space:nowrap;">${esc(r.date)}</td>
+          <td style="font-size:0.8rem;color:var(--text-muted,#64748b);">${esc(r.customerId)}</td>
+          <td><strong>${esc(r.customerName)}</strong></td>
+          <td style="text-align:center;">
+            <button onclick="toggleItems('${escQ(r.soNo)}')" style="background:rgba(20,184,166,0.12);color:#14b8a6;border:none;border-radius:999px;padding:0.15rem 0.5rem;font-size:0.72rem;font-weight:600;cursor:pointer;">${r.items ? r.items.length : 0} item${(r.items && r.items.length !== 1) ? 's' : ''}</button>
+          </td>
+          <td style="text-align:right;">${php(r.totalAmount)}</td>
+          <td style="text-align:right;">${php(r.sales)}</td>
+          <td style="text-align:right;color:var(--text-muted,#64748b);">${php(r.vat)}</td>
+          <td style="text-align:right;font-weight:700;color:#14b8a6;">${php(r.grandTotal)}</td>
+          <td><span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:999px;font-weight:600;background:${r.vatType === 'VAT Inclusive' ? 'rgba(168,85,247,0.15)' : 'rgba(20,184,166,0.12)'};color:${r.vatType === 'VAT Inclusive' ? '#a855f7' : '#14b8a6'};">${esc(r.vatType || 'VAT Exclusive')}</span></td>
+          <td><span class="badge ${badgeClass}">${esc(r.status)}</span></td>
+          <td style="font-size:0.8rem;">${esc(r.invoiceNo)}</td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-sm btn-secondary" onclick="openModal('${escQ(r.soNo)}','${escQ(r.status)}','${escQ(r.invoiceNo)}','${escQ(r.customerName)}')" style="font-size:0.7rem;padding:0.15rem 0.5rem;margin-right:0.25rem;">Edit</button>
+            ${r.driveFolderLink ? `<button onclick="viewDocs('${escQ(r.soNo)}')" title="View Documents" style="font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid rgba(20,184,166,0.3);background:rgba(20,184,166,0.1);color:#14b8a6;cursor:pointer;margin-right:0.25rem;">📎 Docs</button>` : ''}
+            <button onclick="deleteSO('${escQ(r.soNo)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.12);color:#ef4444;cursor:pointer;">Del</button>
+          </td>
+        </tr>`;
+
+        // Expandable items sub-row
+        html += `<tr class="items-row ${expanded ? '' : 'hidden'}" id="items-${esc(r.soNo)}">
+          <td colspan="14">
+            <div class="inner">`;
+        if (r.items && r.items.length > 0) {
+          html += `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+            <tr>
+              <th style="text-align:left;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">#</th>
+              <th style="text-align:left;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Product Code</th>
+              <th style="text-align:left;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Description</th>
+              <th style="text-align:right;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Qty</th>
+              <th style="text-align:right;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Unit Price</th>
+              <th style="text-align:right;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Amount</th>
+            </tr>`;
+          r.items.forEach((it, idx) => {
+            html += `<tr>
+              <td style="padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);">${idx + 1}</td>
+              <td style="padding:0.25rem 0.5rem;">${esc(it.productCode)}</td>
+              <td style="padding:0.25rem 0.5rem;">${esc(it.productDescription)}</td>
+              <td style="text-align:right;padding:0.25rem 0.5rem;">${Number(it.qty).toLocaleString('en-PH')}</td>
+              <td style="text-align:right;padding:0.25rem 0.5rem;">${php(it.unitPrice)}</td>
+              <td style="text-align:right;padding:0.25rem 0.5rem;font-weight:600;">${php(it.amount)}</td>
+            </tr>`;
+          });
+          html += `</table>`;
+        } else {
+          html += `<span style="color:var(--text-muted,#64748b);font-size:0.8rem;">No items.</span>`;
+        }
+        html += `</div></td></tr>`;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function toggleItems(soNo) {
+      if (expandedRows.has(soNo)) expandedRows.delete(soNo);
+      else expandedRows.add(soNo);
+      renderTable();
+    }
+
+    /* ─── Edit Modal ────────────────────────────────────── */
+    let editItemCount = 0;
+
+    function editAddItemRow(prefill) {
+      editItemCount++;
+      const id = editItemCount;
+      const tbody = document.getElementById('editItemsBody');
+      const tr = document.createElement('tr');
+      tr.id = 'edit-item-row-' + id;
+      const p = prefill || {};
+      tr.innerHTML = `
+        <td style="color:var(--text-muted,#64748b);font-size:0.78rem;padding:0.35rem 0.5rem;">${id}</td>
+        <td><input type="text" id="eCode${id}" value="${esc(p.productCode || '')}" placeholder="PRD-001"></td>
+        <td><input type="text" id="eDesc${id}" value="${esc(p.productDescription || '')}" placeholder="Description"></td>
+        <td><input type="number" id="eQty${id}"   min="0" step="any"  value="${Number(p.qty || 1)}"        oninput="editCalcRow(${id})" style="width:70px;"></td>
+        <td><input type="number" id="ePrice${id}" min="0" step="0.01" value="${Number(p.unitPrice || 0)}" oninput="editCalcRow(${id})" style="width:110px;"></td>
+        <td class="amt-cell" id="eAmt${id}">${php((p.qty || 0) * (p.unitPrice || 0))}</td>
+        <td><button type="button" class="rm-btn" onclick="editRemoveItemRow(${id})">✕</button></td>`;
+      tbody.appendChild(tr);
+      editRecalcSummary();
+    }
+
+    function editRemoveItemRow(id) {
+      const tbody = document.getElementById('editItemsBody');
+      if (tbody.rows.length <= 1) return;
+      document.getElementById('edit-item-row-' + id).remove();
+      editRecalcSummary();
+    }
+
+    function editCalcRow(id) {
+      const qty   = parseFloat(document.getElementById('eQty'   + id).value) || 0;
+      const price = parseFloat(document.getElementById('ePrice' + id).value) || 0;
+      document.getElementById('eAmt' + id).textContent = php(qty * price);
+      editRecalcSummary();
+    }
+
+    function getEditItemRows() {
+      const items = [];
+      const tbody = document.getElementById('editItemsBody');
+      for (const tr of tbody.rows) {
+        const id = tr.id.replace('edit-item-row-', '');
+        const qty   = parseFloat(document.getElementById('eQty'   + id).value) || 0;
+        const price = parseFloat(document.getElementById('ePrice' + id).value) || 0;
+        items.push({
+          productCode:        (document.getElementById('eCode' + id).value || '').trim(),
+          productDescription: (document.getElementById('eDesc' + id).value || '').trim(),
+          qty: qty,
+          unitPrice: price
+        });
+      }
+      return items;
+    }
+
+    function editRecalcSummary() {
+      const items = getEditItemRows();
+      const total = items.reduce((s, it) => s + (it.qty * it.unitPrice), 0);
+      const vatType = document.getElementById('editVatType').value;
+      let sales, vat, grand;
+      if (vatType === 'VAT Inclusive') {
+        grand = total; vat = total * (12 / 112); sales = total - vat;
+        document.getElementById('editSumSalesLbl').textContent = 'Sales (Net, VAT removed)';
+        document.getElementById('editSumVATLbl').textContent   = 'VAT (12%, included)';
+        document.getElementById('editSumGrandLbl').textContent = 'TOTAL (VAT Inclusive)';
+      } else if (vatType === 'Zero Rated' || vatType === 'VAT Exempt') {
+        sales = total; vat = 0; grand = total;
+        document.getElementById('editSumSalesLbl').textContent = 'Sales';
+        document.getElementById('editSumVATLbl').textContent   = vatType === 'Zero Rated' ? 'VAT (0%)' : 'VAT (Exempt)';
+        document.getElementById('editSumGrandLbl').textContent = 'TOTAL (' + vatType + ')';
+      } else {
+        sales = total; vat = total * 0.12; grand = total + vat;
+        document.getElementById('editSumSalesLbl').textContent = 'Sales (Net)';
+        document.getElementById('editSumVATLbl').textContent   = 'VAT (12%)';
+        document.getElementById('editSumGrandLbl').textContent = 'TOTAL (w/ VAT)';
+      }
+      document.getElementById('editSumTotal').textContent = php(total);
+      document.getElementById('editSumSales').textContent = php(sales);
+      document.getElementById('editSumVAT').textContent   = php(vat);
+      document.getElementById('editSumGrand').textContent = php(grand);
+    }
+
+    function openModal(soNo, status, invoiceNo, customerName) {
+      const rec = soRecords.find(r => r.soNo === soNo) || {};
+      document.getElementById('modalSONo').value         = soNo;
+      document.getElementById('modalCustomerName').value = customerName || rec.customerName || '';
+      document.getElementById('modalSONoDisplay').value  = soNo;
+      document.getElementById('editSoNoTitle').textContent = soNo;
+      document.getElementById('editSoDate').value        = (rec.date || '').slice(0, 10);
+      document.getElementById('editCustomerId').value    = rec.customerId || '';
+      document.getElementById('editCustomerName').value  = customerName || rec.customerName || '';
+      document.getElementById('modalStatus').value       = status || rec.status || 'Pending';
+      document.getElementById('editVatType').value       = rec.vatType || 'VAT Exclusive';
+      document.getElementById('modalInvoiceNo').value    = invoiceNo || rec.invoiceNo || '';
+      document.getElementById('modalFiles').value = '';
+      document.getElementById('uploadProgress').style.display = 'none';
+      document.getElementById('modalMsg').style.display = 'none';
+      document.getElementById('uploadSection').style.display = ((status || rec.status) === 'Delivered') ? '' : 'none';
+
+      // Repopulate items
+      document.getElementById('editItemsBody').innerHTML = '';
+      editItemCount = 0;
+      const items = (rec.items && rec.items.length) ? rec.items : [{ productCode:'', productDescription:'', qty:1, unitPrice:0 }];
+      items.forEach(editAddItemRow);
+
+      document.getElementById('statusModal').classList.add('open');
+    }
+
+    function onStatusChange() {
+      const status = document.getElementById('modalStatus').value;
+      document.getElementById('uploadSection').style.display = (status === 'Delivered') ? '' : 'none';
+    }
+
+    function closeModal(e) {
+      if (e.target === document.getElementById('statusModal')) {
+        document.getElementById('statusModal').classList.remove('open');
+      }
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function saveStatus() {
+      const soNo         = document.getElementById('modalSONo').value;
+      const customerName = document.getElementById('editCustomerName').value.trim() || document.getElementById('modalCustomerName').value;
+      const status       = document.getElementById('modalStatus').value;
+      const invoiceNo    = document.getElementById('modalInvoiceNo').value.trim();
+      const filesInput   = document.getElementById('modalFiles');
+      const progressEl   = document.getElementById('uploadProgress');
+      const msgEl        = document.getElementById('modalMsg');
+      const saveBtn      = document.getElementById('editSaveBtn');
+      msgEl.style.display = 'none';
+
+      const items = getEditItemRows().filter(it => it.productDescription || it.productCode || it.qty || it.unitPrice);
+      if (!items.length) {
+        msgEl.style.display = 'block';
+        msgEl.style.background = 'rgba(239,68,68,0.12)';
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = 'At least one line item is required.';
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+
+      try {
+        // 1) Update all editable fields (replaces rows)
+        const upd = await apiUpdateSalesOrder({
+          soNo: soNo,
+          date: document.getElementById('editSoDate').value,
+          customerId: document.getElementById('editCustomerId').value.trim(),
+          customerName: customerName,
+          status: status,
+          vatType: document.getElementById('editVatType').value,
+          invoiceNo: invoiceNo,
+          items: JSON.stringify(items)
+        });
+        if (!upd.success) throw new Error(upd.message || 'Failed to update');
+
+        // 2) Upload any new files (preserves driveFolderLink update path)
+        let driveFolderLink = '';
+        if (filesInput.files.length > 0) {
+          progressEl.style.display = 'block';
+          for (const file of filesInput.files) {
+            progressEl.textContent = `Uploading ${file.name}…`;
+            const base64 = await fileToBase64(file);
+            const upResult = await apiUploadSODocument(soNo, customerName, file.name, base64, file.type || 'application/octet-stream');
+            if (!upResult.success) throw new Error('Upload failed: ' + (upResult.message || file.name));
+            driveFolderLink = upResult.folderLink || driveFolderLink;
+          }
+          progressEl.style.display = 'none';
+          if (driveFolderLink) {
+            await apiUpdateSOStatus(soNo, status, invoiceNo, driveFolderLink);
+          }
+        }
+
+        document.getElementById('statusModal').classList.remove('open');
+        clearApiCache();
+        await loadRecords();
+      } catch (err) {
+        progressEl.style.display = 'none';
+        msgEl.style.display = 'block';
+        msgEl.style.background = 'rgba(239,68,68,0.12)';
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = 'Error: ' + err.message;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    }
+
+    /* ─── Docs Mini-Window ──────────────────────────────── */
+    function closeDocsModal(e) {
+      if (!e || e.target === document.getElementById('docsModal')) {
+        document.getElementById('docsModal').classList.remove('open');
+      }
+    }
+
+    async function viewDocs(soNo) {
+      const modal    = document.getElementById('docsModal');
+      const listEl   = document.getElementById('docsModalList');
+      const folderEl = document.getElementById('docsModalFolderLink');
+      document.getElementById('docsModalSONo').textContent = soNo;
+      listEl.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div>';
+      folderEl.style.display = 'none';
+      modal.classList.add('open');
+
+      try {
+        const result = await apiGetSODocuments(soNo);
+        if (!result.success) throw new Error(result.message || 'Failed to load');
+
+        if (result.folderLink) {
+          folderEl.href = result.folderLink;
+          folderEl.style.display = '';
+        }
+
+        if (!result.files || result.files.length === 0) {
+          listEl.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No documents uploaded yet.</div>';
+        } else {
+          let html = '<div style="display:flex;flex-direction:column;gap:0.4rem;">';
+          result.files.forEach(f => {
+            const icon = f.mimeType && f.mimeType.includes('pdf') ? '📄' : (f.mimeType && f.mimeType.startsWith('image') ? '🖼️' : '📎');
+            html += `<a href="${esc(f.link)}" target="_blank" style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(20,184,166,0.08);color:#14b8a6;text-decoration:none;font-size:0.83rem;">
+              <span>${icon}</span><span>${esc(f.name)}</span>
+              <span style="margin-left:auto;font-size:0.72rem;color:var(--text-muted,#64748b);">View ↗</span>
+            </a>`;
+          });
+          html += '</div>';
+          listEl.innerHTML = html;
+        }
+      } catch (err) {
+        listEl.innerHTML = '<div style="color:#ef4444;font-size:0.85rem;">Error: ' + esc(err.message) + '</div>';
+      }
+    }
+
+    /* ─── Delete SO ─────────────────────────────────────── */
+    async function deleteSO(soNo) {
+      if (!confirm('Delete all rows for ' + soNo + '? This cannot be undone.')) return;
+      try {
+        const result = await apiDeleteSalesOrder(soNo);
+        if (result.success) {
+          clearApiCache();
+          await loadRecords();
+        } else {
+          alert('Error: ' + (result.message || 'Failed to delete'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    /* ─── Export Excel ──────────────────────────────────── */
+    async function exportExcel() {
+      const btn = document.getElementById('exportBtn');
+      btn.disabled = true;
+      btn.textContent = 'Exporting...';
+      try {
+        await loadXLSX();
+        const rows = [];
+        // Header rows
+        rows.push(['SO No', 'Date', 'Customer ID', 'Customer Name',
+          'Product Code', 'Product Description', 'Quantity', 'Unit Price', 'Amount',
+          'Total Amount', 'Sales', 'VAT', 'Total Amount (w/ VAT)', 'VAT Type', 'Status', 'Invoice No']);
+
+        soRecords.forEach(so => {
+          (so.items || []).forEach(it => {
+            rows.push([
+              so.soNo, so.date, so.customerId, so.customerName,
+              it.productCode, it.productDescription, it.qty, it.unitPrice, it.amount,
+              so.totalAmount, so.sales, so.vat, so.grandTotal, so.vatType || 'VAT Exclusive', so.status, so.invoiceNo
+            ]);
+          });
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        // Column widths
+        ws['!cols'] = [
+          {wch:16},{wch:12},{wch:14},{wch:22},
+          {wch:14},{wch:28},{wch:8},{wch:12},{wch:12},
+          {wch:14},{wch:12},{wch:10},{wch:18},{wch:12},{wch:14}
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Sales Orders');
+        const fileName = 'SalesOrders_' + new Date().toISOString().slice(0,10) + '.xlsx';
+        XLSX.writeFile(wb, fileName);
+      } catch (err) {
+        alert('Export error: ' + err.message);
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export Excel';
+    }
+  </script>
+</body>
+</html>

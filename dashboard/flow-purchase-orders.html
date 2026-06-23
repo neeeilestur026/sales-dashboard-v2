@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Purchase Orders</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Purchase Orders</h1>
+      <p>Load a sales order (or enter manually), set supplier price &amp; currency. Saving creates an Accounts Payable entry.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="chart-card" style="margin-bottom:1.25rem;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Purchase Order</h3>
+      <input type="hidden" id="poNo" value="">
+      <div class="flow-form">
+        <div><label>Load Sales Order</label><select id="loadSO" onchange="loadFromSO()"></select></div>
+        <div><label>Source SO No</label><input type="text" id="soNo" readonly></div>
+        <div><label>Supplier *</label><input type="text" id="supplier" required></div>
+        <div><label>Currency</label><select id="currency"></select></div>
+        <div><label>Date</label><input type="date" id="date"></div>
+      </div>
+      <p style="font-size:0.76rem;color:var(--text-muted,#64748b);">When loaded from a sales order, default quantity = SO quantity less inventory on hand. New POs start as <b>Draft</b> — submit for management approval from the list.</p>
+
+      <table class="flow-table flow-items" style="margin-top:0.5rem;">
+        <thead><tr><th style="width:34%;">Item</th><th class="num" style="width:14%;">Qty</th><th class="num" style="width:20%;">Purchase Price/Unit (FC)</th><th class="num" style="width:18%;">Total (FC)</th><th></th></tr></thead>
+        <tbody id="itemRows"></tbody>
+      </table>
+      <div class="flow-actions">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
+        <span style="margin-left:auto;font-weight:700;">Total Purchase: <span id="grandTotal">0.00</span> <span id="curLabel"></span></span>
+      </div>
+
+      <div class="flow-actions">
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="savePO()">Save Purchase Order</button>
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+      <div id="formMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <h3 style="font-size:0.95rem;font-weight:600;">Purchase Orders</h3>
+        <button class="btn btn-sm btn-secondary" onclick="loadPOs()">Refresh</button>
+      </div>
+      <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+  </main>
+
+  <!-- Generate Purchase Order PDF modal -->
+  <div class="flow-modal-overlay" id="pdfModal">
+    <div class="flow-modal">
+      <h3>Generate Purchase Order PDF</h3>
+      <div class="sub" id="pdfModalSub">—</div>
+      <input type="hidden" id="pdfPoNo">
+
+      <div class="group-title">Vendor</div>
+      <div class="flow-form">
+        <div class="full"><label>Vendor Address</label><input type="text" id="pdfVendorAddress"></div>
+        <div><label>Contact Person</label><input type="text" id="pdfVendorContact"></div>
+        <div><label>Vendor Email</label><input type="text" id="pdfVendorEmail"></div>
+        <div><label>Vendor TIN</label><input type="text" id="pdfVendorTin"></div>
+      </div>
+
+      <div class="group-title">Order</div>
+      <div class="flow-form">
+        <div><label>Payment Terms</label><input type="text" id="pdfPaymentTerms" placeholder="e.g. Net 30"></div>
+        <div><label>Date Needed</label><input type="date" id="pdfDateNeeded"></div>
+        <div><label>Reference No.</label><input type="text" id="pdfReferenceNo" placeholder="SO / client PO"></div>
+        <div><label>Format</label><select id="pdfDescriptionType"><option value="short">Short (10 items/page)</option><option value="long">Long (3 items/page)</option></select></div>
+      </div>
+
+      <div class="group-title">Invoice Contact (H.O Estur)</div>
+      <div class="flow-form">
+        <div><label>Contact Person</label><input type="text" id="pdfInvoiceContact"></div>
+        <div><label>Email</label><input type="text" id="pdfInvoiceEmail"></div>
+      </div>
+
+      <div class="group-title">Attachments (optional brochure PDFs)</div>
+      <input type="file" id="pdfBrochures" accept="application/pdf" multiple>
+
+      <div id="pdfModalMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closePdfModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="pdfGenBtn" onclick="submitPdf()">Generate &amp; Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-purchase-orders.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Dashboard — Leave Request</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/training-mode.css">
+  <style>
+    .leave-container { max-width: 900px; margin: 0 auto; }
+    .section-card {
+      background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155);
+      border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;
+    }
+    .section-title {
+      font-size: 0.85rem; font-weight: 600; color: var(--text-muted, #64748b);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .leave-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .leave-form .full { grid-column: 1 / -1; }
+    .leave-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .leave-form input, .leave-form select, .leave-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--bg-primary, #0f172a);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .leave-form input:read-only { opacity: 0.6; cursor: not-allowed; }
+    .leave-form textarea { resize: vertical; min-height: 60px; }
+    .leave-form input:focus, .leave-form select:focus, .leave-form textarea:focus { outline: none; border-color: #3b82f6; }
+    .btn-submit {
+      display: block; width: 100%; padding: 0.75rem; background: var(--primary, #3b82f6);
+      color: #fff; border: none; border-radius: 8px; font-size: 0.95rem;
+      font-weight: 600; cursor: pointer; margin-top: 1rem;
+    }
+    .btn-submit:hover { opacity: 0.9; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .form-msg { margin-top: 0.75rem; font-size: 0.85rem; font-weight: 500; text-align: center; }
+    .form-msg.success { color: #22c55e; }
+    .form-msg.error { color: #ef4444; }
+    .leave-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .leave-table th {
+      text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b);
+      border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; font-size: 0.75rem;
+    }
+    .leave-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; }
+    .leave-table tr:hover td { background: #e2e8f0; }
+    .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .status-pending { background: rgba(234,179,8,0.12); color: #eab308; }
+    .status-approved { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .status-rejected { background: rgba(239,68,68,0.12); color: #ef4444; }
+    @media(max-width: 640px) { .leave-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="leave-container">
+      <div class="page-header">
+        <h1>Leave Request</h1>
+        <p>Submit a leave request for approval.</p>
+      </div>
+
+      <!-- Leave Form -->
+      <div class="section-card">
+        <div class="section-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          New Leave Request
+        </div>
+        <form id="leaveForm" onsubmit="submitLeave(event)">
+          <div class="leave-form">
+            <div>
+              <label for="leaveEmployee">Employee Name</label>
+              <input type="text" id="leaveEmployee" readonly>
+            </div>
+            <div>
+              <label for="leaveType">Leave Type <span style="color:#ef4444;">*</span></label>
+              <select id="leaveType" required>
+                <option value="Vacation">Vacation</option>
+                <option value="Sick">Sick</option>
+                <option value="Personal">Personal</option>
+                <option value="Half Day">Half Day</option>
+                <option value="Undertime">Undertime</option>
+                <option value="Maternity/Paternity">Maternity/Paternity</option>
+                <option value="Emergency">Emergency</option>
+              </select>
+            </div>
+            <div>
+              <label for="leaveStart">Start Date <span style="color:#ef4444;">*</span></label>
+              <input type="date" id="leaveStart" required onchange="calcDays()">
+            </div>
+            <div>
+              <label for="leaveEnd">End Date <span style="color:#ef4444;">*</span></label>
+              <input type="date" id="leaveEnd" required onchange="calcDays()">
+            </div>
+            <div>
+              <label for="leaveDays">Days</label>
+              <input type="number" id="leaveDays" min="0.5" step="0.5" readonly>
+            </div>
+            <div class="full">
+              <label for="leaveReason">Reason</label>
+              <textarea id="leaveReason" placeholder="Reason for leave..."></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn-submit" id="submitBtn">Submit Leave Request</button>
+          <div id="formMsg" class="form-msg"></div>
+        </form>
+      </div>
+
+      <!-- My Leave History -->
+      <div class="section-card">
+        <div class="section-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          My Leave History
+        </div>
+        <div id="leaveContainer" style="overflow-x:auto;">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/leave-request.js"></script>
+  <script src="js/training-mode.js"></script>
+</body>
+</html>

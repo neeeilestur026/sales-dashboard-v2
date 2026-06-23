@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Request Form</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tool-css/tool-shared.css">
+</head>
+<body>
+<script>
+(function(){var s;try{s=JSON.parse(localStorage.getItem('session'));}catch(e){}
+if(!s||!s.token){window.location.href='/index.html';return;}
+var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorage.removeItem('session');window.location.href='/index.html';}
+})();
+</script>
+
+    <!-- Back to Dashboard -->
+    <div class="container pt-3">
+        <a id="backLink" href="/dashboard.html" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to Dashboard</a>
+    </div>
+    <script>
+    (function(){try{var s=JSON.parse(localStorage.getItem('session'));if(s&&s.role==='admin')document.getElementById('backLink').href='/admin.html';else if(s&&s.role==='management')document.getElementById('backLink').href='/management-home.html';else if(s&&s.role==='accounting')document.getElementById('backLink').href='/accounting-home.html';}catch(e){}})();
+    </script>
+
+    <!-- Page header -->
+    <div class="page-header">
+        <div class="container">
+            <h1>Purchase Request Form</h1>
+            <p>Fill in the details below to generate a purchase request PDF.</p>
+        </div>
+    </div>
+
+    <div class="container main-content">
+        <form id="pr_form" enctype="multipart/form-data">
+            <div class="row g-4">
+
+                <!-- Company Information -->
+                <div class="col-md-6">
+                    <div class="card section-gap">
+                        <div class="card-header">
+                            <div class="header-icon blue">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 21h18M3 7v14M21 7v14M9 3h6l3 4H6l3-4zM9 21v-6h6v6"/></svg>
+                            </div>
+                            <h5>Company Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="company_name" class="form-label">Company Name <span class="text-danger">*</span></label>
+                                <div style="position:relative;">
+                                  <input type="text" class="form-control" id="company_name" name="company_name" required autocomplete="off" oninput="filterClientSuggestions(this.value)" onfocus="filterClientSuggestions(this.value)">
+                                  <div id="clientSuggestions" class="client-suggestions" style="display:none;"></div>
+                                </div>
+                                <div class="invalid-feedback">Please enter the company name.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="company_address" class="form-label">Company Address <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="company_address" name="company_address" required>
+                                <div class="invalid-feedback">Please enter the company address.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="contact_person" class="form-label">Contact Person's Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="contact_person" name="contact_person" required>
+                                <div class="invalid-feedback">Please enter the contact person's name.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="designation" class="form-label">Designation / Department</label>
+                                <input type="text" class="form-control" id="designation" name="designation" placeholder="e.g., Procurement and Logistics Department">
+                            </div>
+                            <div class="mb-3">
+                                <label for="contact_email" class="form-label">Contact Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="contact_email" name="contact_email" required>
+                                <div class="invalid-feedback">Please enter a valid email address.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="contact_phone" class="form-label">Contact Phone Number <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="contact_phone" name="contact_phone" required placeholder="e.g., (917) 513-5704">
+                                <div class="invalid-feedback">Please enter a phone number.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Request Details -->
+                <div class="col-md-6">
+                    <div class="card section-gap">
+                        <div class="card-header">
+                            <div class="header-icon amber">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+                            </div>
+                            <h5>Request Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="reference_number" class="form-label">Reference Number</label>
+                                <input type="text" class="form-control" id="reference_number" name="reference_number" placeholder="e.g., 2026-093-SHP-CBNC">
+                            </div>
+                            <div class="mb-3">
+                                <label for="pr_number_client" class="form-label">PR Number from Client</label>
+                                <input type="text" class="form-control" id="pr_number_client" name="pr_number_client" placeholder="e.g., 1310004168">
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <label for="pr_date" class="form-label">Date <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control" id="pr_date" name="pr_date" required>
+                                        <div class="invalid-feedback">Required.</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <label for="date_needed" class="form-label">Date Needed <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control" id="date_needed" name="date_needed" required>
+                                        <div class="invalid-feedback">Required.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <label for="urgency" class="form-label">Urgency <span class="text-danger">*</span></label>
+                                        <select class="form-select" id="urgency" name="urgency" required>
+                                            <option value="" disabled selected>Select</option>
+                                            <option value="High">High</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="Low">Low</option>
+                                        </select>
+                                        <div class="invalid-feedback">Required.</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <label for="description_type" class="form-label">Description Type</label>
+                                        <select class="form-select" id="description_type" name="description_type">
+                                            <option value="short" selected>Short (10/page)</option>
+                                            <option value="long">Long (3/page)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Attach Brochure / Supporting PDF (Optional)</label>
+                                <input type="file" class="form-control" id="brochure_file" name="brochure_file" accept=".pdf" multiple>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Items -->
+            <div class="card section-gap">
+                <div class="card-header" style="justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <div class="header-icon blue">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                        <h5 class="mb-0">Item Details</h5>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="showAddItemModal()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        Add Item
+                    </button>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="items_table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th style="text-align:left;">Item Description</th>
+                                    <th>Model / Part No.</th>
+                                    <th>Qty</th>
+                                    <th>Unit</th>
+                                    <th>Remarks</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prepared by -->
+            <div class="card section-gap">
+                <div class="card-header">
+                    <div class="header-icon dark">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 1 1 3.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    </div>
+                    <h5>Prepared by</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted" style="font-size:0.8rem; margin-bottom:1rem;">Appears as the signature block at the bottom of the last page.</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="prepared_by_name" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="prepared_by_name" name="prepared_by_name" placeholder="Full name">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="prepared_by_position" class="form-label">Position / Title</label>
+                                <input type="text" class="form-control" id="prepared_by_position" name="prepared_by_position" placeholder="Position / Title">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Log -->
+            <div class="card section-gap">
+                <div class="card-header">
+                    <div class="header-icon dark">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+                    </div>
+                    <h5>Output Log</h5>
+                </div>
+                <div class="card-body" style="padding:0.75rem;">
+                    <pre id="output_log" style="height: 160px; overflow-y: auto; margin:0;"></pre>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="action-bar">
+                <button type="button" class="btn btn-primary btn-generate" onclick="generatePR()">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    Generate PDF
+                </button>
+                <button type="button" class="btn btn-secondary btn-reset" onclick="resetForm()">Reset Form</button>
+            </div>
+            <p class="text-muted text-center" style="font-size:0.8rem;margin-top:0.5rem;">The generated PR will automatically be submitted to Google Sheet and uploaded to Google Drive.</p>
+        </form>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addItemModalLabel">Add Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="item_description" class="form-label">Item Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="item_description" rows="3" placeholder="Describe the item in detail"></textarea>
+                        <div class="invalid-feedback">Please enter an item description.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="model_no" class="form-label">Model / Part No.</label>
+                        <input type="text" class="form-control" id="model_no" placeholder="e.g., AB-1234">
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label for="quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="quantity" min="1" step="1">
+                                <div class="invalid-feedback">Enter a valid quantity.</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label for="unit_of_measure" class="form-label">Unit of Measure</label>
+                                <input type="text" class="form-control" id="unit_of_measure" placeholder="e.g., EA, PCS">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="item_remarks" class="form-label">Remarks (Optional)</label>
+                        <input type="text" class="form-control" id="item_remarks" placeholder="Any additional notes">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="addItemSubmitBtn" onclick="addItem()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        Add Item
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/tool-js/pr/script.js"></script>
+    <style>
+      .client-suggestions{position:absolute;top:100%;left:0;right:0;z-index:999;background:#1e293b;border:1px solid #334155;border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
+      .client-suggestions .cs-item{padding:8px 12px;cursor:pointer;font-size:0.85rem;color:#f1f5f9;border-bottom:1px solid rgba(51,65,85,0.3);}
+      .client-suggestions .cs-item:hover,.client-suggestions .cs-item.active{background:#334155;}
+      .client-suggestions .cs-item small{display:block;color:#94a3b8;font-size:0.75rem;}
+      .client-suggestions .cs-empty{padding:8px 12px;color:#64748b;font-size:0.82rem;}
+    </style>
+    <script>
+    (function(){
+      var SCRIPT_URL='REPLACE_WITH_YOUR_APPS_SCRIPT_EXEC_URL';
+      var clients=[];
+      var loaded=false;
+
+      function loadClients(){
+        if(loaded)return;
+        loaded=true;
+        try{
+          var s=JSON.parse(localStorage.getItem('session')||'{}');
+          var name=s.name||'';
+          if(!name)return;
+          fetch(SCRIPT_URL+'?action=getClients&agentName='+encodeURIComponent(name))
+            .then(function(r){return r.json();})
+            .then(function(d){if(d.success)clients=d.data||[];})
+            .catch(function(){});
+        }catch(e){}
+      }
+
+      window.filterClientSuggestions=function(val){
+        var box=document.getElementById('clientSuggestions');
+        if(!box)return;
+        val=(val||'').trim().toLowerCase();
+        if(!val){box.style.display='none';return;}
+
+        var matches=clients.filter(function(c){
+          return c.companyName.toLowerCase().indexOf(val)!==-1;
+        }).slice(0,8);
+
+        if(matches.length===0){
+          box.innerHTML='<div class="cs-empty">No matching clients</div>';
+          box.style.display='block';
+          return;
+        }
+
+        box.innerHTML=matches.map(function(c,i){
+          return '<div class="cs-item" onmousedown="selectClient('+i+',event)" data-idx="'+i+'">'
+            +escH(c.companyName)
+            +(c.contactPerson?'<small>'+escH(c.contactPerson)+(c.position?' — '+escH(c.position):'')+'</small>':'')
+            +'</div>';
+        }).join('');
+        box.style.display='block';
+        box._matches=matches;
+      };
+
+      window.selectClient=function(idx,e){
+        if(e)e.preventDefault();
+        var box=document.getElementById('clientSuggestions');
+        var c=box._matches&&box._matches[idx];
+        if(!c)return;
+
+        setVal('company_name',c.companyName);
+        setVal('company_address',c.siteAddress||c.headOffice||'');
+        setVal('contact_person',c.contactPerson||'');
+        setVal('designation',c.position||'');
+        setVal('contact_email',c.email||'');
+        setVal('contact_phone',c.mobile||c.tel||'');
+
+        box.style.display='none';
+      };
+
+      function setVal(id,val){var el=document.getElementById(id);if(el)el.value=val;}
+      function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+      document.addEventListener('click',function(e){
+        var box=document.getElementById('clientSuggestions');
+        if(box&&!box.contains(e.target)&&e.target.id!=='company_name')box.style.display='none';
+      });
+
+      if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadClients);
+      else loadClients();
+    })();
+    </script>
+</body>
+</html>

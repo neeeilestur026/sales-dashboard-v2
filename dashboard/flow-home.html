@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accounting Process Flow</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Accounting Process Flow</h1>
+      <p>Inventory → Quotation → Sales Order → Purchase Order (+ AP Aging) → Receiving → Invoice. Each step loads from the previous one.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="chart-card" id="cfgWarn" style="display:none;border-color:rgba(249,115,22,0.4);margin-bottom:1.25rem;">
+      <strong style="color:#f97316;">Flow backend not configured.</strong>
+      <p style="font-size:0.82rem;color:var(--text-muted,#64748b);margin-top:0.4rem;">
+        Deploy <code>apps-script/FlowAPI.gs</code> as a web app and paste its <code>/exec</code> URL into
+        <code>dashboard/js/flow-api.js</code> (<code>FLOW_API_URL</code>).
+      </p>
+    </div>
+
+    <div class="flow-hub">
+      <a href="flow-inventory.html"><div class="step">STEP 1</div><div class="title">Inventory</div><div class="desc">Items with purchase price, shipping &amp; landed cost. Qty may be zero.</div></a>
+      <a href="flow-quotations.html"><div class="step">STEP 2</div><div class="title">Quotation</div><div class="desc">Load items from inventory; set quoted qty &amp; price.</div></a>
+      <a href="flow-sales-orders.html"><div class="step">STEP 3</div><div class="title">Sales Order</div><div class="desc">Load a quotation; edit quantities &amp; remove items.</div></a>
+      <a href="flow-purchase-orders.html"><div class="step">STEP 4</div><div class="title">Purchase Order</div><div class="desc">Load a sales order; supplier price &amp; currency. Creates AP entry.</div></a>
+      <a href="flow-ap-aging.html"><div class="step">STEP 4b</div><div class="title">AP Aging</div><div class="desc">Edit the PHP amount, due date &amp; payment status.</div></a>
+      <a href="flow-receiving.html"><div class="step">STEP 5</div><div class="title">Materials Receiving</div><div class="desc">Load a PO; add shipping → landed cost → inventory.</div></a>
+      <a href="flow-invoices.html"><div class="step">STEP 6</div><div class="title">Invoice / Issuance</div><div class="desc">Load a sales order; deduct inventory; record COGS.</div></a>
+      <a href="flow-ledger.html"><div class="step">LEDGER</div><div class="title">General Ledger</div><div class="desc">Journal entries auto-posted at each step, trial balance &amp; chart of accounts.</div></a>
+      <a href="flow-accounting.html"><div class="step">ACCOUNTING</div><div class="title">Accounting (per Sales Order)</div><div class="desc">Read-only full detail of each sales order across the whole flow — quotation to invoice.</div></a>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const session = requireAccountingOrAdmin();
+      if (!session) return;
+      renderNavbar('flow-home');
+      renderFlowNav('flow-home.html');
+      if (!_flowConfigured()) document.getElementById('cfgWarn').style.display = 'block';
+    });
+  </script>
+</body>
+</html>

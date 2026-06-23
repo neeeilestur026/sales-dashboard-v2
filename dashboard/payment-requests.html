@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Payment Requests</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .pr-kpi { background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 1rem; text-align: center; }
+    .pr-kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
+    .pr-kpi-label { font-size: 0.72rem; font-weight: 600; color: var(--text-muted, #64748b); text-transform: uppercase; margin-top: 0.2rem; }
+    .pr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .pr-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .pr-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .pr-table tr:hover td { background: #e2e8f0; }
+    .st { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .st-pending { background: rgba(249,115,22,0.12); color: #f97316; }
+    .st-approved { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .st-paid { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .st-rejected { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .search-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.25rem; }
+    .search-bar input, .search-bar select { padding: 0.5rem 0.75rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem; }
+    .search-bar input { flex: 1; min-width: 200px; }
+    .search-bar input::placeholder { color: var(--text-muted, #64748b); }
+    .detail-row { display: none; }
+    .detail-row.open { display: table-row; }
+    .detail-row td { background: #e2e8f0; padding: 1rem; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; font-size: 0.82rem; }
+    .detail-grid div { padding: 0.4rem 0; }
+    .detail-grid strong { color: var(--text-muted, #64748b); font-size: 0.72rem; display: block; margin-bottom: 0.15rem; }
+    @media(max-width: 768px) { .detail-grid { grid-template-columns: 1fr 1fr; } }
+    @media(max-width: 480px) { .detail-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Preview Modal ─── */
+    .preview-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 10000;
+      align-items: center; justify-content: center;
+    }
+    .preview-overlay.open { display: flex; }
+    .preview-modal {
+      background: var(--surface, #0f172a); border: 1px solid var(--border, #334155);
+      border-radius: 16px; width: 92vw; max-width: 1000px; height: 85vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden;
+    }
+    .preview-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #334155); }
+    .preview-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #f1f5f9); }
+    .preview-close { background: none; border: none; color: var(--text-muted, #64748b); cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem; }
+    .preview-close:hover { color: var(--text-primary, #f1f5f9); }
+    .preview-body { display: flex; flex: 1; overflow: hidden; }
+    .pv-details { width: 300px; min-width: 260px; padding: 1.25rem; overflow-y: auto; border-right: 1px solid var(--border, #334155); font-size: 0.82rem; }
+    .pv-details .dl { margin-bottom: 0.85rem; }
+    .pv-details .dl-label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #64748b); margin-bottom: 0.2rem; }
+    .pv-details .dl-value { color: var(--text-primary, #f1f5f9); word-break: break-word; }
+    .pv-pdf { flex: 1; display: flex; flex-direction: column; background: #1a1a2e; }
+    .pv-pdf-frame { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+    .pv-pdf-frame iframe { width: 100%; height: 100%; border: none; }
+    .pv-pdf-frame .no-pdf { text-align: center; color: var(--text-muted, #64748b); padding: 2rem; }
+    .pv-pdf-frame .no-pdf svg { margin-bottom: 0.75rem; opacity: 0.5; }
+    .pv-docs-strip {
+      border-top: 1px solid #e2e8f0; padding: 0.6rem 1rem;
+      background: rgba(15,23,42,0.7); display: flex; flex-wrap: wrap;
+      align-items: center; gap: 0.5rem; flex-shrink: 0;
+    }
+    .pv-docs-label {
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-muted, #64748b);
+      white-space: nowrap; margin-right: 0.25rem;
+    }
+    .pv-doc-link {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      font-size: 0.72rem; color: #60a5fa; text-decoration: none;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 5px; padding: 0.18rem 0.55rem; white-space: nowrap;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pv-doc-link:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); }
+    .pv-doc-nolink {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      font-size: 0.72rem; color: var(--text-muted, #64748b);
+      background: #e2e8f0; border: 1px solid #e2e8f0;
+      border-radius: 5px; padding: 0.18rem 0.55rem; white-space: nowrap;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .preview-actions { padding: 1rem 1.25rem; border-top: 1px solid var(--border, #334155); display: flex; gap: 0.5rem; justify-content: flex-end; }
+    .btn-preview { padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer; background: rgba(59,130,246,0.15); color: #3b82f6; text-decoration: none; }
+    .btn-preview:hover { background: rgba(59,130,246,0.3); }
+    @media (max-width: 700px) {
+      .preview-body { flex-direction: column; }
+      .pv-details { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border, #334155); max-height: 35vh; }
+      .preview-modal { width: 98vw; height: 92vh; }
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Payment Requests</h1>
+      <p>Track and manage all submitted payment requests.</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="pr-grid" id="prKpis">
+      <div class="pr-kpi"><div class="pr-kpi-value" id="totalRequests">--</div><div class="pr-kpi-label">Total Requests</div></div>
+      <div class="pr-kpi"><div class="pr-kpi-value" id="pendingCount">--</div><div class="pr-kpi-label">Pending</div></div>
+      <div class="pr-kpi"><div class="pr-kpi-value" id="approvedCount">--</div><div class="pr-kpi-label">Approved</div></div>
+      <div class="pr-kpi"><div class="pr-kpi-value" id="totalAmount">--</div><div class="pr-kpi-label" id="totalAmountLabel">Total Amount</div></div>
+    </div>
+
+    <!-- Table -->
+    <div class="chart-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);">All Payment Requests</h3>
+        <a href="/payment-request/" class="btn btn-sm btn-primary">+ New Request</a>
+      </div>
+      <div class="search-bar">
+        <input type="text" id="prSearch" placeholder="Search payee or PR#..." oninput="filterRequests()">
+        <select id="dateRange" onchange="filterRequests()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+          <option value="30d">Last 30 days</option>
+          <option value="7d">Last 7 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="year">This year</option>
+          <option value="all">All time</option>
+        </select>
+        <input type="month" id="monthFilter" onchange="filterRequests()" title="Filter by month" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+        <button type="button" onclick="document.getElementById('monthFilter').value='';filterRequests();" title="Clear month filter" style="padding:0.5rem 0.65rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-muted,#94a3b8);font-size:0.78rem;cursor:pointer;">Clear month</button>
+        <select id="archiveFilter" onchange="filterRequests()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+          <option value="active">Active</option>
+          <option value="archive">Archive</option>
+          <option value="all">All</option>
+        </select>
+        <button class="btn btn-sm btn-secondary" onclick="loadPaymentRequests()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-sm btn-secondary" onclick="exportPRExcel()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+      </div>
+      <div id="prCount" style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;"></div>
+      <div id="prContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Payment Request Preview Modal -->
+  <div class="preview-overlay" id="previewOverlay" onclick="if(event.target===this)closePreview()">
+    <div class="preview-modal">
+      <div class="preview-header">
+        <h3 id="previewTitle">Payment Request Preview</h3>
+        <button class="preview-close" onclick="closePreview()" title="Close">&times;</button>
+      </div>
+      <div class="preview-body">
+        <div class="pv-details" id="previewDetails"></div>
+        <div class="pv-pdf" id="previewPdf"></div>
+      </div>
+      <div class="preview-actions" id="previewActions"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/payment-requests.js"></script>
+</body>
+</html>

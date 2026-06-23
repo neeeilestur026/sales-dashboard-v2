@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Payables — Director Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .dp-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin-bottom:1rem; }
+    .dp-kpi { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:0.85rem 1rem; }
+    .dp-kpi .lbl { font-size:0.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .dp-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color:var(--text-primary,#f1f5f9); }
+
+    .dp-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+    .dp-toolbar input, .dp-toolbar select {
+      padding:0.5rem 0.65rem; border:1px solid var(--border,#334155); border-radius:8px;
+      background:var(--surface-2,#1e293b); color:var(--text-primary,#f1f5f9); font-size:0.85rem;
+    }
+    .dp-search { flex:1; min-width:220px; }
+    .dp-tab { padding:0.4rem 0.85rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:transparent; color:var(--text-muted,#64748b); font-size:0.8rem; cursor:pointer; font-weight:600; }
+    .dp-tab.active { background:#14b8a6; border-color:#14b8a6; color:#fff; }
+
+    .dp-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; overflow:hidden; }
+    .dp-table-wrap { overflow-x:auto; }
+    .dp-table { width:100%; border-collapse:collapse; font-size:0.85rem; table-layout:fixed; min-width:1000px; }
+    .dp-table th { text-align:left; padding:0.55rem 0.75rem; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#334155); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; background:rgba(15,23,42,0.4); }
+    .dp-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); vertical-align:top; }
+    .dp-table td.wrap { word-break:break-word; overflow-wrap:anywhere; white-space:normal; }
+    .dp-table td.nowrap { white-space:nowrap; }
+    .dp-table .row-paid td { opacity:0.65; }
+    .dp-table .row-overdue td { background:rgba(239,68,68,0.06); }
+    .dp-actions { display:flex; flex-wrap:wrap; gap:0.3rem; justify-content:flex-end; }
+    .dp-count { font-size:0.8rem; color:var(--text-muted,#94a3b8); margin-bottom:0.5rem; }
+
+    .badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; }
+    .badge-unpaid   { background:rgba(234,179,8,0.15);  color:#eab308; }
+    .badge-paid     { background:rgba(34,197,94,0.15);  color:#22c55e; }
+    .badge-overdue  { background:rgba(239,68,68,0.15);  color:#ef4444; }
+
+    .dp-btn { padding:0.35rem 0.7rem; border-radius:6px; font-size:0.74rem; font-weight:600;
+      cursor:pointer; border:1px solid var(--border,#334155); background:var(--surface,#0f172a);
+      color:var(--text-primary,#e2e8f0); }
+    .dp-btn.primary { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+    .dp-btn.success { background:#16a34a; color:#fff; border-color:#16a34a; }
+    .dp-btn.warn    { background:#f97316; color:#fff; border-color:#f97316; }
+    .dp-btn.danger  { background:#ef4444; color:#fff; border-color:#ef4444; }
+
+    .dp-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:90; align-items:center; justify-content:center; }
+    .dp-modal-bg.open { display:flex; }
+    .dp-modal { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px;
+      padding:1.25rem; width:min(460px, 92vw); color:var(--text-primary,#f1f5f9); }
+    .dp-modal h3 { margin:0 0 0.75rem; }
+    .dp-modal .row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.7rem; }
+    .dp-modal .row.two { flex-direction:row; gap:0.5rem; }
+    .dp-modal .row.two > div { flex:1; display:flex; flex-direction:column; gap:0.3rem; }
+    .dp-modal .row label { font-size:0.74rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .dp-modal input, .dp-modal select, .dp-modal textarea {
+      padding:0.55rem 0.65rem; border-radius:6px; border:1px solid var(--border,#334155);
+      background:var(--bg-primary,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.88rem; font-family:inherit;
+    }
+    .dp-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div style="max-width:1200px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div>
+          <h1 style="margin:0;">My Payables</h1>
+          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+            Personal payables/payments outside the Payment Request system.
+            When marked Paid, the chosen bank account is auto-debited.
+          </p>
+        </div>
+        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+          <button class="dp-btn" onclick="loadPayables()">🔄 Refresh</button>
+          <button class="dp-btn primary" onclick="openAddModal()">+ Add Payable</button>
+        </div>
+      </div>
+
+      <div class="dp-kpis">
+        <div class="dp-kpi"><div class="lbl">Unpaid</div><div class="val" id="kpiUnpaidCount" style="color:#eab308;">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Unpaid Total</div><div class="val" id="kpiUnpaidTotal" style="color:#eab308;">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Overdue</div><div class="val" id="kpiOverdue" style="color:#ef4444;">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Paid (Filtered)</div><div class="val" id="kpiPaid" style="color:#22c55e;">—</div></div>
+      </div>
+
+      <div class="dp-toolbar">
+        <input type="text" id="dpSearch" class="dp-search" placeholder="Search payee, description, category…" oninput="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+        <input type="month" id="dpMonth" onchange="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Year</label>
+        <select id="dpYear" onchange="applyFilters()"><option value="">All</option></select>
+        <button class="dp-tab active" onclick="setStatus('all')" id="tabAll">All</button>
+        <button class="dp-tab" onclick="setStatus('Unpaid')" id="tabUnpaid">Unpaid</button>
+        <button class="dp-tab" onclick="setStatus('Paid')" id="tabPaid">Paid</button>
+        <button class="dp-tab" onclick="clearAllFilters()">Clear</button>
+      </div>
+
+      <div class="dp-count" id="dpCount"></div>
+
+      <div class="dp-card">
+        <div class="dp-table-wrap">
+          <table class="dp-table">
+            <colgroup>
+              <col style="width:120px;">
+              <col style="width:150px;">
+              <col style="width:110px;">
+              <col>
+              <col style="width:120px;">
+              <col style="width:90px;">
+              <col style="width:130px;">
+              <col style="width:200px;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Due / Created</th>
+                <th>Payee</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th style="text-align:right;">Amount</th>
+                <th>Status</th>
+                <th>Bank</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="dpBody">
+              <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add / Edit Payable Modal -->
+  <div class="dp-modal-bg" id="addModalBg">
+    <div class="dp-modal">
+      <h3 id="addModalTitle">Add Payable</h3>
+      <input type="hidden" id="payableId">
+      <div class="row">
+        <label>Payee *</label>
+        <input type="text" id="fPayee" placeholder="e.g. Meralco, BIR, Pedro Santos">
+      </div>
+      <div class="row two">
+        <div>
+          <label>Amount (₱) *</label>
+          <input type="number" id="fAmount" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div>
+          <label>Due Date</label>
+          <input type="date" id="fDueDate">
+        </div>
+      </div>
+      <div class="row">
+        <label>Category</label>
+        <input type="text" id="fCategory" list="categoryList" placeholder="e.g. Utilities, Tax, Loan, Rent">
+        <datalist id="categoryList">
+          <option value="Utilities"></option>
+          <option value="Tax"></option>
+          <option value="Loan"></option>
+          <option value="Rent"></option>
+          <option value="Insurance"></option>
+          <option value="Personal"></option>
+          <option value="Reimbursement"></option>
+          <option value="Other"></option>
+        </datalist>
+      </div>
+      <div class="row">
+        <label>Description</label>
+        <textarea id="fDescription" rows="2" placeholder="What is this payment for?"></textarea>
+      </div>
+      <div class="row">
+        <label>Notes</label>
+        <textarea id="fNotes" rows="2" placeholder="Optional notes"></textarea>
+      </div>
+      <div class="dp-modal-actions">
+        <button class="dp-btn" onclick="closeAddModal()">Cancel</button>
+        <button class="dp-btn primary" onclick="savePayable()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mark as Paid Modal -->
+  <div class="dp-modal-bg" id="payModalBg">
+    <div class="dp-modal">
+      <h3>Mark as Paid</h3>
+      <input type="hidden" id="payPayableId">
+      <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 0.7rem;">
+        The chosen bank account will be auto-debited for the payable amount.
+      </p>
+      <div class="row">
+        <label>Payable</label>
+        <div id="paySummary" style="padding:0.55rem 0.65rem;background:var(--bg-primary,#0f172a);border:1px solid var(--border,#334155);border-radius:6px;font-size:0.88rem;"></div>
+      </div>
+      <div class="row">
+        <label>Deduct From Bank Account *</label>
+        <select id="payBankAccount"></select>
+      </div>
+      <div class="dp-modal-actions">
+        <button class="dp-btn" onclick="closePayModal()">Cancel</button>
+        <button class="dp-btn success" onclick="confirmPay()">Mark Paid &amp; Debit Bank</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      var session = (typeof requireDirector === 'function') ? requireDirector() : null;
+      if (typeof requireDirector === 'function' && !session) return;
+      if (typeof renderNavbar === 'function') renderNavbar('director-payables');
+
+      var allPayables = [];
+      var bankAccounts = [];
+      var activeStatus = 'all';
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function php(n) { return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+      function dateVal(o) { return new Date(o.dueDate || o.createdAt || 0); }
+      function fmtDate(d) {
+        if (!d) return '';
+        var dt = (d instanceof Date) ? d : new Date(d);
+        if (isNaN(dt.getTime())) return String(d || '');
+        return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+      }
+      function todayISO() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      }
+      function isOverdue(p) {
+        if (p.status === 'Paid') return false;
+        if (!p.dueDate) return false;
+        return p.dueDate < todayISO();
+      }
+
+      function populateYears(rows) {
+        var sel = document.getElementById('dpYear');
+        var years = {};
+        rows.forEach(function (r) {
+          var d = dateVal(r);
+          if (!isNaN(d.getTime())) years[d.getFullYear()] = true;
+        });
+        var cur = sel.value;
+        var list = Object.keys(years).sort(function (a, b) { return b - a; });
+        sel.innerHTML = '<option value="">All</option>' + list.map(function (y) {
+          return '<option value="' + y + '"' + (y === cur ? ' selected' : '') + '>' + y + '</option>';
+        }).join('');
+      }
+
+      function setActiveTab() {
+        ['All', 'Unpaid', 'Paid'].forEach(function (s) {
+          var el = document.getElementById('tab' + s);
+          if (el) el.classList.toggle('active', activeStatus === (s === 'All' ? 'all' : s));
+        });
+      }
+
+      window.setStatus = function (s) { activeStatus = s; setActiveTab(); applyFilters(); };
+      window.clearAllFilters = function () {
+        document.getElementById('dpSearch').value = '';
+        document.getElementById('dpMonth').value = '';
+        document.getElementById('dpYear').value = '';
+        activeStatus = 'all'; setActiveTab(); applyFilters();
+      };
+
+      window.applyFilters = function () {
+        var search = (document.getElementById('dpSearch').value || '').toLowerCase().trim();
+        var month = document.getElementById('dpMonth').value || '';
+        var year = document.getElementById('dpYear').value || '';
+        var filtered = allPayables.filter(function (p) {
+          if (activeStatus !== 'all' && String(p.status || 'Unpaid') !== activeStatus) return false;
+          var d = dateVal(p);
+          if (!isNaN(d.getTime())) {
+            if (month) {
+              var ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              if (ym !== month) return false;
+            }
+            if (year && String(d.getFullYear()) !== String(year)) return false;
+          } else if (month || year) { return false; }
+          if (search) {
+            var hay = ((p.payee || '') + ' ' + (p.description || '') + ' ' + (p.category || '') + ' ' + (p.notes || '')).toLowerCase();
+            if (hay.indexOf(search) < 0) return false;
+          }
+          return true;
+        });
+        renderKpis(filtered);
+        renderTable(filtered);
+      };
+
+      function renderKpis(rows) {
+        var unpaidCount = 0, unpaidTotal = 0, overdueCount = 0, paidTotal = 0;
+        rows.forEach(function (p) {
+          var amt = Number(p.amount || 0);
+          if (p.status === 'Paid') paidTotal += amt;
+          else {
+            unpaidCount++;
+            unpaidTotal += amt;
+            if (isOverdue(p)) overdueCount++;
+          }
+        });
+        document.getElementById('kpiUnpaidCount').textContent = unpaidCount;
+        document.getElementById('kpiUnpaidTotal').textContent = php(unpaidTotal);
+        document.getElementById('kpiOverdue').textContent = overdueCount;
+        document.getElementById('kpiPaid').textContent = php(paidTotal);
+      }
+
+      function bankNameFor(code) {
+        var a = bankAccounts.find(function (x) { return x.code === code; });
+        return a ? a.name : code;
+      }
+
+      function renderTable(rows) {
+        var body = document.getElementById('dpBody');
+        var count = document.getElementById('dpCount');
+        count.textContent = 'Showing ' + rows.length + ' payable' + (rows.length === 1 ? '' : 's');
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No payables match these filters.</td></tr>';
+          return;
+        }
+        body.innerHTML = rows.map(function (p) {
+          var paid = p.status === 'Paid';
+          var overdue = isOverdue(p);
+          var rowCls = paid ? 'row-paid' : (overdue ? 'row-overdue' : '');
+          var badge = paid ? '<span class="badge badge-paid">Paid</span>'
+                    : overdue ? '<span class="badge badge-overdue">Overdue</span>'
+                    : '<span class="badge badge-unpaid">Unpaid</span>';
+          var dateLine = p.dueDate
+            ? '<div>' + esc(fmtDate(p.dueDate)) + '</div><div style="font-size:0.7rem;color:var(--text-muted);">added ' + esc(fmtDate(p.createdAt)) + '</div>'
+            : '<div style="color:var(--text-muted);">— no due —</div><div style="font-size:0.7rem;color:var(--text-muted);">added ' + esc(fmtDate(p.createdAt)) + '</div>';
+          var bankCell = paid
+            ? esc(bankNameFor(p.bankAccountCode)) + (p.paidAt ? '<div style="font-size:0.7rem;color:var(--text-muted);">' + esc(fmtDate(p.paidAt)) + '</div>' : '')
+            : '<span style="color:var(--text-muted);">—</span>';
+          var actions = paid
+            ? '<button class="dp-btn warn" onclick="unmarkPaid(\'' + p.id + '\')">Unpay</button>' +
+              '<button class="dp-btn danger" onclick="deletePayable(\'' + p.id + '\')">✕</button>'
+            : '<button class="dp-btn success" onclick="openPayModal(\'' + p.id + '\')">Mark Paid</button>' +
+              '<button class="dp-btn" onclick="openEditModal(\'' + p.id + '\')">Edit</button>' +
+              '<button class="dp-btn danger" onclick="deletePayable(\'' + p.id + '\')">✕</button>';
+
+          return '<tr class="' + rowCls + '">' +
+            '<td class="nowrap">' + dateLine + '</td>' +
+            '<td class="wrap"><strong>' + esc(p.payee) + '</strong></td>' +
+            '<td class="wrap">' + esc(p.category || '—') + '</td>' +
+            '<td class="wrap">' + esc(p.description || '') + '</td>' +
+            '<td class="nowrap" style="text-align:right;font-weight:700;">' + php(p.amount) + '</td>' +
+            '<td class="nowrap">' + badge + '</td>' +
+            '<td class="nowrap">' + bankCell + '</td>' +
+            '<td class="nowrap"><div class="dp-actions">' + actions + '</div></td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      // ----- Modals -----
+      window.openAddModal = function () {
+        document.getElementById('addModalTitle').textContent = 'Add Payable';
+        document.getElementById('payableId').value = '';
+        document.getElementById('fPayee').value = '';
+        document.getElementById('fAmount').value = '';
+        document.getElementById('fDueDate').value = '';
+        document.getElementById('fCategory').value = '';
+        document.getElementById('fDescription').value = '';
+        document.getElementById('fNotes').value = '';
+        document.getElementById('addModalBg').classList.add('open');
+      };
+      window.openEditModal = function (id) {
+        var p = allPayables.find(function (x) { return x.id === id; });
+        if (!p) return;
+        document.getElementById('addModalTitle').textContent = 'Edit Payable';
+        document.getElementById('payableId').value = p.id;
+        document.getElementById('fPayee').value = p.payee || '';
+        document.getElementById('fAmount').value = p.amount || '';
+        document.getElementById('fDueDate').value = p.dueDate || '';
+        document.getElementById('fCategory').value = p.category || '';
+        document.getElementById('fDescription').value = p.description || '';
+        document.getElementById('fNotes').value = p.notes || '';
+        document.getElementById('addModalBg').classList.add('open');
+      };
+      window.closeAddModal = function () { document.getElementById('addModalBg').classList.remove('open'); };
+
+      window.savePayable = function () {
+        var data = {
+          id: document.getElementById('payableId').value || '',
+          payee: document.getElementById('fPayee').value.trim(),
+          amount: parseFloat(document.getElementById('fAmount').value),
+          dueDate: document.getElementById('fDueDate').value,
+          category: document.getElementById('fCategory').value.trim(),
+          description: document.getElementById('fDescription').value,
+          notes: document.getElementById('fNotes').value
+        };
+        if (!data.payee || !(data.amount > 0)) { alert('Payee and amount are required.'); return; }
+        apiSaveDirectorPayable(data).then(function (res) {
+          if (res && res.success === false) throw new Error(res.message || 'Save failed');
+          closeAddModal();
+          return loadPayables();
+        }).catch(function (err) { alert('Save failed: ' + (err.message || err)); });
+      };
+
+      window.openPayModal = function (id) {
+        var p = allPayables.find(function (x) { return x.id === id; });
+        if (!p) return;
+        document.getElementById('payPayableId').value = id;
+        document.getElementById('paySummary').textContent = p.payee + ' — ' + php(p.amount) + (p.description ? '  ·  ' + p.description : '');
+        var sel = document.getElementById('payBankAccount');
+        sel.innerHTML = bankAccounts.map(function (a) {
+          var bal = (a.currentBalance != null ? a.currentBalance : a.balance) || 0;
+          return '<option value="' + a.code + '">' + esc(a.name) + ' (bal: ' + php(bal) + ')</option>';
+        }).join('');
+        // Default: AUB
+        var aub = bankAccounts.find(function (a) { return /AUB/i.test(a.code); });
+        if (aub) sel.value = aub.code;
+        document.getElementById('payModalBg').classList.add('open');
+      };
+      window.closePayModal = function () { document.getElementById('payModalBg').classList.remove('open'); };
+      window.confirmPay = function () {
+        var id = document.getElementById('payPayableId').value;
+        var bankAccountCode = document.getElementById('payBankAccount').value;
+        if (!id || !bankAccountCode) { alert('Choose a bank account.'); return; }
+        var user = (typeof getCurrentUser === 'function' ? getCurrentUser() : null) || {};
+        apiMarkDirectorPayablePaid({
+          id: id,
+          bankAccountCode: bankAccountCode,
+          paidBy: user.username || user.email || user.name || ''
+        }).then(function (res) {
+          if (res && res.success === false) throw new Error(res.message || 'Mark Paid failed');
+          closePayModal();
+          return loadPayables();
+        }).catch(function (err) { alert('Mark Paid failed: ' + (err.message || err)); });
+      };
+
+      window.unmarkPaid = function (id) {
+        if (!confirm('Reverse this payment? The bank debit will be removed.')) return;
+        apiUnmarkDirectorPayablePaid(id).then(function (res) {
+          if (res && res.success === false) throw new Error(res.message || 'Unmark failed');
+          return loadPayables();
+        }).catch(function (err) { alert('Unmark failed: ' + (err.message || err)); });
+      };
+
+      window.deletePayable = function (id) {
+        if (!confirm('Delete this payable? If it was paid, the bank debit will also be removed.')) return;
+        apiDeleteDirectorPayable(id).then(function (res) {
+          if (res && res.success === false) throw new Error(res.message || 'Delete failed');
+          return loadPayables();
+        }).catch(function (err) { alert('Delete failed: ' + (err.message || err)); });
+      };
+
+      window.loadPayables = function () {
+        var body = document.getElementById('dpBody');
+        body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>';
+        return Promise.all([
+          apiGetDirectorPayables(),
+          apiGetBankAccounts()
+        ]).then(function (results) {
+          var pRes = results[0], bRes = results[1];
+          if (!pRes || !pRes.success) throw new Error((pRes && pRes.message) || 'Failed to load payables');
+          allPayables = pRes.data || [];
+          bankAccounts = (bRes && (bRes.data || bRes.accounts || [])) || [];
+          populateYears(allPayables);
+          setActiveTab();
+          applyFilters();
+        }).catch(function (err) {
+          console.error('loadPayables failed', err);
+          body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:1.5rem;">Failed to load payables.</td></tr>';
+        });
+      };
+
+      document.addEventListener('DOMContentLoaded', function () {
+        ['addModalBg', 'payModalBg'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener('click', function (e) {
+            if (e.target === el) el.classList.remove('open');
+          });
+        });
+        loadPayables();
+      });
+    })();
+  </script>
+</body>
+</html>

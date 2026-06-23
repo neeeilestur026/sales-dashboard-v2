@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Home</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .hero {
+      position: relative;
+      border-radius: var(--radius-lg, 18px);
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.6rem;
+      overflow: hidden;
+      background:
+        radial-gradient(900px 220px at 0% 0%, rgba(15,118,110,0.10), transparent 62%),
+        radial-gradient(700px 220px at 100% 120%, rgba(13,148,136,0.07), transparent 60%),
+        linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
+      border: 1px solid var(--border, #e2e8f0);
+      box-shadow: var(--shadow-sm);
+      animation: fadeInUp 0.4s var(--ease-out, ease) both;
+    }
+    .hero::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: linear-gradient(180deg, var(--accent, #0f766e), var(--accent-light, #ccfbf1));
+    }
+    .hero-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; }
+    .hero h1 { font-size:1.55rem; font-weight:700; color:var(--text-primary); margin:0; letter-spacing:-0.02em; }
+    .hero p { color:var(--text-secondary); font-size:0.9rem; margin-top:0.3rem; }
+    .hero-meta { display:flex; gap:0.55rem; flex-wrap:wrap; }
+    .hero-pill {
+      display:inline-flex; align-items:center; gap:0.4rem;
+      padding:0.45rem 0.95rem; border-radius:999px;
+      font-size:0.78rem; font-weight:600;
+      background:#fff; border:1px solid var(--border); color:var(--text-secondary);
+      transition: var(--transition-fast, all 0.14s ease);
+    }
+    .hero-pill:hover { border-color: var(--accent, #0f766e); color: var(--accent, #0f766e); transform: translateY(-1px); box-shadow: var(--shadow-xs); }
+    .hero-pill.accent { background: var(--accent, #0f766e); color:#fff; border-color: var(--accent, #0f766e); }
+    .hero-pill.accent:hover { background: var(--accent-hover, #115e59); color:#fff; }
+
+    /* Section header — consistent across the page */
+    .section-head {
+      display:flex; align-items:center; gap:0.5rem;
+      font-size:0.95rem; font-weight:700; color:var(--text-primary);
+      margin:0 0 1rem; letter-spacing:-0.01em;
+    }
+    .section-head svg { color: var(--accent, #0f766e); flex-shrink:0; }
+    .section-head .sh-meta { margin-left:auto; font-size:0.74rem; font-weight:500; color:var(--text-muted, #94a3b8); }
+
+    /* Sticky sub-toolbar for task panels */
+    .task-toolbar {
+      position: sticky; top: 0; z-index: 30;
+      display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
+      padding:0.6rem 0.75rem; margin-bottom:0.6rem;
+      background:rgba(255,255,255,0.92); backdrop-filter:saturate(140%) blur(8px);
+      border:1px solid var(--border, #e2e8f0); border-radius:12px;
+      box-shadow:var(--shadow-xs);
+      flex-wrap:wrap;
+      animation: slideDown 0.3s ease both;
+    }
+    .ttb-mini:hover { transform: translateY(-1px); }
+    .ttb-left, .ttb-right { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+    .ttb-search {
+      display:flex; align-items:center; gap:0.4rem;
+      padding:0.35rem 0.6rem; border:1px solid var(--border); border-radius:8px;
+      background:#fff; min-width:240px;
+    }
+    .ttb-search svg { color:var(--text-muted); flex-shrink:0; }
+    .ttb-search input {
+      border:none; outline:none; font-size:0.82rem; width:100%;
+      background:transparent; color:var(--text-primary);
+    }
+    .ttb-dates { display:flex; align-items:center; gap:0.35rem; }
+    .ttb-dates input[type="date"] {
+      padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:8px;
+      font-size:0.78rem; background:#fff; color:var(--text-primary);
+    }
+    .ttb-dash { color:var(--text-muted); font-size:0.78rem; }
+    .ttb-mini {
+      padding:0.4rem 0.7rem; border:1px solid var(--border); border-radius:8px;
+      background:#fff; font-size:0.78rem; font-weight:600; color:var(--text-secondary);
+      cursor:pointer; transition:all 0.15s ease;
+    }
+    .ttb-mini:hover { background:var(--bg-inset); border-color:var(--border-strong); color:var(--text-primary); }
+    .ttb-updated {
+      font-size:0.72rem; color:var(--text-muted);
+      padding:0.3rem 0.55rem; background:var(--bg-inset); border-radius:6px;
+    }
+
+    /* Density toggle: compact rows */
+    body.density-compact .chart-card table th,
+    body.density-compact .chart-card table td {
+      padding-top:0.35rem !important; padding-bottom:0.35rem !important;
+      font-size:0.78rem !important;
+    }
+
+    /* 2-column main + sidebar layout */
+    .admin-2col {
+      display:grid; grid-template-columns: minmax(0, 1fr) 320px;
+      gap:1rem; align-items:start;
+    }
+    .admin-main { min-width:0; }
+    .admin-side { display:flex; flex-direction:column; gap:1rem; position:sticky; top:1rem; }
+    .admin-side .chart-card { margin:0 !important; }
+    @media (max-width: 1100px) {
+      .admin-2col { grid-template-columns: 1fr; }
+      .admin-side { position:static; }
+    }
+
+    /* KPI cards as clickable filters (Admin item 1) */
+    #taskStatCards .chart-card {
+      cursor: pointer; user-select: none;
+      transition: var(--transition-fast, all 0.14s ease);
+      border: 1px solid var(--border, #e2e8f0);
+      position: relative; overflow: hidden;
+    }
+    #taskStatCards .chart-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--border-strong, #cbd5e1);
+    }
+    #taskStatCards .chart-card:active { transform: translateY(0); }
+    #taskStatCards .chart-card.kpi-active {
+      border-color: var(--accent, #0f766e);
+      box-shadow: 0 0 0 2px var(--accent-ring, rgba(15,118,110,0.20));
+      background: linear-gradient(180deg, var(--accent-light, #ccfbf1) 0%, #ffffff 42%);
+    }
+    #taskStatCards .chart-card.kpi-active::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--accent, #0f766e);
+    }
+
+    /* Process Flow snapshot KPI tiles */
+    .fkpi { padding:0.9rem 1rem; text-align:left; transition: var(--transition-fast, all 0.14s ease); }
+    .fkpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong, #cbd5e1); }
+    .fkpi .fkpi-l { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted,#94a3b8); font-weight:700; }
+    .fkpi .fkpi-v { font-size:1.3rem; font-weight:700; margin-top:0.25rem; color:var(--text-primary); font-variant-numeric: tabular-nums; }
+
+    /* Sidebar panels */
+    .side-panel-head {
+      padding:0.7rem 1rem; border-bottom:1px solid var(--border, #e2e8f0);
+      display:flex; align-items:center; justify-content:space-between; gap:0.5rem;
+      background: linear-gradient(180deg, #ffffff, #fafcfc);
+    }
+    .side-panel-head h3 { font-size:0.82rem; font-weight:700; margin:0; display:flex; align-items:center; gap:0.4rem; color:var(--text-primary); }
+    .side-panel-head h3 svg { color: var(--accent, #0f766e); }
+    .side-scroll { max-height:340px; overflow-y:auto; }
+    .side-scroll::-webkit-scrollbar { width:8px; }
+    .side-scroll::-webkit-scrollbar-thumb { background:var(--border, #cbd5e1); border-radius:8px; }
+
+    /* ─── Email Modal (light, harmonized) ─── */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.45); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); z-index:11000; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-box { background:var(--bg-card,#ffffff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.5rem; width:min(520px,95vw); max-height:90vh; overflow-y:auto; box-shadow:0 24px 60px -20px rgba(15,23,42,0.5); }
+    .modal-overlay.open .modal-box { animation: popIn 0.2s var(--ease-spring, cubic-bezier(0.34,1.4,0.5,1)); }
+    .modal-box h3 { font-size:1rem; font-weight:700; margin:0 0 1rem; color:var(--text-primary,#0f172a); }
+    .modal-label { font-size:0.78rem; color:var(--text-muted,#64748b); margin-bottom:0.25rem; }
+    .modal-input, .modal-textarea { width:100%; padding:0.5rem 0.75rem; border-radius:8px; border:1px solid var(--border,#e2e8f0); background:#fff; color:var(--text-primary,#0f172a); font-size:0.85rem; box-sizing:border-box; transition:border-color 0.14s ease, box-shadow 0.14s ease; }
+    .modal-input:focus, .modal-textarea:focus { outline:none; border-color:var(--accent,#0f766e); box-shadow:0 0 0 3px var(--accent-ring, rgba(15,118,110,0.2)); }
+    .modal-textarea { resize:vertical; min-height:120px; }
+    .modal-footer { display:flex; gap:0.6rem; justify-content:flex-end; margin-top:1rem; }
+    .btn-modal-send { background:var(--accent,#0f766e); color:#fff; border:none; border-radius:8px; padding:0.45rem 1rem; font-size:0.83rem; font-weight:600; cursor:pointer; transition:background 0.14s ease; }
+    .btn-modal-send:hover { background:var(--accent-hover,#115e59); }
+    .btn-modal-send:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-cancel { background:transparent; color:var(--text-secondary,#475569); border:1px solid var(--border,#e2e8f0); border-radius:8px; padding:0.45rem 1rem; font-size:0.83rem; cursor:pointer; transition:background 0.14s ease; }
+    .btn-cancel:hover { background:var(--bg-inset,#e2e8f0); }
+    .form-row { margin-bottom:0.9rem; }
+
+    @keyframes popIn { from { opacity:0; transform: translateY(10px) scale(0.985); } to { opacity:1; transform:none; } }
+    @media (prefers-reduced-motion: reduce) {
+      .hero, .modal-overlay.open .modal-box { animation: none !important; }
+      .hero-pill:hover, #taskStatCards .chart-card:hover, .fkpi:hover, a.afmod:hover { transform: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <section class="hero">
+      <div class="hero-row">
+        <div>
+          <h1 class="greeting" id="greeting">Good morning!</h1>
+          <p id="todayLabel">Admin hub — manage orders and track your team.</p>
+        </div>
+        <div class="hero-meta">
+          <a href="admin-summary.html" class="hero-pill" style="background:#14b8a6;color:#fff;border-color:#14b8a6;">Summary →</a>
+          <a href="admin-team.html" class="hero-pill">Team →</a>
+          <a href="admin-reports.html" class="hero-pill">Reports →</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="flowApprovalStrip" style="display:none;margin:0 0 1.5rem;"></section>
+
+    <!-- ── Process Flow (new accounting system) ───────────── -->
+    <div style="margin-bottom:2rem;">
+      <h2 class="section-head">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+        Process Flow
+        <span id="afkpiState" class="sh-meta">Loading…</span>
+      </h2>
+
+      <div class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1.25rem;">
+        <div class="chart-card fkpi"><div class="fkpi-l">Sales Invoiced</div><div class="fkpi-v" id="afkpiSales">—</div></div>
+        <div class="chart-card fkpi"><div class="fkpi-l">Total COGS</div><div class="fkpi-v" id="afkpiCogs">—</div></div>
+        <div class="chart-card fkpi"><div class="fkpi-l">Gross Profit</div><div class="fkpi-v" id="afkpiGp">—</div></div>
+        <div class="chart-card fkpi"><div class="fkpi-l">AP Outstanding</div><div class="fkpi-v" id="afkpiAp">—</div></div>
+        <div class="chart-card fkpi"><div class="fkpi-l">Inventory Value</div><div class="fkpi-v" id="afkpiInv">—</div></div>
+        <div class="chart-card fkpi"><div class="fkpi-l">Sales Orders</div><div class="fkpi-v" id="afkpiSo">—</div></div>
+      </div>
+
+      <div class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
+        <a href="flow-accounting.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Accounting</strong><div class="afsub">Per-SO consolidated view</div></a>
+        <a href="flow-inventory.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Inventory</strong><div class="afsub">Costed stock &amp; landed cost</div></a>
+        <a href="flow-quotations.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Quotations</strong><div class="afsub">Quote items from inventory</div></a>
+        <a href="flow-sales-orders.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Sales Orders</strong><div class="afsub">Load &amp; edit quotations</div></a>
+        <a href="flow-purchase-orders.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Purchase Orders</strong><div class="afsub">From SO; auto AP entry</div></a>
+        <a href="flow-ap-aging.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>AP Aging</strong><div class="afsub">Payables &amp; payments</div></a>
+        <a href="flow-receiving.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Receiving</strong><div class="afsub">Landed cost → inventory</div></a>
+        <a href="flow-invoices.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Invoices</strong><div class="afsub">Issue &amp; record COGS</div></a>
+        <a href="flow-ledger.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>General Ledger</strong><div class="afsub">Journals &amp; trial balance</div></a>
+      </div>
+    </div>
+    <style>
+      a.afmod {
+        text-decoration:none; color:var(--text-primary,#0f172a); display:block;
+        position:relative; transition: var(--transition-fast, all 0.14s ease);
+      }
+      a.afmod::before {
+        content:''; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:3px 0 0 3px;
+        background:var(--accent,#0f766e); opacity:0; transition:opacity 0.14s ease;
+      }
+      a.afmod strong { font-size:0.92rem; font-weight:700; }
+      a.afmod .afsub { font-size:0.76rem; color:var(--text-muted,#94a3b8); margin-top:0.25rem; }
+      a.afmod:hover { border-color:var(--accent,#0f766e); transform:translateY(-2px); box-shadow:var(--shadow-md); }
+      a.afmod:hover::before { opacity:1; }
+    </style>
+
+    <!-- ── Task Overview ─────────────────────────────────── -->
+    <div style="margin-bottom:2rem;">
+      <h2 class="section-head">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Task Overview
+        <span class="sh-meta">Click a card to filter</span>
+      </h2>
+
+      <!-- Summary Stat Cards (Process Flow modules + retained Shipments) -->
+      <div id="taskStatCards" class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;margin-bottom:1.5rem;">
+        <div class="chart-card kpi-active" data-tab="qt" onclick="_kpiSwitch('qt')" style="padding:1rem;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Quotations</div>
+          <div style="font-size:1.6rem;font-weight:700;color:#0f766e;" id="kQtTotal">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kQtOpen" style="color:#f59e0b;">—</span> open</div>
+        </div>
+        <div class="chart-card" data-tab="so" onclick="_kpiSwitch('so')" style="padding:1rem;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Sales Orders</div>
+          <div style="font-size:1.6rem;font-weight:700;color:#14b8a6;" id="kSoTotal">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kSoOpen" style="color:#f59e0b;">—</span> open</div>
+        </div>
+        <div class="chart-card" data-tab="po" onclick="_kpiSwitch('po')" style="padding:1rem;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Purchase Orders</div>
+          <div style="font-size:1.6rem;font-weight:700;color:#6366f1;" id="kPoTotal">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kPoPending" style="color:#f59e0b;">—</span> pending</div>
+        </div>
+        <div class="chart-card" data-tab="ap" onclick="_kpiSwitch('ap')" style="padding:1rem;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">AP Outstanding</div>
+          <div style="font-size:1.6rem;font-weight:700;color:#ef4444;" id="kApAmt">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kApOpen" style="color:#f59e0b;">—</span> unpaid</div>
+        </div>
+        <div class="chart-card" data-tab="iv" onclick="_kpiSwitch('iv')" style="padding:1rem;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Invoiced Sales</div>
+          <div style="font-size:1.6rem;font-weight:700;color:#22c55e;" id="kIvSales">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;">GP <span id="kIvGp" style="color:#22c55e;">—</span></div>
+        </div>
+        <div class="chart-card" data-tab="sm" onclick="_kpiSwitch('sm')" style="padding:1rem;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Shipments</div>
+          <div style="font-size:1.6rem;font-weight:700;color:#f59e0b;" id="smvTotal">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="smvInTransit" style="color:#3b82f6;">—</span> in transit · <span id="smvArrived" style="color:#22c55e;">—</span> arrived</div>
+        </div>
+      </div>
+
+      <!-- Sub-toolbar -->
+      <div class="task-toolbar" id="taskToolbar">
+        <div class="ttb-left">
+          <div class="ttb-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="taskSearchInput" type="text" placeholder="Search current tab… (ref, client, item)" oninput="_filterTaskTable()">
+          </div>
+          <div class="ttb-dates">
+            <input type="date" id="taskDateFrom" oninput="_filterTaskTable()" title="From date">
+            <span class="ttb-dash">—</span>
+            <input type="date" id="taskDateTo" oninput="_filterTaskTable()" title="To date">
+            <button class="ttb-mini" onclick="_clearTaskFilters()" title="Clear filters">Clear</button>
+          </div>
+        </div>
+        <div class="ttb-right">
+          <button class="ttb-mini" onclick="_toggleDensity()" title="Toggle row density" id="densityBtn">⇕ Density</button>
+          <button class="ttb-mini" onclick="_refreshTasks()" title="Refresh data">↻ Refresh</button>
+          <span class="ttb-updated" id="taskUpdatedAt">just now</span>
+        </div>
+      </div>
+
+      <!-- 2-col: main task panels + sidebar (Inventory + Activity) -->
+      <div class="admin-2col">
+        <div class="admin-main">
+      <!-- Tab Bar -->
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+        <button class="task-tab" onclick="switchTaskTab('inbox')" id="tabTaskInbox">📥 Inbox <span id="inboxCount" style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:0.7rem;font-weight:700;margin-left:4px;display:none;"></span></button>
+        <button class="task-tab active" onclick="switchTaskTab('qt')" id="tabTaskQt">Quotations</button>
+        <button class="task-tab" onclick="switchTaskTab('so')" id="tabTaskSo">Sales Orders</button>
+        <button class="task-tab" onclick="switchTaskTab('po')" id="tabTaskPo">Purchase Orders</button>
+        <button class="task-tab" onclick="switchTaskTab('ap')" id="tabTaskAp">AP Aging</button>
+        <button class="task-tab" onclick="switchTaskTab('rc')" id="tabTaskRc">Receiving</button>
+        <button class="task-tab" onclick="switchTaskTab('iv')" id="tabTaskIv">Invoices</button>
+        <button class="task-tab" onclick="switchTaskTab('pr')" id="tabTaskPr">Purchase Requests</button>
+        <button class="task-tab" onclick="switchTaskTab('sm')" id="tabTaskSm">🚢 Shipments</button>
+      </div>
+
+      <!-- Tab Panels -->
+      <div class="chart-card" style="padding:0;overflow:hidden;">
+
+        <!-- Unified Inbox Panel (aggregates pending rows from all 6 panels) -->
+        <div id="taskPanelInbox" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Pending items across all task types · auto-merged</span>
+            <button class="ttb-mini" onclick="_buildInbox()" style="font-size:0.74rem;padding:0.3rem 0.6rem;">↻ Rebuild</button>
+          </div>
+          <div style="overflow-x:auto;" id="inboxTableWrap">
+            <div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">Inbox will populate once task panels load…</div>
+          </div>
+        </div>
+
+        <!-- Quotations Panel (flow) -->
+        <div id="taskPanelQt">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">From the process flow · most recent first</span>
+            <a href="flow-quotations.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="qtTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Sales Orders Panel (flow) -->
+        <div id="taskPanelSo" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">From the process flow · most recent first</span>
+            <a href="flow-sales-orders.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="soTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Purchase Orders Panel (flow) -->
+        <div id="taskPanelPo" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">From the process flow · most recent first</span>
+            <a href="flow-purchase-orders.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="poTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- AP Aging Panel (flow) -->
+        <div id="taskPanelAp" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Payables from purchase orders · most recent first</span>
+            <a href="flow-ap-aging.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="apTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Receiving Panel (flow) -->
+        <div id="taskPanelRc" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Materials receiving · landed cost · most recent first</span>
+            <a href="flow-receiving.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="rcTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Invoices Panel (flow) -->
+        <div id="taskPanelIv" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Issued invoices · sales &amp; COGS · most recent first</span>
+            <a href="flow-invoices.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="ivTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Purchase Requests Panel (flow) -->
+        <div id="taskPanelPr" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Pricing / purchase requests · most recent first</span>
+            <a href="flow-pricing-request.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
+          </div>
+          <div style="overflow-x:auto;" id="prTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Shipments Panel -->
+        <div id="taskPanelSm" style="display:none;">
+          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:1rem;">
+              <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Most recent first · up to 50 rows</span>
+              <select id="smStatusFilter" onchange="applySmFilter()" style="font-size:0.75rem;background:var(--surface,#1e293b);color:var(--text-secondary,#94a3b8);border:1px solid #e2e8f0;border-radius:4px;padding:0.2rem 0.4rem;">
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Awaiting Confirmation">Awaiting Confirmation</option>
+                <option value="Payment Processing">Payment Processing</option>
+                <option value="Goods Ready">Goods Ready</option>
+                <option value="Booked">Booked</option>
+                <option value="In Transit">In Transit</option>
+                <option value="Customs Clearance">Customs Clearance</option>
+                <option value="Arrived">Arrived</option>
+                <option value="Delivered">Delivered</option>
+              </select>
+            </div>
+          </div>
+          <div style="overflow-x:auto;" id="smTableWrap">
+            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+      </div>
+        </div><!-- /admin-main -->
+
+        <aside class="admin-side">
+          <!-- Inventory Snapshot -->
+          <div class="chart-card" style="padding:0;overflow:hidden;">
+            <div class="side-panel-head">
+              <h3>
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/></svg>
+                Inventory
+              </h3>
+              <a href="flow-inventory.html" style="font-size:0.74rem;font-weight:600;color:var(--accent,#0f766e);">View All →</a>
+            </div>
+            <div class="side-scroll" style="overflow-x:auto;" id="invSnapshotWrap">
+              <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
+            </div>
+          </div>
+
+          <!-- Recent Activity -->
+          <div class="chart-card" style="padding:0;overflow:hidden;">
+            <div class="side-panel-head">
+              <h3>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Recent Activity
+              </h3>
+            </div>
+            <div id="activityFeed" class="side-scroll" style="padding:0.5rem 0.75rem;">
+              <div class="loading-overlay" style="padding:1.5rem;"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </aside>
+      </div><!-- /admin-2col -->
+    </div>
+    <!-- ── End Task Overview ──────────────────────────────── -->
+
+    <!-- Team Monthly Summary Row -->
+    <div class="summary-row" id="summaryRow">
+      <div class="summary-item">
+        Team This Month: <strong id="monthQuotations">—</strong> Quotations
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <strong id="monthPRs">—</strong> PRs
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <strong id="monthPOs">—</strong> POs
+      </div>
+    </div>
+
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/stage-meta.js"></script>
+  <script src="js/admin.js"></script>
+  <script>
+    // ── Process Flow KPI snapshot (read-only, from the flow backend) ──
+    (function loadAdminFlowKpis() {
+      const st = document.getElementById('afkpiState');
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      if (typeof _flowConfigured !== 'function' || !_flowConfigured()) {
+        if (st) st.textContent = 'Flow backend not configured';
+        return;
+      }
+      Promise.all([
+        fetchFlow('getInvoices').catch(() => ({ data: [] })),
+        fetchFlow('getAPAging').catch(() => ({ data: [] })),
+        fetchFlow('getInventory').catch(() => ({ data: [] })),
+        fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+      ]).then(([inv, ap, stock, so]) => {
+        const invoices = (inv && inv.data) || [], aps = (ap && ap.data) || [];
+        const items = (stock && stock.data) || [], sos = (so && so.data) || [];
+        const sales = invoices.reduce((s, v) => s + flowNum(v.totalSales), 0);
+        const cogs = invoices.reduce((s, v) => s + flowNum(v.totalCOGS), 0);
+        const apOut = aps.filter(a => (a.status || '').toLowerCase() !== 'paid')
+          .reduce((s, a) => s + (flowNum(a.amountPHP) - flowNum(a.paidPHP)), 0);
+        const invVal = items.reduce((s, i) => s + flowNum(i.totalLanded), 0);
+        set('afkpiSales', flowMoney(sales, 'PHP'));
+        set('afkpiCogs', flowMoney(cogs, 'PHP'));
+        set('afkpiGp', flowMoney(sales - cogs, 'PHP'));
+        set('afkpiAp', flowMoney(apOut, 'PHP'));
+        set('afkpiInv', flowMoney(invVal, 'PHP'));
+        set('afkpiSo', String(sos.length));
+        if (st) st.textContent = 'Live · from Process Flow';
+      }).catch(() => { if (st) st.textContent = 'Unavailable'; });
+    })();
+
+    // Pending-approval + supplier-pricing strip for admin.
+    (function loadAdminApprovalStrip() {
+      if (typeof _flowConfigured !== 'function' || !_flowConfigured()) return;
+      Promise.all([
+        fetchFlow('getQuotations').catch(() => ({ data: [] })),
+        fetchFlow('getPricingRequests').catch(() => ({ data: [] })),
+      ]).then(([q, pr]) => {
+        const qn = ((q && q.data) || []).filter(x => x.status === 'Pending Admin').length;
+        const sourcing = ((pr && pr.data) || []).filter(x => x.status === 'Requested' || x.status === 'Sourcing').length;
+        const el = document.getElementById('flowApprovalStrip');
+        if (!el || (qn + sourcing === 0)) return;
+        const chip = (n, label, href, color) => `<a href="${href}" style="text-decoration:none;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.9rem;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:#fff;color:var(--text-primary,#0f172a);font-weight:600;font-size:0.85rem;"><span style="background:${color};color:#fff;border-radius:999px;padding:1px 9px;font-size:0.78rem;">${n}</span>${label}</a>`;
+        let chips = '';
+        if (qn) chips += chip(qn, 'Quotations awaiting your approval', 'flow-quotations.html', '#b45309');
+        if (sourcing) chips += chip(sourcing, 'Purchase Requests awaiting supplier pricing', 'flow-pricing-request.html', '#0f766e');
+        el.innerHTML = `<div style="border:1px solid var(--border,#e2e8f0);border-radius:14px;background:linear-gradient(180deg,#fff,#f6faf9);padding:1rem 1.2rem;">
+          <div style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;color:var(--text-primary,#0f172a);">⚑ Needs my attention</div>
+          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">${chips}</div></div>`;
+        el.style.display = '';
+      }).catch(() => {});
+    })();
+  </script>
+
+  <!-- Shipment Edit Modal -->
+  <div id="smEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;overflow-y:auto;padding:2rem 1rem;">
+    <div style="max-width:720px;margin:0 auto;background:var(--surface,#1e293b);border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
+      <div style="padding:1.2rem 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--text-primary,#f1f5f9);">Shipment Details</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.15rem;" id="smEditSubtitle">—</div>
+        </div>
+        <button onclick="closeSmModal()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+      </div>
+      <!-- Tab Bar -->
+      <div id="smEditTabs" style="padding:0 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;gap:0;">
+        <button id="smEditTabBtnDetails" onclick="_smModalSwitchTab('details')" class="sm-edit-tab active">Shipment</button>
+        <button id="smEditTabBtnPayment" onclick="_smModalSwitchTab('payment')" class="sm-edit-tab">Payment</button>
+        <button id="smEditTabBtnHistory" onclick="_smModalSwitchTab('history')" class="sm-edit-tab">History</button>
+      </div>
+      <!-- Details Tab Panel -->
+      <div id="smEditTabDetails">
+      <div style="padding:1.2rem 1.5rem;">
+        <input type="hidden" id="smEditId">
+        <input type="hidden" id="smEditPoNo">
+        <input type="hidden" id="smEditClient">
+
+        <!-- Shipment fields block -->
+        <div id="smShipmentBlock">
+        <!-- Status + Mode row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Status</label>
+            <select id="smEditStatus" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;">
+              <option value="Pending">Pending</option>
+              <option value="Awaiting Confirmation">Awaiting Confirmation</option>
+              <option value="Payment Processing">Payment Processing</option>
+              <option value="Goods Ready">Goods Ready</option>
+              <option value="Booked">Booked</option>
+              <option value="In Transit">In Transit</option>
+              <option value="Customs Clearance">Customs Clearance</option>
+              <option value="Arrived">Arrived</option>
+              <option value="Delivered">Delivered</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Mode (AIR / SEA / LOCAL)</label>
+            <select id="smEditMode" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;">
+              <option value="">— Select —</option>
+              <option value="AIR">AIR</option>
+              <option value="SEA">SEA</option>
+              <option value="LOCAL">LOCAL</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Linked Sales Orders -->
+        <div style="margin-bottom:0.75rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);">Linked Sales Orders <span style="font-weight:400;opacity:0.7;">(select all that apply)</span></label>
+            <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:var(--text-secondary,#94a3b8);cursor:pointer;">
+              <input type="checkbox" id="smEditForStocking" onchange="smToggleStocking(this)"> For Stocking — no SO
+            </label>
+          </div>
+          <div id="smSoPickerWrap" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+            <div style="padding:0.35rem 0.6rem;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
+              <input id="smSoSearch" type="text" placeholder="Search SO # or client…" oninput="smFilterSOs()" style="width:100%;background:transparent;border:none;color:var(--text-primary,#f1f5f9);font-size:0.78rem;outline:none;">
+            </div>
+            <div id="smSoCheckList" style="max-height:140px;overflow-y:auto;padding:0.3rem 0;">
+              <div style="padding:0.5rem 0.75rem;font-size:0.78rem;color:var(--text-muted,#64748b);">Loading pending SOs…</div>
+            </div>
+          </div>
+          <div id="smSoChips" style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.4rem;min-height:0;"></div>
+        </div>
+
+        <!-- PO Numbers + Principal + Item -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Client's PO #</label>
+            <input id="smEditClientsPO" type="text" placeholder="Client PO number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">HI-ESCORP PO #</label>
+            <input id="smEditHiPO" type="text" placeholder="Internal PO number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Principal / Supplier</label>
+            <input id="smEditPrincipal" type="text" placeholder="Supplier name" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Item Description</label>
+            <input id="smEditItem" type="text" placeholder="Item or product description" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+
+        <!-- Dates -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Shipment Date</label>
+            <input id="smEditShipmentDate" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">ETD</label>
+            <input id="smEditETD" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">ETA</label>
+            <input id="smEditETA" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">AWB / Tracking #</label>
+            <input id="smEditAWB" type="text" placeholder="Airway bill or tracking number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Logistics Company</label>
+            <input id="smEditLogistics" type="text" placeholder="e.g. Foureleven Freight" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Date Arrived</label>
+          <input id="smEditDateArrived" type="date" style="width:240px;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;margin-bottom:0.75rem;">
+        </div>
+
+        </div><!-- /smShipmentBlock -->
+
+        <!-- Payment block -->
+        <div id="smPaymentBlock" style="display:none;">
+        <!-- Payment -->
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted,#64748b);margin-bottom:0.5rem;margin-top:0.25rem;">Payment</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Total Amount (₱)</label>
+            <input id="smEditTotalAmount" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Amount Paid (₱)</label>
+            <input id="smEditAmountPaid" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Date of Payment</label>
+            <input id="smEditDatePayment" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Payment Status</label>
+            <select id="smEditPaymentStatus" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;">
+              <option value="">— Select —</option>
+              <option value="Unpaid">Unpaid</option>
+              <option value="Partial">Partial</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Payment Method</label>
+            <input id="smEditPaymentMethod" type="text" placeholder="e.g. Telegraphic Transfer" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Sales Invoice #</label>
+            <input id="smEditSalesInvoice" type="text" placeholder="SI number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Delivery Receipt #</label>
+            <input id="smEditDeliveryReceipt" type="text" placeholder="DR number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+
+        </div><!-- /smPaymentBlock -->
+
+        <!-- Remarks -->
+        <div style="margin-bottom:1rem;">
+          <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Remarks</label>
+          <textarea id="smEditRemarks" rows="2" placeholder="Notes, delivery confirmations, etc." style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;resize:vertical;box-sizing:border-box;"></textarea>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:0.6rem;justify-content:flex-end;border-top:1px solid #e2e8f0;padding-top:1rem;">
+          <div id="smEditMsg" style="flex:1;font-size:0.8rem;color:var(--text-muted,#64748b);align-self:center;"></div>
+          <button onclick="closeSmModal()" style="background:transparent;border:1px solid #e2e8f0;color:var(--text-secondary,#94a3b8);border-radius:6px;padding:0.5rem 1.2rem;font-size:0.82rem;cursor:pointer;">Cancel</button>
+          <button onclick="openSmTimeline(_smTlShipmentIdx)" style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.35);color:#14b8a6;border-radius:6px;padding:0.5rem 1.1rem;font-size:0.82rem;cursor:pointer;">View Timeline</button>
+          <button onclick="saveSmEdit()" style="background:#6366f1;border:none;color:#fff;border-radius:6px;padding:0.5rem 1.4rem;font-size:0.82rem;font-weight:600;cursor:pointer;">Save Changes</button>
+        </div>
+      </div>
+      </div><!-- /smEditTabDetails -->
+      <!-- History Tab Panel -->
+      <div id="smEditTabHistory" style="display:none;padding:1.2rem 1.5rem;min-height:340px;flex-direction:column;">
+        <!-- Filter Bar -->
+        <div class="sm-hist-filters" id="smHistoryFilters">
+          <input type="date" id="smHistDateFrom" class="sm-hist-filter-input" title="From date" onchange="_smHistoryLoad(1)">
+          <input type="date" id="smHistDateTo" class="sm-hist-filter-input" title="To date" onchange="_smHistoryLoad(1)">
+          <select id="smHistEventType" class="sm-hist-filter-input sm-hist-filter-select" onchange="_smHistoryLoad(1)">
+            <option value="">All event types</option>
+            <option value="FIELD_CHANGE">Field changes</option>
+            <option value="STAGE_DONE">Stage done</option>
+            <option value="STAGE_SKIPPED">Stage skipped</option>
+            <option value="STAGE_RESET">Stage reset</option>
+            <option value="DOC_UPLOAD">Doc uploaded</option>
+            <option value="DOC_DELETE">Doc deleted</option>
+            <option value="DOC_RESTORE">Doc restored</option>
+            <option value="SHIPMENT_CREATED">Shipment created</option>
+            <option value="AUTO_DERIVATION">Auto-derived</option>
+            <option value="CORRECTION">Manual correction</option>
+          </select>
+          <input type="text" id="smHistActor" class="sm-hist-filter-input" placeholder="Actor…" style="width:130px;" oninput="_smHistoryLoad(1)">
+          <label class="sm-hist-toggle">
+            <input type="checkbox" id="smHistHideSystem" checked onchange="_smHistoryLoad(1)"> Hide system events
+          </label>
+          <button class="sm-hist-filter-btn" onclick="_smHistoryClearFilters()">Clear</button>
+        </div>
+        <!-- Event List -->
+        <div id="smHistoryList" style="flex:1;"></div>
+        <!-- Pager -->
+        <div id="smHistoryPager" style="display:none;" class="sm-hist-pager">
+          <button class="sm-hist-pager-btn" id="smHistPrevBtn" onclick="_smHistoryLoad(_smHistoryPage - 1)" disabled>← Prev</button>
+          <span id="smHistPageInfo"></span>
+          <button class="sm-hist-pager-btn" id="smHistNextBtn" onclick="_smHistoryLoad(_smHistoryPage + 1)" disabled>Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <style>
+    .task-tab {
+      background: transparent;
+      border: 1px solid var(--border, #e2e8f0);
+      color: var(--text-secondary, #64748b);
+      border-radius: 999px;
+      padding: 0.4rem 0.95rem;
+      font-size: 0.8rem; font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-fast, all 0.14s ease);
+    }
+    .task-tab:hover { background: var(--bg-inset, #eef2f6); color: var(--text-primary, #0f172a); border-color: var(--border-strong, #cbd5e1); }
+    .task-tab.active { background: var(--accent, #0f766e); border-color: var(--accent, #0f766e); color: #fff; box-shadow: 0 2px 10px -3px var(--accent-ring, rgba(15,118,110,0.4)); }
+    .task-tbl { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .task-tbl thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-inset, #eef2f6); }
+    .task-tbl th { padding: 0.6rem 0.9rem; text-align: left; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border, #e2e8f0); white-space: nowrap; }
+    .task-tbl td { padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border, #e2e8f0); color: var(--text-secondary, #475569); vertical-align: middle; }
+    .task-tbl tbody tr:nth-child(even) td { background: rgba(15,118,110,0.018); }
+    .task-tbl tr:last-child td { border-bottom: none; }
+    .task-tbl tbody tr { transition: background 0.12s ease; }
+    .task-tbl tr:hover td { background: var(--accent-light, #ccfbf1); }
+    .task-tbl .amt { font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--text-primary, #0f172a); }
+    .task-tbl .ref { font-weight: 700; color: var(--text-primary, #0f172a); font-size: 0.8rem; }
+    .sbadge { display:inline-block; padding:0.18rem 0.6rem; border-radius:999px; font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; }
+    .sbadge-pending    { background:rgba(245,158,11,0.15);  color:#f59e0b; }
+    .sbadge-awaiting   { background:rgba(251,191,36,0.15);  color:#fbbf24; }
+    .sbadge-payment    { background:rgba(59,130,246,0.15);  color:#3b82f6; }
+    .sbadge-goodsready { background:rgba(16,185,129,0.15);  color:#10b981; }
+    .sbadge-booked     { background:rgba(139,92,246,0.15);  color:#a78bfa; }
+    .sbadge-intransit  { background:rgba(99,102,241,0.15);  color:#818cf8; }
+    .sbadge-customs    { background:rgba(249,115,22,0.15);  color:#fb923c; }
+    .sbadge-arrived    { background:rgba(34,197,94,0.15);   color:#22c55e; }
+    .sbadge-delivered  { background:rgba(20,184,166,0.15);  color:#14b8a6; }
+    .sbadge-default    { background:var(--bg-inset,#eef2f6); color:var(--text-secondary,#475569); }
+    .sbadge-approved   { background:rgba(13,148,136,0.14);  color:#0f766e; }
+    .sbadge-sent       { background:rgba(59,130,246,0.15);  color:#3b82f6; }
+    .sbadge-paid       { background:rgba(20,184,166,0.15);  color:#0d9488; }
+    .sbadge-rejected   { background:rgba(239,68,68,0.15);   color:#ef4444; }
+    #smEditOverlay input, #smEditOverlay select, #smEditOverlay textarea { outline:none; }
+    #smEditOverlay input:focus, #smEditOverlay select:focus, #smEditOverlay textarea:focus { border-color:var(--accent,#0f766e); box-shadow:0 0 0 3px var(--accent-ring, rgba(15,118,110,0.18)); }
+    .sm-doc-file { display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.45rem;border-radius:6px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:0.35rem; }
+    .sm-doc-file:last-child { margin-bottom:0; }
+    .sm-doc-name { flex:1;font-size:0.78rem;color:var(--text-secondary,#94a3b8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+
+    /* ── Phase Ribbon ───────────────────────────────── */
+    .sm-tl-ribbon { display:flex; gap:4px; padding-bottom:0.55rem; }
+    .sm-tl-ribbon-seg {
+      flex:1; position:relative; overflow:hidden; cursor:pointer;
+      background:#e2e8f0; border:1px solid #e2e8f0;
+      border-radius:7px; padding:0.4rem 0.5rem; text-align:left;
+      transition:border-color 0.15s, box-shadow 0.15s;
+      min-width:0;
+    }
+    .sm-tl-ribbon-seg:hover  { border-color:rgba(99,102,241,0.5); box-shadow:0 2px 8px rgba(99,102,241,0.15); }
+    .sm-tl-ribbon-seg:focus  { outline:2px solid #6366f1; outline-offset:2px; }
+    .sm-tl-ribbon-seg.partial { border-color:rgba(245,158,11,0.4); }
+    .sm-tl-ribbon-seg.done    { border-color:rgba(34,197,94,0.45); }
+    .sm-tl-ribbon-fill {
+      position:absolute; left:0; top:0; height:100%; pointer-events:none;
+      background:rgba(34,197,94,0.08); transition:width 0.4s ease;
+    }
+    .sm-tl-ribbon-seg.partial .sm-tl-ribbon-fill { background:rgba(245,158,11,0.08); }
+    .sm-tl-ribbon-icon  { font-size:0.85rem; display:block; line-height:1; margin-bottom:2px; position:relative; }
+    .sm-tl-ribbon-label {
+      font-size:0.62rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:0.04em; color:var(--text-secondary,#94a3b8);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      display:block; position:relative;
+    }
+    .sm-tl-ribbon-seg.done .sm-tl-ribbon-label { color:#22c55e; }
+    .sm-tl-ribbon-seg.partial .sm-tl-ribbon-label { color:#f59e0b; }
+    .sm-tl-ribbon-count {
+      font-size:0.63rem; font-weight:600; color:var(--text-muted,#64748b);
+      display:block; position:relative;
+    }
+    .sm-tl-ribbon-seg.done .sm-tl-ribbon-count { color:#16a34a; }
+    .sm-tl-ribbon-overall {
+      font-size:0.7rem; color:var(--text-muted,#64748b);
+      padding-top:0.25rem; text-align:right;
+    }
+
+    /* ── Next-Up Callout Card ────────────────────────── */
+    .sm-tl-next-up {
+      display:flex; align-items:flex-start; gap:0.65rem;
+      padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0.85rem;
+      border:1px solid rgba(99,102,241,0.4);
+      background:rgba(99,102,241,0.07);
+    }
+    .sm-tl-next-up.blocked { border-color:rgba(239,68,68,0.4); background:rgba(239,68,68,0.06); }
+    .sm-tl-next-up.done    { border-color:rgba(34,197,94,0.4);  background:rgba(34,197,94,0.06); }
+    .sm-tl-next-up-icon { font-size:1.1rem; flex-shrink:0; margin-top:2px; }
+    .sm-tl-next-up-body { flex:1; min-width:0; }
+    .sm-tl-next-up-kicker {
+      font-size:0.62rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:0.06em; color:#818cf8; margin-bottom:0.2rem;
+    }
+    .sm-tl-next-up.blocked .sm-tl-next-up-kicker { color:#f87171; }
+    .sm-tl-next-up.done    .sm-tl-next-up-kicker { color:#22c55e; }
+    .sm-tl-next-up-stage { font-size:0.83rem; font-weight:700; color:var(--text-primary,#f1f5f9); display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap; }
+    .sm-tl-next-up-sub   { font-size:0.7rem; color:var(--text-muted,#64748b); margin-top:0.15rem; }
+
+    /* ── Owner Badges ───────────────────────────────── */
+    .sm-owner-badge {
+      display:inline-block; font-size:0.6rem; font-weight:700; line-height:1;
+      padding:0.15rem 0.45rem; border-radius:99px; border:1px solid transparent;
+      white-space:nowrap; vertical-align:middle;
+    }
+    .sm-owner-sales       { background:rgba(59,130,246,0.15);  color:#60a5fa; border-color:rgba(59,130,246,0.3);  }
+    .sm-owner-admin       { background:rgba(100,116,139,0.18); color:#94a3b8; border-color:rgba(100,116,139,0.35);}
+    .sm-owner-sir-larry   { background:rgba(168,85,247,0.15);  color:#c084fc; border-color:rgba(168,85,247,0.3);  }
+    .sm-owner-accounting  { background:rgba(16,185,129,0.15);  color:#34d399; border-color:rgba(16,185,129,0.3);  }
+    .sm-owner-supplier    { background:rgba(249,115,22,0.15);  color:#fb923c; border-color:rgba(249,115,22,0.3);  }
+    .sm-owner-broker      { background:rgba(245,158,11,0.15);  color:#fbbf24; border-color:rgba(245,158,11,0.3);  }
+    .sm-owner-bank        { background:rgba(6,182,212,0.15);   color:#22d3ee; border-color:rgba(6,182,212,0.3);   }
+    .sm-owner-forwarder   { background:rgba(244,63,94,0.15);   color:#fb7185; border-color:rgba(244,63,94,0.3);   }
+
+    /* ── Stage Cards ────────────────────────────────── */
+    .sm-tl-phase-wrap { margin-bottom:0.6rem; }
+    .sm-tl-phase-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0.55rem 0.85rem; border-radius:8px; cursor:pointer;
+      user-select:none; border:1px solid transparent;
+      transition:background 0.12s, border-color 0.12s;
+    }
+    .sm-tl-phase-hdr:hover   { background:#f8fafc; }
+    .sm-tl-phase-hdr:focus   { outline:2px solid #6366f1; outline-offset:2px; }
+    .sm-tl-phase-hdr.pending { background:#f8fafc; border-color:#e2e8f0; }
+    .sm-tl-phase-hdr.partial { background:rgba(245,158,11,0.04);  border-color:rgba(245,158,11,0.3); }
+    .sm-tl-phase-hdr.done    { background:rgba(34,197,94,0.04);   border-color:rgba(34,197,94,0.3); }
+    .sm-tl-phase-hdr.open    { background:rgba(99,102,241,0.05);  border-color:rgba(99,102,241,0.35); }
+    .sm-tl-phase-left   { display:flex; align-items:center; gap:0.55rem; }
+    .sm-tl-phase-num    { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:700; flex-shrink:0; }
+    .sm-tl-phase-name   { font-size:0.82rem; font-weight:700; }
+    .sm-tl-phase-right  { display:flex; align-items:center; gap:0.5rem; }
+    .sm-tl-phase-cnt    { font-size:0.72rem; font-weight:600; }
+    .sm-tl-phase-chevron { font-size:0.7rem; color:var(--text-muted,#64748b); }
+
+    /* Phase body (stage list container) */
+    .sm-tl-phase-body {
+      margin-top:0.25rem; padding-left:0.4rem;
+      border-left:2px solid #e2e8f0;
+    }
+    .sm-tl-phase-body.partial { border-left-color:rgba(245,158,11,0.35); }
+    .sm-tl-phase-body.done    { border-left-color:rgba(34,197,94,0.4);   }
+
+    /* Stage card */
+    .sm-tl-card {
+      border-radius:7px; margin-bottom:0.3rem; overflow:hidden;
+      border:1px solid #e2e8f0; background:#f8fafc;
+      transition:box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+      border-left-width:3px;
+    }
+    .sm-tl-card:hover { box-shadow:0 2px 12px rgba(0,0,0,0.25); transform:translateY(-1px); }
+    .sm-tl-card.done    { border-left-color:#22c55e; background:rgba(34,197,94,0.03); }
+    .sm-tl-card.skipped { border-left-color:#f59e0b; background:rgba(245,158,11,0.03); }
+    .sm-tl-card.next    { border-left-color:#6366f1; background:rgba(99,102,241,0.04); animation:sm-pulse-border 2s ease-in-out infinite; }
+    .sm-tl-card.blocked { border-left-color:#ef4444; background:rgba(239,68,68,0.03); }
+    .sm-tl-card.pending { border-left-color:#e2e8f0; }
+    .sm-tl-card.open    { box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+    @keyframes sm-pulse-border {
+      0%,100% { box-shadow:0 0 0 0 rgba(99,102,241,0); }
+      50%      { box-shadow:0 0 0 3px rgba(99,102,241,0.25); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sm-tl-card.next { animation:none; }
+      .sm-tl-card, .sm-tl-ribbon-fill, .sm-tl-ribbon-seg { transition:none; }
+    }
+
+    /* Stage card header row */
+    .sm-tl-card-hdr {
+      display:flex; align-items:center; gap:0.6rem;
+      padding:0.5rem 0.75rem; cursor:pointer; user-select:none;
+    }
+    .sm-tl-card-hdr:focus { outline:2px solid #6366f1; outline-offset:-2px; }
+    .sm-tl-card-dot {
+      width:22px; height:22px; border-radius:50%; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      font-size:0.63rem; font-weight:700;
+    }
+    .sm-tl-card-dot.done    { background:rgba(34,197,94,0.2);  color:#22c55e; border:1px solid rgba(34,197,94,0.5);  }
+    .sm-tl-card-dot.skipped { background:rgba(245,158,11,0.2); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
+    .sm-tl-card-dot.next    { background:rgba(99,102,241,0.25); color:#818cf8; border:1px solid rgba(99,102,241,0.5); }
+    .sm-tl-card-dot.blocked { background:rgba(239,68,68,0.2);  color:#ef4444; border:1px solid rgba(239,68,68,0.4);  }
+    .sm-tl-card-dot.pending { background:#e2e8f0;   color:#475569; border:1px solid #e2e8f0; }
+    .sm-tl-card-main { flex:1; min-width:0; }
+    .sm-tl-card-label {
+      font-size:0.79rem; font-weight:600; color:var(--text-secondary,#94a3b8);
+    }
+    .sm-tl-card.done .sm-tl-card-label    { color:var(--text-primary,#f1f5f9); }
+    .sm-tl-card.next .sm-tl-card-label    { color:var(--text-primary,#f1f5f9); }
+    .sm-tl-card.skipped .sm-tl-card-label { text-decoration:line-through; color:var(--text-muted,#64748b); }
+    .sm-tl-card-meta {
+      font-size:0.67rem; color:var(--text-muted,#64748b);
+      margin-top:0.05rem; display:flex; align-items:center; gap:0.3rem; flex-wrap:wrap;
+    }
+    .sm-tl-card-date { font-size:0.67rem; font-weight:600; color:#22c55e; margin-top:0.1rem; }
+    .sm-tl-card.skipped .sm-tl-card-date  { color:#f59e0b; }
+    .sm-tl-card-right { display:flex; align-items:center; gap:0.35rem; flex-shrink:0; }
+    .auto-badge {
+      font-size:0.6rem; font-weight:700; background:rgba(99,102,241,0.15);
+      color:#818cf8; border-radius:3px; padding:0 0.28rem;
+      border:1px solid rgba(99,102,241,0.3);
+    }
+    .doc-badge {
+      font-size:0.65rem; font-weight:600; background:rgba(34,197,94,0.12);
+      color:#22c55e; border-radius:99px; padding:0.1rem 0.38rem;
+      border:1px solid rgba(34,197,94,0.25);
+    }
+    .blocked-icon { font-size:0.72rem; color:#ef4444; }
+
+    /* Stage card detail panel */
+    .sm-tl-detail { padding:0.65rem 0.75rem 0.8rem; border-top:1px solid #e2e8f0; }
+    .sm-tl-detail-section { margin-bottom:0.65rem; }
+    .sm-tl-detail-section:last-child { margin-bottom:0; }
+    .sm-tl-section-label {
+      font-size:0.62rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:0.06em; color:var(--text-muted,#64748b); margin-bottom:0.3rem;
+    }
+
+    /* Dependency chips */
+    .sm-dep-chips { display:flex; gap:0.3rem; flex-wrap:wrap; }
+    .sm-dep-chip {
+      display:inline-flex; align-items:center; gap:0.25rem;
+      font-size:0.67rem; padding:0.18rem 0.5rem; border-radius:99px;
+      border:1px solid #e2e8f0; color:var(--text-muted,#64748b);
+      background:#e2e8f0; cursor:pointer; transition:border-color 0.1s;
+    }
+    .sm-dep-chip:hover { border-color:rgba(99,102,241,0.5); color:#818cf8; }
+    .sm-dep-chip.done    { border-color:rgba(34,197,94,0.4);  color:#22c55e; background:rgba(34,197,94,0.08);  }
+    .sm-dep-chip.skipped { border-color:rgba(245,158,11,0.4); color:#f59e0b; background:rgba(245,158,11,0.08); }
+    .sm-dep-chip.blocked { border-color:rgba(239,68,68,0.4);  color:#f87171; background:rgba(239,68,68,0.07);  }
+
+    /* Fields table */
+    .sm-tl-fields { width:100%; font-size:0.73rem; border-collapse:collapse; }
+    .sm-tl-fields td { padding:0.22rem 0; vertical-align:top; }
+    .sm-tl-fields .fl { color:var(--text-muted,#64748b); width:38%; padding-right:0.5rem; }
+    .sm-tl-fields .fv { color:var(--text-primary,#f1f5f9); font-weight:500; }
+    .sm-tl-fields .fv.empty { color:var(--text-muted,#64748b); font-style:italic; font-weight:400; }
+    .sm-set-now {
+      font-size:0.65rem; color:#818cf8; background:none; border:none; cursor:pointer;
+      text-decoration:underline; padding:0; margin-left:0.4rem;
+    }
+
+    /* Action buttons in detail panel */
+    .sm-tl-actions { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.1rem; }
+    .sm-tl-btn {
+      border-radius:5px; padding:0.28rem 0.7rem; font-size:0.73rem;
+      cursor:pointer; font-weight:600; border:1px solid; transition:opacity 0.1s;
+    }
+    .sm-tl-btn:hover { opacity:0.85; }
+    .sm-tl-btn:focus { outline:2px solid #6366f1; outline-offset:2px; }
+    .sm-tl-btn.done-btn    { background:rgba(34,197,94,0.12);  border-color:rgba(34,197,94,0.3);  color:#22c55e; }
+    .sm-tl-btn.skip-btn    { background:rgba(245,158,11,0.1);  border-color:rgba(245,158,11,0.3); color:#f59e0b; }
+    .sm-tl-btn.reset-btn   { background:#e2e8f0;    border-color:#e2e8f0;   color:var(--text-muted,#64748b); }
+
+    /* ── Responsive ─────────────────────────────────── */
+    @media (max-width:640px) {
+      #smTlOverlay { padding:0.75rem 0.4rem; }
+      #smTlOverlay > div { border-radius:10px; }
+      #smTlRibbon  { padding:0.5rem 0.75rem 0; }
+      .sm-tl-ribbon { gap:3px; }
+      .sm-tl-ribbon-label { display:none; }
+      .sm-tl-ribbon-icon  { font-size:1rem; margin-bottom:1px; }
+      .sm-tl-ribbon-count { font-size:0.6rem; }
+      #smTlContent { padding:0.65rem 0.75rem 1.2rem; }
+      .sm-tl-next-up { position:sticky; top:0; z-index:10; }
+      .sm-tl-actions { flex-direction:column; }
+      .sm-tl-btn { width:100%; text-align:center; padding:0.4rem 0.7rem; }
+      .sm-dep-chips { gap:0.25rem; }
+    }
+    @media (min-width:641px) and (max-width:1023px) {
+      .sm-tl-ribbon-label { font-size:0.58rem; }
+    }
+
+    /* ── Edit Modal Tab Bar ─────────────────────────── */
+    .sm-edit-tab {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted, #64748b);
+      padding: 0.55rem 0.9rem 0.45rem;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      font-weight: 500;
+      margin-bottom: -1px;
+    }
+    .sm-edit-tab:hover { color: var(--text-secondary, #475569); }
+    .sm-edit-tab.active { color: var(--accent, #0f766e); border-bottom-color: var(--accent, #0f766e); font-weight: 700; }
+
+    /* ── History Timeline ───────────────────────────── */
+    .sm-hist-filters {
+      display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
+      margin-bottom: 1rem;
+    }
+    .sm-hist-filter-input {
+      background: #f8fafc; color: var(--text-primary,#f1f5f9);
+      border: 1px solid #e2e8f0; border-radius: 6px;
+      padding: 0.35rem 0.6rem; font-size: 0.75rem; outline: none;
+    }
+    .sm-hist-filter-input:focus { border-color: #6366f1; }
+    .sm-hist-filter-select { min-width: 120px; }
+    .sm-hist-filter-btn {
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35);
+      color: #818cf8; border-radius: 6px; padding: 0.35rem 0.75rem;
+      font-size: 0.75rem; cursor: pointer; font-weight: 600;
+    }
+    .sm-hist-filter-btn:hover { background: rgba(99,102,241,0.2); }
+    .sm-hist-toggle {
+      font-size: 0.72rem; color: var(--text-muted,#64748b); cursor: pointer;
+      display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;
+    }
+
+    /* Event row */
+    .sm-hist-event {
+      display: flex; gap: 0.6rem; padding: 0.65rem 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .sm-hist-event:last-child { border-bottom: none; }
+    .sm-hist-icon {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; margin-top: 2px;
+    }
+    .sm-hist-icon.field      { background: rgba(99,102,241,0.15); color: #818cf8; }
+    .sm-hist-icon.stage      { background: rgba(34,197,94,0.12);  color: #22c55e; }
+    .sm-hist-icon.document   { background: rgba(6,182,212,0.12);  color: #22d3ee; }
+    .sm-hist-icon.lifecycle  { background: rgba(168,85,247,0.12); color: #c084fc; }
+    .sm-hist-icon.system     { background: #e2e8f0;    color: #94a3b8; }
+    .sm-hist-body { flex: 1; min-width: 0; }
+    .sm-hist-sentence {
+      font-size: 0.8rem; color: var(--text-secondary,#94a3b8); line-height: 1.4;
+    }
+    .sm-hist-sentence strong { color: var(--text-primary,#f1f5f9); font-weight: 600; }
+    .sm-hist-diff {
+      display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+      margin-top: 0.3rem; font-size: 0.73rem;
+    }
+    .sm-hist-old {
+      text-decoration: line-through; color: var(--text-muted,#64748b);
+      background: rgba(239,68,68,0.08); border-radius: 3px; padding: 0.1rem 0.35rem;
+    }
+    .sm-hist-new {
+      color: #22c55e; background: rgba(34,197,94,0.1);
+      border-radius: 3px; padding: 0.1rem 0.35rem; font-weight: 500;
+    }
+    .sm-hist-arrow { color: var(--text-muted,#64748b); font-size: 0.65rem; }
+    .sm-hist-meta {
+      font-size: 0.67rem; color: var(--text-muted,#64748b);
+      margin-top: 0.2rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+    }
+    .sm-hist-actor {
+      display: inline-block; padding: 0.1rem 0.4rem; border-radius: 99px;
+      background: rgba(99,102,241,0.12); color: #818cf8;
+      font-size: 0.63rem; font-weight: 600;
+    }
+
+    /* Pager */
+    .sm-hist-pager {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 0.75rem; margin-top: 0.25rem;
+      border-top: 1px solid #e2e8f0; font-size: 0.75rem;
+      color: var(--text-muted,#64748b);
+    }
+    .sm-hist-pager-btn {
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      color: var(--text-secondary,#94a3b8); border-radius: 5px;
+      padding: 0.3rem 0.75rem; font-size: 0.75rem; cursor: pointer;
+    }
+    .sm-hist-pager-btn:disabled { opacity: 0.35; cursor: default; }
+    .sm-hist-pager-btn:not(:disabled):hover { border-color: #6366f1; color: #818cf8; }
+
+    /* Empty / banner states */
+    .sm-hist-empty {
+      text-align: center; padding: 2.5rem 1rem; color: var(--text-muted,#64748b);
+      font-size: 0.82rem;
+    }
+    .sm-hist-tracking-banner {
+      font-size: 0.72rem; color: var(--text-muted,#64748b);
+      background: #e2e8f0; border-radius: 6px;
+      padding: 0.45rem 0.75rem; margin-top: 0.75rem; text-align: center;
+    }
+  </style>
+
+  <!-- PDF Mini Viewer -->
+  <div id="smPdfOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:3000;align-items:center;justify-content:center;padding:1.5rem;">
+    <div style="width:100%;max-width:860px;height:85vh;background:#1e293b;border-radius:12px;border:1px solid #e2e8f0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.6);">
+      <div style="padding:0.75rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <div style="font-size:0.85rem;font-weight:600;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%;" id="smPdfTitle">Document</div>
+        <div style="display:flex;gap:0.6rem;align-items:center;flex-shrink:0;">
+          <a id="smPdfOpenLink" href="#" target="_blank" style="font-size:0.75rem;color:#6366f1;text-decoration:none;">Open in Drive ↗</a>
+          <button onclick="smClosePdf()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+        </div>
+      </div>
+      <iframe id="smPdfFrame" src="" style="flex:1;border:none;width:100%;background:#fff;"></iframe>
+    </div>
+  </div>
+
+  <!-- Shipment Lifecycle Timeline Modal -->
+  <div id="smTlOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2500;overflow-y:auto;padding:1.5rem 1rem;">
+    <div style="max-width:680px;margin:0 auto;background:var(--surface,#1e293b);border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 24px 64px rgba(0,0,0,0.55);">
+      <!-- Header -->
+      <div style="padding:1.2rem 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;">
+        <div style="min-width:0;">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Shipment Lifecycle Timeline</div>
+          <div style="font-size:1rem;font-weight:700;color:var(--text-primary,#f1f5f9);margin-bottom:0.2rem;" id="smTlHeader">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span id="smTlSubtitle">—</span>
+            <span id="smTlStatusBadge"></span>
+          </div>
+        </div>
+        <button onclick="closeSmTimeline()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.5rem;cursor:pointer;line-height:1;flex-shrink:0;">×</button>
+      </div>
+      <!-- Phase ribbon (replaces single progress bar) -->
+      <div id="smTlRibbon" style="padding:0.65rem 1.2rem 0;border-bottom:1px solid #e2e8f0;">
+        <div style="height:52px;"></div>
+      </div>
+      <!-- Stage list (next-up card rendered here by JS as first child) -->
+      <div id="smTlContent" style="padding:0.85rem 1.2rem 1.5rem;">
+        <div style="padding:2rem;text-align:center;"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function setDate() {
+      const tl = document.getElementById('todayLabel');
+      if (!tl) return;
+      const d = new Date();
+      tl.textContent = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    })();
+  </script>
+
+  <script>
+    // Sticky toolbar handlers — operate on the currently-visible task panel
+    (function () {
+      const ACTIVE_PANEL_IDS = ['taskPanelQt','taskPanelSo','taskPanelPo','taskPanelAp','taskPanelRc','taskPanelIv','taskPanelPr','taskPanelSm'];
+      function activePanel() {
+        for (const id of ACTIVE_PANEL_IDS) {
+          const el = document.getElementById(id);
+          if (el && el.style.display !== 'none' && el.offsetParent !== null) return el;
+        }
+        return null;
+      }
+      function rowDateMs(row) {
+        // Try common date attrs first
+        const ds = row.getAttribute('data-date') || row.getAttribute('data-iso');
+        if (ds) { const t = Date.parse(ds); if (!isNaN(t)) return t; }
+        // Scan cells for a parseable date
+        for (const td of row.cells || []) {
+          const txt = (td.textContent || '').trim();
+          if (!txt) continue;
+          const t = Date.parse(txt);
+          if (!isNaN(t) && txt.length >= 8) return t;
+        }
+        return null;
+      }
+      window._filterTaskTable = function () {
+        const panel = activePanel();
+        if (!panel) return;
+        const q = (document.getElementById('taskSearchInput')?.value || '').trim().toLowerCase();
+        const fromV = document.getElementById('taskDateFrom')?.value;
+        const toV = document.getElementById('taskDateTo')?.value;
+        const fromMs = fromV ? Date.parse(fromV) : null;
+        const toMs = toV ? Date.parse(toV) + 86399999 : null;
+        panel.querySelectorAll('table tbody tr').forEach(tr => {
+          let visible = true;
+          if (q && !(tr.textContent || '').toLowerCase().includes(q)) visible = false;
+          if (visible && (fromMs || toMs)) {
+            const t = rowDateMs(tr);
+            if (t == null) {
+              if (fromMs || toMs) visible = false;
+            } else {
+              if (fromMs && t < fromMs) visible = false;
+              if (toMs && t > toMs) visible = false;
+            }
+          }
+          tr.style.display = visible ? '' : 'none';
+        });
+      };
+      window._clearTaskFilters = function () {
+        const s = document.getElementById('taskSearchInput'); if (s) s.value = '';
+        const f = document.getElementById('taskDateFrom'); if (f) f.value = '';
+        const t = document.getElementById('taskDateTo'); if (t) t.value = '';
+        window._filterTaskTable();
+      };
+      window._toggleDensity = function () {
+        const on = document.body.classList.toggle('density-compact');
+        try { localStorage.setItem('admin_density_compact', on ? '1' : '0'); } catch (e) {}
+        const btn = document.getElementById('densityBtn');
+        if (btn) btn.textContent = on ? '⇕ Comfort' : '⇕ Density';
+      };
+      window._refreshTasks = function () {
+        const u = document.getElementById('taskUpdatedAt');
+        if (u) u.textContent = 'refreshing…';
+        // Prefer existing fetcher if exposed; otherwise reload
+        if (typeof window.refreshAdminTasks === 'function') {
+          try { window.refreshAdminTasks(); _markUpdated(); return; } catch(e) {}
+        }
+        location.reload();
+      };
+      let _lastUpdated = Date.now();
+      function _markUpdated() { _lastUpdated = Date.now(); _tickUpdated(); }
+      function _tickUpdated() {
+        const el = document.getElementById('taskUpdatedAt');
+        if (!el) return;
+        const s = Math.max(0, Math.round((Date.now() - _lastUpdated) / 1000));
+        if (s < 5) el.textContent = 'just now';
+        else if (s < 60) el.textContent = s + 's ago';
+        else if (s < 3600) el.textContent = Math.round(s/60) + 'm ago';
+        else el.textContent = Math.round(s/3600) + 'h ago';
+      }
+      // Restore density preference
+      try {
+        if (localStorage.getItem('admin_density_compact') === '1') {
+          document.body.classList.add('density-compact');
+          const btn = document.getElementById('densityBtn');
+          if (btn) btn.textContent = '⇕ Comfort';
+        }
+      } catch (e) {}
+      _markUpdated();
+      setInterval(_tickUpdated, 30000);
+      // Re-filter when user switches tabs
+      const _origSwitch = window.switchTaskTab;
+      if (typeof _origSwitch === 'function') {
+        window.switchTaskTab = function (k) {
+          // Handle Inbox tab locally (admin.js doesn't know about it)
+          if (k === 'inbox') {
+            ['Qt','So','Po','Ap','Rc','Iv','Pr','Sm'].forEach(s => {
+              const p = document.getElementById('taskPanel' + s); if (p) p.style.display = 'none';
+              const t = document.getElementById('tabTask' + s); if (t) t.classList.remove('active');
+            });
+            const ip = document.getElementById('taskPanelInbox'); if (ip) ip.style.display = '';
+            const it = document.getElementById('tabTaskInbox'); if (it) it.classList.add('active');
+            _buildInbox();
+            return;
+          }
+          // Hide inbox when switching to a regular tab
+          const ip = document.getElementById('taskPanelInbox'); if (ip) ip.style.display = 'none';
+          const it = document.getElementById('tabTaskInbox'); if (it) it.classList.remove('active');
+          const r = _origSwitch.apply(this, arguments);
+          setTimeout(window._filterTaskTable, 50);
+          _kpiSyncActive(k);
+          return r;
+        };
+      }
+
+      // KPI cards as filters (Admin item 1)
+      function _kpiSyncActive(tab) {
+        document.querySelectorAll('#taskStatCards [data-tab]').forEach(el => {
+          el.classList.toggle('kpi-active', el.getAttribute('data-tab') === tab);
+        });
+      }
+      window._kpiSwitch = function (tab) {
+        if (typeof window.switchTaskTab === 'function') {
+          window.switchTaskTab(tab);
+        } else {
+          _kpiSyncActive(tab);
+        }
+      };
+
+      // === Unified Tasks Inbox (Admin item 2) ===
+      // Aggregate pending rows from all 6 task panels into one merged table.
+      const PANEL_SOURCES = [
+        { panel: 'taskPanelQt', wrap: 'qtTableWrap', type: 'QT',  color: '#0f766e', label: 'Quotation' },
+        { panel: 'taskPanelSo', wrap: 'soTableWrap', type: 'SO',  color: '#14b8a6', label: 'Sales Order' },
+        { panel: 'taskPanelPo', wrap: 'poTableWrap', type: 'PO',  color: '#6366f1', label: 'Purchase Order' },
+        { panel: 'taskPanelAp', wrap: 'apTableWrap', type: 'AP',  color: '#ef4444', label: 'AP Aging' },
+        { panel: 'taskPanelRc', wrap: 'rcTableWrap', type: 'RCV', color: '#0e7490', label: 'Receiving' },
+        { panel: 'taskPanelIv', wrap: 'ivTableWrap', type: 'INV', color: '#22c55e', label: 'Invoice' },
+        { panel: 'taskPanelPr', wrap: 'prTableWrap', type: 'PR',  color: '#3b82f6', label: 'Purchase Req' },
+        { panel: 'taskPanelSm', wrap: 'smTableWrap', type: 'SHP', color: '#f59e0b', label: 'Shipment' }
+      ];
+      function _isPendingRow(rowText) {
+        const t = (rowText || '').toLowerCase();
+        // Exclude obviously completed/closed states
+        if (/\b(delivered|paid|approved|completed|closed|done|sent|arrived)\b/.test(t)) return false;
+        // Include pending-ish keywords or when no status is mentioned (assume pending)
+        if (/\b(pending|awaiting|review|in transit|processing|booked|hold|overdue|follow)/.test(t)) return true;
+        return true; // default: include
+      }
+      function _firstHeaderRow(table) {
+        return table.querySelector('thead tr') || table.querySelector('tr');
+      }
+      window._buildInbox = function () {
+        const wrap = document.getElementById('inboxTableWrap');
+        if (!wrap) return;
+        const merged = []; // {type, color, label, html, dateMs}
+        PANEL_SOURCES.forEach(src => {
+          const w = document.getElementById(src.wrap); if (!w) return;
+          const tbl = w.querySelector('table'); if (!tbl) return;
+          const rows = tbl.querySelectorAll('tbody tr');
+          rows.forEach(tr => {
+            const txt = tr.textContent || '';
+            if (!_isPendingRow(txt)) return;
+            // Try to extract a date for sorting
+            let dateMs = 0;
+            for (const td of tr.cells || []) {
+              const t = (td.textContent || '').trim();
+              if (t.length >= 8) {
+                const ts = Date.parse(t);
+                if (!isNaN(ts)) { dateMs = ts; break; }
+              }
+            }
+            // Build row HTML: prepend type badge
+            const cellsHtml = Array.from(tr.cells || []).slice(0, 6)
+              .map(c => '<td style="padding:0.45rem 0.6rem;border-bottom:1px solid #f1f5f9;font-size:0.8rem;">' + (c.innerHTML || '') + '</td>')
+              .join('');
+            merged.push({
+              type: src.type, color: src.color, label: src.label, dateMs: dateMs,
+              html: '<tr data-type="' + src.type + '">' +
+                    '<td style="padding:0.45rem 0.6rem;border-bottom:1px solid #f1f5f9;">' +
+                      '<span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:999px;background:' + src.color + ';color:#fff;font-size:0.68rem;font-weight:700;">' + src.type + '</span>' +
+                    '</td>' + cellsHtml + '</tr>'
+            });
+          });
+        });
+        // Sort by recency (most recent first), unknown dates last
+        merged.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
+        // Update count badge
+        const cntEl = document.getElementById('inboxCount');
+        if (cntEl) {
+          if (merged.length) { cntEl.textContent = merged.length; cntEl.style.display = ''; }
+          else cntEl.style.display = 'none';
+        }
+        if (!merged.length) {
+          wrap.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">No pending items across any task type. 🎉</div>';
+          return;
+        }
+        wrap.innerHTML =
+          '<table style="width:100%;border-collapse:collapse;">' +
+          '<thead><tr style="background:var(--bg-inset);">' +
+          '<th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Type</th>' +
+          '<th colspan="6" style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Item</th>' +
+          '</tr></thead><tbody>' + merged.map(m => m.html).join('') + '</tbody></table>';
+      };
+      // Rebuild Inbox when task panels load (MutationObserver on the panels container)
+      const inboxObserver = new MutationObserver(() => {
+        // Always update count + rebuild silently if visible
+        const ip = document.getElementById('taskPanelInbox');
+        if (ip && ip.style.display !== 'none') _buildInbox();
+        else {
+          // Just update the count
+          let total = 0;
+          PANEL_SOURCES.forEach(src => {
+            const w = document.getElementById(src.wrap); if (!w) return;
+            const tbl = w.querySelector('table'); if (!tbl) return;
+            tbl.querySelectorAll('tbody tr').forEach(tr => {
+              if (_isPendingRow(tr.textContent || '')) total++;
+            });
+          });
+          const cntEl = document.getElementById('inboxCount');
+          if (cntEl) {
+            if (total) { cntEl.textContent = total; cntEl.style.display = ''; }
+            else cntEl.style.display = 'none';
+          }
+        }
+      });
+      PANEL_SOURCES.forEach(src => {
+        const w = document.getElementById(src.wrap);
+        if (w) inboxObserver.observe(w, { childList: true, subtree: true });
+      });
+
+      // Extend shipment modal tab switcher to handle Payment sub-tab
+      const _origModalSwitch = window._smModalSwitchTab;
+      window._smModalSwitchTab = function (tab) {
+        const ship = document.getElementById('smShipmentBlock');
+        const pay = document.getElementById('smPaymentBlock');
+        const btnD = document.getElementById('smEditTabBtnDetails');
+        const btnP = document.getElementById('smEditTabBtnPayment');
+        const btnH = document.getElementById('smEditTabBtnHistory');
+        if (tab === 'payment') {
+          // Stay on Details panel container, but show only payment block
+          if (typeof _origModalSwitch === 'function') _origModalSwitch('details');
+          if (ship) ship.style.display = 'none';
+          if (pay) pay.style.display = '';
+          if (btnD) btnD.classList.remove('active');
+          if (btnP) btnP.classList.add('active');
+          if (btnH) btnH.classList.remove('active');
+          return;
+        }
+        if (tab === 'details') {
+          if (ship) ship.style.display = '';
+          if (pay) pay.style.display = 'none';
+          if (btnP) btnP.classList.remove('active');
+        } else if (tab === 'history') {
+          if (btnP) btnP.classList.remove('active');
+        }
+        if (typeof _origModalSwitch === 'function') return _origModalSwitch(tab);
+      };
+    })();
+  </script>
+
+  <!-- Admin Email Modal (Follow Up / Supplier Inquiry) -->
+  <div class="modal-overlay" id="adminEmailModal" onclick="if(event.target===this) closeAdminEmailModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <h3 id="adminEmailTitle">Send Email</h3>
+      <div class="form-row">
+        <div class="modal-label">To</div>
+        <input type="email" class="modal-input" id="adminEmailTo" placeholder="recipient@example.com">
+      </div>
+      <div class="form-row">
+        <div class="modal-label">Subject</div>
+        <input type="text" class="modal-input" id="adminEmailSubject">
+      </div>
+      <div class="form-row">
+        <div class="modal-label">Message</div>
+        <textarea class="modal-textarea" id="adminEmailBody"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeAdminEmailModal()">Cancel</button>
+        <button class="btn-modal-send" id="adminBtnSend" onclick="sendAdminEmail()">Send Email</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

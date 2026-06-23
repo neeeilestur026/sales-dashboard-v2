@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Materials Receiving</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Materials Receiving</h1>
+      <p>Load a purchase order, enter total shipping cost, and the system pro-rates it into the landed cost per item, then updates inventory.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="chart-card" style="margin-bottom:1.25rem;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">New Receiving</h3>
+      <div class="flow-form">
+        <div><label>Load Purchase Order *</label><select id="loadPO" onchange="loadFromPO()"></select></div>
+        <div><label>Supplier</label><input type="text" id="supplier" readonly></div>
+        <div><label>Currency</label><input type="text" id="currency" readonly></div>
+        <div><label>Date</label><input type="date" id="date"></div>
+        <div><label>Total Shipping Cost (PHP)</label>
+          <div style="display:flex;gap:0.4rem;align-items:center;">
+            <input type="text" id="totalShipping" readonly value="0.00" style="flex:1;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="openShipModal()">Edit…</button>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:0.76rem;color:var(--text-muted,#64748b);">Purchase/unit (PHP) = AP Paid × unit price (FC) ÷ PO total (FC). Shipping/unit = (Duties+Delivery+Other) × unit price ÷ PO total. VAT goes to Input VAT (Other Assets), not inventory. Landed = Purchase/unit (PHP) + Shipping/unit.</p>
+
+      <table class="flow-table flow-items" style="margin-top:0.5rem;">
+        <thead><tr><th>Item</th><th class="num">Qty Received</th><th class="num">Purchase/Unit (FC)</th><th class="num">Purchase/Unit (PHP)</th><th class="num">Shipping/Unit (PHP)</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th></tr></thead>
+        <tbody id="itemRows"></tbody>
+      </table>
+      <div class="flow-actions">
+        <span style="margin-left:auto;font-weight:700;">Total Landed: <span id="grandTotal">0.00</span></span>
+      </div>
+
+      <div class="flow-actions">
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveReceiving()">Receive &amp; Update Inventory</button>
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+      <div id="formMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <h3 style="font-size:0.95rem;font-weight:600;">Receiving History</h3>
+        <button class="btn btn-sm btn-secondary" onclick="loadReceiving()">Refresh</button>
+      </div>
+      <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+  </main>
+
+  <!-- Shipping costs mini-window -->
+  <div class="flow-modal-overlay" id="shipModal">
+    <div class="flow-modal" style="width:min(440px,100%);">
+      <h3>Shipping Costs (PHP)</h3>
+      <div class="sub">These are summed into Total Shipping Cost. VAT is posted to Input VAT (Other Assets); Duties, Delivery &amp; Other become part of inventory cost.</div>
+      <div class="flow-form">
+        <div><label>Customs Duties</label><input type="number" id="shipDuties" step="any" min="0" value="0" oninput="shipModalRecalc()"></div>
+        <div><label>VAT</label><input type="number" id="shipVat" step="any" min="0" value="0" oninput="shipModalRecalc()"></div>
+        <div><label>Delivery Charges</label><input type="number" id="shipDelivery" step="any" min="0" value="0" oninput="shipModalRecalc()"></div>
+        <div><label>Other Charges</label><input type="number" id="shipOther" step="any" min="0" value="0" oninput="shipModalRecalc()"></div>
+      </div>
+      <div class="flow-actions" style="justify-content:flex-end;font-weight:700;">Total: <span id="shipModalTotal">0.00</span></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeShipModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="applyShipModal()">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-receiving.js"></script>
+</body>
+</html>

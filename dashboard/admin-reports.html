@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Daily Reports</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- XLSX loaded lazily via api.js -->
+  <style>
+    .filter-bar {
+      display: flex; gap: 0.75rem; align-items: center;
+      margin-bottom: 1.25rem; flex-wrap: wrap;
+    }
+    .filter-bar label { font-size: 0.85rem; color: var(--text-muted, #64748b); font-weight: 500; }
+    .filter-bar input[type="date"] {
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px; color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+    }
+    .filter-bar input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+    .reports-table {
+      width: 100%; border-collapse: collapse; font-size: 0.875rem;
+    }
+    .reports-table th {
+      text-align: left; padding: 0.65rem 0.9rem;
+      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      font-weight: 600; white-space: nowrap;
+    }
+    .reports-table td {
+      padding: 0.65rem 0.9rem; border-bottom: 1px solid #e2e8f0;
+      color: var(--text-primary, #f1f5f9); vertical-align: middle;
+    }
+    .reports-table tr:hover td { background: #e2e8f0; }
+    .not-submitted td { color: var(--text-muted, #64748b); font-style: italic; opacity: 0.6; }
+    .badge-success { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-fail { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-muted { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .details-btn {
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
+      color: #3b82f6; border-radius: 6px; padding: 0.25rem 0.6rem;
+      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    }
+    .details-btn:hover { background: rgba(59,130,246,0.2); }
+    .call-details-row { display: none; }
+    .call-details-row.open { display: table-row; }
+    .call-details-row td { padding: 0.5rem 0.9rem; background: rgba(30,41,59,0.5); }
+    .mini-table {
+      width: 100%; border-collapse: collapse; font-size: 0.8rem;
+    }
+    .mini-table th {
+      text-align: left; padding: 0.3rem 0.6rem; font-weight: 600;
+      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+    }
+    .mini-table td {
+      padding: 0.3rem 0.6rem; border-bottom: 1px solid #e2e8f0;
+      color: var(--text-secondary, #94a3b8);
+    }
+    .no-results { text-align: center; padding: 3rem 1rem; color: var(--text-muted, #64748b); }
+    .date-label { font-size: 0.85rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Daily Sales Reports</h1>
+      <p>View daily activity reports submitted by your team.</p>
+    </div>
+
+    <div class="chart-card">
+      <div class="filter-bar">
+        <label>Date:</label>
+        <input type="date" id="reportDate" onchange="loadReports()">
+        <button class="btn" onclick="setToday()">Today</button>
+        <button class="btn" onclick="exportReportsExcel()" style="margin-left:auto;font-size:0.78rem;padding:0.4rem 0.75rem;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </button>
+      </div>
+
+      <div id="dateLabel" class="date-label"></div>
+
+      <div id="reportsContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/admin-reports.js"></script>
+</body>
+</html>

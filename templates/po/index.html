@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Order Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tool-css/tool-shared.css">
+</head>
+<body>
+<script>
+(function(){var s;try{s=JSON.parse(localStorage.getItem('session'));}catch(e){}
+if(!s||!s.token){window.location.href='/index.html';return;}
+var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorage.removeItem('session');window.location.href='/index.html';}
+window.scrollTo(0,0);
+})();
+</script>
+
+    <div class="tool-topbar">
+        <div class="container">
+            <a href="/admin.html" class="btn btn-outline-secondary btn-sm">&larr; Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="page-header">
+        <div class="container">
+            <h1>Purchase Order Generator</h1>
+            <p>Fill in the details below to generate a purchase order PDF.</p>
+        </div>
+    </div>
+
+    <div class="container main-content">
+        <form id="po_form" enctype="multipart/form-data">
+            <div class="row g-4">
+
+                <!-- Vendor Information -->
+                <div class="col-md-6">
+                    <div class="card section-gap">
+                        <div class="card-header">
+                            <div class="header-icon blue">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 21h18M3 7v14M21 7v14M9 3h6l3 4H6l3-4zM9 21v-6h6v6"/></svg>
+                            </div>
+                            <h5>Vendor Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Vendor Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="vendor_name" name="vendor_name" required>
+                                <div class="invalid-feedback">Please enter a vendor name.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Vendor Address <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="vendor_address" name="vendor_address" required>
+                                <div class="invalid-feedback">Please enter a vendor address.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Contact Person <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="vendor_contact_person" name="vendor_contact_person" required>
+                                <div class="invalid-feedback">Please enter a contact person.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Vendor Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="vendor_email" name="vendor_email" required>
+                                <div class="invalid-feedback">Please enter a valid vendor email.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">TIN <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="vendor_tin" name="vendor_tin" required>
+                                <div class="invalid-feedback">Please enter a TIN.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PO Details -->
+                <div class="col-md-6">
+                    <div class="card section-gap">
+                        <div class="card-header">
+                            <div class="header-icon amber">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+                            </div>
+                            <h5>Purchase Order Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="form-label">PO Number <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="po_number" name="po_number" required>
+                                    <div class="invalid-feedback">Required.</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">PO Date <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="po_date" name="po_date" required>
+                                    <div class="invalid-feedback">Required.</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Payment Terms <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="payment_terms" name="payment_terms" required>
+                                <div class="invalid-feedback">Please enter payment terms.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Date Needed <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="date_needed" name="date_needed" required>
+                                <div class="invalid-feedback">Please enter the date needed.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Invoice Contact Person <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="invoice_contact_person" name="invoice_contact_person" required>
+                                <div class="invalid-feedback">Required.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Invoice Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="invoice_email" name="invoice_email" required>
+                                <div class="invalid-feedback">Please enter a valid email.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Reference No. (Optional)</label>
+                                <input type="text" class="form-control" id="reference_no" name="reference_no">
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="form-label">Currency</label>
+                                    <select class="form-select" id="currency" name="currency">
+                                        <option value="PHP">PHP — Philippine Peso</option>
+                                        <option value="USD">USD — US Dollar</option>
+                                        <option value="EUR">EUR — Euro</option>
+                                        <option value="JPY">JPY — Japanese Yen</option>
+                                        <option value="GBP">GBP — British Pound</option>
+                                        <option value="AUD">AUD — Australian Dollar</option>
+                                        <option value="CAD">CAD — Canadian Dollar</option>
+                                        <option value="SGD">SGD — Singapore Dollar</option>
+                                        <option value="AED">AED — UAE Dirham</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Description Mode</label>
+                                    <select class="form-select" id="description_type" name="description_type">
+                                        <option value="short" selected>Short (10/page)</option>
+                                        <option value="long">Long (3/page)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Attach Brochure (Optional PDF)</label>
+                                <input type="file" class="form-control" id="brochure_file" name="brochure_file" accept=".pdf" multiple>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Items -->
+            <div class="card section-gap">
+                <div class="card-header" style="justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <div class="header-icon blue">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                        <h5 class="mb-0">Items</h5>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="showAddItemModal()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        Add Item
+                    </button>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="items_table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Item Code</th>
+                                    <th style="text-align:left;">Item Description</th>
+                                    <th>Qty</th>
+                                    <th>Unit Price</th>
+                                    <th>Total</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Log -->
+            <div class="card section-gap">
+                <div class="card-header">
+                    <div class="header-icon dark">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+                    </div>
+                    <h5>Output Log</h5>
+                </div>
+                <div class="card-body" style="padding:0.75rem;">
+                    <pre id="output_log">No output yet.</pre>
+                </div>
+            </div>
+
+            <div class="action-bar">
+                <button type="button" class="btn btn-primary btn-generate" onclick="generatePurchaseOrder()">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    Generate PDF
+                </button>
+                <button type="button" class="btn btn-secondary btn-reset" onclick="resetForm()">Reset Form</button>
+            </div>
+            <p class="text-muted text-center" style="font-size:0.8rem;margin-top:0.5rem;">The generated PO will automatically be submitted to PO Approvals for management review.</p>
+        </form>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addItemModalLabel">Add Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Item Code</label>
+                        <input type="text" class="form-control" id="item_code">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Item Description</label>
+                        <textarea class="form-control" id="item_description" rows="3"></textarea>
+                        <div class="invalid-feedback">Please enter an item description.</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" class="form-control" id="quantity" min="1" step="1">
+                                <div class="invalid-feedback">Enter a valid quantity.</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">Unit Price</label>
+                                <input type="number" class="form-control" id="unit_price" step="0.01" min="0">
+                                <div class="invalid-feedback">Enter a valid price.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addItem()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        Add Item
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/tool-js/po/script.js"></script>
+</body>
+</html>

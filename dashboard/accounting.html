@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Accounting</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* Tabs */
+    .tab-bar { display:flex; gap:0.25rem; margin-bottom:1.5rem; border-bottom:2px solid var(--border,#334155); }
+    .tab-btn { padding:0.6rem 1.25rem; border:none; background:transparent; color:var(--text-muted,#64748b); font-family:inherit; font-size:0.875rem; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
+    .tab-btn:hover { color:var(--text-primary,#f1f5f9); }
+    .tab-btn.active { color:var(--accent,#f97316); border-bottom-color:var(--accent,#f97316); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    /* KPI Cards */
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.75rem; margin-bottom:1.5rem; }
+    .kpi-card { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1rem 1.1rem; min-width:0; }
+    .kpi-label { font-size:0.72rem; font-weight:600; color:var(--text-muted,#64748b); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.35rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-value { font-size:clamp(0.95rem, 1.1vw + 0.3rem, 1.35rem); font-weight:700; color:var(--text-primary,#f1f5f9); white-space:nowrap; }
+    .kpi-sub { font-size:0.72rem; margin-top:0.25rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-positive { color:#22c55e; }
+    .kpi-negative { color:#ef4444; }
+    .kpi-neutral { color:var(--text-muted,#64748b); }
+
+    /* Widen page for this dashboard */
+    .main-content { max-width:1400px; padding-left:1rem; padding-right:1rem; }
+
+    /* Two-column layout */
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem; }
+    @media(max-width:768px) { .grid-2 { grid-template-columns:1fr; } }
+
+    /* Charts */
+    .chart-box { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1.25rem; }
+    .chart-box h3 { font-size:0.88rem; font-weight:600; color:var(--text-secondary,#94a3b8); margin-bottom:1rem; }
+    .chart-box canvas { max-height:280px; }
+
+    /* Aging table */
+    .aging-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:0.5rem; margin-top:0.75rem; }
+    .aging-item { text-align:center; padding:0.75rem 0.5rem; border-radius:8px; background:#f8fafc; }
+    .aging-label { font-size:0.7rem; font-weight:600; color:var(--text-muted,#64748b); margin-bottom:0.25rem; }
+    .aging-val { font-size:1rem; font-weight:700; }
+    .aging-current { color:#22c55e; }
+    .aging-30 { color:#eab308; }
+    .aging-60 { color:#f97316; }
+    .aging-90 { color:#ef4444; }
+    .aging-over { color:#dc2626; }
+
+    /* Range filter */
+    .range-bar { display:flex; gap:0.4rem; margin-bottom:1.25rem; flex-wrap:wrap; align-items:center; }
+    .range-btn { padding:0.4rem 0.9rem; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer; border:1px solid var(--border,#334155); background:transparent; color:var(--text-muted,#64748b); transition:all 0.15s; }
+    .range-btn:hover { color:var(--text-primary,#f1f5f9); }
+    .range-btn.active { background:var(--accent,#f97316); color:#fff; border-color:var(--accent,#f97316); }
+
+    /* Order & Expense tables */
+    .acct-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    .acct-table th { text-align:left; padding:0.55rem 0.65rem; color:var(--text-muted,#64748b); border-bottom:1px solid var(--border,#334155); font-weight:600; white-space:nowrap; font-size:0.75rem; }
+    .acct-table td { padding:0.55rem 0.65rem; border-bottom:1px solid #e2e8f0; color:var(--text-primary,#f1f5f9); }
+    .acct-table tr:hover td { background:#e2e8f0; }
+
+    /* Status badges */
+    .st { display:inline-block; padding:0.15rem 0.55rem; border-radius:6px; font-size:0.72rem; font-weight:600; }
+    .st-paid { background:rgba(34,197,94,0.12); color:#22c55e; }
+    .st-partial { background:rgba(234,179,8,0.12); color:#eab308; }
+    .st-pending { background:rgba(148,163,184,0.1); color:#94a3b8; }
+    .st-overdue { background:rgba(239,68,68,0.12); color:#ef4444; }
+    .st-processing { background:rgba(59,130,246,0.12); color:#3b82f6; }
+    .st-transit { background:rgba(168,85,247,0.12); color:#a855f7; }
+    .st-delivered { background:rgba(34,197,94,0.12); color:#22c55e; }
+    .st-completed { background:rgba(34,197,94,0.15); color:#22c55e; }
+
+    /* Forms */
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.75rem 1rem; }
+    .form-section { margin-bottom:1rem; }
+    .form-section-title { font-size:0.78rem; font-weight:700; color:var(--accent,#f97316); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.6rem; padding-bottom:0.35rem; border-bottom:1px solid var(--border,#334155); }
+    .acct-form .form-group { margin-bottom:0.5rem; }
+    .acct-form .form-label { font-size:0.72rem; font-weight:600; color:var(--text-muted,#64748b); margin-bottom:0.2rem; display:block; }
+    .acct-form .form-input, .acct-form select {
+      width:100%; padding:0.5rem 0.65rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:var(--bg,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.82rem; font-family:inherit;
+    }
+    .acct-form select { appearance:auto; }
+    .form-panel { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1.25rem; margin-bottom:1.25rem; }
+    .form-panel.hidden { display:none; }
+
+    /* Filter bar */
+    .filter-bar { display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center; }
+    .filter-bar .form-input, .filter-bar select {
+      padding:0.4rem 0.65rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:var(--bg,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.8rem; font-family:inherit;
+    }
+    .filter-bar select { appearance:auto; }
+    .ml-auto { margin-left:auto; }
+
+    /* Profit color */
+    .profit-pos { color:#22c55e; font-weight:700; }
+    .profit-neg { color:#ef4444; font-weight:700; }
+    .profit-zero { color:var(--text-muted,#64748b); }
+
+    /* Top clients */
+    .client-row { display:flex; align-items:center; gap:0.75rem; padding:0.45rem 0; border-bottom:1px solid #e2e8f0; }
+    .client-row:last-child { border-bottom:none; }
+    .client-rank { font-size:0.72rem; font-weight:700; color:var(--text-muted,#64748b); width:1.5rem; }
+    .client-name { flex:1; font-weight:600; font-size:0.82rem; }
+    .client-rev { font-weight:700; color:var(--accent,#f97316); font-size:0.85rem; }
+
+    /* ─── Email Modal ─── */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:11000; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-box { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:16px; padding:1.5rem; width:min(520px,95vw); max-height:90vh; overflow-y:auto; }
+    .modal-box h3 { font-size:1rem; font-weight:700; margin:0 0 1rem; }
+    .modal-label { font-size:0.78rem; color:var(--text-muted,#64748b); margin-bottom:0.25rem; }
+    .modal-input, .modal-textarea { width:100%; padding:0.5rem 0.75rem; border-radius:8px; border:1px solid var(--border,#334155); background:var(--bg,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.85rem; box-sizing:border-box; }
+    .modal-textarea { resize:vertical; min-height:120px; }
+    .modal-footer { display:flex; gap:0.6rem; justify-content:flex-end; margin-top:1rem; }
+    .btn-modal-send { background:#6366f1; color:#fff; border:none; border-radius:8px; padding:0.45rem 1rem; font-size:0.83rem; font-weight:600; cursor:pointer; }
+    .btn-modal-send:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-cancel { background:transparent; color:var(--text-secondary,#94a3b8); border:1px solid var(--border,#334155); border-radius:8px; padding:0.45rem 1rem; font-size:0.83rem; cursor:pointer; }
+    .form-row { margin-bottom:0.9rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Accounting</h1>
+      <p>Track orders, expenses, receivables, and profitability.</p>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabDashboard" onclick="switchAcctTab('dashboard')">Dashboard</button>
+      <button class="tab-btn" id="tabOrders" onclick="switchAcctTab('orders')">Orders</button>
+      <button class="tab-btn" id="tabExpenses" onclick="switchAcctTab('expenses')">Expenses</button>
+      <button class="tab-btn" id="tabSalesOrders" onclick="switchAcctTab('sales-orders')">Sales Orders</button>
+      <button class="tab-btn" id="tabCollections" onclick="switchAcctTab('collections')">Collections</button>
+      <button class="tab-btn" id="tabArAging" onclick="switchAcctTab('ar-aging')">AR Aging</button>
+      <button class="tab-btn" id="tabProfitReport" onclick="switchAcctTab('profit-report')">Profit Report</button>
+      <button class="tab-btn" id="tabShipments" onclick="switchAcctTab('shipments')">Shipments</button>
+    </div>
+
+    <!-- ═══ DASHBOARD TAB ═══ -->
+    <div class="tab-panel active" id="panel-dashboard">
+      <div class="range-bar">
+        <button class="range-btn active" onclick="loadDashboard('month')">This Month</button>
+        <button class="range-btn" onclick="loadDashboard('quarter')">Quarter</button>
+        <button class="range-btn" onclick="loadDashboard('year')">This Year</button>
+        <button class="range-btn" onclick="loadDashboard('all')">All Time</button>
+      </div>
+      <div id="dashContent">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading financials...</span></div>
+      </div>
+    </div>
+
+    <!-- ═══ ORDERS TAB ═══ -->
+    <div class="tab-panel" id="panel-orders">
+      <div class="filter-bar">
+        <select id="orderStatusFilter" onchange="loadOrders()">
+          <option value="">All Statuses</option>
+          <option value="Processing">Processing</option>
+          <option value="In Transit">In Transit</option>
+          <option value="Delivered">Delivered</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <input type="text" class="form-input" id="orderClientSearch" placeholder="Search client..." oninput="loadOrders()" style="max-width:200px;">
+        <div class="ml-auto" style="display:flex;gap:0.4rem;">
+          <button class="btn btn-secondary btn-sm" onclick="exportOrdersExcel()">Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="toggleOrderForm()">+ Add Order</button>
+        </div>
+      </div>
+
+      <!-- Add Order Form (hidden) -->
+      <div class="form-panel hidden" id="orderFormPanel">
+        <form class="acct-form" id="orderForm" onsubmit="submitOrder(event)">
+          <div class="form-section">
+            <div class="form-section-title">Order Details</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Order Date</label><input type="date" name="orderDate" class="form-input" required></div>
+              <div class="form-group"><label class="form-label">Voucher Number</label><input type="text" name="orderNumber" class="form-input" placeholder="PO-001" required></div>
+              <div class="form-group"><label class="form-label">Type</label><select name="type" class="form-input"><option value="International">International</option><option value="Local">Local</option></select></div>
+              <div class="form-group"><label class="form-label">Client</label><input type="text" name="client" class="form-input" required></div>
+              <div class="form-group"><label class="form-label">Product Description</label><input type="text" name="product" class="form-input" required></div>
+              <div class="form-group"><label class="form-label">Qty</label><input type="number" name="qty" class="form-input" value="1" min="1"></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="form-section-title">Pricing</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Selling Price (PHP)</label><input type="number" name="sellingPrice" class="form-input" step="0.01" required></div>
+              <div class="form-group"><label class="form-label">Payee</label><input type="text" name="supplier" class="form-input"></div>
+              <div class="form-group"><label class="form-label">Purchase Cost</label><input type="number" name="purchaseCost" class="form-input" step="0.01"></div>
+              <div class="form-group"><label class="form-label">Currency</label><select name="currency" class="form-input"><option value="PHP">PHP</option><option value="USD">USD</option><option value="SGD">SGD</option></select></div>
+              <div class="form-group"><label class="form-label">Exchange Rate to PHP</label><input type="number" name="exchangeRate" class="form-input" step="0.0001" value="1"></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="form-section-title">Shipping & Delivery</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Shipping Method</label><select name="shippingMethod" class="form-input"><option value="">N/A</option><option value="DHL">DHL</option><option value="FedEx">FedEx</option><option value="3rd Party Forwarder">3rd Party Forwarder</option></select></div>
+              <div class="form-group"><label class="form-label">Shipping Cost (PHP)</label><input type="number" name="shippingCost" class="form-input" step="0.01" value="0"></div>
+              <div class="form-group"><label class="form-label">Duties & Taxes (PHP)</label><input type="number" name="dutiesTaxes" class="form-input" step="0.01" value="0"></div>
+              <div class="form-group"><label class="form-label">Delivery Method</label><select name="deliveryMethod" class="form-input"><option value="">N/A</option><option value="AP Cargo">AP Cargo</option><option value="LBC">LBC</option><option value="Self">Self-Delivery</option></select></div>
+              <div class="form-group"><label class="form-label">Delivery Cost (PHP)</label><input type="number" name="deliveryCost" class="form-input" step="0.01" value="0"></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="form-section-title">Payment</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Payment Terms</label><select name="paymentTerms" class="form-input"><option value="COD">COD</option><option value="30 Days">30 Days</option><option value="60 Days">60 Days</option><option value="50% DP, 50% 30 Days">50% DP, 50% 30 Days</option></select></div>
+              <div class="form-group"><label class="form-label">Due Date (optional)</label><input type="date" name="dueDate" class="form-input"></div>
+              <div class="form-group"><label class="form-label">Order Status</label><select name="orderStatus" class="form-input"><option value="Processing">Processing</option><option value="In Transit">In Transit</option><option value="Delivered">Delivered</option><option value="Completed">Completed</option></select></div>
+              <div class="form-group"><label class="form-label">Notes</label><input type="text" name="notes" class="form-input"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleOrderForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary btn-sm" id="orderSubmitBtn">Save Order</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="table-wrapper" id="ordersContainer">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading orders...</span></div>
+        </div>
+      </div>
+
+      <!-- Purchase Orders (read-only mirror of Admin POs) -->
+      <div class="card" style="margin-top:1.25rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+          <div>
+            <h3 style="margin:0;font-size:0.95rem;">Purchase Orders <span style="color:var(--text-muted,#64748b);font-weight:400;font-size:0.78rem;">(from Admin)</span></h3>
+            <p style="margin:0.15rem 0 0;color:var(--text-muted,#64748b);font-size:0.75rem;">Vendor POs raised by Admin. Read-only.</p>
+          </div>
+          <div style="display:flex;gap:0.4rem;align-items:center;">
+            <input type="text" id="poSearch" class="form-input" placeholder="Search PO, vendor…" oninput="renderPOTable()" style="max-width:220px;font-size:0.8rem;">
+            <select id="poStatusFilter" onchange="renderPOTable()" style="font-size:0.8rem;">
+              <option value="">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Sent">Sent</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadPORecordsForAcct()">Refresh</button>
+          </div>
+        </div>
+        <div class="table-wrapper" id="poRecordsContainer">
+          <div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Loading purchase orders…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EXPENSES TAB ═══ -->
+    <div class="tab-panel" id="panel-expenses">
+      <div class="filter-bar" style="flex-wrap:wrap;gap:0.4rem;">
+        <input type="month" id="expMonthFilter" oninput="applyExpenseFilters()" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:0.35rem 0.6rem;font-size:0.82rem;">
+        <button id="expAllTimeBtn" class="btn btn-secondary btn-sm" onclick="toggleExpAllTime()" style="font-size:0.78rem;">All Time</button>
+        <select id="expCatFilter" onchange="applyExpenseFilters()" style="min-width:160px;">
+          <option value="">All Categories</option>
+          <option value="Advertising">Advertising</option>
+          <option value="Bank service charge">Bank service charge</option>
+          <option value="Commission">Commission</option>
+          <option value="Depreciation expense">Depreciation expense</option>
+          <option value="Employee benefits">Employee benefits</option>
+          <option value="Inventory">Inventory</option>
+          <option value="Janitorial">Janitorial</option>
+          <option value="Legal fees">Legal fees</option>
+          <option value="Load allowances">Load allowances</option>
+          <option value="Medical expenses">Medical expenses</option>
+          <option value="Miscellaneous">Miscellaneous</option>
+          <option value="Permits and licenses">Permits and licenses</option>
+          <option value="Postage and communication">Postage and communication</option>
+          <option value="Professional fees">Professional fees</option>
+          <option value="Rent expense">Rent expense</option>
+          <option value="Repairs and maintenance">Repairs and maintenance</option>
+          <option value="Representation">Representation</option>
+          <option value="Revolving fund">Revolving fund</option>
+          <option value="Revolving funds">Revolving funds</option>
+          <option value="Salaries and wages">Salaries and wages</option>
+          <option value="Statutory benefits">Statutory benefits</option>
+          <option value="Supplies expense">Supplies expense</option>
+          <option value="Tools and equipment">Tools and equipment</option>
+          <option value="Transportation and travel">Transportation and travel</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Delivery Expense">Delivery Expense</option>
+          <option value="Cost of Goods Sold">Cost of Goods Sold</option>
+          <option value="Interest income">Interest income</option>
+          <option value="Interest expense">Interest expense</option>
+          <option value="Cost of Goods Sold">Cost of Goods Sold</option>
+          <option value="Interest income">Interest income</option>
+          <option value="Interest expense">Interest expense</option>
+        </select>
+        <div class="ml-auto" style="display:flex;gap:0.4rem;">
+          <button class="btn btn-secondary btn-sm" onclick="exportExpensesExcel()">Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="toggleExpenseForm()">+ Add Expense</button>
+        </div>
+      </div>
+
+      <!-- Expense Summary Cards -->
+      <div id="expenseSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;margin-bottom:1rem;"></div>
+
+      <!-- Category Breakdown -->
+      <div id="expenseCategoryBreakdown" style="margin-bottom:1rem;"></div>
+
+      <!-- Add Expense Form (hidden) -->
+      <div class="form-panel hidden" id="expenseFormPanel">
+        <form class="acct-form" id="expenseForm" onsubmit="submitExpense(event)">
+          <div class="form-section-title" id="expenseFormTitle">Log Expense</div>
+          <input type="hidden" id="expenseEditRowIndex" value="">
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-input" required></div>
+            <div class="form-group"><label class="form-label">Category</label><select name="category" class="form-input"><option value="Advertising">Advertising</option><option value="Bank service charge">Bank service charge</option><option value="Commission">Commission</option><option value="Depreciation expense">Depreciation expense</option><option value="Employee benefits">Employee benefits</option><option value="Inventory">Inventory</option><option value="Janitorial">Janitorial</option><option value="Legal fees">Legal fees</option><option value="Load allowances">Load allowances</option><option value="Medical expenses">Medical expenses</option><option value="Miscellaneous">Miscellaneous</option><option value="Permits and licenses">Permits and licenses</option><option value="Postage and communication">Postage and communication</option><option value="Professional fees">Professional fees</option><option value="Rent expense">Rent expense</option><option value="Repairs and maintenance">Repairs and maintenance</option><option value="Representation">Representation</option><option value="Revolving fund">Revolving fund</option><option value="Revolving funds">Revolving funds</option><option value="Salaries and wages">Salaries and wages</option><option value="Statutory benefits">Statutory benefits</option><option value="Supplies expense">Supplies expense</option><option value="Tools and equipment">Tools and equipment</option><option value="Transportation and travel">Transportation and travel</option><option value="Utilities">Utilities</option><option value="Delivery Expense">Delivery Expense</option><option value="Cost of Goods Sold">Cost of Goods Sold</option><option value="Interest income">Interest income</option><option value="Interest expense">Interest expense</option></select></div>
+            <div class="form-group"><label class="form-label">Voucher Number (optional)</label><input type="text" name="orderRef" class="form-input" placeholder="PO-001"></div>
+            <div class="form-group"><label class="form-label">Client (optional)</label><input type="text" name="client" class="form-input"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Description</label><input type="text" name="description" class="form-input" required></div>
+            <div class="form-group"><label class="form-label">Toll Fee</label><input type="number" name="toll" class="form-input" step="0.01" value="0"></div>
+            <div class="form-group"><label class="form-label">Fuel</label><input type="number" name="fuel" class="form-input" step="0.01" value="0"></div>
+            <div class="form-group"><label class="form-label">Meals</label><input type="number" name="meals" class="form-input" step="0.01" value="0"></div>
+            <div class="form-group"><label class="form-label">Load Balance</label><input type="number" name="loadBalance" class="form-input" step="0.01" value="0"></div>
+            <div class="form-group"><label class="form-label">Other Amount</label><input type="number" name="otherAmount" class="form-input" step="0.01" value="0"></div>
+            <div class="form-group"><label class="form-label">Notes</label><input type="text" name="notes" class="form-input"></div>
+          </div>
+          <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cancelExpenseForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary btn-sm" id="expenseSubmitBtn">Save Expense</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="table-wrapper" id="expensesContainer">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading expenses...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SALES ORDERS TAB ═══ -->
+    <div class="tab-panel" id="panel-sales-orders">
+      <div class="filter-bar">
+        <input type="month" id="soMonthFilter" oninput="applySalesOrderFilters()" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:0.35rem 0.6rem;font-size:0.82rem;">
+        <button id="soAllTimeBtn" class="btn btn-secondary btn-sm" onclick="toggleSOAllTime()" style="font-size:0.78rem;">All Time</button>
+        <select id="soStatusFilter" onchange="loadSalesOrders()">
+          <option value="">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Invoiced">Invoiced</option>
+          <option value="Delivered">Delivered</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+        <input type="text" class="form-input" id="soSearch" placeholder="Search SO#, customer..." oninput="loadSalesOrders()" style="max-width:200px;">
+        <div class="ml-auto" style="display:flex;gap:0.4rem;">
+          <button class="btn btn-secondary btn-sm" onclick="exportSOExcel()">Excel</button>
+        </div>
+      </div>
+
+      <div id="soStatsBar"></div>
+
+      <div class="card">
+        <div class="table-wrapper" id="salesOrdersContainer">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading sales orders...</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- ═══ COLLECTIONS TAB ═══ -->
+    <div class="tab-panel" id="panel-collections">
+      <div class="filter-bar">
+        <input type="text" class="form-input" id="colSearch" placeholder="Search company, invoice..." oninput="filterCollections()" style="max-width:240px;">
+        <select id="colStatusFilter" onchange="filterCollections()" style="padding:0.4rem 0.65rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.8rem;">
+          <option value="">All Records</option>
+          <option value="collected">Collected</option>
+          <option value="outstanding">Outstanding</option>
+        </select>
+        <div class="ml-auto" style="display:flex;gap:0.4rem;">
+          <button class="btn btn-secondary btn-sm" onclick="exportCollectionsExcel()">Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="toggleCollectionForm()">+ Add Record</button>
+        </div>
+      </div>
+
+      <!-- KPI summary bar -->
+      <div id="colKPIs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;margin-bottom:1.25rem;"></div>
+
+      <!-- Add/Edit Collection Form (hidden) -->
+      <div class="form-panel hidden" id="collectionFormPanel">
+        <form class="acct-form" id="collectionForm" onsubmit="submitCollection(event)">
+          <input type="hidden" name="rowIndex" id="collectionRowIndex">
+          <div class="form-section">
+            <div class="form-section-title" id="collectionFormTitle">Invoice Details</div>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;">
+                <label class="form-label">Linked Sales Order</label>
+                <select name="soNo" id="collectionSoNo" class="form-input" onchange="onCollectionSoSelect()">
+                  <option value="">— None / manual entry —</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Invoice No.</label><input type="text" name="invoiceNo" class="form-input" placeholder="INV-001" required></div>
+              <div class="form-group"><label class="form-label">DR No.</label><input type="text" name="drNo" class="form-input" placeholder="DR-001"></div>
+              <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-input" required></div>
+              <div class="form-group"><label class="form-label">S.I. Date</label><input type="date" name="siDate" class="form-input"></div>
+              <div class="form-group"><label class="form-label">Customer ID</label><input type="text" name="customerId" class="form-input" placeholder="CUST-0001"></div>
+              <div class="form-group" style="grid-column:span 2;"><label class="form-label">Company Name</label><input type="text" name="companyName" class="form-input" required></div>
+              <div class="form-group"><label class="form-label">PO No.</label><input type="text" name="poNo" class="form-input"></div>
+              <div class="form-group"><label class="form-label">Date Received</label><input type="date" name="dateReceived" class="form-input"></div>
+              <div class="form-group"><label class="form-label">Payment Terms</label><select name="paymentTerms" class="form-input"><option value="COD">COD</option><option value="30 days">30 days</option><option value="60 days">60 days</option><option value="90 days">90 days</option><option value="PDC">PDC</option></select></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="form-section-title">Amounts</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Invoice Amount (PHP)</label><input type="number" name="invoiceAmount" class="form-input" step="0.01" min="0" oninput="autoCalcCollection()" required></div>
+              <div class="form-group"><label class="form-label">Net of VAT (auto)</label><input type="number" name="netOfVat" class="form-input" step="0.01" min="0" readonly style="opacity:0.6;"></div>
+              <div class="form-group"><label class="form-label">VAT (auto)</label><input type="number" name="vat" class="form-input" step="0.01" min="0" readonly style="opacity:0.6;"></div>
+              <div class="form-group"><label class="form-label">EWT (auto)</label><input type="number" name="ewt" class="form-input" step="0.01" min="0" readonly style="opacity:0.6;"></div>
+              <div class="form-group"><label class="form-label">Total Amount Due (auto)</label><input type="number" name="totalAmountDue" class="form-input" step="0.01" min="0" readonly style="opacity:0.6;"></div>
+              <div class="form-group"><label class="form-label">Due Date</label><input type="date" name="dueDate" class="form-input"></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="form-section-title">Collection</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Date Collected</label><input type="date" name="dateCollected" class="form-input"></div>
+              <div class="form-group"><label class="form-label">Amount Received (PHP)</label><input type="number" name="amountReceived" class="form-input" step="0.01" min="0" value="0"></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="form-section-title">Follow-Up</div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Remarks</label><select name="remarks" class="form-input"><option value="">—</option><option value="UNPAID">UNPAID</option><option value="PARTIAL">PARTIAL</option><option value="PROMISED">PROMISED</option><option value="PAID">PAID</option><option value="DISPUTED">DISPUTED</option></select></div>
+              <div class="form-group"><label class="form-label">Last Follow-Up Date</label><input type="date" name="lastFollowUpDate" class="form-input"></div>
+              <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Notes (calls, emails, contact info)</label><textarea name="notes" class="form-input" rows="3" style="resize:vertical;"></textarea></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCollectionForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary btn-sm" id="collectionSubmitBtn">Save Record</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="table-wrapper" id="collectionsContainer">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading collections...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ AR AGING TAB ═══ -->
+    <div class="tab-panel" id="panel-ar-aging">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.75rem;">
+        <div style="font-size:1rem;font-weight:700;color:var(--text-primary);">Accounts Receivable Aging</div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <input type="text" id="arSearch" placeholder="Search customer / invoice..." class="form-input" style="width:240px;font-size:0.82rem;" oninput="renderArAging()">
+          <select id="arBucketFilter" class="form-input" style="width:160px;font-size:0.82rem;" onchange="renderArAging()">
+            <option value="">All buckets</option>
+            <option value="current">Current</option>
+            <option value="1-30">1–30 days</option>
+            <option value="31-60">31–60 days</option>
+            <option value="61-90">61–90 days</option>
+            <option value="90+">90+ days</option>
+            <option value="paid">Paid</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="loadArAging(true)" style="font-size:0.75rem;">Refresh</button>
+          <button class="btn btn-primary btn-sm" onclick="exportArAgingExcel()" style="font-size:0.75rem;">Export Excel</button>
+        </div>
+      </div>
+
+      <div id="arKpiBar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1rem;"></div>
+
+      <div class="card">
+        <div class="table-wrapper" id="arAgingContainer">
+          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading AR aging...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PROFIT REPORT TAB ═══ -->
+    <div class="tab-panel" id="panel-profit-report">
+
+      <!-- Saved Reports (top — always visible) -->
+      <div style="margin-bottom:2rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+          <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em;">Saved Reports</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadSavedProfitReports()" style="font-size:0.75rem;">Refresh</button>
+        </div>
+        <div id="savedProfitReportsList">
+          <div style="text-align:center;padding:1rem;color:var(--text-muted,#64748b);">Loading saved reports...</div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="border-top:1px solid var(--border,#334155);margin-bottom:2rem;"></div>
+
+      <!-- SO Selector -->
+      <div class="chart-box" style="margin-bottom:1rem;">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em;margin-bottom:0.75rem;">Add Sales Orders to Report</div>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:180px;">
+            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);margin-bottom:0.25rem;">Client</div>
+            <select id="prClientSelect" onchange="prFilterSOs()" style="width:100%;background:var(--surface-2,#0f172a);border:1px solid var(--border,#334155);color:var(--text-primary,#f1f5f9);border-radius:8px;padding:0.45rem 0.6rem;font-size:0.82rem;">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div style="flex:2;min-width:220px;">
+            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);margin-bottom:0.25rem;">SO No</div>
+            <select id="prSOSelect" style="width:100%;background:var(--surface-2,#0f172a);border:1px solid var(--border,#334155);color:var(--text-primary,#f1f5f9);border-radius:8px;padding:0.45rem 0.6rem;font-size:0.82rem;">
+              <option value="">-- Select client first --</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="prAddSO()">+ Add SO</button>
+        </div>
+      </div>
+
+      <!-- SO Entry Cards -->
+      <div id="prSOEntriesList">
+        <div style="text-align:center;padding:2rem;color:var(--text-muted,#64748b);">No SOs added yet. Select a client and SO above, then click + Add SO.</div>
+      </div>
+
+      <!-- Action Bar (hidden until at least one SO added) -->
+      <div id="prCalculateBar" style="display:none;gap:0.75rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="calculateProfitReport()">Calculate Gross Profit</button>
+        <button class="btn btn-secondary" id="prSaveBtn" onclick="saveProfitReport()" style="display:none;">Save Report</button>
+        <button class="btn btn-secondary" onclick="exportProfitReportExcel()">Export Excel</button>
+        <button class="btn btn-secondary" onclick="prClearAll()" style="margin-left:auto;">Clear All</button>
+      </div>
+
+      <!-- Result Matrix -->
+      <div id="profitReportContainer"></div>
+
+    </div>
+
+    <!-- ═══ SHIPMENTS TAB (read-only mirror of Admin shipment monitoring) ═══ -->
+    <div class="tab-panel" id="panel-shipments">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div>
+          <h3 style="margin:0;font-size:1rem;">Shipment Monitoring <span style="font-size:0.7rem;color:var(--text-muted,#64748b);font-weight:500;">(view-only)</span></h3>
+          <p style="margin:0.2rem 0 0;font-size:0.78rem;color:var(--text-muted,#64748b);">Live mirror of Admin shipment monitoring. Click a row to view full details, stage timeline and documents.</p>
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="shipSearch" class="form-input" placeholder="Search ID, PO, client, principal…" oninput="renderShipmentsTable()" style="font-size:0.8rem;padding:0.4rem 0.6rem;min-width:200px;">
+          <select id="shipStatusFilter" onchange="renderShipmentsTable()" style="font-size:0.8rem;padding:0.4rem 0.6rem;background:var(--surface-2,#1e293b);color:var(--text-primary,#f1f5f9);border:1px solid var(--border,#334155);border-radius:6px;">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Awaiting Confirmation">Awaiting Confirmation</option>
+            <option value="Payment Processing">Payment Processing</option>
+            <option value="Goods Ready">Goods Ready</option>
+            <option value="Booked">Booked</option>
+            <option value="In Transit">In Transit</option>
+            <option value="Customs Clearance">Customs Clearance</option>
+            <option value="Arrived">Arrived</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="loadShipmentsForAcct()">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrapper" id="shipmentsContainer">
+        <div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Loading shipments…</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/accounting.js"></script>
+
+  <!-- SO Edit Modal (Profit Report) -->
+  <div id="soEditOverlay" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
+    <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:14px;padding:1.5rem;width:min(420px,94vw);box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+      <h3 style="margin:0 0 1rem;font-size:1rem;color:var(--text-primary,#f1f5f9);">Edit Sales Order — <span id="soEditNo" style="color:#3b82f6;"></span></h3>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;">
+        <div>
+          <label style="font-size:0.75rem;font-weight:600;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:0.3rem;">Status</label>
+          <select id="soEditStatus" style="width:100%;padding:0.5rem 0.75rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.85rem;">
+            <option value="Pending">Pending</option>
+            <option value="Invoiced">Invoiced</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.75rem;font-weight:600;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:0.3rem;">Invoice No.</label>
+          <input type="text" id="soEditInvoiceNo" placeholder="INV-001" style="width:100%;padding:0.5rem 0.75rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.85rem;box-sizing:border-box;">
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1.25rem;">
+        <button onclick="closeSoEditModal()" style="padding:0.45rem 1rem;border-radius:8px;border:1px solid var(--border,#334155);background:transparent;color:var(--text-muted,#64748b);cursor:pointer;font-size:0.85rem;">Cancel</button>
+        <button onclick="saveSoEdit()" id="soEditSaveBtn" style="padding:0.45rem 1rem;border-radius:8px;border:none;background:#3b82f6;color:#fff;cursor:pointer;font-size:0.85rem;font-weight:600;">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profit Report Entry Edit Modal -->
+  <div id="prEditOverlay" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.65);align-items:flex-start;justify-content:center;padding-top:3vh;overflow-y:auto;">
+    <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:14px;padding:1.5rem;width:min(560px,96vw);box-shadow:0 12px 48px rgba(0,0,0,0.6);margin-bottom:2rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+        <h3 style="margin:0;font-size:1rem;color:var(--text-primary,#f1f5f9);">Edit Profit Entry — <span id="prEditSOLabel" style="color:#3b82f6;"></span></h3>
+        <button onclick="closePrEditModal()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem;">
+        <div>
+          <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">SO Date</label>
+          <input type="date" id="prEditSODate" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Sales Amount (₱)</label>
+          <input type="number" id="prEditSales" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem;">
+        <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.4rem;">COGS Type</label>
+        <div style="display:flex;gap:1.5rem;">
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem;color:var(--text-primary,#f1f5f9);">
+            <input type="radio" name="prEditCogsType" value="local" onchange="prEditToggleIntl(false)"> Local
+          </label>
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem;color:var(--text-primary,#f1f5f9);">
+            <input type="radio" name="prEditCogsType" value="international" onchange="prEditToggleIntl(true)"> International
+          </label>
+        </div>
+      </div>
+
+      <div style="font-size:0.72rem;font-weight:800;color:var(--accent,#f97316);letter-spacing:.05em;margin-bottom:0.5rem;">COST OF GOODS SOLD</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+        <div>
+          <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Purchase of Goods</label>
+          <input type="number" id="prEditPurchaseOfGoods" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+        </div>
+        <div id="prEditBscCogsWrap">
+          <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Bank Svc Charge (COGS)</label>
+          <input type="number" id="prEditBankServiceChargeCOGS" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+        </div>
+      </div>
+
+      <div id="prEditIntlSection" style="display:none;">
+        <div style="font-size:0.72rem;font-weight:800;color:#6366f1;letter-spacing:.05em;margin-bottom:0.5rem;">SHIPPING / LOGISTICS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Duties & Taxes</label>
+            <input type="number" id="prEditDutiesAndTaxes" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Bank Svc Charge (Shipping)</label>
+            <input type="number" id="prEditBankServiceChargeShipping" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Shipping Company</label>
+            <select id="prEditShippingCompany" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;">
+              <option>DHL</option><option>FourEleven</option><option>FedEx</option><option>Others</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Shipping Cost</label>
+            <input type="number" id="prEditShippingCost" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Local Charges</label>
+            <input type="number" id="prEditLocalCharges" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:0.72rem;font-weight:800;color:var(--text-secondary,#94a3b8);letter-spacing:.05em;margin-bottom:0.5rem;">DELIVERY</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.25rem;">
+        <div>
+          <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Delivery to Office</label>
+          <input type="number" id="prEditDeliveryToOffice" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);display:block;margin-bottom:0.25rem;">Delivery to Client</label>
+          <input type="number" id="prEditDeliveryToClient" min="0" step="0.01" style="width:100%;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--bg,#0f172a);color:var(--text-primary,#f1f5f9);font-size:0.82rem;box-sizing:border-box;">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+        <button onclick="closePrEditModal()" style="padding:0.45rem 1rem;border-radius:8px;border:1px solid var(--border,#334155);background:transparent;color:var(--text-muted,#64748b);cursor:pointer;font-size:0.85rem;">Cancel</button>
+        <button onclick="prSaveEdit()" id="prEditSaveBtn" style="padding:0.45rem 1.25rem;border-radius:8px;border:none;background:#3b82f6;color:#fff;cursor:pointer;font-size:0.85rem;font-weight:600;">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Accounting Email Modal (Follow Up / Collection) -->
+  <div class="modal-overlay" id="acctEmailModal" onclick="if(event.target===this) closeAcctEmailModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <h3 id="acctEmailTitle">Send Email</h3>
+      <div class="form-row">
+        <div class="modal-label">To</div>
+        <input type="email" class="modal-input" id="acctEmailTo" placeholder="recipient@example.com">
+      </div>
+      <div class="form-row">
+        <div class="modal-label">Subject</div>
+        <input type="text" class="modal-input" id="acctEmailSubject">
+      </div>
+      <div class="form-row">
+        <div class="modal-label">Message</div>
+        <textarea class="modal-textarea" id="acctEmailBody"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeAcctEmailModal()">Cancel</button>
+        <button class="btn-modal-send" id="acctBtnSend" onclick="sendAcctEmail()">Send Email</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SHIPMENT DETAILS MODAL (read-only) ═══ -->
+  <div id="shipDetailOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9500;overflow-y:auto;padding:2rem 1rem;">
+    <div style="max-width:880px;margin:0 auto;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
+      <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border,#334155);display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--text-primary,#f1f5f9);">Shipment Details</div>
+          <div id="shipDetailSubtitle" style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:0.15rem;">—</div>
+        </div>
+        <button onclick="closeShipmentDetails()" style="background:none;border:none;color:var(--text-muted,#94a3b8);font-size:1.5rem;cursor:pointer;line-height:1;">×</button>
+      </div>
+      <div id="shipDetailBody" style="padding:1.25rem 1.5rem;font-size:0.83rem;color:var(--text-primary,#e2e8f0);"></div>
+    </div>
+  </div>
+
+</body>
+</html>

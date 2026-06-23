@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing — Leave & Attendance</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .leave-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .leave-form .full { grid-column: 1 / -1; }
+    .leave-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .leave-form input, .leave-form select, .leave-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .leave-form textarea { resize: vertical; min-height: 60px; }
+    .leave-form input:focus, .leave-form select:focus, .leave-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .leave-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .leave-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .leave-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .leave-table tr:hover td { background: #e2e8f0; }
+    .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .status-pending { background: rgba(234,179,8,0.12); color: #eab308; }
+    .status-approved { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .status-rejected { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .stats-row { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .stat-card { flex: 1; min-width: 140px; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }
+    .stat-card .num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
+    .stat-card .lbl { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent, #f97316); }
+    @media(max-width: 640px) { .leave-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Leave & Attendance</h1>
+      <p>Manage employee leave requests, approvals, and attendance tracking.</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card"><div class="num" id="statPending">-</div><div class="lbl">Pending</div></div>
+      <div class="stat-card"><div class="num" id="statApproved">-</div><div class="lbl">Approved</div></div>
+      <div class="stat-card"><div class="num" id="statRejected">-</div><div class="lbl">Rejected</div></div>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Leave Request
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="leaveForm" onsubmit="submitLeave(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="leave-form">
+            <div>
+              <label for="leaveEmployee">Employee Name <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="leaveEmployee" placeholder="e.g. Juan Dela Cruz" required>
+            </div>
+            <div>
+              <label for="leaveType">Leave Type</label>
+              <select id="leaveType">
+                <option value="Vacation">Vacation</option>
+                <option value="Sick">Sick</option>
+                <option value="Personal">Personal</option>
+                <option value="Maternity/Paternity">Maternity/Paternity</option>
+                <option value="Emergency">Emergency</option>
+              </select>
+            </div>
+            <div>
+              <label for="leaveStart">Start Date <span style="color:#ef4444;">*</span></label>
+              <input type="date" id="leaveStart" required>
+            </div>
+            <div>
+              <label for="leaveEnd">End Date <span style="color:#ef4444;">*</span></label>
+              <input type="date" id="leaveEnd" required>
+            </div>
+            <div>
+              <label for="leaveDays">Days</label>
+              <input type="number" id="leaveDays" min="0.5" step="0.5" placeholder="Auto-calculated">
+            </div>
+            <div>
+              <label for="leaveReason">Reason</label>
+              <input type="text" id="leaveReason" placeholder="e.g. Family vacation">
+            </div>
+            <!-- Edit-only fields -->
+            <div id="editOnlyStatus" style="display:none;">
+              <label for="leaveStatus">Status</label>
+              <select id="leaveStatus">
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+            <div id="editOnlyApprover" style="display:none;">
+              <label for="leaveApprovedBy">Approved By</label>
+              <input type="text" id="leaveApprovedBy" placeholder="e.g. Manager name">
+            </div>
+            <div class="full">
+              <label for="leaveNotes">Notes</label>
+              <textarea id="leaveNotes" placeholder="Additional notes..."></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Add Leave Request</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Leave Table -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Leave Requests</h3>
+      <div class="filter-bar">
+        <select id="filterStatus" onchange="filterLeave()">
+          <option value="">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Search by employee name..." oninput="renderTable()">
+      </div>
+      <div id="leaveContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-leave.js"></script>
+</body>
+</html>

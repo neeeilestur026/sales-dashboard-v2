@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing — Memos & Announcements</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .memo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+    .memo-card {
+      background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155);
+      border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.6rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .memo-card:hover { border-color: var(--accent, #f97316); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    .memo-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+    .memo-card-title { font-size: 1rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin: 0; line-height: 1.3; flex: 1; }
+    .memo-card-badges { display: flex; gap: 0.35rem; flex-shrink: 0; flex-wrap: wrap; }
+    .memo-card-content {
+      font-size: 0.84rem; color: var(--text-secondary, #94a3b8); line-height: 1.55;
+      overflow: hidden; position: relative;
+    }
+    .memo-card-content.truncated { max-height: 4.65em; }
+    .memo-card-content.truncated::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1.8em;
+      background: linear-gradient(transparent, var(--surface-2, #1e293b));
+    }
+    .memo-card-content.expanded { max-height: none; }
+    .memo-card-content.expanded::after { display: none; }
+    .memo-toggle-btn {
+      background: none; border: none; color: var(--accent, #f97316); cursor: pointer;
+      font-size: 0.78rem; font-weight: 600; padding: 0; text-align: left;
+    }
+    .memo-toggle-btn:hover { text-decoration: underline; }
+    .memo-card-meta { font-size: 0.72rem; color: var(--text-muted, #64748b); display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .memo-card-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid #e2e8f0; }
+    .memo-target { font-size: 0.75rem; color: var(--text-muted, #64748b); }
+    .memo-target strong { color: var(--text-secondary, #94a3b8); }
+
+    /* Type badges */
+    .type-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+    .type-memo { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .type-announcement { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .type-policy { background: rgba(168,85,247,0.12); color: #a855f7; }
+
+    /* Priority badges */
+    .priority-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+    .priority-low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .priority-normal { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .priority-high { background: rgba(249,115,22,0.12); color: #f97316; }
+    .priority-urgent { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+    .memo-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .memo-form .full { grid-column: 1 / -1; }
+    .memo-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .memo-form input, .memo-form select, .memo-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .memo-form textarea { resize: vertical; min-height: 120px; }
+    .memo-form input:focus, .memo-form select:focus, .memo-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar select { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select:focus { outline: none; border-color: var(--accent, #f97316); }
+    @media(max-width: 640px) {
+      .memo-form { grid-template-columns: 1fr; }
+      .memo-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Memos & Announcements</h1>
+      <p>Create and manage company memos, announcements, and policy updates.</p>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Memo
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="memoForm" onsubmit="submitMemo(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="memo-form">
+            <div class="full">
+              <label for="memoTitle">Title <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="memoTitle" placeholder="e.g. Office Closure Notice" required>
+            </div>
+            <div class="full">
+              <label for="memoContent">Content <span style="color:#ef4444;">*</span></label>
+              <textarea id="memoContent" placeholder="Write the memo or announcement content..." required></textarea>
+            </div>
+            <div>
+              <label for="memoType">Type</label>
+              <select id="memoType">
+                <option value="Memo">Memo</option>
+                <option value="Announcement">Announcement</option>
+                <option value="Policy Update">Policy Update</option>
+              </select>
+            </div>
+            <div>
+              <label for="memoPriority">Priority</label>
+              <select id="memoPriority">
+                <option value="Normal">Normal</option>
+                <option value="Low">Low</option>
+                <option value="High">High</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label for="memoTarget">Target Audience</label>
+              <input type="text" id="memoTarget" placeholder="e.g. All, HR Department, Marketing Team" value="All">
+            </div>
+            <div>
+              <label for="memoStatus">Status</label>
+              <select id="memoStatus">
+                <option value="Active">Active</option>
+                <option value="Archived">Archived</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Add Memo</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Memo Cards -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Memos & Announcements</h3>
+      <div class="filter-bar">
+        <select id="filterType" onchange="filterMemos()">
+          <option value="">All Types</option>
+          <option value="Memo">Memo</option>
+          <option value="Announcement">Announcement</option>
+          <option value="Policy Update">Policy Update</option>
+        </select>
+        <select id="filterPriority" onchange="filterMemos()">
+          <option value="">All Priorities</option>
+          <option value="Low">Low</option>
+          <option value="Normal">Normal</option>
+          <option value="High">High</option>
+          <option value="Urgent">Urgent</option>
+        </select>
+        <select id="filterStatus" onchange="filterMemos()">
+          <option value="">All Statuses</option>
+          <option value="Active">Active</option>
+          <option value="Archived">Archived</option>
+        </select>
+      </div>
+      <div id="memoContainer">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-memos.js"></script>
+</body>
+</html>

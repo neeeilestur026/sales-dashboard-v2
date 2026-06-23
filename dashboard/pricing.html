@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Management Dashboard -- Pricing Engine</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .section { margin-bottom: 1.5rem; }
+    .section-title {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 1rem; font-weight: 700; color: var(--text-primary, #1e293b);
+      margin-bottom: 0.75rem; letter-spacing: -0.015em;
+    }
+    .section-title svg { color: var(--accent, #fb923c); flex-shrink: 0; }
+    .card {
+      background: var(--bg-card, #ffffff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 12px; padding: 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .config-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1.25rem;
+    }
+    .config-grid label {
+      display: block; font-size: 0.75rem; font-weight: 600;
+      color: var(--text-muted, #94a3b8); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .config-grid select, .config-grid input {
+      width: 100%; padding: 0.5rem 0.7rem;
+      background: var(--bg-card, #ffffff); border: 1.5px solid var(--border, #e2e8f0);
+      border-radius: 8px; color: var(--text-primary, #1e293b);
+      font-size: 0.875rem; font-family: inherit;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .config-grid select:focus, .config-grid input:focus {
+      outline: none; border-color: var(--accent, #fb923c);
+      box-shadow: 0 0 0 3px rgba(251,146,60,0.18);
+    }
+
+    .readout-row {
+      display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.75rem;
+      padding: 0.65rem 1rem; background: var(--bg-inset, #f1f5f9);
+      border-radius: 10px; border: 1px solid var(--border, #e2e8f0);
+    }
+    .readout-item { display: flex; flex-direction: column; gap: 0.1rem; }
+    .readout-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted, #94a3b8); letter-spacing: 0.04em; }
+    .readout-value { font-size: 0.95rem; font-weight: 700; color: var(--text-primary, #1e293b); }
+
+    .line-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .line-table th {
+      text-align: left; padding: 0.5rem 0.6rem; font-size: 0.72rem; font-weight: 600;
+      text-transform: uppercase; color: var(--text-muted, #94a3b8);
+      border-bottom: 1px solid var(--border, #e2e8f0);
+      background: var(--bg-inset, #f1f5f9); letter-spacing: 0.04em;
+    }
+    .line-table td { padding: 0.4rem 0.35rem; vertical-align: middle; }
+    .line-table input {
+      width: 100%; padding: 0.4rem 0.55rem;
+      background: var(--bg-card, #ffffff); border: 1.5px solid var(--border, #e2e8f0);
+      border-radius: 6px; color: var(--text-primary, #1e293b);
+      font-size: 0.85rem; font-family: inherit;
+    }
+    .line-table input[type="number"] { text-align: right; }
+    .line-table input:focus { outline: none; border-color: var(--accent, #fb923c); box-shadow: 0 0 0 3px rgba(251,146,60,0.18); }
+
+    .btn-remove {
+      background: none; border: none; color: var(--text-muted, #94a3b8);
+      cursor: pointer; padding: 0.25rem; border-radius: 4px;
+    }
+    .btn-remove:hover { color: #dc2626; background: #fef2f2; }
+
+    .btn-add {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.45rem 1rem; margin-top: 0.75rem;
+      background: #eef2ff; color: #6366f1;
+      border: 1px solid rgba(99,102,241,0.25); border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-add:hover { background: #e0e7ff; border-color: rgba(99,102,241,0.4); }
+
+    .btn-clear {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.45rem 1rem; margin-top: 0.75rem; margin-left: 0.5rem;
+      background: #fef2f2; color: #dc2626;
+      border: 1px solid rgba(220,38,38,0.2); border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-clear:hover { background: #fee2e2; border-color: rgba(220,38,38,0.35); }
+
+    .btn-submit {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.45rem 1rem; margin-top: 0.75rem; margin-left: 0.5rem;
+      background: #f0fdf4; color: #16a34a;
+      border: 1px solid rgba(22,163,74,0.25); border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-submit:hover { background: #dcfce7; border-color: rgba(22,163,74,0.4); }
+    .btn-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .results-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .results-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 1100px; }
+    .results-table th {
+      text-align: left; padding: 0.5rem 0.45rem; font-size: 0.66rem; font-weight: 600;
+      text-transform: uppercase; color: var(--text-muted, #94a3b8);
+      border-bottom: 1px solid var(--border, #e2e8f0); white-space: nowrap;
+      background: var(--bg-inset, #f1f5f9); letter-spacing: 0.04em;
+    }
+    .results-table td { padding: 0.4rem 0.45rem; border-bottom: 1px solid var(--border, #e2e8f0); color: var(--text-primary, #1e293b); }
+    .results-table .td-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .results-table .td-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .pl-kpis {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 0.75rem; margin-bottom: 1.25rem;
+    }
+    .pl-kpi {
+      background: var(--bg-inset, #f1f5f9); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 10px; padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.15rem;
+    }
+    .pl-kpi-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted, #94a3b8); letter-spacing: 0.04em; }
+    .pl-kpi-value { font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #1e293b); letter-spacing: -0.02em; }
+    .pl-kpi-pct { font-size: 0.72rem; color: var(--text-secondary, #475569); }
+
+    .pl-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .pl-table th {
+      text-align: left; padding: 0.5rem 0.6rem; font-size: 0.7rem; font-weight: 600;
+      text-transform: uppercase; color: var(--text-muted, #94a3b8);
+      border-bottom: 1px solid var(--border, #e2e8f0);
+      background: var(--bg-inset, #f1f5f9); letter-spacing: 0.04em;
+    }
+    .pl-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border, #e2e8f0); color: var(--text-primary, #1e293b); }
+    .pl-table .td-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pl-bold td { font-weight: 700; }
+    .pl-final td { border-top: 2px solid var(--border-strong, #cbd5e1); font-size: 0.95rem; padding-top: 0.65rem; }
+
+    @media (max-width: 768px) {
+      .config-grid { grid-template-columns: 1fr; }
+      .readout-row { gap: 1rem; }
+      .pl-kpis { grid-template-columns: 1fr 1fr; }
+    }
+
+    .edit-banner {
+      display: none; align-items: center; gap: 0.75rem; padding: 0.65rem 1rem;
+      background: #fffbeb; border: 1px solid rgba(217,119,6,0.3);
+      border-radius: 10px; margin-bottom: 1rem; font-size: 0.82rem; color: #92400e;
+    }
+    .edit-banner svg { flex-shrink: 0; }
+    .edit-banner .edit-banner-id { font-weight: 700; }
+    .edit-banner button {
+      margin-left: auto; background: none; border: 1px solid rgba(217,119,6,0.35);
+      color: #92400e; border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.75rem;
+      cursor: pointer; font-weight: 600;
+    }
+    .edit-banner button:hover { background: #fef3c7; }
+
+    .fwd-card {
+      background: var(--bg-inset, #f1f5f9); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.65rem;
+      transition: box-shadow 0.15s;
+    }
+    .fwd-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .fwd-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.35rem; }
+    .fwd-id { font-weight: 700; font-size: 0.85rem; color: var(--text-primary, #1e293b); display: flex; align-items: center; gap: 0.5rem; }
+    .fwd-meta { font-size: 0.75rem; color: var(--text-secondary, #475569); }
+    .fwd-items { font-size: 0.78rem; color: var(--text-secondary, #475569); }
+    .badge-pending  { background: #fffbeb; color: #92400e; border: 1px solid rgba(217,119,6,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; }
+    .badge-priced   { background: #f0fdf4; color: #15803d; border: 1px solid rgba(22,163,74,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; }
+    .badge-forwarded{ background: #eef2ff; color: #4338ca; border: 1px solid rgba(99,102,241,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; }
+    .badge-applied  { background: #faf5ff; color: #7c3aed; border: 1px solid rgba(124,58,237,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; }
+    .badge-sent     { background: #f0fdfa; color: #0f766e; border: 1px solid rgba(20,184,166,0.2); padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; }
+
+    /* Pricing History */
+    .hist-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .hist-table th { text-align: left; padding: 0.45rem 0.6rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted, #94a3b8); border-bottom: 1px solid var(--border, #e2e8f0); white-space: nowrap; background: var(--bg-inset, #f1f5f9); letter-spacing: 0.04em; }
+    .hist-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border, #e2e8f0); vertical-align: middle; color: var(--text-primary, #1e293b); }
+    .hist-table .td-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hist-expand-btn { background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0); color: var(--text-secondary, #475569); border-radius: 4px; padding: 0.15rem 0.45rem; font-size: 0.7rem; cursor: pointer; }
+    .hist-expand-btn:hover { color: var(--text-primary, #1e293b); border-color: var(--border-strong, #cbd5e1); }
+    .hist-items-row { background: var(--bg-inset, #f1f5f9); }
+    .hist-items-inner { padding: 0.5rem 0.75rem; }
+    .last-price-hint { font-size: 0.68rem; color: #7c3aed; white-space: nowrap; }
+
+    /* ─── Document Preview Modal ─── */
+    .doc-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 10000;
+      align-items: center; justify-content: center;
+    }
+    .doc-overlay.open { display: flex; }
+    .doc-modal {
+      background: var(--bg-card, #ffffff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 16px; width: 92vw; max-width: 1000px; height: 85vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15); overflow: hidden;
+    }
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border, #e2e8f0);
+      background: var(--bg-card, #ffffff);
+    }
+    .doc-header h3 { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #1e293b); }
+    .doc-close {
+      background: none; border: none; color: var(--text-muted, #94a3b8);
+      cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem;
+    }
+    .doc-close:hover { color: var(--text-primary, #1e293b); }
+    .doc-body { display: flex; flex: 1; overflow: hidden; }
+    .doc-sidebar {
+      width: 240px; min-width: 200px; padding: 0.75rem;
+      overflow-y: auto; border-right: 1px solid var(--border, #e2e8f0);
+      background: var(--bg-inset, #f1f5f9);
+    }
+    .doc-file-item {
+      display: flex; align-items: center; gap: 0.4rem;
+      padding: 0.5rem 0.6rem; border-radius: 8px; cursor: pointer;
+      font-size: 0.82rem; color: var(--text-primary, #1e293b);
+      margin-bottom: 0.25rem; word-break: break-word;
+      border: 1px solid transparent; background: var(--bg-card, #fff);
+    }
+    .doc-file-item:hover { background: #eef2ff; border-color: rgba(99,102,241,0.15); }
+    .doc-file-item.active { background: #eef2ff; border-color: rgba(99,102,241,0.3); color: #4338ca; font-weight: 600; }
+    .doc-file-item svg { flex-shrink: 0; }
+    .doc-viewer { flex: 1; display: flex; align-items: center; justify-content: center; background: #f1f5f9; }
+    .doc-viewer iframe { width: 100%; height: 100%; border: none; }
+    @media(max-width: 640px) {
+      .doc-body { flex-direction: column; }
+      .doc-sidebar { width: 100%; min-width: 0; max-height: 120px; border-right: none; border-bottom: 1px solid var(--border, #e2e8f0); }
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Pricing Engine</h1>
+      <p>Calculate landed cost, selling price, and P&L for industrial items.</p>
+    </div>
+
+    <!-- Edit Banner -->
+    <div class="edit-banner" id="editBanner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Editing submission <span class="edit-banner-id"></span> — changes will update the existing record.
+      <button onclick="cancelEdit()">Cancel Edit</button>
+    </div>
+
+    <!-- Forwarded from Admin -->
+    <div class="section" id="forwardedSection">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+        Forwarded from Admin <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary);">— Items waiting for pricing</span>
+      </div>
+      <div class="card" id="forwardedList">
+        <p style="color:var(--text-muted);font-size:0.82rem;">Loading...</p>
+      </div>
+    </div>
+
+    <!-- My Past Submissions -->
+    <div class="section" id="mySubmissionsSection">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        My Submissions <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary);">— Edit or revise before admin applies</span>
+      </div>
+      <div class="card" id="mySubmissionsList">
+        <p style="color:var(--text-muted);font-size:0.82rem;">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Pricing History -->
+    <div class="section" id="pricingHistorySection">
+      <div class="section-title" style="cursor:pointer;" onclick="toggleHistorySection()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Pricing History <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary);">— Summary of completed pricings</span>
+        <svg id="histToggleIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto;transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="card" id="pricingHistoryContent" style="display:none;">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;">
+          <input type="text" id="histClientFilter" placeholder="Filter by client..." oninput="applyHistoryFilter()"
+            style="flex:1;min-width:140px;padding:0.35rem 0.6rem;border-radius:8px;border:1.5px solid var(--border,#e2e8f0);background:var(--bg-card,#ffffff);color:var(--text-primary,#1e293b);font-size:0.8rem;">
+          <input type="month" id="histMonthFilter" oninput="applyHistoryFilter()"
+            style="padding:0.35rem 0.6rem;border-radius:8px;border:1.5px solid var(--border,#e2e8f0);background:var(--bg-card,#ffffff);color:var(--text-primary,#1e293b);font-size:0.8rem;">
+          <select id="histStatusFilter" onchange="applyHistoryFilter()"
+            style="padding:0.35rem 0.6rem;border-radius:8px;border:1.5px solid var(--border,#e2e8f0);background:var(--bg-card,#ffffff);color:var(--text-primary,#1e293b);font-size:0.8rem;">
+            <option value="">All Statuses</option>
+            <option value="Priced">Priced</option>
+            <option value="Applied">Applied</option>
+            <option value="Sent to Sales">Sent to Sales</option>
+          </select>
+          <button onclick="clearHistoryFilters()" style="padding:0.35rem 0.65rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-secondary,#475569);font-size:0.78rem;cursor:pointer;">Clear</button>
+        </div>
+        <div id="pricingHistoryList"><p style="color:var(--text-muted);font-size:0.82rem;">Loading...</p></div>
+      </div>
+    </div>
+
+    <!-- Section 1: Configuration -->
+    <div class="section">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Configuration
+      </div>
+      <div class="card">
+        <div class="config-grid">
+          <div>
+            <label for="principalSelect">Principal / Supplier</label>
+            <select id="principalSelect">
+              <option value="">— Select Principal —</option>
+            </select>
+          </div>
+          <div>
+            <label for="destSelect">Delivery Destination</label>
+            <select id="destSelect">
+              <option value="">— None (Local Pickup) —</option>
+            </select>
+          </div>
+          <div>
+            <label for="commissionRate">Commission Rate (%)</label>
+            <input type="number" id="commissionRate" value="5" min="0" max="99" step="0.1">
+          </div>
+          <div>
+            <label for="marginRate">Profit Margin Rate (%)</label>
+            <input type="number" id="marginRate" value="30" min="0" max="99" step="0.1">
+          </div>
+        </div>
+        <div class="readout-row">
+          <div class="readout-item">
+            <span class="readout-label">Currency</span>
+            <span class="readout-value" id="rdCurrency">—</span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">Forex Rate</span>
+            <span class="readout-value" id="rdForexLabel" style="display:flex;align-items:center;gap:0.35rem;">
+              <span id="rdForexPrefix">1 — = ₱</span>
+              <input type="number" id="forexRateInput" step="0.0001" min="0" value="" placeholder="—"
+                     style="width:5.5rem;padding:0.2rem 0.4rem;border:1px solid var(--border,#cbd5e1);border-radius:4px;font-size:0.85rem;font-weight:600;">
+            </span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">Shipping & Duties</span>
+            <span class="readout-value" style="display:flex;align-items:center;gap:0.25rem;">
+              <input type="number" id="dutiesPctInput" step="0.1" min="0" max="100" value="" placeholder="—"
+                     style="width:4.5rem;padding:0.2rem 0.4rem;border:1px solid var(--border,#cbd5e1);border-radius:4px;font-size:0.85rem;font-weight:600;">
+              <span>%</span>
+            </span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">Origin</span>
+            <span class="readout-value" id="rdOrigin">—</span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">CBM Rate</span>
+            <span class="readout-value" id="rdCbmRate">—</span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">Min Delivery</span>
+            <span class="readout-value" id="rdMinCharge">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Line Items -->
+    <div class="section">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Line Items
+      </div>
+      <div class="card">
+        <div style="overflow-x:auto;">
+          <table class="line-table">
+            <thead>
+              <tr>
+                <th style="width:36px;">#</th>
+                <th style="width:120px;">Model No.</th>
+                <th>Item Description</th>
+                <th style="width:120px;">Buy Price</th>
+                <th style="width:80px;">Discount %</th>
+                <th style="width:70px;">Qty</th>
+                <th style="width:80px;">CBM</th>
+                <th style="width:36px;"></th>
+              </tr>
+            </thead>
+            <tbody id="itemsBody"></tbody>
+          </table>
+        </div>
+        <div>
+          <button class="btn-add" onclick="addItem()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Item
+          </button>
+          <button class="btn-clear" onclick="clearAll()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Clear All
+          </button>
+          <button class="btn-submit" id="btnSubmit" onclick="submitToAdmin()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Submit to Admin
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Pricing Results -->
+    <div class="section">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Pricing Breakdown
+      </div>
+      <div class="card">
+        <div class="results-wrap">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Model No.</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Disc.</th>
+                <th>Buy (PHP)</th>
+                <th>Brokerage</th>
+                <th>Landed</th>
+                <th>Delivery</th>
+                <th>COGS</th>
+                <th>Commission</th>
+                <th>Profit</th>
+                <th>Unit (VAT Excl.)</th>
+                <th>Unit (VAT Incl.)</th>
+                <th>Total + VAT</th>
+                <th>Last Price</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr><td colspan="16" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Select a principal and add items to begin.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: P&L Summary -->
+    <div class="section">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+        Profit & Loss Summary
+      </div>
+      <div class="card" id="plSummary"></div>
+    </div>
+  </main>
+
+  <!-- Document Preview Modal -->
+  <div class="doc-overlay" id="docOverlay" onclick="if(event.target===this)closeDocPreview()">
+    <div class="doc-modal">
+      <div class="doc-header">
+        <h3 id="docModalTitle">Supporting Documents</h3>
+        <button class="doc-close" onclick="closeDocPreview()" title="Close">&times;</button>
+      </div>
+      <div class="doc-body">
+        <div class="doc-sidebar" id="docSidebar">
+          <div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Loading files...</div>
+        </div>
+        <div class="doc-viewer" id="docViewer">
+          <div style="color:var(--text-muted);font-size:0.85rem;">Select a file to preview</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/pricing.js"></script>
+</body>
+</html>

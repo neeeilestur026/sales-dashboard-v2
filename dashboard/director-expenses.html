@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expenses — Director Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .dex-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+    .dex-toolbar input, .dex-toolbar select {
+      padding:0.5rem 0.65rem; border:1px solid var(--border,#334155); border-radius:8px;
+      background:var(--surface-2,#1e293b); color:var(--text-primary,#f1f5f9); font-size:0.85rem;
+    }
+    .dex-search { flex:1; min-width:220px; }
+    .dex-tab {
+      padding:0.4rem 0.85rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:transparent; color:var(--text-muted,#64748b); font-size:0.8rem; cursor:pointer; font-weight:600;
+    }
+
+    .dex-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin-bottom:1rem; }
+    .dex-kpi { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:0.85rem 1rem; }
+    .dex-kpi .lbl { font-size:0.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .dex-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color:var(--text-primary,#f1f5f9); }
+
+    .dex-analytics { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
+    @media(max-width:880px){ .dex-analytics { grid-template-columns:1fr; } }
+    .dex-panel {
+      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px;
+      padding:1rem 1.1rem;
+    }
+    .dex-panel h3 { margin:0 0 0.75rem; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#94a3b8); }
+    .dex-rank { width:100%; border-collapse:collapse; font-size:0.83rem; }
+    .dex-rank th { text-align:left; padding:0.4rem 0.45rem; color:var(--text-muted,#94a3b8); font-size:0.68rem; text-transform:uppercase; }
+    .dex-rank td { padding:0.45rem 0.45rem; border-top:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
+    .dex-rank td .bar { display:block; height:5px; border-radius:3px; background:linear-gradient(90deg,#ef4444,#f59e0b); margin-top:0.25rem; }
+
+    .dex-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; overflow:hidden; }
+    .dex-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+    .dex-table th { text-align:left; padding:0.55rem 0.75rem; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#334155); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; background:rgba(15,23,42,0.4); }
+    .dex-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
+    .dex-count { font-size:0.8rem; color:var(--text-muted,#94a3b8); margin-bottom:0.5rem; }
+    .dex-pill { display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.7rem; font-weight:600; background:rgba(59,130,246,0.15); color:#60a5fa; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div style="max-width:1200px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div>
+          <h1 style="margin:0;">Expenses</h1>
+          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+            Full expense history with monthly/yearly filters and category breakdowns.
+          </p>
+        </div>
+        <button class="btn" onclick="loadExpenses()">🔄 Refresh</button>
+      </div>
+
+      <div class="dex-kpis">
+        <div class="dex-kpi"><div class="lbl">Total Entries</div><div class="val" id="kpiCount">—</div></div>
+        <div class="dex-kpi"><div class="lbl">Total Spent</div><div class="val" id="kpiTotal" style="color:#ef4444;">—</div></div>
+        <div class="dex-kpi"><div class="lbl">Avg per Entry</div><div class="val" id="kpiAvg" style="color:#f59e0b;">—</div></div>
+        <div class="dex-kpi"><div class="lbl">Top Category</div><div class="val" id="kpiTopCat" style="color:#3b82f6;font-size:1.1rem;">—</div></div>
+      </div>
+
+      <div class="dex-analytics">
+        <div class="dex-panel">
+          <h3>Top Categories (by Spend)</h3>
+          <table class="dex-rank">
+            <thead><tr><th>#</th><th>Category</th><th style="text-align:right;">Entries</th><th style="text-align:right;">Avg</th><th style="text-align:right;">Total</th></tr></thead>
+            <tbody id="topCatBody"><tr><td colspan="5" style="color:var(--text-muted);padding:0.6rem 0;">—</td></tr></tbody>
+          </table>
+        </div>
+        <div class="dex-panel">
+          <h3>Breakdown by Type</h3>
+          <table class="dex-rank">
+            <thead><tr><th>Type</th><th style="text-align:right;">Total</th><th style="text-align:right;">% of Spend</th></tr></thead>
+            <tbody id="typeBreakdownBody"><tr><td colspan="3" style="color:var(--text-muted);padding:0.6rem 0;">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="dex-toolbar">
+        <input type="text" id="dexSearch" class="dex-search" placeholder="Search description, client, category, ref…" oninput="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+        <input type="month" id="dexMonth" onchange="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Year</label>
+        <select id="dexYear" onchange="applyFilters()"><option value="">All</option></select>
+        <label style="font-size:0.78rem;color:var(--text-muted);">Category</label>
+        <select id="dexCategory" onchange="applyFilters()"><option value="">All</option></select>
+        <button class="dex-tab" onclick="clearAllFilters()">Clear</button>
+      </div>
+
+      <div class="dex-count" id="dexCount"></div>
+
+      <div class="dex-card">
+        <table class="dex-table" id="dexTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>Client / Ref</th>
+              <th>Description</th>
+              <th style="text-align:right;">Toll</th>
+              <th style="text-align:right;">Fuel</th>
+              <th style="text-align:right;">Meals</th>
+              <th style="text-align:right;">Load</th>
+              <th style="text-align:right;">Other</th>
+              <th style="text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody id="dexBody">
+            <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      var session = (typeof requireDirector === 'function') ? requireDirector() : null;
+      if (typeof requireDirector === 'function' && !session) return;
+      if (typeof renderNavbar === 'function') renderNavbar('director-expenses');
+
+      var allExpenses = [];
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function php(n) {
+        return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function dateVal(o) { return new Date(o.date || 0); }
+      function fmtDate(d) {
+        var dt = (d instanceof Date) ? d : new Date(d);
+        if (isNaN(dt.getTime())) return String(d || '');
+        return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+      }
+
+      function populateYearsAndCategories(rows) {
+        var ySel = document.getElementById('dexYear');
+        var cSel = document.getElementById('dexCategory');
+        var years = {}, cats = {};
+        rows.forEach(function (r) {
+          var d = dateVal(r);
+          if (!isNaN(d.getTime())) years[d.getFullYear()] = true;
+          var c = String(r.category || '').trim();
+          if (c) cats[c] = true;
+        });
+        var yCur = ySel.value, cCur = cSel.value;
+        ySel.innerHTML = '<option value="">All</option>' + Object.keys(years).sort(function (a, b) { return b - a; }).map(function (y) {
+          return '<option value="' + y + '"' + (y === yCur ? ' selected' : '') + '>' + y + '</option>';
+        }).join('');
+        cSel.innerHTML = '<option value="">All</option>' + Object.keys(cats).sort().map(function (c) {
+          return '<option value="' + esc(c) + '"' + (c === cCur ? ' selected' : '') + '>' + esc(c) + '</option>';
+        }).join('');
+      }
+
+      window.clearAllFilters = function () {
+        document.getElementById('dexSearch').value = '';
+        document.getElementById('dexMonth').value = '';
+        document.getElementById('dexYear').value = '';
+        document.getElementById('dexCategory').value = '';
+        applyFilters();
+      };
+
+      window.applyFilters = function () {
+        var search = (document.getElementById('dexSearch').value || '').toLowerCase().trim();
+        var month = document.getElementById('dexMonth').value || '';
+        var year = document.getElementById('dexYear').value || '';
+        var cat = document.getElementById('dexCategory').value || '';
+
+        var filtered = allExpenses.filter(function (r) {
+          if (cat && String(r.category || '') !== cat) return false;
+          var d = dateVal(r);
+          if (!isNaN(d.getTime())) {
+            if (month) {
+              var ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              if (ym !== month) return false;
+            }
+            if (year && String(d.getFullYear()) !== String(year)) return false;
+          } else if (month || year) {
+            return false;
+          }
+          if (search) {
+            var hay = ((r.description || '') + ' ' + (r.client || '') + ' ' + (r.category || '') + ' ' + (r.orderRef || '') + ' ' + (r.notes || '')).toLowerCase();
+            if (hay.indexOf(search) < 0) return false;
+          }
+          return true;
+        });
+
+        renderKpis(filtered);
+        renderAnalytics(filtered);
+        renderTable(filtered);
+      };
+
+      function renderKpis(rows) {
+        var total = 0;
+        var byCat = {};
+        rows.forEach(function (r) {
+          var amt = Number(r.total || 0);
+          total += amt;
+          var c = String(r.category || '—');
+          byCat[c] = (byCat[c] || 0) + amt;
+        });
+        var avg = rows.length ? total / rows.length : 0;
+        var topCat = '—';
+        var topVal = 0;
+        Object.keys(byCat).forEach(function (k) {
+          if (byCat[k] > topVal) { topVal = byCat[k]; topCat = k; }
+        });
+        document.getElementById('kpiCount').textContent = rows.length;
+        document.getElementById('kpiTotal').textContent = php(total);
+        document.getElementById('kpiAvg').textContent = php(avg);
+        document.getElementById('kpiTopCat').textContent = topCat + (topVal > 0 ? '  ·  ' + php(topVal) : '');
+      }
+
+      function renderAnalytics(rows) {
+        // Top categories
+        var byCat = {};
+        rows.forEach(function (r) {
+          var c = String(r.category || '—').trim() || '—';
+          if (!byCat[c]) byCat[c] = { name: c, count: 0, total: 0 };
+          byCat[c].count += 1;
+          byCat[c].total += Number(r.total || 0);
+        });
+        var catList = Object.keys(byCat).map(function (k) { return byCat[k]; })
+          .sort(function (a, b) { return b.total - a.total; });
+        var maxCat = (catList[0] && catList[0].total) || 1;
+        var topCatHtml = catList.length
+          ? catList.map(function (c, i) {
+              var pct = Math.max(2, Math.round((c.total / maxCat) * 100));
+              var avg = c.count ? c.total / c.count : 0;
+              return '<tr>' +
+                '<td style="color:var(--text-muted);">' + (i + 1) + '</td>' +
+                '<td>' + esc(c.name) + '<span class="bar" style="width:' + pct + '%;"></span></td>' +
+                '<td style="text-align:right;">' + c.count + '</td>' +
+                '<td style="text-align:right;color:var(--text-muted);">' + php(avg) + '</td>' +
+                '<td style="text-align:right;font-weight:600;">' + php(c.total) + '</td>' +
+                '</tr>';
+            }).join('')
+          : '<tr><td colspan="5" style="color:var(--text-muted);padding:0.6rem 0;">No data.</td></tr>';
+        document.getElementById('topCatBody').innerHTML = topCatHtml;
+
+        // Breakdown by type (toll/fuel/meals/load/other)
+        var types = { Toll: 0, Fuel: 0, Meals: 0, 'Load Balance': 0, Other: 0 };
+        var grand = 0;
+        rows.forEach(function (r) {
+          types.Toll += Number(r.toll || 0);
+          types.Fuel += Number(r.fuel || 0);
+          types.Meals += Number(r.meals || 0);
+          types['Load Balance'] += Number(r.loadBalance || 0);
+          types.Other += Number(r.otherAmount || 0);
+          grand += Number(r.total || 0);
+        });
+        var typeRows = Object.keys(types).map(function (k) { return { name: k, val: types[k] }; })
+          .sort(function (a, b) { return b.val - a.val; });
+        var typeHtml = grand > 0
+          ? typeRows.map(function (t) {
+              var pct = grand ? (t.val / grand * 100) : 0;
+              return '<tr>' +
+                '<td>' + esc(t.name) + '</td>' +
+                '<td style="text-align:right;font-weight:600;">' + php(t.val) + '</td>' +
+                '<td style="text-align:right;color:var(--text-muted);">' + pct.toFixed(1) + '%</td>' +
+                '</tr>';
+            }).join('')
+          : '<tr><td colspan="3" style="color:var(--text-muted);padding:0.6rem 0;">No data.</td></tr>';
+        document.getElementById('typeBreakdownBody').innerHTML = typeHtml;
+      }
+
+      function renderTable(rows) {
+        var body = document.getElementById('dexBody');
+        var count = document.getElementById('dexCount');
+        count.textContent = 'Showing ' + rows.length + ' expense' + (rows.length === 1 ? '' : 's');
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No expenses match these filters.</td></tr>';
+          return;
+        }
+        rows.sort(function (a, b) { return dateVal(b) - dateVal(a); });
+        body.innerHTML = rows.map(function (r) {
+          var clientRef = (r.client ? esc(r.client) : '') +
+            (r.orderRef ? ' <span class="dex-pill">' + esc(r.orderRef) + '</span>' : '');
+          return '<tr>' +
+            '<td style="white-space:nowrap;color:var(--text-muted);">' + esc(fmtDate(r.date)) + '</td>' +
+            '<td>' + esc(r.category || '—') + '</td>' +
+            '<td>' + (clientRef || '<span style="color:var(--text-muted);">—</span>') + '</td>' +
+            '<td>' + esc(r.description || '') + '</td>' +
+            '<td style="text-align:right;">' + (r.toll ? php(r.toll) : '—') + '</td>' +
+            '<td style="text-align:right;">' + (r.fuel ? php(r.fuel) : '—') + '</td>' +
+            '<td style="text-align:right;">' + (r.meals ? php(r.meals) : '—') + '</td>' +
+            '<td style="text-align:right;">' + (r.loadBalance ? php(r.loadBalance) : '—') + '</td>' +
+            '<td style="text-align:right;">' + (r.otherAmount ? php(r.otherAmount) : '—') + '</td>' +
+            '<td style="text-align:right;font-weight:700;color:#ef4444;">' + php(r.total) + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      window.loadExpenses = function () {
+        var body = document.getElementById('dexBody');
+        body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>';
+        return fetchFromAPI({ action: 'getExpenses' }, { noCache: true })
+          .then(function (res) {
+            if (!res || !res.success) throw new Error((res && res.message) || 'Failed to load');
+            allExpenses = res.data || [];
+            populateYearsAndCategories(allExpenses);
+            applyFilters();
+          })
+          .catch(function (err) {
+            console.error('loadExpenses failed', err);
+            body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ef4444;padding:1.5rem;">Failed to load expenses.</td></tr>';
+          });
+      };
+
+      document.addEventListener('DOMContentLoaded', loadExpenses);
+    })();
+  </script>
+</body>
+</html>

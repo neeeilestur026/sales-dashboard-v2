@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing — Accounting</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .main-content { max-width: 1200px; padding-left: 1rem; padding-right: 1rem; }
+
+    /* ── Filter bar ─────────────────────────────────── */
+    .filter-bar {
+      display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .filter-bar input, .filter-bar select {
+      padding: 0.45rem 0.75rem; border-radius: 8px;
+      border: 1px solid var(--border, #e2e8f0);
+      background: var(--bg-card, #fff);
+      color: var(--text-primary, #1e293b);
+      font-family: inherit; font-size: 0.83rem;
+    }
+    .filter-bar input:focus, .filter-bar select:focus {
+      outline: none; border-color: var(--accent, #fb923c);
+      box-shadow: 0 0 0 3px rgba(251,146,60,0.15);
+    }
+    .filter-spacer { flex: 1; }
+
+    /* ── KPI row ────────────────────────────────────── */
+    .kpi-row { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .kpi-pill {
+      background: var(--bg-card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 10px; padding: 0.6rem 1.1rem;
+      min-width: 140px; flex: 1;
+    }
+    .kpi-pill .kp-label { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary, #475569); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    .kpi-pill .kp-val   { font-size: 1.35rem; font-weight: 700; color: var(--text-primary, #1e293b); }
+    .kpi-pill .kp-sub   { font-size: 0.72rem; color: var(--text-muted, #94a3b8); margin-top: 0.1rem; }
+
+    /* ── Table ─────────────────────────────────────── */
+    .billing-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    .billing-table th {
+      text-align: left; padding: 0.55rem 0.75rem;
+      color: var(--text-secondary, #475569);
+      border-bottom: 1px solid var(--border, #e2e8f0);
+      font-weight: 600; font-size: 0.75rem;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      background: var(--bg-inset, #f1f5f9);
+      white-space: nowrap;
+    }
+    .billing-table td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border, #e2e8f0);
+      color: var(--text-primary, #1e293b);
+      vertical-align: middle;
+    }
+    .billing-table tr:hover td { background: var(--bg-inset, #f1f5f9); cursor: pointer; }
+
+    /* ── Status badges ──────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 0.18rem 0.6rem; border-radius: 999px;
+      font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+    }
+    .badge-unpaid  { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .badge-paid    { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-pending { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+    /* ── Priority pill ──────────────────────────────── */
+    .pri-high   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .pri-medium { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+    .pri-low    { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+    /* ── Empty / loading ────────────────────────────── */
+    .empty-state {
+      text-align: center; padding: 3rem 1rem;
+      color: var(--text-muted, #94a3b8);
+    }
+    .empty-state svg { opacity: 0.3; margin-bottom: 0.75rem; }
+    .empty-state p   { font-size: 0.9rem; }
+
+    /* ── Overlay backdrop ───────────────────────────── */
+    .overlay-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,0.45); z-index: 1000;
+      align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .overlay-backdrop.open { display: flex; }
+
+    /* ── Detail modal ───────────────────────────────── */
+    .detail-modal {
+      background: var(--bg-card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 14px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.18);
+      width: 100%; max-width: 900px;
+      max-height: 92vh; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .detail-modal-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border, #e2e8f0);
+      flex-shrink: 0;
+    }
+    .detail-modal-header h3 { font-size: 1rem; font-weight: 700; color: var(--text-primary,#1e293b); margin: 0; flex: 1; }
+    .detail-modal-body { flex: 1; overflow-y: auto; padding: 0; }
+
+    /* ── Detail tabs ─────────────────────────────────── */
+    .detail-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border,#e2e8f0);
+      background: var(--bg-inset, #f1f5f9); flex-shrink: 0;
+      padding: 0 1.25rem;
+    }
+    .detail-tab-btn {
+      padding: 0.65rem 1rem; border: none; background: transparent;
+      color: var(--text-muted, #94a3b8); font-family: inherit;
+      font-size: 0.83rem; font-weight: 600; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .detail-tab-btn:hover { color: var(--text-primary,#1e293b); }
+    .detail-tab-btn.active { color: var(--accent,#fb923c); border-bottom-color: var(--accent,#fb923c); }
+    .detail-tab-panel { display: none; padding: 1.25rem; }
+    .detail-tab-panel.active { display: block; }
+
+    /* ── Info grid ───────────────────────────────────── */
+    .info-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+      gap: 0.75rem 1.25rem; margin-bottom: 1.25rem;
+    }
+    .info-item .info-label { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary,#475569); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.18rem; }
+    .info-item .info-val   { font-size: 0.88rem; color: var(--text-primary,#1e293b); font-weight: 500; }
+
+    /* ── Section title ───────────────────────────────── */
+    .sec-title {
+      font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--accent,#fb923c);
+      margin-bottom: 0.6rem; padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border,#e2e8f0);
+    }
+
+    /* ── Amount highlight ─────────────────────────────── */
+    .amt-highlight {
+      background: var(--bg-inset,#f1f5f9);
+      border: 1px solid var(--border,#e2e8f0);
+      border-radius: 10px; padding: 0.75rem 1.1rem;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .amt-highlight .amt-label { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary,#475569); }
+    .amt-highlight .amt-val   { font-size: 1.4rem; font-weight: 700; color: var(--text-primary,#1e293b); }
+
+    /* ── PDF side-by-side ─────────────────────────────── */
+    .pdf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 640px) { .pdf-grid { grid-template-columns: 1fr; } }
+
+    .pdf-card {
+      border: 1px solid var(--border,#e2e8f0); border-radius: 10px; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .pdf-card-header {
+      padding: 0.65rem 0.9rem; background: var(--bg-inset,#f1f5f9);
+      border-bottom: 1px solid var(--border,#e2e8f0);
+      font-size: 0.78rem; font-weight: 700; color: var(--text-secondary,#475569);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;
+    }
+    .pdf-card-body {
+      flex: 1; min-height: 360px; background: #f8fafc;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pdf-card-body iframe { width: 100%; height: 360px; border: none; display: block; }
+    .pdf-placeholder {
+      text-align: center; color: var(--text-muted,#94a3b8); padding: 2rem 1rem;
+    }
+    .pdf-placeholder svg { opacity: 0.3; margin-bottom: 0.5rem; }
+    .pdf-placeholder p { font-size: 0.8rem; margin: 0; }
+
+    /* ── Cash Voucher form ───────────────────────────── */
+    .cv-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1rem; }
+    @media (max-width: 580px) { .cv-form { grid-template-columns: 1fr; } }
+    .cv-form .full-col { grid-column: 1 / -1; }
+    .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
+    .form-lbl { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary,#475569); text-transform: uppercase; letter-spacing: 0.03em; }
+    .form-inp {
+      padding: 0.5rem 0.7rem; border-radius: 8px;
+      border: 1px solid var(--border,#e2e8f0);
+      background: var(--bg-card,#fff); color: var(--text-primary,#1e293b);
+      font-family: inherit; font-size: 0.875rem;
+    }
+    .form-inp:focus { outline: none; border-color: var(--accent,#fb923c); box-shadow: 0 0 0 3px rgba(251,146,60,0.15); }
+    textarea.form-inp { resize: vertical; min-height: 60px; }
+
+    /* ── Buttons ─────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1.1rem; border-radius: 8px; border: none;
+      font-family: inherit; font-size: 0.83rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; text-decoration: none;
+    }
+    .btn-primary   { background: var(--accent,#fb923c); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover,#f97316); }
+    .btn-success   { background: #16a34a; color: #fff; }
+    .btn-success:hover { background: #15803d; }
+    .btn-ghost     { background: transparent; color: var(--text-secondary,#475569); border: 1px solid var(--border,#e2e8f0); }
+    .btn-ghost:hover { background: var(--bg-inset,#f1f5f9); }
+    .btn-sm        { padding: 0.35rem 0.75rem; font-size: 0.77rem; border-radius: 6px; }
+    .btn-icon      { padding: 0.35rem; border-radius: 6px; }
+
+    .modal-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 1rem 1.25rem; border-top: 1px solid var(--border,#e2e8f0); background: var(--bg-inset,#f1f5f9); flex-shrink: 0; }
+    .modal-actions .spacer { flex: 1; }
+
+    /* ── Mark-paid confirm ──────────────────────────── */
+    .confirm-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,0.5); z-index: 1100;
+      align-items: center; justify-content: center; padding: 1rem;
+    }
+    .confirm-overlay.open { display: flex; }
+    .confirm-box {
+      background: var(--bg-card,#fff); border: 1px solid var(--border,#e2e8f0);
+      border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      padding: 1.5rem; max-width: 420px; width: 100%;
+    }
+    .confirm-box h4 { font-size: 1rem; font-weight: 700; margin: 0 0 0.5rem; color: var(--text-primary,#1e293b); }
+    .confirm-box p  { font-size: 0.875rem; color: var(--text-secondary,#475569); margin: 0 0 1.25rem; }
+    .confirm-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+    /* ── Spinner ─────────────────────────────────────── */
+    .spin { animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Billing</h1>
+      <p>Management-approved payment requests — track payment status and generate documents.</p>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-row" id="billingKpis">
+      <div class="kpi-pill">
+        <div class="kp-label">Total Approved</div>
+        <div class="kp-val" id="kpiTotal">—</div>
+        <div class="kp-sub">payment requests</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="kp-label">Unpaid</div>
+        <div class="kp-val" id="kpiUnpaid" style="color:#d97706">—</div>
+        <div class="kp-sub">pending payment</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="kp-label">Paid</div>
+        <div class="kp-val" id="kpiPaid" style="color:#16a34a">—</div>
+        <div class="kp-sub">processed</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="kp-label" id="kpiAmountLabel">Total Amount</div>
+        <div class="kp-val" id="kpiAmount">—</div>
+        <div class="kp-sub" id="kpiAmountSub">all approved PRs</div>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <input type="text" id="filterSearch" placeholder="Search PR#, payee, purpose…" style="min-width:220px;">
+      <select id="filterStatus">
+        <option value="">All Statuses</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Paid">Paid</option>
+      </select>
+      <select id="filterPriority">
+        <option value="">All Priorities</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+      <input type="month" id="filterMonth" title="Filter by month" style="padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+      <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('filterMonth').value='';applyFilters();" title="Clear month filter">Clear month</button>
+      <span class="filter-spacer"></span>
+      <button class="btn btn-ghost btn-sm" onclick="loadBillingRecords()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <!-- Table card -->
+    <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#e2e8f0);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+      <table class="billing-table" id="billingTable">
+        <thead>
+          <tr>
+            <th>PR #</th>
+            <th>Date</th>
+            <th>Requested By</th>
+            <th>Purpose</th>
+            <th>Payee</th>
+            <th>Amount</th>
+            <th>Due</th>
+            <th>Priority</th>
+            <th>Billing</th>
+            <th>CV #</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="billingTbody">
+          <tr><td colspan="11"><div class="empty-state"><p>Loading…</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ═══ Detail / PDF Overlay ══════════════════════════════════ -->
+  <div class="overlay-backdrop" id="detailOverlay" onclick="_overlayBgClick(event)">
+    <div class="detail-modal" id="detailModal">
+      <div class="detail-modal-header">
+        <div>
+          <h3 id="detailTitle">Payment Request Details</h3>
+          <div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:0.15rem;" id="detailSubtitle"></div>
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="closeDetailOverlay()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="detail-tabs" id="detailTabs">
+        <button class="detail-tab-btn active" onclick="switchDetailTab('info')">Request Info</button>
+        <button class="detail-tab-btn" id="tabDocuments" onclick="switchDetailTab('documents')">Documents</button>
+        <button class="detail-tab-btn" id="tabCvForm" style="display:none" onclick="switchDetailTab('cv-form')">Cash Voucher Form</button>
+      </div>
+
+      <div class="detail-modal-body">
+
+        <!-- Tab: Info ──────────────────────────────────── -->
+        <div class="detail-tab-panel active" id="panelInfo">
+          <div class="sec-title">Request Details</div>
+          <div class="info-grid" id="infoGrid"></div>
+
+          <div class="sec-title">Payee & Payment</div>
+          <div class="info-grid" id="payeeGrid"></div>
+
+          <div class="amt-highlight">
+            <span class="amt-label">Total Amount</span>
+            <span class="amt-val" id="detailAmt">—</span>
+          </div>
+
+          <div id="remarkSection" style="display:none">
+            <div class="sec-title">Remarks</div>
+            <div id="detailRemark" style="font-size:0.875rem;color:var(--text-primary,#1e293b);background:var(--bg-inset,#f1f5f9);border-radius:8px;padding:0.75rem;margin-bottom:1.25rem;"></div>
+          </div>
+
+          <div id="billingStatusSection">
+            <div class="sec-title">Billing Status</div>
+            <div class="info-grid" id="billingInfoGrid"></div>
+          </div>
+        </div>
+
+        <!-- Tab: Documents ─────────────────────────────── -->
+        <div class="detail-tab-panel" id="panelDocuments">
+          <div id="noPdfsMsg" style="display:none;margin-bottom:1rem;">
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.75rem 1rem;font-size:0.83rem;color:#92400e;">
+              No documents generated yet. Mark the request as Paid to auto-generate the Payment Slip.
+            </div>
+          </div>
+          <div class="pdf-grid" id="pdfGrid">
+            <!-- Payment Slip -->
+            <div class="pdf-card">
+              <div class="pdf-card-header">
+                <span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Payment Slip
+                </span>
+                <button class="btn btn-ghost btn-sm" id="btnDownloadSlip" onclick="downloadSlip()" style="display:none">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download
+                </button>
+              </div>
+              <div class="pdf-card-body" id="slipPdfBody">
+                <div class="pdf-placeholder">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <p>Mark as Paid to generate</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cash Voucher -->
+            <div class="pdf-card">
+              <div class="pdf-card-header">
+                <span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                  Cash Voucher
+                </span>
+                <button class="btn btn-ghost btn-sm" id="btnDownloadCv" onclick="downloadCv()" style="display:none">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download
+                </button>
+              </div>
+              <div class="pdf-card-body" id="cvPdfBody">
+                <div class="pdf-placeholder">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                  <p id="cvPlaceholderTxt">Fill the Cash Voucher form to generate</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: CV Form ────────────────────────────────── -->
+        <div class="detail-tab-panel" id="panelCvForm">
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.75rem 1rem;font-size:0.83rem;color:#92400e;margin-bottom:1.25rem;" id="cvFormNote">
+            This request must be marked as Paid before generating a Cash Voucher.
+          </div>
+          <form id="cvForm" onsubmit="return false">
+            <div class="cv-form">
+              <div class="form-group">
+                <label class="form-lbl">CV Number <span style="color:#dc2626">*</span></label>
+                <input class="form-inp" id="cvNumber" placeholder="e.g. CV-2025-001">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">CV Date <span style="color:#dc2626">*</span></label>
+                <input class="form-inp" type="date" id="cvDate">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Prepared by <span style="color:#dc2626">*</span></label>
+                <input class="form-inp" id="cvPreparedBy" placeholder="Accounting staff name">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Approved by</label>
+                <input class="form-inp" id="cvApprovedBy" placeholder="Approver name">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Account Charged</label>
+                <input class="form-inp" id="cvAccountCharged" placeholder="e.g. Office Supplies Expense">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Credit Account</label>
+                <input class="form-inp" id="cvCreditAccount" placeholder="e.g. Cash / Bank" value="Cash / Bank">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Payment Mode</label>
+                <select class="form-inp" id="cvPaymentMode">
+                  <option value="">— select —</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Check">Check</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Online Transfer">Online Transfer</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Cheque Number</label>
+                <input class="form-inp" id="cvChequeNumber" placeholder="If applicable">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Cheque Date</label>
+                <input class="form-inp" type="date" id="cvChequeDate">
+              </div>
+              <div class="form-group">
+                <label class="form-lbl">Bank</label>
+                <input class="form-inp" id="cvBankName" placeholder="Bank name">
+              </div>
+              <div class="form-group full-col">
+                <label class="form-lbl">Particulars</label>
+                <input class="form-inp" id="cvParticulars" placeholder="Description of payment">
+              </div>
+              <div class="form-group full-col">
+                <label class="form-lbl">Additional Notes</label>
+                <textarea class="form-inp" id="cvNotes" rows="2" placeholder="Optional notes…"></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+
+      </div><!-- /body -->
+
+      <div class="modal-actions" id="modalActions">
+        <button class="btn btn-ghost" onclick="closeDetailOverlay()">Close</button>
+        <span class="spacer"></span>
+        <button class="btn btn-primary" id="btnMarkPaid" onclick="confirmMarkPaid()" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Mark as Paid
+        </button>
+        <button class="btn btn-success" id="btnGenerateCv" onclick="generateCashVoucher()" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          Generate Cash Voucher
+        </button>
+      </div>
+    </div><!-- /modal -->
+  </div>
+
+  <!-- ═══ Mark-Paid Confirm ══════════════════════════════════════ -->
+  <div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+      <h4>Confirm Payment</h4>
+      <p id="confirmMsg">Are you sure you want to mark this request as Paid? A Payment Slip PDF will be auto-generated.</p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="document.getElementById('confirmOverlay').classList.remove('open')">Cancel</button>
+        <button class="btn btn-success" id="confirmOkBtn" onclick="doMarkPaid()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Yes, Mark Paid
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/accounting-billing.js"></script>
+</body>
+</html>

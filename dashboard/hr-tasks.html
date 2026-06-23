@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing — Task Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .task-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .task-form .full { grid-column: 1 / -1; }
+    .task-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .task-form input, .task-form select, .task-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .task-form textarea { resize: vertical; min-height: 60px; }
+    .task-form input:focus, .task-form select:focus, .task-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .task-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .task-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .task-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .task-table tr:hover td { background: #e2e8f0; }
+    .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .status-pending { background: rgba(234,179,8,0.12); color: #eab308; }
+    .status-progress { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .status-completed { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .type-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .type-hr { background: rgba(236,72,153,0.12); color: #ec4899; }
+    .type-marketing { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent, #f97316); }
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+    .mini-stat { background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }
+    .mini-stat .num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
+    .mini-stat .lbl { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
+    .overdue { color: #ef4444 !important; }
+    @media(max-width: 640px) { .task-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Task Tracker</h1>
+      <p>Create, assign, and track HR & Marketing tasks.</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-cards" id="statsRow">
+      <div class="mini-stat"><div class="num" id="statTotal">-</div><div class="lbl">Total Tasks</div></div>
+      <div class="mini-stat"><div class="num" id="statPending">-</div><div class="lbl">Pending</div></div>
+      <div class="mini-stat"><div class="num" id="statProgress">-</div><div class="lbl">In Progress</div></div>
+      <div class="mini-stat"><div class="num" id="statCompleted">-</div><div class="lbl">Completed</div></div>
+      <div class="mini-stat"><div class="num overdue" id="statOverdue">-</div><div class="lbl">Overdue</div></div>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Task
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="taskForm" onsubmit="submitTask(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="task-form">
+            <div class="full">
+              <label for="taskTitle">Title <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="taskTitle" placeholder="e.g. Schedule interview for applicant" required>
+            </div>
+            <div>
+              <label for="taskType">Type</label>
+              <select id="taskType">
+                <option value="HR">HR</option>
+                <option value="Marketing">Marketing</option>
+              </select>
+            </div>
+            <div>
+              <label for="taskAssigned">Assigned To</label>
+              <input type="text" id="taskAssigned" placeholder="e.g. Maria Santos">
+            </div>
+            <div>
+              <label for="taskStatus">Status</label>
+              <select id="taskStatus">
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+            <div>
+              <label for="taskDue">Due Date</label>
+              <input type="date" id="taskDue">
+            </div>
+            <div class="full">
+              <label for="taskNotes">Notes</label>
+              <textarea id="taskNotes" placeholder="Additional notes..."></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Add Task</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Task Table -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Tasks</h3>
+      <div class="filter-bar">
+        <select id="filterType" onchange="renderTable()">
+          <option value="">All Types</option>
+          <option value="HR">HR</option>
+          <option value="Marketing">Marketing</option>
+        </select>
+        <select id="filterStatus" onchange="renderTable()">
+          <option value="">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Search tasks..." oninput="renderTable()">
+      </div>
+      <div id="taskContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-tasks.js"></script>
+</body>
+</html>

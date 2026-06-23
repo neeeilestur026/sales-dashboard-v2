@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — User Management</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .usr-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .usr-form .full { grid-column: 1 / -1; }
+    .usr-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .usr-form input, .usr-form select {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .usr-form input:focus, .usr-form select:focus { outline: none; border-color: var(--accent, #f97316); }
+    .usr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .usr-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
+    .usr-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .usr-table tr:hover td { background: #e2e8f0; }
+    .role-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .role-admin { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .role-sales { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .role-accounting { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .role-management { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .role-director { background: rgba(245,158,11,0.14); color: #f59e0b; }
+    .role-hr { background: rgba(236,72,153,0.12); color: #ec4899; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    @media(max-width: 640px) { .usr-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>User Management</h1>
+      <p>Manage user accounts, roles, and permissions.</p>
+    </div>
+
+    <!-- Add/Edit User Form -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add User
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="toggleUserForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="userForm" onsubmit="submitUser(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="usr-form">
+            <div>
+              <label for="usrUsername">Username <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="usrUsername" placeholder="e.g. jdoe" required>
+            </div>
+            <div>
+              <label for="usrPassword">Password <span style="color:#ef4444;">*</span></label>
+              <input type="password" id="usrPassword" placeholder="Min 6 characters" required minlength="6">
+            </div>
+            <div>
+              <label for="usrFullName">Full Name <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="usrFullName" placeholder="e.g. John Doe" required>
+            </div>
+            <div>
+              <label for="usrRole">Role <span style="color:#ef4444;">*</span></label>
+              <select id="usrRole" required>
+                <option value="sales">Sales</option>
+                <option value="accounting">Accounting</option>
+                <option value="management">Management</option>
+                <option value="director">Director</option>
+                <option value="hr">HR-Marketing</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="full" id="trainingModeWrap">
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;color:var(--text-primary,#0f172a);font-weight:600;">
+                <input type="checkbox" id="usrTrainingMode" style="width:auto;margin:0;">
+                <span>Training Mode</span>
+                <span style="font-weight:400;color:var(--text-muted,#64748b);font-size:0.78rem;">— shows tutorials and prevents actions from being saved to records.</span>
+              </label>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Add User</button>
+            <button type="button" class="btn btn-secondary" onclick="resetUserForm()">Cancel</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Users</h3>
+      <div id="usrCount" style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;"></div>
+      <div id="usrContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/admin-users.js"></script>
+</body>
+</html>

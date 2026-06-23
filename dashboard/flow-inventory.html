@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Inventory</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Inventory</h1>
+      <p>Item master with purchase price, shipping &amp; landed cost. Quantity may be zero.</p>
+      <p id="salesNote" class="flow-msg" style="display:none;background:rgba(13,148,136,0.10);color:var(--accent-dark,#115e59);margin-top:0.5rem;">You can add and edit items here. Items can only be removed by admin/accounting.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="chart-card" style="margin-bottom:1.25rem;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">Add Item</h3>
+      <form id="invForm" onsubmit="submitItem(event)">
+        <input type="hidden" id="rowIndex" value="">
+        <div class="flow-form">
+          <div><label>Item No. *</label><input type="text" id="itemNo" required placeholder="e.g. WLD-500A"></div>
+          <div class="full"><label>Description *</label><input type="text" id="description" required placeholder="e.g. Welding Rod 500A"></div>
+          <div><label>Available Balance</label><input type="number" id="balance" step="any" min="0" value="0"></div>
+          <div><label>Purchase Price / Unit</label><input type="number" id="purchasePrice" step="any" min="0" value="0"></div>
+          <div><label>Shipping Cost / Unit</label><input type="number" id="shippingCost" step="any" min="0" value="0"></div>
+          <div><label>Currency</label><select id="currency"></select></div>
+        </div>
+        <div class="flow-actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Add Item</button>
+          <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+        </div>
+        <div id="formMsg" class="flow-msg" style="display:none;"></div>
+      </form>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <input type="text" id="search" placeholder="Search item no. or description..." oninput="render()" style="flex:1;min-width:200px;padding:0.5rem 0.7rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--surface-2,#1e293b);color:var(--text-primary,#f1f5f9);">
+        <button class="btn btn-sm btn-secondary" onclick="loadInventory()">Refresh</button>
+      </div>
+      <div id="container" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-inventory.js"></script>
+</body>
+</html>

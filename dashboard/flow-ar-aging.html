@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — AR Aging</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Accounts Receivable Aging</h1>
+      <p>Auto-generated when an invoice is issued — the client owes the invoiced sales amount. Record collections here to clear the receivable.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.25rem;">
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiCount">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Open Receivables</div></div>
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiOut">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Outstanding (PHP)</div></div>
+      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiCollected">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Collected (PHP)</div></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <h3 style="font-size:0.95rem;font-weight:600;">Receivables</h3>
+        <button class="btn btn-sm btn-secondary" onclick="loadAR()">Refresh</button>
+      </div>
+      <div id="container" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+      <div id="msg" class="flow-msg" style="display:none;"></div>
+    </div>
+  </main>
+
+  <!-- Record-collection modal -->
+  <div class="flow-modal-overlay" id="collectModal">
+    <div class="flow-modal" style="max-width:520px;">
+      <h3>Record Collection</h3>
+      <div class="sub" id="collectSub">—</div>
+      <input type="hidden" id="collectArNo">
+      <div class="flow-form">
+        <div><label>Amount (PHP) *</label><input type="number" step="any" min="0" id="collectAmount"></div>
+        <div><label>Date</label><input type="date" id="collectDate"></div>
+        <div><label>Method</label><select id="collectMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option><option>Other</option></select></div>
+        <div><label>Reference No.</label><input type="text" id="collectRef" placeholder="OR / deposit slip #"></div>
+        <div class="full"><label>Notes</label><input type="text" id="collectNotes"></div>
+      </div>
+      <div id="collectMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeCollect()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="collectBtn" onclick="submitCollection()">Record</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-ar-aging.js"></script>
+</body>
+</html>

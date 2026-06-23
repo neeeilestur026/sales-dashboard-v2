@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotation Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tool-css/tool-shared.css">
+</head>
+<body>
+<script>
+(function(){var s;try{s=JSON.parse(localStorage.getItem('session'));}catch(e){}
+if(!s||!s.token){window.location.href='/index.html';return;}
+var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorage.removeItem('session');window.location.href='/index.html';}
+window.scrollTo(0,0);
+})();
+</script>
+
+    <div class="tool-topbar">
+        <div class="container-fluid" style="max-width:1400px;">
+            <a id="backLink" href="/dashboard.html" class="btn btn-outline-secondary btn-sm">&larr; Back to Dashboard</a>
+        </div>
+    </div>
+    <script>
+    (function(){try{var s=JSON.parse(localStorage.getItem('session'));if(s&&s.role==='admin')document.getElementById('backLink').href='/admin.html';else if(s&&s.role==='management')document.getElementById('backLink').href='/management-home.html';}catch(e){}})();
+    </script>
+
+    <div class="page-header">
+        <div class="container-fluid" style="max-width:1400px;">
+            <h1>Quotation Generator</h1>
+            <p>Generate professional quotation PDFs with pricing from Excel catalogs.</p>
+        </div>
+    </div>
+
+    <div class="container-fluid py-2 pb-5" style="max-width:1400px;">
+
+        <!-- Revision Mode Banner -->
+        <div id="revisionBanner" class="alert alert-warning d-flex align-items-center d-none" style="margin-bottom:1rem;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="me-2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div class="flex-grow-1">
+                <strong>Revision Mode:</strong> Editing a rejected quotation. Images from the original are not included. Edit items and regenerate the PDF, then submit.
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="cancelRevision()">Cancel Revision</button>
+        </div>
+
+        <div class="row g-3">
+
+            <!-- LEFT COLUMN -->
+            <div class="col-lg-5">
+
+                <!-- Client Details -->
+                <div class="card section-gap">
+                    <div class="card-header">
+                        <div class="header-icon blue">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <h5>Client Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label">Client Name</label>
+                            <div style="position:relative;">
+                              <input type="text" id="clientName" class="form-control form-control-sm" autocomplete="off" oninput="filterClientSuggestions(this.value)" onfocus="filterClientSuggestions(this.value)">
+                              <div id="clientSuggestions" class="client-suggestions" style="display:none;"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Client Address</label>
+                            <input type="text" id="clientAddress" class="form-control form-control-sm">
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <label class="form-label">Attention</label>
+                                <input type="text" id="attention" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Designation</label>
+                                <input type="text" id="clientDesignation" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="clientEmail" class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Subject</label>
+                            <input type="text" id="subject" class="form-control form-control-sm">
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <label class="form-label">Reference No <small class="text-muted">(auto: YYYY-NNN-)</small></label>
+                                <input type="text" id="referenceNo" class="form-control form-control-sm" placeholder="e.g. ClientName-Product">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">RFQ No</label>
+                                <input type="text" id="referenceRfqNo" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Quotation Date</label>
+                            <input type="date" id="quotationDate" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signature Details -->
+                <div class="card section-gap">
+                    <div class="card-header">
+                        <div class="header-icon dark">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 1 1 3.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                        </div>
+                        <h5>Signature Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label">Name</label>
+                            <input type="text" id="sigName" class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Designation</label>
+                            <input type="text" id="sigDesignation" class="form-control form-control-sm">
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <label class="form-label">Viber</label>
+                                <input type="text" id="sigViber" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Mobile</label>
+                                <input type="text" id="sigMobile" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="sigEmail" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN -->
+            <div class="col-lg-7">
+
+                <!-- Quotation Details -->
+                <div class="card section-gap">
+                    <div class="card-header">
+                        <div class="header-icon orange">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                        </div>
+                        <h5>Quotation Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Principal</label>
+                                <select id="principal" class="form-select form-select-sm" onchange="loadData()">
+                                    <option value="">-- Select Principal --</option>
+                                    {% for principal in principals %}
+                                    <option value="{{ principal }}">{{ principal }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Destination</label>
+                                <select id="destination" class="form-select form-select-sm">
+                                    <option value="">-- Select Destination --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Discount (%)</label>
+                                <input type="number" id="discountPercentage" class="form-control form-control-sm" value="0" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">VAT Option</label>
+                                <select id="vatOption" class="form-select form-select-sm">
+                                    <option value="exclusive">VAT Exclusive</option>
+                                    <option value="inclusive">VAT Inclusive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Description Mode</label>
+                                <select id="descMode" class="form-select form-select-sm">
+                                    <option value="short">Short (6/page)</option>
+                                    <option value="long">Long (1/page)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Note (optional, appears on last page)</label>
+                            <textarea id="note" class="form-control form-control-sm" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Items -->
+                <div class="card section-gap">
+                    <div class="card-header" style="justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <div class="header-icon blue">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                            </div>
+                            <h5 class="mb-0">Items</h5>
+                        </div>
+                        <div style="display:flex;gap:0.4rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="showTermsModal()">Terms</button>
+                            <button class="btn btn-primary btn-sm" onclick="showAddItemModal()">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                                Add Item
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0" id="itemsTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th style="text-align:left;">Product Name</th>
+                                        <th>Model No</th>
+                                        <th>QTY</th>
+                                        <th>Unit Price</th>
+                                        <th>Total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="itemsTableBody">
+                                    <tr><td colspan="7" class="text-center text-muted py-3" style="font-size:0.875rem;">No items added yet.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Log -->
+                <div class="card section-gap">
+                    <div class="card-header">
+                        <div class="header-icon dark">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+                        </div>
+                        <h5>Output Log</h5>
+                    </div>
+                    <div class="card-body" style="padding:0.75rem;">
+                        <pre id="outputLog">Ready.</pre>
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn btn-danger btn-sm" onclick="clearItems()" style="flex:0 0 auto;padding:0.85rem 1rem;">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        Clear
+                    </button>
+                    <div style="flex:1;display:flex;align-items:center;gap:0.5rem;">
+                        <label for="brochure_file" class="form-label mb-0" style="font-size:0.8rem;white-space:nowrap;color:var(--text-muted,#94a3b8);">Attach PDF:</label>
+                        <input type="file" id="brochure_file" name="brochure_file" class="form-control form-control-sm" accept=".pdf" multiple style="max-width:260px;">
+                    </div>
+                    <button class="btn btn-primary btn-generate" onclick="generateQuotation()">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                        Generate Quotation PDF
+                    </button>
+                </div>
+
+                <!-- Submit to Google Sheet -->
+                <div class="card sheet-card" style="margin-top:0.5rem;">
+                    <div class="card-header">
+                        <div class="header-icon green">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h18M3 14h18M10 3v18M14 3v18M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z"/></svg>
+                        </div>
+                        <h5>Submit to Google Sheet</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="approvalStatus" style="margin-bottom:1rem;">
+                            <p style="color:#64748b;margin:0;">Generate a quotation first to submit for approval.</p>
+                        </div>
+                        <button type="button" class="btn btn-warning w-100" id="checkStatusBtn" style="display:none;margin-bottom:0.5rem;" onclick="checkApprovalStatus()">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L3 10"/></svg>
+                            Check Approval Status
+                        </button>
+                        <button type="button" class="btn btn-secondary w-100" disabled id="submitBtn" onclick="submitToGoogleSheet()">
+                            Submit to Google Sheet
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Revise Rejected Quotation -->
+                <div class="card" style="margin-top:0.5rem; border-left:3px solid #f0ad4e;">
+                    <div class="card-header">
+                        <div class="header-icon" style="background:rgba(240,173,78,0.15); color:#e6930a;">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </div>
+                        <h5>Revise Rejected Quotation</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted" style="font-size:0.85rem;margin-bottom:1rem;">Load a previously rejected quotation to revise and resubmit for approval.</p>
+                        <button type="button" class="btn btn-warning w-100" onclick="fetchRejectedQuotations()">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L3 10"/></svg>
+                            Load Rejected Quotation
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="addItemModalLabel">Add Item</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label">Input Mode</label>
+                    <select id="inputMode" class="form-select form-select-sm" onchange="updateInputMode()">
+                        <option value="excel">From Excel</option>
+                        <option value="manual">Manual</option>
+                    </select>
+                </div>
+                <div class="col-md-6" id="productCodeDropdownContainer">
+                    <label class="form-label">Product Code</label>
+                    <div class="dropdown" id="productCodeDropdown">
+                        <input type="text" id="productCodeSearch" class="form-control form-control-sm"
+                               placeholder="Search product code..."
+                               autocomplete="off"
+                               data-bs-toggle="dropdown"
+                               aria-expanded="false"
+                               oninput="populateProductCodesDropdown(this.value)">
+                        <ul class="dropdown-menu w-100" id="productCodeDropdownMenu" style="max-height:200px;overflow-y:auto;"></ul>
+                    </div>
+                    <input type="hidden" id="selectedProductCode" value="">
+                </div>
+                <div class="col-md-6 d-none" id="manualProductCodeContainer">
+                    <label class="form-label">Product Code (Manual)</label>
+                    <input type="text" id="manualProductCode" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Product Name</label>
+                    <input type="text" id="productName" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">CBM</label>
+                    <input type="number" id="cbm" class="form-control form-control-sm" value="0.01" min="0.001" step="0.001">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" id="quantity" class="form-control form-control-sm" value="1" min="1" step="1">
+                </div>
+                <div class="col-md-4" id="productPriceContainer">
+                    <label class="form-label">Product Price (PHP)</label>
+                    <input type="number" id="productPrice" class="form-control form-control-sm" step="0.01" placeholder="Auto from Excel">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Description</label>
+                    <textarea id="itemDescription" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Item Image (PNG/JPEG, max 5 MB)</label>
+                    <input type="file" id="itemImage" class="form-control form-control-sm" accept="image/png,image/jpeg">
+                </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addItem()">Add Item</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terms Modal -->
+    <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="termsModalLabel">Terms &amp; Conditions</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-2">
+                <label class="form-label">Validity</label>
+                <input type="text" id="termsValidity" class="form-control form-control-sm" value="30 days">
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Delivery</label>
+                <input type="text" id="termsDelivery" class="form-control form-control-sm">
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Payment</label>
+                <input type="text" id="termsPayment" class="form-control form-control-sm">
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Warranty</label>
+                <select id="termsWarrantySelect" class="form-select form-select-sm" onchange="toggleWarrantyInput()">
+                    <option value="">None</option>
+                    <option value="1 year">1 Year</option>
+                    <option value="2 years">2 Years</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <input type="text" id="termsWarrantyCustom" class="form-control form-control-sm mt-1 d-none" placeholder="Enter custom warranty...">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="submitTerms()">Save Terms</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Item Modal -->
+    <div class="modal fade" id="editItemModal" tabindex="-1" aria-labelledby="editItemModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editItemModalLabel">Edit Item</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="editItemNo">
+            <div class="mb-2">
+                <label class="form-label">Product Name</label>
+                <input type="text" id="editProductName" class="form-control form-control-sm">
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Product Code</label>
+                <input type="text" id="editProductCode" class="form-control form-control-sm">
+            </div>
+            <div class="row mb-2">
+                <div class="col-6">
+                    <label class="form-label">Unit Price (PHP)</label>
+                    <input type="number" id="editUnitPrice" class="form-control form-control-sm" step="0.01">
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" id="editQuantity" class="form-control form-control-sm" min="1" step="1">
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Description</label>
+                <textarea id="editDescription" class="form-control form-control-sm" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="applyEditItem()">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rejected Quotations Modal -->
+    <div class="modal fade" id="rejectedQuotationsModal" tabindex="-1" aria-labelledby="rejectedQuotationsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rejectedQuotationsModalLabel">Rejected Quotations</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="rejectedQuotationsLoading" class="text-center py-4">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+              <span class="ms-2">Loading rejected quotations...</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-striped mb-0 d-none" id="rejectedQuotationsTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Ref No</th>
+                    <th>Client</th>
+                    <th>Subject</th>
+                    <th class="text-end">Amount</th>
+                    <th class="text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="rejectedQuotationsBody"></tbody>
+              </table>
+            </div>
+            <div id="rejectedQuotationsEmpty" class="text-center text-muted py-4 d-none">
+              No rejected quotations found.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/tool-js/quotation/script.js"></script>
+    <style>
+      .client-suggestions{position:absolute;top:100%;left:0;right:0;z-index:999;background:#1e293b;border:1px solid #334155;border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
+      .client-suggestions .cs-item{padding:8px 12px;cursor:pointer;font-size:0.85rem;color:#f1f5f9;border-bottom:1px solid rgba(51,65,85,0.3);}
+      .client-suggestions .cs-item:hover,.client-suggestions .cs-item.active{background:#334155;}
+      .client-suggestions .cs-item small{display:block;color:#94a3b8;font-size:0.75rem;}
+      .client-suggestions .cs-empty{padding:8px 12px;color:#64748b;font-size:0.82rem;}
+    </style>
+    <script>
+    (function(){
+      var SCRIPT_URL='REPLACE_WITH_YOUR_APPS_SCRIPT_EXEC_URL';
+      var clients=[];
+      var loaded=false;
+
+      // Load client list for this agent
+      function loadClients(){
+        if(loaded)return;
+        loaded=true;
+        try{
+          var s=JSON.parse(localStorage.getItem('session')||'{}');
+          var name=s.name||'';
+          if(!name)return;
+          fetch(SCRIPT_URL+'?action=getClients&agentName='+encodeURIComponent(name))
+            .then(function(r){return r.json();})
+            .then(function(d){if(d.success)clients=d.data||[];})
+            .catch(function(){});
+        }catch(e){}
+      }
+
+      // Filter and show suggestions
+      window.filterClientSuggestions=function(val){
+        var box=document.getElementById('clientSuggestions');
+        if(!box)return;
+        val=(val||'').trim().toLowerCase();
+        if(!val){box.style.display='none';return;}
+
+        var matches=clients.filter(function(c){
+          return c.companyName.toLowerCase().indexOf(val)!==-1;
+        }).slice(0,8);
+
+        if(matches.length===0){
+          box.innerHTML='<div class="cs-empty">No matching clients</div>';
+          box.style.display='block';
+          return;
+        }
+
+        box.innerHTML=matches.map(function(c,i){
+          return '<div class="cs-item" onmousedown="selectClient('+i+',event)" data-idx="'+i+'">'
+            +escH(c.companyName)
+            +(c.contactPerson?'<small>'+escH(c.contactPerson)+(c.position?' — '+escH(c.position):'')+'</small>':'')
+            +'</div>';
+        }).join('');
+        box.style.display='block';
+        // Store matches for selection
+        box._matches=matches;
+      };
+
+      // Select a client and autofill
+      window.selectClient=function(idx,e){
+        if(e)e.preventDefault();
+        var box=document.getElementById('clientSuggestions');
+        var c=box._matches&&box._matches[idx];
+        if(!c)return;
+
+        setVal('clientName',c.companyName);
+        setVal('clientAddress',c.siteAddress||c.headOffice||'');
+        setVal('attention',c.contactPerson||'');
+        setVal('clientDesignation',c.position||'');
+        setVal('clientEmail',c.email||'');
+
+        box.style.display='none';
+      };
+
+      function setVal(id,val){var el=document.getElementById(id);if(el)el.value=val;}
+      function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+      // Close dropdown on outside click
+      document.addEventListener('click',function(e){
+        var box=document.getElementById('clientSuggestions');
+        if(box&&!box.contains(e.target)&&e.target.id!=='clientName')box.style.display='none';
+      });
+
+      // Load clients when page is ready
+      if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadClients);
+      else loadClients();
+    })();
+    </script>
+</body>
+</html>

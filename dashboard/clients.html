@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client List</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/training-mode.css">
+  <style>
+    .cl-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .cl-form .full { grid-column: 1 / -1; }
+    .cl-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .cl-form input, .cl-form select, .cl-form textarea {
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+    }
+    .cl-form textarea { resize: vertical; min-height: 60px; }
+    .cl-form input:focus, .cl-form select:focus, .cl-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .cl-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .cl-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .cl-table th { text-align: left; padding: 0.6rem 0.65rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
+    .cl-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
+    .cl-table tr:hover td { background: #e2e8f0; }
+    .filter-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+    .filter-bar input, .filter-bar select {
+      padding: 0.45rem 0.7rem; background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155); border-radius: 8px;
+      color: var(--text-primary, #f1f5f9); font-size: 0.82rem; font-family: inherit;
+    }
+    .filter-bar input { flex: 1; min-width: 180px; }
+    .filter-bar input::placeholder { color: var(--text-muted, #64748b); }
+    .filter-bar select { appearance: auto; }
+    .count-label { font-size: 0.8rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+    .toggle-form-btn { cursor: pointer; }
+    .form-section { display: none; }
+    .form-section.open { display: block; }
+    .ml-auto { margin-left: auto; }
+    .type-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600; }
+    .type-active { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .type-inactive { background: rgba(148,163,184,0.1); color: #94a3b8; }
+    .type-prospect { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .type-vip { background: rgba(249,115,22,0.12); color: #f97316; }
+    .act-btn { background: none; border: none; cursor: pointer; padding: 0.2rem 0.35rem; border-radius: 4px; transition: background 0.15s; }
+    .act-btn:hover { background: #f8fafc; }
+    .act-edit { color: #3b82f6; }
+    .act-del { color: #ef4444; }
+    @media(max-width: 640px) { .cl-form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Client List</h1>
+      <p>Manage your client database.</p>
+    </div>
+
+    <!-- Add/Edit Form (collapsible) -->
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add New Client
+        </h3>
+        <button class="btn btn-sm btn-secondary toggle-form-btn" onclick="toggleForm()">
+          <span id="toggleLabel">Show Form</span>
+        </button>
+      </div>
+
+      <div id="formSection" class="form-section">
+        <form id="clientForm" onsubmit="submitClient(event)">
+          <input type="hidden" id="editRowIndex" value="">
+          <div class="cl-form">
+            <div class="full">
+              <label for="clCompany">Company Name <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="clCompany" placeholder="e.g. DMCI Holdings" required>
+            </div>
+            <div>
+              <label for="clIndustry">Industry</label>
+              <input type="text" id="clIndustry" placeholder="e.g. Construction">
+            </div>
+            <div>
+              <label for="clType">Client Type</label>
+              <select id="clType">
+                <option value="Active">Active</option>
+                <option value="Prospect">Prospect</option>
+                <option value="VIP">VIP</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="full">
+              <label for="clSiteAddress">Site Address</label>
+              <input type="text" id="clSiteAddress" placeholder="Site/project address">
+            </div>
+            <div>
+              <label for="clTel">Tel #</label>
+              <input type="text" id="clTel" placeholder="Telephone number">
+            </div>
+            <div>
+              <label for="clHeadOffice">Head Office</label>
+              <input type="text" id="clHeadOffice" placeholder="Head office address">
+            </div>
+            <div>
+              <label for="clHeadOfficeTel">Head Office Tel #</label>
+              <input type="text" id="clHeadOfficeTel" placeholder="Head office telephone">
+            </div>
+            <div>
+              <label for="clContactPerson">Contact Person</label>
+              <input type="text" id="clContactPerson" placeholder="Full name">
+            </div>
+            <div>
+              <label for="clPosition">Position</label>
+              <input type="text" id="clPosition" placeholder="e.g. Purchasing Manager">
+            </div>
+            <div>
+              <label for="clMobile">Mobile #</label>
+              <input type="text" id="clMobile" placeholder="Mobile number">
+            </div>
+            <div>
+              <label for="clEmail">Email</label>
+              <input type="email" id="clEmail" placeholder="email@company.com">
+            </div>
+            <div class="full">
+              <label for="clNotes">Notes</label>
+              <textarea id="clNotes" placeholder="Additional notes..."></textarea>
+            </div>
+          </div>
+          <div class="cl-actions">
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Add Client
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Clear</button>
+          </div>
+        </form>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Records -->
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">Client Records</h3>
+
+      <div class="filter-bar">
+        <!-- Admin agent filter (hidden for sales) -->
+        <select id="agentFilter" style="display:none;" onchange="loadClients()">
+          <option value="">All Agents</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Search company, contact, industry..." oninput="loadClients()">
+        <select id="typeFilter" onchange="loadClients()">
+          <option value="">All Types</option>
+          <option value="Active">Active</option>
+          <option value="Prospect">Prospect</option>
+          <option value="VIP">VIP</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+        <div class="ml-auto" style="display:flex;gap:0.4rem;">
+          <button class="btn btn-sm btn-secondary" onclick="exportClientsExcel()">Excel</button>
+          <button class="btn btn-sm btn-secondary" onclick="clearApiCache();loadClients();">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div id="clientCount" class="count-label"></div>
+      <div id="clientContainer" style="overflow-x:auto;">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/clients.js"></script>
+  <script src="js/training-mode.js"></script>
+</body>
+</html>

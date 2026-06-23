@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hi-Escorp Portal — Connect Email</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .email-form { max-width: 480px; }
+    .email-form .form-group { margin-bottom: 1rem; }
+    .email-form label {
+      display: block; font-size: 0.82rem; font-weight: 500;
+      color: var(--text-muted, #64748b); margin-bottom: 0.35rem;
+    }
+    .email-form input {
+      width: 100%; padding: 0.55rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px; color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+    }
+    .form-msg { margin-top: 1rem; font-size: 0.85rem; font-weight: 500; }
+    .form-msg.success { color: #22c55e; }
+    .form-msg.error { color: #ef4444; }
+    .form-msg.info { color: #3b82f6; }
+    .helper {
+      font-size: 0.78rem; color: var(--text-muted, #64748b);
+      margin-top: 0.25rem; line-height: 1.4;
+    }
+    .status-card {
+      padding: 0.85rem 1rem; border-radius: 8px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      color: #22c55e; font-size: 0.85rem; margin-bottom: 1rem;
+    }
+    .button-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .trust-note {
+      margin-top: 1.5rem; padding: 0.85rem 1rem;
+      background: rgba(59, 130, 246, 0.08);
+      border-left: 3px solid #3b82f6;
+      border-radius: 4px;
+      font-size: 0.8rem; color: var(--text-muted, #94a3b8);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Connect GoDaddy Email</h1>
+      <p>Auto-fill your daily report's Email Log section with today's sent emails.</p>
+    </div>
+
+    <div class="chart-card">
+      <div id="statusBox"></div>
+
+      <div class="email-form">
+        <div class="form-group">
+          <label for="godaddyEmail">GoDaddy Email Address</label>
+          <input type="email" id="godaddyEmail" placeholder="you@yourdomain.com" autocomplete="username">
+          <div class="helper">Your full GoDaddy webmail address (e.g. sales@hi-escorp.com).</div>
+        </div>
+        <div class="form-group">
+          <label for="godaddyPassword">Password</label>
+          <input type="password" id="godaddyPassword" placeholder="Mailbox password" autocomplete="current-password">
+          <div class="helper">Password is encrypted before storage. Stored at rest only as a sealed blob &mdash; never visible to your browser, the spreadsheet, or anyone else after this page.</div>
+        </div>
+
+        <div class="button-row">
+          <button class="btn btn-secondary" id="testBtn" onclick="testConnection()">Test Connection</button>
+          <button class="btn btn-primary" id="saveBtn" onclick="saveCredentials()">Save &amp; Connect</button>
+          <button class="btn btn-secondary" id="disconnectBtn" onclick="disconnect()" style="display:none;">Disconnect</button>
+        </div>
+        <div id="formMsg" class="form-msg"></div>
+      </div>
+
+      <div class="trust-note">
+        <strong>How it works:</strong> Your password is sent over HTTPS to our server, used to verify the connection, then encrypted with AES-128 before storage. The encryption key is held only by the server &mdash; nothing in your browser, your spreadsheet, or any log can read your stored password.
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/email-setup.js"></script>
+</body>
+</html>

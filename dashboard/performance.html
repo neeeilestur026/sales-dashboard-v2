@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Dashboard — Client Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/training-mode.css">
+  <!-- XLSX loaded lazily via api.js -->
+  <style>
+    .tracker-toolbar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .tracker-toolbar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+    }
+    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted, #64748b); }
+    .tracker-toolbar select {
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .tracker-table-wrap { overflow-x: auto; }
+    .tracker-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .tracker-table th {
+      text-align: left;
+      padding: 0.65rem 0.9rem;
+      color: var(--text-muted, #64748b);
+      border-bottom: 1px solid var(--border, #334155);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tracker-table td {
+      padding: 0.7rem 0.9rem;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: middle;
+      color: var(--text-primary, #f1f5f9);
+    }
+    .tracker-table tr:hover td { background: #e2e8f0; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .badge-quotation { background: rgba(249,115,22,0.15); color: #f97316; }
+    .badge-pending   { background: rgba(234,179,8,0.15);   color: #eab308; }
+    .badge-replied   { background: rgba(34,197,94,0.15);   color: #22c55e; }
+    .badge-closed    { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .badge-won       { background: rgba(34,197,94,0.2);    color: #22c55e; }
+    .badge-lost      { background: rgba(239,68,68,0.15);   color: #ef4444; }
+    .days-badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .days-fresh  { background: rgba(34,197,94,0.12);  color: #22c55e; }
+    .days-ok     { background: rgba(234,179,8,0.12);  color: #eab308; }
+    .days-old    { background: rgba(249,115,22,0.12); color: #f97316; }
+    .days-stale  { background: rgba(239,68,68,0.12);  color: #ef4444; }
+    .tracker-count {
+      font-size: 0.8rem;
+      color: var(--text-muted, #64748b);
+      margin-bottom: 0.75rem;
+    }
+    .no-results {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted, #64748b);
+    }
+    .status-select {
+      display: inline-block;
+      padding: 0.2rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      text-align: center;
+      min-width: 70px;
+    }
+    .status-select.badge-pending  { background: rgba(234,179,8,0.15);   color: #eab308; }
+    .status-select.badge-replied  { background: rgba(34,197,94,0.15);   color: #22c55e; }
+    .status-select.badge-won      { background: rgba(34,197,94,0.2);    color: #22c55e; }
+    .status-select.badge-lost     { background: rgba(239,68,68,0.15);   color: #ef4444; }
+    .status-select.badge-closed   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .status-select option { background: #1e293b; color: #f1f5f9; }
+    .followup-input {
+      background: transparent;
+      border: 1px solid var(--border, #334155);
+      border-radius: 6px;
+      color: var(--text-primary, #f1f5f9);
+      font-size: 0.78rem;
+      padding: 0.2rem 0.4rem;
+      cursor: pointer;
+      width: 120px;
+    }
+    .followup-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+    .followup-suggested { border-style: dashed; opacity: 0.6; }
+    .followup-due { background: rgba(239,68,68,0.1); }
+    .followup-due .followup-input { border-color: #ef4444; color: #ef4444; }
+
+    /* ─── Revise Button ─── */
+    .btn-revise {
+      padding: 0.2rem 0.5rem; border-radius: 6px;
+      font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;
+      background: rgba(59,130,246,0.15); color: #3b82f6;
+      margin-left: 0.4rem;
+    }
+    .btn-revise:hover { background: rgba(59,130,246,0.3); }
+
+    /* ─── Revision Modal ─── */
+    .revision-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 10000;
+      align-items: center; justify-content: center;
+    }
+    .revision-overlay.open { display: flex; }
+    .revision-modal {
+      background: var(--surface, #0f172a);
+      border: 1px solid var(--border, #334155);
+      border-radius: 16px; width: 92vw; max-width: 560px; max-height: 85vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden;
+    }
+    .revision-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #334155);
+    }
+    .revision-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #f1f5f9); }
+    .revision-close {
+      background: none; border: none; color: var(--text-muted, #64748b);
+      cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem;
+    }
+    .revision-close:hover { color: var(--text-primary, #f1f5f9); }
+    .revision-body { flex: 1; overflow-y: auto; padding: 1.25rem; }
+    .revision-details {
+      font-size: 0.82rem; margin-bottom: 1.25rem;
+      padding-bottom: 1rem; border-bottom: 1px solid var(--border, #334155);
+    }
+    .revision-details .detail-row { margin-bottom: 0.6rem; }
+    .revision-details .detail-label {
+      display: block; font-size: 0.7rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--text-muted, #64748b); margin-bottom: 0.15rem;
+    }
+    .revision-details .detail-value { color: var(--text-primary, #f1f5f9); word-break: break-word; }
+    .revision-form .form-group { margin-bottom: 1rem; }
+    .revision-form label {
+      display: block; font-size: 0.82rem; font-weight: 600;
+      color: var(--text-primary, #f1f5f9); margin-bottom: 0.4rem;
+    }
+    .revision-file-input, .revision-amount-input {
+      width: 100%; padding: 0.5rem 0.75rem;
+      background: var(--surface-2, #1e293b);
+      border: 1px solid var(--border, #334155);
+      border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem;
+    }
+    .form-hint { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-top: 0.3rem; }
+    .revision-error {
+      background: rgba(239,68,68,0.1); color: #ef4444;
+      padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.82rem; margin-bottom: 0.75rem;
+    }
+    .revision-progress {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.82rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem;
+    }
+    .revision-actions {
+      padding: 1rem 1.25rem; border-top: 1px solid var(--border, #334155);
+      display: flex; gap: 0.5rem; justify-content: flex-end;
+    }
+    .btn-revision-cancel {
+      padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      border: 1px solid var(--border, #334155); background: transparent;
+      color: var(--text-muted, #64748b); cursor: pointer;
+    }
+    .btn-revision-cancel:hover { color: var(--text-primary, #f1f5f9); }
+    .btn-revision-submit {
+      padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      border: none; background: rgba(59,130,246,0.2); color: #3b82f6; cursor: pointer;
+    }
+    .btn-revision-submit:hover { background: rgba(59,130,246,0.35); }
+    .btn-revision-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Client Tracker</h1>
+      <p>Track all clients you've sent Quotations to.</p>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:1.5rem;">
+      <div class="tracker-toolbar">
+        <input type="text" id="searchInput" placeholder="Search client, document #, or source..." oninput="applyFilters()">
+        <select id="statusFilter" onchange="applyFilters()">
+          <option value="">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Replied">Replied</option>
+          <option value="Won">Won</option>
+          <option value="Lost">Lost</option>
+          <option value="Closed">Closed</option>
+        </select>
+        <button class="btn" id="dateRangeBtn" onclick="toggleDateRange()" title="Toggle date range">
+          Show All Records
+        </button>
+        <button class="btn" onclick="loadTracker()" title="Refresh">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+        <button class="btn" onclick="exportTrackerExcel()" title="Export Excel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </button>
+      </div>
+
+      <div id="trackerCount" class="tracker-count"></div>
+
+      <div id="trackerContainer" class="tracker-table-wrap">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Quotation Revision Modal -->
+  <div class="revision-overlay" id="revisionOverlay" onclick="if(event.target===this)closeRevisionModal()">
+    <div class="revision-modal">
+      <div class="revision-header">
+        <h3 id="revisionTitle">Revise Quotation</h3>
+        <button class="revision-close" onclick="closeRevisionModal()" title="Close">&times;</button>
+      </div>
+      <div class="revision-body">
+        <div id="revisionDetails" class="revision-details"></div>
+        <div class="revision-form">
+          <div class="form-group">
+            <label for="revisionPdfInput">Upload Revised PDF <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+            <input type="file" id="revisionPdfInput" accept=".pdf" class="revision-file-input">
+            <p class="form-hint">Leave empty to keep the current PDF and just resubmit for approval.</p>
+          </div>
+          <div class="form-group">
+            <label for="revisionAmountInput">Total Amount (PHP) <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+            <input type="number" id="revisionAmountInput" step="0.01" min="0" class="revision-amount-input" placeholder="Leave blank to keep current amount">
+          </div>
+          <div id="revisionError" class="revision-error" style="display:none;"></div>
+          <div id="revisionProgress" class="revision-progress" style="display:none;">
+            <div class="spinner"></div>
+            <span id="revisionProgressText">Uploading...</span>
+          </div>
+        </div>
+      </div>
+      <div class="revision-actions">
+        <button class="btn-revision-cancel" onclick="closeRevisionModal()">Cancel</button>
+        <button class="btn-revision-submit" id="btnSubmitRevision" onclick="submitRevision()">Submit Revision</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/performance.js"></script>
+  <script src="js/training-mode.js"></script>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR-Marketing Dashboard — Home</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* Alert Banner */
+    .alert-banner { display:none; padding:0.75rem 1rem; border-radius:10px; font-size:0.82rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem; }
+    .alert-banner.warning { background:rgba(234,179,8,0.1); border:1px solid rgba(234,179,8,0.25); color:#eab308; }
+    .alert-banner.success { background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.25); color:#22c55e; }
+    .alert-banner svg { flex-shrink:0; }
+
+    /* KPI Stats */
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem; margin-bottom:1.5rem; }
+    .kpi-card { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1rem; display:flex; align-items:center; gap:0.75rem; transition:transform 0.15s,box-shadow 0.15s; }
+    .kpi-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.2); }
+    .kpi-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .kpi-value { font-size:1.4rem; font-weight:800; color:var(--text-primary,#f1f5f9); line-height:1; }
+    .kpi-label { font-size:0.72rem; color:var(--text-muted,#64748b); margin-top:0.15rem; }
+
+    /* Quick Actions */
+    .quick-actions { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:0.5rem; margin-bottom:1.5rem; }
+    .qa-btn { display:flex; flex-direction:column; align-items:center; gap:0.35rem; padding:0.75rem 0.5rem; background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:10px; color:var(--text-secondary,#94a3b8); text-decoration:none; font-size:0.75rem; font-weight:600; transition:all 0.15s; text-align:center; cursor:pointer; }
+    .qa-btn:hover { background:rgba(249,115,22,0.08); border-color:var(--accent,#f97316); color:var(--accent,#f97316); transform:translateY(-1px); }
+    .qa-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+
+    /* Section headers */
+    .section-title { font-size:0.92rem; font-weight:700; color:var(--text-primary,#f1f5f9); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.4rem; }
+
+    /* App cards grid */
+    .modules-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:0.75rem; margin-bottom:1.5rem; }
+    .module-card { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1rem; text-decoration:none; color:var(--text-primary,#f1f5f9); transition:all 0.15s; display:flex; flex-direction:column; gap:0.4rem; }
+    .module-card:hover { border-color:var(--accent,#f97316); transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.2); }
+    .module-card-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.15rem; }
+    .module-card h4 { font-size:0.85rem; font-weight:700; margin:0; }
+    .module-card p { font-size:0.72rem; color:var(--text-muted,#64748b); margin:0; line-height:1.3; }
+    .module-stat { font-size:0.72rem; color:var(--text-secondary,#94a3b8); display:flex; align-items:center; gap:0.3rem; margin-top:auto; padding-top:0.4rem; }
+    .module-stat .num { font-weight:700; color:var(--accent,#f97316); }
+
+    /* Two-column layout for bottom */
+    .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem; }
+    @media(max-width:768px) { .bottom-grid { grid-template-columns:1fr; } }
+    .info-card { background:var(--surface,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1rem; }
+    .info-card h4 { font-size:0.88rem; font-weight:700; color:var(--text-primary,#f1f5f9); margin:0 0 0.75rem 0; display:flex; align-items:center; gap:0.4rem; }
+
+    /* Birthday list */
+    .bday-item { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid #e2e8f0; }
+    .bday-item:last-child { border-bottom:none; }
+    .bday-avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:700; flex-shrink:0; }
+    .bday-info { flex:1; }
+    .bday-name { font-size:0.82rem; font-weight:600; color:var(--text-primary,#f1f5f9); }
+    .bday-detail { font-size:0.7rem; color:var(--text-muted,#64748b); }
+    .bday-badge { font-size:0.65rem; font-weight:700; padding:0.15rem 0.4rem; border-radius:999px; white-space:nowrap; }
+    .bday-today { background:rgba(34,197,94,0.12); color:#22c55e; }
+    .bday-soon { background:rgba(59,130,246,0.12); color:#3b82f6; }
+
+    /* Today overview */
+    .overview-item { display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0; border-bottom:1px solid #e2e8f0; font-size:0.82rem; }
+    .overview-item:last-child { border-bottom:none; }
+    .overview-label { color:var(--text-secondary,#94a3b8); }
+    .overview-value { font-weight:700; color:var(--text-primary,#f1f5f9); }
+
+    /* Hero band */
+    .hero {
+      position: relative;
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.5rem;
+      background:
+        radial-gradient(1200px 200px at 0% 0%, rgba(236,72,153,0.10), transparent 60%),
+        radial-gradient(800px 200px at 100% 100%, rgba(99,102,241,0.10), transparent 60%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid var(--border, #e2e8f0);
+      box-shadow: var(--shadow-sm);
+    }
+    .hero-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; }
+    .hero h1 { font-size:1.6rem; font-weight:700; color:var(--text-primary); margin:0; letter-spacing:-0.01em; }
+    .hero p { color:var(--text-secondary); font-size:0.9rem; margin-top:0.25rem; }
+    .hero-meta { display:flex; gap:0.6rem; flex-wrap:wrap; }
+    .hero-pill {
+      display:inline-flex; align-items:center; gap:0.4rem;
+      padding:0.45rem 0.95rem; border-radius:999px;
+      font-size:0.78rem; font-weight:600;
+      background:#fff; border:1px solid var(--border); color:var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <section class="hero">
+      <div class="hero-row">
+        <div>
+          <h1 class="greeting" id="greeting">Good morning!</h1>
+          <p id="todayLabel">HR-Marketing hub — your central command for people, recruitment, and marketing.</p>
+        </div>
+        <div class="hero-meta">
+          <a href="hr-daily-report.html" class="hero-pill" style="background:var(--accent);color:#fff;border-color:var(--accent);">Submit Daily Report →</a>
+          <a href="hr-analytics.html" class="hero-pill">Analytics →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alert Banners -->
+    <div id="alertBanner" class="alert-banner" style="display:none;"></div>
+
+    <!-- KPI Stats Row -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(236,72,153,0.12);color:#ec4899;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div><div class="kpi-value" id="statEmployees">-</div><div class="kpi-label">Employees</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        </div>
+        <div><div class="kpi-value" id="statOpen">-</div><div class="kpi-label">Open Positions</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(234,179,8,0.12);color:#eab308;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div><div class="kpi-value" id="statTasksPending">-</div><div class="kpi-label">Tasks Pending</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(34,197,94,0.12);color:#22c55e;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div><div class="kpi-value" id="statTasksDone">-</div><div class="kpi-label">Tasks Done</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(168,85,247,0.12);color:#a855f7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div><div class="kpi-value" id="statCampaigns">-</div><div class="kpi-label">Active Campaigns</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(239,68,68,0.12);color:#ef4444;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div><div class="kpi-value" id="statLeave">-</div><div class="kpi-label">Leave Pending</div></div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Quick Actions
+    </div>
+    <div class="quick-actions">
+      <a href="hr-daily-report.html" class="qa-btn">
+        <div class="qa-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        Submit Report
+      </a>
+      <a href="hr-employees.html" class="qa-btn">
+        <div class="qa-icon" style="background:rgba(236,72,153,0.12);color:#ec4899;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        </div>
+        Add Employee
+      </a>
+      <a href="hr-leave.html" class="qa-btn">
+        <div class="qa-icon" style="background:rgba(239,68,68,0.12);color:#ef4444;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        File Leave
+      </a>
+      <a href="hr-tasks.html" class="qa-btn">
+        <div class="qa-icon" style="background:rgba(168,85,247,0.12);color:#a855f7;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        New Task
+      </a>
+      <a href="hr-memos.html" class="qa-btn">
+        <div class="qa-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        Post Memo
+      </a>
+      <a href="hr-analytics.html" class="qa-btn">
+        <div class="qa-icon" style="background:rgba(34,197,94,0.12);color:#22c55e;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        Analytics
+      </a>
+    </div>
+
+    <!-- Module Cards -->
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      HR Modules
+    </div>
+    <div class="modules-grid">
+      <a href="hr-recruitment.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        </div>
+        <h4>Recruitment Pipeline</h4>
+        <p>Track candidates through hiring stages</p>
+        <div class="module-stat"><span class="num" id="pipelineCount">-</span> active candidates</div>
+      </a>
+      <a href="hr-employees.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(236,72,153,0.12);color:#ec4899;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <h4>Employee Masterlist</h4>
+        <p>Manage employee records & onboarding</p>
+        <div class="module-stat"><span class="num" id="empCount">-</span> employees</div>
+      </a>
+      <a href="hr-leave.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(239,68,68,0.12);color:#ef4444;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <h4>Leave & Attendance</h4>
+        <p>Manage leave requests & approvals</p>
+        <div class="module-stat"><span class="num" id="leaveCount">-</span> pending</div>
+      </a>
+      <a href="hr-reviews.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(34,197,94,0.12);color:#22c55e;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <h4>Performance Reviews</h4>
+        <p>Track employee performance evaluations</p>
+      </a>
+      <a href="hr-training.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </div>
+        <h4>Training & Development</h4>
+        <p>Manage training programs & workshops</p>
+      </a>
+      <a href="hr-tasks.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <h4>Task Tracker</h4>
+        <p>HR & Marketing task management</p>
+        <div class="module-stat"><span class="num" id="taskCount">-</span> pending</div>
+      </a>
+      <a href="hr-grievances.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(251,146,60,0.12);color:#fb923c;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <h4>Grievances</h4>
+        <p>Submit & track complaints</p>
+      </a>
+      <a href="hr-accreditations.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(20,184,166,0.12);color:#14b8a6;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h4>Accreditations</h4>
+        <p>Track compliance & certifications</p>
+      </a>
+    </div>
+
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Marketing Modules
+    </div>
+    <div class="modules-grid">
+      <a href="hr-campaigns.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <h4>Marketing Campaigns</h4>
+        <p>Plan, track & measure campaign ROI</p>
+        <div class="module-stat"><span class="num" id="campaignCount">-</span> active</div>
+      </a>
+      <a href="hr-content-calendar.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <h4>Content Calendar</h4>
+        <p>Schedule social media & content</p>
+      </a>
+      <a href="hr-memos.html" class="module-card">
+        <div class="module-card-icon" style="background:rgba(34,197,94,0.12);color:#22c55e;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h4>Memos & Announcements</h4>
+        <p>Post memos, policies & announcements</p>
+      </a>
+    </div>
+
+    <!-- Bottom grid: Today's Overview + Birthdays -->
+    <div class="bottom-grid">
+      <div class="info-card">
+        <h4>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Today's Overview
+        </h4>
+        <div id="todayOverview">
+          <div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div>
+        </div>
+      </div>
+      <div class="info-card">
+        <h4>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          Upcoming Birthdays & Anniversaries
+        </h4>
+        <div id="birthdayList">
+          <div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/hr-home.js"></script>
+  <script>
+    (function setDate() {
+      const tl = document.getElementById('todayLabel');
+      if (!tl) return;
+      const d = new Date();
+      tl.textContent = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    })();
+  </script>
+</body>
+</html>

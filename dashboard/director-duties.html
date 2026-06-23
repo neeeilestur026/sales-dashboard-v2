@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VAT & Duties — Director Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .dd-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin-bottom:1rem; }
+    .dd-kpi { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:0.85rem 1rem; }
+    .dd-kpi .lbl { font-size:0.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .dd-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color:var(--text-primary,#f1f5f9); }
+
+    .dd-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+    .dd-toolbar input, .dd-toolbar select {
+      padding:0.5rem 0.65rem; border:1px solid var(--border,#334155); border-radius:8px;
+      background:var(--surface-2,#1e293b); color:var(--text-primary,#f1f5f9); font-size:0.85rem;
+    }
+    .dd-search { flex:1; min-width:220px; }
+    .dd-tab {
+      padding:0.4rem 0.85rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:transparent; color:var(--text-muted,#64748b); font-size:0.8rem; cursor:pointer; font-weight:600;
+    }
+    .dd-tab.active { background:#14b8a6; border-color:#14b8a6; color:#fff; }
+
+    .dd-panel { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:1rem 1.1rem; margin-bottom:1rem; }
+    .dd-panel h3 { margin:0 0 0.75rem; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#94a3b8); }
+
+    .dd-rank { width:100%; border-collapse:collapse; font-size:0.85rem; table-layout:fixed; }
+    .dd-rank col.c-rank { width:42px; }
+    .dd-rank col.c-date { width:100px; }
+    .dd-rank col.c-so   { width:120px; }
+    .dd-rank col.c-amt  { width:120px; }
+    .dd-rank th { text-align:left; padding:0.5rem 0.55rem; color:var(--text-muted,#94a3b8); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; border-bottom:1px solid var(--border,#334155); background:rgba(15,23,42,0.4); }
+    .dd-rank td { padding:0.55rem; border-top:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); vertical-align:top; }
+    .dd-rank td.wrap { word-break:break-word; overflow-wrap:anywhere; }
+    .dd-rank td.nowrap { white-space:nowrap; }
+    .dd-rank tr.is-top td { background:rgba(239,68,68,0.05); }
+
+    .dd-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; overflow:hidden; }
+    .dd-table-wrap { overflow-x:auto; }
+    .dd-table { width:100%; border-collapse:collapse; font-size:0.85rem; min-width:1000px; table-layout:fixed; }
+    .dd-table th { text-align:left; padding:0.55rem 0.75rem; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#334155); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; background:rgba(15,23,42,0.4); }
+    .dd-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); vertical-align:top; }
+    .dd-table td.wrap { word-break:break-word; overflow-wrap:anywhere; }
+    .dd-table td.nowrap { white-space:nowrap; }
+
+    .dd-count { font-size:0.8rem; color:var(--text-muted,#94a3b8); margin-bottom:0.5rem; }
+    .dd-sub { color:var(--text-muted,#64748b); font-size:0.75rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div style="max-width:1300px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div>
+          <h1 style="margin:0;">VAT &amp; Duties &amp; Taxes</h1>
+          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+            Per-SO VAT (from Sales Orders) and Duties &amp; Taxes (from Profit Reports). Profit-report entries are matched to their SO by SO No, customer, and sales amount.
+          </p>
+        </div>
+        <button class="btn" onclick="loadDuties()">🔄 Refresh</button>
+      </div>
+
+      <div class="dd-kpis">
+        <div class="dd-kpi"><div class="lbl">Total VAT</div><div class="val" id="kpiVat" style="color:#38bdf8;">—</div></div>
+        <div class="dd-kpi"><div class="lbl">Total Duties &amp; Taxes</div><div class="val" id="kpiDuties" style="color:#f59e0b;">—</div></div>
+        <div class="dd-kpi"><div class="lbl">Sales Orders</div><div class="val" id="kpiCount">—</div></div>
+        <div class="dd-kpi"><div class="lbl">Tax Burden % of Sales</div><div class="val" id="kpiPct" style="color:#22c55e;">—</div></div>
+      </div>
+
+      <div class="dd-toolbar">
+        <input type="text" id="ddSearch" class="dd-search" placeholder="Search SO No, customer…" oninput="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+        <input type="month" id="ddMonth" onchange="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Year</label>
+        <select id="ddYear" onchange="applyFilters()"><option value="">All</option></select>
+        <button class="dd-tab active" id="tabAll" onclick="setScope('all')">All</button>
+        <button class="dd-tab" id="tabVat" onclick="setScope('vat')">Has VAT</button>
+        <button class="dd-tab" id="tabDuties" onclick="setScope('duties')">Has Duties</button>
+        <button class="dd-tab" onclick="clearAllFilters()">Clear</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="dd-panel">
+          <h3>Top 10 SOs by VAT</h3>
+          <table class="dd-rank">
+            <colgroup><col class="c-rank"><col class="c-so"><col><col class="c-amt"></colgroup>
+            <thead><tr><th>#</th><th>SO No</th><th>Customer</th><th style="text-align:right;">VAT</th></tr></thead>
+            <tbody id="topVatBody"><tr><td colspan="4" class="dd-sub">—</td></tr></tbody>
+          </table>
+        </div>
+        <div class="dd-panel">
+          <h3>Top 10 SOs by Duties &amp; Taxes</h3>
+          <table class="dd-rank">
+            <colgroup><col class="c-rank"><col class="c-so"><col><col class="c-amt"></colgroup>
+            <thead><tr><th>#</th><th>SO No</th><th>Customer</th><th style="text-align:right;">Duties</th></tr></thead>
+            <tbody id="topDutiesBody"><tr><td colspan="4" class="dd-sub">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="dd-count" id="ddCount"></div>
+
+      <div class="dd-card">
+        <div class="dd-table-wrap">
+          <table class="dd-table">
+            <colgroup>
+              <col style="width:110px;">
+              <col style="width:140px;">
+              <col>
+              <col style="width:130px;">
+              <col style="width:130px;">
+              <col style="width:130px;">
+              <col style="width:90px;">
+            </colgroup>
+            <thead><tr>
+              <th>SO Date</th>
+              <th>SO No</th>
+              <th>Customer</th>
+              <th style="text-align:right;">Sales</th>
+              <th style="text-align:right;">VAT</th>
+              <th style="text-align:right;">Duties &amp; Taxes</th>
+              <th style="text-align:right;">Tax %</th>
+            </tr></thead>
+            <tbody id="ddBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      var session = (typeof requireDirector === 'function') ? requireDirector() : null;
+      if (typeof requireDirector === 'function' && !session) return;
+      if (typeof renderNavbar === 'function') renderNavbar('director-duties');
+
+      var allEntries = [];
+      var scope = 'all';
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function php(n) { return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+      function pct(n) { return (isFinite(n) ? n.toFixed(1) : '0.0') + '%'; }
+      function fmtDate(d) {
+        if (!d) return '';
+        var dt = (d instanceof Date) ? d : new Date(d);
+        if (isNaN(dt.getTime())) return String(d || '');
+        return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+      }
+      function dateOf(e) { return new Date(e.soDate || 0); }
+
+      // Match key: SO No + Customer Name + Sales amount (rounded to cents)
+      function _matchKey(soNo, customer, sales) {
+        var s = String(soNo || '').trim().toUpperCase();
+        var c = String(customer || '').trim().toUpperCase();
+        var amt = Math.round(Number(sales || 0) * 100);
+        return s + '|' + c + '|' + amt;
+      }
+
+      function populateYears(rows) {
+        var sel = document.getElementById('ddYear');
+        var years = {};
+        rows.forEach(function (r) {
+          var d = dateOf(r);
+          if (!isNaN(d.getTime())) years[d.getFullYear()] = true;
+        });
+        var cur = sel.value;
+        var list = Object.keys(years).sort(function (a, b) { return b - a; });
+        sel.innerHTML = '<option value="">All</option>' + list.map(function (y) {
+          return '<option value="' + y + '"' + (y === cur ? ' selected' : '') + '>' + y + '</option>';
+        }).join('');
+      }
+
+      function setActiveTab() {
+        ['All', 'Vat', 'Duties'].forEach(function (s) {
+          var el = document.getElementById('tab' + s);
+          if (el) el.classList.toggle('active', scope === s.toLowerCase());
+        });
+      }
+
+      window.setScope = function (s) { scope = s; setActiveTab(); applyFilters(); };
+      window.clearAllFilters = function () {
+        document.getElementById('ddSearch').value = '';
+        document.getElementById('ddMonth').value = '';
+        document.getElementById('ddYear').value = '';
+        scope = 'all'; setActiveTab(); applyFilters();
+      };
+
+      window.applyFilters = function () {
+        var search = (document.getElementById('ddSearch').value || '').toLowerCase().trim();
+        var month = document.getElementById('ddMonth').value || '';
+        var year = document.getElementById('ddYear').value || '';
+
+        var filtered = allEntries.filter(function (e) {
+          if (scope === 'vat' && Number(e.vat || 0) <= 0) return false;
+          if (scope === 'duties' && Number(e.dutiesAndTaxes || 0) <= 0) return false;
+          var d = dateOf(e);
+          if (!isNaN(d.getTime())) {
+            if (month) {
+              var ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              if (ym !== month) return false;
+            }
+            if (year && String(d.getFullYear()) !== String(year)) return false;
+          } else if (month || year) { return false; }
+          if (search) {
+            var hay = ((e.soNo || '') + ' ' + (e.customerName || '')).toLowerCase();
+            if (hay.indexOf(search) < 0) return false;
+          }
+          return true;
+        });
+
+        renderKpis(filtered);
+        renderRanking('topVatBody', filtered, 'vat', '#38bdf8');
+        renderRanking('topDutiesBody', filtered, 'dutiesAndTaxes', '#f59e0b');
+        renderTable(filtered);
+      };
+
+      function renderKpis(rows) {
+        var totalVat = 0, totalDuties = 0, sales = 0;
+        rows.forEach(function (e) {
+          totalVat += Number(e.vat || 0);
+          totalDuties += Number(e.dutiesAndTaxes || 0);
+          sales += Number(e.sales || 0);
+        });
+        var burden = sales > 0 ? ((totalVat + totalDuties) / sales * 100) : 0;
+        document.getElementById('kpiVat').textContent = php(totalVat);
+        document.getElementById('kpiDuties').textContent = php(totalDuties);
+        document.getElementById('kpiCount').textContent = rows.length;
+        document.getElementById('kpiPct').textContent = pct(burden);
+      }
+
+      function renderRanking(bodyId, rows, field, color) {
+        var withAmt = rows.filter(function (e) { return Number(e[field] || 0) > 0; });
+        withAmt.sort(function (a, b) { return Number(b[field] || 0) - Number(a[field] || 0); });
+        var top = withAmt.slice(0, 10);
+        var body = document.getElementById(bodyId);
+        if (!top.length) {
+          body.innerHTML = '<tr><td colspan="4" class="dd-sub">No SOs in this filter.</td></tr>';
+          return;
+        }
+        body.innerHTML = top.map(function (e, i) {
+          var amt = Number(e[field] || 0);
+          var topCls = i < 3 ? 'is-top' : '';
+          return '<tr class="' + topCls + '">' +
+            '<td class="nowrap" style="color:var(--text-muted);">' + (i + 1) + '</td>' +
+            '<td class="nowrap"><strong>' + esc(e.soNo || '—') + '</strong></td>' +
+            '<td class="wrap">' + esc(e.customerName || '—') + '</td>' +
+            '<td class="nowrap" style="text-align:right;font-weight:700;color:' + color + ';">' + php(amt) + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      function renderTable(rows) {
+        var body = document.getElementById('ddBody');
+        var count = document.getElementById('ddCount');
+        count.textContent = 'Showing ' + rows.length + ' SO' + (rows.length === 1 ? '' : 's');
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No entries match these filters.</td></tr>';
+          return;
+        }
+        var sorted = rows.slice().sort(function (a, b) {
+          return (Number(b.vat || 0) + Number(b.dutiesAndTaxes || 0)) -
+                 (Number(a.vat || 0) + Number(a.dutiesAndTaxes || 0));
+        });
+        body.innerHTML = sorted.map(function (e) {
+          var sales = Number(e.sales || 0);
+          var vat = Number(e.vat || 0);
+          var duties = Number(e.dutiesAndTaxes || 0);
+          var burden = sales > 0 ? ((vat + duties) / sales * 100) : 0;
+          return '<tr>' +
+            '<td class="nowrap" style="color:var(--text-muted);font-size:0.8rem;">' + esc(fmtDate(dateOf(e))) + '</td>' +
+            '<td class="nowrap"><strong>' + esc(e.soNo || '—') + '</strong></td>' +
+            '<td class="wrap">' + esc(e.customerName || '—') + '</td>' +
+            '<td class="nowrap" style="text-align:right;">' + php(sales) + '</td>' +
+            '<td class="nowrap" style="text-align:right;font-weight:700;color:' + (vat > 0 ? '#38bdf8' : 'var(--text-muted)') + ';">' + (vat > 0 ? php(vat) : '—') + '</td>' +
+            '<td class="nowrap" style="text-align:right;font-weight:700;color:' + (duties > 0 ? '#f59e0b' : 'var(--text-muted)') + ';">' + (duties > 0 ? php(duties) : '—') + '</td>' +
+            '<td class="nowrap" style="text-align:right;color:var(--text-muted);">' + pct(burden) + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      window.loadDuties = function () {
+        var body = document.getElementById('ddBody');
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>';
+        return Promise.all([
+          (typeof apiGetSalesOrders === 'function' ? apiGetSalesOrders() : Promise.resolve({ success: true, data: [] }))
+            .catch(function (e) { console.warn('sales orders failed', e); return { success: true, data: [] }; }),
+          apiGetProfitReports().catch(function (e) { console.warn('profit reports failed', e); return { success: true, data: [] }; })
+        ]).then(function (results) {
+          var soRes = results[0];
+          var prRes = results[1];
+
+          // 1) Build duties lookup from profit reports, keyed by (SO No | Customer | Sales).
+          //    Multiple reports may contain the same SO — keep the entry from the newest
+          //    report that has duties > 0.
+          var dutiesByKey = {};
+          (prRes && prRes.data || []).forEach(function (report) {
+            var rDate = new Date(report.reportDate || 0);
+            (report.entries || []).forEach(function (e) {
+              var d = Number(e.dutiesAndTaxes || 0);
+              if (d <= 0) return;
+              var key = _matchKey(e.soNo, e.customerName, e.sales);
+              var existing = dutiesByKey[key];
+              if (!existing || rDate > existing.date) {
+                dutiesByKey[key] = { duties: d, date: rDate };
+              }
+            });
+          });
+
+          // 2) Build the row list from Sales Orders. Each SO contributes its VAT;
+          //    duties are looked up by (SO No | Customer | Sales).
+          var rows = [];
+          (soRes && soRes.data || []).forEach(function (so) {
+            var sales = Number(so.sales || 0);
+            var key = _matchKey(so.soNo, so.customerName, sales);
+            var dutiesEntry = dutiesByKey[key];
+            rows.push({
+              soNo: so.soNo || '',
+              soDate: so.date || '',
+              customerName: so.customerName || '',
+              sales: sales,
+              vat: Number(so.vat || 0),
+              dutiesAndTaxes: dutiesEntry ? dutiesEntry.duties : 0
+            });
+            if (dutiesEntry) delete dutiesByKey[key]; // mark as consumed
+          });
+
+          // 3) Profit-report entries that didn't match any SO (likely older entries
+          //    from before the Sales Orders sheet existed) — add them as standalone
+          //    rows so their duties still show in the totals.
+          Object.keys(dutiesByKey).forEach(function (key) {
+            var parts = key.split('|');
+            var soNo = parts[0];
+            var customer = parts[1];
+            var sales = (parseInt(parts[2], 10) || 0) / 100;
+            // Find the matching entry in any report to recover display fields
+            var match = null;
+            (prRes && prRes.data || []).some(function (report) {
+              return (report.entries || []).some(function (e) {
+                if (_matchKey(e.soNo, e.customerName, e.sales) === key) {
+                  match = { e: e, reportDate: report.reportDate };
+                  return true;
+                }
+                return false;
+              });
+            });
+            rows.push({
+              soNo: soNo,
+              soDate: (match && match.e.soDate) || (match && match.reportDate) || '',
+              customerName: (match && match.e.customerName) || customer,
+              sales: (match && Number(match.e.sales)) || sales,
+              vat: 0,
+              dutiesAndTaxes: dutiesByKey[key].duties
+            });
+          });
+
+          allEntries = rows;
+          populateYears(allEntries);
+          setActiveTab();
+          applyFilters();
+        }).catch(function (err) {
+          console.error('loadDuties failed', err);
+          body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:1.5rem;">Failed to load data.</td></tr>';
+        });
+      };
+
+      document.addEventListener('DOMContentLoaded', function () {
+        setActiveTab();
+        loadDuties();
+      });
+    })();
+  </script>
+</body>
+</html>

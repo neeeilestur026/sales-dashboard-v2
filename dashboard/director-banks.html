@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bank Accounts — Director Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .bank-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; margin-bottom:1.25rem; }
+    .bank-card {
+      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155);
+      border-radius:12px; padding:1rem 1.1rem; position:relative;
+    }
+    .bank-card .bk-name { font-size:0.78rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .bank-card .bk-bal  { font-size:1.6rem; font-weight:700; margin:0.3rem 0 0.1rem; color:var(--text-primary,#f1f5f9); }
+    .bank-card .bk-sub  { font-size:0.78rem; color:var(--text-muted,#94a3b8); }
+    .bank-card .bk-actions { display:flex; gap:0.4rem; margin-top:0.75rem; flex-wrap:wrap; }
+    .bank-card.aub { border-color:#f97316; }
+    .bk-btn {
+      padding:0.35rem 0.7rem; border-radius:6px; font-size:0.74rem; font-weight:600;
+      cursor:pointer; border:1px solid var(--border,#334155); background:var(--surface,#0f172a);
+      color:var(--text-primary,#e2e8f0);
+    }
+    .bk-btn.primary { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+    .bk-btn.warn { background:#f97316; color:#fff; border-color:#f97316; }
+    .bk-toolbar {
+      display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;
+      margin-bottom:0.75rem;
+    }
+    .bk-tabs { display:flex; gap:0.4rem; flex-wrap:wrap; }
+    .bk-tab {
+      padding:0.4rem 0.85rem; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;
+      background:transparent; border:1px solid var(--border,#334155); color:var(--text-muted,#94a3b8);
+    }
+    .bk-tab.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+    .bk-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    .bk-table th { text-align:left; padding:0.5rem 0.6rem; border-bottom:1px solid var(--border,#334155); color:var(--text-muted,#94a3b8); font-size:0.7rem; text-transform:uppercase; }
+    .bk-table td { padding:0.5rem 0.6rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
+    .bk-amt.credit { color:#16a34a; font-weight:600; }
+    .bk-amt.debit  { color:#ef4444; font-weight:600; }
+    .pill-pr { background:rgba(249,115,22,0.15); color:#fb923c; padding:0.1rem 0.45rem; border-radius:999px; font-size:0.68rem; font-weight:600; }
+    .pill-xfer { background:rgba(59,130,246,0.15); color:#60a5fa; padding:0.1rem 0.45rem; border-radius:999px; font-size:0.68rem; font-weight:600; }
+    .pill-other { background:rgba(148,163,184,0.15); color:#cbd5e1; padding:0.1rem 0.45rem; border-radius:999px; font-size:0.68rem; font-weight:600; }
+    .bk-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:90; align-items:center; justify-content:center; }
+    .bk-modal-bg.open { display:flex; }
+    .bk-modal {
+      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155);
+      border-radius:12px; padding:1.25rem; width:min(440px, 92vw);
+      color:var(--text-primary,#f1f5f9);
+    }
+    .bk-modal h3 { margin:0 0 0.75rem; }
+    .bk-modal .row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.7rem; }
+    .bk-modal .row label { font-size:0.74rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .bk-modal input, .bk-modal select, .bk-modal textarea {
+      padding:0.55rem 0.65rem; border-radius:6px; border:1px solid var(--border,#334155);
+      background:var(--bg-primary,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.88rem; font-family:inherit;
+    }
+    .bk-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div style="max-width:1200px;margin:0 auto;">
+      <div class="bk-toolbar">
+        <div>
+          <h1 style="margin:0;">Bank Accounts</h1>
+          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+            AUB is auto-debited every time a Payment Request is marked Paid.
+            Metrobank accounts receive client payments and fund AUB.
+          </p>
+        </div>
+        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+          <button class="bk-btn" onclick="loadBanks()">🔄 Refresh</button>
+          <button class="bk-btn warn" onclick="openTransferModal()">↔ Fund AUB / Transfer</button>
+        </div>
+      </div>
+
+      <!-- Account balance cards -->
+      <div class="bank-grid" id="bankCards">
+        <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1rem;">Loading…</div>
+      </div>
+
+      <!-- Filter / Account tabs -->
+      <div class="bk-toolbar">
+        <div class="bk-tabs" id="bkTabs"></div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+          <input type="month" id="bkMonth" onchange="loadTransactions()" style="padding:0.4rem 0.55rem;border:1px solid var(--border,#334155);border-radius:6px;background:var(--surface,#0f172a);color:var(--text-primary,#e2e8f0);">
+          <button class="bk-btn" onclick="document.getElementById('bkMonth').value='';loadTransactions();">Clear</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;overflow:hidden;">
+        <table class="bk-table" id="bkTxTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Ref</th>
+              <th style="text-align:right;">Amount</th>
+              <th>By</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="bkTxBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem;">Select an account.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add / edit transaction modal -->
+  <div class="bk-modal-bg" id="txModalBg">
+    <div class="bk-modal">
+      <h3 id="txModalTitle">Add Transaction</h3>
+      <input type="hidden" id="txAccountCode">
+      <div class="row">
+        <label>Type</label>
+        <select id="txType">
+          <option value="Deposit">Deposit (Money In)</option>
+          <option value="Withdrawal">Withdrawal (Money Out)</option>
+          <option value="Adjustment">Adjustment</option>
+          <option value="Fee">Bank Fee</option>
+          <option value="Interest">Interest</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Amount (₱)</label>
+        <input type="number" id="txAmount" min="0.01" step="0.01" placeholder="0.00">
+      </div>
+      <div class="row">
+        <label>Date</label>
+        <input type="date" id="txDate">
+      </div>
+      <div class="row">
+        <label>Description</label>
+        <textarea id="txDescription" rows="2" placeholder="e.g. Client payment from ACME Corp, Check #12345"></textarea>
+      </div>
+      <div class="bk-modal-actions">
+        <button class="bk-btn" onclick="closeTxModal()">Cancel</button>
+        <button class="bk-btn primary" onclick="saveTransaction()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transfer modal (Metrobank → AUB or any pair) -->
+  <div class="bk-modal-bg" id="xferModalBg">
+    <div class="bk-modal">
+      <h3>Transfer / Fund AUB</h3>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.6rem;">Use this when you deposit a Metrobank check to AUB, or move funds between any two accounts.</p>
+      <div class="row">
+        <label>From Account</label>
+        <select id="xferFrom"></select>
+      </div>
+      <div class="row">
+        <label>To Account</label>
+        <select id="xferTo"></select>
+      </div>
+      <div class="row">
+        <label>Amount (₱)</label>
+        <input type="number" id="xferAmount" min="0.01" step="0.01" placeholder="0.00">
+      </div>
+      <div class="row">
+        <label>Date</label>
+        <input type="date" id="xferDate">
+      </div>
+      <div class="row">
+        <label>Description (e.g. Check #, deposit slip)</label>
+        <textarea id="xferDesc" rows="2" placeholder="e.g. Metrobank check #00123 deposited to AUB"></textarea>
+      </div>
+      <div class="bk-modal-actions">
+        <button class="bk-btn" onclick="closeTransferModal()">Cancel</button>
+        <button class="bk-btn primary" onclick="saveTransfer()">Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit account modal -->
+  <div class="bk-modal-bg" id="acctModalBg">
+    <div class="bk-modal">
+      <h3>Edit Account</h3>
+      <input type="hidden" id="acctCode">
+      <div class="row">
+        <label>Display Name</label>
+        <input type="text" id="acctName">
+      </div>
+      <div class="row">
+        <label>Bank</label>
+        <input type="text" id="acctBank">
+      </div>
+      <div class="row">
+        <label>Branch</label>
+        <input type="text" id="acctBranch">
+      </div>
+      <div class="row">
+        <label>Account Number</label>
+        <input type="text" id="acctNumber">
+      </div>
+      <div class="row">
+        <label>Opening Balance (₱)</label>
+        <input type="number" id="acctOpening" step="0.01">
+      </div>
+      <div class="row">
+        <label>Notes</label>
+        <textarea id="acctNotes" rows="2"></textarea>
+      </div>
+      <div class="bk-modal-actions">
+        <button class="bk-btn" onclick="closeAcctModal()">Cancel</button>
+        <button class="bk-btn primary" onclick="saveAccount()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/director-banks.js"></script>
+</body>
+</html>

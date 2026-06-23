@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Environment variables (NEVER commit this)
+.env
+
+# Temporary upload files
+data/uploads/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Local backups, worktrees, and ad-hoc files
+.claude/
+.claude-*-backup-*/
+.last-*-backup
+AR AGING.xlsx

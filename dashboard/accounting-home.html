@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accounting Dashboard — Home</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .hero {
+      position: relative;
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.25rem;
+      background:
+        radial-gradient(1200px 240px at 0% 0%, rgba(15,118,110,0.10), transparent 62%),
+        radial-gradient(900px 240px at 100% 100%, rgba(13,148,136,0.08), transparent 60%),
+        linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
+      border: 1px solid var(--border, #e2e8f0);
+      box-shadow: var(--shadow-card, var(--shadow-sm));
+      overflow: hidden;
+    }
+    .hero::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(120deg, transparent 60%, rgba(15,118,110,0.05));
+    }
+    .hero-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; }
+    .hero h1 { font-size:1.6rem; font-weight:700; color:var(--text-primary); margin:0; letter-spacing:-0.01em; }
+    .hero p { color:var(--text-secondary); font-size:0.9rem; margin-top:0.25rem; }
+    .hero-meta { display:flex; gap:0.6rem; flex-wrap:wrap; }
+    .hero-pill {
+      display:inline-flex; align-items:center; gap:0.4rem;
+      padding:0.4rem 0.85rem; border-radius:999px;
+      font-size:0.78rem; font-weight:600;
+      background:#fff; border:1px solid var(--border); color:var(--text-secondary);
+    }
+
+    .app-grid-v2 {
+      display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:0.85rem;
+    }
+    @media (max-width:700px) { .app-grid-v2 { grid-template-columns:1fr; } }
+    .acard {
+      position:relative;
+      background:var(--bg-card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:1.1rem 1.2rem;
+      transition:var(--transition);
+      box-shadow:var(--shadow-xs);
+      display:flex; flex-direction:column; gap:0.55rem;
+    }
+    .acard:hover { box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:var(--accent); }
+    a.acard { text-decoration:none; color:inherit; }
+    a.acard::after { content:"→"; position:absolute; top:1.1rem; right:1.2rem; color:var(--text-muted); font-weight:700; opacity:0; transform:translateX(-4px); transition:opacity .18s ease, transform .18s ease; }
+    a.acard:hover::after { opacity:1; transform:translateX(0); color:var(--accent); }
+    .acard-top { display:flex; align-items:center; gap:0.7rem; }
+    .acard-icon {
+      width:42px; height:42px; border-radius:10px;
+      display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .acard-title { font-size:1rem; font-weight:700; color:var(--text-primary); margin:0; }
+    .acard-desc { font-size:0.82rem; color:var(--text-muted); margin:0; }
+    .acard-stat {
+      display:flex; align-items:center; gap:0.4rem;
+      font-size:0.8rem; color:var(--text-secondary);
+      padding:0.5rem 0.7rem; background:var(--bg-inset);
+      border-radius:8px;
+    }
+    .acard-cta {
+      display:inline-flex; align-items:center; justify-content:center; gap:0.35rem;
+      padding:0.55rem 1rem; border-radius:8px;
+      font-size:0.85rem; font-weight:600;
+      background:var(--accent); color:#fff !important;
+      transition:var(--transition); margin-top:0.25rem;
+    }
+    .acard-cta:hover { background:var(--accent-hover); transform:translateX(2px); }
+    .acard-cta.subtle { background:var(--bg-inset); color:var(--text-primary) !important; }
+    .acard-cta.subtle:hover { background:var(--border); }
+
+    .sect-head {
+      display:flex; align-items:center; justify-content:space-between;
+      margin:0.5rem 0 0.75rem;
+    }
+    .sect-head h2 {
+      font-size:0.78rem; font-weight:700; color:var(--text-muted);
+      text-transform:uppercase; letter-spacing:0.08em; margin:0;
+    }
+
+    /* Shipment Monitoring */
+    .sm-section { margin-top:1.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+    .sm-section-hdr { display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; }
+    .sm-section-hdr:hover { background:var(--bg-inset); }
+    .sm-section-title { display:flex; align-items:center; gap:0.5rem; font-size:0.9rem; font-weight:700; color:var(--text-primary); margin:0; }
+    .sm-section-body { padding:0.9rem 1.1rem 1rem; }
+    .sm-summary { font-size:0.75rem; color:var(--text-muted); }
+    .sm-filter-btn { padding:0.25rem 0.75rem; border-radius:20px; font-size:0.72rem; font-weight:600; border:1px solid var(--border,#334155); background:transparent; color:var(--text-muted,#64748b); cursor:pointer; transition:all 0.15s; }
+    .sm-filter-btn:hover { border-color:rgba(15,118,110,0.5); color:#0d9488; }
+    .sm-filter-btn.active { background:rgba(15,118,110,0.15); border-color:rgba(15,118,110,0.5); color:#0d9488; }
+    .sm-row { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.65rem 0.85rem; background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:10px; margin-bottom:0.5rem; cursor:pointer; transition:border-color 0.15s; flex-wrap:wrap; }
+    .sm-row:hover { border-color:rgba(15,118,110,0.4); }
+    .sm-row-left { display:flex; flex-direction:column; gap:0.2rem; min-width:0; }
+    .sm-row-po { font-size:0.78rem; font-weight:700; color:var(--text-primary,#f1f5f9); }
+    .sm-row-sub { font-size:0.72rem; color:var(--text-muted,#64748b); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:340px; }
+    .sm-row-right { display:flex; align-items:center; gap:0.5rem; flex-shrink:0; }
+    .sm-tl-ribbon { display:flex; gap:4px; padding-bottom:0.55rem; }
+    .sm-tl-ribbon-seg { flex:1; position:relative; overflow:hidden; cursor:pointer; background:#e2e8f0; border:1px solid #e2e8f0; border-radius:7px; padding:0.4rem 0.5rem; text-align:left; transition:border-color 0.15s; min-width:0; }
+    .sm-tl-ribbon-seg:hover { border-color:rgba(15,118,110,0.5); }
+    .sm-tl-ribbon-seg.partial { border-color:rgba(245,158,11,0.4); }
+    .sm-tl-ribbon-seg.done    { border-color:rgba(34,197,94,0.45); }
+    .sm-tl-ribbon-fill { position:absolute; left:0; top:0; height:100%; pointer-events:none; background:rgba(34,197,94,0.08); transition:width 0.4s ease; }
+    .sm-tl-ribbon-seg.partial .sm-tl-ribbon-fill { background:rgba(245,158,11,0.08); }
+    .sm-tl-ribbon-icon  { font-size:0.85rem; display:block; line-height:1; margin-bottom:2px; position:relative; }
+    .sm-tl-ribbon-label { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-secondary,#94a3b8); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; position:relative; }
+    .sm-tl-ribbon-seg.done .sm-tl-ribbon-label { color:#22c55e; }
+    .sm-tl-ribbon-seg.partial .sm-tl-ribbon-label { color:#f59e0b; }
+    .sm-tl-ribbon-count { font-size:0.63rem; font-weight:600; color:var(--text-muted,#64748b); display:block; position:relative; }
+    .sm-tl-ribbon-seg.done .sm-tl-ribbon-count { color:#16a34a; }
+    .sm-tl-ribbon-overall { font-size:0.7rem; color:var(--text-muted,#64748b); padding-top:0.25rem; text-align:right; }
+    .sm-tl-next-up { display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0.85rem; border:1px solid rgba(15,118,110,0.4); background:rgba(15,118,110,0.07); }
+    .sm-tl-next-up.blocked { border-color:rgba(239,68,68,0.4); background:rgba(239,68,68,0.06); }
+    .sm-tl-next-up.done    { border-color:rgba(34,197,94,0.4);  background:rgba(34,197,94,0.06); }
+    .sm-tl-next-up-icon { font-size:1.1rem; flex-shrink:0; margin-top:2px; }
+    .sm-tl-next-up-body { flex:1; min-width:0; }
+    .sm-tl-next-up-kicker { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#0d9488; margin-bottom:0.2rem; }
+    .sm-tl-next-up.blocked .sm-tl-next-up-kicker { color:#f87171; }
+    .sm-tl-next-up.done    .sm-tl-next-up-kicker { color:#22c55e; }
+    .sm-tl-next-up-stage { font-size:0.83rem; font-weight:700; color:var(--text-primary,#f1f5f9); display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap; }
+    .sm-tl-next-up-sub   { font-size:0.7rem; color:var(--text-muted,#64748b); margin-top:0.15rem; }
+    .sm-owner-badge { display:inline-block; font-size:0.6rem; font-weight:700; line-height:1; padding:0.15rem 0.45rem; border-radius:99px; border:1px solid transparent; white-space:nowrap; vertical-align:middle; }
+    .sm-owner-sales       { background:rgba(59,130,246,0.15);  color:#60a5fa; border-color:rgba(59,130,246,0.3);  }
+    .sm-owner-admin       { background:rgba(100,116,139,0.18); color:#94a3b8; border-color:rgba(100,116,139,0.35);}
+    .sm-owner-sir-larry   { background:rgba(168,85,247,0.15);  color:#c084fc; border-color:rgba(168,85,247,0.3);  }
+    .sm-owner-accounting  { background:rgba(16,185,129,0.15);  color:#34d399; border-color:rgba(16,185,129,0.3);  }
+    .sm-owner-supplier    { background:rgba(249,115,22,0.15);  color:#fb923c; border-color:rgba(249,115,22,0.3);  }
+    .sm-owner-broker      { background:rgba(245,158,11,0.15);  color:#fbbf24; border-color:rgba(245,158,11,0.3);  }
+    .sm-owner-bank        { background:rgba(6,182,212,0.15);   color:#22d3ee; border-color:rgba(6,182,212,0.3);   }
+    .sm-owner-forwarder   { background:rgba(244,63,94,0.15);   color:#fb7185; border-color:rgba(244,63,94,0.3);   }
+    .sm-tl-phase-wrap { margin-bottom:0.6rem; }
+    .sm-tl-phase-hdr { display:flex; align-items:center; justify-content:space-between; padding:0.55rem 0.85rem; border-radius:8px; cursor:pointer; user-select:none; border:1px solid transparent; transition:background 0.12s, border-color 0.12s; }
+    .sm-tl-phase-hdr:hover   { background:#f8fafc; }
+    .sm-tl-phase-hdr.pending { background:#f8fafc; border-color:#e2e8f0; }
+    .sm-tl-phase-hdr.partial { background:rgba(245,158,11,0.04);  border-color:rgba(245,158,11,0.3); }
+    .sm-tl-phase-hdr.done    { background:rgba(34,197,94,0.04);   border-color:rgba(34,197,94,0.3); }
+    .sm-tl-phase-hdr.open    { background:rgba(15,118,110,0.05);  border-color:rgba(15,118,110,0.35); }
+    .sm-tl-phase-left   { display:flex; align-items:center; gap:0.55rem; }
+    .sm-tl-phase-num    { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:700; flex-shrink:0; }
+    .sm-tl-phase-name   { font-size:0.82rem; font-weight:700; }
+    .sm-tl-phase-right  { display:flex; align-items:center; gap:0.5rem; }
+    .sm-tl-phase-cnt    { font-size:0.72rem; font-weight:600; }
+    .sm-tl-phase-chevron { font-size:0.7rem; color:var(--text-muted,#64748b); }
+    .sm-tl-phase-body { margin-top:0.25rem; padding-left:0.4rem; border-left:2px solid #e2e8f0; }
+    .sm-tl-phase-body.partial { border-left-color:rgba(245,158,11,0.35); }
+    .sm-tl-phase-body.done    { border-left-color:rgba(34,197,94,0.4); }
+    .sm-tl-card { border-radius:7px; margin-bottom:0.3rem; overflow:hidden; border:1px solid #e2e8f0; background:#f8fafc; transition:box-shadow 0.15s, border-color 0.15s; border-left-width:3px; }
+    .sm-tl-card.done    { border-left-color:#22c55e; background:rgba(34,197,94,0.03); }
+    .sm-tl-card.skipped { border-left-color:#f59e0b; background:rgba(245,158,11,0.03); }
+    .sm-tl-card.next    { border-left-color:#0f766e; background:rgba(15,118,110,0.04); animation:sm-pulse-border 2s ease-in-out infinite; }
+    .sm-tl-card.blocked { border-left-color:#ef4444; background:rgba(239,68,68,0.03); }
+    .sm-tl-card.pending { border-left-color:#e2e8f0; }
+    .sm-tl-card.open    { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+    @keyframes sm-pulse-border { 0%,100% { box-shadow:0 0 0 0 rgba(15,118,110,0); } 50% { box-shadow:0 0 0 3px rgba(15,118,110,0.25); } }
+    .sm-tl-card-hdr { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.75rem; cursor:pointer; user-select:none; }
+    .sm-tl-card-dot { width:22px; height:22px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:0.63rem; font-weight:700; }
+    .sm-tl-card-dot.done    { background:rgba(34,197,94,0.2);  color:#22c55e; border:1px solid rgba(34,197,94,0.5);  }
+    .sm-tl-card-dot.skipped { background:rgba(245,158,11,0.2); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
+    .sm-tl-card-dot.next    { background:rgba(15,118,110,0.25); color:#0d9488; border:1px solid rgba(15,118,110,0.5); }
+    .sm-tl-card-dot.blocked { background:rgba(239,68,68,0.2);  color:#ef4444; border:1px solid rgba(239,68,68,0.4);  }
+    .sm-tl-card-dot.pending { background:#e2e8f0; color:#475569; border:1px solid #e2e8f0; }
+    .sm-tl-card-main { flex:1; min-width:0; }
+    .sm-tl-card-label { font-size:0.79rem; font-weight:600; color:var(--text-secondary,#94a3b8); }
+    .sm-tl-card.done .sm-tl-card-label    { color:var(--text-primary,#f1f5f9); }
+    .sm-tl-card.next .sm-tl-card-label    { color:var(--text-primary,#f1f5f9); }
+    .sm-tl-card.skipped .sm-tl-card-label { text-decoration:line-through; color:var(--text-muted,#64748b); }
+    .sm-tl-card-meta { font-size:0.67rem; color:var(--text-muted,#64748b); margin-top:0.05rem; display:flex; align-items:center; gap:0.3rem; flex-wrap:wrap; }
+    .sm-tl-card-date { font-size:0.67rem; font-weight:600; color:#22c55e; margin-top:0.1rem; }
+    .sm-tl-card.skipped .sm-tl-card-date { color:#f59e0b; }
+    .sm-tl-card-right { display:flex; align-items:center; gap:0.35rem; flex-shrink:0; }
+    .auto-badge { font-size:0.6rem; font-weight:700; background:rgba(15,118,110,0.15); color:#0d9488; border-radius:3px; padding:0 0.28rem; border:1px solid rgba(15,118,110,0.3); }
+    .doc-badge  { font-size:0.65rem; font-weight:600; background:rgba(34,197,94,0.12); color:#22c55e; border-radius:99px; padding:0.1rem 0.38rem; border:1px solid rgba(34,197,94,0.25); }
+    .blocked-icon { font-size:0.72rem; color:#ef4444; }
+    .sm-tl-detail { padding:0.65rem 0.75rem 0.8rem; border-top:1px solid #e2e8f0; }
+    .sm-tl-detail-section { margin-bottom:0.65rem; }
+    .sm-tl-detail-section:last-child { margin-bottom:0; }
+    .sm-tl-section-label { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted,#64748b); margin-bottom:0.3rem; }
+    .sm-dep-chips { display:flex; gap:0.3rem; flex-wrap:wrap; }
+    .sm-dep-chip { display:inline-flex; align-items:center; gap:0.25rem; font-size:0.67rem; padding:0.18rem 0.5rem; border-radius:99px; border:1px solid #e2e8f0; color:var(--text-muted,#64748b); background:#e2e8f0; cursor:pointer; transition:border-color 0.1s; }
+    .sm-dep-chip:hover { border-color:rgba(15,118,110,0.5); color:#0d9488; }
+    .sm-dep-chip.done    { border-color:rgba(34,197,94,0.4);  color:#22c55e; background:rgba(34,197,94,0.08);  }
+    .sm-dep-chip.skipped { border-color:rgba(245,158,11,0.4); color:#f59e0b; background:rgba(245,158,11,0.08); }
+    .sm-dep-chip.blocked { border-color:rgba(239,68,68,0.4);  color:#f87171; background:rgba(239,68,68,0.07);  }
+    .sm-tl-fields { width:100%; font-size:0.73rem; border-collapse:collapse; }
+    .sm-tl-fields td { padding:0.22rem 0; vertical-align:top; }
+    .sm-tl-fields .fl { color:var(--text-muted,#64748b); width:38%; padding-right:0.5rem; }
+    .sm-tl-fields .fv { color:var(--text-primary,#f1f5f9); font-weight:500; }
+    .sm-tl-fields .fv.empty { color:var(--text-muted,#64748b); font-style:italic; font-weight:400; }
+    .sm-mgmt-doc-file { display:flex; align-items:center; gap:0.4rem; padding:0.3rem 0; border-bottom:1px solid #e2e8f0; }
+    .sm-mgmt-doc-file:last-child { border-bottom:none; }
+    .sm-mgmt-doc-thumb { width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer; flex-shrink:0; background:#e2e8f0; }
+    .sm-mgmt-doc-name { flex:1; font-size:0.78rem; color:var(--text-secondary,#94a3b8); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sm-mgmt-doc-btn { font-size:0.72rem; color:#0d9488; background:rgba(15,118,110,0.1); border:1px solid rgba(15,118,110,0.3); border-radius:5px; padding:0.2rem 0.5rem; cursor:pointer; white-space:nowrap; }
+    .sm-mgmt-doc-btn:hover { background:rgba(15,118,110,0.2); }
+    @media (max-width:640px) {
+      .sm-tl-ribbon { gap:3px; }
+      .sm-tl-ribbon-label { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <section class="hero">
+      <div class="hero-row" style="position:relative;z-index:1;">
+        <div>
+          <h1 class="greeting" id="greeting">Good morning!</h1>
+          <p id="todayLabel">Accounting hub — process flow, financials &amp; monitoring.</p>
+        </div>
+        <div class="hero-meta">
+          <a href="flow-accounting.html" class="hero-pill" style="background:var(--accent);color:#fff;border-color:var(--accent);">Accounting Overview →</a>
+          <a href="flow-ledger.html" class="hero-pill" style="background:var(--action);color:#fff;border-color:var(--action);">General Ledger →</a>
+          <a href="accounting-billing.html" class="hero-pill">Billing →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI summary (read-only, from the flow backend) -->
+    <div class="sect-head"><h2>Financial Snapshot</h2><span id="kpiState" style="font-size:0.74rem;color:var(--text-muted);">Loading…</span></div>
+    <div class="stat-grid kpi-grid" id="kpiGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.85rem;margin-bottom:1.5rem;">
+      <div class="stat-card"><div class="stat-card-label">Total Sales</div><div class="stat-card-value" id="kpiSales">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">Total COGS</div><div class="stat-card-value" id="kpiCogs">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">Gross Profit</div><div class="stat-card-value" id="kpiGp">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">AP Outstanding</div><div class="stat-card-value" id="kpiAp">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">Inventory Value</div><div class="stat-card-value" id="kpiInv">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">Sales Orders</div><div class="stat-card-value" id="kpiSo">—</div></div>
+    </div>
+
+    <div class="sect-head">
+      <h2>Process Flow Modules</h2>
+      <span style="font-size:0.78rem;color:var(--text-muted);">Click to open</span>
+    </div>
+
+    <div class="app-grid-v2 stagger" id="appGrid" style="grid-template-columns:repeat(auto-fit,minmax(232px,1fr));">
+      <a href="flow-accounting.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </span>
+          <div><h3 class="acard-title">Accounting</h3><p class="acard-desc">Per-SO consolidated view</p></div>
+        </div>
+        <div class="acard-stat">Full story of every sales order</div>
+      </a>
+
+      <a href="flow-inventory.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#ecfeff;color:#0e7490;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </span>
+          <div><h3 class="acard-title">Inventory</h3><p class="acard-desc">Costed stock &amp; landed cost</p></div>
+        </div>
+        <div class="acard-stat">Item master &amp; balances</div>
+      </a>
+
+      <a href="flow-quotations.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#f0fdfa;color:#0f766e;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </span>
+          <div><h3 class="acard-title">Quotations</h3><p class="acard-desc">Quote items from inventory</p></div>
+        </div>
+        <div class="acard-stat">Generate branded PDFs</div>
+      </a>
+
+      <a href="flow-sales-orders.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#f0fdf4;color:#15803d;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </span>
+          <div><h3 class="acard-title">Sales Orders</h3><p class="acard-desc">Load &amp; edit quotations</p></div>
+        </div>
+        <div class="acard-stat">Confirmed customer orders</div>
+      </a>
+
+      <a href="flow-purchase-orders.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#eff6ff;color:#1d4ed8;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          </span>
+          <div><h3 class="acard-title">Purchase Orders</h3><p class="acard-desc">From SO; auto AP entry</p></div>
+        </div>
+        <div class="acard-stat">Supplier procurement</div>
+      </a>
+
+      <a href="flow-ap-aging.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#fff7ed;color:#c2410c;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
+          <div><h3 class="acard-title">AP Aging</h3><p class="acard-desc">Payables &amp; payments</p></div>
+        </div>
+        <div class="acard-stat">Track what you owe</div>
+      </a>
+
+      <a href="flow-receiving.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#ecfeff;color:#0e7490;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+          </span>
+          <div><h3 class="acard-title">Receiving</h3><p class="acard-desc">Landed cost → inventory</p></div>
+        </div>
+        <div class="acard-stat">Materials received</div>
+      </a>
+
+      <a href="flow-invoices.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#f0fdfa;color:#0f766e;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </span>
+          <div><h3 class="acard-title">Invoices</h3><p class="acard-desc">Issue &amp; record COGS</p></div>
+        </div>
+        <div class="acard-stat">Materials issuance</div>
+      </a>
+
+      <a href="flow-ledger.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#f8fafc;color:#475569;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </span>
+          <div><h3 class="acard-title">General Ledger</h3><p class="acard-desc">Journals &amp; trial balance</p></div>
+        </div>
+        <div class="acard-stat">Double-entry postings</div>
+      </a>
+
+      <a href="accounting-billing.html" class="acard">
+        <div class="acard-top">
+          <span class="acard-icon" style="background:#f8fafc;color:#475569;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          </span>
+          <div><h3 class="acard-title">Billing</h3><p class="acard-desc">Payment slips &amp; vouchers</p></div>
+        </div>
+        <div class="acard-stat">Approved payment requests</div>
+      </a>
+    </div>
+
+    <!-- Shipment Monitoring -->
+    <div class="sm-section" style="margin-top:1.5rem;">
+      <div class="sm-section-hdr" onclick="acctSmToggleSection(this)">
+        <h2 class="sm-section-title">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          Shipment Monitoring
+        </h2>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+          <span class="sm-summary" id="acctSmSummary">Loading…</span>
+          <svg id="acctSmChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div class="sm-section-body" id="acctSmBody">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+          <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">Filter:</span>
+          <button class="sm-filter-btn active" onclick="acctSmFilter('All',this)">All</button>
+          <button class="sm-filter-btn" onclick="acctSmFilter('Pending',this)">Pending</button>
+          <button class="sm-filter-btn" onclick="acctSmFilter('In Transit',this)">In Transit</button>
+          <button class="sm-filter-btn" onclick="acctSmFilter('Arrived',this)">Arrived</button>
+          <button class="sm-filter-btn" onclick="acctSmFilter('Delivered',this)">Delivered</button>
+        </div>
+        <div id="acctSmContainer"><div style="text-align:center;padding:1.5rem;color:var(--text-muted,#64748b);">Loading shipments…</div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Shipment Timeline Modal -->
+  <div id="acctSmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;overflow-y:auto;padding:1.5rem 1rem;" onclick="if(event.target===this)acctSmClose()">
+    <div style="max-width:680px;margin:0 auto;background:var(--bg-card,#fff);border-radius:12px;border:1px solid var(--border,#e2e8f0);box-shadow:0 24px 64px rgba(0,0,0,0.25);">
+      <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border,#e2e8f0);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;">
+        <div style="min-width:0;">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Shipment Lifecycle Timeline</div>
+          <div style="font-size:1rem;font-weight:700;color:var(--text-primary);margin-bottom:0.2rem;" id="acctSmTlHeader">—</div>
+          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span id="acctSmTlSubtitle">—</span>
+            <span id="acctSmTlStatusBadge"></span>
+          </div>
+        </div>
+        <button onclick="acctSmClose()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.5rem;cursor:pointer;line-height:1;flex-shrink:0;" aria-label="Close">×</button>
+      </div>
+      <div id="acctSmTlRibbon" style="padding:0.65rem 1.2rem 0;border-bottom:1px solid var(--border,#e2e8f0);"><div style="height:52px;"></div></div>
+      <div id="acctSmTlContent" style="padding:0.85rem 1.2rem 1.5rem;"><div style="padding:2rem;text-align:center;">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Doc Viewer Modal -->
+  <div id="acctDocViewerOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;" onclick="if(event.target===this)acctCloseDocViewer()">
+    <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#e2e8f0);border-radius:14px;width:min(780px,96vw);height:min(88vh,640px);display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,0.3);overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1rem;border-bottom:1px solid var(--border,#e2e8f0);flex-shrink:0;">
+        <span id="acctDocViewerTitle" style="font-size:0.88rem;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        <a id="acctDocViewerOpenBtn" href="#" target="_blank" style="font-size:0.75rem;color:#3b82f6;text-decoration:none;padding:0.25rem 0.6rem;border:1px solid rgba(59,130,246,0.3);border-radius:6px;background:rgba(59,130,246,0.08);white-space:nowrap;">Open in Drive</a>
+        <button onclick="acctCloseDocViewer()" style="padding:0.25rem 0.5rem;border-radius:6px;border:1px solid var(--border,#e2e8f0);background:transparent;color:var(--text-muted,#64748b);cursor:pointer;font-size:1rem;line-height:1;">&times;</button>
+      </div>
+      <div id="acctDocViewerBody" style="flex:1;overflow:hidden;"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/stage-meta.js"></script>
+  <script src="js/accounting-home.js"></script>
+  <script>
+    // ── Financial KPI snapshot (read-only, from the flow backend) ──
+    (function loadAcctKpis() {
+      const state = document.getElementById('kpiState');
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      if (typeof _flowConfigured !== 'function' || !_flowConfigured()) {
+        if (state) state.textContent = 'Flow backend not configured';
+        return;
+      }
+      Promise.all([
+        fetchFlow('getInvoices').catch(() => ({ data: [] })),
+        fetchFlow('getAPAging').catch(() => ({ data: [] })),
+        fetchFlow('getInventory').catch(() => ({ data: [] })),
+        fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+      ]).then(([inv, ap, stock, so]) => {
+        const invoices = (inv && inv.data) || [], aps = (ap && ap.data) || [];
+        const items = (stock && stock.data) || [], sos = (so && so.data) || [];
+        const sales = invoices.reduce((s, v) => s + flowNum(v.totalSales), 0);
+        const cogs = invoices.reduce((s, v) => s + flowNum(v.totalCOGS), 0);
+        const apOut = aps.filter(a => (a.status || '').toLowerCase() !== 'paid')
+          .reduce((s, a) => s + (flowNum(a.amountPHP) - flowNum(a.paidPHP)), 0);
+        const invVal = items.reduce((s, i) => s + flowNum(i.totalLanded), 0);
+        set('kpiSales', flowMoney(sales, 'PHP'));
+        set('kpiCogs', flowMoney(cogs, 'PHP'));
+        set('kpiGp', flowMoney(sales - cogs, 'PHP'));
+        set('kpiAp', flowMoney(apOut, 'PHP'));
+        set('kpiInv', flowMoney(invVal, 'PHP'));
+        set('kpiSo', String(sos.length));
+        if (state) state.textContent = 'Live · from Process Flow';
+      }).catch(() => { if (state) state.textContent = 'Unavailable'; });
+    })();
+
+    function _acctExtractDriveFileId(url) {
+      if (!url) return null;
+      var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      return m ? m[1] : null;
+    }
+    function acctOpenDocViewer(title, url) {
+      document.getElementById('acctDocViewerTitle').textContent = title;
+      document.getElementById('acctDocViewerOpenBtn').href = url;
+      var body = document.getElementById('acctDocViewerBody');
+      var fileId = _acctExtractDriveFileId(url);
+      if (fileId) {
+        body.innerHTML = '<iframe src="https://drive.google.com/file/d/' + fileId + '/preview" style="width:100%;height:100%;border:none;" allowfullscreen></iframe>';
+      } else {
+        body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem;color:var(--text-muted,#64748b);"><p style="font-size:0.88rem;margin:0;">Stored in Drive folder</p><a href="' + url + '" target="_blank" style="padding:0.5rem 1.25rem;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-size:0.85rem;font-weight:600;">Open in Drive</a></div>';
+      }
+      document.getElementById('acctDocViewerOverlay').style.display = 'flex';
+    }
+    function acctCloseDocViewer() {
+      document.getElementById('acctDocViewerOverlay').style.display = 'none';
+      document.getElementById('acctDocViewerBody').innerHTML = '';
+    }
+    function acctSmToggleSection(hdr) {
+      var body = document.getElementById('acctSmBody');
+      var chevron = document.getElementById('acctSmChevron');
+      var hidden = body.style.display === 'none';
+      body.style.display = hidden ? '' : 'none';
+      chevron.style.transform = hidden ? '' : 'rotate(-90deg)';
+    }
+    (function setDate() {
+      const tl = document.getElementById('todayLabel');
+      if (!tl) return;
+      const d = new Date();
+      tl.textContent = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    })();
+  </script>
+</body>
+</html>

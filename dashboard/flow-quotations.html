@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Quotations</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Quotations</h1>
+      <p>Load items from inventory and set quoted quantity &amp; price. Missing items can be added to inventory (even at zero stock).</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div class="chart-card" style="margin-bottom:1.25rem;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Quotation</h3>
+      <input type="hidden" id="quotationNo" value="">
+      <div class="flow-form">
+        <div><label>Customer *</label><input type="text" id="customer" required></div>
+        <div><label>Date</label><input type="date" id="date"></div>
+      </div>
+      <p class="flow-msg" style="display:block;background:var(--bg-inset,#eef2f6);color:var(--text-secondary,#475569);">New quotations start as <b>Draft</b>. Submit for approval from the list below once ready.</p>
+
+      <table class="flow-table flow-items" style="margin-top:0.5rem;">
+        <thead><tr><th style="width:34%;">Item</th><th class="num" style="width:14%;">Quoted Qty</th><th class="num" style="width:18%;">Quoted Price</th><th class="num" style="width:18%;">Line Total</th><th></th></tr></thead>
+        <tbody id="itemRows"></tbody>
+      </table>
+      <div class="flow-actions">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="toggleNewItem()">+ New inventory item</button>
+        <span style="margin-left:auto;font-weight:700;">Total: <span id="grandTotal">0.00</span></span>
+      </div>
+
+      <div id="newItemBox" class="chart-card" style="display:none;background:rgba(59,130,246,0.04);margin:0.5rem 0;">
+        <div class="flow-form">
+          <div><label>Item No. *</label><input type="text" id="niItemNo"></div>
+          <div class="full"><label>Description *</label><input type="text" id="niDesc"></div>
+          <div><label>Opening Balance</label><input type="number" id="niBal" value="0" step="any" min="0"></div>
+          <div><label>Purchase Price/Unit</label><input type="number" id="niPP" value="0" step="any" min="0"></div>
+          <div><label>Shipping Cost/Unit</label><input type="number" id="niSC" value="0" step="any" min="0"></div>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" onclick="createInventoryItem()">Add to Inventory</button>
+        <div id="niMsg" class="flow-msg" style="display:none;"></div>
+      </div>
+
+      <div class="flow-actions">
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveQuotation()">Save Quotation</button>
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+      <div id="formMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <h3 style="font-size:0.95rem;font-weight:600;">Quotations</h3>
+        <button class="btn btn-sm btn-secondary" onclick="loadQuotations()">Refresh</button>
+      </div>
+      <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+  </main>
+
+  <!-- Generate Quotation PDF modal -->
+  <div class="flow-modal-overlay" id="pdfModal">
+    <div class="flow-modal">
+      <h3>Generate Quotation PDF</h3>
+      <div class="sub" id="pdfModalSub">—</div>
+      <input type="hidden" id="pdfQuotationNo">
+
+      <div class="flow-form">
+        <div><label>VAT</label><select id="pdfVat"><option value="inclusive">VAT Inclusive (12%)</option><option value="exclusive">VAT Exclusive</option><option value="zero">Zero-Rated</option></select></div>
+        <div><label>Format</label><select id="pdfDescMode"><option value="short">Short (6 items/page)</option><option value="long">Long (1 item/page, with image)</option></select></div>
+        <div><label>Subject</label><input type="text" id="pdfSubject" placeholder="Quotation subject"></div>
+      </div>
+
+      <div class="group-title">Client</div>
+      <div class="flow-form">
+        <div class="full"><label>Address</label><input type="text" id="pdfAddress"></div>
+        <div><label>Attention</label><input type="text" id="pdfAttention"></div>
+        <div><label>Designation</label><input type="text" id="pdfDesignation"></div>
+        <div><label>Email</label><input type="text" id="pdfEmail"></div>
+        <div><label>RFQ No.</label><input type="text" id="pdfRfqNo"></div>
+      </div>
+
+      <div class="group-title">Terms &amp; Conditions</div>
+      <div class="flow-form">
+        <div><label>Validity</label><input type="text" id="pdfValidity" placeholder="e.g. 30 days"></div>
+        <div><label>Delivery</label><input type="text" id="pdfDelivery"></div>
+        <div><label>Payment</label><input type="text" id="pdfPayment"></div>
+        <div><label>Warranty</label><input type="text" id="pdfWarranty" value="1 year warranty against factory defect"></div>
+      </div>
+
+      <div class="group-title">Signatory</div>
+      <div class="flow-form">
+        <div><label>Name</label><input type="text" id="pdfSigName"></div>
+        <div><label>Designation</label><input type="text" id="pdfSigDesignation"></div>
+        <div><label>Viber</label><input type="text" id="pdfSigViber"></div>
+        <div><label>Mobile</label><input type="text" id="pdfSigMobile"></div>
+        <div><label>Email</label><input type="text" id="pdfSigEmail"></div>
+      </div>
+
+      <div class="group-title">Items &amp; Images (optional, PNG/JPEG ≤5MB)</div>
+      <div id="pdfItems"></div>
+
+      <div class="full" style="margin-top:0.6rem;"><label>Note (shown on final page in Long format)</label><input type="text" id="pdfNote"></div>
+
+      <div id="pdfModalMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closePdfModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="pdfGenBtn" onclick="submitPdf()">Generate &amp; Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-quotations.js"></script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Purchase Requests</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    /* 5-step process indicator */
+    .pr-steps { display:flex; gap:0; margin:0 0 1.25rem; flex-wrap:wrap; }
+    .pr-step { flex:1 1 0; min-width:120px; position:relative; text-align:center; padding:0.55rem 0.4rem; }
+    .pr-step .dot { width:30px; height:30px; border-radius:50%; margin:0 auto 0.35rem;
+      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem;
+      background:var(--surface-2,#eef2f7); color:var(--text-muted,#64748b); border:2px solid transparent; }
+    .pr-step .lbl { font-size:0.72rem; font-weight:600; color:var(--text-muted,#64748b); }
+    .pr-step.active .dot { background:var(--accent,#0d9488); color:#fff; }
+    .pr-step.active .lbl { color:var(--text,#0f172a); }
+    .pr-step.done .dot { background:rgba(13,148,136,0.15); color:var(--accent,#0d9488); border-color:var(--accent,#0d9488); }
+    .pr-step:not(:last-child)::after { content:''; position:absolute; top:1.05rem; left:60%; right:-40%;
+      height:2px; background:var(--border,#e2e8f0); z-index:0; }
+    .pr-step.done:not(:last-child)::after { background:var(--accent,#0d9488); }
+    .pr-card-head { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-bottom:0.5rem; }
+    .pr-meta { font-size:0.78rem; color:var(--text-muted,#64748b); }
+    .pr-meta b { color:var(--text,#0f172a); }
+    .pr-queue-item { border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.85rem 1rem; margin-bottom:0.85rem; background:var(--surface,#fff); }
+    .seg { display:inline-flex; border:1px solid var(--border,#e2e8f0); border-radius:8px; overflow:hidden; }
+    .seg button { border:none; background:transparent; padding:0.4rem 0.9rem; font-weight:600; font-size:0.82rem; cursor:pointer; color:var(--text-muted,#64748b); }
+    .seg button.active { background:var(--accent,#0d9488); color:#fff; }
+
+    /* Management pricing engine */
+    .pe-card { border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.85rem; background:var(--surface,#fff); }
+    .pe-card-head { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-bottom:0.7rem; flex-wrap:wrap; }
+    .pe-card-head .pe-name { font-weight:700; font-size:0.9rem; color:var(--text,#0f172a); }
+    .pe-card-head select { padding:0.35rem 0.5rem; border:1px solid var(--border,#e2e8f0); border-radius:7px; font-size:0.82rem; }
+    .pe-inputs { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:0.55rem; margin-bottom:0.7rem; }
+    .pe-inputs label { display:block; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; margin-bottom:0.2rem; }
+    .pe-inputs input { width:100%; padding:0.4rem 0.55rem; border:1px solid var(--border,#e2e8f0); border-radius:7px; font-size:0.84rem; box-sizing:border-box; text-align:right; }
+    .pe-breakdown { display:grid; grid-template-columns:repeat(auto-fit,minmax(86px,1fr)); gap:0.45rem 0.75rem; padding:0.7rem 0.8rem; background:var(--bg-inset,#f1f5f9); border-radius:9px; }
+    .pe-bd { display:flex; flex-direction:column; }
+    .pe-bd .l { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-muted,#64748b); font-weight:700; }
+    .pe-bd .v { font-size:0.84rem; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text,#0f172a); }
+    .pe-bd.final .v { color:var(--accent,#0d9488); font-weight:700; }
+    .pe-pnl-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.6rem; margin:0.5rem 0 0.8rem; }
+    .pe-kpi { border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.6rem 0.8rem; background:var(--surface,#fff); display:flex; flex-direction:column; gap:0.15rem; }
+    .pe-kpi .l { font-size:0.64rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-muted,#64748b); font-weight:700; }
+    .pe-kpi .v { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text,#0f172a); }
+    .pe-pnl-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    .pe-pnl-table td { padding:0.32rem 0.5rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-secondary,#475569); }
+    .pe-pnl-table td.n { text-align:right; font-variant-numeric:tabular-nums; }
+    .pe-pnl-table tr.bold td { font-weight:700; color:var(--text,#0f172a); }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Purchase Requests</h1>
+      <p id="roleBlurb">A connected pricing request: Sales requests items → Admin sources suppliers → Management prices → Admin verifies → back to Sales to quote.</p>
+    </div>
+
+    <div class="pr-steps" id="prSteps"></div>
+
+    <!-- Sales: new request form -->
+    <div class="chart-card" id="salesFormCard" style="display:none;margin-bottom:1.25rem;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Purchase Request</h3>
+      <input type="hidden" id="prNo" value="">
+      <div class="flow-form">
+        <div><label>Customer *</label><input type="text" id="customer" required></div>
+        <div><label>Date</label><input type="date" id="date"></div>
+        <div class="full"><label>Notes (optional)</label><input type="text" id="notes" placeholder="Context for admin / management"></div>
+      </div>
+
+      <table class="flow-table flow-items" style="margin-top:0.5rem;">
+        <thead><tr><th style="width:40%;">Item</th><th class="num" style="width:14%;">Qty</th><th style="width:14%;">UOM</th><th style="width:26%;">Remarks</th><th></th></tr></thead>
+        <tbody id="itemRows"></tbody>
+      </table>
+      <div class="flow-actions">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
+        <span style="margin-left:auto;font-weight:700;">Lines: <span id="lineCount">0</span></span>
+      </div>
+
+      <div class="flow-actions">
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveRequest()">Submit to Admin</button>
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+      <div id="formMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <!-- Queue / list -->
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;align-items:center;">
+        <h3 style="font-size:0.95rem;font-weight:600;" id="listTitle">My Requests</h3>
+        <div style="display:flex;gap:0.6rem;align-items:center;">
+          <span class="seg" id="filterSeg"></span>
+          <button class="btn btn-sm btn-secondary" onclick="loadRequests()">Refresh</button>
+        </div>
+      </div>
+      <div id="listContainer" style="margin-top:0.75rem;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+  </main>
+
+  <!-- Detail / action modal -->
+  <div class="flow-modal-overlay" id="prModal">
+    <div class="flow-modal" style="width:min(1200px,95vw);max-width:none;">
+      <h3 id="modalTitle">Request</h3>
+      <div class="sub" id="modalSub">—</div>
+      <input type="hidden" id="modalPrNo">
+      <div id="modalBody"></div>
+      <div id="modalMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <!-- PR PDF modal -->
+  <div class="flow-modal-overlay" id="pdfModal">
+    <div class="flow-modal">
+      <h3>Generate Purchase Request PDF</h3>
+      <div class="sub" id="pdfModalSub">—</div>
+      <input type="hidden" id="pdfPrNo">
+      <div class="flow-form">
+        <div><label>Format</label><select id="pdfDescMode"><option value="short">Short (10 items/page)</option><option value="long">Long (3 items/page)</option></select></div>
+        <div><label>Date Needed</label><input type="date" id="pdfDateNeeded"></div>
+        <div><label>Urgency</label><select id="pdfUrgency"><option>Normal</option><option>High</option><option>Urgent</option></select></div>
+        <div><label>PR No. from Client</label><input type="text" id="pdfPrNumberClient"></div>
+      </div>
+      <div class="group-title">Company Information</div>
+      <div class="flow-form">
+        <div><label>Company Name</label><input type="text" id="pdfCompanyName"></div>
+        <div class="full"><label>Company Address</label><input type="text" id="pdfCompanyAddress"></div>
+        <div><label>Contact Person</label><input type="text" id="pdfContactPerson"></div>
+        <div><label>Designation</label><input type="text" id="pdfDesignation"></div>
+        <div><label>Email</label><input type="text" id="pdfContactEmail"></div>
+        <div><label>Phone</label><input type="text" id="pdfContactPhone"></div>
+      </div>
+      <div class="group-title">Prepared By</div>
+      <div class="flow-form">
+        <div><label>Name</label><input type="text" id="pdfPreparedByName"></div>
+        <div><label>Position</label><input type="text" id="pdfPreparedByPosition"></div>
+      </div>
+      <div id="pdfModalMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closePdfModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="pdfGenBtn" onclick="submitPrPdf()">Generate &amp; Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-pricing-engine.js"></script>
+  <script src="js/flow-pricing-request.js"></script>
+</body>
+</html>

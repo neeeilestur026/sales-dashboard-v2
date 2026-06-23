@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Orders — Director Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .dso-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+    .dso-toolbar input, .dso-toolbar select {
+      padding:0.5rem 0.65rem; border:1px solid var(--border,#334155); border-radius:8px;
+      background:var(--surface-2,#1e293b); color:var(--text-primary,#f1f5f9); font-size:0.85rem;
+    }
+    .dso-search { flex:1; min-width:220px; }
+    .dso-tab {
+      padding:0.4rem 0.85rem; border-radius:8px; border:1px solid var(--border,#334155);
+      background:transparent; color:var(--text-muted,#64748b); font-size:0.8rem; cursor:pointer; font-weight:600;
+    }
+    .dso-tab.active { background:#14b8a6; border-color:#14b8a6; color:#fff; }
+    .dso-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin-bottom:1rem; }
+    .dso-kpi {
+      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:0.85rem 1rem;
+    }
+    .dso-kpi .lbl { font-size:0.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .dso-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color:var(--text-primary,#f1f5f9); }
+
+    .dso-analytics { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
+    @media(max-width:880px){ .dso-analytics { grid-template-columns:1fr; } }
+    .dso-panel {
+      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px;
+      padding:1rem 1.1rem;
+    }
+    .dso-panel h3 { margin:0 0 0.75rem; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#94a3b8); }
+    .dso-rank { width:100%; border-collapse:collapse; font-size:0.83rem; }
+    .dso-rank th { text-align:left; padding:0.4rem 0.45rem; color:var(--text-muted,#94a3b8); font-size:0.68rem; text-transform:uppercase; }
+    .dso-rank td { padding:0.45rem 0.45rem; border-top:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
+    .dso-rank td .bar { display:block; height:5px; border-radius:3px; background:linear-gradient(90deg,#3b82f6,#14b8a6); margin-top:0.25rem; }
+
+    .dso-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; overflow:hidden; }
+    .dso-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+    .dso-table th { text-align:left; padding:0.55rem 0.75rem; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#334155); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; background:rgba(15,23,42,0.4); }
+    .dso-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
+    .dso-table tr.main-row { cursor:pointer; }
+    .dso-table tr.main-row:hover td { background:rgba(20,184,166,0.06); }
+    .dso-table tr.items-row td { padding:0; background:rgba(20,184,166,0.04); }
+    .dso-table tr.items-row.hidden { display:none; }
+    .dso-inner { padding:0.7rem 1rem 0.85rem 2rem; }
+    .dso-items { width:100%; border-collapse:collapse; font-size:0.8rem; }
+    .dso-items th { text-align:left; padding:0.35rem 0.5rem; color:var(--text-muted,#94a3b8); font-size:0.68rem; text-transform:uppercase; }
+    .dso-items td { padding:0.35rem 0.5rem; color:var(--text-primary,#e2e8f0); border-top:1px solid rgba(148,163,184,0.08); }
+    .badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; }
+    .badge-pending { background:rgba(234,179,8,0.15);  color:#eab308; }
+    .badge-delivered { background:rgba(34,197,94,0.15);  color:#22c55e; }
+    .badge-cancelled { background:rgba(239,68,68,0.15);  color:#ef4444; }
+    .dso-count { font-size:0.8rem; color:var(--text-muted,#94a3b8); margin-bottom:0.5rem; }
+    .dso-chevron { display:inline-block; transition:transform 0.15s; color:var(--text-muted,#94a3b8); }
+    .dso-chevron.open { transform:rotate(90deg); }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <div style="max-width:1200px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div>
+          <h1 style="margin:0;">Sales Orders</h1>
+          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+            Full order history with monthly/yearly filters and customer rankings.
+          </p>
+        </div>
+        <button class="btn" onclick="loadSalesOrders()">🔄 Refresh</button>
+      </div>
+
+      <div class="dso-kpis">
+        <div class="dso-kpi"><div class="lbl">Total Orders</div><div class="val" id="kpiTotal">—</div></div>
+        <div class="dso-kpi"><div class="lbl">Pending</div><div class="val" id="kpiPending" style="color:#f97316;">—</div></div>
+        <div class="dso-kpi"><div class="lbl">Delivered</div><div class="val" id="kpiDelivered" style="color:#22c55e;">—</div></div>
+        <div class="dso-kpi"><div class="lbl">Total Amount</div><div class="val" id="kpiAmount" style="color:#3b82f6;">—</div></div>
+      </div>
+
+      <div class="dso-analytics">
+        <div class="dso-panel">
+          <h3>Top Buyers (by Revenue)</h3>
+          <table class="dso-rank">
+            <thead><tr><th>#</th><th>Customer</th><th style="text-align:right;">Orders</th><th style="text-align:right;">Total</th></tr></thead>
+            <tbody id="topBuyersBody"><tr><td colspan="4" style="color:var(--text-muted);padding:0.6rem 0;">—</td></tr></tbody>
+          </table>
+        </div>
+        <div class="dso-panel">
+          <h3>Least Active Buyers</h3>
+          <table class="dso-rank">
+            <thead><tr><th>#</th><th>Customer</th><th style="text-align:right;">Orders</th><th style="text-align:right;">Total</th></tr></thead>
+            <tbody id="leastBuyersBody"><tr><td colspan="4" style="color:var(--text-muted);padding:0.6rem 0;">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="dso-toolbar">
+        <input type="text" id="dsoSearch" class="dso-search" placeholder="Search SO No, customer, invoice…" oninput="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+        <input type="month" id="dsoMonth" onchange="applyFilters()">
+        <label style="font-size:0.78rem;color:var(--text-muted);">Year</label>
+        <select id="dsoYear" onchange="applyFilters()"><option value="">All</option></select>
+        <button class="dso-tab" onclick="setStatus('all')" id="tabAll">All</button>
+        <button class="dso-tab" onclick="setStatus('Pending')" id="tabPending">Pending</button>
+        <button class="dso-tab" onclick="setStatus('Delivered')" id="tabDelivered">Delivered</button>
+        <button class="dso-tab" onclick="clearAllFilters()">Clear</button>
+      </div>
+
+      <div class="dso-count" id="dsoCount"></div>
+
+      <div class="dso-card">
+        <table class="dso-table" id="dsoTable">
+          <thead>
+            <tr>
+              <th style="width:32px;"></th>
+              <th>SO No</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Status</th>
+              <th>Invoice #</th>
+              <th style="text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="dsoBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      var session = (typeof requireDirector === 'function') ? requireDirector() : null;
+      if (typeof requireDirector === 'function' && !session) return;
+      if (typeof renderNavbar === 'function') renderNavbar('director-sales-orders');
+
+      var allOrders = [];
+      var activeStatus = 'all';
+      var expanded = {};
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function php(n) {
+        return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function dateVal(o) { return new Date(o.date || o.soDate || 0); }
+      function fmtDate(d) {
+        var dt = (d instanceof Date) ? d : new Date(d);
+        if (isNaN(dt.getTime())) return String(d || '');
+        return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+      }
+
+      function populateYears(orders) {
+        var sel = document.getElementById('dsoYear');
+        var years = {};
+        orders.forEach(function (o) {
+          var d = dateVal(o);
+          if (!isNaN(d.getTime())) years[d.getFullYear()] = true;
+        });
+        var cur = sel.value;
+        var list = Object.keys(years).sort(function (a, b) { return b - a; });
+        sel.innerHTML = '<option value="">All</option>' + list.map(function (y) {
+          return '<option value="' + y + '"' + (y === cur ? ' selected' : '') + '>' + y + '</option>';
+        }).join('');
+      }
+
+      function setActiveTab() {
+        ['All', 'Pending', 'Delivered'].forEach(function (s) {
+          var el = document.getElementById('tab' + s);
+          if (el) el.classList.toggle('active', activeStatus === (s === 'All' ? 'all' : s));
+        });
+      }
+
+      window.setStatus = function (s) {
+        activeStatus = s;
+        setActiveTab();
+        applyFilters();
+      };
+
+      window.clearAllFilters = function () {
+        document.getElementById('dsoSearch').value = '';
+        document.getElementById('dsoMonth').value = '';
+        document.getElementById('dsoYear').value = '';
+        activeStatus = 'all';
+        setActiveTab();
+        applyFilters();
+      };
+
+      window.applyFilters = function () {
+        var search = (document.getElementById('dsoSearch').value || '').toLowerCase().trim();
+        var month = document.getElementById('dsoMonth').value || '';
+        var year = document.getElementById('dsoYear').value || '';
+
+        var filtered = allOrders.filter(function (o) {
+          if (activeStatus !== 'all') {
+            var st = String(o.status || 'Pending');
+            if (st !== activeStatus) return false;
+          }
+          var d = dateVal(o);
+          if (!isNaN(d.getTime())) {
+            if (month) {
+              var ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              if (ym !== month) return false;
+            }
+            if (year && String(d.getFullYear()) !== String(year)) return false;
+          } else if (month || year) {
+            return false;
+          }
+          if (search) {
+            var hay = ((o.soNo || o.soNumber || '') + ' ' + (o.customerName || o.customer || '') + ' ' + (o.invoiceNo || '')).toLowerCase();
+            if (hay.indexOf(search) < 0) return false;
+          }
+          return true;
+        });
+
+        renderKpis(filtered);
+        renderRankings(filtered);
+        renderTable(filtered);
+      };
+
+      function renderKpis(orders) {
+        var pending = 0, delivered = 0, amount = 0;
+        orders.forEach(function (o) {
+          var st = String(o.status || 'Pending');
+          if (st === 'Pending') pending++;
+          else if (st === 'Delivered') delivered++;
+          amount += Number(o.grandTotal || o.totalAmount || o.amount || 0);
+        });
+        document.getElementById('kpiTotal').textContent = orders.length;
+        document.getElementById('kpiPending').textContent = pending;
+        document.getElementById('kpiDelivered').textContent = delivered;
+        document.getElementById('kpiAmount').textContent = php(amount);
+      }
+
+      function renderRankings(orders) {
+        var agg = {};
+        orders.forEach(function (o) {
+          var name = String(o.customerName || o.customer || '—').trim() || '—';
+          if (!agg[name]) agg[name] = { name: name, count: 0, total: 0 };
+          agg[name].count += 1;
+          agg[name].total += Number(o.grandTotal || o.totalAmount || o.amount || 0);
+        });
+        var list = Object.keys(agg).map(function (k) { return agg[k]; });
+
+        var top = list.slice().sort(function (a, b) { return b.total - a.total; }).slice(0, 10);
+        var least = list.slice().sort(function (a, b) { return a.total - b.total; }).slice(0, 10);
+        var max = (top[0] && top[0].total) || 1;
+
+        function rowsHtml(rows) {
+          if (!rows.length) return '<tr><td colspan="4" style="color:var(--text-muted);padding:0.6rem 0;">No data.</td></tr>';
+          return rows.map(function (r, i) {
+            var pct = Math.max(2, Math.round((r.total / max) * 100));
+            return '<tr>' +
+              '<td style="color:var(--text-muted);">' + (i + 1) + '</td>' +
+              '<td>' + esc(r.name) + '<span class="bar" style="width:' + pct + '%;"></span></td>' +
+              '<td style="text-align:right;">' + r.count + '</td>' +
+              '<td style="text-align:right;font-weight:600;">' + php(r.total) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+        document.getElementById('topBuyersBody').innerHTML = rowsHtml(top);
+        document.getElementById('leastBuyersBody').innerHTML = rowsHtml(least);
+      }
+
+      function renderTable(orders) {
+        var body = document.getElementById('dsoBody');
+        var count = document.getElementById('dsoCount');
+        count.textContent = 'Showing ' + orders.length + ' order' + (orders.length === 1 ? '' : 's');
+
+        if (!orders.length) {
+          body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No sales orders match these filters.</td></tr>';
+          return;
+        }
+        orders.sort(function (a, b) { return dateVal(b) - dateVal(a); });
+
+        body.innerHTML = orders.map(function (o) {
+          var soNo = o.soNo || o.soNumber || '';
+          var st = String(o.status || 'Pending');
+          var stClass = st.toLowerCase() === 'delivered' ? 'badge-delivered'
+                      : st.toLowerCase() === 'cancelled' ? 'badge-cancelled'
+                      : 'badge-pending';
+          var amount = o.grandTotal || o.totalAmount || o.amount || 0;
+          var isOpen = !!expanded[soNo];
+          var items = Array.isArray(o.items) ? o.items : [];
+          var itemsHtml = '';
+          if (items.length) {
+            itemsHtml = '<table class="dso-items">' +
+              '<thead><tr><th>Product Code</th><th>Description</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Amount</th></tr></thead><tbody>' +
+              items.map(function (it) {
+                return '<tr>' +
+                  '<td>' + esc(it.productCode || '') + '</td>' +
+                  '<td>' + esc(it.productDescription || '') + '</td>' +
+                  '<td style="text-align:right;">' + Number(it.qty || 0) + '</td>' +
+                  '<td style="text-align:right;">' + php(it.unitPrice) + '</td>' +
+                  '<td style="text-align:right;">' + php(it.amount) + '</td>' +
+                  '</tr>';
+              }).join('') +
+              '</tbody></table>';
+          } else {
+            itemsHtml = '<div style="color:var(--text-muted);font-size:0.8rem;">No line items.</div>';
+          }
+
+          return '<tr class="main-row" onclick="toggleRow(\'' + esc(soNo).replace(/'/g, "\\'") + '\')">' +
+              '<td><span class="dso-chevron ' + (isOpen ? 'open' : '') + '" id="chev-' + esc(soNo) + '">▶</span></td>' +
+              '<td><strong>' + esc(soNo) + '</strong></td>' +
+              '<td style="white-space:nowrap;color:var(--text-muted);">' + esc(fmtDate(o.date || o.soDate)) + '</td>' +
+              '<td>' + esc(o.customerName || o.customer || '') + '</td>' +
+              '<td><span class="badge ' + stClass + '">' + esc(st) + '</span></td>' +
+              '<td style="color:var(--text-muted);font-size:0.82rem;">' + esc(o.invoiceNo || '—') + '</td>' +
+              '<td style="font-weight:600;text-align:right;">' + php(amount) + '</td>' +
+            '</tr>' +
+            '<tr class="items-row ' + (isOpen ? '' : 'hidden') + '" id="items-' + esc(soNo) + '">' +
+              '<td colspan="7"><div class="dso-inner">' + itemsHtml + '</div></td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      window.toggleRow = function (soNo) {
+        expanded[soNo] = !expanded[soNo];
+        var row = document.getElementById('items-' + soNo);
+        var chev = document.getElementById('chev-' + soNo);
+        if (row) row.classList.toggle('hidden', !expanded[soNo]);
+        if (chev) chev.classList.toggle('open', !!expanded[soNo]);
+      };
+
+      window.loadSalesOrders = function () {
+        var body = document.getElementById('dsoBody');
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>';
+        return fetchFromAPI({ action: 'getSalesOrders' }, { noCache: true })
+          .then(function (res) {
+            if (!res || !res.success) throw new Error((res && res.message) || 'Failed to load');
+            allOrders = res.data || [];
+            populateYears(allOrders);
+            setActiveTab();
+            applyFilters();
+          })
+          .catch(function (err) {
+            console.error('loadSalesOrders failed', err);
+            body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:1.5rem;">Failed to load sales orders.</td></tr>';
+          });
+      };
+
+      document.addEventListener('DOMContentLoaded', function () {
+        setActiveTab();
+        loadSalesOrders();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Director Payroll Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .main-content { max-width: 1400px; padding-left: 0.75rem; padding-right: 0.75rem; }
+
+    /* ── Period selector ── */
+    .period-bar {
+      display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
+      border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+    }
+    .period-bar label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted, #64748b); }
+    .period-bar select, .period-bar input[type=number] {
+      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
+      color: var(--text-primary, #f1f5f9); border-radius: 8px; padding: 0.35rem 0.7rem;
+      font-size: 0.85rem;
+    }
+    #periodLabel {
+      font-size: 0.9rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin-left: auto;
+    }
+
+    /* ── Tabs ── */
+    .pay-tabs {
+      display: flex; gap: 0.35rem; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border, #334155); margin-bottom: 1rem;
+    }
+    .pay-tab {
+      padding: 0.5rem 1.1rem; border-radius: 8px 8px 0 0;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      border: 1px solid transparent; border-bottom: none;
+      color: var(--text-muted, #64748b); background: transparent;
+      transition: all 0.15s;
+    }
+    .pay-tab:hover { color: var(--text-primary, #f1f5f9); background: rgba(59,130,246,0.06); }
+    .pay-tab.active {
+      color: #3b82f6; background: var(--surface, #1e293b);
+      border-color: var(--border, #334155); border-bottom-color: var(--surface, #1e293b);
+    }
+    .pay-panel { display: none; }
+    .pay-panel.active { display: block; }
+
+    /* ── EE table ── */
+    .ee-toolbar {
+      display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; flex-wrap: wrap;
+    }
+    .btn-sm {
+      padding: 0.35rem 0.9rem; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid var(--border, #334155); background: transparent;
+      color: var(--text-muted, #64748b); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-sm:hover { background: rgba(59,130,246,0.08); color: #3b82f6; border-color: rgba(59,130,246,0.35); }
+    .btn-sm.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+    .btn-sm.primary:hover { background: #2563eb; }
+    .btn-sm.danger { background: transparent; color: #ef4444; border-color: #ef4444; }
+    .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
+
+    /* ── Generic card ── */
+    .pay-card {
+      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
+      border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1rem; overflow-x: auto;
+    }
+    .pay-card h3 {
+      font-size: 0.85rem; font-weight: 600; color: var(--text-secondary, #94a3b8);
+      margin: 0 0 0.75rem;
+    }
+
+    /* ── Payroll tables ── */
+    .pay-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .pay-table th {
+      padding: 0.5rem 0.6rem; text-align: left; font-size: 0.7rem; font-weight: 600;
+      color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border, #334155); white-space: nowrap;
+    }
+    .pay-table th.num, .pay-table td.num { text-align: right; }
+    .pay-table td {
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid #e2e8f0;
+      color: var(--text-primary, #f1f5f9); white-space: nowrap;
+    }
+    .pay-table tr:last-child td { border-bottom: none; }
+    .pay-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .pay-table tr.total-row td {
+      font-weight: 700; border-top: 2px solid var(--border, #334155);
+      color: #3b82f6; border-bottom: none;
+    }
+    .pay-table input[type=text], .pay-table input[type=time], .pay-table input[type=number] {
+      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
+      color: var(--text-primary, #f1f5f9); border-radius: 6px; padding: 0.25rem 0.4rem;
+      font-size: 0.78rem; width: 100%; box-sizing: border-box; min-width: 60px;
+    }
+    .pay-table input:focus { outline: none; border-color: #3b82f6; }
+    .pay-table select {
+      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
+      color: var(--text-primary, #f1f5f9); border-radius: 6px; padding: 0.25rem 0.4rem;
+      font-size: 0.78rem;
+    }
+
+    /* computed cells */
+    .pay-table td.computed { color: var(--text-muted, #64748b); }
+    .pay-table td.highlight { color: #22c55e; font-weight: 600; }
+
+    /* Sticky first column */
+    .pay-table td.sticky, .pay-table th.sticky {
+      position: sticky; left: 0; z-index: 1;
+      background: var(--surface, #1e293b);
+    }
+
+    /* save bar */
+    .save-bar {
+      display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; flex-wrap: wrap;
+    }
+    .save-msg { font-size: 0.78rem; color: #22c55e; }
+
+    /* ── EE modal ── */
+    .ee-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000;
+      display: none; align-items: center; justify-content: center;
+    }
+    .ee-overlay.open { display: flex; }
+    .ee-modal {
+      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
+      border-radius: 14px; padding: 1.5rem; width: min(480px, 95vw); max-height: 90vh;
+      overflow-y: auto;
+    }
+    .ee-modal h3 { font-size: 1rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin: 0 0 1rem; }
+    .form-row { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
+    .form-row label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted, #64748b); }
+    .form-row input, .form-row select {
+      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
+      color: var(--text-primary, #f1f5f9); border-radius: 8px; padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+    }
+    .form-row input:focus, .form-row select:focus { outline: none; border-color: #3b82f6; }
+    .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+
+    /* Greeting */
+    #greeting { font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <div class="main-content">
+    <div id="greeting"></div>
+
+    <section id="flowApprovalStrip" style="display:none;margin:0.75rem 0 1.25rem;"></section>
+
+    <!-- Period bar -->
+    <div class="period-bar">
+      <label>Month</label>
+      <select id="payMonth">
+        <option value="01">January</option><option value="02">February</option>
+        <option value="03">March</option><option value="04">April</option>
+        <option value="05">May</option><option value="06">June</option>
+        <option value="07">July</option><option value="08">August</option>
+        <option value="09">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+      <label>Year</label>
+      <input type="number" id="payYear" value="2026" min="2020" max="2099" style="width:80px;">
+      <button class="btn-sm primary" onclick="loadPeriod()">Load</button>
+      <span id="periodLabel">Select a period and click Load</span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="pay-tabs">
+      <button class="pay-tab active" onclick="switchPayTab('ee')" id="tabEE">👥 EE (Employees)</button>
+      <button class="pay-tab" onclick="switchPayTab('hoursA')" id="tabHoursA">📋 HOURS A (1st Cutoff)</button>
+      <button class="pay-tab" onclick="switchPayTab('payA')" id="tabPayA">💰 PAY A (1st Cutoff)</button>
+      <button class="pay-tab" onclick="switchPayTab('hoursB')" id="tabHoursB">📋 HOURS B (2nd Cutoff)</button>
+      <button class="pay-tab" onclick="switchPayTab('payB')" id="tabPayB">💰 PAY B (2nd Cutoff)</button>
+      <button class="pay-tab" onclick="switchPayTab('thirteenth')" id="tabThirteenth">🎁 13TH MONTH</button>
+    </div>
+
+    <!-- EE Panel -->
+    <div class="pay-panel active" id="panelEE">
+      <div class="pay-card">
+        <div class="ee-toolbar">
+          <h3 style="margin:0;">Employee Master List</h3>
+          <button class="btn-sm primary" onclick="openEEModal(null)">+ Add Employee</button>
+        </div>
+        <table class="pay-table" id="eeTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Last Name</th>
+              <th>First Name</th>
+              <th class="num">Daily Rate (₱)</th>
+              <th class="num">Hourly Rate (₱)</th>
+              <th class="num">Other Income (₱)</th>
+              <th class="num">HDMF Amt</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="eeBody">
+            <tr><td colspan="9" style="text-align:center;color:var(--text-muted);">Loading employees...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- HOURS A Panel -->
+    <div class="pay-panel" id="panelHoursA">
+      <div class="pay-card" style="overflow-x:auto;">
+        <h3 id="hoursATitle">1st Cutoff Timesheet — 26th prev month – 10th this month</h3>
+        <div id="hoursAGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
+        <div class="save-bar">
+          <button class="btn-sm primary" onclick="saveHours('A')">Save Hours A</button>
+          <button class="btn-sm" onclick="exportCutoff('A')">⬇ Export PDF</button>
+          <span id="saveHoursAMsg" class="save-msg" style="display:none;">Saved!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAY A Panel -->
+    <div class="pay-panel" id="panelPayA">
+      <div class="pay-card" style="overflow-x:auto;">
+        <h3>1st Cutoff Payroll Register</h3>
+        <div id="payAGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
+        <div class="save-bar">
+          <button class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
+          <button class="btn-sm" onclick="exportCutoff('A')">⬇ Export PDF</button>
+          <button class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
+          <span id="savePayAMsg" class="save-msg" style="display:none;">Saved!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HOURS B Panel -->
+    <div class="pay-panel" id="panelHoursB">
+      <div class="pay-card" style="overflow-x:auto;">
+        <h3 id="hoursBTitle">2nd Cutoff Timesheet — Days 16–end of month</h3>
+        <div id="hoursBGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
+        <div class="save-bar">
+          <button class="btn-sm primary" onclick="saveHours('B')">Save Hours B</button>
+          <button class="btn-sm" onclick="exportCutoff('B')">⬇ Export PDF</button>
+          <span id="saveHoursBMsg" class="save-msg" style="display:none;">Saved!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAY B Panel -->
+    <div class="pay-panel" id="panelPayB">
+      <div class="pay-card" style="overflow-x:auto;">
+        <h3>2nd Cutoff Payroll Register</h3>
+        <div id="payBGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
+        <div class="save-bar">
+          <button class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
+          <button class="btn-sm" onclick="exportCutoff('B')">⬇ Export PDF</button>
+          <button class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>
+          <span id="savePayBMsg" class="save-msg" style="display:none;">Saved!</span>
+        </div>
+      </div>
+    </div>
+    <!-- 13TH MONTH Panel -->
+    <div class="pay-panel" id="panelThirteenth">
+      <div class="pay-card" style="overflow-x:auto;">
+        <div class="ee-toolbar" style="flex-wrap:wrap;gap:0.5rem;">
+          <h3 style="margin:0;">13th Month Pay — Auto-computed from Payroll Register</h3>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <label style="font-size:0.82rem;color:var(--text-muted);">Year</label>
+            <select id="thirteenthYear" onchange="load13thMonth()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:6px;"></select>
+            <button class="btn-sm" onclick="load13thMonth()">🔄 Refresh</button>
+            <button class="btn-sm" onclick="export13thMonthExcel()">⬇ Export Excel</button>
+            <button class="btn-sm" onclick="print13thMonth()">🖨 Print / PDF</button>
+          </div>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0.3rem 0 0.8rem;">
+          Formula: total Basic Pay earned in the selected year ÷ 12. Inactive/resigned employees
+          are prorated automatically since their basic pay reflects only the months actually worked.
+          Updates whenever Payroll Register entries change.
+        </p>
+        <table class="pay-table" id="thirteenthTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Last Name</th>
+              <th>First Name</th>
+              <th>Status</th>
+              <th class="num">Months Worked</th>
+              <th class="num">Cutoffs</th>
+              <th class="num">Total Basic Pay (₱)</th>
+              <th class="num">13th Month Pay (₱)</th>
+            </tr>
+          </thead>
+          <tbody id="thirteenthBody">
+            <tr><td colspan="8" style="text-align:center;color:var(--text-muted);">Select a year to load.</td></tr>
+          </tbody>
+          <tfoot id="thirteenthFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </div><!-- /.main-content -->
+
+  <!-- EE Add/Edit Modal -->
+  <div class="ee-overlay" id="eeOverlay">
+    <div class="ee-modal">
+      <h3 id="eeModalTitle">Add Employee</h3>
+      <input type="hidden" id="eeEditId">
+      <div class="form-row">
+        <label>Last Name</label>
+        <input type="text" id="eeLastName" placeholder="e.g. ESTUR">
+      </div>
+      <div class="form-row">
+        <label>First Name</label>
+        <input type="text" id="eeFirstName" placeholder="e.g. NEIL MONDANO">
+      </div>
+      <div class="form-row">
+        <label>Daily Rate (₱)</label>
+        <input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-row">
+        <label>Other Income (₱) — e.g. allowances, per 2nd cutoff</label>
+        <input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-row">
+        <label>HDMF / Pag-IBIG Amount (₱)</label>
+        <input type="number" id="eeHdmf" min="0" step="0.01" placeholder="100.00">
+      </div>
+      <div class="form-row">
+        <label>Status</label>
+        <select id="eeStatus">
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" onclick="closeEEModal()">Cancel</button>
+        <button class="btn-sm primary" onclick="saveEE()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/director-home.js"></script>
+  <script>
+    // Pending-approval strip (director is part of the final approver tier).
+    (function () {
+      if (typeof _flowConfigured !== 'function' || !_flowConfigured()) return;
+      Promise.all([
+        fetchFlow('getQuotations').catch(() => ({ data: [] })),
+        fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
+      ]).then(([q, po]) => {
+        const qn = ((q && q.data) || []).filter(x => x.status === 'Pending Management').length;
+        const pn = ((po && po.data) || []).filter(x => x.status === 'Pending Management').length;
+        const el = document.getElementById('flowApprovalStrip');
+        if (!el || (qn + pn === 0)) return;
+        const chip = (n, label, href) => `<a href="${href}" style="text-decoration:none;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.9rem;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:#fff;color:var(--text-primary,#0f172a);font-weight:600;font-size:0.85rem;"><span style="background:#b45309;color:#fff;border-radius:999px;padding:1px 9px;font-size:0.78rem;">${n}</span>${label}</a>`;
+        let chips = '';
+        if (qn) chips += chip(qn, 'Quotations awaiting your approval', 'flow-quotations.html');
+        if (pn) chips += chip(pn, 'Purchase Orders awaiting your approval', 'flow-purchase-orders.html');
+        el.innerHTML = `<div style="border:1px solid var(--border,#e2e8f0);border-radius:14px;background:linear-gradient(180deg,#fff,#f6faf9);padding:1rem 1.2rem;">
+          <div style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;color:var(--text-primary,#0f172a);">⚑ Pending my approval</div>
+          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">${chips}</div></div>`;
+        el.style.display = '';
+      }).catch(() => {});
+    })();
+  </script>
+</body>
+</html>
