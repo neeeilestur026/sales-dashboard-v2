@@ -353,6 +353,8 @@ function renderNavbar(activePage) {
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
+          <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
+          <a href="migrate-collections.html" class="${activePage === 'migrate-collections' ? 'active' : ''}">Migrate Collections</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Materials Receiving</a>
@@ -401,6 +403,8 @@ function renderNavbar(activePage) {
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
+          <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
+          <a href="migrate-collections.html" class="${activePage === 'migrate-collections' ? 'active' : ''}">Migrate Collections</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Receiving</a>

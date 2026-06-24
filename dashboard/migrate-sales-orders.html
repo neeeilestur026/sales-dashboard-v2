@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migrate Sales Orders — Legacy → Flow</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .report { max-width: 1200px; margin: 0 auto; }
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
+    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-body { padding: 1.4rem 1.6rem; }
+    .mig-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.3rem; }
+    .mig-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
+    .mig-tile .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; }
+    .mig-tile .v { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+    .mig-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
+    .mig-toolbar input[type=text], .mig-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: #fff; }
+    .mig-toolbar .spacer { margin-left: auto; }
+    .mig-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    .mig-table th { text-align: left; padding: 0.55rem 0.7rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--border); background: var(--bg-inset); position: sticky; top: 0; }
+    .mig-table td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .mig-table tr:hover td { background: var(--accent-light, #ccfbf1); }
+    .mig-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .mig-table .ref { font-weight: 700; color: var(--text-primary); }
+    .b-mig { background: rgba(13,148,136,0.14); color: #0f766e; }
+    .b-pend { background: rgba(245,158,11,0.16); color: #b45309; }
+    .mig-badge { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
+    .mig-items { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--text-secondary); display: none; }
+    .mig-items.open { display: block; }
+    .mig-items table { width: 100%; border-collapse: collapse; margin-top: 0.25rem; }
+    .mig-items td, .mig-items th { padding: 0.2rem 0.45rem; border-bottom: 1px dashed var(--border); font-size: 0.76rem; }
+    .mig-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.76rem; padding: 0; text-decoration: underline; }
+    .progress-wrap { background: var(--bg-inset); border-radius: 999px; height: 10px; overflow: hidden; margin: 0.4rem 0; }
+    .progress-bar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s ease; }
+    .dr-empty { padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="report">
+      <div class="report-sheet">
+        <div class="report-head">
+          <div>
+            <h1>Migrate Sales Orders</h1>
+            <div class="meta" id="metaLine">Bring legacy sales orders into the new process flow — original numbers preserved, already-migrated ones skipped.</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <a href="flow-sales-orders.html" class="btn btn-sm btn-secondary">← Flow Sales Orders</a>
+            <button class="btn btn-sm btn-secondary" id="reloadBtn">Reload</button>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="mig-kpis" id="kpis">
+            <div class="mig-tile"><div class="l">Legacy SOs</div><div class="v" id="kTotal">—</div></div>
+            <div class="mig-tile"><div class="l">Already Migrated</div><div class="v" id="kMig">—</div></div>
+            <div class="mig-tile"><div class="l">Pending Migration</div><div class="v" id="kPend">—</div></div>
+            <div class="mig-tile"><div class="l">Total Value (ex-VAT)</div><div class="v" id="kValue">—</div></div>
+          </div>
+
+          <div id="runBox" style="display:none;border:1px solid var(--border);border-radius:10px;padding:0.8rem 1rem;margin-bottom:1rem;background:#f8fafc;">
+            <div style="font-weight:700;font-size:0.85rem;" id="runTitle">Migrating…</div>
+            <div class="progress-wrap"><div class="progress-bar" id="progBar"></div></div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);" id="runStat">—</div>
+          </div>
+
+          <div class="mig-toolbar">
+            <input type="text" id="search" placeholder="Search SO no / customer…">
+            <select id="statusFilter"><option value="">All statuses</option></select>
+            <select id="migFilter"><option value="">All</option><option value="pending">Pending only</option><option value="migrated">Migrated only</option></select>
+            <span class="spacer"></span>
+            <button class="btn btn-sm btn-secondary" id="selPendingBtn">Select all pending</button>
+            <button class="btn btn-sm btn-primary" id="migSelBtn">Migrate selected</button>
+            <button class="btn btn-sm btn-primary" id="migAllBtn">Migrate all pending</button>
+          </div>
+
+          <div id="container" style="overflow-x:auto;max-height:60vh;overflow-y:auto;"><div class="dr-empty">Loading legacy sales orders…</div></div>
+          <div id="msg" class="flow-msg" style="display:none;margin-top:0.75rem;"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/migrate-sales-orders.js"></script>
+</body>
+</html>

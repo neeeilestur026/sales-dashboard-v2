@@ -246,12 +246,22 @@ function submitToGoogleSheet() {
 
     fetch('/mi/submit_to_sheets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(data),
+        cache: 'no-store'
     })
-    .then(response => response.json())
+    .then(async response => {
+        const text = await response.text();
+        if (!text) {
+            throw new Error('Server returned an empty response (HTTP ' + response.status + '). The request may have timed out — please try again.');
+        }
+        let parsed;
+        try { parsed = JSON.parse(text); }
+        catch (_) { throw new Error('Server returned a non-JSON response (HTTP ' + response.status + '): ' + text.slice(0, 200)); }
+        return parsed;
+    })
     .then(data => {
-        updateOutputLog(data.output_log);
+        updateOutputLog(data.output_log || []);
         if (data.success) {
             alert('Successfully submitted to Google Sheet!\n\nIssuance No: ' + issuanceNo + '\nRecipient: ' + recipientName + '\nItems: ' + itemCount);
         } else {
@@ -260,8 +270,8 @@ function submitToGoogleSheet() {
     })
     .catch(error => {
         console.error('Error submitting to sheets:', error);
-        updateOutputLog(['Error: Failed to submit to Google Sheet.']);
-        alert('Error: Failed to submit to Google Sheet. Check the console for details.');
+        updateOutputLog(['Error: ' + (error && error.message ? error.message : 'Failed to submit to Google Sheet.')]);
+        alert('Error submitting to Google Sheet:\n\n' + (error && error.message ? error.message : 'Unknown error'));
     });
 }
 

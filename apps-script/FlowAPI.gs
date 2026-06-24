@@ -383,6 +383,84 @@ function createSalesOrder(p) {
   return { success: true, soNo: no, message: 'Sales Order created.' };
 }
 
+// Bulk-import legacy Sales Orders (header + items). Preserves the original SO No, skips any that already
+// exist (idempotent), tolerant of blank customer / zero-item records so no legacy record is lost.
+function importSalesOrders(p) {
+  var incoming = JSON.parse(p.items || '[]');
+  if (!incoming.length) return { success: false, message: 'No sales orders to import.' };
+  var existing = {};
+  _rows('SalesOrders').forEach(function (r) { existing[String(r['SO No'])] = true; });
+  var soSh = _sheet('SalesOrders'), itemSh = _sheet('SalesOrderItems');
+  var created = 0, skipped = 0, errors = [];
+  incoming.forEach(function (so) {
+    try {
+      var no = so.soNo || _nextNumber('SalesOrders', 1, 'SO');
+      if (existing[String(no)]) { skipped++; return; }
+      var items = Array.isArray(so.items) ? so.items : [];
+      var total = 0;
+      items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+      soSh.appendRow([no, so.quotationNo || '', so.date || _now(), so.customer || '(unknown)',
+        so.status || 'Open', total, so.createdBy || 'Migrated (legacy)', _now()]);
+      items.forEach(function (it) {
+        itemSh.appendRow([no, it.itemNo || '', it.itemName || '', _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)]);
+      });
+      existing[String(no)] = true;
+      created++;
+    } catch (e) {
+      errors.push({ soNo: so && so.soNo, message: String(e && e.message || e) });
+    }
+  });
+  return { success: true, created: created, skipped: skipped, errors: errors,
+    message: 'Imported ' + created + ' sales order(s); skipped ' + skipped + ' already present.' };
+}
+
+// Bulk-import legacy Collections (the old invoice-level receivables ledger) into the flow. Each old
+// record becomes one ARAging row (Amount = totalAmountDue, Collected = amountReceived) and, when any
+// amount was received, one Collections payment row. Preserves the original invoice number (dedupe key),
+// skips invoices already present (idempotent), and posts NO journals (pure historical record write).
+function importCollections(p) {
+  var incoming = JSON.parse(p.items || '[]');
+  if (!incoming.length) return { success: false, message: 'No collections to import.' };
+  var existing = {};
+  _rows('ARAging').forEach(function (r) { existing[String(r['INV No'])] = true; });
+  var createdAR = 0, createdPayments = 0, skipped = 0, errors = [];
+  incoming.forEach(function (c) {
+    try {
+      var invNo = c.invoiceNo != null ? String(c.invoiceNo) : '';
+      if (invNo && existing[invNo]) { skipped++; return; }
+      var due = _num(c.totalAmountDue), recv = _num(c.amountReceived);
+      var status = recv <= 0 ? 'Unpaid' : (recv >= due && due > 0 ? 'Paid' : 'Partial');
+      // Preserve the old breakdown in Notes (blanks omitted).
+      var parts = ['Migrated (legacy)'];
+      if (c.drNo) parts.push('DR ' + c.drNo);
+      if (c.poNo) parts.push('PO ' + c.poNo);
+      if (c.paymentTerms) parts.push('Terms ' + c.paymentTerms);
+      if (c.netOfVat) parts.push('Net ' + c.netOfVat);
+      if (c.vat) parts.push('VAT ' + c.vat);
+      if (c.ewt) parts.push('EWT ' + c.ewt);
+      if (c.dateReceived) parts.push('Rcvd ' + c.dateReceived);
+      var notes = parts.join(' · ');
+      var arNo = _nextNumber('ARAging', 1, 'AR');
+      var customer = c.customer || '(unknown)';
+      _append('ARAging', [arNo, invNo, c.soNo || '', customer, due, recv, status,
+        c.dueDate || '', notes, _now(), _now()]);
+      if (recv > 0) {
+        var colNo = _nextNumber('Collections', 1, 'COL');
+        _append('Collections', [colNo, arNo, invNo, c.soNo || '', customer,
+          c.dateCollected || c.date || _dateStr(_now()), recv, '', '', 'Migrated (legacy)', _now()]);
+        createdPayments++;
+      }
+      if (invNo) existing[invNo] = true;
+      createdAR++;
+    } catch (e) {
+      errors.push({ invoiceNo: c && c.invoiceNo, message: String(e && e.message || e) });
+    }
+  });
+  return { success: true, createdAR: createdAR, createdPayments: createdPayments, skipped: skipped,
+    errors: errors, message: 'Imported ' + createdAR + ' receivable(s) and ' + createdPayments +
+    ' payment(s); skipped ' + skipped + ' already present.' };
+}
+
 function updateSalesOrder(p) {
   var no = p.soNo;
   if (!no) return { success: false, message: 'soNo required.' };
@@ -1049,9 +1127,11 @@ var _MODULE_MAP = {
   addInventoryItem: ['Inventory', 'Added'], updateInventoryItem: ['Inventory', 'Updated'], deleteInventoryItem: ['Inventory', 'Deleted'],
   createQuotation: ['Quotation', 'Created'], updateQuotation: ['Quotation', 'Updated'], deleteQuotation: ['Quotation', 'Deleted'],
   createSalesOrder: ['Sales Order', 'Created'], updateSalesOrder: ['Sales Order', 'Updated'], deleteSalesOrder: ['Sales Order', 'Deleted'],
+  importSalesOrders: ['Sales Order', 'Imported'],
   createPurchaseOrder: ['Purchase Order', 'Created'], updatePurchaseOrder: ['Purchase Order', 'Updated'], deletePurchaseOrder: ['Purchase Order', 'Deleted'],
   updateAPAging: ['AP Aging', 'Updated'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
+  importCollections: ['Collection', 'Imported'],
   createReceiving: ['Receiving', 'Received'],
   createInvoice: ['Invoice', 'Issued'],
   saveQuotationPDF: ['Quotation', 'PDF Saved'], savePOPDF: ['Purchase Order', 'PDF Saved'],
@@ -1289,11 +1369,12 @@ var HANDLERS = {
   getQuotations: getQuotations, createQuotation: createQuotation,
   updateQuotation: updateQuotation, deleteQuotation: deleteQuotation,
   getSalesOrders: getSalesOrders, createSalesOrder: createSalesOrder,
-  updateSalesOrder: updateSalesOrder, deleteSalesOrder: deleteSalesOrder,
+  updateSalesOrder: updateSalesOrder, deleteSalesOrder: deleteSalesOrder, importSalesOrders: importSalesOrders,
   getPurchaseOrders: getPurchaseOrders, createPurchaseOrder: createPurchaseOrder,
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
   getAPAging: getAPAging, updateAPAging: updateAPAging,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
+  importCollections: importCollections,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -1312,9 +1393,9 @@ var HANDLERS = {
 var MUTATIONS = {
   addInventoryItem: 1, updateInventoryItem: 1, deleteInventoryItem: 1,
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1,
-  createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1,
+  createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
-  updateAPAging: 1, recordCollection: 1, updateARAging: 1, createReceiving: 1, createInvoice: 1,
+  updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
