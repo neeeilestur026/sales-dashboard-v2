@@ -305,10 +305,8 @@ function renderNavbar(activePage) {
   let navLinks = '';
   if (session.role === 'admin') {
     const salesPages = ['admin-team', 'admin-clients', 'admin-reports', 'admin-targets', 'admin-daily-report'];
-    const docPages = ['quotation-approvals', 'pr-tracker', 'supplier-quotation', 'payment-requests', 'pending-items', 'quotation-summary', 'po-approvals', 'po-create', 'mro-queue', 'mi-queue', 'pricing-submissions'];
     const sysPages = ['admin-users', 'admin-login-log', 'change-password'];
     const salesActive = salesPages.includes(activePage);
-    const docActive = docPages.includes(activePage);
     const sysActive = sysPages.includes(activePage);
 
     navLinks = `
@@ -330,26 +328,10 @@ function renderNavbar(activePage) {
           <a href="admin-targets.html" class="${activePage === 'admin-targets' ? 'active' : ''}">Sales Targets</a>
         </div>
       </div>
-      <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${docActive ? 'active' : ''}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Documents
-          <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="nav-dropdown-menu">
-          <a href="quotation-approvals.html" class="${activePage === 'quotation-approvals' ? 'active' : ''}">Quotation Approvals</a>
-          <a href="pr-tracker.html" class="${activePage === 'pr-tracker' ? 'active' : ''}">PR Tracker</a>
-          <a href="supplier-quotation.html" class="${activePage === 'supplier-quotation' ? 'active' : ''}">Supplier Quotation</a>
-          <a href="payment-requests.html" class="${activePage === 'payment-requests' ? 'active' : ''}">Payment Requests</a>
-          <a href="pending-items.html" class="${activePage === 'pending-items' ? 'active' : ''}">Pending Items</a>
-          <a href="quotation-summary.html" class="${activePage === 'quotation-summary' ? 'active' : ''}">Quotation Summary</a>
-          <a href="po-approvals.html" class="${activePage === 'po-approvals' ? 'active' : ''}">PO Approvals</a>
-          <a href="/po/" class="${activePage === 'po-create' ? 'active' : ''}">Create Purchase Order</a>
-          <a href="mro-queue.html" class="${activePage === 'mro-queue' ? 'active' : ''}">MRO Queue</a>
-          <a href="mi-queue.html" class="${activePage === 'mi-queue' ? 'active' : ''}">MI Queue</a>
-          <a href="pricing-submissions.html" class="${activePage === 'pricing-submissions' ? 'active' : ''}">Pricing Submissions</a>
-        </div>
-      </div>
+      <a href="payment-requests.html" class="${activePage === 'payment-requests' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+        Payment Requests
+      </a>
       <a href="accounting.html" class="${activePage === 'accounting' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Accounting
