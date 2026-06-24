@@ -12,22 +12,36 @@ function _flowConfigured() {
   return FLOW_API_URL && FLOW_API_URL.indexOf('REPLACE_WITH') !== 0;
 }
 
-/** GET read-only action. */
+// Apps Script intermittently bounces a request to a one-time googleusercontent URL that can
+// momentarily return 404/429/5xx (or the network blips) under load. These are transient — retry them.
+function _flowTransient(status) { return status === 404 || status === 408 || status === 429 || status >= 500; }
+function _flowSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/** GET read-only action. Retries transient failures a few times with backoff. */
 async function fetchFlow(action, params = {}) {
   if (!_flowConfigured()) throw new Error('Flow backend not configured. Set FLOW_API_URL in js/flow-api.js.');
   const q = new URLSearchParams(Object.assign({ action }, params)).toString();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 30000);
-  try {
-    const res = await fetch(`${FLOW_API_URL}?${q}`, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`Server responded with status ${res.status}`);
-    return await res.json();
-  } catch (e) {
-    clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('Request timed out.');
-    throw new Error(e.message || 'Unable to reach the flow backend.');
+  const attempts = 4;
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    try {
+      const res = await fetch(`${FLOW_API_URL}?${q}`, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        if (_flowTransient(res.status) && i < attempts - 1) { lastErr = new Error(`Server responded with status ${res.status}`); await _flowSleep(400 * (i + 1)); continue; }
+        throw new Error(`Server responded with status ${res.status}`);
+      }
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = (e.name === 'AbortError') ? new Error('Request timed out.') : new Error(e.message || 'Unable to reach the flow backend.');
+      if (i < attempts - 1) { await _flowSleep(400 * (i + 1)); continue; }
+      throw lastErr;
+    }
   }
+  throw lastErr || new Error('Unable to reach the flow backend.');
 }
 
 /** POST mutation. Items/objects are JSON-stringified by the caller as needed. */
@@ -43,21 +57,33 @@ function _flowActorRole() {
 async function postFlow(action, params = {}) {
   if (!_flowConfigured()) throw new Error('Flow backend not configured. Set FLOW_API_URL in js/flow-api.js.');
   const body = Object.assign({ actorName: _flowActor(), actorRole: _flowActorRole() }, params, { action });
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 60000);
-  try {
-    const res = await fetch(FLOW_API_URL, {
-      method: 'POST', redirect: 'follow', signal: ctrl.signal,
-      headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body)
-    });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`Server responded with status ${res.status}`);
-    return await res.json();
-  } catch (e) {
-    clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('Request timed out.');
-    throw new Error(e.message || 'Unable to reach the flow backend.');
+  const payload = JSON.stringify(body);
+  const attempts = 4;
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60000);
+    try {
+      const res = await fetch(FLOW_API_URL, {
+        method: 'POST', redirect: 'follow', signal: ctrl.signal,
+        headers: { 'Content-Type': 'text/plain' }, body: payload
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        // Transient redirect/load failures retry. The bulk importers dedupe server-side, so a retry
+        // never double-writes; single mutations almost always 404 before the handler runs.
+        if (_flowTransient(res.status) && i < attempts - 1) { lastErr = new Error(`Server responded with status ${res.status}`); await _flowSleep(500 * (i + 1)); continue; }
+        throw new Error(`Server responded with status ${res.status}`);
+      }
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = (e.name === 'AbortError') ? new Error('Request timed out.') : new Error(e.message || 'Unable to reach the flow backend.');
+      if (i < attempts - 1) { await _flowSleep(500 * (i + 1)); continue; }
+      throw lastErr;
+    }
   }
+  throw lastErr || new Error('Unable to reach the flow backend.');
 }
 
 // ─── Shared UI helpers ───────────────────────────
