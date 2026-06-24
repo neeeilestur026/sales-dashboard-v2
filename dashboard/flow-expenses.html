@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Expenses</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .report { max-width: 1280px; margin: 0 auto; }
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
+    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-body { padding: 1.4rem 1.6rem; }
+    .ex-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.7rem; margin-bottom: 1.4rem; }
+    .ex-kpi { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); min-width: 0; }
+    .ex-kpi.tot { border-color: var(--accent); background: linear-gradient(180deg, #ffffff, #f0fbf9); }
+    .ex-kpi .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; }
+    .ex-kpi .v { font-size: clamp(0.92rem, 1.7vw, 1.3rem); font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; word-break: break-word; }
+    .ex-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .ex-toolbar input[type=text], .ex-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: #fff; }
+    .ex-toolbar .spacer { margin-left: auto; }
+    .ex-group { margin-bottom: 1.5rem; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .ex-group-head { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 1rem; background: var(--bg-inset); cursor: pointer; border-bottom: 1px solid var(--border); }
+    .ex-group-head .gt { font-size: 0.92rem; font-weight: 700; color: var(--text-primary); }
+    .ex-group-head .gc { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
+    .ex-group-head .gsub { margin-left: auto; font-size: 1rem; font-weight: 700; color: var(--accent-dark, #0f766e); font-variant-numeric: tabular-nums; }
+    .ex-group.collapsed .ex-group-body { display: none; }
+    .ex-catbar { padding: 0.5rem 1rem; background: #fbfdfd; border-bottom: 1px dashed var(--border); display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; font-size: 0.74rem; color: var(--text-secondary); }
+    .ex-catbar b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .ex-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .ex-table th { text-align: left; padding: 0.5rem 0.6rem; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; }
+    .ex-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .ex-table tr:hover td { background: var(--accent-light, #ccfbf1); }
+    .ex-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .ex-table .amt { font-weight: 700; }
+    .ex-grand { display: flex; justify-content: space-between; align-items: center; padding: 0.9rem 1.1rem; border: 2px solid var(--accent); border-radius: 12px; background: linear-gradient(180deg, #ffffff, #f0fbf9); margin-top: 0.5rem; }
+    .ex-grand .gl { font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-primary); }
+    .ex-grand .gv { font-size: 1.35rem; font-weight: 800; color: var(--accent-dark, #0f766e); font-variant-numeric: tabular-nums; }
+    .ex-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.66rem; font-weight: 700; }
+    .b-opex { background: rgba(13,148,136,0.14); color: #0f766e; }
+    .b-ga { background: rgba(99,102,241,0.14); color: #4338ca; }
+    .b-other { background: rgba(100,116,139,0.16); color: #475569; }
+    .ex-act { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 0.15rem 0.45rem; cursor: pointer; font-size: 0.72rem; color: var(--text-secondary); }
+    .ex-act:hover { border-color: var(--accent); color: var(--accent-dark, #0f766e); }
+    .dr-empty { padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic; }
+    .ex-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+    .ex-form .full { grid-column: 1 / -1; }
+    .ex-form label { display: block; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.2rem; }
+    .ex-form input, .ex-form select, .ex-form textarea { width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: #fff; }
+    .ex-comp { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+    @media (max-width: 640px) { .ex-form { grid-template-columns: 1fr; } .ex-comp { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="report">
+      <div class="report-sheet">
+        <div class="report-head">
+          <div>
+            <h1>Expenses</h1>
+            <div class="meta" id="metaLine">Operating, General &amp; Administrative, and Other expenses — sorted by type with per-type subtotals and an overall total.</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <a href="migrate-expenses.html" class="btn btn-sm btn-secondary" style="white-space:nowrap;">⤓ Import legacy Expenses</a>
+            <button class="btn btn-sm btn-primary" id="addBtn">+ Add Expense</button>
+            <button class="btn btn-sm btn-secondary" id="reloadBtn">Reload</button>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="ex-kpis" id="kpis">
+            <div class="ex-kpi tot"><div class="l">Total Expenses</div><div class="v" id="kTotal">—</div></div>
+            <div class="ex-kpi"><div class="l">Operating (OpEx)</div><div class="v" id="kOpex">—</div></div>
+            <div class="ex-kpi"><div class="l">General &amp; Admin</div><div class="v" id="kGa">—</div></div>
+            <div class="ex-kpi"><div class="l">Other / Non-Op</div><div class="v" id="kOther">—</div></div>
+            <div class="ex-kpi"><div class="l"># Records</div><div class="v" id="kCount">—</div></div>
+          </div>
+
+          <div class="ex-toolbar">
+            <input type="text" id="search" placeholder="Search voucher / client / description…">
+            <select id="yearSel"></select>
+            <select id="monthSel">
+              <option value="">All months</option>
+              <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+              <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+              <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+              <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+            </select>
+            <select id="typeFilter">
+              <option value="">All types</option>
+              <option value="Operating">Operating (OpEx)</option>
+              <option value="General &amp; Administrative">General &amp; Administrative</option>
+              <option value="Other">Other / Non-Operating</option>
+            </select>
+            <select id="catFilter"><option value="">All categories</option></select>
+            <span class="spacer"></span>
+            <button class="btn btn-sm btn-secondary" id="printBtn">Print</button>
+          </div>
+
+          <div id="container"><div class="dr-empty">Loading expenses…</div></div>
+          <div id="msg" class="flow-msg" style="display:none;margin-top:0.75rem;"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add / Edit modal -->
+  <div class="flow-modal-overlay" id="expModal">
+    <div class="flow-modal" style="max-width:640px;">
+      <h3 id="expModalTitle">Add Expense</h3>
+      <input type="hidden" id="expRowIndex">
+      <div class="ex-form">
+        <div><label>Date *</label><input type="date" id="fDate"></div>
+        <div><label>Type *</label><select id="fType">
+          <option value="Operating">Operating (OpEx)</option>
+          <option value="General &amp; Administrative">General &amp; Administrative</option>
+          <option value="Other">Other / Non-Operating</option>
+        </select></div>
+        <div><label>Category *</label><input type="text" id="fCategory" list="catList" placeholder="e.g. Rent expense"><datalist id="catList"></datalist></div>
+        <div><label>Voucher No.</label><input type="text" id="fVoucher"></div>
+        <div><label>Client</label><input type="text" id="fClient"></div>
+        <div><label>Amount (PHP)</label><input type="number" step="any" id="fAmount" placeholder="auto = sum of components"></div>
+        <div class="full"><label>Description *</label><input type="text" id="fDescription"></div>
+        <div class="full"><label>Component breakdown (optional — auto-sums into Amount)</label>
+          <div class="ex-comp">
+            <input type="number" step="any" id="fToll" placeholder="Toll">
+            <input type="number" step="any" id="fFuel" placeholder="Fuel">
+            <input type="number" step="any" id="fMeals" placeholder="Meals">
+            <input type="number" step="any" id="fLoad" placeholder="Load">
+            <input type="number" step="any" id="fOther" placeholder="Other">
+          </div>
+        </div>
+        <div class="full"><label>Notes</label><input type="text" id="fNotes"></div>
+      </div>
+      <div id="expFormMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeExpModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="expSaveBtn" onclick="submitExpense()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-expenses.js"></script>
+</body>
+</html>

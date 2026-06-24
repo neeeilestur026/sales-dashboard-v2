@@ -55,6 +55,10 @@ var SCHEMA = {
   Collections: ['Collection No', 'AR No', 'INV No', 'SO No', 'Customer', 'Date', 'Amount (PHP)',
                 'Method', 'Reference No', 'Notes', 'Created At'],
 
+  // ── Expenses ledger (OpEx / G&A / Other) — pure record, no GL journals ──
+  Expenses: ['Exp No', 'Date', 'Type', 'Category', 'Voucher No', 'Client', 'Description', 'Toll',
+             'Fuel', 'Meals', 'Load Balance', 'Other', 'Amount', 'Notes', 'Created By', 'Legacy Key', 'Created At'],
+
   // ── Phase 2: General Ledger ──
   ChartOfAccounts: ['Code', 'Name', 'Type', 'Normal Balance'],
   Journal: ['Entry No', 'Date', 'Source', 'Source No', 'Account Code', 'Account Name', 'Debit', 'Credit', 'Currency', 'Memo', 'Created At'],
@@ -700,6 +704,139 @@ function updateARAging(p) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  EXPENSES  (OpEx / G&A / Other — pure ledger, no GL journals)
+// ════════════════════════════════════════════════════════════════════════════
+var EXP_TYPE = { OPEX: 'Operating', GA: 'General & Administrative', OTHER: 'Other' };
+
+// Default category → type mapping (lower-cased keys). Anything unmapped → Operating (overridable).
+var _EXP_TYPE_MAP = {
+  // Operating (selling / distribution / field)
+  'advertising': EXP_TYPE.OPEX, 'commission': EXP_TYPE.OPEX, 'delivery expense': EXP_TYPE.OPEX,
+  'representation': EXP_TYPE.OPEX, 'transportation and travel': EXP_TYPE.OPEX,
+  'load allowances': EXP_TYPE.OPEX, 'postage and communication': EXP_TYPE.OPEX,
+  'repairs and maintenance': EXP_TYPE.OPEX, 'supplies expense': EXP_TYPE.OPEX,
+  'tools and equipment': EXP_TYPE.OPEX, 'fuel': EXP_TYPE.OPEX, 'toll': EXP_TYPE.OPEX,
+  'meals': EXP_TYPE.OPEX, 'gas': EXP_TYPE.OPEX, 'transportation': EXP_TYPE.OPEX,
+  // General & Administrative
+  'salaries and wages': EXP_TYPE.GA, 'employee benefits': EXP_TYPE.GA, 'statutory benefits': EXP_TYPE.GA,
+  'rent expense': EXP_TYPE.GA, 'utilities': EXP_TYPE.GA, 'depreciation expense': EXP_TYPE.GA,
+  'legal fees': EXP_TYPE.GA, 'professional fees': EXP_TYPE.GA, 'permits and licenses': EXP_TYPE.GA,
+  'bank service charge': EXP_TYPE.GA, 'janitorial': EXP_TYPE.GA, 'medical expenses': EXP_TYPE.GA,
+  'miscellaneous': EXP_TYPE.GA, 'revolving fund': EXP_TYPE.GA, 'revolving funds': EXP_TYPE.GA,
+  // Other / Non-Operating
+  'cost of goods sold': EXP_TYPE.OTHER, 'inventory': EXP_TYPE.OTHER,
+  'interest expense': EXP_TYPE.OTHER, 'interest income': EXP_TYPE.OTHER
+};
+
+function _expType(category) {
+  var t = _EXP_TYPE_MAP[String(category || '').trim().toLowerCase()];
+  return t || EXP_TYPE.OPEX;
+}
+
+// Idempotency signature for migrating a legacy expense (no natural key in the old sheet).
+function _expKey(rec) {
+  var amount = (rec.amount != null && rec.amount !== '')
+    ? _num(rec.amount)
+    : (_num(rec.toll) + _num(rec.fuel) + _num(rec.meals) + _num(rec.loadBalance) + _num(rec.otherAmount));
+  return [_dateStr(rec.date), String(rec.category || '').trim(), amount.toFixed(2),
+    String(rec.description || '').trim(), String(rec.createdBy || '').trim()].join('|');
+}
+
+function getExpenses(p) {
+  var rows = _rows('Expenses');
+  if (p && p.type) rows = rows.filter(function (r) { return String(r['Type']) === String(p.type); });
+  if (p && p.category) rows = rows.filter(function (r) { return String(r['Category']) === String(p.category); });
+  if (p && p.year) rows = rows.filter(function (r) { return _dateStr(r['Date']).slice(0, 4) === String(p.year); });
+  if (p && p.month) rows = rows.filter(function (r) { return _dateStr(r['Date']).slice(5, 7) === String(p.month); });
+  rows.sort(function (a, b) { return new Date(b['Created At']) - new Date(a['Created At']); });
+  return { success: true, data: rows.map(function (r) {
+    return {
+      expNo: r['Exp No'], date: r['Date'], type: r['Type'] || EXP_TYPE.OPEX, category: r['Category'],
+      voucherNo: r['Voucher No'], client: r['Client'], description: r['Description'],
+      toll: _num(r['Toll']), fuel: _num(r['Fuel']), meals: _num(r['Meals']),
+      loadBalance: _num(r['Load Balance']), other: _num(r['Other']), amount: _num(r['Amount']),
+      notes: r['Notes'], createdBy: r['Created By'], legacyKey: r['Legacy Key'] || '',
+      createdAt: r['Created At'], rowIndex: r.rowIndex
+    };
+  }) };
+}
+
+function _expAmount(p) {
+  if (p.amount != null && p.amount !== '') return _num(p.amount);
+  return _num(p.toll) + _num(p.fuel) + _num(p.meals) + _num(p.loadBalance) + _num(p.other != null ? p.other : p.otherAmount);
+}
+
+function addExpense(p) {
+  var category = String(p.category || '').trim() || 'Uncategorized';
+  var type = p.type || _expType(category);
+  var amount = _expAmount(p);
+  var no = _nextNumber('Expenses', 1, 'EXP');
+  _append('Expenses', [no, p.date || _dateStr(_now()), type, category, p.voucherNo || p.orderRef || '',
+    p.client || '', p.description || '', _num(p.toll), _num(p.fuel), _num(p.meals), _num(p.loadBalance),
+    _num(p.other != null ? p.other : p.otherAmount), amount, p.notes || '', p.createdBy || p.actorName || '',
+    p.legacyKey || '', _now()]);
+  return { success: true, expNo: no, message: 'Expense ' + no + ' recorded.' };
+}
+
+function updateExpense(p) {
+  var ri = parseInt(p.rowIndex, 10);
+  if (!ri) return { success: false, message: 'rowIndex required.' };
+  var sh = _sheet('Expenses');
+  var existing = _rows('Expenses').filter(function (r) { return r.rowIndex === ri; })[0];
+  if (!existing) return { success: false, message: 'Expense not found.' };
+  var category = String(p.category != null ? p.category : existing['Category']).trim() || 'Uncategorized';
+  var type = p.type || existing['Type'] || _expType(category);
+  var amount = (p.amount != null && p.amount !== '') ? _num(p.amount)
+    : (_num(p.toll) + _num(p.fuel) + _num(p.meals) + _num(p.loadBalance) + _num(p.other != null ? p.other : p.otherAmount));
+  sh.getRange(ri, 1, 1, SCHEMA.Expenses.length).setValues([[existing['Exp No'],
+    p.date || existing['Date'], type, category, p.voucherNo != null ? p.voucherNo : existing['Voucher No'],
+    p.client != null ? p.client : existing['Client'], p.description != null ? p.description : existing['Description'],
+    _num(p.toll), _num(p.fuel), _num(p.meals), _num(p.loadBalance),
+    _num(p.other != null ? p.other : p.otherAmount), amount, p.notes != null ? p.notes : existing['Notes'],
+    existing['Created By'], existing['Legacy Key'] || '', existing['Created At'] || _now()]]);
+  return { success: true, expNo: existing['Exp No'], message: 'Expense updated.' };
+}
+
+function deleteExpense(p) {
+  var ri = parseInt(p.rowIndex, 10);
+  if (!ri) return { success: false, message: 'rowIndex required.' };
+  _sheet('Expenses').deleteRow(ri);
+  return { success: true, message: 'Expense deleted.' };
+}
+
+// Bulk-import legacy expenses into the flow ledger. Each old record becomes one Expenses row, typed
+// via the default category→type map. Dedupes on a composite Legacy Key (idempotent), posts NO journals.
+function importExpenses(p) {
+  var incoming = JSON.parse(p.items || '[]');
+  if (!incoming.length) return { success: false, message: 'No expenses to import.' };
+  var existing = {};
+  _rows('Expenses').forEach(function (r) { if (r['Legacy Key']) existing[String(r['Legacy Key'])] = true; });
+  var created = 0, skipped = 0, errors = [];
+  incoming.forEach(function (rec) {
+    try {
+      var key = _expKey(rec);
+      if (existing[key]) { skipped++; return; }
+      var category = String(rec.category || '').trim() || 'Uncategorized';
+      var type = rec.type || _expType(category);
+      var amount = (rec.amount != null && rec.amount !== '') ? _num(rec.amount)
+        : (_num(rec.toll) + _num(rec.fuel) + _num(rec.meals) + _num(rec.loadBalance) + _num(rec.otherAmount));
+      var no = _nextNumber('Expenses', 1, 'EXP');
+      _append('Expenses', [no, _dateStr(rec.date) || _dateStr(_now()), type, category,
+        rec.voucherNo || rec.orderRef || '', rec.client || '', rec.description || '', _num(rec.toll),
+        _num(rec.fuel), _num(rec.meals), _num(rec.loadBalance), _num(rec.otherAmount), amount,
+        rec.notes || '', rec.createdBy || 'Migrated (legacy)', key, _now()]);
+      existing[key] = true;
+      created++;
+    } catch (e) {
+      errors.push({ voucherNo: rec && (rec.voucherNo || rec.orderRef), description: rec && rec.description,
+        message: String(e && e.message || e) });
+    }
+  });
+  return { success: true, created: created, skipped: skipped, errors: errors,
+    message: 'Imported ' + created + ' expense(s); skipped ' + skipped + ' already present.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  MATERIALS RECEIVING  (loads from a PO; pro-rates shipping → landed cost → inventory)
 // ════════════════════════════════════════════════════════════════════════════
 function getReceiving() {
@@ -1132,6 +1269,8 @@ var _MODULE_MAP = {
   updateAPAging: ['AP Aging', 'Updated'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
   importCollections: ['Collection', 'Imported'],
+  addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
+  deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
   createReceiving: ['Receiving', 'Received'],
   createInvoice: ['Invoice', 'Issued'],
   saveQuotationPDF: ['Quotation', 'PDF Saved'], savePOPDF: ['Purchase Order', 'PDF Saved'],
@@ -1175,8 +1314,8 @@ function _logActivity(action, params, result) {
       : (action === 'recordCollection' || action === 'updateARAging')
       ? (result.arNo || params.arNo || result.collectionNo || '')
       : (result.quotationNo || result.soNo || result.poNo || result.mrNo || result.invNo
-         || result.prNo || result.apNo || result.refNo || params.refNo || params.prNo || params.poNo
-         || params.soNo || params.quotationNo || params.itemNo || '');
+         || result.prNo || result.apNo || result.expNo || result.refNo || params.refNo || params.prNo || params.poNo
+         || params.soNo || params.quotationNo || params.expNo || params.itemNo || '');
     var user = params.actorName || params.createdBy || params.receivedBy || '';
     var now = _now();
     _sheet('ActivityLog').appendRow([now, _dateStr(now), user, map[0], map[1], refNo,
@@ -1375,6 +1514,8 @@ var HANDLERS = {
   getAPAging: getAPAging, updateAPAging: updateAPAging,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
   importCollections: importCollections,
+  getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
+  deleteExpense: deleteExpense, importExpenses: importExpenses,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -1396,6 +1537,7 @@ var MUTATIONS = {
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
+  addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
