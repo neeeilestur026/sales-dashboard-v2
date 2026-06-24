@@ -733,13 +733,18 @@ function _expType(category) {
   return t || EXP_TYPE.OPEX;
 }
 
-// Idempotency signature for migrating a legacy expense (no natural key in the old sheet).
+// Idempotency signature for a migrated legacy expense. Includes the voucher number so that two
+// distinct vouchers sharing the same date/category/amount/description are NOT collapsed. Computed
+// from fields both an incoming record and an existing flow row have, so re-runs match by value.
+function _expSig(date, voucher, category, amount, description) {
+  return [_dateStr(date), String(voucher || '').trim(), String(category || '').trim(),
+    _num(amount).toFixed(2), String(description || '').trim()].join('|');
+}
 function _expKey(rec) {
   var amount = (rec.amount != null && rec.amount !== '')
     ? _num(rec.amount)
     : (_num(rec.toll) + _num(rec.fuel) + _num(rec.meals) + _num(rec.loadBalance) + _num(rec.otherAmount));
-  return [_dateStr(rec.date), String(rec.category || '').trim(), amount.toFixed(2),
-    String(rec.description || '').trim(), String(rec.createdBy || '').trim()].join('|');
+  return _expSig(rec.date, rec.voucherNo != null ? rec.voucherNo : rec.orderRef, rec.category, amount, rec.description);
 }
 
 function getExpenses(p) {
@@ -809,8 +814,14 @@ function deleteExpense(p) {
 function importExpenses(p) {
   var incoming = JSON.parse(p.items || '[]');
   if (!incoming.length) return { success: false, message: 'No expenses to import.' };
+  // Build the existing-set by recomputing the signature from each row's actual fields (date · voucher ·
+  // category · amount · description). This matches already-migrated rows by value — regardless of what
+  // is stored in their Legacy Key column — so a re-run never duplicates them and only the genuinely
+  // missing records (distinct voucher but otherwise-identical) get imported.
   var existing = {};
-  _rows('Expenses').forEach(function (r) { if (r['Legacy Key']) existing[String(r['Legacy Key'])] = true; });
+  _rows('Expenses').forEach(function (r) {
+    existing[_expSig(r['Date'], r['Voucher No'], r['Category'], r['Amount'], r['Description'])] = true;
+  });
   var created = 0, skipped = 0, errors = [];
   incoming.forEach(function (rec) {
     try {

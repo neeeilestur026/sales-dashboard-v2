@@ -29,6 +29,14 @@ const TYPE_BADGE = { 'Operating': 'b-opex', 'General & Administrative': 'b-ga', 
 const TYPE_SHORT = { 'Operating': 'OpEx', 'General & Administrative': 'G&A', 'Other': 'Other' };
 function expTypeFor(cat) { return EXP_TYPE_MAP[String(cat || '').trim().toLowerCase()] || 'Operating'; }
 
+// Signature = date · voucher · category · amount · description (matches FlowAPI _expSig). Including the
+// voucher keeps distinct vouchers that share date/amount/description from colliding. Computed identically
+// for legacy source records and existing flow rows so the migrated badge + server dedupe always agree.
+function expSig(date, voucher, category, amount, description) {
+  return [flowDate(date) || '', String(voucher || '').trim(), String(category || '').trim(),
+    flowNum(amount).toFixed(2), String(description || '').trim()].join('|');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   if (!requireAccountingOrAdmin()) return;
   renderNavbar('migrate-expenses');
@@ -52,11 +60,12 @@ function normalize(o) {
   const date = flowDate(o.date) || '';
   const description = String(o.description || '').trim();
   const createdBy = String(o.createdBy || '').trim() || 'Migrated (legacy)';
+  const voucherNo = o.orderRef || o.voucherNo || '';
   return {
-    date, category, voucherNo: o.orderRef || o.voucherNo || '', client: o.client || '', description,
+    date, category, voucherNo, client: o.client || '', description,
     toll, fuel, meals, loadBalance, otherAmount, amount, notes: o.notes || '', createdBy,
     type: expTypeFor(category),
-    legacyKey: [date, category, amount.toFixed(2), description, (o.createdBy || '').trim()].join('|'),
+    legacyKey: expSig(date, voucherNo, category, amount, description),
   };
 }
 
@@ -72,7 +81,10 @@ async function loadAll() {
     if (!oldRes || !oldRes.success) throw new Error((oldRes && oldRes.message) || 'Could not load legacy expenses.');
 
     legacyExp = (oldRes.data || []).map(normalize);
-    migratedSet = new Set((flowRes && flowRes.data || []).map(e => String(e.legacyKey)).filter(Boolean));
+    // Recompute the signature from each flow row's fields (don't trust the stored Legacy Key column),
+    // so already-migrated rows match by value and the badges are correct.
+    migratedSet = new Set((flowRes && flowRes.data || [])
+      .map(e => expSig(e.date, e.voucherNo, e.category, e.amount, e.description)));
     render();
   } catch (e) {
     c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
