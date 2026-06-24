@@ -15,10 +15,10 @@
     .report-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
     .report-body { padding: 1.4rem 1.6rem; }
-    .as-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1.6rem; }
-    .as-kpi { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--bg-card); }
+    .as-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.7rem; margin-bottom: 1.6rem; }
+    .as-kpi { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--bg-card); min-width: 0; }
     .as-kpi .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; }
-    .as-kpi .v { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .as-kpi .v { font-size: clamp(0.92rem, 1.7vw, 1.25rem); font-weight: 700; color: var(--text-primary); margin-top: 0.15rem; font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; word-break: break-word; }
     .as-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.2rem; margin-bottom: 1.6rem; }
     .as-sect-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0 0 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
     .as-sect-title .pill { margin-left: auto; background: var(--accent-light); color: var(--accent-dark); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; }
