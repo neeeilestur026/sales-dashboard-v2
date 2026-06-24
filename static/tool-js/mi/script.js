@@ -150,14 +150,20 @@ function generateMI() {
 
     fetch('/mi/generate', {
         method: 'POST',
-        body: formData
+        body: formData,
+        cache: 'no-store'
     })
-    .then(response => {
+    .then(async response => {
         if (!response.ok) {
-            return response.json().then(data => {
-                updateOutputLog(data.output_log || ['Error generating PDF.']);
-                throw new Error(data.message || 'Failed to generate Materials Issuance document.');
-            });
+            const text = await response.text();
+            if (text) {
+                let parsed;
+                try { parsed = JSON.parse(text); }
+                catch (_) { throw new Error('HTTP ' + response.status + ': ' + text.slice(0, 200)); }
+                updateOutputLog(parsed.output_log || ['Error generating PDF.']);
+                throw new Error(parsed.message || 'HTTP ' + response.status);
+            }
+            throw new Error('Server error (HTTP ' + response.status + '). The server may have timed out — please try again.');
         }
         const disposition = response.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename="?(.+?)"?$/);

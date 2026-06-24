@@ -310,16 +310,18 @@ def generate():
         pdf_bytes = buffer.getvalue()
         _user_pdf[uk] = {"bytes": pdf_bytes, "filename": pdf_filename}
 
-        # Upload to Google Drive
+        # Upload to Google Drive in background so PDF is returned immediately.
         if DASHBOARD_APPS_SCRIPT_URL:
-            try:
-                created_by = data.get("prepared_by_name", "").strip()
-                drive_link = _upload_mi_pdf_to_drive(created_by, uk)
-                if drive_link:
-                    _user_pdf[uk]["drive_link"] = drive_link
-                    log.append("Uploaded to Google Drive.")
-            except Exception as e:
-                logger.warning("MI Drive upload failed: %s", e)
+            created_by = data.get("prepared_by_name", "").strip()
+            def _bg_drive(uk_=uk, cb_=created_by):
+                try:
+                    link = _upload_mi_pdf_to_drive(cb_, uk_)
+                    if link:
+                        _user_pdf.setdefault(uk_, {})["drive_link"] = link
+                except Exception as e:
+                    logger.warning("MI Drive upload (bg) failed: %s", e)
+            _threading.Thread(target=_bg_drive, daemon=True).start()
+            log.append("PDF generated. Drive upload started in background.")
 
         buffer = BytesIO(pdf_bytes)
         return send_file(
