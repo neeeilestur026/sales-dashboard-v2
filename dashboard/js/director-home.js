@@ -710,6 +710,8 @@ function _buildCutoffHtml(cutoff) {
   const dates       = _buildDateRange(cutoff);
   const company     = 'HI-ESCORP';
   const period      = _currentYear + '-' + _currentMonth + '-' + cutoff;
+  const employerShareEl = document.getElementById('employerShare' + cutoff);
+  const employerShare = employerShareEl ? (parseFloat(employerShareEl.value) || 0) : 0;
 
   const p = v => '₱' + (Number(v)||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -851,6 +853,9 @@ function _buildCutoffHtml(cutoff) {
   td.bold { font-weight: bold; }
   td.green { color: #16612a; font-weight: bold; }
   td.name { min-width: 120px; }
+  table.summary { width: 360px; margin-top: 4px; }
+  table.summary td { border-bottom: 1px solid #e5e7eb; }
+  table.summary tr.total td { font-weight: bold; border-top: 2px solid #333; background: #eef2ff !important; }
   .sig-block { margin-top: 30px; display: flex; gap: 40px; }
   .sig-line { flex: 1; border-top: 1px solid #333; padding-top: 4px; font-size: 8pt; text-align: center; }
   .meta { font-size: 7.5pt; color: #777; text-align: right; margin-top: 4px; }
@@ -884,6 +889,18 @@ function _buildCutoffHtml(cutoff) {
   <tbody>${prBody}</tbody>
 </table>
 
+<h2>Section 3 — Cutoff Cost Summary</h2>
+<table class="summary">
+  <tbody>
+    <tr><td>Employees</td><td class="num">${employeeCount}</td></tr>
+    <tr><td>Gross Pay (salaries expense)</td><td class="num">${p(gGross)}</td></tr>
+    <tr><td>Total Deductions</td><td class="num">${p(gDed)}</td></tr>
+    <tr><td>Net Pay (cash to employees)</td><td class="num green">${p(gNet)}</td></tr>
+    <tr><td>Employer Share (SSS / PhilHealth / Pag-IBIG)</td><td class="num">${p(employerShare)}</td></tr>
+    <tr class="total"><td>TOTAL PAYROLL COST (Gross + Employer Share)</td><td class="num bold">${p(gGross + employerShare)}</td></tr>
+  </tbody>
+</table>
+
 <div class="sig-block">
   <div class="sig-line">Prepared by</div>
   <div class="sig-line">Checked by</div>
@@ -906,7 +923,9 @@ function _buildCutoffHtml(cutoff) {
       totalOTHours: totOT,
       grossPay: gGross,
       totalDeductions: gDed,
-      netPay: gNet
+      netPay: gNet,
+      employerShare: employerShare,
+      totalPayrollCost: gGross + employerShare
     }
   };
 }

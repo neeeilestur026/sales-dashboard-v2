@@ -3356,6 +3356,8 @@ async function decidePayrollApproval(decision) {
   try {
     var res = await apiDecidePayrollApproval(rec.rowIndex, decision, approvedBy, notes, pdfBase64);
     if (res && res.success) {
+      // On approval, auto-log the cutoff to the flow Expenses (Operating · Salaries and wages).
+      if (decision === 'Approved') { _logPayrollExpense(rec, approvedBy); }
       alert(decision + ' recorded.');
       closePayrollApprovalModal();
       var activeTab = document.querySelector('.payappr-tab.active');
@@ -3374,6 +3376,45 @@ async function decidePayrollApproval(decision) {
   } catch (err) {
     approveBtn.disabled = false; rejectBtn.disabled = false;
     alert('Error: ' + err.message);
+  }
+}
+
+// Pick a representative expense date for a cutoff: 1st cutoff → mid-month, 2nd cutoff → month end.
+function _payrollExpenseDate(period, cutoff) {
+  var m = String(period || '').match(/(\d{4})-(\d{2})/);
+  if (!m) return new Date().toISOString().slice(0, 10);
+  var y = +m[1], mo = +m[2];
+  if (cutoff === 'B') { var last = new Date(y, mo, 0).getDate(); return m[1] + '-' + m[2] + '-' + String(last).padStart(2, '0'); }
+  return m[1] + '-' + m[2] + '-15';
+}
+
+// Auto-log an approved payroll cutoff into the flow Expenses as an Operating "Salaries and wages"
+// expense. Amount = gross pay + employer share. Idempotent (importExpenses dedupes on the voucher-
+// inclusive signature, so re-runs/retries never duplicate). Best-effort — never blocks the approval.
+async function _logPayrollExpense(rec, approvedBy) {
+  try {
+    if (typeof postFlow !== 'function') return;
+    var listRow = (_payrollApprovalsCache || []).filter(function (x) { return x.rowIndex === rec.rowIndex; })[0];
+    var t = rec.totals || (listRow && listRow.totals) || {};
+    var amount = (Number(t.grossPay) || 0) + (Number(t.employerShare) || 0);
+    if (amount <= 0) return;
+    var cutoff = /2nd|B$|-B/i.test(String(rec.cutoffLabel || rec.period || '')) ? 'B' : 'A';
+    var rec2 = {
+      date: _payrollExpenseDate(rec.period, cutoff),
+      voucherNo: 'PAYROLL-' + rec.period,
+      category: 'Salaries and wages', type: 'Operating',
+      client: 'HI-ESCORP', createdBy: approvedBy || 'Management',
+      description: 'Payroll ' + (rec.cutoffLabel || '') + ' — ' + rec.period + ' (' + (t.employeeCount || 0) + ' employees)',
+      amount: amount
+    };
+    var r = await postFlow('importExpenses', { items: JSON.stringify([rec2]) });
+    if (r && r.success) {
+      var msg = (r.created ? 'Logged ' : 'Already logged ') + '₱' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+        ' to Expenses (Operating · Salaries and wages).';
+      if (typeof showToast === 'function') showToast(msg); else console.log(msg);
+    }
+  } catch (e) {
+    console.warn('Payroll expense logging failed (approval still recorded):', e);
   }
 }
 

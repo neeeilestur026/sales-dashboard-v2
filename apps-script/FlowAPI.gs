@@ -717,8 +717,10 @@ var _EXP_TYPE_MAP = {
   'repairs and maintenance': EXP_TYPE.OPEX, 'supplies expense': EXP_TYPE.OPEX,
   'tools and equipment': EXP_TYPE.OPEX, 'fuel': EXP_TYPE.OPEX, 'toll': EXP_TYPE.OPEX,
   'meals': EXP_TYPE.OPEX, 'gas': EXP_TYPE.OPEX, 'transportation': EXP_TYPE.OPEX,
+  // Salaries & wages are treated as an Operating Expense (per user directive).
+  'salaries and wages': EXP_TYPE.OPEX, 'payroll': EXP_TYPE.OPEX,
   // General & Administrative
-  'salaries and wages': EXP_TYPE.GA, 'employee benefits': EXP_TYPE.GA, 'statutory benefits': EXP_TYPE.GA,
+  'employee benefits': EXP_TYPE.GA, 'statutory benefits': EXP_TYPE.GA,
   'rent expense': EXP_TYPE.GA, 'utilities': EXP_TYPE.GA, 'depreciation expense': EXP_TYPE.GA,
   'legal fees': EXP_TYPE.GA, 'professional fees': EXP_TYPE.GA, 'permits and licenses': EXP_TYPE.GA,
   'bank service charge': EXP_TYPE.GA, 'janitorial': EXP_TYPE.GA, 'medical expenses': EXP_TYPE.GA,
@@ -845,6 +847,24 @@ function importExpenses(p) {
   });
   return { success: true, created: created, skipped: skipped, errors: errors,
     message: 'Imported ' + created + ' expense(s); skipped ' + skipped + ' already present.' };
+}
+
+// Set the Type on every Expenses row whose Category matches (e.g. move all 'Salaries and wages' to
+// Operating). One-time consistency helper; harmless if re-run.
+function reclassifyExpenses(p) {
+  var category = String(p.category || '').trim();
+  var type = String(p.type || '').trim();
+  if (!category || !type) return { success: false, message: 'category and type are required.' };
+  var sh = _sheet('Expenses');
+  var typeCol = SCHEMA.Expenses.indexOf('Type') + 1;
+  var updated = 0;
+  _rows('Expenses').forEach(function (r) {
+    if (String(r['Category']).trim().toLowerCase() === category.toLowerCase() && String(r['Type']) !== type) {
+      sh.getRange(r.rowIndex, typeCol, 1, 1).setValues([[type]]);
+      updated++;
+    }
+  });
+  return { success: true, updated: updated, message: 'Reclassified ' + updated + ' "' + category + '" expense(s) to ' + type + '.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1282,6 +1302,7 @@ var _MODULE_MAP = {
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
+  reclassifyExpenses: ['Expense', 'Reclassified'],
   createReceiving: ['Receiving', 'Received'],
   createInvoice: ['Invoice', 'Issued'],
   saveQuotationPDF: ['Quotation', 'PDF Saved'], savePOPDF: ['Purchase Order', 'PDF Saved'],
@@ -1526,7 +1547,7 @@ var HANDLERS = {
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
-  deleteExpense: deleteExpense, importExpenses: importExpenses,
+  deleteExpense: deleteExpense, importExpenses: importExpenses, reclassifyExpenses: reclassifyExpenses,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -1548,7 +1569,7 @@ var MUTATIONS = {
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
-  addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1,
+  addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,

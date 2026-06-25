@@ -5,147 +5,166 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Director Payroll Dashboard</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
   <style>
-    .main-content { max-width: 1400px; padding-left: 0.75rem; padding-right: 0.75rem; }
+    /* ── Director Payroll — modern light "Teal & Slate" theme ── */
+    .main-content { max-width: 1400px; padding-left: 0.9rem; padding-right: 0.9rem; }
+
+    /* Hero header */
+    .pay-hero {
+      background: linear-gradient(135deg, var(--accent, #0d9488), var(--accent-dark, #0f766e));
+      border-radius: var(--radius-lg, 16px); padding: 1.4rem 1.6rem; margin-bottom: 1.1rem;
+      color: #fff; box-shadow: var(--shadow-md, 0 6px 20px rgba(13,148,136,0.18));
+    }
+    .pay-hero h1 { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+    .pay-hero p { margin: 0.25rem 0 0; font-size: 0.85rem; opacity: 0.92; }
+    #greeting { font-weight: 700; }
 
     /* ── Period selector ── */
     .period-bar {
       display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
-      border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+      background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 14px; padding: 0.8rem 1.1rem; margin-bottom: 1.1rem;
+      box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06));
     }
-    .period-bar label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted, #64748b); }
+    .period-bar label { font-size: 0.78rem; font-weight: 700; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.03em; }
     .period-bar select, .period-bar input[type=number] {
-      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
-      color: var(--text-primary, #f1f5f9); border-radius: 8px; padding: 0.35rem 0.7rem;
+      background: #fff; border: 1px solid var(--border, #e2e8f0);
+      color: var(--text-primary, #0f172a); border-radius: 8px; padding: 0.4rem 0.7rem;
       font-size: 0.85rem;
     }
+    .period-bar select:focus, .period-bar input:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 3px var(--accent-ring, rgba(13,148,136,0.15)); }
     #periodLabel {
-      font-size: 0.9rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin-left: auto;
+      font-size: 0.86rem; font-weight: 700; color: var(--accent-dark, #0f766e); margin-left: auto;
+      background: var(--accent-light, #ccfbf1); padding: 0.35rem 0.8rem; border-radius: 999px;
     }
 
-    /* ── Tabs ── */
+    /* ── Tabs as a step flow ── */
     .pay-tabs {
-      display: flex; gap: 0.35rem; flex-wrap: wrap;
-      border-bottom: 1px solid var(--border, #334155); margin-bottom: 1rem;
+      display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.1rem;
     }
     .pay-tab {
-      padding: 0.5rem 1.1rem; border-radius: 8px 8px 0 0;
-      font-size: 0.82rem; font-weight: 600; cursor: pointer;
-      border: 1px solid transparent; border-bottom: none;
-      color: var(--text-muted, #64748b); background: transparent;
-      transition: all 0.15s;
+      padding: 0.55rem 1.05rem; border-radius: 10px;
+      font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      border: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #fff);
+      color: var(--text-secondary, #475569);
+      transition: all var(--transition-fast, 0.14s) ease;
     }
-    .pay-tab:hover { color: var(--text-primary, #f1f5f9); background: rgba(59,130,246,0.06); }
+    .pay-tab:hover { color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); transform: translateY(-1px); }
     .pay-tab.active {
-      color: #3b82f6; background: var(--surface, #1e293b);
-      border-color: var(--border, #334155); border-bottom-color: var(--surface, #1e293b);
+      color: #fff; background: var(--accent, #0d9488); border-color: var(--accent, #0d9488);
+      box-shadow: 0 2px 8px rgba(13,148,136,0.28);
     }
-    .pay-panel { display: none; }
+    .pay-panel { display: none; animation: fadeIn 0.2s ease; }
     .pay-panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-    /* ── EE table ── */
-    .ee-toolbar {
-      display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; flex-wrap: wrap;
-    }
+    /* ── EE toolbar / buttons ── */
+    .ee-toolbar { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
     .btn-sm {
-      padding: 0.35rem 0.9rem; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
-      border: 1px solid var(--border, #334155); background: transparent;
-      color: var(--text-muted, #64748b); cursor: pointer; transition: all 0.15s;
+      padding: 0.42rem 0.95rem; border-radius: 8px; font-size: 0.78rem; font-weight: 700;
+      border: 1px solid var(--border, #e2e8f0); background: #fff;
+      color: var(--text-secondary, #475569); cursor: pointer; transition: all var(--transition-fast, 0.14s) ease;
     }
-    .btn-sm:hover { background: rgba(59,130,246,0.08); color: #3b82f6; border-color: rgba(59,130,246,0.35); }
-    .btn-sm.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-    .btn-sm.primary:hover { background: #2563eb; }
-    .btn-sm.danger { background: transparent; color: #ef4444; border-color: #ef4444; }
-    .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
+    .btn-sm:hover { background: var(--accent-light, #ccfbf1); color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); }
+    .btn-sm.primary { background: var(--accent, #0d9488); color: #fff; border-color: var(--accent, #0d9488); }
+    .btn-sm.primary:hover { background: var(--accent-dark, #0f766e); }
+    .btn-sm.danger { background: #fff; color: #ef4444; border-color: #fecaca; }
+    .btn-sm.danger:hover { background: rgba(239,68,68,0.08); }
 
     /* ── Generic card ── */
     .pay-card {
-      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
-      border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1rem; overflow-x: auto;
+      background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 14px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; overflow-x: auto;
+      box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06));
     }
     .pay-card h3 {
-      font-size: 0.85rem; font-weight: 600; color: var(--text-secondary, #94a3b8);
-      margin: 0 0 0.75rem;
+      font-size: 0.92rem; font-weight: 700; color: var(--text-primary, #0f172a); margin: 0 0 0.8rem;
     }
+    /* per-cutoff summary strip the JS can fill (read-only) */
+    .pay-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.9rem; }
+    .pay-summary .tile { border: 1px solid var(--border, #e2e8f0); border-radius: 12px; padding: 0.6rem 0.8rem; background: var(--bg-inset, #f8fafc); min-width: 0; }
+    .pay-summary .tile .l { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #64748b); font-weight: 700; }
+    .pay-summary .tile .v { font-size: clamp(0.9rem, 1.5vw, 1.15rem); font-weight: 800; color: var(--text-primary, #0f172a); font-variant-numeric: tabular-nums; margin-top: 0.15rem; overflow-wrap: anywhere; }
 
     /* ── Payroll tables ── */
     .pay-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     .pay-table th {
-      padding: 0.5rem 0.6rem; text-align: left; font-size: 0.7rem; font-weight: 600;
+      padding: 0.55rem 0.6rem; text-align: left; font-size: 0.66rem; font-weight: 700;
       color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.04em;
-      border-bottom: 1px solid var(--border, #334155); white-space: nowrap;
+      border-bottom: 1px solid var(--border, #e2e8f0); white-space: nowrap;
+      background: var(--bg-inset, #f8fafc); position: sticky; top: 0;
     }
-    .pay-table th.num, .pay-table td.num { text-align: right; }
+    .pay-table th.num, .pay-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .pay-table td {
-      padding: 0.5rem 0.6rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-primary, #f1f5f9); white-space: nowrap;
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border, #e2e8f0);
+      color: var(--text-primary, #0f172a); white-space: nowrap;
     }
     .pay-table tr:last-child td { border-bottom: none; }
-    .pay-table tr:hover td { background: rgba(59,130,246,0.04); }
-    .pay-table tr.total-row td {
-      font-weight: 700; border-top: 2px solid var(--border, #334155);
-      color: #3b82f6; border-bottom: none;
+    .pay-table tbody tr:hover td { background: var(--accent-light, #ccfbf1); }
+    .pay-table tr.total-row td, .pay-table tr.total td {
+      font-weight: 800; border-top: 2px solid var(--accent, #0d9488);
+      color: var(--accent-dark, #0f766e); border-bottom: none; background: var(--bg-inset, #f8fafc);
     }
     .pay-table input[type=text], .pay-table input[type=time], .pay-table input[type=number] {
-      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
-      color: var(--text-primary, #f1f5f9); border-radius: 6px; padding: 0.25rem 0.4rem;
+      background: #fff; border: 1px solid var(--border, #e2e8f0);
+      color: var(--text-primary, #0f172a); border-radius: 6px; padding: 0.28rem 0.42rem;
       font-size: 0.78rem; width: 100%; box-sizing: border-box; min-width: 60px;
     }
-    .pay-table input:focus { outline: none; border-color: #3b82f6; }
+    .pay-table input:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 2px var(--accent-ring, rgba(13,148,136,0.15)); }
     .pay-table select {
-      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
-      color: var(--text-primary, #f1f5f9); border-radius: 6px; padding: 0.25rem 0.4rem;
+      background: #fff; border: 1px solid var(--border, #e2e8f0);
+      color: var(--text-primary, #0f172a); border-radius: 6px; padding: 0.28rem 0.42rem;
       font-size: 0.78rem;
     }
-
-    /* computed cells */
     .pay-table td.computed { color: var(--text-muted, #64748b); }
-    .pay-table td.highlight { color: #22c55e; font-weight: 600; }
+    .pay-table td.highlight { color: var(--accent-dark, #0f766e); font-weight: 700; }
+    .pay-table td.sticky, .pay-table th.sticky { position: sticky; left: 0; z-index: 2; background: var(--bg-card, #fff); }
 
-    /* Sticky first column */
-    .pay-table td.sticky, .pay-table th.sticky {
-      position: sticky; left: 0; z-index: 1;
-      background: var(--surface, #1e293b);
-    }
-
-    /* save bar */
+    /* save / submit bar */
     .save-bar {
-      display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 0.75rem; margin-top: 0.9rem; flex-wrap: wrap;
+      padding-top: 0.8rem; border-top: 1px dashed var(--border, #e2e8f0);
     }
-    .save-msg { font-size: 0.78rem; color: #22c55e; }
+    .save-msg { font-size: 0.78rem; color: var(--accent-dark, #0f766e); font-weight: 700; }
+    .employer-field { display: flex; align-items: center; gap: 0.45rem; margin-right: auto; }
+    .employer-field label { font-size: 0.74rem; font-weight: 700; color: var(--text-secondary, #475569); }
+    .employer-field input { background: #fff; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.82rem; width: 150px; font-variant-numeric: tabular-nums; }
+    .employer-field input:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 2px var(--accent-ring, rgba(13,148,136,0.15)); }
+    .employer-field .hint { font-size: 0.68rem; color: var(--text-muted, #64748b); }
 
     /* ── EE modal ── */
     .ee-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000;
+      position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 1000;
       display: none; align-items: center; justify-content: center;
+      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
     }
     .ee-overlay.open { display: flex; }
     .ee-modal {
-      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
-      border-radius: 14px; padding: 1.5rem; width: min(480px, 95vw); max-height: 90vh;
-      overflow-y: auto;
+      background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 16px; padding: 1.6rem; width: min(480px, 95vw); max-height: 90vh;
+      overflow-y: auto; box-shadow: var(--shadow-lg, 0 18px 50px rgba(15,23,42,0.25));
     }
-    .ee-modal h3 { font-size: 1rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin: 0 0 1rem; }
-    .form-row { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
-    .form-row label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted, #64748b); }
+    .ee-modal h3 { font-size: 1.05rem; font-weight: 800; color: var(--text-primary, #0f172a); margin: 0 0 1rem; }
+    .form-row { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
+    .form-row label { font-size: 0.74rem; font-weight: 700; color: var(--text-secondary, #475569); }
     .form-row input, .form-row select {
-      background: var(--bg, #0f172a); border: 1px solid var(--border, #334155);
-      color: var(--text-primary, #f1f5f9); border-radius: 8px; padding: 0.5rem 0.75rem;
+      background: #fff; border: 1px solid var(--border, #e2e8f0);
+      color: var(--text-primary, #0f172a); border-radius: 8px; padding: 0.55rem 0.75rem;
       font-size: 0.85rem;
     }
-    .form-row input:focus, .form-row select:focus { outline: none; border-color: #3b82f6; }
+    .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 3px var(--accent-ring, rgba(13,148,136,0.15)); }
     .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
-
-    /* Greeting */
-    #greeting { font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin-bottom: 1rem; }
   </style>
 </head>
 <body>
   <header class="navbar" id="navbar"></header>
 
   <div class="main-content">
-    <div id="greeting"></div>
+    <div class="pay-hero">
+      <h1>Payroll Dashboard</h1>
+      <p id="greeting">Manage employees, timesheets and payroll registers, then submit each cutoff to Management for approval.</p>
+    </div>
 
     <section id="flowApprovalStrip" style="display:none;margin:0.75rem 0 1.25rem;"></section>
 
@@ -223,6 +242,11 @@
         <h3>1st Cutoff Payroll Register</h3>
         <div id="payAGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
         <div class="save-bar">
+          <div class="employer-field">
+            <label for="employerShareA">Employer Share (₱)</label>
+            <input type="number" id="employerShareA" min="0" step="0.01" placeholder="0.00">
+            <span class="hint">SSS / PhilHealth / Pag-IBIG — added to the expense as total payroll cost</span>
+          </div>
           <button class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
           <button class="btn-sm" onclick="exportCutoff('A')">⬇ Export PDF</button>
           <button class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
@@ -250,6 +274,11 @@
         <h3>2nd Cutoff Payroll Register</h3>
         <div id="payBGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
         <div class="save-bar">
+          <div class="employer-field">
+            <label for="employerShareB">Employer Share (₱)</label>
+            <input type="number" id="employerShareB" min="0" step="0.01" placeholder="0.00">
+            <span class="hint">SSS / PhilHealth / Pag-IBIG — added to the expense as total payroll cost</span>
+          </div>
           <button class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
           <button class="btn-sm" onclick="exportCutoff('B')">⬇ Export PDF</button>
           <button class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>

@@ -17,7 +17,8 @@ const EXP_TYPE_MAP = {
   'postage and communication': 'Operating', 'repairs and maintenance': 'Operating', 'supplies expense': 'Operating',
   'tools and equipment': 'Operating', 'fuel': 'Operating', 'toll': 'Operating', 'meals': 'Operating',
   'gas': 'Operating', 'transportation': 'Operating',
-  'salaries and wages': 'General & Administrative', 'employee benefits': 'General & Administrative',
+  'salaries and wages': 'Operating', 'payroll': 'Operating',
+  'employee benefits': 'General & Administrative',
   'statutory benefits': 'General & Administrative', 'rent expense': 'General & Administrative',
   'utilities': 'General & Administrative', 'depreciation expense': 'General & Administrative',
   'legal fees': 'General & Administrative', 'professional fees': 'General & Administrative',
@@ -43,6 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderFlowNav('flow-expenses.html');
   document.getElementById('reloadBtn').addEventListener('click', loadExpenses);
   document.getElementById('addBtn').addEventListener('click', () => openExpModal());
+  const reclassBtn = document.getElementById('reclassSalariesBtn');
+  if (reclassBtn) reclassBtn.addEventListener('click', reclassSalaries);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   ['search', 'yearSel', 'monthSel', 'typeFilter', 'catFilter'].forEach(id =>
     document.getElementById(id).addEventListener('input', render));
@@ -246,6 +249,23 @@ async function submitExpense() {
     formErr(e.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+// One-time: move every "Salaries and wages" expense to the Operating type (payroll = OpEx).
+async function reclassSalaries() {
+  if (!confirm('Move ALL "Salaries and wages" expenses to the Operating type? This is safe to run once.')) return;
+  const btn = document.getElementById('reclassSalariesBtn');
+  btn.disabled = true; btn.textContent = 'Reclassifying…';
+  try {
+    const r = await postFlow('reclassifyExpenses', { category: 'Salaries and wages', type: 'Operating' });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Reclassify failed.');
+    flash(r.message || 'Reclassified.', true);
+    await loadExpenses();
+  } catch (e) {
+    flash(e.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salaries → Operating';
   }
 }
 
