@@ -90,7 +90,10 @@ var SCHEMA = {
                    'Notes', 'Created By', 'Created At', 'Updated At'],
   MktgPrincipal:  ['Activity No', 'Principal', 'Activity', 'Date', 'Status', 'MDF Requested',
                    'MDF Approved', 'Notes', 'Created By', 'Created At', 'Updated At'],
-  MktgMetrics:    ['Month', 'Website Visits', 'LinkedIn Followers', 'Notes', 'Updated By', 'Updated At']
+  MktgMetrics:    ['Month', 'Website Visits', 'LinkedIn Followers', 'Notes', 'Updated By', 'Updated At'],
+
+  // ── Sales call log (per rep, per day) ──
+  SalesCalls: ['Call No', 'Date', 'User', 'Contact', 'Company', 'Outcome', 'Notes', 'Created At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -1341,6 +1344,15 @@ function getMarketing(p) {
   return { success: true, data: out };
 }
 
+// Human-readable label for an activity-log summary, e.g. "Lead · Cemex".
+var _MKTG_LABEL = { leads: ['Lead', 'company'], campaigns: ['Campaign', 'name'], content: ['Content', 'title'],
+  enablement: ['Asset', 'name'], events: ['Event', 'name'], principal: ['Co-marketing', 'activity'], metrics: ['Metrics', 'month'] };
+function _mktgMsg(entity, rec) {
+  var m = _MKTG_LABEL[entity] || [entity, ''];
+  var v = rec[m[1]];
+  return m[0] + (v ? ' · ' + v : '');
+}
+
 function saveMarketingRecord(p) {
   var entity = p.entity, cfg = MKTG[entity];
   if (!cfg) return { success: false, message: 'Unknown marketing entity: ' + entity };
@@ -1349,6 +1361,7 @@ function saveMarketingRecord(p) {
   var sheet = cfg.sheet, fields = SCHEMA[sheet], sh = _sheet(sheet);
   var idHeader = fields[0];
   var now = _now();
+  var msg = _mktgMsg(entity, rec);
 
   // Build a value array from the record's camelCase keys, header order.
   function valuesFrom(existing) {
@@ -1374,7 +1387,7 @@ function saveMarketingRecord(p) {
     var ex = rows.filter(function (r) { return r.rowIndex === ri; })[0];
     if (!ex) return { success: false, message: 'Record not found.' };
     sh.getRange(ri, 1, 1, fields.length).setValues([valuesFrom(ex)]);
-    return { success: true, entity: entity, id: ex[idHeader], rowIndex: ri };
+    return { success: true, entity: entity, id: ex[idHeader], rowIndex: ri, message: msg };
   }
 
   // Keyed entities (metrics) upsert by their key column.
@@ -1383,17 +1396,17 @@ function saveMarketingRecord(p) {
     var match = rows.filter(function (r) { return String(r[cfg.key]) === keyVal; })[0];
     if (match) {
       sh.getRange(match.rowIndex, 1, 1, fields.length).setValues([valuesFrom(match)]);
-      return { success: true, entity: entity, id: keyVal, rowIndex: match.rowIndex };
+      return { success: true, entity: entity, id: keyVal, rowIndex: match.rowIndex, message: msg };
     }
     sh.appendRow(valuesFrom(null));
-    return { success: true, entity: entity, id: keyVal, rowIndex: sh.getLastRow() };
+    return { success: true, entity: entity, id: keyVal, rowIndex: sh.getLastRow(), message: msg };
   }
 
   // New numbered record.
   var id = _nextNumber(sheet, 1, cfg.prefix);
   rec[_camel(idHeader)] = id;
   sh.appendRow(valuesFrom(null));
-  return { success: true, entity: entity, id: id, rowIndex: sh.getLastRow() };
+  return { success: true, entity: entity, id: id, rowIndex: sh.getLastRow(), message: msg };
 }
 
 function deleteMarketingRecord(p) {
@@ -1403,6 +1416,41 @@ function deleteMarketingRecord(p) {
   if (!ri) return { success: false, message: 'rowIndex required.' };
   _sheet(cfg.sheet).deleteRow(ri);
   return { success: true, entity: p.entity, message: 'Record deleted.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SALES CALL LOG  (per rep, per day; also mirrored to the ActivityLog)
+// ════════════════════════════════════════════════════════════════════════════
+function getSalesCalls(p) {
+  var rows = _rows('SalesCalls');
+  if (p && p.date) rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
+  if (p && p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+  rows.sort(function (a, b) { return new Date(b['Created At']) - new Date(a['Created At']); });
+  return { success: true, data: rows.map(function (r) {
+    return {
+      callNo: r['Call No'], date: _dateStr(r['Date']), user: r['User'], contact: r['Contact'],
+      company: r['Company'], outcome: r['Outcome'], notes: r['Notes'], createdAt: r['Created At'],
+      rowIndex: r.rowIndex
+    };
+  }) };
+}
+
+function logSalesCall(p) {
+  var contact = String(p.contact || '').trim();
+  if (!contact && !p.company) return { success: false, message: 'Contact or company is required.' };
+  var no = _nextNumber('SalesCalls', 1, 'CALL');
+  var date = p.date ? _dateStr(p.date) : _dateStr(_now());
+  _append('SalesCalls', [no, date, p.actorName || '', contact, p.company || '', p.outcome || '',
+    p.notes || '', _now()]);
+  return { success: true, callNo: no, refNo: contact || p.company,
+    message: 'Call · ' + (p.outcome || 'logged') + (contact ? ' — ' + contact : '') };
+}
+
+function deleteSalesCall(p) {
+  var ri = parseInt(p.rowIndex, 10);
+  if (!ri) return { success: false, message: 'rowIndex required.' };
+  _sheet('SalesCalls').deleteRow(ri);
+  return { success: true, message: 'Call removed.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1432,7 +1480,8 @@ var _MODULE_MAP = {
   rejectQuotation: ['Quotation', 'Rejected'], sendQuotation: ['Quotation', 'Sent'],
   submitPOApproval: ['Purchase Order', 'Submitted'], approvePO: ['Purchase Order', 'Approved'],
   rejectPO: ['Purchase Order', 'Rejected'],
-  saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed']
+  saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed'],
+  logSalesCall: ['Call', 'Logged']
 };
 
 function _dateStr(v) {
@@ -1667,6 +1716,7 @@ var HANDLERS = {
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
   deleteExpense: deleteExpense, importExpenses: importExpenses, reclassifyExpenses: reclassifyExpenses,
   getMarketing: getMarketing, saveMarketingRecord: saveMarketingRecord, deleteMarketingRecord: deleteMarketingRecord,
+  getSalesCalls: getSalesCalls, logSalesCall: logSalesCall, deleteSalesCall: deleteSalesCall,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -1690,6 +1740,7 @@ var MUTATIONS = {
   updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
+  logSalesCall: 1, deleteSalesCall: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,

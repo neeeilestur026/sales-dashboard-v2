@@ -7,6 +7,7 @@
 let drSession = null;
 let drEntries = [];        // this rep's activity entries for the selected date
 let drEmailCount = 0;
+let drCalls = [];          // this rep's logged calls for the selected date
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Inventory'];
 
 function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refreshBtn').addEventListener('click', load);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
+  document.getElementById('logCallBtn').addEventListener('click', logCall);
 
   load();
 });
@@ -38,9 +40,10 @@ async function load() {
     `For ${date} · Prepared by ${drSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
 
   // Activity (flow backend) — scoped to THIS rep so reps never see each other's movements.
+  // Calls are shown in their own section, so keep the 'Call' module out of the generic timeline.
   try {
     const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
-    drEntries = (res && res.data) || [];
+    drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
   } catch (e) {
     drEntries = [];
     document.getElementById('timelineBody').innerHTML =
@@ -49,6 +52,7 @@ async function load() {
   render();
   loadEmails();
   loadNotes();
+  loadCalls();
 }
 
 function render() {
@@ -132,4 +136,54 @@ async function saveNotes() {
     msg.textContent = r && r.success ? 'Saved ✓' : (r.message || 'Failed');
   } catch (e) { msg.textContent = e.message; }
   finally { btn.disabled = false; btn.textContent = 'Save Notes'; setTimeout(() => { msg.textContent = ''; }, 2500); }
+}
+
+// ── Call Log (flow backend, scoped by rep + date) ──
+async function loadCalls() {
+  try {
+    const r = await fetchFlow('getSalesCalls', { date: _date(), user: drSession.name });
+    drCalls = (r && r.data) || [];
+  } catch (e) { drCalls = []; }
+  document.getElementById('sumCalls').textContent = drCalls.length;
+  document.getElementById('callCount').textContent = drCalls.length;
+  document.getElementById('callBody').innerHTML = drCalls.length ? drCalls.map(c => `
+    <tr>
+      <td>${_esc(_time(c.createdAt))}</td>
+      <td>${_esc(c.contact || '—')}</td>
+      <td>${_esc(c.company || '—')}</td>
+      <td><span class="act-chip">${_esc(c.outcome || '')}</span></td>
+      <td style="color:var(--text-secondary);">${_esc(c.notes || '')}</td>
+      <td class="no-print"><button class="btn btn-xs" data-del="${c.rowIndex}" style="border:1px solid var(--border);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
+    </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No calls logged for this day.</td></tr>';
+  document.querySelectorAll('#callBody [data-del]').forEach(b => b.addEventListener('click', () => delCall(b.getAttribute('data-del'))));
+}
+
+async function logCall() {
+  const contact = document.getElementById('callContact').value.trim();
+  const company = document.getElementById('callCompany').value.trim();
+  if (!contact && !company) { alert('Enter a contact or company.'); return; }
+  const btn = document.getElementById('logCallBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const r = await postFlow('logSalesCall', {
+      date: _date(), contact, company,
+      outcome: document.getElementById('callOutcome').value,
+      notes: document.getElementById('callNotes').value.trim(),
+    });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Failed to log call.');
+    document.getElementById('callContact').value = '';
+    document.getElementById('callCompany').value = '';
+    document.getElementById('callNotes').value = '';
+    await loadCalls();
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = '+ Log Call'; }
+}
+
+async function delCall(rowIndex) {
+  if (!confirm('Remove this call?')) return;
+  try {
+    const r = await postFlow('deleteSalesCall', { rowIndex });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Failed.');
+    await loadCalls();
+  } catch (e) { alert(e.message); }
 }

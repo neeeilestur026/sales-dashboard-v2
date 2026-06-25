@@ -228,6 +228,14 @@ function requireMarketingAccess() {
   return session;
 }
 
+/** Require the marketing role exactly (own daily report). Oversight roles use all-daily-reports. */
+function requireMarketing() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (session.role !== 'marketing') { window.location.href = _homeForRole(session.role); return null; }
+  return session;
+}
+
 /**
  * Require director role — redirect others to their home page
  */
@@ -574,6 +582,10 @@ function renderNavbar(activePage) {
       <a href="marketing-home.html" class="${activePage === 'marketing-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         Dashboard
+      </a>
+      <a href="marketing-daily-report.html" class="${activePage === 'marketing-daily-report' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Daily Report
       </a>
       <a href="leave-request.html" class="${activePage === 'leave-request' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
