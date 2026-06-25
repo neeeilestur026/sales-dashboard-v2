@@ -75,7 +75,22 @@ var SCHEMA = {
 
   // ── Generic per-record document attachments (any process step) ──
   Documents: ['Doc ID', 'Module', 'Ref No', 'Doc Type', 'File Name', 'Drive Link', 'File ID',
-              'Uploaded By', 'Uploaded At']
+              'Uploaded By', 'Uploaded At'],
+
+  // ── Marketing workspace (B2B industrial marketing) ──
+  MktgLeads:      ['Lead No', 'Date', 'Company', 'Contact', 'Email', 'Phone', 'Industry', 'Source',
+                   'Status', 'SO No', 'Notes', 'Created By', 'Created At', 'Updated At'],
+  MktgCampaigns:  ['Campaign No', 'Name', 'Channel', 'Start Date', 'End Date', 'Status', 'Budget',
+                   'Spend', 'Leads', 'MQLs', 'Notes', 'Created By', 'Created At', 'Updated At'],
+  MktgContent:    ['Content No', 'Date', 'Title', 'Type', 'Vertical', 'Channel', 'Status', 'Link',
+                   'Notes', 'Created By', 'Created At', 'Updated At'],
+  MktgEnablement: ['Asset No', 'Name', 'Category', 'Vertical', 'Status', 'Link', 'Last Updated',
+                   'Notes', 'Created By', 'Created At', 'Updated At'],
+  MktgEvents:     ['Event No', 'Name', 'Type', 'Date', 'Location', 'Status', 'Budget', 'Leads Captured',
+                   'Notes', 'Created By', 'Created At', 'Updated At'],
+  MktgPrincipal:  ['Activity No', 'Principal', 'Activity', 'Date', 'Status', 'MDF Requested',
+                   'MDF Approved', 'Notes', 'Created By', 'Created At', 'Updated At'],
+  MktgMetrics:    ['Month', 'Website Visits', 'LinkedIn Followers', 'Notes', 'Updated By', 'Updated At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -1289,6 +1304,108 @@ function rejectPO(p) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  MARKETING WORKSPACE  (generic data-backed store: one config + 3 actions)
+// ════════════════════════════════════════════════════════════════════════════
+var MKTG = {
+  leads:      { sheet: 'MktgLeads', prefix: 'LEAD' },
+  campaigns:  { sheet: 'MktgCampaigns', prefix: 'CMP' },
+  content:    { sheet: 'MktgContent', prefix: 'CNT' },
+  enablement: { sheet: 'MktgEnablement', prefix: 'AST' },
+  events:     { sheet: 'MktgEvents', prefix: 'EVT' },
+  principal:  { sheet: 'MktgPrincipal', prefix: 'PRN' },
+  metrics:    { sheet: 'MktgMetrics', key: 'Month' }   // upsert by Month, no generated id
+};
+
+// Camelize a header ('Lead No' → 'leadNo', 'MDF Requested' → 'mdfRequested', 'SO No' → 'soNo').
+function _camel(h) {
+  var parts = String(h).replace(/[^A-Za-z0-9 ]/g, '').trim().split(/\s+/);
+  return parts.map(function (w, i) {
+    w = w.toLowerCase();
+    return i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1);
+  }).join('');
+}
+function _mktgMap(fields, row, rowIndex) {
+  var o = { rowIndex: rowIndex };
+  fields.forEach(function (h, i) { o[_camel(h)] = row[h]; });
+  return o;
+}
+
+function getMarketing(p) {
+  var out = {};
+  var only = p && p.entity;
+  Object.keys(MKTG).forEach(function (k) {
+    if (only && k !== only) return;
+    var cfg = MKTG[k], fields = SCHEMA[cfg.sheet];
+    out[k] = _rows(cfg.sheet).map(function (r) { return _mktgMap(fields, r, r.rowIndex); });
+  });
+  return { success: true, data: out };
+}
+
+function saveMarketingRecord(p) {
+  var entity = p.entity, cfg = MKTG[entity];
+  if (!cfg) return { success: false, message: 'Unknown marketing entity: ' + entity };
+  var rec = {};
+  try { rec = JSON.parse(p.record || '{}'); } catch (e) { return { success: false, message: 'Invalid record JSON.' }; }
+  var sheet = cfg.sheet, fields = SCHEMA[sheet], sh = _sheet(sheet);
+  var idHeader = fields[0];
+  var now = _now();
+
+  // Build a value array from the record's camelCase keys, header order.
+  function valuesFrom(existing) {
+    return fields.map(function (h) {
+      var ck = _camel(h);
+      if (h === 'Created At') return (existing && existing[h]) || now;
+      if (h === 'Updated At' || h === 'Last Updated') return now;
+      if (h === 'Created By' || h === 'Updated By') {
+        if (rec[ck] != null && rec[ck] !== '') return rec[ck];
+        if (existing && existing[h]) return existing[h];
+        return p.actorName || '';
+      }
+      if (rec[ck] != null) return rec[ck];
+      return existing ? (existing[h] || '') : '';
+    });
+  }
+
+  var rows = _rows(sheet);
+
+  // Update by rowIndex.
+  if (rec.rowIndex) {
+    var ri = parseInt(rec.rowIndex, 10);
+    var ex = rows.filter(function (r) { return r.rowIndex === ri; })[0];
+    if (!ex) return { success: false, message: 'Record not found.' };
+    sh.getRange(ri, 1, 1, fields.length).setValues([valuesFrom(ex)]);
+    return { success: true, entity: entity, id: ex[idHeader], rowIndex: ri };
+  }
+
+  // Keyed entities (metrics) upsert by their key column.
+  if (cfg.key) {
+    var keyCamel = _camel(cfg.key), keyVal = String(rec[keyCamel] || '');
+    var match = rows.filter(function (r) { return String(r[cfg.key]) === keyVal; })[0];
+    if (match) {
+      sh.getRange(match.rowIndex, 1, 1, fields.length).setValues([valuesFrom(match)]);
+      return { success: true, entity: entity, id: keyVal, rowIndex: match.rowIndex };
+    }
+    sh.appendRow(valuesFrom(null));
+    return { success: true, entity: entity, id: keyVal, rowIndex: sh.getLastRow() };
+  }
+
+  // New numbered record.
+  var id = _nextNumber(sheet, 1, cfg.prefix);
+  rec[_camel(idHeader)] = id;
+  sh.appendRow(valuesFrom(null));
+  return { success: true, entity: entity, id: id, rowIndex: sh.getLastRow() };
+}
+
+function deleteMarketingRecord(p) {
+  var cfg = MKTG[p.entity];
+  if (!cfg) return { success: false, message: 'Unknown marketing entity: ' + p.entity };
+  var ri = parseInt(p.rowIndex, 10);
+  if (!ri) return { success: false, message: 'rowIndex required.' };
+  _sheet(cfg.sheet).deleteRow(ri);
+  return { success: true, entity: p.entity, message: 'Record deleted.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
 var _MODULE_MAP = {
@@ -1314,7 +1431,8 @@ var _MODULE_MAP = {
   submitQuotationApproval: ['Quotation', 'Submitted'], approveQuotation: ['Quotation', 'Approved'],
   rejectQuotation: ['Quotation', 'Rejected'], sendQuotation: ['Quotation', 'Sent'],
   submitPOApproval: ['Purchase Order', 'Submitted'], approvePO: ['Purchase Order', 'Approved'],
-  rejectPO: ['Purchase Order', 'Rejected']
+  rejectPO: ['Purchase Order', 'Rejected'],
+  saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed']
 };
 
 function _dateStr(v) {
@@ -1548,6 +1666,7 @@ var HANDLERS = {
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
   deleteExpense: deleteExpense, importExpenses: importExpenses, reclassifyExpenses: reclassifyExpenses,
+  getMarketing: getMarketing, saveMarketingRecord: saveMarketingRecord, deleteMarketingRecord: deleteMarketingRecord,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -1570,6 +1689,7 @@ var MUTATIONS = {
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
+  saveMarketingRecord: 1, deleteMarketingRecord: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketing Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .mkt { max-width: 1320px; margin: 0 auto; }
+    .mkt-hero {
+      background: linear-gradient(135deg, var(--accent, #0d9488), var(--accent-dark, #0f766e));
+      border-radius: var(--radius-lg, 16px); padding: 1.4rem 1.6rem; color: #fff;
+      box-shadow: var(--shadow-md, 0 6px 20px rgba(13,148,136,0.18));
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;
+    }
+    .mkt-hero h1 { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+    .mkt-hero p { margin: 0.3rem 0 0; font-size: 0.85rem; opacity: 0.92; max-width: 640px; }
+    .mkt-hero .ctrl { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .mkt-hero .ctrl input, .mkt-hero .ctrl button { border-radius: 8px; border: none; padding: 0.45rem 0.7rem; font-size: 0.85rem; }
+    .mkt-hero .ctrl input { background: rgba(255,255,255,0.92); color: #0f172a; }
+    .mkt-hero .ctrl .ro { font-size: 0.72rem; background: rgba(255,255,255,0.2); padding: 0.3rem 0.7rem; border-radius: 999px; }
+
+    /* KPI scorecard */
+    .mkt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.7rem; margin: 1.2rem 0; }
+    .kpi { border: 1px solid var(--border, #e2e8f0); border-radius: 14px; padding: 0.85rem 0.95rem; background: var(--bg-card, #fff); min-width: 0; position: relative; box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06)); }
+    .kpi.hero-kpi { border-color: var(--accent, #0d9488); background: linear-gradient(180deg, #fff, #f0fbf9); }
+    .kpi .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #64748b); font-weight: 700; display: flex; align-items: center; gap: 0.35rem; }
+    .kpi .v { font-size: clamp(1.1rem, 2vw, 1.7rem); font-weight: 800; color: var(--text-primary, #0f172a); font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 0.2rem; }
+    .kpi .t { font-size: 0.7rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
+    .kpi .pill { position: absolute; top: 0.7rem; right: 0.8rem; font-size: 0.62rem; font-weight: 800; padding: 0.1rem 0.5rem; border-radius: 999px; }
+    .pill-met { background: rgba(13,148,136,0.14); color: #0f766e; }
+    .pill-below { background: rgba(245,158,11,0.16); color: #b45309; }
+    .pill-top { background: #fde68a; color: #92400e; }
+
+    /* tab bar */
+    .mkt-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .mkt-tab { padding: 0.5rem 1rem; border-radius: 10px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      border: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #fff); color: var(--text-secondary, #475569);
+      transition: all 0.14s ease; }
+    .mkt-tab:hover { color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); }
+    .mkt-tab.active { background: var(--accent, #0d9488); color: #fff; border-color: var(--accent, #0d9488); box-shadow: 0 2px 8px rgba(13,148,136,0.28); }
+    .mkt-tab .cnt { font-size: 0.7rem; opacity: 0.8; margin-left: 0.3rem; }
+
+    .mkt-panel { display: none; }
+    .mkt-panel.active { display: block; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .panel-card { background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 14px; padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06)); }
+    .panel-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
+    .panel-toolbar h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-primary, #0f172a); }
+    .panel-toolbar input[type=text], .panel-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 0.84rem; background: #fff; }
+    .panel-toolbar .spacer { margin-left: auto; }
+
+    .mkt-act { background: none; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; padding: 0.18rem 0.5rem; cursor: pointer; font-size: 0.74rem; color: var(--text-secondary, #475569); }
+    .mkt-act:hover { border-color: var(--accent, #0d9488); color: var(--accent-dark, #0f766e); }
+    .mkt-badge { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
+    .b-new { background: rgba(100,116,139,0.16); color: #475569; }
+    .b-warm { background: rgba(245,158,11,0.16); color: #b45309; }
+    .b-good { background: rgba(13,148,136,0.16); color: #0f766e; }
+    .b-info { background: rgba(59,130,246,0.14); color: #1d4ed8; }
+    .b-bad { background: rgba(239,68,68,0.14); color: #b91c1c; }
+    .dr-empty { padding: 1.2rem; text-align: center; color: var(--text-muted, #64748b); font-size: 0.85rem; font-style: italic; }
+
+    /* form */
+    .mkt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+    .mkt-form .full { grid-column: 1 / -1; }
+    .mkt-form label { display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-secondary, #475569); margin-bottom: 0.2rem; }
+    .mkt-form input, .mkt-form select, .mkt-form textarea { width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 0.85rem; background: #fff; }
+    .mkt-form textarea { min-height: 60px; resize: vertical; }
+    @media (max-width: 640px) { .mkt-form { grid-template-columns: 1fr; } }
+
+    /* task rhythm */
+    .rhythm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .rhythm-col h4 { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-dark, #0f766e); font-weight: 800; }
+    .rhythm-col label { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.45rem 0.55rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; margin-bottom: 0.4rem; font-size: 0.82rem; color: var(--text-secondary, #475569); cursor: pointer; }
+    .rhythm-col label.done { background: var(--bg-inset, #f8fafc); color: var(--text-muted, #94a3b8); text-decoration: line-through; }
+    .rhythm-col input { margin-top: 0.15rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="mkt">
+      <div class="mkt-hero">
+        <div>
+          <h1>Marketing Dashboard</h1>
+          <p id="heroSub">B2B industrial marketing — generate qualified leads, produce technical content, and enable the sales team. Judged on qualified leads that turn into real opportunities, not vanity metrics.</p>
+        </div>
+        <div class="ctrl">
+          <label style="font-size:0.72rem;opacity:0.9;">Month</label>
+          <input type="month" id="monthSel">
+          <button id="metricsBtn" title="Enter website visits / followers for this month">Monthly metrics</button>
+          <span class="ro" id="roTag" style="display:none;">Read-only</span>
+        </div>
+      </div>
+
+      <div class="mkt-kpis" id="kpis"></div>
+
+      <div class="mkt-tabs" id="tabs"></div>
+      <div id="panels"></div>
+
+      <div id="msg" class="flow-msg" style="display:none;margin-top:0.8rem;"></div>
+    </div>
+  </main>
+
+  <!-- Record modal -->
+  <div class="flow-modal-overlay" id="recModal">
+    <div class="flow-modal" style="max-width:640px;">
+      <h3 id="recModalTitle">Add</h3>
+      <input type="hidden" id="recEntity">
+      <input type="hidden" id="recRowIndex">
+      <div class="mkt-form" id="recForm"></div>
+      <div id="recFormMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeRecModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="recSaveBtn" onclick="submitRecord()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly metrics modal -->
+  <div class="flow-modal-overlay" id="metModal">
+    <div class="flow-modal" style="max-width:420px;">
+      <h3>Monthly Metrics — <span id="metMonthLabel"></span></h3>
+      <div class="mkt-form">
+        <div><label>Website Visits</label><input type="number" min="0" id="metVisits"></div>
+        <div><label>LinkedIn Followers</label><input type="number" min="0" id="metFollowers"></div>
+        <div class="full"><label>Notes</label><input type="text" id="metNotes"></div>
+      </div>
+      <div id="metMsg" class="flow-msg" style="display:none;"></div>
+      <div class="flow-modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeMetModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="metSaveBtn" onclick="submitMetrics()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/marketing-home.js"></script>
+</body>
+</html>
