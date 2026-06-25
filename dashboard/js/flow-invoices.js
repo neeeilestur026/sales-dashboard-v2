@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadSOOptions() {
   try { const r = await fetchFlow('getSalesOrders'); ivSOs = (r && r.data) || []; }
   catch (e) { ivSOs = []; }
+  // Most recent sales order first (by date, then SO number).
+  ivSOs.sort((a, b) =>
+    (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
+    String(b.soNo).localeCompare(String(a.soNo)));
   document.getElementById('loadSO').innerHTML = '<option value="">— select a sales order —</option>' +
     ivSOs.map(s => `<option value="${flowEsc(s.soNo)}">${flowEsc(s.soNo)} — ${flowEsc(s.customer)}</option>`).join('');
 }

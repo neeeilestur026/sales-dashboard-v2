@@ -117,6 +117,10 @@ async function loadSOs() {
   try {
     const res = await fetchFlow('getSalesOrders');
     soList = (res && res.data) || [];
+    // Most recent sales order first (by date, then SO number).
+    soList.sort((a, b) =>
+      (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
+      String(b.soNo).localeCompare(String(a.soNo)));
     if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th></th></tr></thead><tbody>${soList.map(s => `
       <tr><td>${flowEsc(s.soNo)}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>

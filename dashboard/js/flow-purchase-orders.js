@@ -27,16 +27,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadPOs();
 });
 
+// Most recent sales order first (by date, then SO number).
+function soNewestFirst(list) {
+  return (list || []).slice().sort((a, b) =>
+    (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
+    String(b.soNo).localeCompare(String(a.soNo)));
+}
+
 async function loadSOOptions() {
-  try { const r = await fetchFlow('getSalesOrders'); poSOs = (r && r.data) || []; }
+  try { const r = await fetchFlow('getSalesOrders'); poSOs = soNewestFirst((r && r.data) || []); }
   catch (e) { poSOs = []; }
-  document.getElementById('loadSO').innerHTML = '<option value="">— select a sales order —</option>' +
+  document.getElementById('loadSO').innerHTML = '<option value="">— none (Restock PO) —</option>' +
     poSOs.map(s => `<option value="${flowEsc(s.soNo)}">${flowEsc(s.soNo)} — ${flowEsc(s.customer)}</option>`).join('');
 }
 
 async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); poInventory = (r && r.data) || []; }
   catch (e) { poInventory = []; }
+  const dl = document.getElementById('poInvList');
+  if (dl) dl.innerHTML = poInventory.map(i =>
+    `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
 }
 
 function invBalance(itemNo) {
@@ -62,7 +72,7 @@ function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input type="text" class="itemNo" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" style="width:38%;display:inline-block;">
+    <td><input type="text" class="itemNo" list="poInvList" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" style="width:38%;display:inline-block;" oninput="poFillItem(this)">
         <input type="text" class="itemName" value="${item ? flowEsc(item.itemName) : ''}" placeholder="Description" style="width:60%;display:inline-block;"></td>
     <td class="num"><input type="number" step="any" min="0" class="qty" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
     <td class="num"><input type="number" step="any" min="0" class="price" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
@@ -70,6 +80,15 @@ function addRow(item) {
     <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
   tb.appendChild(tr);
   recalc();
+}
+
+// When an item-no matches an inventory item (e.g. picked from the datalist), auto-fill its
+// description. Manual/new items are left as typed. (Stock is added later at Materials Receiving.)
+function poFillItem(input) {
+  const match = poInventory.find(x => String(x.itemNo) === input.value.trim());
+  if (!match) return;
+  const nameInput = input.closest('tr').querySelector('.itemName');
+  if (nameInput && !nameInput.value.trim()) nameInput.value = match.description || '';
 }
 
 function recalc() {
@@ -147,7 +166,8 @@ async function loadPOs() {
       const st = p.status || 'Draft';
       const noteTip = (st === 'Rejected' && p.approvalNote) ? ` title="Reason: ${flowEsc(p.approvalNote)}"` : '';
       const noteLine = (st === 'Rejected' && p.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(p.approvalNote)}</div>` : '';
-      return `<tr><td>${flowEsc(p.poNo)}</td><td>${flowEsc(p.soNo)}</td><td>${flowDate(p.date)}</td><td>${flowEsc(p.supplier)}</td>
+      const soCell = p.soNo ? flowEsc(p.soNo) : '<span class="flow-badge b-pending" title="Purchase order without a sales order — for restocking stock">Restock</span>';
+      return `<tr><td>${flowEsc(p.poNo)}</td><td>${soCell}</td><td>${flowDate(p.date)}</td><td>${flowEsc(p.supplier)}</td>
       <td>${flowEsc(p.currency)}</td><td class="num">${flowMoney(p.total, p.currency)}</td>
       <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td><td>${p.items.length}</td>
       <td>${p.pdfLink ? `<a href="${flowEsc(p.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
