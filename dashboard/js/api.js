@@ -413,6 +413,11 @@ async function apiFetchEmailLogToday() {
   return _flaskFetch('/api/email/today', {});
 }
 
+/** Fetch a recent feed from a GoDaddy folder ('inbox' | 'sent' | 'spam'); inbox/spam classified. */
+async function apiFetchEmailFeed(folder, days) {
+  return _flaskFetch('/api/email/feed', { folder, days: days || 14 });
+}
+
 /** Whether the agent already has GoDaddy credentials configured. */
 async function apiGetEmailStatus() {
   return _flaskFetch('/api/email/status', {});

@@ -166,6 +166,139 @@ def _select_sent(conn: imaplib.IMAP4_SSL) -> bool:
     return False
 
 
+# Candidate folder names per logical mailbox (servers differ).
+_FOLDER_CANDIDATES = {
+    "inbox": ('"INBOX"', 'INBOX'),
+    "sent": ('"Sent"', '"Sent Items"', '"INBOX.Sent"', 'Sent', 'Sent Items'),
+    "spam": ('"Junk"', '"Spam"', '"Junk E-mail"', '"INBOX.Junk"', '"INBOX.spam"',
+             '"Bulk Mail"', 'Junk', 'Spam'),
+}
+
+
+def _select_folder(conn: imaplib.IMAP4_SSL, kind: str) -> bool:
+    """Select a logical folder (inbox/sent/spam) read-only; True if found."""
+    for folder in _FOLDER_CANDIDATES.get(kind, ()):
+        try:
+            typ, _ = conn.select(folder, readonly=True)
+            if typ == "OK":
+                return True
+        except imaplib.IMAP4.error:
+            continue
+    return False
+
+
+# ── Incoming-email classification (rule-based, B2B industrial distributor) ──
+_PRINCIPAL_HINTS = ("powerteam", "cejn", "radtorque", "rad torque", "rad-torque", "spx", "spxflow")
+
+
+def _classify(from_addr: str, from_name: str, subject: str, my_domain: str) -> str:
+    addr = (from_addr or "").lower()
+    name = (from_name or "").lower()
+    subj = (subject or "").lower()
+    blob = name + " " + subj + " " + addr
+    sender_domain = addr.split("@", 1)[1] if "@" in addr else ""
+
+    def has(*words):
+        return any(w in blob for w in words)
+
+    # Internal — same domain as the connected mailbox.
+    if my_domain and sender_domain.endswith(my_domain):
+        return "Internal"
+    # Supplier / Principal — known principals by domain or name.
+    if any(h in sender_domain for h in _PRINCIPAL_HINTS) or any(h in blob for h in _PRINCIPAL_HINTS):
+        return "Supplier/Principal"
+    # Newsletter / promo / no-reply senders.
+    if addr.startswith(("noreply", "no-reply", "donotreply", "do-not-reply", "newsletter", "mailer", "notifications")) \
+       or has("unsubscribe", "newsletter", "webinar", "% off", "promo", "promotion", "marketing email"):
+        return "Newsletter/Promo"
+    # Purchase order / order.
+    if has("purchase order", "p.o.", "po no", "po#", "order confirmation", "sales order"):
+        return "Purchase Order"
+    # Finance / payment.
+    if has("payment", "remittance", "statement of account", "soa", "billing", "official receipt",
+           "credit memo", "debit memo", "invoice", "collection"):
+        return "Finance/Payment"
+    # Sales inquiry / RFQ.
+    if has("inquiry", "enquiry", "quotation", "quote", "rfq", "request for quote", "price",
+           "pricelist", "price list", "availability", "canvass", "interested", "looking for"):
+        return "Sales Inquiry/RFQ"
+    return "Other"
+
+
+def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250) -> list[dict]:
+    """Fetch recent message headers from a logical folder (inbox/sent/spam) within `days`.
+    Inbox/Spam messages are classified. Returns newest-first, capped at `cap`."""
+    my_domain = addr.split("@", 1)[1].lower() if "@" in addr else ""
+    conn = _imap_login(addr, pwd)
+    try:
+        if not _select_folder(conn, kind):
+            raise RuntimeError(f"Could not open {kind} folder")
+        since_dt = datetime.now(PH_TZ) - timedelta(days=max(1, int(days)))
+        date_str = since_dt.strftime("%d-%b-%Y")
+        typ, data = conn.search(None, f"SINCE {date_str}")
+        if typ != "OK" or not data or not data[0]:
+            return []
+        ids = data[0].split()
+        if not ids:
+            return []
+        # Newest first; cap to protect the gateway timeout on busy mailboxes.
+        ids = ids[::-1][:cap]
+        id_set = b",".join(ids)
+        typ, msg_data = conn.fetch(id_set, "(BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID)])")
+        if typ != "OK" or not msg_data:
+            return []
+        out = []
+        for part in msg_data:
+            if not isinstance(part, tuple) or len(part) < 2:
+                continue
+            msg = email_pkg.message_from_bytes(part[1])
+            subject = _decode_mime(msg.get("Subject", ""))
+            date_hdr = msg.get("Date", "")
+            message_id = (msg.get("Message-ID", "") or "").strip("<>")
+            try:
+                dt = parsedate_to_datetime(date_hdr) if date_hdr else None
+            except (TypeError, ValueError):
+                dt = None
+            iso = dt.astimezone(PH_TZ).isoformat() if dt else date_hdr
+
+            if kind == "sent":
+                raw = (_decode_mime(msg.get("To", "")) or _decode_mime(msg.get("Cc", "")))
+                pname, paddr = "", ""
+                for n, a in (getaddresses([raw]) if raw else []):
+                    if a:
+                        pname, paddr = n, a
+                        break
+                out.append({
+                    "name": pname or paddr, "recipient": paddr,
+                    "company": _company_from_email(paddr),
+                    "subject": subject, "date": iso, "messageId": message_id,
+                })
+            else:
+                raw = _decode_mime(msg.get("From", ""))
+                fname, faddr = "", ""
+                for n, a in (getaddresses([raw]) if raw else []):
+                    if a:
+                        fname, faddr = n, a
+                        break
+                out.append({
+                    "name": fname or faddr, "from": faddr,
+                    "company": _company_from_email(faddr),
+                    "subject": subject, "date": iso, "messageId": message_id,
+                    "category": _classify(faddr, fname, subject, my_domain),
+                })
+        # parsedate may be missing/garbled; keep server order (already newest-first by id).
+        return out
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
 def fetch_sent_today(addr: str, pwd: str) -> list[dict]:
     """Connect to GoDaddy IMAP, return a list of headers for emails sent today (PH local time)."""
     conn = _imap_login(addr, pwd)
@@ -336,6 +469,39 @@ def email_today():
         return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
     except Exception as exc:
         logger.error("fetch_sent_today error: %s", exc)
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@email_log_bp.route("/api/email/feed", methods=["POST"])
+def email_feed():
+    """Feed recent messages from a logical folder (inbox/sent/spam); inbox/spam classified."""
+    body = request.get_json(silent=True) or {}
+    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
+    session = _validate_session(token)
+    if not session:
+        return jsonify({"success": False, "message": "Invalid session"}), 401
+    kind = (body.get("folder") or "inbox").strip().lower()
+    if kind not in ("inbox", "sent", "spam"):
+        return jsonify({"success": False, "message": "Invalid folder"}), 400
+    try:
+        days = max(1, min(60, int(body.get("days", 14))))
+    except (TypeError, ValueError):
+        days = 14
+    enc_blob = _get_enc_creds(session["username"])
+    if not enc_blob:
+        return jsonify({"success": True, "needsSetup": True, "emails": [], "folder": kind})
+    decrypted = _decrypt(enc_blob)
+    if not decrypted:
+        return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
+    addr, pwd = decrypted
+    try:
+        emails = fetch_folder(addr, pwd, kind, days=days)
+        return jsonify({"success": True, "folder": kind, "emails": emails, "godaddyEmail": addr, "days": days})
+    except imaplib.IMAP4.error as exc:
+        _creds_cache.pop(session["username"], None)
+        return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
+    except Exception as exc:
+        logger.error("email_feed error: %s", exc)
         return jsonify({"success": False, "message": str(exc)}), 500
 
 

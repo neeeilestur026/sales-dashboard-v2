@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Director — Email</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .em { max-width: 1200px; margin: 0 auto; }
+    .em-hero { background: linear-gradient(135deg, var(--accent, #0d9488), var(--accent-dark, #0f766e)); border-radius: var(--radius-lg, 16px); padding: 1.3rem 1.6rem; color: #fff; box-shadow: var(--shadow-md, 0 6px 20px rgba(13,148,136,0.18)); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
+    .em-hero h1 { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+    .em-hero .sub { font-size: 0.82rem; opacity: 0.92; margin-top: 0.2rem; }
+    .em-hero .who { font-size: 0.78rem; background: rgba(255,255,255,0.18); padding: 0.3rem 0.7rem; border-radius: 999px; }
+
+    .em-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .em-tab { padding: 0.5rem 1.1rem; border-radius: 10px; font-size: 0.84rem; font-weight: 700; cursor: pointer; border: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #fff); color: var(--text-secondary, #475569); transition: all 0.14s ease; }
+    .em-tab:hover { color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); }
+    .em-tab.active { background: var(--accent, #0d9488); color: #fff; border-color: var(--accent, #0d9488); box-shadow: 0 2px 8px rgba(13,148,136,0.28); }
+    .em-tab .cnt { font-size: 0.72rem; opacity: 0.85; margin-left: 0.35rem; }
+
+    .em-card { background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 14px; padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06)); }
+    .em-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem; }
+    .em-toolbar input[type=text] { padding: 0.45rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 0.85rem; background: #fff; min-width: 220px; }
+    .em-toolbar .spacer { margin-left: auto; }
+
+    .em-cats { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+    .em-chip { padding: 0.3rem 0.7rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; cursor: pointer; border: 1px solid var(--border, #e2e8f0); background: #fff; color: var(--text-secondary, #475569); }
+    .em-chip.active { background: var(--accent, #0d9488); color: #fff; border-color: var(--accent, #0d9488); }
+
+    .em-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .em-table th { text-align: left; padding: 0.55rem 0.7rem; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #64748b); font-weight: 700; border-bottom: 1px solid var(--border, #e2e8f0); background: var(--bg-inset, #f8fafc); }
+    .em-table td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border, #e2e8f0); vertical-align: top; }
+    .em-table tr:hover td { background: var(--accent-light, #ccfbf1); }
+    .em-table .subj { font-weight: 600; color: var(--text-primary, #0f172a); }
+    .em-from { color: var(--text-secondary, #475569); }
+    .em-from .addr { color: var(--text-muted, #94a3b8); font-size: 0.76rem; }
+    .em-date { white-space: nowrap; color: var(--text-muted, #64748b); font-size: 0.78rem; }
+
+    .cat-badge { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
+    .cat-rfq { background: rgba(13,148,136,0.16); color: #0f766e; }
+    .cat-po { background: rgba(99,102,241,0.16); color: #4338ca; }
+    .cat-supplier { background: rgba(217,119,6,0.16); color: #b45309; }
+    .cat-finance { background: rgba(5,150,105,0.16); color: #047857; }
+    .cat-internal { background: rgba(100,116,139,0.16); color: #475569; }
+    .cat-promo { background: rgba(236,72,153,0.14); color: #be185d; }
+    .cat-other { background: var(--bg-inset, #f1f5f9); color: #64748b; }
+
+    .dr-empty { padding: 1.4rem; text-align: center; color: var(--text-muted, #64748b); font-size: 0.86rem; font-style: italic; }
+    .em-setup { text-align: center; padding: 2.4rem 1.4rem; }
+    .em-setup .ic { font-size: 2.4rem; }
+    .em-setup h2 { margin: 0.5rem 0 0.3rem; font-size: 1.1rem; }
+    .em-setup p { color: var(--text-secondary, #475569); font-size: 0.88rem; margin: 0 0 1rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="em">
+      <div class="em-hero">
+        <div>
+          <h1>Email</h1>
+          <div class="sub">GoDaddy mailbox feed — Inbox, Sent &amp; Spam · incoming mail auto-classified · last 14 days</div>
+        </div>
+        <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+          <span class="who" id="whoTag" style="display:none;"></span>
+          <button class="btn btn-sm" id="refreshBtn" style="background:rgba(255,255,255,0.92);">Refresh</button>
+        </div>
+      </div>
+
+      <div id="setupBox" style="display:none;"></div>
+
+      <div id="feedBox" style="display:none;">
+        <div class="em-tabs" id="tabs">
+          <div class="em-tab active" data-folder="inbox">📥 Inbox<span class="cnt" id="cntInbox"></span></div>
+          <div class="em-tab" data-folder="sent">📤 Sent<span class="cnt" id="cntSent"></span></div>
+          <div class="em-tab" data-folder="spam">🚫 Spam<span class="cnt" id="cntSpam"></span></div>
+        </div>
+
+        <div class="em-card">
+          <div class="em-toolbar">
+            <input type="text" id="search" placeholder="Search sender / subject…">
+            <span class="spacer"></span>
+            <span style="font-size:0.78rem;color:var(--text-muted,#64748b);" id="metaLine"></span>
+          </div>
+          <div class="em-cats" id="catFilter" style="display:none;"></div>
+          <div id="listBox" style="overflow-x:auto;"><div class="dr-empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/director-emails.js"></script>
+</body>
+</html>
