@@ -411,12 +411,12 @@ function createSalesOrder(p) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
   // Auto-create the shipment-monitoring timeline for this order (flow-native).
-  _autoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
+  _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
   return { success: true, soNo: no, message: 'Sales Order created.' };
 }
 
 /** Create a Shipment row for a Sales Order if one doesn't already exist (keyed by SO No). */
-function _autoCreateShipment(soNo, customer, item, createdBy) {
+function _flowAutoCreateShipment(soNo, customer, item, createdBy) {
   try {
     var exists = _rows('Shipments').some(function (r) { return String(r['SO No']) === String(soNo); });
     if (exists) return;

@@ -98,6 +98,9 @@ def _get_enc_creds(username: str) -> Optional[str]:
         "sharedSecret": INTERNAL_SHARED_SECRET,
     })
     if not result.get("success"):
+        if str(result.get("message", "")).strip().lower() == "forbidden":
+            logger.warning("getEmailCredentialsForBackend Forbidden — INTERNAL_SHARED_SECRET mismatch "
+                           "with Code.gs; set the matching Script Property in the Code.gs project.")
         return None
     enc_blob = result.get("encBlob") or ""
     if not enc_blob:
@@ -415,7 +418,16 @@ def email_setup():
         "sharedSecret": INTERNAL_SHARED_SECRET,
     })
     if not result.get("success"):
-        return jsonify({"success": False, "message": result.get("message", "Failed to save")}), 500
+        msg = result.get("message", "Failed to save")
+        # Code.gs rejected the shared secret — a config mismatch, not a server crash.
+        if str(msg).strip().lower() == "forbidden":
+            logger.warning("setEmailCredentials Forbidden — INTERNAL_SHARED_SECRET mismatch with Code.gs")
+            return jsonify({"success": False, "message": (
+                "Apps Script rejected the request: the Code.gs INTERNAL_SHARED_SECRET Script Property "
+                "does not match this server's. In the Code.gs Apps Script project, open Project Settings "
+                "→ Script properties and set INTERNAL_SHARED_SECRET to the same value as the server."
+            )}), 403
+        return jsonify({"success": False, "message": msg}), 500
     _creds_cache[session["username"]] = {"enc_blob": enc_blob, "_ts": time.time()}
     return jsonify({"success": True, "message": "Email connected", "godaddyEmail": addr})
 
