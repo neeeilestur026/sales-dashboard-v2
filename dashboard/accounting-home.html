@@ -86,6 +86,55 @@
       text-transform:uppercase; letter-spacing:0.08em; margin:0;
     }
 
+    /* Revenue & Net Profit report */
+    .pnl-card { background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:1.2rem 1.3rem; margin-bottom:1.5rem; box-shadow:var(--shadow-sm); }
+    .pnl-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem; }
+    .pnl-head h2 { font-size:1.05rem; font-weight:700; color:var(--text-primary); margin:0; letter-spacing:-0.01em; }
+    .pnl-controls { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+    .pnl-controls select { padding:0.4rem 0.7rem; border:1px solid var(--border); border-radius:8px; font-size:0.84rem; background:#fff; color:var(--text-primary); cursor:pointer; }
+    .pnl-state { font-size:0.74rem; color:var(--text-muted); }
+    .pnl-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.7rem; margin-bottom:1.1rem; }
+    .pnl-tile { background:var(--bg-inset); border:1px solid var(--border); border-radius:12px; padding:0.7rem 0.85rem; }
+    .pnl-tile .l { font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.3rem; }
+    .pnl-tile .v { font-size:clamp(0.95rem,2.4vw,1.3rem); font-weight:800; color:var(--text-primary); font-variant-numeric:tabular-nums; line-height:1.1; }
+    .pnl-tile.accent { background:var(--accent-light); border-color:var(--accent); }
+    .pnl-tile.accent .v { color:var(--accent-dark); }
+    .pnl-tile.pos .v { color:#16a34a; }
+    .pnl-tile.neg .v { color:#ef4444; }
+    /* Monthly P&L table */
+    .pnl-mtable { width:100%; border-collapse:collapse; font-size:0.84rem; min-width:660px; }
+    .pnl-mtable th { text-align:left; padding:0.5rem 0.7rem; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); font-weight:700; border-bottom:2px solid var(--border); background:var(--bg-inset); white-space:nowrap; }
+    .pnl-mtable th.num, .pnl-mtable td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .pnl-mtable td { padding:0.5rem 0.7rem; border-bottom:1px solid var(--border); color:var(--text-primary); }
+    .pnl-mrow { cursor:pointer; transition:background var(--transition,0.15s); }
+    .pnl-mrow:hover td { background:var(--bg-inset); }
+    .pnl-mname { font-weight:700; color:var(--text-primary); }
+    .pnl-sub { font-size:0.68rem; font-weight:400; color:var(--text-muted); margin-left:0.35rem; }
+    .pnl-sub2 { display:block; font-size:0.67rem; font-weight:400; color:var(--text-muted); }
+    .pnl-expand { background:none; border:1px solid var(--border); color:var(--text-muted); border-radius:5px; padding:0.1rem 0.45rem; font-size:0.72rem; cursor:pointer; line-height:1.2; }
+    .pnl-expand:hover { border-color:var(--accent); color:var(--accent-dark); }
+    .pnl-grand td { font-weight:700; background:var(--bg-inset); border-top:2px solid var(--border); border-bottom:none; text-transform:uppercase; font-size:0.72rem; letter-spacing:0.03em; }
+    .pnl-grand td.num { font-size:0.84rem; }
+    /* Expanded month detail */
+    .pnl-detailrow td { padding:0; background:#f8fafc; border-bottom:2px solid var(--border); }
+    .pnl-detail { padding:0.85rem 0.95rem; display:grid; gap:0.85rem; }
+    .pnl-detail-h { font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.4rem; }
+    .pnl-subtable { width:100%; border-collapse:collapse; font-size:0.78rem; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .pnl-subtable th { text-align:left; padding:0.4rem 0.6rem; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border); background:var(--bg-inset); }
+    .pnl-subtable th.num, .pnl-subtable td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .pnl-subtable td { padding:0.38rem 0.6rem; border-bottom:1px solid var(--border); }
+    .pnl-subtable tbody tr:last-child td { border-bottom:none; }
+    .pnl-subtotal td { font-weight:700; background:var(--bg-inset); }
+    .pnl-netfoot { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.6rem 0.8rem; border-radius:10px; border:1px solid var(--border); }
+    .pnl-netfoot.pos { border-color:rgba(22,163,74,0.3); background:rgba(22,163,74,0.06); }
+    .pnl-netfoot.neg { border-color:rgba(239,68,68,0.3); background:rgba(239,68,68,0.06); }
+    .pnl-netfoot .l { font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); }
+    .pnl-netfoot .s { font-size:0.7rem; color:var(--text-muted); }
+    .pnl-netfoot .v { font-size:1.05rem; font-weight:800; line-height:1.1; }
+    .pnl-muted { color:var(--text-muted); font-style:italic; }
+    .pnl-empty { padding:1.4rem; text-align:center; color:var(--text-muted); font-size:0.86rem; font-style:italic; }
+    .pnl-note { font-size:0.72rem; color:var(--text-muted); margin:0.7rem 0 0; line-height:1.5; }
+
     /* Shipment Monitoring */
     .sm-section { margin-top:1.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
     .sm-section-hdr { display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; }
@@ -221,6 +270,22 @@
           <a href="accounting-billing.html" class="hero-pill">Billing →</a>
         </div>
       </div>
+    </section>
+
+    <!-- Revenue & Net Profit report (per Sales Order, Month/Year) -->
+    <section class="pnl-card">
+      <div class="pnl-head">
+        <div>
+          <h2>Revenue &amp; Net Profit Report</h2>
+          <div class="pnl-state" id="pnlState">Loading…</div>
+        </div>
+        <div class="pnl-controls">
+          <label style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Year</label>
+          <select id="pnlYear"></select>
+        </div>
+      </div>
+      <div class="pnl-tiles" id="pnlTotals"></div>
+      <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
     </section>
 
     <!-- KPI summary (read-only, from the flow backend) -->
@@ -403,6 +468,7 @@
   <script src="js/flow-api.js"></script>
   <script src="js/stage-meta.js"></script>
   <script src="js/accounting-home.js"></script>
+  <script src="js/accounting-profit.js"></script>
   <script>
     // ── Financial KPI snapshot (read-only, from the flow backend) ──
     (function loadAcctKpis() {

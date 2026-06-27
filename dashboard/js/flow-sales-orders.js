@@ -121,14 +121,63 @@ async function loadSOs() {
     soList.sort((a, b) =>
       (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
       String(b.soNo).localeCompare(String(a.soNo)));
-    if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
-    c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th></th></tr></thead><tbody>${soList.map(s => `
-      <tr><td>${flowEsc(s.soNo)}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
-      <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td class="num">${flowMoney(s.total, 'PHP')}</td><td>${s.items.length}</td>
-      <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")'>Docs</button>
-      <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
-      <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button></td></tr>`).join('')}</tbody></table>`;
+    buildSOFilters();
+    renderSOs();
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+function buildSOFilters() {
+  // Year options from SO dates (newest first) + All years.
+  const years = new Set();
+  soList.forEach(s => { const y = (flowDate(s.date) || '').slice(0, 4); if (y) years.add(y); });
+  const ySel = document.getElementById('soYear');
+  if (ySel && !ySel.dataset.bound) {
+    ['soSearch', 'soYear', 'soMonth', 'soCustomer'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.addEventListener('input', renderSOs);
+    });
+    ySel.dataset.bound = '1';
+  }
+  if (ySel) {
+    const cur = ySel.value;
+    ySel.innerHTML = '<option value="">All years</option>' +
+      Array.from(years).sort((a, b) => b.localeCompare(a)).map(y => `<option value="${y}">${y}</option>`).join('');
+    ySel.value = cur;
+  }
+  // Customer options.
+  const custs = Array.from(new Set(soList.map(s => s.customer).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+  const cSel = document.getElementById('soCustomer');
+  if (cSel) {
+    const cur = cSel.value;
+    cSel.innerHTML = '<option value="">All customers</option>' +
+      custs.map(c => `<option value="${flowEsc(c)}">${flowEsc(c)}</option>`).join('');
+    cSel.value = cur;
+  }
+}
+
+function renderSOs() {
+  const c = document.getElementById('listContainer');
+  const q = (document.getElementById('soSearch').value || '').trim().toLowerCase();
+  const y = document.getElementById('soYear').value;
+  const m = document.getElementById('soMonth').value;
+  const cust = document.getElementById('soCustomer').value;
+  const rows = soList.filter(s => {
+    const d = flowDate(s.date) || '';
+    if (y && d.slice(0, 4) !== y) return false;
+    if (m && d.slice(5, 7) !== m) return false;
+    if (cust && String(s.customer) !== cust) return false;
+    if (q && !((s.soNo + ' ' + (s.quotationNo || '') + ' ' + (s.customer || '')).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const meta = document.getElementById('soFilterMeta');
+  if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
+  if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
+  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
+  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
+    <tr><td>${flowEsc(s.soNo)}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
+    <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td class="num">${flowMoney(s.total, 'PHP')}</td><td>${s.items.length}</td>
+    <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")'>Docs</button>
+    <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
+    <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button></td></tr>`).join('')}</tbody></table>`;
 }
 
 function editSO(no) {

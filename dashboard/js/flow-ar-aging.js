@@ -78,13 +78,23 @@ function openCollect(arNo) {
   document.getElementById('collectArNo').value = arNo;
   document.getElementById('collectSub').textContent = `${arNo} · ${r.customer} · outstanding ${flowMoney(r.outstanding, 'PHP')}`;
   document.getElementById('collectAmount').value = r.outstanding > 0 ? r.outstanding : '';
+  document.getElementById('collectEwt').value = '';
   document.getElementById('collectDate').value = new Date().toISOString().slice(0, 10);
   document.getElementById('collectRef').value = '';
   document.getElementById('collectNotes').value = '';
   document.getElementById('collectMsg').style.display = 'none';
+  collectRecalcNet();
   document.getElementById('collectModal').classList.add('open');
 }
 function closeCollect() { document.getElementById('collectModal').classList.remove('open'); }
+
+function collectRecalcNet() {
+  const amount = flowNum(document.getElementById('collectAmount').value);
+  const ewt = flowNum(document.getElementById('collectEwt').value);
+  const net = amount - ewt;
+  document.getElementById('collectNet').textContent =
+    `Net cash = ${flowMoney(net, 'PHP')}  (Amount ${flowMoney(amount, 'PHP')} − EWT ${flowMoney(ewt, 'PHP')})`;
+}
 
 async function submitCollection() {
   const arNo = document.getElementById('collectArNo').value;
@@ -94,7 +104,8 @@ async function submitCollection() {
   btn.disabled = true; btn.textContent = 'Recording...';
   try {
     const res = await postFlow('recordCollection', {
-      arNo, amount, date: document.getElementById('collectDate').value,
+      arNo, amount, ewt: flowNum(document.getElementById('collectEwt').value),
+      date: document.getElementById('collectDate').value,
       method: document.getElementById('collectMethod').value,
       ref: document.getElementById('collectRef').value.trim(),
       notes: document.getElementById('collectNotes').value.trim()

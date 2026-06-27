@@ -77,6 +77,7 @@ function addRow(item) {
     <td class="num"><input type="number" step="any" min="0" class="qty" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
     <td class="num"><input type="number" step="any" min="0" class="price" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
     <td class="num lineTotal">0.00</td>
+    <td class="num lineTotalPHP">0.00</td>
     <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
   tb.appendChild(tr);
   recalc();
@@ -91,18 +92,47 @@ function poFillItem(input) {
   if (nameInput && !nameInput.value.trim()) nameInput.value = match.description || '';
 }
 
-function recalc() {
-  let total = 0;
+function poFxRate() {
   const cur = document.getElementById('currency').value;
+  if (cur === 'PHP') return 1;
+  const r = flowNum(document.getElementById('fxRate').value);
+  return r > 0 ? r : 0;
+}
+
+function recalc() {
+  const cur = document.getElementById('currency').value;
+  const isFx = cur !== 'PHP';
+  // Show the FX-rate field + PHP total only for foreign currencies.
+  const fxWrap = document.getElementById('fxRateWrap');
+  if (fxWrap) fxWrap.style.display = isFx ? '' : 'none';
+  const phpWrap = document.getElementById('grandTotalPHPwrap');
+  if (phpWrap) phpWrap.style.display = isFx ? '' : 'none';
+  const rate = poFxRate();
+  let total = 0, totalPHP = 0;
   document.querySelectorAll('#itemRows tr').forEach(tr => {
     const qty = flowNum(tr.querySelector('.qty').value);
     const price = flowNum(tr.querySelector('.price').value);
     const lt = qty * price;
+    const ltPHP = lt * rate;
     tr.querySelector('.lineTotal').textContent = lt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    total += lt;
+    const phpCell = tr.querySelector('.lineTotalPHP');
+    if (phpCell) phpCell.textContent = isFx ? ltPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    total += lt; totalPHP += ltPHP;
   });
   document.getElementById('grandTotal').textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   document.getElementById('curLabel').textContent = cur;
+  const gpHP = document.getElementById('grandTotalPHP');
+  if (gpHP) gpHP.textContent = totalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** PHP estimate of the whole PO = Σ(qty×price) × rate (or FC total when currency is PHP). */
+function poTotalPHP() {
+  const rate = poFxRate();
+  let total = 0;
+  document.querySelectorAll('#itemRows tr').forEach(tr => {
+    total += flowNum(tr.querySelector('.qty').value) * flowNum(tr.querySelector('.price').value);
+  });
+  return total * rate;
 }
 
 function collectItems() {
@@ -128,6 +158,7 @@ async function savePO() {
   const payload = {
     poNo, soNo: document.getElementById('soNo').value, supplier,
     currency: document.getElementById('currency').value, date: document.getElementById('date').value,
+    exchangeRate: poFxRate(), totalPHP: poTotalPHP(),
     createdBy: poSession.name, items: JSON.stringify(items)
   };
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -149,6 +180,7 @@ function resetForm() {
   document.getElementById('loadSO').value = '';
   document.getElementById('supplier').value = '';
   document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  const fx = document.getElementById('fxRate'); if (fx) fx.value = '';
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Purchase Order';
   document.getElementById('formMsg').style.display = 'none';

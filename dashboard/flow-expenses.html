@@ -66,17 +66,15 @@
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <a href="migrate-expenses.html" class="btn btn-sm btn-secondary" style="white-space:nowrap;">⤓ Import legacy Expenses</a>
             <button class="btn btn-sm btn-primary" id="addBtn">+ Add Expense</button>
-            <button class="btn btn-sm btn-secondary" id="reclassSalariesBtn" title="Move all Salaries & Wages expenses to the Operating type">Salaries → Operating</button>
+            <button class="btn btn-sm btn-secondary" id="reclassSalariesBtn" title="Fold any legacy G&A / Other expenses into Operating (OpEx)">Fold legacy → OpEx</button>
             <button class="btn btn-sm btn-secondary" id="reloadBtn">Reload</button>
           </div>
         </div>
         <div class="report-body">
           <div class="ex-kpis" id="kpis">
-            <div class="ex-kpi tot"><div class="l">Total Expenses</div><div class="v" id="kTotal">—</div></div>
-            <div class="ex-kpi"><div class="l">Operating (OpEx)</div><div class="v" id="kOpex">—</div></div>
-            <div class="ex-kpi"><div class="l">General &amp; Admin</div><div class="v" id="kGa">—</div></div>
-            <div class="ex-kpi"><div class="l">Other / Non-Op</div><div class="v" id="kOther">—</div></div>
+            <div class="ex-kpi tot"><div class="l">Total Operating Expenses (OpEx)</div><div class="v" id="kTotal">—</div></div>
             <div class="ex-kpi"><div class="l"># Records</div><div class="v" id="kCount">—</div></div>
+            <div class="ex-kpi"><div class="l"># Categories</div><div class="v" id="kCats">—</div></div>
           </div>
 
           <div class="ex-toolbar">
@@ -88,12 +86,6 @@
               <option value="04">April</option><option value="05">May</option><option value="06">June</option>
               <option value="07">July</option><option value="08">August</option><option value="09">September</option>
               <option value="10">October</option><option value="11">November</option><option value="12">December</option>
-            </select>
-            <select id="typeFilter">
-              <option value="">All types</option>
-              <option value="Operating">Operating (OpEx)</option>
-              <option value="General &amp; Administrative">General &amp; Administrative</option>
-              <option value="Other">Other / Non-Operating</option>
             </select>
             <select id="catFilter"><option value="">All categories</option></select>
             <span class="spacer"></span>
@@ -114,11 +106,8 @@
       <input type="hidden" id="expRowIndex">
       <div class="ex-form">
         <div><label>Date *</label><input type="date" id="fDate"></div>
-        <div><label>Type *</label><select id="fType">
-          <option value="Operating">Operating (OpEx)</option>
-          <option value="General &amp; Administrative">General &amp; Administrative</option>
-          <option value="Other">Other / Non-Operating</option>
-        </select></div>
+        <input type="hidden" id="fType" value="Operating">
+        <div><label>Classification</label><input type="text" value="Operating Expenses (OpEx)" disabled style="color:var(--text-muted,#64748b);"></div>
         <div><label>Category *</label><input type="text" id="fCategory" list="catList" placeholder="e.g. Rent expense"><datalist id="catList"></datalist></div>
         <div><label>Voucher No.</label><input type="text" id="fVoucher"></div>
         <div><label>Client</label><input type="text" id="fClient"></div>

@@ -47,12 +47,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const reclassBtn = document.getElementById('reclassSalariesBtn');
   if (reclassBtn) reclassBtn.addEventListener('click', reclassSalaries);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
-  ['search', 'yearSel', 'monthSel', 'typeFilter', 'catFilter'].forEach(id =>
+  ['search', 'yearSel', 'monthSel', 'catFilter'].forEach(id =>
     document.getElementById(id).addEventListener('input', render));
-  document.getElementById('fCategory').addEventListener('input', e => {
-    // auto-pick the type from the category unless the user already changed it
-    document.getElementById('fType').value = expTypeFor(e.target.value);
-  });
   // populate category datalist
   document.getElementById('catList').innerHTML = EXP_CATEGORIES.map(c => `<option value="${flowEsc(c)}">`).join('');
   await loadExpenses();
@@ -98,12 +94,10 @@ function filtered() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   const y = document.getElementById('yearSel').value;
   const m = document.getElementById('monthSel').value;
-  const tf = document.getElementById('typeFilter').value;
   const cf = document.getElementById('catFilter').value;
   return allExp.filter(r => {
     if (y && _yr(r.date) !== y) return false;
     if (m && _mo(r.date) !== m) return false;
-    if (tf && r.type !== tf) return false;
     if (cf && r.category !== cf) return false;
     if (q) {
       const hay = (r.voucherNo + ' ' + r.client + ' ' + r.description + ' ' + r.category).toLowerCase();
@@ -116,44 +110,37 @@ function filtered() {
 function render() {
   const rows = filtered();
 
-  // ── KPI totals ──
-  const byType = { 'Operating': 0, 'General & Administrative': 0, 'Other': 0 };
-  rows.forEach(r => { byType[r.type] = (byType[r.type] || 0) + flowNum(r.amount); });
-  const total = byType['Operating'] + byType['General & Administrative'] + byType['Other'];
+  // ── Single OpEx umbrella: one classification, categories underneath ──
+  const total = rows.reduce((s, r) => s + flowNum(r.amount), 0);
+  const catMap = {};
+  rows.forEach(r => { const cat = r.category || 'Uncategorized'; catMap[cat] = (catMap[cat] || 0) + flowNum(r.amount); });
+  const cats = Object.keys(catMap);
+
   document.getElementById('kTotal').textContent = flowMoney(total, 'PHP');
-  document.getElementById('kOpex').textContent = flowMoney(byType['Operating'], 'PHP');
-  document.getElementById('kGa').textContent = flowMoney(byType['General & Administrative'], 'PHP');
-  document.getElementById('kOther').textContent = flowMoney(byType['Other'], 'PHP');
   document.getElementById('kCount').textContent = rows.length;
+  const kCats = document.getElementById('kCats');
+  if (kCats) kCats.textContent = cats.length;
 
   const y = document.getElementById('yearSel').value;
   const m = document.getElementById('monthSel').value;
   const mLabel = m ? new Date(2000, parseInt(m, 10) - 1, 1).toLocaleString('en-US', { month: 'long' }) + ' ' : '';
   document.getElementById('metaLine').textContent =
-    `Period: ${mLabel}${y || 'All years'} · ${rows.length} record(s) · sorted by type with subtotals.`;
+    `Period: ${mLabel}${y || 'All years'} · ${rows.length} record(s) · Operating Expenses by category.`;
 
   const c = document.getElementById('container');
   if (!rows.length) { c.innerHTML = '<div class="dr-empty">No expenses match the current filters.</div>'; return; }
 
-  let html = '';
-  EXP_TYPES.forEach(type => {
-    const list = rows.filter(r => r.type === type)
-      .sort((a, b) => (a.category || '').localeCompare(b.category || '') || flowDate(b.date).localeCompare(flowDate(a.date)));
-    if (!list.length) return;
-    const subtotal = list.reduce((s, r) => s + flowNum(r.amount), 0);
+  // Sort all rows by category then date (newest first within a category).
+  const list = rows.slice().sort((a, b) =>
+    (a.category || '').localeCompare(b.category || '') || flowDate(b.date).localeCompare(flowDate(a.date)));
+  const catBar = cats.sort((a, b) => catMap[b] - catMap[a])
+    .map(cat => `<span>${flowEsc(cat)} <b>${flowMoney(catMap[cat], 'PHP')}</b></span>`).join('');
 
-    // per-category breakdown
-    const catMap = {};
-    list.forEach(r => { catMap[r.category || 'Uncategorized'] = (catMap[r.category || 'Uncategorized'] || 0) + flowNum(r.amount); });
-    const catBar = Object.keys(catMap).sort((a, b) => catMap[b] - catMap[a])
-      .map(cat => `<span>${flowEsc(cat)} <b>${flowMoney(catMap[cat], 'PHP')}</b></span>`).join('');
-
-    const isCol = collapsed[type];
-    html += `<div class="ex-group${isCol ? ' collapsed' : ''}" data-type="${flowEsc(type)}">
-      <div class="ex-group-head" data-toggle="${flowEsc(type)}">
-        <span class="gt">${flowEsc(TYPE_LABEL[type])}</span>
-        <span class="gc">${list.length} record(s)</span>
-        <span class="gsub">${flowMoney(subtotal, 'PHP')}</span>
+  const html = `<div class="ex-group">
+      <div class="ex-group-head" style="cursor:default;">
+        <span class="gt">Operating Expenses (OpEx)</span>
+        <span class="gc">${list.length} record(s) · ${cats.length} categor${cats.length === 1 ? 'y' : 'ies'}</span>
+        <span class="gsub">${flowMoney(total, 'PHP')}</span>
       </div>
       <div class="ex-group-body">
         <div class="ex-catbar">${catBar}</div>
@@ -163,15 +150,10 @@ function render() {
           <th class="num">Amount</th><th></th></tr></thead><tbody>
           ${list.map(rowHtml).join('')}
         </tbody></table></div>
-      </div></div>`;
-  });
-
-  html += `<div class="ex-grand"><span class="gl">Total Overall Expenses</span><span class="gv">${flowMoney(total, 'PHP')}</span></div>`;
+      </div></div>
+    <div class="ex-grand"><span class="gl">Total Operating Expenses</span><span class="gv">${flowMoney(total, 'PHP')}</span></div>`;
   c.innerHTML = html;
 
-  c.querySelectorAll('[data-toggle]').forEach(h => h.addEventListener('click', () => {
-    const t = h.getAttribute('data-toggle'); collapsed[t] = !collapsed[t]; render();
-  }));
   c.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openExpModal(b.getAttribute('data-edit'))));
   c.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => delExpense(b.getAttribute('data-del'))));
   c.querySelectorAll('[data-docs]').forEach(b => b.addEventListener('click', () =>
@@ -252,20 +234,20 @@ async function submitExpense() {
   }
 }
 
-// One-time: move every "Salaries and wages" expense to the Operating type (payroll = OpEx).
+// Fold any legacy G&A / Other expenses into the single Operating (OpEx) umbrella. Run-once, safe to repeat.
 async function reclassSalaries() {
-  if (!confirm('Move ALL "Salaries and wages" expenses to the Operating type? This is safe to run once.')) return;
+  if (!confirm('Fold ALL expenses into Operating (OpEx)? Legacy General & Administrative / Other rows move to OpEx. Safe to run once.')) return;
   const btn = document.getElementById('reclassSalariesBtn');
-  btn.disabled = true; btn.textContent = 'Reclassifying…';
+  btn.disabled = true; btn.textContent = 'Folding…';
   try {
-    const r = await postFlow('reclassifyExpenses', { category: 'Salaries and wages', type: 'Operating' });
+    const r = await postFlow('reclassifyExpenses', { type: 'Operating' });   // no category → all rows
     if (!r || !r.success) throw new Error((r && r.message) || 'Reclassify failed.');
-    flash(r.message || 'Reclassified.', true);
+    flash(r.message || 'Folded into OpEx.', true);
     await loadExpenses();
   } catch (e) {
     flash(e.message, false);
   } finally {
-    btn.disabled = false; btn.textContent = 'Salaries → Operating';
+    btn.disabled = false; btn.textContent = 'Fold legacy → OpEx';
   }
 }
 

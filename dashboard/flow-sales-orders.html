@@ -51,6 +51,19 @@
         <h3 style="font-size:0.95rem;font-weight:600;">Sales Orders</h3>
         <button class="btn btn-sm btn-secondary" onclick="loadSOs()">Refresh</button>
       </div>
+      <div class="flow-actions" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <input type="text" id="soSearch" placeholder="Search SO / quotation…" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;min-width:180px;">
+        <select id="soYear" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;"></select>
+        <select id="soMonth" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;">
+          <option value="">All months</option>
+          <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+          <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+          <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+          <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+        </select>
+        <select id="soCustomer" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;"><option value="">All customers</option></select>
+        <span id="soFilterMeta" style="margin-left:auto;font-size:0.78rem;color:var(--text-muted,#64748b);"></span>
+      </div>
       <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>

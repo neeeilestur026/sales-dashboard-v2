@@ -130,6 +130,7 @@ function renderFlowNav(active) {
     ['flow-ar-aging.html', 'AR Aging'],
     ['flow-collections.html', 'Collections'],
     ['flow-expenses.html', 'Expenses'],
+    ['flow-shipments.html', 'Shipments'],
     ['flow-ledger.html', 'Ledger'],
   ];
   const el = document.getElementById('flowNav');

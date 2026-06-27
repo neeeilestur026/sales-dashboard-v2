@@ -42,12 +42,14 @@
       <div class="sub" id="collectSub">—</div>
       <input type="hidden" id="collectArNo">
       <div class="flow-form">
-        <div><label>Amount (PHP) *</label><input type="number" step="any" min="0" id="collectAmount"></div>
+        <div><label>Amount (PHP) *</label><input type="number" step="any" min="0" id="collectAmount" oninput="collectRecalcNet()"></div>
+        <div><label>EWT / 2307 (PHP)</label><input type="number" step="any" min="0" id="collectEwt" placeholder="0.00" oninput="collectRecalcNet()"></div>
         <div><label>Date</label><input type="date" id="collectDate"></div>
         <div><label>Method</label><select id="collectMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option><option>Other</option></select></div>
         <div><label>Reference No.</label><input type="text" id="collectRef" placeholder="OR / deposit slip #"></div>
         <div class="full"><label>Notes</label><input type="text" id="collectNotes"></div>
       </div>
+      <div class="sub" id="collectNet" style="margin-top:0.4rem;">Net cash = Amount − EWT</div>
       <div id="collectMsg" class="flow-msg" style="display:none;"></div>
       <div class="flow-modal-foot">
         <button type="button" class="btn btn-secondary" onclick="closeCollect()">Cancel</button>

@@ -116,21 +116,16 @@ function render() {
     .reduce((s, a) => s + _n(a.outstanding), 0);
   const collectedPeriod = cols.reduce((s, c) => s + _n(c.amount), 0);
 
-  // ── Expenses (OpEx / G&A / Other) in period ──
-  const expOpex = exps.filter(e => e.type === 'Operating').reduce((s, e) => s + _n(e.amount), 0);
-  const expGa = exps.filter(e => e.type === 'General & Administrative').reduce((s, e) => s + _n(e.amount), 0);
-  const expOther = exps.filter(e => e.type === 'Other').reduce((s, e) => s + _n(e.amount), 0);
-  const expTotal = expOpex + expGa + expOther;
-  const operatingIncome = grossProfit - expOpex - expGa;     // Other is non-operating, excluded
-  const netIncome = operatingIncome - expOther;
+  // ── Operating Expenses (single OpEx umbrella — all categories) in period ──
+  const expTotal = exps.reduce((s, e) => s + _n(e.amount), 0);
+  const netIncome = grossProfit - expTotal;
 
   const pct = v => revenue > 0 ? (v / revenue * 100).toFixed(1) + '%' : '—';
 
   // ── KPI strip ──
   const kpis = [
     ['Revenue (Sales)', _m(revenue)], ['COGS', _m(cogs)], ['Gross Profit', _m(grossProfit)],
-    ['Gross Margin', margin], ['Total Expenses', _m(expTotal)], ['Operating (OpEx)', _m(expOpex)],
-    ['General & Admin', _m(expGa)], ['Other / Non-Op', _m(expOther)], ['Operating Income', _m(operatingIncome)],
+    ['Gross Margin', margin], ['Operating Expenses (OpEx)', _m(expTotal)], ['Net Income', _m(netIncome)],
     ['Collected (period)', _m(collectedPeriod)], ['AR Outstanding (open)', _m(arOutAll)],
     ['Total Purchases', purStr], ['Total Shipping', _m(shipping)],
     ['VAT Input', _m(vat)], ['AP Outstanding (open)', _m(apOutAll)],
@@ -152,10 +147,7 @@ function render() {
           <tr class="bold"><td>Revenue (Sales)</td><td class="n">${_m(revenue)}</td><td class="n">100.0%</td></tr>
           <tr><td>Less: Cost of Goods Sold</td><td class="n" style="color:#f97316;">(${_m(cogs)})</td><td class="n">${pct(cogs)}</td></tr>
           <tr class="bold final"><td>Gross Profit</td><td class="n" style="color:#16a34a;">${_m(grossProfit)}</td><td class="n">${margin}</td></tr>
-          <tr><td>Less: Operating Expenses (OpEx)</td><td class="n" style="color:#f97316;">(${_m(expOpex)})</td><td class="n">${pct(expOpex)}</td></tr>
-          <tr><td>Less: General &amp; Administrative</td><td class="n" style="color:#f97316;">(${_m(expGa)})</td><td class="n">${pct(expGa)}</td></tr>
-          <tr class="bold final"><td>Operating Income</td><td class="n" style="color:${operatingIncome >= 0 ? '#16a34a' : '#ef4444'};">${_m(operatingIncome)}</td><td class="n">${pct(operatingIncome)}</td></tr>
-          <tr><td>Less: Other / Non-Operating</td><td class="n" style="color:#f97316;">(${_m(expOther)})</td><td class="n">${pct(expOther)}</td></tr>
+          <tr><td>Less: Operating Expenses (OpEx)</td><td class="n" style="color:#f97316;">(${_m(expTotal)})</td><td class="n">${pct(expTotal)}</td></tr>
           <tr class="bold final"><td>Net Income</td><td class="n" style="color:${netIncome >= 0 ? '#16a34a' : '#ef4444'};">${_m(netIncome)}</td><td class="n">${pct(netIncome)}</td></tr>
         </tbody></table>
         <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.5rem;">Revenue &amp; COGS come from issued invoices in the period. The flow capitalizes duties/delivery into inventory cost (recovered through COGS) and routes VAT to Input&nbsp;VAT, so operating costs appear under Costs &amp; Expenses.</p>
@@ -203,10 +195,10 @@ function render() {
       cols.map(c => [_e(c.collectionNo), _ymd(c.date), _e(c.soNo), _e(c.customer), _e(c.method), _m(c.amount)]),
       ['Total', '', '', '', '', _m(collectedPeriod)])}
 
-    ${_tbl('Expenses (period · OpEx / G&A / Other)', ['Exp No', 'Date', 'Type', 'Category', 'Voucher', 'Description', 'Amount (PHP)'], [6],
-      exps.slice().sort((a, b) => (a.type || '').localeCompare(b.type || '') || (a.category || '').localeCompare(b.category || ''))
-        .map(e => [_e(e.expNo), _ymd(e.date), _e(e.type), _e(e.category), _e(e.voucherNo), _e(e.description), _m(e.amount)]),
-      ['Total', '', '', '', '', '', _m(expTotal)])}
+    ${_tbl('Operating Expenses (period · by category)', ['Exp No', 'Date', 'Category', 'Voucher', 'Description', 'Amount (PHP)'], [5],
+      exps.slice().sort((a, b) => (a.category || '').localeCompare(b.category || '') || (_ymd(b.date) || '').localeCompare(_ymd(a.date) || ''))
+        .map(e => [_e(e.expNo), _ymd(e.date), _e(e.category), _e(e.voucherNo), _e(e.description), _m(e.amount)]),
+      ['Total', '', '', '', '', _m(expTotal)])}
   `;
 }
 

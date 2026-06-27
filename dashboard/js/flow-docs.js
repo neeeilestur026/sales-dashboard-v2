@@ -21,7 +21,7 @@ function _docsModalEl() {
       <div id="flowDocsList" style="margin:0.75rem 0;"></div>
       <div class="group-title">Attach a document</div>
       <div class="flow-form">
-        <div class="full"><label>File (max ${FLOW_DOC_MAX_MB}MB)</label><input type="file" id="flowDocsFile"></div>
+        <div class="full"><label>Files (multiple allowed · max ${FLOW_DOC_MAX_MB}MB each)</label><input type="file" id="flowDocsFile" multiple></div>
         <div class="full"><label>Type / label (optional)</label><input type="text" id="flowDocsType" placeholder="e.g. Proforma, Packing List, Commercial Invoice"></div>
       </div>
       <div id="flowDocsMsg" class="flow-msg" style="display:none;"></div>
@@ -77,25 +77,33 @@ async function flowDocsRefresh() {
 
 async function flowDocsUpload() {
   const fileEl = document.getElementById('flowDocsFile');
-  const file = fileEl && fileEl.files && fileEl.files[0];
-  if (!file) { flowMsg('flowDocsMsg', 'Choose a file first.', false); return; }
-  if (file.size > FLOW_DOC_MAX_MB * 1024 * 1024) {
-    flowMsg('flowDocsMsg', `File too large (max ${FLOW_DOC_MAX_MB}MB).`, false); return;
-  }
+  const files = fileEl && fileEl.files ? Array.from(fileEl.files) : [];
+  if (!files.length) { flowMsg('flowDocsMsg', 'Choose at least one file.', false); return; }
+  const tooBig = files.find(f => f.size > FLOW_DOC_MAX_MB * 1024 * 1024);
+  if (tooBig) { flowMsg('flowDocsMsg', `"${tooBig.name}" is too large (max ${FLOW_DOC_MAX_MB}MB each).`, false); return; }
+  const docType = document.getElementById('flowDocsType').value.trim();
   const btn = document.getElementById('flowDocsAddBtn');
-  btn.disabled = true; btn.textContent = 'Attaching…';
+  btn.disabled = true;
+  let done = 0;
+  const failures = [];
   try {
-    const dataUrl = await fileToDataURL(file);
-    const base64 = String(dataUrl).split(',')[1] || '';
-    const res = await postFlow('addDocument', {
-      module: _docsCtx.module, refNo: _docsCtx.refNo,
-      docType: document.getElementById('flowDocsType').value.trim(),
-      fileName: file.name, fileBase64: base64, mimeType: file.type || 'application/octet-stream'
-    });
-    if (!res.success) throw new Error(res.message);
-    flowMsg('flowDocsMsg', 'Document attached.', true);
+    for (const file of files) {
+      btn.textContent = `Attaching ${done + 1}/${files.length}…`;
+      try {
+        const dataUrl = await fileToDataURL(file);
+        const base64 = String(dataUrl).split(',')[1] || '';
+        const res = await postFlow('addDocument', {
+          module: _docsCtx.module, refNo: _docsCtx.refNo, docType,
+          fileName: file.name, fileBase64: base64, mimeType: file.type || 'application/octet-stream'
+        });
+        if (!res.success) throw new Error(res.message);
+        done++;
+      } catch (e) { failures.push(`${file.name}: ${e.message}`); }
+    }
     fileEl.value = ''; document.getElementById('flowDocsType').value = '';
     await flowDocsRefresh();
+    if (failures.length) flowMsg('flowDocsMsg', `Attached ${done}/${files.length}. Failed: ${failures.join('; ')}`, false);
+    else flowMsg('flowDocsMsg', `${done} document${done === 1 ? '' : 's'} attached.`, true);
   } catch (e) {
     flowMsg('flowDocsMsg', e.message, false);
   } finally { btn.disabled = false; btn.textContent = 'Attach'; }

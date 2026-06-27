@@ -24,18 +24,19 @@
         <div><label>Source SO No</label><input type="text" id="soNo" readonly placeholder="— Restock (no SO) —"></div>
         <div><label>Supplier *</label><input type="text" id="supplier" required></div>
         <div><label>Currency</label><select id="currency"></select></div>
+        <div id="fxRateWrap" style="display:none;"><label>Exchange Rate (to PHP)</label><input type="number" step="any" min="0" id="fxRate" placeholder="e.g. 56.50" oninput="recalc()"></div>
         <div><label>Date</label><input type="date" id="date"></div>
       </div>
       <p style="font-size:0.76rem;color:var(--text-muted,#64748b);">Leave the sales order blank for a <b>Restock PO</b> — type an item no (suggestions come from inventory, description auto-fills) and the stock is added when the PO is <b>received</b> in Materials Receiving. When loaded from a sales order, default quantity = SO quantity less inventory on hand. New POs start as <b>Draft</b> — submit for management approval from the list.</p>
 
       <datalist id="poInvList"></datalist>
       <table class="flow-table flow-items" style="margin-top:0.5rem;">
-        <thead><tr><th style="width:34%;">Item</th><th class="num" style="width:14%;">Qty</th><th class="num" style="width:20%;">Purchase Price/Unit (FC)</th><th class="num" style="width:18%;">Total (FC)</th><th></th></tr></thead>
+        <thead><tr><th style="width:30%;">Item</th><th class="num" style="width:12%;">Qty</th><th class="num" style="width:18%;">Purchase Price/Unit (FC)</th><th class="num" style="width:16%;">Total (FC)</th><th class="num" style="width:16%;">Total (PHP)</th><th></th></tr></thead>
         <tbody id="itemRows"></tbody>
       </table>
       <div class="flow-actions">
         <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
-        <span style="margin-left:auto;font-weight:700;">Total Purchase: <span id="grandTotal">0.00</span> <span id="curLabel"></span></span>
+        <span style="margin-left:auto;font-weight:700;">Total Purchase: <span id="grandTotal">0.00</span> <span id="curLabel"></span><span id="grandTotalPHPwrap" style="display:none;color:var(--text-muted,#64748b);font-weight:600;"> · ≈ ₱<span id="grandTotalPHP">0.00</span> (est.)</span></span>
       </div>
 
       <div class="flow-actions">

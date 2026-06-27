@@ -53,7 +53,7 @@ var SCHEMA = {
   ARAging:     ['AR No', 'INV No', 'SO No', 'Customer', 'Amount (PHP)', 'Collected (PHP)', 'Status',
                 'Due Date', 'Notes', 'Created At', 'Updated At'],
   Collections: ['Collection No', 'AR No', 'INV No', 'SO No', 'Customer', 'Date', 'Amount (PHP)',
-                'Method', 'Reference No', 'Notes', 'Created At'],
+                'Method', 'Reference No', 'Notes', 'Created At', 'EWT (PHP)'],
 
   // ── Expenses ledger (OpEx / G&A / Other) — pure record, no GL journals ──
   Expenses: ['Exp No', 'Date', 'Type', 'Category', 'Voucher No', 'Client', 'Description', 'Toll',
@@ -93,7 +93,14 @@ var SCHEMA = {
   MktgMetrics:    ['Month', 'Website Visits', 'LinkedIn Followers', 'Notes', 'Updated By', 'Updated At'],
 
   // ── Sales call log (per rep, per day) ──
-  SalesCalls: ['Call No', 'Date', 'User', 'Contact', 'Company', 'Outcome', 'Notes', 'Created At']
+  SalesCalls: ['Call No', 'Date', 'User', 'Contact', 'Company', 'Outcome', 'Notes', 'Created At'],
+
+  // ── Balance Sheet opening balances (Cash, Inventory) — editable config ──
+  OpeningBalances: ['Key', 'Amount (PHP)', 'Updated By', 'Updated At'],
+
+  // ── Shipment Monitoring (flow-native): auto-created at SO; 21-stage timeline ──
+  Shipments: ['Shipment ID', 'SO No', 'PO No', 'Customer', 'Principal', 'Item', 'Mode', 'ETD', 'ETA',
+              'AWB', 'Status', 'Stages (JSON)', 'Remarks', 'Created By', 'Created At', 'Updated At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -103,11 +110,12 @@ var COA = [
   ['1300', 'Inventory', 'Asset', 'Debit'],
   ['1400', 'Purchases Clearing', 'Asset', 'Debit'],
   ['1500', 'Input VAT Receivable', 'Asset', 'Debit'],
+  ['1600', 'Creditable Withholding Tax', 'Asset', 'Debit'],
   ['2010', 'Accounts Payable', 'Liability', 'Credit'],
   ['4000', 'Sales', 'Revenue', 'Credit'],
   ['5000', 'Cost of Goods Sold', 'Expense', 'Debit']
 ];
-var ACC = { CASH: '1010', AR: '1200', INV: '1300', CLEARING: '1400', INPUT_VAT: '1500', AP: '2010', SALES: '4000', COGS: '5000' };
+var ACC = { CASH: '1010', AR: '1200', INV: '1300', CLEARING: '1400', INPUT_VAT: '1500', CWT: '1600', AP: '2010', SALES: '4000', COGS: '5000' };
 function _accName(code) { for (var i = 0; i < COA.length; i++) if (COA[i][0] === code) return COA[i][1]; return code; }
 
 // ── Spreadsheet / sheet helpers ──────────────────────────────────────────────
@@ -402,7 +410,20 @@ function createSalesOrder(p) {
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
+  // Auto-create the shipment-monitoring timeline for this order (flow-native).
+  _autoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
   return { success: true, soNo: no, message: 'Sales Order created.' };
+}
+
+/** Create a Shipment row for a Sales Order if one doesn't already exist (keyed by SO No). */
+function _autoCreateShipment(soNo, customer, item, createdBy) {
+  try {
+    var exists = _rows('Shipments').some(function (r) { return String(r['SO No']) === String(soNo); });
+    if (exists) return;
+    var id = _nextNumber('Shipments', 1, 'SHM');
+    _append('Shipments', [id, soNo, '', customer || '', '', item || '', '', '', '', '',
+      'Pending', '{}', '', createdBy || '', _now(), _now()]);
+  } catch (e) { /* never block the SO write */ }
 }
 
 // Bulk-import legacy Sales Orders (header + items). Preserves the original SO No, skips any that already
@@ -545,9 +566,11 @@ function createPurchaseOrder(p) {
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
-  // Auto-create the Accounts Payable entry (FC amount flows in; PHP filled later by user).
+  // Auto-create the Accounts Payable entry. FC amount flows in; the PHP estimate (Total × exchange
+  // rate, entered on the PO form) pre-fills Amount (PHP) so AP aging + the balance sheet populate.
   var apNo = _nextNumber('APAging', 1, 'AP');
-  _append('APAging', [apNo, no, p.supplier, currency, total, '', 'Unpaid', '', 0, '', _now(), _now()]);
+  var amountPHP = _num(p.totalPHP) > 0 ? _num(p.totalPHP) : '';
+  _append('APAging', [apNo, no, p.supplier, currency, total, amountPHP, 'Unpaid', '', 0, '', _now(), _now()]);
   // GL: Dr Purchases Clearing / Cr Accounts Payable (Total Purchase Order).
   _postJournal('PO', no, p.date || _now(), currency, [
     { account: ACC.CLEARING, debit: total, memo: 'PO ' + no + ' — ' + p.supplier },
@@ -573,11 +596,16 @@ function updatePurchaseOrder(p) {
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
-  // Keep the linked AP entry's FC amount + currency in sync (don't clobber the user's PHP edits).
+  // Keep the linked AP entry's FC amount + currency in sync. Refresh the PHP estimate too when a new
+  // one is supplied and the AP is still untouched (Unpaid, nothing paid) — don't clobber manual edits.
   var apSh = _sheet('APAging');
+  var newPHP = _num(p.totalPHP);
   _rows('APAging').forEach(function (r) {
     if (String(r['PO No']) === String(no)) {
       apSh.getRange(r.rowIndex, 4, 1, 2).setValues([[currency, total]]);
+      if (newPHP > 0 && _num(r['Paid (PHP)']) === 0 && String(r['Status']).toLowerCase() !== 'paid') {
+        apSh.getRange(r.rowIndex, 6, 1, 1).setValues([[newPHP]]);   // Amount (PHP)
+      }
       apSh.getRange(r.rowIndex, 12, 1, 1).setValues([[_now()]]);
     }
   });
@@ -676,7 +704,8 @@ function getCollections(p) {
     return {
       collectionNo: r['Collection No'], arNo: r['AR No'], invNo: r['INV No'], soNo: r['SO No'],
       customer: r['Customer'], date: r['Date'], amount: _num(r['Amount (PHP)']), method: r['Method'],
-      reference: r['Reference No'], notes: r['Notes'], createdAt: r['Created At'], rowIndex: r.rowIndex
+      reference: r['Reference No'], notes: r['Notes'], createdAt: r['Created At'],
+      ewt: _num(r['EWT (PHP)']), netCash: _num(r['Amount (PHP)']) - _num(r['EWT (PHP)']), rowIndex: r.rowIndex
     };
   }) };
 }
@@ -691,22 +720,26 @@ function recordCollection(p) {
   if (!ar) return { success: false, message: 'AR entry not found.' };
   var amount = _num(p.amount);
   if (amount <= 0) return { success: false, message: 'Collection amount must be greater than zero.' };
+  var ewt = _num(p.ewt);                                  // creditable withholding tax (2307) on this collection
+  if (ewt < 0) ewt = 0;
+  if (ewt > amount) ewt = amount;
   var colNo = _nextNumber('Collections', 1, 'COL');
   _append('Collections', [colNo, p.arNo, ar['INV No'], ar['SO No'], ar['Customer'], p.date || _dateStr(_now()),
-    amount, p.method || '', p.ref || '', p.notes || '', _now()]);
-  // Recompute collected total + status on the AR row.
-  var collected = _rows('Collections').filter(function (r) { return String(r['AR No']) === String(p.arNo); })
-    .reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
+    amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt]);
+  // Recompute collected total + EWT total + status on the AR row (collected settles the full receivable).
+  var colRows = _rows('Collections').filter(function (r) { return String(r['AR No']) === String(p.arNo); });
+  var collected = colRows.reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
+  var ewtTotal = colRows.reduce(function (s, r) { return s + _num(r['EWT (PHP)']); }, 0);
   var amt = _num(ar['Amount (PHP)']);
   var status = collected <= 0 ? 'Unpaid' : (collected >= amt ? 'Paid' : 'Partial');
   _setCellByKey('ARAging', 'AR No', p.arNo, 'Collected (PHP)', collected);
   _setCellByKey('ARAging', 'AR No', p.arNo, 'Status', status);
   _setCellByKey('ARAging', 'AR No', p.arNo, 'Updated At', _now());
-  // GL: aggregate cash received against the receivable — Dr Cash / Cr Accounts Receivable.
-  _postJournal('ARCOLL', p.arNo, _now(), 'PHP', [
-    { account: ACC.CASH, debit: collected, memo: 'Collection of ' + p.arNo },
-    { account: ACC.AR, credit: collected, memo: 'Collection of ' + p.arNo }
-  ]);
+  // GL: receivable settled by cash + creditable tax — Dr Cash (net) / Dr Creditable Tax (EWT) / Cr A/R (gross).
+  var lines = [{ account: ACC.CASH, debit: collected - ewtTotal, memo: 'Collection of ' + p.arNo }];
+  if (ewtTotal > 0) lines.push({ account: ACC.CWT, debit: ewtTotal, memo: 'EWT 2307 — ' + p.arNo });
+  lines.push({ account: ACC.AR, credit: collected, memo: 'Collection of ' + p.arNo });
+  _postJournal('ARCOLL', p.arNo, _now(), 'PHP', lines);
   return { success: true, collectionNo: colNo, arNo: p.arNo, collected: collected, status: status,
     message: 'Collection ' + colNo + ' recorded.' };
 }
@@ -748,9 +781,10 @@ var _EXP_TYPE_MAP = {
   'interest expense': EXP_TYPE.OTHER, 'interest income': EXP_TYPE.OTHER
 };
 
+// Single OpEx umbrella: every expense classifies as Operating; the category is the real breakdown.
+// (The legacy _EXP_TYPE_MAP above is retained for reference but no longer splits buckets.)
 function _expType(category) {
-  var t = _EXP_TYPE_MAP[String(category || '').trim().toLowerCase()];
-  return t || EXP_TYPE.OPEX;
+  return EXP_TYPE.OPEX;
 }
 
 // Idempotency signature for a migrated legacy expense. Includes the voucher number so that two
@@ -870,19 +904,21 @@ function importExpenses(p) {
 // Set the Type on every Expenses row whose Category matches (e.g. move all 'Salaries and wages' to
 // Operating). One-time consistency helper; harmless if re-run.
 function reclassifyExpenses(p) {
-  var category = String(p.category || '').trim();
-  var type = String(p.type || '').trim();
-  if (!category || !type) return { success: false, message: 'category and type are required.' };
+  var category = String(p.category || '').trim();   // optional: match a single category
+  var type = String(p.type || '').trim();           // target type
+  if (!type) return { success: false, message: 'type is required.' };
   var sh = _sheet('Expenses');
   var typeCol = SCHEMA.Expenses.indexOf('Type') + 1;
   var updated = 0;
   _rows('Expenses').forEach(function (r) {
-    if (String(r['Category']).trim().toLowerCase() === category.toLowerCase() && String(r['Type']) !== type) {
+    var catMatch = !category || String(r['Category']).trim().toLowerCase() === category.toLowerCase();
+    if (catMatch && String(r['Type']) !== type) {
       sh.getRange(r.rowIndex, typeCol, 1, 1).setValues([[type]]);
       updated++;
     }
   });
-  return { success: true, updated: updated, message: 'Reclassified ' + updated + ' "' + category + '" expense(s) to ' + type + '.' };
+  var what = category ? ('"' + category + '"') : 'all';
+  return { success: true, updated: updated, message: 'Reclassified ' + updated + ' ' + what + ' expense(s) to ' + type + '.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1093,6 +1129,146 @@ function getTrialBalance() {
       debit: s.debit, credit: s.credit, debitBalance: debitBal, creditBalance: creditBal };
   });
   return { success: true, data: rows, totals: { debit: totalDr, credit: totalCr, balanced: Math.abs(totalDr - totalCr) < 0.005 } };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SHIPMENT MONITORING (flow-native) — 21-stage timeline auto-linked to the flow
+// ════════════════════════════════════════════════════════════════════════════
+// Stage keys (must match dashboard/js/stage-meta.js _SM_LIFECYCLE_STAGES order).
+var _SHIP_STAGES = ['so_received', 'po_created', 'po_approved', 'po_sent', 'proforma_received',
+  'prf_created', 'prf_approved', 'tt_sent', 'tt_forwarded', 'shipping_docs_received', 'forwarder_quotes',
+  'forwarder_approved', 'booked', 'pickup', 'in_transit', 'customs_clearance', 'fan_sad_tan',
+  'debit_memo', 'forwarder_final_invoice', 'local_charges', 'delivered'];
+
+function _shipParse(json) { try { return JSON.parse(json || '{}') || {}; } catch (e) { return {}; } }
+
+/** Auto-derive which stages are "done" from the flow records joined by the shipment's SO/PO. */
+function _shipAutoDerive(soNo) {
+  var d = {};
+  if (!soNo) return d;
+  d.so_received = true;                                              // the SO exists by definition
+  var pos = _rows('PurchaseOrders').filter(function (r) { return String(r['SO No']) === String(soNo); });
+  if (pos.length) {
+    d.po_created = true;
+    var anyApproved = pos.some(function (p) { return String(p['Status']) === 'Approved'; });
+    var anySent = pos.some(function (p) { return ['Approved', 'Sent'].indexOf(String(p['Status'])) !== -1; });
+    if (anyApproved) d.po_approved = true;
+    if (anySent) d.po_sent = true;
+    var poNos = {}; pos.forEach(function (p) { poNos[String(p['PO No'])] = true; });
+    var aps = _rows('APAging').filter(function (r) { return poNos[String(r['PO No'])]; });
+    if (aps.length) d.prf_created = true;
+    if (aps.some(function (a) { return _num(a['Paid (PHP)']) > 0; })) d.tt_sent = true;
+    var mrs = _rows('MaterialsReceiving').filter(function (r) { return poNos[String(r['PO No'])]; });
+    if (mrs.length) d.delivered = true;
+  }
+  return d;
+}
+
+function _shipMap(r) {
+  return {
+    shipmentId: r['Shipment ID'], soNo: r['SO No'], poNo: r['PO No'], customer: r['Customer'],
+    principal: r['Principal'], item: r['Item'], mode: r['Mode'], etd: r['ETD'], eta: r['ETA'],
+    awb: r['AWB'], status: r['Status'] || 'Pending', remarks: r['Remarks'],
+    stages: _shipParse(r['Stages (JSON)']), createdBy: r['Created By'], createdAt: r['Created At'],
+    updatedAt: r['Updated At'], rowIndex: r.rowIndex
+  };
+}
+
+/** Merge stored manual stage states with the auto-derived "done" flags. */
+function _shipTimeline(s) {
+  var derived = _shipAutoDerive(s.soNo);
+  return _SHIP_STAGES.map(function (key) {
+    var stored = s.stages[key] || {};
+    var auto = !!derived[key];
+    var status = stored.status || (auto ? 'done' : 'pending');
+    // Auto-derived stages always show done unless explicitly skipped.
+    if (auto && status !== 'skipped') status = 'done';
+    return {
+      key: key, status: status, autoderived: auto,
+      completedAt: stored.completedAt || '', completedBy: stored.completedBy || '',
+      notes: stored.notes || '', skippedReason: stored.skippedReason || ''
+    };
+  });
+}
+
+function getShipments() {
+  return { success: true, data: _rows('Shipments').map(function (r) {
+    var s = _shipMap(r);
+    var tl = _shipTimeline(s);
+    var done = tl.filter(function (t) { return t.status === 'done'; }).length;
+    var skipped = tl.filter(function (t) { return t.status === 'skipped'; }).length;
+    s.progress = { done: done, skipped: skipped, total: _SHIP_STAGES.length };
+    delete s.stages;
+    return s;
+  }) };
+}
+
+function getShipmentTimeline(p) {
+  if (!p.shipmentId) return { success: false, message: 'shipmentId required.' };
+  var r = _rows('Shipments').filter(function (x) { return String(x['Shipment ID']) === String(p.shipmentId); })[0];
+  if (!r) return { success: false, message: 'Shipment not found.' };
+  var s = _shipMap(r);
+  return { success: true, shipment: { shipmentId: s.shipmentId, soNo: s.soNo, poNo: s.poNo,
+    customer: s.customer, principal: s.principal, item: s.item, mode: s.mode, etd: s.etd, eta: s.eta,
+    awb: s.awb, status: s.status, remarks: s.remarks }, timeline: _shipTimeline(s) };
+}
+
+function advanceShipmentStage(p) {
+  if (!p.shipmentId || !p.stageKey) return { success: false, message: 'shipmentId and stageKey required.' };
+  if (_SHIP_STAGES.indexOf(p.stageKey) === -1) return { success: false, message: 'Unknown stage.' };
+  var st = ['done', 'skipped', 'pending'].indexOf(p.stageStatus) !== -1 ? p.stageStatus : 'done';
+  var sh = _sheet('Shipments');
+  var r = _rows('Shipments').filter(function (x) { return String(x['Shipment ID']) === String(p.shipmentId); })[0];
+  if (!r) return { success: false, message: 'Shipment not found.' };
+  var stages = _shipParse(r['Stages (JSON)']);
+  if (st === 'pending') { delete stages[p.stageKey]; }
+  else {
+    stages[p.stageKey] = { status: st, completedAt: _dateStr(_now()), completedBy: p.actorName || '',
+      notes: p.notes || '', skippedReason: st === 'skipped' ? String(p.skippedReason || '').slice(0, 200) : '' };
+  }
+  var jsonCol = SCHEMA.Shipments.indexOf('Stages (JSON)') + 1;
+  var updCol = SCHEMA.Shipments.indexOf('Updated At') + 1;
+  sh.getRange(r.rowIndex, jsonCol, 1, 1).setValues([[JSON.stringify(stages)]]);
+  sh.getRange(r.rowIndex, updCol, 1, 1).setValues([[_now()]]);
+  return { success: true, shipmentId: p.shipmentId, stageKey: p.stageKey, status: st, message: 'Stage updated.' };
+}
+
+function updateShipment(p) {
+  if (!p.shipmentId) return { success: false, message: 'shipmentId required.' };
+  var r = _rows('Shipments').filter(function (x) { return String(x['Shipment ID']) === String(p.shipmentId); })[0];
+  if (!r) return { success: false, message: 'Shipment not found.' };
+  var setIf = function (header, val) { if (val !== undefined) _setCellByKey('Shipments', 'Shipment ID', p.shipmentId, header, val); };
+  setIf('PO No', p.poNo); setIf('Principal', p.principal); setIf('Item', p.item); setIf('Mode', p.mode);
+  setIf('ETD', p.etd); setIf('ETA', p.eta); setIf('AWB', p.awb); setIf('Status', p.status); setIf('Remarks', p.remarks);
+  _setCellByKey('Shipments', 'Shipment ID', p.shipmentId, 'Updated At', _now());
+  return { success: true, shipmentId: p.shipmentId, message: 'Shipment updated.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BALANCE SHEET — editable opening balances (Cash, Inventory)
+// ════════════════════════════════════════════════════════════════════════════
+function getOpeningBalances() {
+  var out = { cash: 0, inventory: 0 };
+  _rows('OpeningBalances').forEach(function (r) {
+    var k = String(r['Key'] || '').toLowerCase();
+    if (k === 'cash' || k === 'inventory') out[k] = _num(r['Amount (PHP)']);
+  });
+  return { success: true, data: out, cash: out.cash, inventory: out.inventory };
+}
+
+function setOpeningBalance(p) {
+  var key = String(p.key || '').toLowerCase();
+  if (key !== 'cash' && key !== 'inventory') return { success: false, message: 'key must be cash or inventory.' };
+  var amount = _num(p.amount);
+  var existing = _rows('OpeningBalances').filter(function (r) { return String(r['Key']).toLowerCase() === key; })[0];
+  if (existing) {
+    _setCellByKey('OpeningBalances', 'Key', existing['Key'], 'Amount (PHP)', amount);
+    _setCellByKey('OpeningBalances', 'Key', existing['Key'], 'Updated By', p.actorName || '');
+    _setCellByKey('OpeningBalances', 'Key', existing['Key'], 'Updated At', _now());
+  } else {
+    _append('OpeningBalances', [key, amount, p.actorName || '', _now()]);
+  }
+  return { success: true, key: key, amount: amount, message: 'Opening ' + key + ' balance saved.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1481,7 +1657,9 @@ var _MODULE_MAP = {
   submitPOApproval: ['Purchase Order', 'Submitted'], approvePO: ['Purchase Order', 'Approved'],
   rejectPO: ['Purchase Order', 'Rejected'],
   saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed'],
-  logSalesCall: ['Call', 'Logged']
+  logSalesCall: ['Call', 'Logged'],
+  setOpeningBalance: ['Balance Sheet', 'Updated'],
+  advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated']
 };
 
 function _dateStr(v) {
@@ -1720,6 +1898,9 @@ var HANDLERS = {
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
+  getOpeningBalances: getOpeningBalances, setOpeningBalance: setOpeningBalance,
+  getShipments: getShipments, getShipmentTimeline: getShipmentTimeline,
+  advanceShipmentStage: advanceShipmentStage, updateShipment: updateShipment,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
@@ -1746,5 +1927,7 @@ var MUTATIONS = {
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
   addDocument: 1, deleteDocument: 1,
   submitQuotationApproval: 1, approveQuotation: 1, rejectQuotation: 1, sendQuotation: 1,
-  submitPOApproval: 1, approvePO: 1, rejectPO: 1
+  submitPOApproval: 1, approvePO: 1, rejectPO: 1,
+  setOpeningBalance: 1,
+  advanceShipmentStage: 1, updateShipment: 1
 };
