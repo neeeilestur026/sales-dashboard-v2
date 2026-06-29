@@ -760,6 +760,88 @@
       font-size: 1.4rem; color: var(--text-muted); line-height: 1;
     }
   </style>
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    /* ── Focused rebuild: hide legacy sidebar + sections, keep retained (HR/Payroll/Shipment) ── */
+    .mgmt-nav { display:none !important; }
+    .mgmt-shell { display:block !important; }
+    .mgmt-content { width:100% !important; max-width:none !important; }
+    .section.ws-hidden { display:block !important; }   /* neutralize workspace hide for retained sections */
+    #section-financial,#section-aging,#section-sales,#section-queues,#section-backlog,
+    #section-payments,#section-sales-orders,#section-sessions,#section-activity,
+    #section-daily-reports,#section-inventory,#section-audit-log { display:none !important; }
+
+    /* ── New flow sections ── */
+    .mgmt-newsec { background:var(--bg-card,#fff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.2rem 1.4rem; margin-bottom:1.25rem; box-shadow:var(--shadow-sm,0 1px 3px rgba(15,23,42,0.06)); }
+    .mgmt-newsec > h2 { margin:0 0 0.9rem; font-size:1.05rem; font-weight:700; color:var(--text-primary,#0f172a); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+    .mgmt-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.7rem; }
+    .mgmt-kpi { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:0.75rem 0.9rem; }
+    .mgmt-kpi .l { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; }
+    .mgmt-kpi .v { font-size:clamp(1rem,2.2vw,1.4rem); font-weight:800; color:var(--text-primary,#0f172a); margin-top:0.15rem; font-variant-numeric:tabular-nums; line-height:1.1; overflow-wrap:anywhere; }
+    .mgmt-kpi.accent { background:var(--accent-light,#ccfbf1); border-color:var(--accent,#0d9488); }
+    .mgmt-kpi.accent .v { color:var(--accent-dark,#0f766e); }
+
+    /* income statement */
+    .is-controls { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:0.9rem; }
+    .is-controls select, .is-controls input { padding:0.4rem 0.7rem; border:1px solid var(--border,#e2e8f0); border-radius:8px; font-size:0.85rem; background:#fff; }
+    .is-toggle { display:inline-flex; border:1px solid var(--border,#e2e8f0); border-radius:8px; overflow:hidden; }
+    .is-toggle button { padding:0.4rem 0.9rem; border:none; background:#fff; font-size:0.82rem; font-weight:600; cursor:pointer; color:var(--text-secondary,#475569); }
+    .is-toggle button.active { background:var(--accent,#0d9488); color:#fff; }
+    .is-state { font-size:0.74rem; color:var(--text-muted,#64748b); }
+    .is-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.7rem; margin-bottom:1.1rem; }
+    .is-tile { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:0.7rem 0.85rem; }
+    .is-tile .l { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; }
+    .is-tile .v { font-size:clamp(0.95rem,2.2vw,1.3rem); font-weight:800; color:var(--text-primary,#0f172a); margin-top:0.15rem; font-variant-numeric:tabular-nums; line-height:1.1; overflow-wrap:anywhere; }
+    .is-tile.accent { background:var(--accent-light,#ccfbf1); border-color:var(--accent,#0d9488); }
+    .is-tile.accent .v { color:var(--accent-dark,#0f766e); }
+    .is-tile.pos .v { color:#16a34a; } .is-tile.neg .v { color:#ef4444; }
+    .is-table { width:100%; border-collapse:collapse; font-size:0.84rem; min-width:640px; }
+    .is-table th { text-align:left; padding:0.5rem 0.7rem; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; border-bottom:2px solid var(--border,#e2e8f0); background:var(--bg-inset,#f8fafc); white-space:nowrap; }
+    .is-table th.num,.is-table td.num,.is-subtable th.num,.is-subtable td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .is-table td { padding:0.5rem 0.7rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-primary,#0f172a); }
+    .is-mrow, .is-sorow { cursor:pointer; }
+    .is-mrow:hover td, .is-sorow:hover td { background:var(--bg-inset,#f8fafc); }
+    .is-mname { font-weight:700; }
+    .is-sub { font-size:0.68rem; font-weight:400; color:var(--text-muted,#64748b); margin-left:0.35rem; }
+    .is-sub2 { display:block; font-size:0.67rem; color:var(--text-muted,#64748b); }
+    .is-exp { background:none; border:1px solid var(--border,#e2e8f0); color:var(--text-muted,#64748b); border-radius:5px; padding:0.1rem 0.45rem; font-size:0.72rem; cursor:pointer; }
+    .is-grand td { font-weight:700; background:var(--bg-inset,#f8fafc); border-top:2px solid var(--border,#e2e8f0); text-transform:uppercase; font-size:0.72rem; }
+    .is-grand td.num { font-size:0.84rem; }
+    .is-detailrow td { padding:0; background:#f8fafc; border-bottom:2px solid var(--border,#e2e8f0); }
+    .is-subtable { width:100%; border-collapse:collapse; font-size:0.8rem; background:#fff; }
+    .is-subtable th { text-align:left; padding:0.4rem 0.6rem; font-size:0.62rem; text-transform:uppercase; color:var(--text-muted,#64748b); font-weight:700; border-bottom:1px solid var(--border,#e2e8f0); background:var(--bg-inset,#f8fafc); }
+    .is-subtable td { padding:0.4rem 0.6rem; border-bottom:1px solid var(--border,#e2e8f0); }
+    .is-subtotal td { font-weight:700; background:var(--bg-inset,#f8fafc); }
+    .is-bd { padding:0.85rem 1rem; }
+    .is-bd-h { font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted,#64748b); margin-bottom:0.5rem; }
+    .is-bd-table { width:100%; max-width:560px; border-collapse:collapse; font-size:0.84rem; }
+    .is-bd-table td { padding:0.3rem 0.5rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-secondary,#475569); }
+    .is-bd-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .is-bd-table tr.sect td { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; padding-top:0.6rem; border-bottom:none; }
+    .is-bd-table tr.b td { font-weight:700; color:var(--text-primary,#0f172a); }
+    .is-bd-table tr.sub td { font-weight:600; }
+    .is-bd-table tr.tot td { font-weight:800; color:var(--text-primary,#0f172a); border-top:2px solid var(--border,#e2e8f0); border-bottom:none; }
+    .is-note { font-size:0.72rem; color:var(--text-muted,#64748b); margin:0.7rem 0 0; line-height:1.5; }
+    .is-empty { padding:1.4rem; text-align:center; color:var(--text-muted,#64748b); font-style:italic; }
+
+    /* approvals + daily reports */
+    .mf-empty { padding:1.2rem; text-align:center; color:var(--text-muted,#64748b); font-style:italic; font-size:0.86rem; }
+    .mf-invmeta { font-size:0.78rem; color:var(--text-muted,#64748b); margin-bottom:0.5rem; }
+    .dr-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:0.6rem; margin-bottom:0.9rem; }
+    .dr-tile { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.6rem 0.8rem; text-align:center; }
+    .dr-tile .l { font-size:0.64rem; text-transform:uppercase; color:var(--text-muted,#64748b); font-weight:700; }
+    .dr-tile .v { font-size:1.05rem; font-weight:800; color:var(--text-primary,#0f172a); margin-top:0.2rem; font-variant-numeric:tabular-nums; }
+    .urep { border:1px solid var(--border,#e2e8f0); border-radius:10px; margin-bottom:0.6rem; overflow:hidden; background:#fff; }
+    .urep > summary { list-style:none; cursor:pointer; padding:0.7rem 0.9rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; background:var(--bg-inset,#f8fafc); }
+    .urep > summary::-webkit-details-marker { display:none; }
+    .uname { font-weight:700; color:var(--text-primary,#0f172a); }
+    .ustat { font-size:0.76rem; color:var(--text-muted,#64748b); }
+    .urep-body { padding:0.8rem 0.9rem; }
+    .umods { display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.6rem; }
+    .urep-note { margin-top:0.6rem; font-size:0.82rem; color:var(--text-secondary,#475569); background:var(--bg-inset,#f8fafc); padding:0.5rem 0.7rem; border-radius:8px; }
+    .mod-badge { display:inline-block; padding:0.12rem 0.5rem; border-radius:999px; font-size:0.68rem; font-weight:700; background:var(--accent-light,#ccfbf1); color:var(--accent-dark,#0f766e); white-space:nowrap; }
+    .act-chip { display:inline-block; padding:0.1rem 0.45rem; border-radius:6px; font-size:0.7rem; font-weight:600; background:var(--bg-inset,#f1f5f9); color:var(--text-secondary,#475569); }
+  </style>
 </head>
 <body>
   <header class="navbar" id="navbar"></header>
@@ -824,6 +906,60 @@
       </aside>
 
       <div class="mgmt-content">
+
+    <!-- ════════ Redesigned flow sections (top) ════════ -->
+    <div class="mgmt-newsec">
+      <h2>💼 Financial Snapshot <span class="is-state" style="margin-left:auto;font-weight:400;">live · Process Flow</span></h2>
+      <div class="mgmt-kpis">
+        <div class="mgmt-kpi accent"><div class="l">Revenue</div><div class="v" id="mgmtKpiRevenue">—</div></div>
+        <div class="mgmt-kpi"><div class="l">COGS</div><div class="v" id="mgmtKpiCogs">—</div></div>
+        <div class="mgmt-kpi"><div class="l">Gross Profit</div><div class="v" id="mgmtKpiGp">—</div></div>
+        <div class="mgmt-kpi"><div class="l">AP Outstanding</div><div class="v" id="mgmtKpiAp">—</div></div>
+        <div class="mgmt-kpi"><div class="l">Inventory Value</div><div class="v" id="mgmtKpiInv">—</div></div>
+        <div class="mgmt-kpi"><div class="l">Sales Orders</div><div class="v" id="mgmtKpiSo">—</div></div>
+      </div>
+    </div>
+
+    <div class="mgmt-newsec">
+      <h2>📊 Income Statement <span class="is-state" id="isState" style="margin-left:auto;font-weight:400;"></span></h2>
+      <div class="is-controls">
+        <label style="font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">Year</label>
+        <select id="isYear"></select>
+        <div class="is-toggle">
+          <button type="button" data-is-mode="monthly" class="active">Monthly</button>
+          <button type="button" data-is-mode="yearly">Yearly</button>
+        </div>
+      </div>
+      <div class="is-tiles" id="isTotals"></div>
+      <div id="isBody"><div class="is-empty">Loading…</div></div>
+    </div>
+
+    <div class="mgmt-newsec">
+      <h2>✅ Pending Approvals</h2>
+      <div id="mgmtApprovals"><div class="mf-empty">Loading…</div></div>
+    </div>
+
+    <div class="mgmt-newsec">
+      <h2>🗒️ Daily Reports <span class="is-state" id="mgmtDrMeta" style="margin-left:auto;font-weight:400;"></span></h2>
+      <div class="is-controls">
+        <label style="font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">Date</label>
+        <input type="date" id="mgmtDrDate">
+        <input type="text" id="mgmtDrSearch" placeholder="Search user…">
+      </div>
+      <div class="dr-tiles">
+        <div class="dr-tile"><div class="l">Active Users</div><div class="v" id="mgmtDrUsers">0</div></div>
+        <div class="dr-tile"><div class="l">Movements</div><div class="v" id="mgmtDrMovements">0</div></div>
+        <div class="dr-tile"><div class="l">Documents</div><div class="v" id="mgmtDrDocs">0</div></div>
+        <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="mgmtDrSales">₱0.00</div></div>
+        <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
+      </div>
+      <div id="mgmtDrBody"><div class="mf-empty">Loading…</div></div>
+    </div>
+
+    <div class="mgmt-newsec">
+      <h2>📦 Inventory <span class="is-state" style="margin-left:auto;font-weight:400;">Process Flow</span></h2>
+      <div id="mgmtInvBody"><div class="mf-empty">Loading…</div></div>
+    </div>
 
     <!-- Section 1: Financial Overview -->
     <div class="section" id="section-financial">
@@ -1554,6 +1690,8 @@
   <script src="js/stage-meta.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="js/management-home.js"></script>
+  <script src="js/management-flow.js"></script>
+  <script src="js/management-income.js"></script>
   <script>
     // Pending-approval strip (management/director are the final approver tier).
     (function () {
