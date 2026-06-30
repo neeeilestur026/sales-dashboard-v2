@@ -41,7 +41,7 @@ function onHand(itemNo) {
 
 function loadFromSO() {
   const no = document.getElementById('loadSO').value;
-  const s = ivSOs.find(x => x.soNo === no);
+  const s = ivSOs.find(x => String(x.soNo) === String(no));   // migrated SOs may have numeric ids
   ivCurrent = s || null;
   if (!s) { document.getElementById('itemRows').innerHTML = ''; recalc(); return; }
   document.getElementById('soNo').value = s.soNo;

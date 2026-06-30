@@ -56,7 +56,7 @@ function invBalance(itemNo) {
 
 function loadFromSO() {
   const no = document.getElementById('loadSO').value;
-  const s = poSOs.find(x => x.soNo === no);
+  const s = poSOs.find(x => String(x.soNo) === String(no));   // migrated SOs may have numeric ids
   if (!s) return;
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('itemRows').innerHTML = '';

@@ -107,7 +107,13 @@ var SCHEMA = {
                     'Purpose', 'Department', 'Bank Name', 'Account Name', 'Account Number', 'Payment Method',
                     'Due Date', 'Remarks', 'Status', 'Created By', 'Created By Role',
                     'Acct Approved By', 'Acct Approved At', 'Dir Approved By', 'Dir Approved At',
-                    'Mgmt Approved By', 'Mgmt Approved At', 'Approval Note', 'PDF Link', 'Created At', 'Updated At']
+                    'Mgmt Approved By', 'Mgmt Approved At', 'Approval Note', 'PDF Link', 'Created At', 'Updated At'],
+
+  // ── Per-SO cost breakdown migrated from the old Profit Report (revenue + COGS components) ──
+  SOCostDetails: ['SO No', 'Customer', 'Date', 'Sales', 'COGS Type', 'Purchase of Goods',
+                  'Bank Charge (COGS)', 'Duties & Taxes', 'Bank Charge (Shipping)', 'Shipping Company',
+                  'Shipping Cost', 'Local Charges', 'Delivery to Office', 'Delivery to Client',
+                  'Total COGS', 'Gross Profit', 'Source', 'Created At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -395,11 +401,11 @@ function getSalesOrders() {
   return { success: true, data: _rows('SalesOrders').map(function (s) {
     var its = items.filter(function (r) { return String(r['SO No']) === String(s['SO No']); });
     return {
-      soNo: s['SO No'], quotationNo: s['Quotation No'], date: s['Date'], customer: s['Customer'],
+      soNo: String(s['SO No']), quotationNo: s['Quotation No'], date: s['Date'], customer: s['Customer'],
       status: s['Status'], total: _num(s['Total']), createdBy: s['Created By'], createdAt: s['Created At'],
       rowIndex: s.rowIndex,
       items: its.map(function (r) { return {
-        itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
+        itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Price/Unit']), total: _num(r['Total Price']) }; })
     };
   }) };
@@ -693,7 +699,7 @@ function getARAging(p) {
   return { success: true, data: rows.map(function (r) {
     var amt = _num(r['Amount (PHP)']), col = _num(r['Collected (PHP)']);
     return {
-      arNo: r['AR No'], invNo: r['INV No'], soNo: r['SO No'], customer: r['Customer'],
+      arNo: r['AR No'], invNo: String(r['INV No']), soNo: String(r['SO No']), customer: r['Customer'],
       amountPHP: amt, collectedPHP: col, outstanding: amt - col, status: r['Status'],
       dueDate: r['Due Date'], notes: r['Notes'], createdAt: r['Created At'], updatedAt: r['Updated At'],
       rowIndex: r.rowIndex
@@ -709,7 +715,7 @@ function getCollections(p) {
   rows.sort(function (a, b) { return new Date(b['Created At']) - new Date(a['Created At']); });
   return { success: true, data: rows.map(function (r) {
     return {
-      collectionNo: r['Collection No'], arNo: r['AR No'], invNo: r['INV No'], soNo: r['SO No'],
+      collectionNo: r['Collection No'], arNo: r['AR No'], invNo: String(r['INV No']), soNo: String(r['SO No']),
       customer: r['Customer'], date: r['Date'], amount: _num(r['Amount (PHP)']), method: r['Method'],
       reference: r['Reference No'], notes: r['Notes'], createdAt: r['Created At'],
       ewt: _num(r['EWT (PHP)']), netCash: _num(r['Amount (PHP)']) - _num(r['EWT (PHP)']), rowIndex: r.rowIndex
@@ -1026,7 +1032,7 @@ function getInvoices() {
   return { success: true, data: _rows('Invoices').map(function (v) {
     var its = items.filter(function (r) { return String(r['INV No']) === String(v['INV No']); });
     return {
-      invNo: v['INV No'], soNo: v['SO No'], date: v['Date'], customer: v['Customer'],
+      invNo: String(v['INV No']), soNo: String(v['SO No']), date: v['Date'], customer: v['Customer'],
       totalSales: _num(v['Total Sales']), totalCOGS: _num(v['Total COGS']), createdBy: v['Created By'],
       createdAt: v['Created At'], rowIndex: v.rowIndex,
       items: its.map(function (r) { return {
@@ -1409,6 +1415,77 @@ function savePaymentRequestPDF(p) {
   var link = _savePdfToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'));
   _setCellByKey('PaymentRequests', 'PR No', p.prNo, 'PDF Link', link);
   return { success: true, prNo: p.prNo, link: link, message: 'Payment Request PDF saved.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SO COST DETAILS — per-SO cost breakdown migrated from the old Profit Report
+// ════════════════════════════════════════════════════════════════════════════
+function getSOCostDetails(p) {
+  var rows = _rows('SOCostDetails');
+  if (p && p.soNo) rows = rows.filter(function (r) { return String(r['SO No']) === String(p.soNo); });
+  return { success: true, data: rows.map(function (r) {
+    return {
+      soNo: String(r['SO No']), customer: r['Customer'], date: r['Date'], sales: _num(r['Sales']),
+      cogsType: r['COGS Type'] || 'local', purchaseOfGoods: _num(r['Purchase of Goods']),
+      bankChargeCOGS: _num(r['Bank Charge (COGS)']), dutiesAndTaxes: _num(r['Duties & Taxes']),
+      bankChargeShipping: _num(r['Bank Charge (Shipping)']), shippingCompany: r['Shipping Company'],
+      shippingCost: _num(r['Shipping Cost']), localCharges: _num(r['Local Charges']),
+      deliveryToOffice: _num(r['Delivery to Office']), deliveryToClient: _num(r['Delivery to Client']),
+      totalCOGS: _num(r['Total COGS']), grossProfit: _num(r['Gross Profit']),
+      source: r['Source'], createdAt: r['Created At'], rowIndex: r.rowIndex
+    };
+  }) };
+}
+
+/** Computed COGS from the components (for the mismatch check). */
+function _soCostComputed(c) {
+  var t = _num(c.purchaseOfGoods) + _num(c.deliveryToOffice) + _num(c.deliveryToClient);
+  if (String(c.cogsType) === 'international') {
+    t += _num(c.bankServiceChargeCOGS) + _num(c.dutiesAndTaxes) + _num(c.bankServiceChargeShipping) +
+         _num(c.shippingCost) + _num(c.localCharges);
+  }
+  return t;
+}
+
+function importSOCostDetails(p) {
+  var incoming = JSON.parse(p.items || '[]');
+  if (!incoming.length) return { success: false, message: 'No cost details to import.' };
+  var existing = {};
+  _rows('SOCostDetails').forEach(function (r) { existing[String(r['SO No'])] = true; });
+  var soHeaders = {};
+  _rows('SalesOrders').forEach(function (r) { soHeaders[String(r['SO No'])] = true; });
+  var sh = _sheet('SOCostDetails'), soSh = _sheet('SalesOrders');
+  var created = 0, skipped = 0, headersCreated = 0, mismatches = [], errors = [];
+  incoming.forEach(function (c) {
+    try {
+      var soNo = c.soNo != null ? String(c.soNo) : '';
+      if (!soNo) { errors.push({ soNo: '', message: 'missing SO No' }); return; }
+      if (existing[soNo]) { skipped++; return; }
+      var totalCOGS = _num(c.totalCOGS);
+      var computed = _soCostComputed(c);
+      if (Math.abs(computed - totalCOGS) > 0.01) mismatches.push({ soNo: soNo, stored: totalCOGS, computed: computed });
+      // Write each old field to its exact column (no cross-mixing).
+      sh.appendRow([soNo, c.customerName || c.customer || '', c.soDate || c.date || '', _num(c.sales),
+        c.cogsType || 'local', _num(c.purchaseOfGoods), _num(c.bankServiceChargeCOGS), _num(c.dutiesAndTaxes),
+        _num(c.bankServiceChargeShipping), c.shippingCompany || '', _num(c.shippingCost), _num(c.localCharges),
+        _num(c.deliveryToOffice), _num(c.deliveryToClient), totalCOGS, _num(c.grossProfit),
+        'Migrated (profit report)', _now()]);
+      existing[soNo] = true;
+      // Also create a header-only Sales Order if one doesn't exist yet (per decision).
+      if (!soHeaders[soNo]) {
+        soSh.appendRow([soNo, '', c.soDate || c.date || _now(), c.customerName || c.customer || '(unknown)',
+          'Closed', _num(c.sales), 'Migrated (legacy)', _now()]);
+        soHeaders[soNo] = true;
+        headersCreated++;
+      }
+      created++;
+    } catch (e) {
+      errors.push({ soNo: c && c.soNo, message: String(e && e.message || e) });
+    }
+  });
+  return { success: true, created: created, skipped: skipped, headersCreated: headersCreated,
+    mismatches: mismatches, errors: errors,
+    message: 'Imported ' + created + ' SO cost detail(s); created ' + headersCreated + ' header(s); skipped ' + skipped + '.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1829,7 +1906,8 @@ var _MODULE_MAP = {
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
   approvePaymentRequest: ['Payment Request', 'Approved'], rejectPaymentRequest: ['Payment Request', 'Rejected'],
-  savePaymentRequestPDF: ['Payment Request', 'PDF Saved']
+  savePaymentRequestPDF: ['Payment Request', 'PDF Saved'],
+  importSOCostDetails: ['Sales Order', 'Cost Imported']
 };
 
 function _dateStr(v) {
@@ -2075,6 +2153,7 @@ var HANDLERS = {
   updatePaymentRequest: updatePaymentRequest, deletePaymentRequest: deletePaymentRequest,
   submitPaymentRequest: submitPaymentRequest, approvePaymentRequest: approvePaymentRequest,
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
+  getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
@@ -2105,5 +2184,6 @@ var MUTATIONS = {
   setOpeningBalance: 1,
   advanceShipmentStage: 1, updateShipment: 1,
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
-  approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1
+  approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1,
+  importSOCostDetails: 1
 };

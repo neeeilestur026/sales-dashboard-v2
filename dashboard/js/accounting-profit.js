@@ -49,15 +49,17 @@ async function pnlLoad() {
   }
   if (state) state.textContent = 'Loading…';
   try {
-    const [invs, sos, exps] = await Promise.all([
+    const [invs, sos, exps, cds] = await Promise.all([
       fetchFlow('getInvoices').catch(() => ({ data: [] })),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getExpenses').catch(() => ({ data: [] })),
+      fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
     ]);
     pnlData = {
       invs: (invs && invs.data) || [],
       sos: (sos && sos.data) || [],
       exps: (exps && exps.data) || [],
+      costDetails: (cds && cds.data) || [],
     };
     pnlBuildYears();
     pnlRender();
@@ -92,17 +94,22 @@ function pnlBuildMonths(year) {
     invBySo[k].cogs += _pn(v.totalCOGS);
   });
 
+  // Migrated per-SO cost breakdown (old profit report) — used only when no new-flow invoice exists.
+  const costBySo = {};
+  (pnlData.costDetails || []).forEach(c => { costBySo[String(c.soNo)] = c; });
+
   const inYear = ym => !year || ym.slice(0, 4) === year;
   const byMonth = {};   // ym -> { revenue, cogs, grossProfit, soCount, entries[], expTotal, expByCat{} }
   const month = ym => (byMonth[ym] = byMonth[ym] || { revenue: 0, cogs: 0, grossProfit: 0, soCount: 0, entries: [], expTotal: 0, expByCat: {} });
 
-  // Sales-order-driven revenue (incl. migrated SOs); invoiced → invoice totals, else SO order total.
+  // Sales-order-driven revenue (incl. migrated SOs): invoiced → invoice totals; else migrated cost detail; else SO order total.
   pnlData.sos.forEach(s => {
     const ym = _pnlYM(s.date);
     if (!ym || !inYear(ym)) return;
     const inv = invBySo[String(s.soNo)];
-    const sales = inv ? inv.sales : _pn(s.total);
-    const cogs = inv ? inv.cogs : 0;
+    const cd = costBySo[String(s.soNo)];
+    const sales = inv ? inv.sales : (cd ? _pn(cd.sales) : _pn(s.total));
+    const cogs = inv ? inv.cogs : (cd ? _pn(cd.totalCOGS) : 0);
     const m = month(ym);
     m.revenue += sales; m.cogs += cogs; m.grossProfit += (sales - cogs); m.soCount++;
     m.entries.push({ soNo: s.soNo || '', date: s.date || '', customer: s.customer || '', sales, cogs, gp: sales - cogs });

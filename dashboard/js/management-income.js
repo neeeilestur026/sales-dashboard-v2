@@ -54,16 +54,18 @@ async function miLoad() {
   }
   if (state) state.textContent = 'Loading…';
   try {
-    const [invs, sos, pos, recs, exps] = await Promise.all([
+    const [invs, sos, pos, recs, exps, cds] = await Promise.all([
       fetchFlow('getInvoices').catch(() => ({ data: [] })),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getReceiving').catch(() => ({ data: [] })),
       fetchFlow('getExpenses').catch(() => ({ data: [] })),
+      fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
     ]);
     miData = {
       invs: (invs && invs.data) || [], sos: (sos && sos.data) || [], pos: (pos && pos.data) || [],
       recs: (recs && recs.data) || [], exps: (exps && exps.data) || [],
+      costDetails: (cds && cds.data) || [],
     };
     miBuildYears();
     miRender();
@@ -106,16 +108,26 @@ function miBuild(year) {
     invBySo[k].sales += _in(v.totalSales); invBySo[k].cogs += _in(v.totalCOGS);
   });
   const inYear = ym => !year || ym.slice(0, 4) === year;
+  // Migrated per-SO cost breakdown (old profit report). Used only when an SO has NO new-flow invoice.
+  const costBySo = {};
+  (miData.costDetails || []).forEach(c => { costBySo[String(c.soNo)] = c; });
 
   const models = [];
   miData.sos.forEach(s => {
     const ym = _miYM(s.date);
     if (!ym || !inYear(ym)) return;
     const inv = invBySo[String(s.soNo)];
-    const sales = inv ? inv.sales : _in(s.total);
-    const cogs = inv ? inv.cogs : 0;
+    const cd = costBySo[String(s.soNo)];
+    let sales, cogs, comps = null, migrated = false;
+    if (inv) {                                   // new-flow data present → takes precedence
+      sales = inv.sales; cogs = inv.cogs; comps = _miCogsComponents(s.soNo);
+    } else if (cd) {                             // migrated old profit-report breakdown
+      sales = _in(cd.sales); cogs = _in(cd.totalCOGS); migrated = true;
+    } else {                                     // no costs known yet
+      sales = _in(s.total); cogs = 0; comps = _miCogsComponents(s.soNo);
+    }
     models.push({ soNo: s.soNo || '', customer: s.customer || '', date: s.date || '', ym,
-      sales, cogs, gp: sales - cogs, comps: _miCogsComponents(s.soNo) });
+      sales, cogs, gp: sales - cogs, comps, migrated, cd: cd || null });
   });
   // orphan invoices (no SO record) bucket by invoice month
   miData.invs.forEach(v => {
@@ -251,26 +263,43 @@ function miSoTable(list, periodExp, periodRev, tag) {
 
 /** Level 3: revenue + COGS component breakdown for one SO. */
 function miSoBreakdown(m, alloc, net) {
-  const c = m.comps;
-  const procurement = c.purchaseOfGoods + c.duties + c.delivery + c.other;
   const line = (label, val, neg, bold) => `<tr${bold ? ' class="b"' : ''}><td>${label}</td><td class="num"${neg ? ' style="color:#ef4444;"' : ''}>${neg ? _miPar(val) : _im(val)}</td></tr>`;
+  let cogsRows, note;
+  if (m.migrated && m.cd) {
+    // Migrated from the old Profit Report — show the exact recorded cost lines.
+    const cd = m.cd, intl = String(cd.cogsType) === 'international';
+    cogsRows = line('Purchase of Goods', cd.purchaseOfGoods, true)
+      + (intl ? line('Bank Charge (COGS)', cd.bankChargeCOGS, true) : '')
+      + (intl ? line('Duties &amp; Taxes', cd.dutiesAndTaxes, true) : '')
+      + (intl ? line('Bank Charge (Shipping)', cd.bankChargeShipping, true) : '')
+      + (intl ? line('Shipping Cost' + (cd.shippingCompany ? ' (' + _ie(cd.shippingCompany) + ')' : ''), cd.shippingCost, true) : '')
+      + (intl ? line('Local Charges', cd.localCharges, true) : '')
+      + line('Delivery to Office', cd.deliveryToOffice, true)
+      + line('Delivery to Client', cd.deliveryToClient, true);
+    note = 'Cost breakdown migrated from the old Profit Report (' + _ie(cd.cogsType || 'local') + ').';
+  } else {
+    const c = m.comps || { purchaseOfGoods: 0, duties: 0, delivery: 0, other: 0, vat: 0 };
+    const procurement = c.purchaseOfGoods + c.duties + c.delivery + c.other;
+    cogsRows = line('Purchase of Goods', c.purchaseOfGoods, true)
+      + line('Duties &amp; Taxes', c.duties, true)
+      + line('Delivery to Office', c.delivery, true)
+      + line('Other Charges', c.other, true)
+      + `<tr class="sub"><td>Procurement landed cost</td><td class="num" style="color:#ef4444;">${_miPar(procurement)}</td></tr>`;
+    note = `COGS components come from the order's Materials Receiving (Input VAT ${_im(c.vat)} is a recoverable asset, excluded from COGS). Total COGS is the landed cost actually issued on the invoice.`;
+  }
   return `<div class="is-bd">
-    <div class="is-bd-h">${_ie(m.soNo)} — Income breakdown</div>
+    <div class="is-bd-h">${_ie(m.soNo)} — Income breakdown${m.migrated ? ' · <span style="color:#0f766e;">migrated</span>' : ''}</div>
     <table class="is-bd-table"><tbody>
       <tr class="sect"><td colspan="2">Revenue</td></tr>
       ${line('Sales', m.sales)}
-      <tr class="sect"><td colspan="2">Cost of Goods Sold (procurement make-up)</td></tr>
-      ${line('Purchase of Goods', c.purchaseOfGoods, true)}
-      ${line('Duties &amp; Taxes', c.duties, true)}
-      ${line('Delivery to Office', c.delivery, true)}
-      ${line('Other Charges', c.other, true)}
-      <tr class="sub"><td>Procurement landed cost</td><td class="num" style="color:#ef4444;">${_miPar(procurement)}</td></tr>
-      ${line('Total COGS (issued)', m.cogs, true, true)}
+      <tr class="sect"><td colspan="2">Cost of Goods Sold</td></tr>
+      ${cogsRows}
+      ${line('Total COGS', m.cogs, true, true)}
       <tr class="tot"><td>Gross Profit</td><td class="num" style="color:${_miCol(m.gp)};">${_im(m.gp)}</td></tr>
       ${line('Less: Operating Expenses (allocated)', alloc, true)}
       <tr class="tot"><td>Net Profit</td><td class="num" style="color:${_miCol(net)};">${_im(net)}</td></tr>
     </tbody></table>
-    <p class="is-note" style="margin:0.5rem 0 0;">COGS components come from the order's Materials Receiving (Input VAT ${_im(c.vat)} is a recoverable asset, excluded from COGS). Total COGS is the landed cost actually issued on the invoice.</p>
+    <p class="is-note" style="margin:0.5rem 0 0;">${note}</p>
   </div>`;
 }
 

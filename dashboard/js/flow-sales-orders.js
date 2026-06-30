@@ -181,7 +181,9 @@ function renderSOs() {
 }
 
 function editSO(no) {
-  const s = soList.find(x => x.soNo === no);
+  // String-compare: migrated SOs have numeric SO numbers (stored as numbers by Sheets),
+  // while `no` arrives as a string from the inline onclick — strict === would miss them.
+  const s = soList.find(x => String(x.soNo) === String(no));
   if (!s) return;
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('quotationNo').value = s.quotationNo || '';
