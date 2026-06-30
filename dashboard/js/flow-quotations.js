@@ -105,14 +105,16 @@ async function saveQuotation() {
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
-  const quotationNo = document.getElementById('quotationNo').value;
+  const editingNo = document.getElementById('quotationNo').value;      // hidden edit-key
+  const customNo = (document.getElementById('quotationNoInput').value || '').trim();
   const payload = {
-    quotationNo, customer, date: document.getElementById('date').value,
+    quotationNo: editingNo || customNo,                                // custom number on create
+    customer, date: document.getElementById('date').value,
     createdBy: qSession.name, items: JSON.stringify(items)
   };
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
-    const res = await postFlow(quotationNo ? 'updateQuotation' : 'createQuotation', payload);
+    const res = await postFlow(editingNo ? 'updateQuotation' : 'createQuotation', payload);
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message} (${res.quotationNo || quotationNo})`, true);
     resetForm();
@@ -123,6 +125,7 @@ async function saveQuotation() {
 
 function resetForm() {
   document.getElementById('quotationNo').value = '';
+  const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = ''; qni.disabled = false; }
   document.getElementById('customer').value = '';
   document.getElementById('date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('itemRows').innerHTML = '';
@@ -221,6 +224,7 @@ function editQuotation(no) {
   const q = qList.find(x => x.quotationNo === no);
   if (!q) return;
   document.getElementById('quotationNo').value = q.quotationNo;
+  const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = q.quotationNo; qni.disabled = true; }
   document.getElementById('customer').value = q.customer;
   document.getElementById('date').value = flowDate(q.date);
   document.getElementById('formTitle').textContent = 'Edit ' + q.quotationNo;

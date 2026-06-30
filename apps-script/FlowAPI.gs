@@ -100,7 +100,14 @@ var SCHEMA = {
 
   // ── Shipment Monitoring (flow-native): auto-created at SO; 21-stage timeline ──
   Shipments: ['Shipment ID', 'SO No', 'PO No', 'Customer', 'Principal', 'Item', 'Mode', 'ETD', 'ETA',
-              'AWB', 'Status', 'Stages (JSON)', 'Remarks', 'Created By', 'Created At', 'Updated At']
+              'AWB', 'Status', 'Stages (JSON)', 'Remarks', 'Created By', 'Created At', 'Updated At'],
+
+  // ── Payment Requests (Type 'PO' = supplier PRF between PO and AP; 'Other' = other payables) ──
+  PaymentRequests: ['PR No', 'Type', 'PO No', 'SO No', 'Supplier', 'Payee', 'Currency', 'Amount',
+                    'Purpose', 'Department', 'Bank Name', 'Account Name', 'Account Number', 'Payment Method',
+                    'Due Date', 'Remarks', 'Status', 'Created By', 'Created By Role',
+                    'Acct Approved By', 'Acct Approved At', 'Dir Approved By', 'Dir Approved At',
+                    'Mgmt Approved By', 'Mgmt Approved At', 'Approval Note', 'PDF Link', 'Created At', 'Updated At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -1245,6 +1252,166 @@ function updateShipment(p) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  PAYMENT REQUESTS  (Type 'PO' supplier PRF: Director → Management;
+//                     Type 'Other' payables: Accounting → then Management & Director)
+// ════════════════════════════════════════════════════════════════════════════
+function _prRow(no) {
+  return _rows('PaymentRequests').filter(function (r) { return String(r['PR No']) === String(no); })[0];
+}
+function _prMap(r) {
+  return {
+    prNo: r['PR No'], type: r['Type'], poNo: r['PO No'], soNo: r['SO No'], supplier: r['Supplier'],
+    payee: r['Payee'], currency: r['Currency'] || 'PHP', amount: _num(r['Amount']), purpose: r['Purpose'],
+    department: r['Department'], bankName: r['Bank Name'], accountName: r['Account Name'],
+    accountNumber: r['Account Number'], paymentMethod: r['Payment Method'], dueDate: r['Due Date'],
+    remarks: r['Remarks'], status: r['Status'] || 'Draft', createdBy: r['Created By'],
+    createdByRole: r['Created By Role'], acctApprovedBy: r['Acct Approved By'], acctApprovedAt: r['Acct Approved At'],
+    dirApprovedBy: r['Dir Approved By'], dirApprovedAt: r['Dir Approved At'],
+    mgmtApprovedBy: r['Mgmt Approved By'], mgmtApprovedAt: r['Mgmt Approved At'],
+    approvalNote: r['Approval Note'], pdfLink: r['PDF Link'] || '', createdAt: r['Created At'],
+    updatedAt: r['Updated At'], rowIndex: r.rowIndex
+  };
+}
+function _prSet(no, obj) {
+  Object.keys(obj).forEach(function (k) { _setCellByKey('PaymentRequests', 'PR No', no, k, obj[k]); });
+  _setCellByKey('PaymentRequests', 'PR No', no, 'Updated At', _now());
+}
+
+function getPaymentRequests(p) {
+  var rows = _rows('PaymentRequests').map(_prMap);
+  if (p && p.type) rows = rows.filter(function (r) { return String(r.type) === String(p.type); });
+  if (p && p.status) rows = rows.filter(function (r) { return String(r.status) === String(p.status); });
+  if (p && p.createdBy) rows = rows.filter(function (r) { return String(r.createdBy) === String(p.createdBy); });
+  rows.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  return { success: true, data: rows };
+}
+
+/** PHP payable for a PO = Σ APAging Amount (PHP) for that PO (fallback FC total). */
+function _poPayablePHP(poNo) {
+  var php = 0, fc = 0;
+  _rows('APAging').forEach(function (r) {
+    if (String(r['PO No']) === String(poNo)) { php += _num(r['Amount (PHP)']); fc += _num(r['Amount (FC)']); }
+  });
+  return php > 0 ? php : fc;
+}
+
+function createPaymentRequest(p) {
+  var type = (p.type === 'Other') ? 'Other' : 'PO';
+  var no = p.prNo || _nextNumber('PaymentRequests', 1, 'PR');
+  if (_prRow(no)) return { success: false, message: 'Payment Request ' + no + ' already exists.' };
+  var supplier = p.supplier || '', currency = p.currency || 'PHP', amount = _num(p.amount),
+      poNo = p.poNo || '', soNo = p.soNo || '';
+  if (type === 'PO') {
+    if (!poNo) return { success: false, message: 'A purchase order is required for a PO payment request.' };
+    var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
+    if (po) { supplier = supplier || po['Supplier']; currency = 'PHP'; soNo = soNo || po['SO No']; }
+    if (amount <= 0) amount = _poPayablePHP(poNo);
+  } else {
+    if (!p.payee) return { success: false, message: 'Payee is required.' };
+    if (amount <= 0) return { success: false, message: 'Amount must be greater than zero.' };
+  }
+  _append('PaymentRequests', [no, type, poNo, soNo, supplier, p.payee || supplier, currency, amount,
+    p.purpose || '', p.department || '', p.bankName || '', p.accountName || '', p.accountNumber || '',
+    p.paymentMethod || '', p.dueDate || '', p.remarks || '', 'Draft', p.createdBy || p.actorName || '',
+    p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now()]);
+  return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
+}
+
+function updatePaymentRequest(p) {
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  var st = String(r['Status']);
+  if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Only Draft / Rejected requests can be edited.' };
+  var fields = { 'Supplier': p.supplier, 'Payee': p.payee, 'Currency': p.currency, 'Purpose': p.purpose,
+    'Department': p.department, 'Bank Name': p.bankName, 'Account Name': p.accountName,
+    'Account Number': p.accountNumber, 'Payment Method': p.paymentMethod, 'Due Date': p.dueDate, 'Remarks': p.remarks };
+  var set = {};
+  Object.keys(fields).forEach(function (k) { if (fields[k] !== undefined) set[k] = fields[k]; });
+  if (p.amount !== undefined) set['Amount'] = _num(p.amount);
+  _prSet(p.prNo, set);
+  return { success: true, prNo: p.prNo, message: 'Payment Request updated.' };
+}
+
+function deletePaymentRequest(p) {
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  _sheet('PaymentRequests').deleteRow(r.rowIndex);
+  return { success: true, prNo: p.prNo, message: 'Payment Request deleted.' };
+}
+
+function submitPaymentRequest(p) {
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  var st = String(r['Status']);
+  if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Already submitted.' };
+  var next = String(r['Type']) === 'Other' ? 'Pending Accounting' : 'Pending Director';
+  _prSet(p.prNo, { 'Status': next, 'Approval Note': '' });
+  return { success: true, prNo: p.prNo, status: next, message: 'Submitted for approval (' + next + ').' };
+}
+
+function approvePaymentRequest(p) {
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  var st = String(r['Status']), role = String(p.actorRole || ''), who = p.actorName || '', now = _now();
+  if (String(r['Type']) === 'PO') {
+    if (st === 'Pending Director') {
+      if (role !== 'director') return { success: false, message: 'Only the director can approve at this stage.' };
+      _prSet(p.prNo, { 'Dir Approved By': who, 'Dir Approved At': now, 'Status': 'Pending Management' });
+      return { success: true, prNo: p.prNo, status: 'Pending Management', message: 'Director approved; forwarded to management.' };
+    }
+    if (st === 'Pending Management') {
+      if (role !== 'management') return { success: false, message: 'Only management can give final approval.' };
+      _prSet(p.prNo, { 'Mgmt Approved By': who, 'Mgmt Approved At': now, 'Status': 'Approved' });
+      return { success: true, prNo: p.prNo, status: 'Approved', message: 'Payment Request approved.' };
+    }
+    return { success: false, message: 'Not awaiting approval at this stage.' };
+  }
+  // Type 'Other': Accounting → then both Management and Director
+  if (st === 'Pending Accounting') {
+    if (role !== 'accounting') return { success: false, message: 'Only accounting can approve at this stage.' };
+    _prSet(p.prNo, { 'Acct Approved By': who, 'Acct Approved At': now, 'Status': 'Pending Final' });
+    return { success: true, prNo: p.prNo, status: 'Pending Final', message: 'Accounting approved; awaiting management and director.' };
+  }
+  if (st === 'Pending Final') {
+    if (role === 'management') {
+      if (r['Mgmt Approved By']) return { success: false, message: 'Management already approved.' };
+      _prSet(p.prNo, { 'Mgmt Approved By': who, 'Mgmt Approved At': now });
+    } else if (role === 'director') {
+      if (r['Dir Approved By']) return { success: false, message: 'Director already approved.' };
+      _prSet(p.prNo, { 'Dir Approved By': who, 'Dir Approved At': now });
+    } else {
+      return { success: false, message: 'Only management or director can approve at this stage.' };
+    }
+    var fresh = _prRow(p.prNo);
+    if (fresh['Mgmt Approved By'] && fresh['Dir Approved By']) {
+      _prSet(p.prNo, { 'Status': 'Approved' });
+      return { success: true, prNo: p.prNo, status: 'Approved', message: 'Payment Request fully approved.' };
+    }
+    return { success: true, prNo: p.prNo, status: 'Pending Final', message: 'Approval recorded; awaiting the other approver.' };
+  }
+  return { success: false, message: 'Not awaiting approval at this stage.' };
+}
+
+function rejectPaymentRequest(p) {
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  var st = String(r['Status']), role = String(p.actorRole || '');
+  if (st.indexOf('Pending') !== 0) return { success: false, message: 'Only a pending request can be rejected.' };
+  var ok = (String(r['Type']) === 'PO') ? (role === 'director' || role === 'management')
+    : (role === 'accounting' || role === 'management' || role === 'director');
+  if (!ok) return { success: false, message: 'You are not an approver for this request.' };
+  _prSet(p.prNo, { 'Status': 'Rejected', 'Approval Note': p.reason || '' });
+  return { success: true, prNo: p.prNo, status: 'Rejected', message: 'Payment Request rejected.' };
+}
+
+function savePaymentRequestPDF(p) {
+  if (!p.prNo || !p.pdfBase64) return { success: false, message: 'prNo and pdfBase64 required.' };
+  var link = _savePdfToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'));
+  _setCellByKey('PaymentRequests', 'PR No', p.prNo, 'PDF Link', link);
+  return { success: true, prNo: p.prNo, link: link, message: 'Payment Request PDF saved.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  BALANCE SHEET — editable opening balances (Cash, Inventory)
 // ════════════════════════════════════════════════════════════════════════════
 function getOpeningBalances() {
@@ -1659,7 +1826,10 @@ var _MODULE_MAP = {
   saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed'],
   logSalesCall: ['Call', 'Logged'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
-  advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated']
+  advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
+  createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
+  approvePaymentRequest: ['Payment Request', 'Approved'], rejectPaymentRequest: ['Payment Request', 'Rejected'],
+  savePaymentRequestPDF: ['Payment Request', 'PDF Saved']
 };
 
 function _dateStr(v) {
@@ -1901,6 +2071,10 @@ var HANDLERS = {
   getOpeningBalances: getOpeningBalances, setOpeningBalance: setOpeningBalance,
   getShipments: getShipments, getShipmentTimeline: getShipmentTimeline,
   advanceShipmentStage: advanceShipmentStage, updateShipment: updateShipment,
+  getPaymentRequests: getPaymentRequests, createPaymentRequest: createPaymentRequest,
+  updatePaymentRequest: updatePaymentRequest, deletePaymentRequest: deletePaymentRequest,
+  submitPaymentRequest: submitPaymentRequest, approvePaymentRequest: approvePaymentRequest,
+  rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
@@ -1929,5 +2103,7 @@ var MUTATIONS = {
   submitQuotationApproval: 1, approveQuotation: 1, rejectQuotation: 1, sendQuotation: 1,
   submitPOApproval: 1, approvePO: 1, rejectPO: 1,
   setOpeningBalance: 1,
-  advanceShipmentStage: 1, updateShipment: 1
+  advanceShipmentStage: 1, updateShipment: 1,
+  createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
+  approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1
 };

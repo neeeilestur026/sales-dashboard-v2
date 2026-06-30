@@ -56,13 +56,18 @@ async function mfLoadApprovals() {
   const c = document.getElementById('mgmtApprovals');
   c.innerHTML = '<div class="mf-empty">Loading approvals…</div>';
   try {
-    const [q, po] = await Promise.all([
+    const [q, po, pr] = await Promise.all([
       fetchFlow('getQuotations').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
+      fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
     ]);
     const quotes = ((q && q.data) || []).filter(x => x.status === 'Pending Management');
     const pos = ((po && po.data) || []).filter(x => x.status === 'Pending Management');
-    if (!quotes.length && !pos.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
+    // Payment requests awaiting management: PO type at Pending Management; Other type at Pending Final (Mgmt not yet signed).
+    const prs = ((pr && pr.data) || []).filter(x =>
+      (x.type === 'PO' && x.status === 'Pending Management') ||
+      (x.type === 'Other' && x.status === 'Pending Final' && !x.mgmtApprovedBy));
+    if (!quotes.length && !pos.length && !prs.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
     const qRows = quotes.map(x => `<tr>
       <td><span class="flow-badge b-pending">Quotation</span></td>
       <td>${_mfe(x.quotationNo)}</td><td>${_mfe(x.customer)}</td>
@@ -77,9 +82,16 @@ async function mfLoadApprovals() {
       <td class="num" style="white-space:nowrap;">
         <button class="link-btn" onclick="mfApprove('approvePO','${_mfe(x.poNo)}','poNo')">Approve</button>
         <button class="link-btn del-btn" onclick="mfReject('rejectPO','${_mfe(x.poNo)}','poNo')">Reject</button></td></tr>`).join('');
+    const prRows = prs.map(x => `<tr>
+      <td><span class="flow-badge b-pending">Payment Req</span></td>
+      <td>${_mfe(x.prNo)}</td><td>${_mfe(x.payee || x.supplier)}</td>
+      <td class="num">${_mfm(x.amount)}</td>
+      <td class="num" style="white-space:nowrap;">
+        <button class="link-btn" onclick="mfApprove('approvePaymentRequest','${_mfe(x.prNo)}','prNo')">Approve</button>
+        <button class="link-btn del-btn" onclick="mfReject('rejectPaymentRequest','${_mfe(x.prNo)}','prNo')">Reject</button></td></tr>`).join('');
     c.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table">
       <thead><tr><th>Type</th><th>No</th><th>Party</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody>${qRows}${pRows}</tbody></table></div>`;
+      <tbody>${qRows}${pRows}${prRows}</tbody></table></div>`;
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
 }
 

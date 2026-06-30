@@ -17,6 +17,7 @@ from PyPDF2 import PdfReader, PdfWriter
 from pdf_generators.flow_quotation_pdf import build_quotation_pdf_bytes, build_summary_table
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
+from pdf_generators.payment_request_pdf import build_payment_request_pdf
 from pdf_generators.utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -263,4 +264,40 @@ def pr_pdf():
         return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
 
     fname = f"Purchase_Request_{sanitize_filename(data.get('prNo', 'NoRef'))}.pdf"
+    return _pdf_response(pdf_bytes, fname)
+
+
+@flow_bp.route("/flow/payment-request-pdf", methods=["POST"])
+def payment_request_pdf():
+    """Render a flow Payment Request (PRF) using the legacy generator — identical output."""
+    data = request.get_json(silent=True) or {}
+    details = {
+        "request_date": _s(data.get("requestDate") or data.get("date")),
+        "pr_number": _s(data.get("prNo")),
+        "requested_by": _s(data.get("requestedBy")),
+        "department": _s(data.get("department")),
+        "purpose": _s(data.get("purpose")),
+        "priority": _s(data.get("priority")),
+        "payee_name": _s(data.get("payee") or data.get("payeeName") or data.get("supplier")),
+        "payee_type": _s(data.get("payeeType")),
+        "bank_name": _s(data.get("bankName")),
+        "bank_branch": _s(data.get("bankBranch")),
+        "account_name": _s(data.get("accountName")),
+        "account_number": _s(data.get("accountNumber")),
+        "payment_method": _s(data.get("paymentMethod")),
+        "currency": _s(data.get("currency")) or "PHP",
+        "amount": _s(data.get("amount")),
+        "due_date": _s(data.get("dueDate")),
+        "remarks": _s(data.get("remarks")),
+    }
+    try:
+        buffer = BytesIO()
+        build_payment_request_pdf(buffer, details, supporting_docs=None)
+        buffer.seek(0)
+        pdf_bytes = buffer.getvalue()
+    except Exception as e:
+        logger.exception("Flow payment-request PDF failed")
+        return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
+
+    fname = f"Payment_Request_{sanitize_filename(data.get('prNo', 'NoRef'))}.pdf"
     return _pdf_response(pdf_bytes, fname)

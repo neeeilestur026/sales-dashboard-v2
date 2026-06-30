@@ -102,6 +102,7 @@ async function saveInvoice() {
   const btn = document.getElementById('saveBtn');
   const payload = {
     soNo: ivCurrent.soNo, customer, date: document.getElementById('date').value,
+    invNo: document.getElementById('invNo').value.trim(),
     createdBy: ivSession.name, items: JSON.stringify(items)
   };
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -121,6 +122,7 @@ function resetForm() {
   document.getElementById('loadSO').value = '';
   document.getElementById('soNo').value = '';
   document.getElementById('customer').value = '';
+  const ivn = document.getElementById('invNo'); if (ivn) ivn.value = '';
   document.getElementById('date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('itemRows').innerHTML = '';
   ['totalSales', 'totalCOGS', 'grossProfit'].forEach(id => document.getElementById(id).textContent = '0.00');

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Requests — Other Payables</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div id="flowNav" class="flow-nav"></div>
+
+    <div class="chart-card" id="formCard">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.25rem;" id="formTitle">New Payment Request (Other Payables)</h3>
+      <p style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;">For expenses and other payables (not purchase orders). Approval: <b>Accounting → then Management &amp; Director</b>. Generates the same PRF document as the old system.</p>
+      <input type="hidden" id="prNo">
+      <div class="flow-form">
+        <div><label>Payee *</label><input type="text" id="payee"></div>
+        <div><label>Amount (PHP) *</label><input type="number" step="any" min="0" id="amount"></div>
+        <div><label>Payment Method</label><select id="paymentMethod"><option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>Online</option><option>Telegraphic Transfer</option></select></div>
+        <div><label>Department</label><input type="text" id="department"></div>
+        <div><label>Bank Name</label><input type="text" id="bankName"></div>
+        <div><label>Account Name</label><input type="text" id="accountName"></div>
+        <div><label>Account Number</label><input type="text" id="accountNumber"></div>
+        <div><label>Due Date</label><input type="date" id="dueDate"></div>
+        <div><label>PR No <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional)</span></label><input type="text" id="prNoInput" placeholder="auto-generated"></div>
+        <div class="full"><label>Purpose *</label><input type="text" id="purpose" placeholder="e.g. Office rent, utilities, supplier (non-PO)…"></div>
+        <div class="full"><label>Remarks</label><input type="text" id="remarks"></div>
+      </div>
+      <div class="flow-actions">
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="savePR()">Save Payment Request</button>
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+      <div id="formMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;">
+        <h3 style="font-size:0.95rem;font-weight:600;">Payment Requests (Other Payables)</h3>
+        <button class="btn btn-sm btn-secondary" onclick="loadPRs()">Refresh</button>
+      </div>
+      <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-other-payables.js"></script>
+</body>
+</html>
