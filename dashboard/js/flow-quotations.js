@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadInventory();
   addRow();
   await loadQuotations();
+  // Deep-link: ?review=<quotationNo> opens the review modal directly (e.g. from the admin dashboard).
+  const reviewNo = new URLSearchParams(location.search).get('review');
+  if (reviewNo) openReviewModal(reviewNo);
 });
 
 async function loadInventory() {
@@ -151,18 +154,18 @@ function quotationActions(q) {
   const no = flowEsc(q.quotationNo);
   const role = qSession.role, st = q.status || 'Draft';
   const isSales = role === 'sales', isAdmin = role === 'admin';
-  const isMgmt = role === 'management' || role === 'director';
+  const isCreator = String(q.createdBy) === String(qSession.name);
   const editable = st === 'Draft' || st === 'Rejected';
   const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.5rem;">${label}</button>`;
-  let a = `<button class="link-btn" onclick='openPdfModal("${no}")'>PDF</button>` + B(`openDocsModal("Quotation","${no}")`, 'Docs');
-  // Approver actions (in-page)
-  if (isAdmin && st === 'Pending Admin') a += B(`approveQuotationAction("${no}")`, 'Approve') + B(`rejectQuotationAction("${no}")`, 'Reject', 'del-btn');
-  if (isMgmt && st === 'Pending Management') a += B(`approveQuotationAction("${no}")`, 'Approve') + B(`rejectQuotationAction("${no}")`, 'Reject', 'del-btn');
-  // Owner (sales) workflow
-  if (isSales && editable) a += B(`submitQuotationAction("${no}")`, 'Submit') + B(`editQuotation("${no}")`, 'Edit') + B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
+  // Everyone can Review (read-only details + PDF). Approvers get Approve/Reject inside the modal.
+  let a = `<button class="link-btn" onclick='openReviewModal("${no}")'>Review</button>`
+    + B(`openPdfModal("${no}")`, 'PDF') + B(`openDocsModal("Quotation","${no}")`, 'Docs');
+  // Submit / re-submit while Draft or Rejected — the creator, admin, or accounting.
+  if (editable && (isCreator || isAdmin || isSales || role === 'accounting'))
+    a += B(`submitQuotationAction("${no}")`, st === 'Rejected' ? 'Re-submit' : 'Submit');
+  if ((isSales || isAdmin) && editable) a += B(`editQuotation("${no}")`, 'Edit') + B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
+  else if (isAdmin) a += B(`editQuotation("${no}")`, 'Edit');
   if (isSales && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
-  // Admin may still correct/edit any quotation
-  if (isAdmin) a += B(`editQuotation("${no}")`, 'Edit');
   return a;
 }
 
@@ -198,6 +201,40 @@ function rejectQuotationAction(no) {
 function sendQuotationAction(no) {
   if (!confirm('Mark quotation ' + no + ' as sent to the client?')) return;
   _qAction('sendQuotation', no);
+}
+
+// ─── Review modal (see details + PDF before approving) ─────────────
+function openReviewModal(no) {
+  const q = qList.find(x => String(x.quotationNo) === String(no));
+  if (!q) return;
+  const role = qSession.role, st = q.status || 'Draft';
+  const isApprover = (role === 'admin' && st === 'Pending Admin') ||
+    ((role === 'management' || role === 'director') && st === 'Pending Management');
+  document.getElementById('qrTitle').textContent = q.quotationNo;
+  document.getElementById('qrSub').innerHTML =
+    `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}`;
+  const items = q.items || [];
+  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total</td><td class="num">${flowMoney(q.total, 'PHP')}</td></tr></tbody></table>`;
+  const pv = document.getElementById('qrPdf');
+  const fid = q.pdfLink ? ((q.pdfLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || [])[1]) : null;
+  if (fid) pv.innerHTML = `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
+  else if (q.pdfLink) pv.innerHTML = `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
+  else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();openPdfModal('${flowEsc(q.quotationNo)}')">generate the PDF</button> first.</div>`;
+  const foot = document.getElementById('qrFoot');
+  foot.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Close</button>` +
+    (isApprover
+      ? `<button type="button" class="btn btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>
+         <button type="button" class="btn btn-primary" onclick="qrApprove('${flowEsc(q.quotationNo)}')">Approve</button>`
+      : `<span style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-left:auto;">${st.indexOf('Pending') === 0 ? 'Awaiting ' + st.replace('Pending ', '') + ' approval' : ''}</span>`);
+  document.getElementById('qrModal').classList.add('open');
+}
+function closeReviewModal() { document.getElementById('qrModal').classList.remove('open'); }
+function qrApprove(no) { closeReviewModal(); _qAction('approveQuotation', no); }
+function qrReject(no) {
+  const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
+  if (reason === null) return;
+  closeReviewModal();
+  _qAction('rejectQuotation', no, { reason });
 }
 
 function renderQuotationTable(rows) {

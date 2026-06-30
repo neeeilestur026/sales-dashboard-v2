@@ -354,9 +354,13 @@ function createQuotation(p) {
   var no = p.quotationNo || _nextNumber('Quotations', 1, 'QTN');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
-  // Status starts at Draft; the approval workflow drives it from there. Capture the creator's role.
-  _append('Quotations', [no, p.date || _now(), p.customer, p.status || 'Draft', total, p.createdBy || '', _now(), '',
-    p.actorRole || p.createdByRole || '', '', '', '']);
+  // Auto-send for approval on create (no separate Submit step). Route by the creator's role:
+  //   management/director → Approved (top tier); admin → Pending Management; else (sales/accounting) → Pending Admin.
+  var creatorRole = p.actorRole || p.createdByRole || '';
+  var initialStatus = p.status ||
+    (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
+  _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
+    creatorRole, '', '', '']);
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
