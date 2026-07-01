@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!ivSession) return;
   renderNavbar('flow-invoices');
   renderFlowNav('flow-invoices.html');
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   await Promise.all([loadSOOptions(), loadInventory()]);
   await loadInvoices();
 });
@@ -123,7 +123,7 @@ function resetForm() {
   document.getElementById('soNo').value = '';
   document.getElementById('customer').value = '';
   const ivn = document.getElementById('invNo'); if (ivn) ivn.value = '';
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   ['totalSales', 'totalCOGS', 'grossProfit'].forEach(id => document.getElementById(id).textContent = '0.00');
   document.getElementById('formMsg').style.display = 'none';

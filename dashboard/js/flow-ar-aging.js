@@ -79,7 +79,7 @@ function openCollect(arNo) {
   document.getElementById('collectSub').textContent = `${arNo} · ${r.customer} · outstanding ${flowMoney(r.outstanding, 'PHP')}`;
   document.getElementById('collectAmount').value = r.outstanding > 0 ? r.outstanding : '';
   document.getElementById('collectEwt').value = '';
-  document.getElementById('collectDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('collectDate').value = flowToday();
   document.getElementById('collectRef').value = '';
   document.getElementById('collectNotes').value = '';
   document.getElementById('collectMsg').style.display = 'none';

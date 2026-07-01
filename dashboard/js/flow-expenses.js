@@ -183,7 +183,7 @@ function openExpModal(rowIndex) {
   const rec = rowIndex ? allExp.find(r => String(r.rowIndex) === String(rowIndex)) : null;
   document.getElementById('expModalTitle').textContent = rec ? 'Edit Expense' : 'Add Expense';
   document.getElementById('expRowIndex').value = rec ? rec.rowIndex : '';
-  document.getElementById('fDate').value = rec ? flowDate(rec.date) : new Date().toISOString().slice(0, 10);
+  document.getElementById('fDate').value = rec ? flowDate(rec.date) : flowToday();
   document.getElementById('fType').value = rec ? rec.type : 'Operating';
   document.getElementById('fCategory').value = rec ? (rec.category || '') : '';
   document.getElementById('fVoucher').value = rec ? (rec.voucherNo || '') : '';

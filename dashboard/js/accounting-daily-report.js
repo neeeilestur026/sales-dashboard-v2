@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderNavbar('accounting-daily-report');
 
   const picker = document.getElementById('datePicker');
-  picker.value = new Date().toISOString().slice(0, 10);
+  picker.value = flowToday();
   picker.addEventListener('change', load);
   document.getElementById('refreshBtn').addEventListener('click', load);
   document.getElementById('printBtn').addEventListener('click', () => window.print());

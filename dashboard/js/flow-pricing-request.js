@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderSteps(prRole === 'sales' ? 0 : prRole === 'management' ? 2 : 1);
   setupRoleUI();
   if (prRole === 'sales') {
-    document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('date').value = flowToday();
     await loadInventory();
     addRow();
   }
@@ -161,7 +161,7 @@ function resetForm() {
   document.getElementById('prNo').value = '';
   document.getElementById('customer').value = '';
   document.getElementById('notes').value = '';
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formMsg').style.display = 'none';
   addRow();

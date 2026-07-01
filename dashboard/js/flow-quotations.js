@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-quotations');
   // Only admin/accounting can open the rest of the flow — show the sub-nav to them.
   if (qSession.role === 'admin' || qSession.role === 'accounting') renderFlowNav('flow-quotations.html');
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   await loadInventory();
   addRow();
   await loadQuotations();
@@ -130,7 +130,7 @@ function resetForm() {
   document.getElementById('quotationNo').value = '';
   const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = ''; qni.disabled = false; }
   document.getElementById('customer').value = '';
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Quotation';
   document.getElementById('formMsg').style.display = 'none';

@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const dp = document.getElementById('mgmtDrDate');
   if (dp) {
-    dp.value = new Date().toISOString().slice(0, 10);
+    dp.value = flowToday();
     dp.addEventListener('change', mfLoadDailyReports);
     const s = document.getElementById('mgmtDrSearch');
     if (s) s.addEventListener('input', mfRenderDailyReports);

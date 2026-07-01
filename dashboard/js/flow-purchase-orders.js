@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const card = document.getElementById('formTitle');
     if (card && card.closest('.chart-card')) card.closest('.chart-card').style.display = 'none';
   } else {
-    document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('date').value = flowToday();
     document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
     document.getElementById('currency').addEventListener('change', recalc);
     await Promise.all([loadSOOptions(), loadInventory()]);
@@ -177,7 +177,7 @@ function resetForm() {
   document.getElementById('soNo').value = '';
   document.getElementById('loadSO').value = '';
   document.getElementById('supplier').value = '';
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   const fx = document.getElementById('fxRate'); if (fx) fx.value = '';
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Purchase Order';

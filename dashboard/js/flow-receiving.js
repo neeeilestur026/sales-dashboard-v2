@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!rcSession) return;
   renderNavbar('flow-receiving');
   renderFlowNav('flow-receiving.html');
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   await Promise.all([loadPOOptions(), loadAP()]);
   await loadReceiving();
 });
@@ -151,7 +151,7 @@ function resetForm() {
   document.getElementById('supplier').value = '';
   document.getElementById('currency').value = '';
   syncShipDisplay();
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('grandTotal').textContent = '0.00';
   document.getElementById('formMsg').style.display = 'none';

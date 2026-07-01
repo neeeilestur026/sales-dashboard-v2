@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!soSession) return;
   renderNavbar('flow-sales-orders');
   renderFlowNav('flow-sales-orders.html');
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   await loadQuotationOptions();
   addRow();
   await loadSOs();
@@ -104,7 +104,7 @@ function resetForm() {
   document.getElementById('loadQuotation').value = '';
   document.getElementById('customer').value = '';
   document.getElementById('status').value = 'Open';
-  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Sales Order';
   document.getElementById('formMsg').style.display = 'none';

@@ -96,10 +96,21 @@ function flowMoney(v, cur) {
   const sym = { PHP: '₱', USD: '$', EUR: '€', SGD: 'S$', AUD: 'A$', JPY: '¥', GBP: '£' };
   return (sym[cur] || (cur ? cur + ' ' : '')) + flowNum(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// Timezone-safe date → 'yyyy-MM-dd'. A plain date string passes through unchanged; a Date/ISO datetime
+// is formatted in PH time (Asia/Manila) so a Manila-midnight value serialized to UTC (…T16:00Z) does NOT
+// truncate to the previous day.
 function flowDate(d) {
   if (!d) return '';
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trim())) return d.trim();
   const dt = new Date(d);
-  return isNaN(dt) ? String(d) : dt.toISOString().slice(0, 10);
+  if (isNaN(dt)) return String(d);
+  try { return dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); } catch (e) { return dt.toISOString().slice(0, 10); }
+}
+
+// Today's date in PH local time as 'yyyy-MM-dd' (use for date-input defaults instead of the UTC toISOString).
+function flowToday() {
+  try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }
+  catch (e) { return new Date().toISOString().slice(0, 10); }
 }
 const FLOW_CURRENCIES = ['PHP', 'USD', 'EUR', 'SGD', 'AUD', 'JPY', 'GBP'];
 
