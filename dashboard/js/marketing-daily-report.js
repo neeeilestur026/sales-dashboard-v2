@@ -98,10 +98,11 @@ function renderTasks() {
 
 async function loadEmails() {
   const body = document.getElementById('emailBody');
-  let emails = [];
+  let emails = [], needsSetup = false;
   try {
     if (typeof apiFetchEmailLogToday === 'function') {
       const r = await apiFetchEmailLogToday();
+      needsSetup = !!(r && r.needsSetup);
       emails = (r && r.success && r.emails) || (r && r.data) || [];
     }
   } catch (e) { emails = []; }
@@ -109,10 +110,14 @@ async function loadEmails() {
   mdrEmailCount = emails.length;
   document.getElementById('emailCount').textContent = emails.length;
   document.getElementById('sumEmails').textContent = emails.length;
+  if (needsSetup) {
+    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
+    return;
+  }
   body.innerHTML = emails.length ? emails.map(r => {
-    const t = r.time || r.sentAt || r.date || '';
+    const t = r.sentAt || r.time || r.date || '';
     return `<tr><td>${_esc(t)}</td><td>${_esc(r.recipient || r.to || '')}</td><td>${_esc(r.subject || '')}</td><td>${_esc(r.category || '')}</td></tr>`;
-  }).join('') : '<tr><td colspan="4" class="dr-empty">No emails recorded today.</td></tr>';
+  }).join('') : '<tr><td colspan="4" class="dr-empty">No emails sent today.</td></tr>';
 }
 
 async function loadNotes() {

@@ -408,9 +408,10 @@ async function apiTestEmailConnection(godaddyEmail, godaddyPassword) {
   return _flaskFetch('/api/email/test', { godaddyEmail, godaddyPassword });
 }
 
-/** Fetch today's sent emails from the agent's GoDaddy mailbox. */
-async function apiFetchEmailLogToday() {
-  return _flaskFetch('/api/email/today', {});
+/** Fetch today's sent emails from the agent's GoDaddy mailbox. Oversight roles may pass a target
+ *  `user` (activity-log name) to read that user's sent mail. */
+async function apiFetchEmailLogToday(user) {
+  return _flaskFetch('/api/email/today', user ? { user } : {});
 }
 
 /** Fetch a recent feed from a GoDaddy folder ('inbox' | 'sent' | 'spam'); inbox/spam classified. */

@@ -19,6 +19,30 @@ function _in(v) { return flowNum(v); }
 function _id(d) { return flowDate(d); }
 const _IMN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+function _miRole() { try { return (JSON.parse(localStorage.getItem('session') || '{}').role || '').toLowerCase(); } catch (e) { return ''; } }
+const miCanEditCost = (_miRole() === 'accounting' || _miRole() === 'admin');
+
+/** Open the shared cost editor prefilled from a per-SO model, then reload on save. */
+function miEditCost(idx) {
+  const m = miModels[idx];
+  if (!m || typeof openSoCostEditor !== 'function') return;
+  const c = m.comps || {};
+  const prefill = m.cd ? {
+    soNo: m.soNo, customer: m.customer, date: m.date, sales: m.cd.sales, cogsType: m.cd.cogsType || 'local',
+    shippingCompany: m.cd.shippingCompany || '', purchaseOfGoods: m.cd.purchaseOfGoods,
+    bankChargeCOGS: m.cd.bankChargeCOGS, dutiesAndTaxes: m.cd.dutiesAndTaxes, bankChargeShipping: m.cd.bankChargeShipping,
+    shippingCost: m.cd.shippingCost, localCharges: m.cd.localCharges, deliveryToOffice: m.cd.deliveryToOffice,
+    deliveryToClient: m.cd.deliveryToClient,
+  } : {
+    soNo: m.soNo, customer: m.customer, date: m.date, sales: m.sales,
+    cogsType: (c.duties || c.other) ? 'international' : 'local', shippingCompany: '',
+    purchaseOfGoods: c.purchaseOfGoods || 0, dutiesAndTaxes: c.duties || 0,
+    deliveryToOffice: c.delivery || 0, localCharges: c.other || 0,
+    bankChargeCOGS: 0, bankChargeShipping: 0, shippingCost: 0, deliveryToClient: 0,
+  };
+  openSoCostEditor(prefill, () => miLoad());
+}
+
 function _miYM(dateStr) {
   if (!dateStr) return '';
   const s = String(dateStr).trim();
@@ -118,16 +142,19 @@ function miBuild(year) {
     if (!ym || !inYear(ym)) return;
     const inv = invBySo[String(s.soNo)];
     const cd = costBySo[String(s.soNo)];
-    let sales, cogs, comps = null, migrated = false;
-    if (inv) {                                   // new-flow data present → takes precedence
-      sales = inv.sales; cogs = inv.cogs; comps = _miCogsComponents(s.soNo);
-    } else if (cd) {                             // migrated old profit-report breakdown
+    const edited = cd && String(cd.source) === 'Manual (edited)';
+    let sales, cogs, comps = null, migrated = false, costNotSet = false;
+    // A SOCostDetails row (migrated or accounting-edited) is authoritative — it carries the full cost
+    // breakdown and equals the migrated invoice's sales/COGS, so this avoids any double count.
+    if (cd) {
       sales = _in(cd.sales); cogs = _in(cd.totalCOGS); migrated = true;
+    } else if (inv) {                            // pure new-flow SO
+      sales = inv.sales; cogs = inv.cogs; comps = _miCogsComponents(s.soNo);
     } else {                                     // no costs known yet
-      sales = _in(s.total); cogs = 0; comps = _miCogsComponents(s.soNo);
+      sales = _in(s.total); cogs = 0; comps = _miCogsComponents(s.soNo); costNotSet = true;
     }
     models.push({ soNo: s.soNo || '', customer: s.customer || '', date: s.date || '', ym,
-      sales, cogs, gp: sales - cogs, comps, migrated, cd: cd || null });
+      sales, cogs, gp: sales - cogs, comps, migrated, edited, costNotSet, cd: cd || null, status: s.status || '' });
   });
   // orphan invoices (no SO record) bucket by invoice month
   miData.invs.forEach(v => {
@@ -240,7 +267,7 @@ function miSoTable(list, periodExp, periodRev, tag) {
     const rid = tag + '_' + j;
     const idx = miModels.indexOf(m);
     const sumRow = `<tr class="is-sorow" onclick="miToggleSo('${rid}')">
-      <td><strong>${_ie(m.soNo)}</strong>${m.date ? `<span class="is-sub2">${_ie(_id(m.date))}</span>` : ''}</td>
+      <td><strong>${_ie(m.soNo)}</strong>${m.costNotSet ? ' <span class="is-warn" title="No cost recorded — click to open, then Edit costs">⚠ cost not set</span>' : ''}${m.date ? `<span class="is-sub2">${_ie(_id(m.date))}</span>` : ''}</td>
       <td>${_ie(m.customer) || '—'}</td>
       <td class="num">${_im(m.sales)}</td>
       <td class="num" style="color:#ef4444;">${m.cogs ? _miPar(m.cogs) : '—'}</td>
@@ -287,8 +314,11 @@ function miSoBreakdown(m, alloc, net) {
       + `<tr class="sub"><td>Procurement landed cost</td><td class="num" style="color:#ef4444;">${_miPar(procurement)}</td></tr>`;
     note = `COGS components come from the order's Materials Receiving (Input VAT ${_im(c.vat)} is a recoverable asset, excluded from COGS). Total COGS is the landed cost actually issued on the invoice.`;
   }
+  const editBtn = miCanEditCost
+    ? `<button type="button" class="btn btn-sm btn-secondary" style="float:right;" onclick="miEditCost(${miModels.indexOf(m)})">✎ Edit costs</button>`
+    : '';
   return `<div class="is-bd">
-    <div class="is-bd-h">${_ie(m.soNo)} — Income breakdown${m.migrated ? ' · <span style="color:#0f766e;">migrated</span>' : ''}</div>
+    <div class="is-bd-h">${editBtn}${_ie(m.soNo)} — Income breakdown${m.edited ? ' · <span style="color:#0f766e;">edited</span>' : m.migrated ? ' · <span style="color:#0f766e;">migrated</span>' : ''}</div>
     <table class="is-bd-table"><tbody>
       <tr class="sect"><td colspan="2">Revenue</td></tr>
       ${line('Sales', m.sales)}

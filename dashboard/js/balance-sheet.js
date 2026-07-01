@@ -39,10 +39,16 @@ async function loadBS() {
       fetchFlow('getInvoices').catch(() => ({ data: [] })),
       fetchFlow('getExpenses').catch(() => ({ data: [] })),
     ]);
+    // Migrated (legacy) invoices/receiving are historical records for P&L reporting only — the real
+    // cash/inventory/AR they represent predates the new-system baseline (captured by opening balances),
+    // so they are EXCLUDED here to keep the balance sheet's Assets = Liabilities + Equity intact.
+    const _notMigrated = r => !String((r && (r.createdBy || r.receivedBy)) || '').startsWith('Migrated (legacy)');
     bsData = {
       opening: (open && open.data) || { cash: 0, inventory: 0 },
       cols: (cols && cols.data) || [], ars: (ars && ars.data) || [], aps: (aps && aps.data) || [],
-      recs: (recs && recs.data) || [], invs: (invs && invs.data) || [], exps: (exps && exps.data) || [],
+      recs: ((recs && recs.data) || []).filter(_notMigrated),
+      invs: ((invs && invs.data) || []).filter(_notMigrated),
+      exps: (exps && exps.data) || [],
     };
     renderBS();
   } catch (e) {

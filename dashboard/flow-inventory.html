@@ -22,7 +22,7 @@
       <form id="invForm" onsubmit="submitItem(event)">
         <input type="hidden" id="rowIndex" value="">
         <div class="flow-form">
-          <div><label>Item No. *</label><input type="text" id="itemNo" required placeholder="e.g. WLD-500A"></div>
+          <div><label>Item No. <span style="font-weight:400;color:var(--text-muted,#64748b);">(type N/A or leave blank if none)</span></label><input type="text" id="itemNo" placeholder="e.g. WLD-500A or N/A"></div>
           <div class="full"><label>Description *</label><input type="text" id="description" required placeholder="e.g. Welding Rod 500A"></div>
           <div><label>Available Balance</label><input type="number" id="balance" step="any" min="0" value="0"></div>
           <div><label>Purchase Price / Unit</label><input type="number" id="purchasePrice" step="any" min="0" value="0"></div>

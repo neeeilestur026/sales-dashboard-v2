@@ -96,7 +96,7 @@ function render() {
         <td style="color:var(--text-secondary);">${_e(e.summary)}</td>
         <td class="num">${e.amount ? _m(e.amount) : ''}</td>
       </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No movements (note only).</td></tr>';
-    return `<details class="urep"${i === 0 ? ' open' : ''}>
+    return `<details class="urep"${i === 0 ? ' open' : ''} data-user="${_e(name)}">
       <summary><span class="uname">${_e(name)}</span>
         <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${note ? ' · 📝 note' : ''}</span></summary>
       <div class="urep-body">
@@ -105,8 +105,35 @@ function render() {
           <thead><tr><th>Time</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
           <tbody>${tl}</tbody>
         </table></div>
+        <div class="uemail" data-loaded="0"><div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails Today</div>
+          <div class="uemail-body"><div class="dr-empty" style="font-size:0.8rem;">Loading…</div></div></div>
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_e(note)}</div>` : ''}
       </div>
     </details>`;
   }).join('');
+
+  // Lazy-load each user's sent emails from GoDaddy when their card is opened (oversight-gated backend).
+  cont.querySelectorAll('.urep').forEach(det => {
+    const load = () => { if (det.open) adrLoadUserEmails(det); };
+    det.addEventListener('toggle', load);
+    if (det.open) load();
+  });
+}
+
+async function adrLoadUserEmails(det) {
+  const box = det.querySelector('.uemail');
+  if (!box || box.getAttribute('data-loaded') === '1') return;
+  box.setAttribute('data-loaded', '1');
+  const body = box.querySelector('.uemail-body');
+  const name = det.getAttribute('data-user') || '';
+  let emails = [], needsSetup = false;
+  try {
+    const r = await apiFetchEmailLogToday(name);
+    needsSetup = !!(r && r.needsSetup);
+    emails = (r && r.success && r.emails) || [];
+  } catch (e) { emails = []; }
+  if (needsSetup) { body.innerHTML = `<div class="dr-empty" style="font-size:0.8rem;">${_e(name)} hasn't connected their mailbox.</div>`; return; }
+  if (!emails.length) { body.innerHTML = `<div class="dr-empty" style="font-size:0.8rem;">No emails sent today.</div>`; return; }
+  body.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>
+    <tbody>${emails.map(m => `<tr><td>${_e(m.sentAt || m.time || '')}</td><td>${_e(m.recipient || '')}</td><td>${_e(m.subject || '')}</td></tr>`).join('')}</tbody></table></div>`;
 }

@@ -16,7 +16,7 @@
  * All tabs are auto-created with headers on first use.
  */
 
-var SHEET_ID = ''; // ← paste the new "v2 Process DB" spreadsheet ID here
+var SHEET_ID = '1ND6d0OK1xJ3wM29L4EsD-Xia44FXfD7HOZx8tms9Msk'; // ← paste the new "v2 Process DB" spreadsheet ID here
 
 // Optional: Drive folder ID for saved quotation/PO PDFs. Blank → auto find/create "Flow Documents".
 var FLOW_DRIVE_FOLDER_ID = '';
@@ -42,7 +42,7 @@ var SCHEMA = {
 
   MaterialsReceiving: ['MR No', 'PO No', 'Date', 'Supplier', 'Currency', 'Customs Duties (PHP)',
                        'VAT (PHP)', 'Delivery Charges (PHP)', 'Other Charges (PHP)',
-                       'Total Shipping Cost (PHP)', 'Received By', 'Created At'],
+                       'Total Shipping Cost (PHP)', 'Received By', 'Created At', 'SO No'],
   ReceivingItems:     ['MR No', 'Item No', 'Item Name', 'Qty Received', 'Purchase Price/Unit (FC)',
                        'Purchase Price/Unit (PHP)', 'Shipping/Unit (PHP)', 'Landed Cost/Unit', 'Total Landed Cost'],
 
@@ -69,7 +69,8 @@ var SCHEMA = {
 
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
-                    'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At'],
+                    'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
+                    'Priced Items JSON'],
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price'],
 
@@ -266,11 +267,20 @@ function _findInventory(itemNo) {
   return null;
 }
 
+/** Normalize an Item No: a blank or "n/a" (any case) becomes the literal text 'N/A'. */
+function _normItemNo(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s || s.toLowerCase() === 'n/a' || s.toLowerCase() === 'na') return 'N/A';
+  return s;
+}
+
 function addInventoryItem(p) {
-  if (!p.itemNo || !p.description) return { success: false, message: 'Item No and Description are required.' };
-  if (_findInventory(p.itemNo)) return { success: false, message: 'Item No already exists.' };
+  if (!p.description) return { success: false, message: 'Description is required.' };
+  var itemNo = _normItemNo(p.itemNo);
+  // 'N/A' is a placeholder for miscellaneous / no-code items — allow multiple, skip the dedupe check.
+  if (itemNo !== 'N/A' && _findInventory(itemNo)) return { success: false, message: 'Item No already exists.' };
   var c = _invComputed(p.balance, p.purchasePrice, p.shippingCost);
-  _append('Inventory', [String(p.itemNo).trim(), String(p.description).trim(), _num(p.balance),
+  _append('Inventory', [itemNo, String(p.description).trim(), _num(p.balance),
     _num(p.purchasePrice), _num(p.shippingCost), c.landed, c.total, p.currency || 'PHP', _now()]);
   return { success: true, message: 'Item added.' };
 }
@@ -280,7 +290,7 @@ function updateInventoryItem(p) {
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
   var c = _invComputed(p.balance, p.purchasePrice, p.shippingCost);
-  sh.getRange(ri, 1, 1, SCHEMA.Inventory.length).setValues([[String(p.itemNo).trim(),
+  sh.getRange(ri, 1, 1, SCHEMA.Inventory.length).setValues([[_normItemNo(p.itemNo),
     String(p.description).trim(), _num(p.balance), _num(p.purchasePrice), _num(p.shippingCost),
     c.landed, c.total, p.currency || 'PHP', _now()]]);
   return { success: true, message: 'Item updated.' };
@@ -326,9 +336,12 @@ function getQuotations(p) {
   if (p && p.createdBy) headers = headers.filter(function (q) { return String(q['Created By']) === String(p.createdBy); });
   return { success: true, data: headers.map(function (q) {
     var its = items.filter(function (r) { return String(r['Quotation No']) === String(q['Quotation No']); });
+    // Self-heal the total from the line items when the stored Total is 0/blank (legacy rows, or a create
+    // path that didn't persist it) so both approval strips and the review modal show the real amount.
+    var itemsTotal = its.reduce(function (s, r) { return s + _num(r['Quoted Qty']) * _num(r['Quoted Price']); }, 0);
     return {
       quotationNo: q['Quotation No'], date: q['Date'], customer: q['Customer'], status: q['Status'] || 'Draft',
-      total: _num(q['Total']), createdBy: q['Created By'], createdAt: q['Created At'],
+      total: _num(q['Total']) || itemsTotal, createdBy: q['Created By'], createdAt: q['Created At'],
       pdfLink: q['PDF Link'] || '', createdByRole: q['Created By Role'] || '',
       approvalNote: q['Approval Note'] || '', approvedBy: q['Approved By'] || '', approvedAt: q['Approved At'] || '',
       rowIndex: q.rowIndex,
@@ -946,7 +959,7 @@ function getReceiving() {
   return { success: true, data: _rows('MaterialsReceiving').map(function (m) {
     var its = items.filter(function (r) { return String(r['MR No']) === String(m['MR No']); });
     return {
-      mrNo: m['MR No'], poNo: m['PO No'], date: m['Date'], supplier: m['Supplier'],
+      mrNo: m['MR No'], poNo: m['PO No'], soNo: m['SO No'] || '', date: m['Date'], supplier: m['Supplier'],
       currency: m['Currency'] || 'PHP',
       duties: _num(m['Customs Duties (PHP)']), vat: _num(m['VAT (PHP)']),
       delivery: _num(m['Delivery Charges (PHP)']), other: _num(m['Other Charges (PHP)']),
@@ -1487,9 +1500,261 @@ function importSOCostDetails(p) {
       errors.push({ soNo: c && c.soNo, message: String(e && e.message || e) });
     }
   });
+  // Reconcile the newly-imported SOs into the invoice-/receiving-driven widgets (idempotent).
+  var bf = {};
+  try { bf = backfillMigratedRecords({}); } catch (e) { bf = { invoicesCreated: 0, receivingsCreated: 0 }; }
   return { success: true, created: created, skipped: skipped, headersCreated: headersCreated,
     mismatches: mismatches, errors: errors,
-    message: 'Imported ' + created + ' SO cost detail(s); created ' + headersCreated + ' header(s); skipped ' + skipped + '.' };
+    invoicesCreated: bf.invoicesCreated || 0, receivingsCreated: bf.receivingsCreated || 0,
+    message: 'Imported ' + created + ' SO cost detail(s); created ' + headersCreated + ' header(s); skipped ' + skipped +
+      '; backfilled ' + (bf.invoicesCreated || 0) + ' invoice(s) + ' + (bf.receivingsCreated || 0) + ' receiving(s).' };
+}
+
+function _soHasRealInvoice(soNo) {
+  return _rows('Invoices').some(function (v) {
+    return String(v['SO No']) === String(soNo) && String(v['Created By']) !== 'Migrated (legacy)';
+  });
+}
+
+/** Delete the SO's migrated Invoice(s) + their InvoiceItems (bottom-up preserves indices). */
+function _deleteMigratedInvoiceForSO(soNo) {
+  var invSh = _sheet('Invoices'), itemSh = _sheet('InvoiceItems'), invNos = {};
+  _rows('Invoices').filter(function (v) { return String(v['SO No']) === String(soNo) && String(v['Created By']) === 'Migrated (legacy)'; })
+    .sort(function (a, b) { return b.rowIndex - a.rowIndex; })
+    .forEach(function (v) { invNos[String(v['INV No'])] = true; invSh.deleteRow(v.rowIndex); });
+  _rows('InvoiceItems').filter(function (r) { return invNos[String(r['INV No'])]; })
+    .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { itemSh.deleteRow(r.rowIndex); });
+}
+
+/** Delete the SO's migrated Receiving(s) + their ReceivingItems. */
+function _deleteMigratedReceivingForSO(soNo) {
+  var mrSh = _sheet('MaterialsReceiving'), itemSh = _sheet('ReceivingItems'), mrNos = {};
+  _rows('MaterialsReceiving').filter(function (m) { return String(m['SO No']) === String(soNo) && String(m['Received By']) === 'Migrated (legacy)'; })
+    .sort(function (a, b) { return b.rowIndex - a.rowIndex; })
+    .forEach(function (m) { mrNos[String(m['MR No'])] = true; mrSh.deleteRow(m.rowIndex); });
+  _rows('ReceivingItems').filter(function (r) { return mrNos[String(r['MR No'])]; })
+    .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { itemSh.deleteRow(r.rowIndex); });
+}
+
+/**
+ * Write the migrated Invoice + Receiving for ONE SOCostDetails row (sheet-key object). Plain appends —
+ * NO journals/inventory/AR/AP. `force` regenerates (deletes existing migrated rows first) — used when an
+ * SO's cost is edited so the process detail stays in sync; without `force` it only fills gaps (backfill).
+ * A real (non-migrated) invoice is never duplicated.
+ */
+function _writeMigratedRecordsForSO(cd, force) {
+  var soNo = String(cd['SO No'] || '');
+  if (!soNo) return { invoice: false, receiving: false };
+  var sales = _num(cd['Sales']), cogs = _num(cd['Total COGS']);
+  var customer = cd['Customer'] || '(unknown)', date = cd['Date'] || _now();
+  var hasReal = _soHasRealInvoice(soNo);
+  var hasMigInv = _rows('Invoices').some(function (v) { return String(v['SO No']) === soNo && String(v['Created By']) === 'Migrated (legacy)'; });
+  var hasMigRcv = _rows('MaterialsReceiving').some(function (m) { return String(m['SO No']) === soNo && String(m['Received By']) === 'Migrated (legacy)'; });
+  var wroteInv = false, wroteRcv = false;
+  if (force || (!hasReal && !hasMigInv)) {
+    if (force) _deleteMigratedInvoiceForSO(soNo);
+    if (!hasReal) {
+      var invNo = _nextNumber('Invoices', 1, 'INV');
+      _sheet('Invoices').appendRow([invNo, soNo, date, customer, sales, cogs, 'Migrated (legacy)', _now()]);
+      _sheet('InvoiceItems').appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs]);
+      wroteInv = true;
+    }
+  }
+  if (force || !hasMigRcv) {
+    if (force) _deleteMigratedReceivingForSO(soNo);
+    var duties = _num(cd['Duties & Taxes']);
+    var delivery = _num(cd['Delivery to Office']) + _num(cd['Delivery to Client']);
+    var other = _num(cd['Local Charges']) + _num(cd['Bank Charge (COGS)']) + _num(cd['Bank Charge (Shipping)']) + _num(cd['Shipping Cost']);
+    var totalShip = duties + delivery + other;
+    var purchase = _num(cd['Purchase of Goods']);
+    var mrNo = _nextNumber('MaterialsReceiving', 1, 'MR');
+    _sheet('MaterialsReceiving').appendRow([mrNo, '', date, '(migrated)', 'PHP', duties, 0, delivery, other, totalShip, 'Migrated (legacy)', _now(), soNo]);
+    _sheet('ReceivingItems').appendRow([mrNo, '(migrated)', 'Migrated legacy goods', 1, 0, purchase, 0, purchase, purchase]);
+    wroteRcv = true;
+  }
+  return { invoice: wroteInv, receiving: wroteRcv };
+}
+
+/**
+ * Reconcile migrated SOs into the invoice-/receiving-driven widgets: for every SOCostDetails row,
+ * create a migrated Invoice (revenue + COGS) and a migrated Receiving (duties/delivery/other) — as
+ * plain row appends only. NO journals, NO inventory apply, NO AR, NO AP (historical records). Marked
+ * 'Migrated (legacy)' so the Balance Sheet can exclude them. Idempotent: skips SOs that already have
+ * an invoice (any) or a migrated receiving. Safe to re-run.
+ */
+function backfillMigratedRecords(p) {
+  var cds = _rows('SOCostDetails');
+  if (!cds.length) return { success: true, invoicesCreated: 0, receivingsCreated: 0, skipped: 0, message: 'No migrated SO cost details to backfill.' };
+  var invBySo = {};
+  _rows('Invoices').forEach(function (v) { if (v['SO No'] != null) invBySo[String(v['SO No'])] = true; });
+  var migRcv = {};
+  _rows('MaterialsReceiving').forEach(function (m) {
+    if (String(m['Received By']) === 'Migrated (legacy)' && m['SO No'] != null && String(m['SO No']) !== '') migRcv[String(m['SO No'])] = true;
+  });
+  var invSh = _sheet('Invoices'), invItemSh = _sheet('InvoiceItems');
+  var mrSh = _sheet('MaterialsReceiving'), rcvItemSh = _sheet('ReceivingItems');
+  var invoicesCreated = 0, receivingsCreated = 0, skipped = 0;
+  cds.forEach(function (c) {
+    var soNo = String(c['SO No'] || '');
+    if (!soNo) { skipped++; return; }
+    var sales = _num(c['Sales']), cogs = _num(c['Total COGS']);
+    var customer = c['Customer'] || '(unknown)', date = c['Date'] || _now();
+    // Invoice — only if the SO has no invoice at all (never duplicate a real new-flow invoice).
+    if (!invBySo[soNo]) {
+      var invNo = _nextNumber('Invoices', 1, 'INV');
+      invSh.appendRow([invNo, soNo, date, customer, sales, cogs, 'Migrated (legacy)', _now()]);
+      invItemSh.appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs]);
+      invBySo[soNo] = true;
+      invoicesCreated++;
+    }
+    // Receiving — capture the cost breakdown; dedupe on a migrated MR for this SO.
+    if (!migRcv[soNo]) {
+      var duties = _num(c['Duties & Taxes']);
+      var delivery = _num(c['Delivery to Office']) + _num(c['Delivery to Client']);
+      var other = _num(c['Local Charges']) + _num(c['Bank Charge (COGS)']) + _num(c['Bank Charge (Shipping)']) + _num(c['Shipping Cost']);
+      var totalShip = duties + delivery + other;
+      var purchase = _num(c['Purchase of Goods']);
+      var mrNo = _nextNumber('MaterialsReceiving', 1, 'MR');
+      mrSh.appendRow([mrNo, '', date, '(migrated)', 'PHP', duties, 0, delivery, other, totalShip, 'Migrated (legacy)', _now(), soNo]);
+      rcvItemSh.appendRow([mrNo, '(migrated)', 'Migrated legacy goods', 1, 0, purchase, 0, purchase, purchase]);
+      migRcv[soNo] = true;
+      receivingsCreated++;
+    }
+    if (invBySo[soNo] && migRcv[soNo] && invoicesCreated === 0 && receivingsCreated === 0) skipped++;
+  });
+  return { success: true, invoicesCreated: invoicesCreated, receivingsCreated: receivingsCreated, skipped: skipped,
+    message: 'Backfilled ' + invoicesCreated + ' invoice(s) and ' + receivingsCreated + ' receiving record(s).' };
+}
+
+/**
+ * Editable per-SO cost: upsert a SOCostDetails row by SO No. Overwrites every cost component,
+ * recomputes Total COGS + Gross Profit, marks Source='Manual (edited)'. Creates the row (and a
+ * header-only Sales Order) if none exists. Field names match getSOCostDetails' camelCase output so
+ * the front-end editor round-trips cleanly.
+ */
+function saveSOCostDetails(p) {
+  var c = (typeof p.record === 'string') ? JSON.parse(p.record || '{}') : (p.record || p);
+  var soNo = c.soNo != null ? String(c.soNo) : '';
+  if (!soNo) return { success: false, message: 'SO No is required.' };
+  var cogsType = String(c.cogsType || 'local');
+  // Recompute Total COGS from the components (international includes shipping/bank/duties/local).
+  var totalCOGS = _num(c.purchaseOfGoods) + _num(c.deliveryToOffice) + _num(c.deliveryToClient);
+  if (cogsType === 'international') {
+    totalCOGS += _num(c.bankChargeCOGS) + _num(c.dutiesAndTaxes) + _num(c.bankChargeShipping) +
+                 _num(c.shippingCost) + _num(c.localCharges);
+  }
+  var sales = _num(c.sales);
+  var grossProfit = sales - totalCOGS;
+  var rowArr = [soNo, c.customer || '', c.date || '', sales, cogsType, _num(c.purchaseOfGoods),
+    _num(c.bankChargeCOGS), _num(c.dutiesAndTaxes), _num(c.bankChargeShipping), c.shippingCompany || '',
+    _num(c.shippingCost), _num(c.localCharges), _num(c.deliveryToOffice), _num(c.deliveryToClient),
+    totalCOGS, grossProfit, 'Manual (edited)', _now()];
+  var sh = _sheet('SOCostDetails');
+  var existing = _rows('SOCostDetails').filter(function (r) { return String(r['SO No']) === soNo; })[0];
+  if (existing) {
+    sh.getRange(existing.rowIndex, 1, 1, rowArr.length).setValues([rowArr]);
+  } else {
+    sh.appendRow(rowArr);
+    // Create a header-only Sales Order if one doesn't exist yet.
+    var hasHeader = _rows('SalesOrders').some(function (r) { return String(r['SO No']) === soNo; });
+    if (!hasHeader) {
+      _sheet('SalesOrders').appendRow([soNo, '', c.date || _now(), c.customer || '(unknown)',
+        'Closed', sales, 'Manual (edited)', _now()]);
+    }
+  }
+  // Regenerate this SO's migrated Invoice + Receiving from the new breakdown so the process detail
+  // (receiving shipping/duties + invoice COGS) and the invoice-driven widgets reflect the edit.
+  try {
+    _writeMigratedRecordsForSO({
+      'SO No': soNo, 'Customer': c.customer || '', 'Date': c.date || '', 'Sales': sales, 'Total COGS': totalCOGS,
+      'Duties & Taxes': _num(c.dutiesAndTaxes), 'Delivery to Office': _num(c.deliveryToOffice),
+      'Delivery to Client': _num(c.deliveryToClient), 'Local Charges': _num(c.localCharges),
+      'Bank Charge (COGS)': _num(c.bankChargeCOGS), 'Bank Charge (Shipping)': _num(c.bankChargeShipping),
+      'Shipping Cost': _num(c.shippingCost), 'Purchase of Goods': _num(c.purchaseOfGoods)
+    }, true);
+  } catch (e) { /* record regeneration is best-effort */ }
+  return { success: true, soNo: soNo, totalCOGS: totalCOGS, grossProfit: grossProfit,
+    message: 'Saved cost details for ' + soNo + '.' };
+}
+
+/**
+ * Remove ALL migrated sales-order records so they can be re-migrated cleanly: the migrated SOCostDetails
+ * rows, the header-only migrated SalesOrders, and the migrated Invoices/Receiving (+ their item rows).
+ * Real new-flow records are untouched. Deletes bottom-up to preserve row indices.
+ */
+function deleteMigratedRecords(p) {
+  var counts = { soCosts: 0, salesOrders: 0, invoices: 0, receivings: 0 };
+  var byRowDesc = function (a, b) { return b.rowIndex - a.rowIndex; };
+  // SOCostDetails — anything migrated or manually edited (all originate from the migration).
+  var scdSh = _sheet('SOCostDetails');
+  _rows('SOCostDetails').filter(function (r) { var s = String(r['Source'] || ''); return s.indexOf('Migrated') === 0 || s === 'Manual (edited)'; })
+    .sort(byRowDesc).forEach(function (r) { scdSh.deleteRow(r.rowIndex); counts.soCosts++; });
+  // Header-only migrated Sales Orders.
+  var soSh = _sheet('SalesOrders');
+  _rows('SalesOrders').filter(function (r) { var cb = String(r['Created By'] || ''); return cb === 'Migrated (legacy)' || cb === 'Manual (edited)'; })
+    .sort(byRowDesc).forEach(function (r) { soSh.deleteRow(r.rowIndex); counts.salesOrders++; });
+  // Migrated Invoices + their items.
+  var invSh = _sheet('Invoices'), invNos = {};
+  _rows('Invoices').filter(function (v) { return String(v['Created By']) === 'Migrated (legacy)'; })
+    .sort(byRowDesc).forEach(function (v) { invNos[String(v['INV No'])] = true; invSh.deleteRow(v.rowIndex); counts.invoices++; });
+  var invItemSh = _sheet('InvoiceItems');
+  _rows('InvoiceItems').filter(function (r) { return invNos[String(r['INV No'])]; }).sort(byRowDesc).forEach(function (r) { invItemSh.deleteRow(r.rowIndex); });
+  // Migrated Receiving + their items.
+  var mrSh = _sheet('MaterialsReceiving'), mrNos = {};
+  _rows('MaterialsReceiving').filter(function (m) { return String(m['Received By']) === 'Migrated (legacy)'; })
+    .sort(byRowDesc).forEach(function (m) { mrNos[String(m['MR No'])] = true; mrSh.deleteRow(m.rowIndex); counts.receivings++; });
+  var rcvItemSh = _sheet('ReceivingItems');
+  _rows('ReceivingItems').filter(function (r) { return mrNos[String(r['MR No'])]; }).sort(byRowDesc).forEach(function (r) { rcvItemSh.deleteRow(r.rowIndex); });
+  return { success: true, soCosts: counts.soCosts, salesOrders: counts.salesOrders,
+    invoices: counts.invoices, receivings: counts.receivings,
+    message: 'Removed migrated: ' + counts.soCosts + ' cost detail(s), ' + counts.salesOrders + ' SO(s), ' +
+      counts.invoices + ' invoice(s), ' + counts.receivings + ' receiving(s).' };
+}
+
+/**
+ * Migrate legacy pricing-engine history (old "Pricing Submissions" sheet) into PricingRequests /
+ * PricingRequestItems. Idempotent: dedupes by Legacy ID (the old PRC-… id). Preserves the full engine
+ * breakdown verbatim in the Legacy Items JSON column for the detail view.
+ */
+function importPricingSubmissions(p) {
+  var incoming = JSON.parse(p.items || '[]');
+  if (!incoming.length) return { success: false, message: 'No pricing submissions to import.' };
+  var sh = _sheet('PricingRequests');
+  // Label the two appended legacy columns on the header row (cosmetic; _rows maps by position).
+  try { sh.getRange(1, 13, 1, 2).setValues([['Legacy ID', 'Legacy Items JSON']]); } catch (e) {}
+  var existing = {};
+  _rows('PricingRequests').forEach(function (h) {
+    var lid = String(h['Legacy ID'] || '');
+    if (lid) existing[lid] = true;
+  });
+  var itemSh = _sheet('PricingRequestItems');
+  var created = 0, skipped = 0, errors = [];
+  incoming.forEach(function (s) {
+    try {
+      var legacyId = String(s.id || s.legacyId || '');
+      if (legacyId && existing[legacyId]) { skipped++; return; }
+      var itemsJson = String(s.itemsJson || '[]');
+      var items = [];
+      try { items = JSON.parse(itemsJson); } catch (e2) { items = []; }
+      var prNo = _nextNumber('PricingRequests', 1, 'PR');
+      sh.appendRow([prNo, s.date || _now(), s.submittedBy || '', s.customer || s.client || '',
+        s.destination || '', _num(s.commissionPct), _num(s.marginPct), 'Migrated', '',
+        'Migrated from ' + (legacyId || 'legacy pricing') + (s.status ? ' (was ' + s.status + ')' : ''),
+        _now(), _now(), legacyId, itemsJson]);
+      items.forEach(function (it, i) {
+        itemSh.appendRow([prNo, i + 1, it.modelNo || it.itemNo || '', it.name || it.itemName || '',
+          _num(it.qty), it.uom || '', it.remarks || '', true, it.supplier || '',
+          s.principal || it.principal || '', it.currency || 'PHP', _num(it.buyPrice != null ? it.buyPrice : it.supplierPrice),
+          _num(it.cbm), _num(it.unitPriceVatEx != null ? it.unitPriceVatEx : it.finalPrice)]);
+      });
+      if (legacyId) existing[legacyId] = true;
+      created++;
+    } catch (e) {
+      errors.push({ legacyId: s && (s.id || s.legacyId), message: String(e && e.message || e) });
+    }
+  });
+  return { success: true, created: created, skipped: skipped, errors: errors,
+    message: 'Imported ' + created + ' pricing submission(s); skipped ' + skipped + '.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1911,7 +2176,10 @@ var _MODULE_MAP = {
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
   approvePaymentRequest: ['Payment Request', 'Approved'], rejectPaymentRequest: ['Payment Request', 'Rejected'],
   savePaymentRequestPDF: ['Payment Request', 'PDF Saved'],
-  importSOCostDetails: ['Sales Order', 'Cost Imported']
+  importSOCostDetails: ['Sales Order', 'Cost Imported'], saveSOCostDetails: ['Sales Order', 'Cost Edited'],
+  backfillMigratedRecords: ['Sales Order', 'Records Backfilled'],
+  deleteMigratedRecords: ['Sales Order', 'Migrated Cleared'],
+  importPricingSubmissions: ['Pricing Request', 'Imported']
 };
 
 function _dateStr(v) {
@@ -2008,6 +2276,8 @@ function getPricingRequests(p) {
       prNo: h['PR No'], date: h['Date'], requestedBy: h['Requested By'], customer: h['Customer'],
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
+      legacyId: h['Legacy ID'] || '', legacyItemsJson: h['Legacy Items JSON'] || '',
+      pricedItemsJson: h['Priced Items JSON'] || '',
       items: its.map(function (r) {
         return {
           line: _num(r['Line']), itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
@@ -2061,6 +2331,8 @@ function updatePRSourcing(p) {
     // cols 8-13: Included, Supplier, Principal, Currency, Supplier Price (FC), CBM
     sh.getRange(row.rowIndex, 8, 1, 6).setValues([[!!u.included, u.supplier || '', u.principal || '',
       u.currency || 'PHP', _num(u.supplierPrice), _num(u.cbm)]]);
+    // col 4: Item Name — admin can correct the product description; it flows to the quotation.
+    if (u.itemName !== undefined) sh.getRange(row.rowIndex, 4, 1, 1).setValues([[u.itemName || '']]);
   });
   _setPRStatus(p.prNo, 'Sourcing');
   return { success: true, prNo: p.prNo, message: 'Sourcing saved.' };
@@ -2075,9 +2347,12 @@ function submitForPricing(p) {
 function setMgmtPricing(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
   var sh = _sheet('PricingRequests');
+  // Ensure the appended history column has a header label (cosmetic; _rows maps by position).
+  try { sh.getRange(1, 15, 1, 1).setValues([['Priced Items JSON']]); } catch (e) {}
   _rows('PricingRequests').forEach(function (h) {
     if (String(h['PR No']) === String(p.prNo)) {
       sh.getRange(h.rowIndex, 5, 1, 3).setValues([[p.destination || '', _num(p.commission), _num(p.margin)]]); // Destination, Commission %, Margin %
+      if (p.pricedItemsJson) sh.getRange(h.rowIndex, 15, 1, 1).setValues([[String(p.pricedItemsJson)]]);        // full engine breakdown for history
     }
   });
   var ish = _sheet('PricingRequestItems');
@@ -2157,7 +2432,9 @@ var HANDLERS = {
   updatePaymentRequest: updatePaymentRequest, deletePaymentRequest: deletePaymentRequest,
   submitPaymentRequest: submitPaymentRequest, approvePaymentRequest: approvePaymentRequest,
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
-  getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails,
+  getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails, saveSOCostDetails: saveSOCostDetails,
+  backfillMigratedRecords: backfillMigratedRecords, deleteMigratedRecords: deleteMigratedRecords,
+  importPricingSubmissions: importPricingSubmissions,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
@@ -2189,5 +2466,6 @@ var MUTATIONS = {
   advanceShipmentStage: 1, updateShipment: 1,
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1,
-  importSOCostDetails: 1
+  importSOCostDetails: 1, saveSOCostDetails: 1, importPricingSubmissions: 1, backfillMigratedRecords: 1,
+  deleteMigratedRecords: 1
 };

@@ -7,8 +7,45 @@
    sales orders (incl. migrated) and all expenses (incl. migrated). No backend change.
    ═══════════════════════════════════════════════ */
 
-let pnlData = { invs: [], sos: [], exps: [] };
+let pnlData = { invs: [], sos: [], exps: [], pos: [], recs: [] };
 let pnlMonthsCache = [];   // rendered month models (for expand toggling)
+let pnlEntryReg = {};      // entryId -> entry (for the cost editor)
+let pnlEntrySeq = 0;
+
+function _pnlRole() { try { return (JSON.parse(localStorage.getItem('session') || '{}').role || '').toLowerCase(); } catch (e) { return ''; } }
+const pnlCanEditCost = (_pnlRole() === 'accounting' || _pnlRole() === 'admin');
+
+/** Per-SO COGS component breakdown from the SO's receiving chain (joined via POs). */
+function _pnlComps(soNo) {
+  const poNos = new Set(pnlData.pos.filter(p => String(p.soNo) === String(soNo)).map(p => String(p.poNo)));
+  const out = { purchaseOfGoods: 0, duties: 0, delivery: 0, other: 0 };
+  pnlData.recs.forEach(r => {
+    if (!poNos.has(String(r.poNo))) return;
+    out.duties += _pn(r.duties); out.delivery += _pn(r.delivery); out.other += _pn(r.other);
+    (r.items || []).forEach(it => { out.purchaseOfGoods += _pn(it.purchasePHP) * _pn(it.qty); });
+  });
+  return out;
+}
+
+/** Open the shared cost editor for a P&L entry, then reload on save. */
+function pnlEditCost(id) {
+  const e = pnlEntryReg[id];
+  if (!e || typeof openSoCostEditor !== 'function') return;
+  const cd = e.cd, c = e.comps || {};
+  const prefill = cd ? {
+    soNo: e.soNo, customer: e.customer, date: e.date, sales: cd.sales, cogsType: cd.cogsType || 'local',
+    shippingCompany: cd.shippingCompany || '', purchaseOfGoods: cd.purchaseOfGoods, bankChargeCOGS: cd.bankChargeCOGS,
+    dutiesAndTaxes: cd.dutiesAndTaxes, bankChargeShipping: cd.bankChargeShipping, shippingCost: cd.shippingCost,
+    localCharges: cd.localCharges, deliveryToOffice: cd.deliveryToOffice, deliveryToClient: cd.deliveryToClient,
+  } : {
+    soNo: e.soNo, customer: e.customer, date: e.date, sales: e.sales,
+    cogsType: (c.duties || c.other) ? 'international' : 'local', shippingCompany: '',
+    purchaseOfGoods: c.purchaseOfGoods || 0, dutiesAndTaxes: c.duties || 0,
+    deliveryToOffice: c.delivery || 0, localCharges: c.other || 0,
+    bankChargeCOGS: 0, bankChargeShipping: 0, shippingCost: 0, deliveryToClient: 0,
+  };
+  openSoCostEditor(prefill, () => pnlLoad());
+}
 
 function _pe(s) { return flowEsc(s); }
 function _pm(v) { return flowMoney(v, 'PHP'); }
@@ -49,17 +86,21 @@ async function pnlLoad() {
   }
   if (state) state.textContent = 'Loading…';
   try {
-    const [invs, sos, exps, cds] = await Promise.all([
+    const [invs, sos, exps, cds, pos, recs] = await Promise.all([
       fetchFlow('getInvoices').catch(() => ({ data: [] })),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getExpenses').catch(() => ({ data: [] })),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
+      fetchFlow('getReceiving').catch(() => ({ data: [] })),
     ]);
     pnlData = {
       invs: (invs && invs.data) || [],
       sos: (sos && sos.data) || [],
       exps: (exps && exps.data) || [],
       costDetails: (cds && cds.data) || [],
+      pos: (pos && pos.data) || [],
+      recs: (recs && recs.data) || [],
     };
     pnlBuildYears();
     pnlRender();
@@ -108,11 +149,16 @@ function pnlBuildMonths(year) {
     if (!ym || !inYear(ym)) return;
     const inv = invBySo[String(s.soNo)];
     const cd = costBySo[String(s.soNo)];
-    const sales = inv ? inv.sales : (cd ? _pn(cd.sales) : _pn(s.total));
-    const cogs = inv ? inv.cogs : (cd ? _pn(cd.totalCOGS) : 0);
+    const edited = cd && String(cd.source) === 'Manual (edited)';
+    let sales, cogs, comps = null, costNotSet = false;
+    // SOCostDetails (migrated or edited) is authoritative — equals the migrated invoice, no double count.
+    if (cd) { sales = _pn(cd.sales); cogs = _pn(cd.totalCOGS); }
+    else if (inv) { sales = inv.sales; cogs = inv.cogs; comps = _pnlComps(s.soNo); }
+    else { sales = _pn(s.total); cogs = 0; comps = _pnlComps(s.soNo); costNotSet = true; }
     const m = month(ym);
     m.revenue += sales; m.cogs += cogs; m.grossProfit += (sales - cogs); m.soCount++;
-    m.entries.push({ soNo: s.soNo || '', date: s.date || '', customer: s.customer || '', sales, cogs, gp: sales - cogs });
+    m.entries.push({ soNo: s.soNo || '', date: s.date || '', customer: s.customer || '', sales, cogs, gp: sales - cogs,
+      cd: cd || null, comps, costNotSet, edited });
   });
   // Orphan invoices (no SO record) → bucket by invoice month.
   pnlData.invs.forEach(v => {
@@ -149,6 +195,7 @@ function pnlRender() {
 
   const months = pnlBuildMonths(year);
   pnlMonthsCache = months;
+  pnlEntryReg = {};     // rebuilt as detail rows render
 
   const totRev = months.reduce((s, m) => s + m.revenue, 0);
   const totCOGS = months.reduce((s, m) => s + m.cogs, 0);
@@ -227,21 +274,28 @@ function pnlDetailHtml(m) {
   const gpColor = v => v >= 0 ? '#16a34a' : '#ef4444';
 
   // Sales orders
+  const editCol = pnlCanEditCost ? '<th></th>' : '';
   let so = `<div class="pnl-detail-h">${_pe(_pnlFmtMonth(m.ym))} — Sales Orders</div>
     <div style="overflow-x:auto;"><table class="pnl-subtable">
-    <thead><tr><th>Sales Order</th><th>Client</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th></tr></thead><tbody>`;
+    <thead><tr><th>Sales Order</th><th>Client</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th>${editCol}</tr></thead><tbody>`;
   if (m.entries.length) {
-    so += m.entries.slice().sort((a, b) => (_pymd(a.date) || '').localeCompare(_pymd(b.date) || '')).map(e =>
-      `<tr><td><strong>${_pe(e.soNo || '—')}</strong>${e.date ? `<span class="pnl-sub2">${_pymd(e.date)}</span>` : ''}</td>
+    so += m.entries.slice().sort((a, b) => (_pymd(a.date) || '').localeCompare(_pymd(b.date) || '')).map(e => {
+      const id = 'pe' + (pnlEntrySeq++);
+      pnlEntryReg[id] = e;
+      const chip = e.costNotSet ? ' <span class="pnl-warn" title="No cost recorded yet">⚠ cost not set</span>'
+        : (e.edited ? ' <span class="pnl-edited" title="Cost edited by accounting">edited</span>' : '');
+      const editCell = pnlCanEditCost ? `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditCost('${id}')">✎ Edit</button></td>` : '';
+      return `<tr><td><strong>${_pe(e.soNo || '—')}</strong>${chip}${e.date ? `<span class="pnl-sub2">${_pymd(e.date)}</span>` : ''}</td>
         <td>${_pe(e.customer || '—')}</td>
         <td class="num">${_pm(e.sales)}</td>
         <td class="num" style="color:#ef4444;">${e.cogs ? par(e.cogs) : '—'}</td>
-        <td class="num" style="color:${gpColor(e.gp)};font-weight:600;">${_pm(e.gp)}</td></tr>`).join('');
+        <td class="num" style="color:${gpColor(e.gp)};font-weight:600;">${_pm(e.gp)}</td>${editCell}</tr>`;
+    }).join('');
     so += `<tr class="pnl-subtotal"><td colspan="2">Total (${m.soCount} SO${m.soCount !== 1 ? 's' : ''})</td>
       <td class="num">${_pm(m.revenue)}</td><td class="num" style="color:#ef4444;">${par(m.cogs)}</td>
-      <td class="num" style="color:${gpColor(m.grossProfit)};">${_pm(m.grossProfit)}</td></tr>`;
+      <td class="num" style="color:${gpColor(m.grossProfit)};">${_pm(m.grossProfit)}</td>${pnlCanEditCost ? '<td></td>' : ''}</tr>`;
   } else {
-    so += `<tr><td colspan="5" class="pnl-muted" style="text-align:center;padding:0.6rem;">No sales orders this month.</td></tr>`;
+    so += `<tr><td colspan="${pnlCanEditCost ? 6 : 5}" class="pnl-muted" style="text-align:center;padding:0.6rem;">No sales orders this month.</td></tr>`;
   }
   so += `</tbody></table></div>`;
 

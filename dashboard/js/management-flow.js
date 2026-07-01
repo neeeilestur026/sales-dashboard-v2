@@ -16,6 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('mgmtKpiGrid')) mfLoadKpis();
   if (document.getElementById('mgmtApprovals')) mfLoadApprovals();
   if (document.getElementById('mgmtInvBody')) mfLoadInventory();
+  if (document.getElementById('mgmtPrBody')) {
+    const ps = document.getElementById('mgmtPrSearch'), pf = document.getElementById('mgmtPrFilter');
+    if (ps) ps.addEventListener('input', mfRenderPricing);
+    if (pf) pf.addEventListener('change', mfRenderPricing);
+    mfLoadPricing();
+  }
   const dp = document.getElementById('mgmtDrDate');
   if (dp) {
     dp.value = new Date().toISOString().slice(0, 10);
@@ -129,6 +135,98 @@ async function mfLoadInventory() {
       <div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div style="margin-top:0.5rem;"><a href="flow-inventory.html" class="link-btn">View all inventory →</a></div>`;
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
+}
+
+// ── Pricing History (all Pricing Requests incl. migrated legacy history) ──
+let mfPricing = [];
+
+async function mfLoadPricing() {
+  const c = document.getElementById('mgmtPrBody');
+  c.innerHTML = '<div class="mf-empty">Loading pricing history…</div>';
+  try {
+    const r = await fetchFlow('getPricingRequests');
+    mfPricing = (r && r.data) || [];
+    mfRenderPricing();
+  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
+}
+
+function mfRenderPricing() {
+  const c = document.getElementById('mgmtPrBody');
+  if (!c) return;
+  const q = (document.getElementById('mgmtPrSearch') || {}).value || '';
+  const f = (document.getElementById('mgmtPrFilter') || {}).value || '';
+  const qq = q.trim().toLowerCase();
+  let list = mfPricing.slice();
+  if (f === 'Migrated') list = list.filter(p => String(p.status) === 'Migrated');
+  else if (f === 'active') list = list.filter(p => String(p.status) !== 'Migrated');
+  if (qq) list = list.filter(p => (String(p.prNo) + ' ' + (p.customer || '') + ' ' + (p.items || []).map(i => i.principal).join(' ') + ' ' + (p.requestedBy || '')).toLowerCase().includes(qq));
+  // newest first by date/PR no
+  list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.prNo).localeCompare(String(a.prNo)));
+
+  const meta = document.getElementById('mgmtPrMeta');
+  const migCount = mfPricing.filter(p => String(p.status) === 'Migrated').length;
+  if (meta) meta.textContent = `${mfPricing.length} request(s) · ${migCount} migrated · Process Flow`;
+
+  if (!list.length) { c.innerHTML = '<div class="mf-empty">No pricing requests match.</div>'; return; }
+  const rows = list.map((p, i) => {
+    const migrated = String(p.status) === 'Migrated';
+    const badge = migrated ? '<span class="flow-badge" style="background:rgba(13,148,136,0.14);color:#0f766e;">Migrated</span>'
+      : `<span class="flow-badge">${_mfe(p.status || '—')}</span>`;
+    const principals = [...new Set((p.items || []).map(it => it.principal).filter(Boolean))].join(', ') || '—';
+    return `<tr class="mf-prrow" onclick="mfTogglePricing(${i})" style="cursor:pointer;">
+        <td><strong>${_mfe(p.prNo)}</strong>${p.legacyId ? `<div style="font-size:0.68rem;color:var(--text-muted,#64748b);">${_mfe(p.legacyId)}</div>` : ''}</td>
+        <td>${_mfe(_mfPrDate(p.date))}</td>
+        <td>${_mfe(p.customer || '—')}</td>
+        <td>${_mfe(principals)}</td>
+        <td>${_mfe(p.requestedBy || '—')}</td>
+        <td class="num">${(p.items || []).length}</td>
+        <td>${badge}</td>
+        <td class="num"><button type="button" class="mf-prexp" id="mfPrBtn${i}">▸</button></td>
+      </tr>
+      <tr id="mfPrDetail${i}" style="display:none;"><td colspan="8" style="background:var(--bg-inset,#f8fafc);">${mfPricingDetail(p)}</td></tr>`;
+  }).join('');
+  c.innerHTML = `<table class="flow-table"><thead><tr>
+    <th>PR No</th><th>Date</th><th>Customer</th><th>Principal(s)</th><th>By</th><th class="num">Items</th><th>Status</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function _mfPrDate(d) { return (typeof flowDate === 'function') ? (flowDate(d) || d || '') : (d || ''); }
+
+function mfPricingDetail(p) {
+  // Prefer the full engine breakdown — legacy (migrated) or the new priced breakdown; else the flow items.
+  let legacy = null;
+  const bdJson = p.legacyItemsJson || p.pricedItemsJson;
+  if (bdJson) { try { legacy = JSON.parse(bdJson); } catch (e) { legacy = null; } }
+  const head = `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin:0.4rem 0;">
+    Destination: <strong>${_mfe(p.destination || '—')}</strong> · Commission: <strong>${_mfn(p.commission)}%</strong> · Margin: <strong>${_mfn(p.margin)}%</strong>${p.legacyId ? ' · <em>legacy pricing history</em>' : ''}</div>`;
+  if (legacy && legacy.length) {
+    const cols = [['modelNo', 'Model'], ['name', 'Name'], ['qty', 'Qty'], ['buyPrice', 'Buy'], ['landedCost', 'Landed'], ['totalCOGS', 'COGS'], ['commission', 'Comm'], ['profitMargin', 'Margin'], ['vat', 'VAT'], ['unitPriceVatEx', 'Unit (VAT-ex)'], ['finalPrice', 'Final']];
+    const body = legacy.map(it => '<tr>' + cols.map(([k]) => {
+      if (k === 'modelNo' || k === 'name') return `<td>${_mfe(it[k] || '—')}</td>`;
+      if (k === 'qty') return `<td class="num">${_mfn(it[k])}</td>`;
+      return `<td class="num">${_mfm(_mfn(it[k]))}</td>`;
+    }).join('') + '</tr>').join('');
+    return head + `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.76rem;">
+      <thead><tr>${cols.map(([, l]) => `<th${l === 'Model' || l === 'Name' ? '' : ' class="num"'}>${l}</th>`).join('')}</tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+  }
+  const items = p.items || [];
+  if (!items.length) return head + '<div class="mf-empty">No item detail.</div>';
+  const body = items.map(it => `<tr>
+    <td>${_mfe(it.itemNo || '—')}</td><td>${_mfe(it.itemName || '—')}</td>
+    <td class="num">${_mfn(it.qty)}</td><td>${_mfe(it.principal || '—')}</td>
+    <td class="num">${_mfm(_mfn(it.supplierPrice))}</td><td class="num">${_mfm(_mfn(it.finalPrice))}</td></tr>`).join('');
+  return head + `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.78rem;">
+    <thead><tr><th>Item No</th><th>Name</th><th class="num">Qty</th><th>Principal</th><th class="num">Supplier Price</th><th class="num">Final Price</th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
+}
+
+function mfTogglePricing(i) {
+  const row = document.getElementById('mfPrDetail' + i), btn = document.getElementById('mfPrBtn' + i);
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : '';
+  if (btn) btn.textContent = open ? '▸' : '▾';
 }
 
 // ── Auto Daily Reports (ported from all-daily-reports.js) ──

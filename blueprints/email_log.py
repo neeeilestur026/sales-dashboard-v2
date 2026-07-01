@@ -465,19 +465,25 @@ def email_today():
     session = _validate_session(token)
     if not session:
         return jsonify({"success": False, "message": "Invalid session"}), 401
-    enc_blob = _get_enc_creds(session["username"])
+    # Oversight roles may request another user's sent mail (management "see what each user is doing").
+    target_user = ""
+    if request.method == "POST":
+        target_user = ((request.get_json(silent=True) or {}).get("user") or "").strip()
+    oversight = str(session.get("role", "")).lower() in ("admin", "accounting", "management", "director")
+    lookup_user = target_user if (target_user and oversight) else session["username"]
+    enc_blob = _get_enc_creds(lookup_user)
     if not enc_blob:
-        return jsonify({"success": True, "needsSetup": True, "emails": []})
+        return jsonify({"success": True, "needsSetup": True, "emails": [], "user": lookup_user})
     decrypted = _decrypt(enc_blob)
     if not decrypted:
         return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
     addr, pwd = decrypted
     try:
         emails = fetch_sent_today(addr, pwd)
-        return jsonify({"success": True, "emails": emails, "godaddyEmail": addr})
+        return jsonify({"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user})
     except imaplib.IMAP4.error as exc:
         # Likely password changed — invalidate cache so next call re-fetches
-        _creds_cache.pop(session["username"], None)
+        _creds_cache.pop(lookup_user, None)
         return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
     except Exception as exc:
         logger.error("fetch_sent_today error: %s", exc)

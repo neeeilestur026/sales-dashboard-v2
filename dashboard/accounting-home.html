@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Accounting Dashboard — Home</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
   <style>
     .hero {
       position: relative;
@@ -111,6 +112,10 @@
     .pnl-mname { font-weight:700; color:var(--text-primary); }
     .pnl-sub { font-size:0.68rem; font-weight:400; color:var(--text-muted); margin-left:0.35rem; }
     .pnl-sub2 { display:block; font-size:0.67rem; font-weight:400; color:var(--text-muted); }
+    .pnl-warn { display:inline-block; font-size:0.62rem; font-weight:700; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:0.05rem 0.4rem; margin-left:0.35rem; }
+    .pnl-edited { display:inline-block; font-size:0.62rem; font-weight:700; color:#0f766e; background:#ccfbf1; border:1px solid #99f6e4; border-radius:999px; padding:0.05rem 0.4rem; margin-left:0.35rem; }
+    .pnl-editcost { font-size:0.72rem; font-weight:600; color:var(--accent,#0f766e); background:transparent; border:1px solid var(--border,#e2e8f0); border-radius:6px; padding:0.15rem 0.5rem; cursor:pointer; }
+    .pnl-editcost:hover { background:var(--bg-inset,#eef2f6); }
     .pnl-expand { background:none; border:1px solid var(--border); color:var(--text-muted); border-radius:5px; padding:0.1rem 0.45rem; font-size:0.72rem; cursor:pointer; line-height:1.2; }
     .pnl-expand:hover { border-color:var(--accent); color:var(--accent-dark); }
     .pnl-grand td { font-weight:700; background:var(--bg-inset); border-top:2px solid var(--border); border-bottom:none; text-transform:uppercase; font-size:0.72rem; letter-spacing:0.03em; }
@@ -468,6 +473,7 @@
   <script src="js/flow-api.js"></script>
   <script src="js/stage-meta.js"></script>
   <script src="js/accounting-home.js"></script>
+  <script src="js/so-cost-editor.js"></script>
   <script src="js/accounting-profit.js"></script>
   <script>
     // ── Financial KPI snapshot (read-only, from the flow backend) ──

@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('selAllBtn').addEventListener('click', selectAllPending);
   document.getElementById('migSelBtn').addEventListener('click', () => migrate(pending().filter(r => mcSelected.has(r.soNo))));
   document.getElementById('migAllBtn').addEventListener('click', () => migrate(pending()));
+  document.getElementById('backfillBtn').addEventListener('click', backfill);
+  document.getElementById('removeMigBtn').addEventListener('click', removeMigrated);
   load();
 });
 
@@ -179,6 +181,33 @@ async function migrate(list) {
     [document.getElementById('migSelBtn'), document.getElementById('migAllBtn')].forEach(b => b.disabled = false);
     setTimeout(() => { prog.style.display = 'none'; }, 600);
   }
+}
+
+// Create migrated Invoice + Receiving records for every migrated SO so the invoice-/receiving-driven
+// widgets (Financial Snapshot, Summary, Balance Sheet) include them. Idempotent, safe to re-run.
+async function backfill() {
+  const btn = document.getElementById('backfillBtn');
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Backfilling…';
+  try {
+    const r = await postFlow('backfillMigratedRecords', {});
+    if (!r || !r.success) throw new Error((r && r.message) || 'Backfill failed');
+    flash(`Backfilled ${r.invoicesCreated || 0} invoice(s) and ${r.receivingsCreated || 0} receiving record(s). The Financial Snapshot now includes migrated sales orders.`, true);
+  } catch (e) { flash(e.message, false); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+// Remove all migrated SO records (cost details, header SOs, invoices, receiving) for a clean re-migrate.
+async function removeMigrated() {
+  if (!confirm('Remove ALL migrated sales orders and their cost details, invoices and receiving records? Real new-flow records are kept. You can then Migrate all pending to re-migrate cleanly.')) return;
+  const btn = document.getElementById('removeMigBtn');
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Removing…';
+  try {
+    const r = await postFlow('deleteMigratedRecords', {});
+    if (!r || !r.success) throw new Error((r && r.message) || 'Remove failed');
+    flash(r.message + ' You can now Migrate all pending to re-migrate.', true);
+    await load();
+  } catch (e) { flash(e.message, false); }
+  finally { btn.disabled = false; btn.textContent = orig; }
 }
 
 function flash(msg, ok) {

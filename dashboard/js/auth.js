@@ -397,6 +397,7 @@ function renderNavbar(activePage) {
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="migrate-expenses.html" class="${activePage === 'migrate-expenses' ? 'active' : ''}">Migrate Expenses</a>
+          <a href="migrate-pricing.html" class="${activePage === 'migrate-pricing' ? 'active' : ''}">Migrate Pricing</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
@@ -454,6 +455,7 @@ function renderNavbar(activePage) {
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="migrate-expenses.html" class="${activePage === 'migrate-expenses' ? 'active' : ''}">Migrate Expenses</a>
+          <a href="migrate-pricing.html" class="${activePage === 'migrate-pricing' ? 'active' : ''}">Migrate Pricing</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
         </div>
       </div>

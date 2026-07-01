@@ -804,6 +804,7 @@
     .is-mname { font-weight:700; }
     .is-sub { font-size:0.68rem; font-weight:400; color:var(--text-muted,#64748b); margin-left:0.35rem; }
     .is-sub2 { display:block; font-size:0.67rem; color:var(--text-muted,#64748b); }
+    .is-warn { display:inline-block; font-size:0.62rem; font-weight:700; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:0.05rem 0.4rem; margin-left:0.35rem; }
     .is-exp { background:none; border:1px solid var(--border,#e2e8f0); color:var(--text-muted,#64748b); border-radius:5px; padding:0.1rem 0.45rem; font-size:0.72rem; cursor:pointer; }
     .is-grand td { font-weight:700; background:var(--bg-inset,#f8fafc); border-top:2px solid var(--border,#e2e8f0); text-transform:uppercase; font-size:0.72rem; }
     .is-grand td.num { font-size:0.84rem; }
@@ -959,6 +960,19 @@
     <div class="mgmt-newsec">
       <h2>📦 Inventory <span class="is-state" style="margin-left:auto;font-weight:400;">Process Flow</span></h2>
       <div id="mgmtInvBody"><div class="mf-empty">Loading…</div></div>
+    </div>
+
+    <div class="mgmt-newsec">
+      <h2>💱 Pricing History <span class="is-state" id="mgmtPrMeta" style="margin-left:auto;font-weight:400;">Process Flow</span></h2>
+      <div class="is-controls">
+        <input type="text" id="mgmtPrSearch" placeholder="Search customer / principal / PR no…" style="min-width:260px;">
+        <select id="mgmtPrFilter">
+          <option value="">All pricing requests</option>
+          <option value="Migrated">Migrated (legacy history)</option>
+          <option value="active">Active flow only</option>
+        </select>
+      </div>
+      <div id="mgmtPrBody" style="overflow-x:auto;"><div class="mf-empty">Loading…</div></div>
     </div>
 
     <!-- Section 1: Financial Overview -->
@@ -1691,6 +1705,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="js/management-home.js"></script>
   <script src="js/management-flow.js"></script>
+  <script src="js/so-cost-editor.js"></script>
   <script src="js/management-income.js"></script>
   <script>
     // Pending-approval strip (management/director are the final approver tier).
