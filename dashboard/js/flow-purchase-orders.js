@@ -49,11 +49,6 @@ async function loadInventory() {
     `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
 }
 
-function invBalance(itemNo) {
-  const i = poInventory.find(x => String(x.itemNo) === String(itemNo));
-  return i ? flowNum(i.balance) : 0;
-}
-
 function loadFromSO() {
   const no = document.getElementById('loadSO').value;
   const s = poSOs.find(x => String(x.soNo) === String(no));   // migrated SOs may have numeric ids
@@ -61,8 +56,8 @@ function loadFromSO() {
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('itemRows').innerHTML = '';
   (s.items || []).forEach(it => {
-    const need = Math.max(0, flowNum(it.qty) - invBalance(it.itemNo)); // SO qty less on-hand
-    addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: need, price: 0 });
+    // Carry the full Sales Order qty into the PO (editable — reduce manually if only ordering a shortfall).
+    addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: 0 });
   });
   if (!s.items || !s.items.length) addRow();
   recalc();
