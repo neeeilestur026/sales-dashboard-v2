@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addRow();
   }
   await loadRequests();
+  if (prRole === 'management') loadFlowPricingHistory();
 });
 
 function renderSteps(activeIdx) {
@@ -71,9 +72,14 @@ function setupRoleUI() {
     prFilter = 'Requested,Sourcing';
   } else { // management
     listTitle.textContent = 'Pricing Queue';
-    blurb.textContent = 'Set destination, commission and margin. The pricing engine computes the final price per item, then returns it to admin.';
+    blurb.textContent = 'The pricing engine is always available below — open a request to price it, or reload a past pricing to re-price. Final prices return to admin.';
     seg.innerHTML = segBtns(['For Mgmt Pricing', ''], ['To Price', 'All']);
     prFilter = 'For Mgmt Pricing';
+    // Show the always-on pricing engine + pricing history (management only).
+    const eng = document.getElementById('mgmtEngineCard'), hist = document.getElementById('pricingHistoryCard');
+    if (eng) eng.style.display = '';
+    if (hist) hist.style.display = '';
+    renderMgmtEngineShell();
   }
 }
 
@@ -228,6 +234,8 @@ function curPr(no) { return prList.find(r => String(r.prNo) === String(no)); }
 function openPr(no) {
   const r = curPr(no);
   if (!r) return;
+  // Management uses the always-on page-level pricing engine (not the modal) to price / re-price.
+  if (prRole === 'management') { loadFlowPricing(no); return; }
   document.getElementById('modalPrNo').value = no;
   document.getElementById('modalTitle').textContent = r.prNo;
   document.getElementById('modalSub').textContent = `${r.customer} · requested by ${r.requestedBy} · ${flowDate(r.date)} · ${r.status}`;
@@ -340,83 +348,147 @@ function pePrincipalSelect(sel) {
     `<option value="${flowEsc(p.name)}"${p.name === sel ? ' selected' : ''}>${flowEsc(p.name)} (${flowEsc(p.currency)})</option>`).join('');
 }
 
+// Management pricing step rendered in the ORIGINAL pricing-engine design (config grid + readouts +
+// line-item input table + wide breakdown table + P&L), driven by the identical flowCalcItem math and the
+// existing flow wiring (loads the PR's included items, saves via setMgmtPricing).
+let _pePriceHist = {};
+
+// One editable line row for the calculator. `pf` optionally prefills from a saved breakdown (re-pricing).
+function peRowHtml(i, idx, pf) {
+  pf = pf || {};
+  const prin = pf.principal != null ? pf.principal : i.principal;
+  const p = flowPrincipalByName(prin);
+  const forex = pf.forex != null ? pf.forex : (p ? p.forex : 1);
+  const duties = pf.dutiesPct != null ? pf.dutiesPct : (p ? p.dutiesPct : 0);
+  const buy = pf.buyPrice != null ? pf.buyPrice : (i.supplierPrice || 0);
+  const disc = pf.discount != null ? pf.discount : 0;
+  const qty = pf.qty != null ? pf.qty : flowNum(i.qty);
+  const cbm = pf.cbm != null ? pf.cbm : (i.cbm || 0);
+  return `<tr data-line="${i.line}" data-itemno="${flowEsc(i.itemNo)}" data-name="${flowEsc(i.itemName)}">
+      <td>${idx + 1}</td>
+      <td class="td-name" title="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo) || '—'}</td>
+      <td class="td-name" title="${flowEsc(i.itemName)}">${flowEsc(i.itemName) || '—'}</td>
+      <td><select class="pe-prin" onchange="peOnPrincipal(this)">${pePrincipalSelect(prin)}</select></td>
+      <td><input type="number" step="any" min="0" class="pe-buy" value="${buy}" oninput="recalcPricing()"></td>
+      <td><input type="number" step="any" min="0" class="pe-disc" value="${disc}" oninput="recalcPricing()"></td>
+      <td><input type="number" step="any" min="0" class="pe-qty" value="${qty}" oninput="recalcPricing()"></td>
+      <td><input type="number" step="any" min="0" class="pe-cbm" value="${cbm}" oninput="recalcPricing()"></td>
+      <td><input type="number" step="any" min="0" class="pe-forex" value="${forex}" oninput="recalcPricing()"></td>
+      <td><input type="number" step="any" min="0" class="pe-duties" value="${duties}" oninput="recalcPricing()"></td>
+    </tr>`;
+}
+
 function pricingPanel(r) {
   const destOpts = '<option value="">— select —</option>' + FLOW_DESTINATIONS.map(d =>
     `<option value="${flowEsc(d.name)}"${d.name === r.destination ? ' selected' : ''}>${flowEsc(d.name)}</option>`).join('');
-  const inc = r.items.filter(i => i.included);
-  const cards = inc.map(i => {
-    const p = flowPrincipalByName(i.principal);
-    const forex = p ? p.forex : 1, duties = p ? p.dutiesPct : 0;
-    return `<div class="pe-card" data-line="${i.line}" data-itemno="${flowEsc(i.itemNo)}">
-      <div class="pe-card-head">
-        <span class="pe-name">${flowEsc(i.itemNo)} — ${flowEsc(i.itemName)}</span>
-        <span class="pe-lastprice" style="font-size:0.7rem;color:var(--text-muted,#64748b);"></span>
-        <label style="font-size:0.68rem;font-weight:700;text-transform:uppercase;color:var(--text-muted,#64748b);display:flex;align-items:center;gap:0.4rem;">Principal
-          <select class="pe-prin" onchange="peOnPrincipal(this)">${pePrincipalSelect(i.principal)}</select></label>
-      </div>
-      <div class="pe-inputs">
-        <div><label>Buy Price (FC)</label><input type="number" step="any" min="0" class="pe-buy" value="${i.supplierPrice || 0}" oninput="recalcPricing()"></div>
-        <div><label>Discount %</label><input type="number" step="any" min="0" class="pe-disc" value="0" oninput="recalcPricing()"></div>
-        <div><label>Qty</label><input type="number" step="any" min="0" class="pe-qty" value="${flowNum(i.qty)}" oninput="recalcPricing()"></div>
-        <div><label>CBM</label><input type="number" step="any" min="0" class="pe-cbm" value="${i.cbm || 0}" oninput="recalcPricing()"></div>
-        <div><label>Forex (₱)</label><input type="number" step="any" min="0" class="pe-forex" value="${forex}" oninput="recalcPricing()"></div>
-        <div><label>Duties %</label><input type="number" step="any" min="0" class="pe-duties" value="${duties}" oninput="recalcPricing()"></div>
-      </div>
-      <div class="pe-breakdown">
-        <div class="pe-bd"><span class="l">Buy (PHP)</span><span class="v b-buyphp">—</span></div>
-        <div class="pe-bd"><span class="l">Brokerage</span><span class="v b-brok">—</span></div>
-        <div class="pe-bd"><span class="l">Landed</span><span class="v b-landed">—</span></div>
-        <div class="pe-bd"><span class="l">Delivery</span><span class="v b-deliv">—</span></div>
-        <div class="pe-bd"><span class="l">COGS</span><span class="v b-cogs">—</span></div>
-        <div class="pe-bd"><span class="l">Commission</span><span class="v b-comm">—</span></div>
-        <div class="pe-bd"><span class="l">Profit</span><span class="v b-prof">—</span></div>
-        <div class="pe-bd final"><span class="l">Unit (VAT-ex)</span><span class="v b-unitex">—</span></div>
-        <div class="pe-bd final"><span class="l">Unit (VAT-inc)</span><span class="v b-unitinc">—</span></div>
-        <div class="pe-bd final"><span class="l">Line Total +VAT</span><span class="v b-linetot">—</span></div>
-      </div>
-    </div>`;
-  }).join('');
-  return `<div class="group-title">Pricing configuration</div>
-    <div class="flow-form">
+  const inc = (r.items || []).filter(i => i.included);
+  const rows = inc.map((i, idx) => peRowHtml(i, idx)).join('');
+  return `
+    <div class="pe-config-grid">
       <div><label>Destination</label><select id="mDest" onchange="recalcPricing()">${destOpts}</select></div>
-      <div><label>Commission %</label><input type="number" step="any" id="mComm" value="${r.commission || 10}" oninput="recalcPricing()"></div>
-      <div><label>Margin %</label><input type="number" step="any" id="mMarg" value="${r.margin || 20}" oninput="recalcPricing()"></div>
+      <div><label>Commission %</label><input type="number" step="any" id="mComm" value="${r.commission || 5}" oninput="recalcPricing()"></div>
+      <div><label>Margin %</label><input type="number" step="any" id="mMarg" value="${r.margin || 30}" oninput="recalcPricing()"></div>
     </div>
-    <div class="group-title">Items &amp; supplier cost</div>
-    <div id="peCards">${cards || '<p class="pr-meta">No included items to price.</p>'}</div>
+    <div class="pe-readout">
+      <div class="pe-ro-item"><span class="pe-ro-label">CBM Rate</span><span class="pe-ro-value" id="peCbmRate">—</span></div>
+      <div class="pe-ro-item"><span class="pe-ro-label">Min Delivery</span><span class="pe-ro-value" id="peMinDeliv">—</span></div>
+      <div class="pe-ro-item"><span class="pe-ro-label">Local Tax</span><span class="pe-ro-value">2%</span></div>
+      <div class="pe-ro-item"><span class="pe-ro-label">VAT</span><span class="pe-ro-value">12%</span></div>
+    </div>
+    <div class="group-title">Line Items — supplier cost &amp; pricing inputs</div>
+    <div style="overflow-x:auto;"><table class="pe-line-table"><thead><tr>
+      <th style="width:30px;">#</th><th>Model No.</th><th>Item Description</th><th style="width:130px;">Principal</th>
+      <th style="width:92px;">Buy Price</th><th style="width:70px;">Disc %</th><th style="width:60px;">Qty</th>
+      <th style="width:66px;">CBM</th><th style="width:78px;">Forex ₱</th><th style="width:72px;">Duties %</th>
+    </tr></thead><tbody id="peRows">${rows || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1rem;">No included items to price.</td></tr>'}</tbody></table></div>
+    <div class="group-title">Pricing Breakdown</div>
+    <div class="pe-results-wrap"><table class="pe-results-table"><thead><tr>
+      <th>#</th><th>Model No.</th><th>Item</th><th>Qty</th><th>Disc.</th><th>Buy (PHP)</th><th>Brokerage</th>
+      <th>Landed</th><th>Delivery</th><th>COGS</th><th>Commission</th><th>Profit</th>
+      <th>Unit (VAT Excl.)</th><th>Unit (VAT Incl.)</th><th>Total + VAT</th><th>Last Price</th>
+    </tr></thead><tbody id="peResults"></tbody></table></div>
     <div class="group-title">Profitability (P&amp;L)</div>
     <div id="pePnl"></div>
-    <p class="pr-meta">Final price is VAT-exclusive per unit; the quotation applies its own VAT.</p>`;
+    <p class="pr-meta">Final price is VAT-exclusive per unit; the quotation applies its own VAT. Computations match the pricing engine exactly.</p>`;
 }
 
 // When the principal changes, refresh the row's forex/duties defaults then recompute.
 function peOnPrincipal(sel) {
-  const card = sel.closest('.pe-card');
+  const tr = sel.closest('tr');
   const p = flowPrincipalByName(sel.value);
-  if (card && p) {
-    card.querySelector('.pe-forex').value = p.forex;
-    card.querySelector('.pe-duties').value = p.dutiesPct;
+  if (tr && p) {
+    tr.querySelector('.pe-forex').value = p.forex;
+    tr.querySelector('.pe-duties').value = p.dutiesPct;
   }
   recalcPricing();
 }
 
-function _peNum(card, cls) { return flowNum(card.querySelector(cls).value); }
+function _peNum(row, cls) { const el = row.querySelector(cls); return el ? flowNum(el.value) : 0; }
 
-// Show the last quoted unit price (VAT-ex) per model beside each item — parity with the old engine's
-// price-history hint. Best-effort: needs the legacy Price History backend (apiGetPriceHistory).
+// Load the last quoted unit price (VAT-ex) per model — the old engine's price-history hint. Best-effort:
+// needs the legacy Price History backend (apiGetPriceHistory). Stored in a map and painted by recalc.
 async function peLoadPriceHistory(clientName) {
+  _pePriceHist = {};
   if (typeof apiGetPriceHistory !== 'function') return;
-  let map = {};
   try {
     const r = await apiGetPriceHistory(clientName || '');
     const list = (r && r.success && r.data) || (r && r.data) || [];
-    list.forEach(h => { if (h && h.modelNo) map[String(h.modelNo)] = h; });
+    list.forEach(h => { if (h && h.modelNo) _pePriceHist[String(h.modelNo)] = h; });
   } catch (e) { return; }
-  document.querySelectorAll('#peCards .pe-card').forEach(card => {
-    const hit = map[String(card.getAttribute('data-itemno') || '')];
-    const el = card.querySelector('.pe-lastprice');
-    if (el && hit) el.textContent = 'Last: ' + flowMoney(hit.unitPriceVatEx, 'PHP');
-  });
+  recalcPricing();
+}
+
+// ─── Always-on management pricing engine (page-level, load a request to price / re-price) ───
+let pePrNo = null;               // the PR currently loaded into the calculator (null = blank)
+let _pricingHistory = [];        // priced/migrated requests shown in the Pricing History section
+
+// Render the empty calculator shell (config + readouts + empty line table + results + P&L).
+function renderMgmtEngineShell() {
+  const body = document.getElementById('mgmtEngineBody');
+  if (body) body.innerHTML = pricingPanel({ items: [], commission: 5, margin: 30, destination: '' });
+}
+
+// Reset the engine to a blank state.
+function clearFlowPricing() {
+  pePrNo = null;
+  renderMgmtEngineShell();
+  const banner = document.getElementById('peEditBanner'); if (banner) banner.style.display = 'none';
+  const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = true;
+  const msg = document.getElementById('peMsg'); if (msg) msg.style.display = 'none';
+}
+
+// Load a request's items + saved pricing into the calculator (to price, or re-price a past one).
+function loadFlowPricing(prNo) {
+  const r = curPr(prNo) || _pricingHistory.find(x => String(x.prNo) === String(prNo));
+  if (!r) return;
+  pePrNo = String(prNo);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('mDest', r.destination || '');
+  set('mComm', r.commission || 5);
+  set('mMarg', r.margin || 30);
+  // Prefill each row from the saved breakdown when re-pricing (buy/discount/forex/duties).
+  let bd = [];
+  try { bd = JSON.parse(r.pricedItemsJson || r.legacyItemsJson || '[]'); } catch (e) { bd = []; }
+  const bdBy = {}; bd.forEach(b => { const k = String((b && (b.modelNo || b.itemNo)) || ''); if (k) bdBy[k] = b; });
+  const inc = (r.items || []).filter(i => i.included);
+  const rowsHtml = inc.map((i, idx) => {
+    const b = bdBy[String(i.itemNo)] || {};
+    return peRowHtml(i, idx, {
+      principal: i.principal,
+      buyPrice: (b.buyPrice != null ? b.buyPrice : i.supplierPrice),
+      discount: b.discount, forex: b.forex, dutiesPct: b.dutiesPct,
+      qty: i.qty, cbm: (b.cbm != null ? b.cbm : i.cbm)
+    });
+  }).join('');
+  const rowsEl = document.getElementById('peRows');
+  if (rowsEl) rowsEl.innerHTML = rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1rem;">No included items to price.</td></tr>';
+  const banner = document.getElementById('peEditBanner');
+  if (banner) { banner.style.display = 'flex'; const id = document.getElementById('peEditId'); if (id) id.textContent = `${r.prNo} · ${r.customer || ''} · ${flowEsc(r.status || '')}`; }
+  const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = false;
+  recalcPricing();
+  peLoadPriceHistory(r.customer);
+  const card = document.getElementById('mgmtEngineCard');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function recalcPricing() {
@@ -425,23 +497,50 @@ function recalcPricing() {
   const dest = flowDestinationByName(destEl.value);
   const comm = flowNum(document.getElementById('mComm').value);
   const marg = flowNum(document.getElementById('mMarg').value);
+  const M = v => flowMoney(v, 'PHP');
+  const cbmEl = document.getElementById('peCbmRate'), minEl = document.getElementById('peMinDeliv');
+  if (cbmEl) cbmEl.textContent = dest ? M(dest.cbmRate) : '—';
+  if (minEl) minEl.textContent = dest ? M(dest.minCharge) : '—';
   const t = { revenue: 0, vat: 0, netSales: 0, cogs: 0, commission: 0, localTax: 0, delivery: 0 };
-  document.querySelectorAll('#peCards .pe-card').forEach(card => {
-    const principal = flowPrincipalByName(card.querySelector('.pe-prin').value);
+  let html = '';
+  document.querySelectorAll('#peRows tr[data-line]').forEach((tr, idx) => {
+    const prinEl = tr.querySelector('.pe-prin');
+    const principal = flowPrincipalByName(prinEl ? prinEl.value : '');
     const out = flowCalcItem(
-      { buyPrice: _peNum(card, '.pe-buy'), discount: _peNum(card, '.pe-disc'), qty: _peNum(card, '.pe-qty'), cbm: _peNum(card, '.pe-cbm') },
+      { buyPrice: _peNum(tr, '.pe-buy'), discount: _peNum(tr, '.pe-disc'), qty: _peNum(tr, '.pe-qty'), cbm: _peNum(tr, '.pe-cbm') },
       principal, dest, comm, marg,
-      { forex: _peNum(card, '.pe-forex'), dutiesPct: _peNum(card, '.pe-duties') }
+      { forex: _peNum(tr, '.pe-forex'), dutiesPct: _peNum(tr, '.pe-duties') }
     );
-    const set = (cls, val) => { const el = card.querySelector(cls); if (el) el.textContent = flowMoney(val, 'PHP'); };
-    set('.b-buyphp', out.buyPricePHP); set('.b-brok', out.brokerage); set('.b-landed', out.landedCost);
-    set('.b-deliv', out.deliveryCost); set('.b-cogs', out.totalCOGS); set('.b-comm', out.commission);
-    set('.b-prof', out.profitMargin); set('.b-unitex', out.unitPriceVatEx); set('.b-unitinc', out.unitPrice);
-    set('.b-linetot', out.finalPrice);
-    card.setAttribute('data-final', out.unitPriceVatEx);
+    tr.setAttribute('data-final', out.unitPriceVatEx);
+    const modelNo = tr.getAttribute('data-itemno') || '', name = tr.getAttribute('data-name') || '';
+    const disc = _peNum(tr, '.pe-disc'), qty = _peNum(tr, '.pe-qty');
+    const hist = _pePriceHist[String(modelNo)];
+    const histCell = hist
+      ? `<td class="td-num" style="color:#7c3aed;white-space:nowrap;" title="${flowEsc(hist.client || '')}">${M(hist.unitPriceVatEx)}</td>`
+      : '<td class="td-num" style="color:var(--text-muted);">—</td>';
+    html += `<tr>
+      <td>${idx + 1}</td>
+      <td class="td-name" title="${flowEsc(modelNo)}">${flowEsc(modelNo) || '—'}</td>
+      <td class="td-name" title="${flowEsc(name)}">${flowEsc(name) || '—'}</td>
+      <td class="td-num">${flowNum(qty)}</td>
+      <td class="td-num">${disc > 0 ? disc + '%' : '—'}</td>
+      <td class="td-num">${M(out.buyPricePHP)}</td>
+      <td class="td-num">${M(out.brokerage)}</td>
+      <td class="td-num">${M(out.landedCost)}</td>
+      <td class="td-num">${M(out.deliveryCost)}</td>
+      <td class="td-num" style="font-weight:600;">${M(out.totalCOGS)}</td>
+      <td class="td-num">${M(out.commission)}</td>
+      <td class="td-num">${M(out.profitMargin)}</td>
+      <td class="td-num" style="font-weight:600;color:#16a34a;">${M(out.unitPriceVatEx)}</td>
+      <td class="td-num" style="font-weight:700;color:var(--accent,#0f766e);">${M(out.unitPrice)}</td>
+      <td class="td-num">${M(out.finalPrice)}</td>
+      ${histCell}
+    </tr>`;
     t.revenue += out.finalPrice; t.vat += out.vat; t.netSales += out.netSellingPrice;
     t.cogs += out.landedCost; t.commission += out.commission; t.localTax += out.localTax; t.delivery += out.deliveryCost;
   });
+  const body = document.getElementById('peResults');
+  if (body) body.innerHTML = html || '<tr><td colspan="16" style="text-align:center;color:var(--text-muted);padding:1rem;">Add supplier prices to see results.</td></tr>';
   renderPePnl(t, comm);
 }
 
@@ -479,36 +578,40 @@ function renderPePnl(t, commPct) {
 }
 
 async function savePricing() {
-  const prNo = document.getElementById('modalPrNo').value;
+  // Engine mode (always-on management page) uses pePrNo; the oversight modal uses #modalPrNo.
+  const usingEngine = !!pePrNo;
+  const msgEl = usingEngine ? 'peMsg' : 'modalMsg';
+  const prNo = usingEngine ? pePrNo : document.getElementById('modalPrNo').value;
   const dest = document.getElementById('mDest').value;
-  if (!dest) { flowMsg('modalMsg', 'Select a destination.', false); return; }
+  if (!prNo) { flowMsg(msgEl, 'Load a request to price first.', false); return; }
+  if (!dest) { flowMsg(msgEl, 'Select a destination.', false); return; }
   const destObj = flowDestinationByName(dest);
   const comm = flowNum(document.getElementById('mComm').value);
   const marg = flowNum(document.getElementById('mMarg').value);
   const round2 = n => Math.round((flowNum(n)) * 100) / 100;   // match the old engine's 2-decimal rounding
   const items = [];
   const breakdown = [];   // full engine breakdown per item, preserved for the pricing history
-  document.querySelectorAll('#peCards .pe-card').forEach(card => {
-    const principal = flowPrincipalByName(card.querySelector('.pe-prin').value);
-    const nameEl = card.querySelector('.pe-name');
+  document.querySelectorAll('#peRows tr[data-line]').forEach(tr => {
+    const prinEl = tr.querySelector('.pe-prin');
+    const principal = flowPrincipalByName(prinEl ? prinEl.value : '');
     const out = flowCalcItem(
-      { buyPrice: _peNum(card, '.pe-buy'), discount: _peNum(card, '.pe-disc'), qty: _peNum(card, '.pe-qty'), cbm: _peNum(card, '.pe-cbm') },
+      { buyPrice: _peNum(tr, '.pe-buy'), discount: _peNum(tr, '.pe-disc'), qty: _peNum(tr, '.pe-qty'), cbm: _peNum(tr, '.pe-cbm') },
       principal, destObj, comm, marg,
-      { forex: _peNum(card, '.pe-forex'), dutiesPct: _peNum(card, '.pe-duties') }
+      { forex: _peNum(tr, '.pe-forex'), dutiesPct: _peNum(tr, '.pe-duties') }
     );
     items.push({
-      line: flowNum(card.getAttribute('data-line')),
+      line: flowNum(tr.getAttribute('data-line')),
       finalPrice: round2(out.unitPriceVatEx),
-      principal: card.querySelector('.pe-prin').value,
+      principal: prinEl ? prinEl.value : '',
       currency: principal ? principal.currency : 'PHP',
-      supplierPrice: round2(_peNum(card, '.pe-buy')),
-      cbm: _peNum(card, '.pe-cbm'),
-      qty: _peNum(card, '.pe-qty')
+      supplierPrice: round2(_peNum(tr, '.pe-buy')),
+      cbm: _peNum(tr, '.pe-cbm'),
+      qty: _peNum(tr, '.pe-qty')
     });
     breakdown.push({
-      modelNo: card.getAttribute('data-itemno') || '', name: nameEl ? nameEl.textContent : '',
-      qty: _peNum(card, '.pe-qty'), buyPrice: round2(_peNum(card, '.pe-buy')), discount: _peNum(card, '.pe-disc'),
-      cbm: _peNum(card, '.pe-cbm'), forex: out.forexRate, dutiesPct: out.dutiesPct,
+      modelNo: tr.getAttribute('data-itemno') || '', name: tr.getAttribute('data-name') || '',
+      qty: _peNum(tr, '.pe-qty'), buyPrice: round2(_peNum(tr, '.pe-buy')), discount: _peNum(tr, '.pe-disc'),
+      cbm: _peNum(tr, '.pe-cbm'), forex: out.forexRate, dutiesPct: out.dutiesPct,
       buyPricePHP: round2(out.buyPricePHP), brokerage: round2(out.brokerage), landedCost: round2(out.landedCost),
       deliveryCost: round2(out.deliveryCost), totalCOGS: round2(out.totalCOGS), netSellingPrice: round2(out.netSellingPrice),
       commission: round2(out.commission), profitMargin: round2(out.profitMargin), localTax: round2(out.localTax),
@@ -521,10 +624,98 @@ async function savePricing() {
       items: JSON.stringify(items), pricedItemsJson: JSON.stringify(breakdown)
     });
     if (!res.success) throw new Error(res.message);
-    flowMsg('modalMsg', 'Priced and returned to admin.', true);
+    flowMsg(msgEl, 'Priced and returned to admin.', true);
     await loadRequests();
-    setTimeout(closePr, 800);
-  } catch (e) { flowMsg('modalMsg', e.message, false); }
+    if (usingEngine) { loadFlowPricingHistory(); setTimeout(clearFlowPricing, 900); }
+    else { setTimeout(closePr, 800); }
+  } catch (e) { flowMsg(msgEl, e.message, false); }
+}
+
+// ─── Pricing History (new-flow: priced + migrated requests) with reload-to-re-price ───
+function loadFlowPricingHistory() {
+  const priced = ['Mgmt Priced', 'Verifying', 'Returned to Sales', 'Quoted'];
+  _pricingHistory = (prList || []).filter(r => priced.includes(r.status) || r.legacyId || r.status === 'Migrated')
+    .slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.prNo).localeCompare(String(a.prNo)));
+  renderPricingHistoryTable();
+}
+
+function applyPricingHistoryFilter() { renderPricingHistoryTable(); }
+function clearPricingHistoryFilters() {
+  ['phClient', 'phMonth', 'phStatus'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderPricingHistoryTable();
+}
+function togglePricingHistory() {
+  const c = document.getElementById('pricingHistoryContent'), ic = document.getElementById('phToggleIcon');
+  if (!c) return;
+  const open = c.style.display !== 'none';
+  c.style.display = open ? 'none' : '';
+  if (ic) ic.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function renderPricingHistoryTable() {
+  const el = document.getElementById('pricingHistoryList');
+  if (!el) return;
+  const client = (document.getElementById('phClient') || {}).value || '';
+  const month = (document.getElementById('phMonth') || {}).value || '';
+  const status = (document.getElementById('phStatus') || {}).value || '';
+  const cl = client.toLowerCase().trim();
+  const list = _pricingHistory.filter(r => {
+    if (status && String(r.status) !== status) return false;
+    if (month && String(r.date || '').slice(0, 7) !== month) return false;
+    if (cl && !String(r.customer || '').toLowerCase().includes(cl)) return false;
+    return true;
+  });
+  if (!list.length) { el.innerHTML = '<p style="color:var(--text-muted,#64748b);font-size:0.82rem;">No pricing history matches.</p>'; return; }
+  const rows = list.map((r, i) => {
+    const badge = r.status === 'Migrated' || r.legacyId
+      ? '<span class="flow-badge" style="background:rgba(13,148,136,0.14);color:#0f766e;">Migrated</span>'
+      : `<span class="flow-badge ${BADGE[r.status] || 'b-pending'}">${flowEsc(r.status)}</span>`;
+    return `<tr class="ph-row">
+        <td><strong>${flowEsc(r.prNo)}</strong>${r.legacyId ? `<div style="font-size:0.68rem;color:var(--text-muted,#64748b);">${flowEsc(r.legacyId)}</div>` : ''}</td>
+        <td>${flowEsc(flowDate(r.date) || '')}</td>
+        <td>${flowEsc(r.customer || '—')}</td>
+        <td class="num">${(r.items || []).length}</td>
+        <td>${badge}</td>
+        <td style="white-space:nowrap;">
+          <button class="link-btn" onclick="togglePhDetail(${i})">Breakdown</button>
+          <button class="link-btn" style="margin-left:0.5rem;" onclick="loadFlowPricing('${flowEsc(r.prNo)}')">Reload / Re-price</button>
+        </td></tr>
+      <tr id="phDetail${i}" style="display:none;"><td colspan="6" style="background:var(--bg-inset,#f8fafc);">${phDetailHtml(r)}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>
+    <th>PR No</th><th>Date</th><th>Customer</th><th class="num">Items</th><th>Status</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function togglePhDetail(i) {
+  const row = document.getElementById('phDetail' + i);
+  if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+// Full per-item breakdown for a history row (from the saved priced/legacy breakdown JSON).
+function phDetailHtml(r) {
+  let bd = [];
+  try { bd = JSON.parse(r.pricedItemsJson || r.legacyItemsJson || '[]'); } catch (e) { bd = []; }
+  const head = `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin:0.4rem 0;">
+    Destination: <strong>${flowEsc(r.destination || '—')}</strong> · Commission: <strong>${flowNum(r.commission)}%</strong> · Margin: <strong>${flowNum(r.margin)}%</strong></div>`;
+  if (bd.length) {
+    const M = v => flowMoney(flowNum(v), 'PHP');
+    const cols = [['modelNo', 'Model'], ['name', 'Name'], ['qty', 'Qty'], ['buyPrice', 'Buy'], ['landedCost', 'Landed'], ['totalCOGS', 'COGS'], ['commission', 'Comm'], ['profitMargin', 'Margin'], ['vat', 'VAT'], ['unitPriceVatEx', 'Unit (VAT-ex)'], ['finalPrice', 'Final']];
+    const body = bd.map(it => '<tr>' + cols.map(([k]) => {
+      if (k === 'modelNo' || k === 'name') return `<td>${flowEsc(it[k] || '—')}</td>`;
+      if (k === 'qty') return `<td class="num">${flowNum(it[k])}</td>`;
+      return `<td class="num">${M(it[k])}</td>`;
+    }).join('') + '</tr>').join('');
+    return head + `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.76rem;">
+      <thead><tr>${cols.map(([, l]) => `<th${l === 'Model' || l === 'Name' ? '' : ' class="num"'}>${l}</th>`).join('')}</tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+  }
+  const items = (r.items || []);
+  const body = items.map(it => `<tr><td>${flowEsc(it.itemNo || '—')}</td><td>${flowEsc(it.itemName || '—')}</td>
+    <td class="num">${flowNum(it.qty)}</td><td>${flowEsc(it.principal || '—')}</td><td class="num">${flowMoney(flowNum(it.finalPrice), 'PHP')}</td></tr>`).join('');
+  return head + `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.78rem;">
+    <thead><tr><th>Item No</th><th>Name</th><th class="num">Qty</th><th>Principal</th><th class="num">Final Price</th></tr></thead>
+    <tbody>${body || '<tr><td colspan="5">No item detail.</td></tr>'}</tbody></table></div>`;
 }
 
 // ── Admin verify ──

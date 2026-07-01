@@ -1740,7 +1740,7 @@ function importPricingSubmissions(p) {
       sh.appendRow([prNo, s.date || _now(), s.submittedBy || '', s.customer || s.client || '',
         s.destination || '', _num(s.commissionPct), _num(s.marginPct), 'Migrated', '',
         'Migrated from ' + (legacyId || 'legacy pricing') + (s.status ? ' (was ' + s.status + ')' : ''),
-        _now(), _now(), legacyId, itemsJson]);
+        _now(), _now(), legacyId, itemsJson, '']); // + Priced Items JSON (col 15)
       items.forEach(function (it, i) {
         itemSh.appendRow([prNo, i + 1, it.modelNo || it.itemNo || '', it.name || it.itemName || '',
           _num(it.qty), it.uom || '', it.remarks || '', true, it.supplier || '',
@@ -2313,7 +2313,7 @@ function createPricingRequest(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var no = p.prNo || _nextNumber('PricingRequests', 1, 'PR');
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
-    '', '', '', 'Requested', '', p.notes || '', _now(), _now()]);
+    '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '']); // + Legacy ID / Legacy Items JSON / Priced Items JSON
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',

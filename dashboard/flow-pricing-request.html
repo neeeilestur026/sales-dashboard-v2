@@ -49,6 +49,30 @@
     .pe-pnl-table td { padding:0.32rem 0.5rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-secondary,#475569); }
     .pe-pnl-table td.n { text-align:right; font-variant-numeric:tabular-nums; }
     .pe-pnl-table tr.bold td { font-weight:700; color:var(--text,#0f172a); }
+
+    /* ── Original pricing-engine design (config grid · readouts · line table · breakdown table) ── */
+    .pe-config-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem 1.25rem; margin-bottom:0.75rem; }
+    .pe-config-grid label { display:block; font-size:0.72rem; font-weight:700; color:var(--text-muted,#94a3b8); margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.04em; }
+    .pe-config-grid select, .pe-config-grid input { width:100%; padding:0.5rem 0.7rem; background:var(--bg-card,#fff); border:1.5px solid var(--border,#e2e8f0); border-radius:8px; color:var(--text,#1e293b); font-size:0.875rem; box-sizing:border-box; }
+    .pe-readout { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:0.9rem; padding:0.65rem 1rem; background:var(--bg-inset,#f1f5f9); border-radius:10px; border:1px solid var(--border,#e2e8f0); }
+    .pe-ro-item { display:flex; flex-direction:column; gap:0.1rem; }
+    .pe-ro-label { font-size:0.66rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); letter-spacing:0.04em; }
+    .pe-ro-value { font-size:0.92rem; font-weight:700; color:var(--text,#1e293b); font-variant-numeric:tabular-nums; }
+    .pe-line-table { width:100%; border-collapse:collapse; font-size:0.83rem; min-width:760px; }
+    .pe-line-table th { text-align:left; padding:0.45rem 0.5rem; font-size:0.66rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#e2e8f0); background:var(--bg-inset,#f1f5f9); letter-spacing:0.04em; white-space:nowrap; }
+    .pe-line-table td { padding:0.35rem 0.3rem; vertical-align:middle; }
+    .pe-line-table input, .pe-line-table select { width:100%; padding:0.38rem 0.5rem; background:var(--bg-card,#fff); border:1.5px solid var(--border,#e2e8f0); border-radius:6px; color:var(--text,#1e293b); font-size:0.82rem; box-sizing:border-box; }
+    .pe-line-table input[type="number"] { text-align:right; }
+    .pe-line-table .td-name { font-size:0.8rem; color:var(--text,#0f172a); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pe-results-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:0.5rem; }
+    .pe-results-table { width:100%; border-collapse:collapse; font-size:0.77rem; min-width:1100px; }
+    .pe-results-table th { text-align:left; padding:0.5rem 0.45rem; font-size:0.64rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#e2e8f0); white-space:nowrap; background:var(--bg-inset,#f1f5f9); letter-spacing:0.04em; }
+    .pe-results-table td { padding:0.4rem 0.45rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text,#1e293b); }
+    .pe-results-table .td-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .pe-results-table .td-name { max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    @media (max-width:768px) { .pe-config-grid { grid-template-columns:1fr; } }
+    .pe-edit-banner { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.9rem; margin:0.6rem 0 0.2rem; background:#fffbeb; border:1px solid rgba(217,119,6,0.3); border-radius:9px; font-size:0.82rem; color:#92400e; }
+    .pe-edit-banner .pe-edit-id { font-weight:700; }
   </style>
 </head>
 <body>
@@ -60,6 +84,44 @@
     </div>
 
     <div class="pr-steps" id="prSteps"></div>
+
+    <!-- Management: always-on pricing engine (price / re-price any request) -->
+    <div class="chart-card" id="mgmtEngineCard" style="display:none;margin-bottom:1.25rem;">
+      <div class="flow-actions" style="justify-content:space-between;align-items:center;">
+        <h3 style="font-size:0.95rem;font-weight:600;">Pricing Engine</h3>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="clearFlowPricing()">New / Clear</button>
+      </div>
+      <div id="peEditBanner" class="pe-edit-banner" style="display:none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        Re-pricing <span class="pe-edit-id" id="peEditId"></span>
+      </div>
+      <div id="mgmtEngineBody" style="margin-top:0.5rem;"></div>
+      <div class="flow-actions" style="margin-top:0.75rem;">
+        <button type="button" class="btn btn-primary" id="peSaveBtn" onclick="savePricing()" disabled>Save Pricing (return to admin)</button>
+        <span style="margin-left:auto;font-size:0.78rem;color:var(--text-muted,#64748b);">Open a request below or a past pricing to load it here.</span>
+      </div>
+      <div id="peMsg" class="flow-msg" style="display:none;margin-top:0.6rem;"></div>
+    </div>
+
+    <!-- Management: pricing history (new + migrated) -->
+    <div class="chart-card" id="pricingHistoryCard" style="display:none;margin-bottom:1.25rem;">
+      <div class="flow-actions" style="justify-content:space-between;align-items:center;cursor:pointer;" onclick="togglePricingHistory()">
+        <h3 style="font-size:0.95rem;font-weight:600;">Pricing History</h3>
+        <svg id="phToggleIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="pricingHistoryContent" style="display:none;margin-top:0.75rem;">
+        <div class="flow-actions" style="gap:0.5rem;flex-wrap:wrap;">
+          <input type="text" id="phClient" placeholder="Filter by customer…" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+          <input type="month" id="phMonth" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+          <select id="phStatus" onchange="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+            <option value="">All statuses</option><option>Mgmt Priced</option><option>Verifying</option>
+            <option>Returned to Sales</option><option>Quoted</option><option>Migrated</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="clearPricingHistoryFilters()">Clear</button>
+        </div>
+        <div id="pricingHistoryList" style="margin-top:0.75rem;"><p style="color:var(--text-muted,#64748b);font-size:0.82rem;">Loading…</p></div>
+      </div>
+    </div>
 
     <!-- Sales: new request form -->
     <div class="chart-card" id="salesFormCard" style="display:none;margin-bottom:1.25rem;">
