@@ -20,6 +20,7 @@
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Purchase Order</h3>
       <input type="hidden" id="poNo" value="">
       <div class="flow-form">
+        <div><label>PO No <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional — auto if blank, e.g. PO-202607-001)</span></label><input type="text" id="poNoInput" placeholder="auto-generated"></div>
         <div><label>Load Sales Order <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional)</span></label><select id="loadSO" onchange="loadFromSO()"></select></div>
         <div><label>Source SO No</label><input type="text" id="soNo" readonly placeholder="— Restock (no SO) —"></div>
         <div><label>Supplier *</label><input type="text" id="supplier" required></div>

@@ -149,7 +149,9 @@ async function savePO() {
   if (!supplier) { flowMsg('formMsg', 'Supplier is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
-  const poNo = document.getElementById('poNo').value;
+  const editingNo = document.getElementById('poNo').value;                        // hidden = edit key
+  const typedNo = (document.getElementById('poNoInput').value || '').trim();       // user-chosen PO No (create)
+  const poNo = editingNo || typedNo;                                               // blank on create → backend auto-numbers
   const payload = {
     poNo, soNo: document.getElementById('soNo').value, supplier,
     currency: document.getElementById('currency').value, date: document.getElementById('date').value,
@@ -158,7 +160,7 @@ async function savePO() {
   };
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
-    const res = await postFlow(poNo ? 'updatePurchaseOrder' : 'createPurchaseOrder', payload);
+    const res = await postFlow(editingNo ? 'updatePurchaseOrder' : 'createPurchaseOrder', payload);
     if (!res.success) throw new Error(res.message);
     let msg = `${res.message} (${res.poNo || poNo})`;
     if (res.apNo) msg += ` · AP entry ${res.apNo} created`;
@@ -171,6 +173,7 @@ async function savePO() {
 
 function resetForm() {
   document.getElementById('poNo').value = '';
+  const pn = document.getElementById('poNoInput'); if (pn) { pn.value = ''; pn.readOnly = false; }
   document.getElementById('soNo').value = '';
   document.getElementById('loadSO').value = '';
   document.getElementById('supplier').value = '';
@@ -239,6 +242,7 @@ function editPO(no) {
   const p = poList.find(x => x.poNo === no);
   if (!p) return;
   document.getElementById('poNo').value = p.poNo;
+  const pn = document.getElementById('poNoInput'); if (pn) { pn.value = p.poNo; pn.readOnly = true; } // PK — not renamable when editing
   document.getElementById('soNo').value = p.soNo || '';
   document.getElementById('supplier').value = p.supplier;
   document.getElementById('currency').value = p.currency || 'PHP';
