@@ -246,6 +246,7 @@ function openPr(no) {
   if (canSource && (r.status === 'Requested' || r.status === 'Sourcing')) {
     body.innerHTML = sourcingTable(r);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
+      <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}')">📎 Supplier Quotation (PDF)</button>
       <button class="btn btn-secondary" onclick="saveSourcing(false)">Save Draft</button>
       <button class="btn btn-primary" onclick="saveSourcing(true)">Forward to Management</button>`;
   } else if (canPrice && r.status === 'For Mgmt Pricing') {
@@ -454,7 +455,14 @@ function clearFlowPricing() {
   renderMgmtEngineShell();
   const banner = document.getElementById('peEditBanner'); if (banner) banner.style.display = 'none';
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = true;
+  const db = document.getElementById('peDocsBtn'); if (db) db.disabled = true;
   const msg = document.getElementById('peMsg'); if (msg) msg.style.display = 'none';
+}
+
+// View the supplier-quotation PDF(s) the admin attached to the loaded request (forwarded via Docs).
+function peViewDocs() {
+  if (!pePrNo) return;
+  openDocsModal('Pricing Request', pePrNo, 'Supplier quotation · ' + pePrNo);
 }
 
 // Load a request's items + saved pricing into the calculator (to price, or re-price a past one).
@@ -485,6 +493,7 @@ function loadFlowPricing(prNo) {
   const banner = document.getElementById('peEditBanner');
   if (banner) { banner.style.display = 'flex'; const id = document.getElementById('peEditId'); if (id) id.textContent = `${r.prNo} · ${r.customer || ''} · ${flowEsc(r.status || '')}`; }
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = false;
+  const db = document.getElementById('peDocsBtn'); if (db) db.disabled = false;
   recalcPricing();
   peLoadPriceHistory(r.customer);
   const card = document.getElementById('mgmtEngineCard');

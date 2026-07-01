@@ -74,10 +74,11 @@ async function mfLoadApprovals() {
       (x.type === 'PO' && x.status === 'Pending Management') ||
       (x.type === 'Other' && x.status === 'Pending Final' && !x.mgmtApprovedBy));
     if (!quotes.length && !pos.length && !prs.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
+    const qTot = x => _mfn(x.total) || (x.items || []).reduce((s, it) => s + _mfn(it.qty) * _mfn(it.price), 0);
     const qRows = quotes.map(x => `<tr>
       <td><span class="flow-badge b-pending">Quotation</span></td>
       <td>${_mfe(x.quotationNo)}</td><td>${_mfe(x.customer)}</td>
-      <td class="num">${_mfm(x.total)}</td>
+      <td class="num">${_mfm(qTot(x))}</td>
       <td class="num" style="white-space:nowrap;">
         <button class="link-btn" onclick="mfApprove('approveQuotation','${_mfe(x.quotationNo)}','quotationNo')">Approve</button>
         <button class="link-btn del-btn" onclick="mfReject('rejectQuotation','${_mfe(x.quotationNo)}','quotationNo')">Reject</button></td></tr>`).join('');

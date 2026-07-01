@@ -169,13 +169,18 @@ function quotationActions(q) {
   return a;
 }
 
+// Total shown even if the stored Total is 0/blank (self-heals from the line items on the client).
+function qtnTotal(q) {
+  return flowNum(q.total) || (q.items || []).reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+}
+
 function quotationRow(q) {
   const st = q.status || 'Draft';
   const noteTip = (st === 'Rejected' && q.approvalNote) ? ` title="Reason: ${flowEsc(q.approvalNote)}"` : '';
   const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
   return `<tr><td>${flowEsc(q.quotationNo)}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
-    <td class="num">${flowMoney(q.total, 'PHP')}</td><td>${q.items.length}</td>
+    <td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
 }
@@ -214,7 +219,7 @@ function openReviewModal(no) {
   document.getElementById('qrSub').innerHTML =
     `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}`;
   const items = q.items || [];
-  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total</td><td class="num">${flowMoney(q.total, 'PHP')}</td></tr></tbody></table>`;
+  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
   const pv = document.getElementById('qrPdf');
   const fid = q.pdfLink ? ((q.pdfLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || [])[1]) : null;
   if (fid) pv.innerHTML = `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
@@ -248,7 +253,7 @@ function renderGroupedByRep() {
   const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   return names.map((name, i) => {
     const rows = groups[name];
-    const total = rows.reduce((s, q) => s + flowNum(q.total), 0);
+    const total = rows.reduce((s, q) => s + qtnTotal(q), 0);
     return `<details class="rep-group"${i === 0 ? ' open' : ''}>
       <summary><span class="rep-name">${flowEsc(name)}</span>
         <span class="rep-meta">${rows.length} quotation(s) · ${flowMoney(total, 'PHP')}</span></summary>
