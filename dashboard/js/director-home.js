@@ -329,6 +329,162 @@ function _empKey(name) {
   return name.replace(/[^a-z0-9]/gi, '_');
 }
 
+// ─── Per-employee payslip PDF (per cutoff, full breakdown, downloadable) ───────────
+const _PAYSLIP_CSS = `
+.payslip { font-family: Arial, Helvetica, sans-serif; color:#1e293b; width:100%; box-sizing:border-box; padding:6px 4px; }
+.payslip .ps-head { text-align:center; border-bottom:2px solid #0f766e; padding-bottom:8px; margin-bottom:12px; }
+.payslip .ps-co { font-size:16px; font-weight:800; letter-spacing:0.5px; color:#0f172a; }
+.payslip .ps-doc { font-size:13px; font-weight:700; color:#0f766e; letter-spacing:2px; margin-top:2px; }
+.payslip .ps-meta { display:flex; flex-wrap:wrap; gap:4px 24px; font-size:12px; margin-bottom:12px; }
+.payslip .ps-meta div { min-width:45%; }
+.payslip .ps-meta b { color:#0f172a; }
+.payslip table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px; }
+.payslip th { text-align:left; background:#f1f5f9; color:#475569; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; padding:5px 8px; border:1px solid #e2e8f0; }
+.payslip td { padding:5px 8px; border:1px solid #e2e8f0; }
+.payslip td.n { text-align:right; font-variant-numeric:tabular-nums; }
+.payslip tr.sub td { font-weight:700; background:#f8fafc; }
+.payslip .ps-net { display:flex; justify-content:space-between; align-items:center; background:#ecfdf5; border:1.5px solid #10b981; border-radius:8px; padding:10px 14px; margin:6px 0 16px; }
+.payslip .ps-net .l { font-size:13px; font-weight:700; color:#065f46; text-transform:uppercase; letter-spacing:0.05em; }
+.payslip .ps-net .v { font-size:20px; font-weight:800; color:#047857; }
+.payslip .ps-sign { display:flex; gap:40px; margin-top:28px; font-size:11px; }
+.payslip .ps-sign div { flex:1; border-top:1px solid #475569; padding-top:4px; text-align:center; color:#64748b; }
+`;
+
+// Period label + date range for a cutoff (reuses the existing date-range builder).
+function _payslipPeriod(cutoff) {
+  const dates = _buildDateRange(cutoff);
+  const monthName = new Date(_currentYear, parseInt(_currentMonth) - 1, 1)
+    .toLocaleString('default', { month: 'long' });
+  const first = dates.length ? dates[0].dateStr : '';
+  const last = dates.length ? dates[dates.length - 1].dateStr : '';
+  return {
+    label: (cutoff === 'A' ? '1st' : '2nd') + ' Cutoff — ' + monthName + ' ' + _currentYear,
+    range: first + '  to  ' + last,
+  };
+}
+
+// Compute one employee's full payslip breakdown — identical math to renderPayGrid,
+// reading the same hours/register maps (so it reflects on-screen deduction edits).
+function _computePaySlip(emp, cutoff) {
+  const empName = emp.lastName + ', ' + emp.firstName;
+  const hourlyRate = emp.dailyRate / 8;
+  const hoursMap = cutoff === 'A' ? _hoursA : _hoursB;
+  const registerMap = cutoff === 'A' ? _registerA : _registerB;
+  let regHrs = 0, otHrs = 0, holidayHrs = 0;
+  Object.keys(hoursMap).forEach(key => {
+    if (!key.startsWith(empName + '|')) return;
+    const entry = hoursMap[key];
+    const hrs = parseFloat(entry.hours) || 0;
+    if (entry.dayType === 'Holiday') holidayHrs += hrs;
+    else { regHrs += Math.min(hrs, 8); otHrs += Math.max(hrs - 8, 0); }
+  });
+  const basicPay = regHrs * hourlyRate;
+  const holidayPay = holidayHrs * hourlyRate * 2;
+  const otPay = otHrs * hourlyRate * 1.25;
+  const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
+  const grossPay = basicPay + holidayPay + otPay + otherIncome;
+  const saved = registerMap[empName] || {};
+  const pagibig = +(saved.pagibig !== undefined ? saved.pagibig : (emp.hdmfAmount || 100));
+  const sss = +(saved.sss !== undefined ? saved.sss : _calcSSS(grossPay));
+  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(grossPay));
+  const advances = +(saved.advances !== undefined ? saved.advances : 0);
+  const wtax = +(saved.wtax !== undefined ? saved.wtax : 0);
+  const totalDed = pagibig + sss + philhealth + advances + wtax;
+  return {
+    empName, hourlyRate, dailyRate: emp.dailyRate, regHrs, otHrs, holidayHrs,
+    basicPay, holidayPay, otPay, otherIncome, grossPay,
+    pagibig, sss, philhealth, advances, wtax, totalDed, netPay: grossPay - totalDed,
+  };
+}
+
+// One employee's branded payslip block (styled by _PAYSLIP_CSS).
+function _payslipHtml(emp, cutoff) {
+  const s = _computePaySlip(emp, cutoff);
+  const pr = _payslipPeriod(cutoff);
+  const hrs = n => (n > 0 ? n.toFixed(1) + ' hrs' : '—');
+  const earn = (label, sub, val) =>
+    `<tr><td>${esc(label)}${sub ? ` <span style="color:#94a3b8;">(${esc(sub)})</span>` : ''}</td><td class="n">${peso(val)}</td></tr>`;
+  const ded = (label, val) => `<tr><td>${esc(label)}</td><td class="n">${peso(val)}</td></tr>`;
+  return `<div class="payslip">
+    <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div><div class="ps-doc">PAYSLIP</div></div>
+    <div class="ps-meta">
+      <div><b>Employee:</b> ${esc(s.empName)}</div>
+      <div><b>Pay Period:</b> ${esc(pr.label)}</div>
+      <div><b>Coverage:</b> ${esc(pr.range)}</div>
+      <div><b>Daily Rate:</b> ${peso(s.dailyRate)} &nbsp; <b>Hourly:</b> ${peso(s.hourlyRate)}</div>
+    </div>
+    <table>
+      <thead><tr><th>Earnings</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>
+        ${earn('Basic Pay', hrs(s.regHrs), s.basicPay)}
+        ${earn('Overtime Pay', hrs(s.otHrs) + ' @1.25', s.otPay)}
+        ${earn('Holiday Pay', hrs(s.holidayHrs) + ' @2.0', s.holidayPay)}
+        ${earn('Other Income', '', s.otherIncome)}
+        <tr class="sub"><td>GROSS PAY</td><td class="n">${peso(s.grossPay)}</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Deductions</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>
+        ${ded('Pag-IBIG', s.pagibig)}
+        ${ded('SSS', s.sss)}
+        ${ded('PhilHealth', s.philhealth)}
+        ${ded('Advances', s.advances)}
+        ${ded('Withholding Tax', s.wtax)}
+        <tr class="sub"><td>TOTAL DEDUCTIONS</td><td class="n">${peso(s.totalDed)}</td></tr>
+      </tbody>
+    </table>
+    <div class="ps-net"><span class="l">Net Pay</span><span class="v">${peso(s.netPay)}</span></div>
+    <div class="ps-sign"><div>Prepared by</div><div>Received by (${esc(s.empName)})</div></div>
+  </div>`;
+}
+
+// Load html2pdf on demand (same CDN as the payroll-approval PDF), then run cb.
+function _ensureHtml2pdf(cb) {
+  if (typeof html2pdf !== 'undefined') { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+  s.onload = () => cb();
+  s.onerror = () => alert('Could not load the PDF library — check your connection and try again.');
+  document.head.appendChild(s);
+}
+
+function _renderPayslipPdf(innerHtml, filename) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;';
+  wrap.innerHTML = '<style>' + _PAYSLIP_CSS + '</style>' + innerHtml;
+  document.body.appendChild(wrap);
+  const remove = () => { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); };
+  html2pdf().set({
+    margin: 10, filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'] },
+  }).from(wrap).save().then(remove).catch(remove);
+}
+
+// Download one employee's payslip PDF for a cutoff.
+function downloadPayslip(empName, cutoff) {
+  if (!_currentYear || !_currentMonth) { alert('Load a period first.'); return; }
+  const emp = _employees.find(e => (e.lastName + ', ' + e.firstName) === empName);
+  if (!emp) { alert('Employee not found.'); return; }
+  const fn = 'Payslip_' + (emp.lastName + '_' + emp.firstName).replace(/[^a-z0-9]/gi, '_') +
+    '_' + _currentYear + '-' + _currentMonth + '_' + cutoff + '.pdf';
+  _ensureHtml2pdf(() => _renderPayslipPdf(_payslipHtml(emp, cutoff), fn));
+}
+
+// Download all active employees' payslips for a cutoff as one multi-page PDF (one per page).
+function downloadAllPayslips(cutoff) {
+  if (!_currentYear || !_currentMonth) { alert('Load a period first.'); return; }
+  const list = _employees || [];
+  if (!list.length) { alert('No employees to generate payslips for.'); return; }
+  const html = list.map((emp, i) =>
+    `<div style="${i < list.length - 1 ? 'page-break-after:always;' : ''}">${_payslipHtml(emp, cutoff)}</div>`).join('');
+  const fn = 'Payslips_' + _currentYear + '-' + _currentMonth + '_' + cutoff + '.pdf';
+  _ensureHtml2pdf(() => _renderPayslipPdf(html, fn));
+}
+
 function _onHoursInput(input) {
   const empName  = input.dataset.emp;
   const date     = input.dataset.date;
@@ -469,6 +625,7 @@ function renderPayGrid(cutoff) {
       <th class="num">WTax</th>
       <th class="num">Total Ded.</th>
       <th class="num highlight">Net Pay</th>
+      <th>Slip</th>
     </tr></thead>
     <tbody>`;
 
@@ -531,6 +688,7 @@ function renderPayGrid(cutoff) {
       <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" style="width:75px;"></td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
       <td class="num highlight" id="netPay_${cutoff}_${k}">${peso(netPay)}</td>
+      <td><button class="btn-sm" title="Download payslip PDF" onclick="downloadPayslip('${esc(empName)}','${cutoff}')">⬇</button></td>
     </tr>`;
   });
 
@@ -548,6 +706,7 @@ function renderPayGrid(cutoff) {
     <td class="num">${peso(totWTax)}</td>
     <td class="num">${peso(totDed)}</td>
     <td class="num">${peso(totNet)}</td>
+    <td></td>
   </tr></tbody></table>`;
 
   container.innerHTML = html;

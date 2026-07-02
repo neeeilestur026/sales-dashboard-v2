@@ -249,6 +249,7 @@
           </div>
           <button class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
           <button class="btn-sm" onclick="exportCutoff('A')">⬇ Export PDF</button>
+          <button class="btn-sm" onclick="downloadAllPayslips('A')">⬇ Payslips (all)</button>
           <button class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
           <span id="savePayAMsg" class="save-msg" style="display:none;">Saved!</span>
         </div>
@@ -281,6 +282,7 @@
           </div>
           <button class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
           <button class="btn-sm" onclick="exportCutoff('B')">⬇ Export PDF</button>
+          <button class="btn-sm" onclick="downloadAllPayslips('B')">⬇ Payslips (all)</button>
           <button class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>
           <span id="savePayBMsg" class="save-msg" style="display:none;">Saved!</span>
         </div>
@@ -365,6 +367,7 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
