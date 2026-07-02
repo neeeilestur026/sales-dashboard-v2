@@ -19,6 +19,11 @@
     <div class="chart-card" style="margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Quotation</h3>
       <input type="hidden" id="quotationNo" value="">
+      <div id="fromPrWrap" style="display:none;margin-bottom:0.75rem;">
+        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Load from Pricing Request <span style="font-weight:400;color:var(--text-muted,#64748b);">(returned to you with management final prices)</span></label>
+        <select id="fromPrSelect" onchange="if(this.value)loadFromPR(this.value)" style="width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;"></select>
+      </div>
+      <div id="fromPrBanner" class="flow-msg" style="display:none;background:rgba(16,185,129,0.08);color:var(--text-secondary,#475569);"></div>
       <div class="flow-form">
         <div><label>Customer *</label><input type="text" id="customer" required></div>
         <div><label>Quotation No <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional — auto if blank)</span></label><input type="text" id="quotationNoInput" placeholder="auto-generated"></div>

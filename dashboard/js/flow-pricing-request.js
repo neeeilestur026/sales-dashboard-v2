@@ -746,14 +746,10 @@ async function verifyReturn() {
 }
 
 // ── Sales: create quotation ──
-async function makeQuotation(no) {
-  if (!confirm('Create a quotation from the included, priced items of ' + no + '?')) return;
-  try {
-    const res = await postFlow('createQuotationFromPR', { prNo: no });
-    if (!res.success) throw new Error(res.message);
-    alert(res.message);
-    window.location.href = 'flow-quotations.html';
-  } catch (e) { flowMsg('modalMsg', e.message, false); }
+// Open the quotation form pre-loaded with this PR's included items + management final prices so the
+// rep can see/review the prices before creating (the form's Save routes through createQuotationFromPR).
+function makeQuotation(no) {
+  window.location.href = 'flow-quotations.html?fromPR=' + encodeURIComponent(no);
 }
 
 // ─── PR PDF (identical legacy layout) ────────────

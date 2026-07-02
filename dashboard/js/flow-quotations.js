@@ -4,6 +4,8 @@ let qList = [];
 let qSession = null;
 
 let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
+let qReturnedPRs = [];      // sales: PRs Returned to Sales, loadable into a quotation
+let qFromPr = '';           // when set, Save creates the quotation from this PR (carries mgmt final prices)
 
 document.addEventListener('DOMContentLoaded', async () => {
   qSession = requireQuotationAccess();
@@ -16,10 +18,68 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadInventory();
   addRow();
   await loadQuotations();
+  // Sales: offer to load a Returned-to-Sales PR (with its management final prices) into the form.
+  if (qSession.role === 'sales') await loadReturnedPRs();
+  const params = new URLSearchParams(location.search);
   // Deep-link: ?review=<quotationNo> opens the review modal directly (e.g. from the admin dashboard).
-  const reviewNo = new URLSearchParams(location.search).get('review');
+  const reviewNo = params.get('review');
   if (reviewNo) openReviewModal(reviewNo);
+  // Deep-link: ?fromPR=<prNo> pre-loads that returned PR's final-priced items for review + create.
+  const fromPr = params.get('fromPR');
+  if (fromPr) loadFromPR(fromPr);
 });
+
+// ─── Load a Returned-to-Sales Pricing Request into the quotation form ─────────────
+async function loadReturnedPRs() {
+  const wrap = document.getElementById('fromPrWrap'), sel = document.getElementById('fromPrSelect');
+  if (!wrap || !sel) return;
+  try {
+    const r = await fetchFlow('getPricingRequests', { requestedBy: qSession.name });
+    qReturnedPRs = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales');
+  } catch (e) { qReturnedPRs = []; }
+  sel.innerHTML = '<option value="">— load a returned Purchase Request —</option>' +
+    qReturnedPRs.map(p => `<option value="${flowEsc(p.prNo)}">${flowEsc(p.prNo)} — ${flowEsc(p.customer || '')}</option>`).join('');
+  wrap.style.display = qReturnedPRs.length ? 'block' : 'none';
+}
+
+// Pre-fill the form from a returned PR: customer + a row per included item priced at its Final Price.
+// Save then routes through createQuotationFromPR (uses the PR's stored management finals + flips it to Quoted).
+async function loadFromPR(prNo) {
+  let pr = qReturnedPRs.find(p => String(p.prNo) === String(prNo));
+  if (!pr) {
+    try {
+      const r = await fetchFlow('getPricingRequests', { requestedBy: qSession.name });
+      pr = ((r && r.data) || []).find(p => String(p.prNo) === String(prNo));
+    } catch (e) { /* ignore */ }
+  }
+  if (!pr) { flowMsg('formMsg', 'Purchase Request ' + prNo + ' not found or not returned to you.', false); return; }
+  const included = (pr.items || []).filter(i => i.included);
+  document.getElementById('customer').value = pr.customer || '';
+  document.getElementById('itemRows').innerHTML = '';
+  included.forEach(addPrRow);
+  if (!included.length) addRow();
+  qFromPr = String(pr.prNo);
+  const sel = document.getElementById('fromPrSelect'); if (sel) sel.value = qFromPr;
+  const banner = document.getElementById('fromPrBanner');
+  banner.style.display = 'block';
+  banner.innerHTML = `Loaded from <b>${flowEsc(pr.prNo)}</b> — management final prices shown below. Review, then <b>Save Quotation</b> to create it.`;
+  document.getElementById('formTitle').textContent = 'Quotation from ' + pr.prNo;
+  recalc();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// A form row for a PR item priced at its Final Price; injects a select option for non-inventory items.
+function addPrRow(it) {
+  addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: flowNum(it.finalPrice) });
+  const sel = document.querySelector('#itemRows tr:last-child select');
+  if (sel && String(sel.value) !== String(it.itemNo || '')) {
+    const opt = document.createElement('option');
+    opt.value = it.itemNo || '';
+    opt.textContent = (it.itemNo ? it.itemNo + ' — ' : '') + (it.itemName || '');
+    opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
 
 async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); qInventory = (r && r.data) || []; }
@@ -103,6 +163,22 @@ async function createInventoryItem() {
 }
 
 async function saveQuotation() {
+  // Loaded from a returned PR: create via createQuotationFromPR so the management final prices are
+  // applied and the PR flips to Quoted; then open the new quotation's review.
+  if (qFromPr && !document.getElementById('quotationNo').value) {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true; btn.textContent = 'Creating...';
+    try {
+      const res = await postFlow('createQuotationFromPR', { prNo: qFromPr });
+      if (!res.success) throw new Error(res.message);
+      window.location.href = 'flow-quotations.html?review=' + encodeURIComponent(res.quotationNo || '');
+      return;
+    } catch (e) {
+      flowMsg('formMsg', e.message, false);
+      btn.disabled = false; btn.textContent = 'Save Quotation';
+      return;
+    }
+  }
   const items = collectItems();
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
@@ -134,6 +210,10 @@ function resetForm() {
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Quotation';
   document.getElementById('formMsg').style.display = 'none';
+  // clear any Returned-to-Sales PR load
+  qFromPr = '';
+  const b = document.getElementById('fromPrBanner'); if (b) b.style.display = 'none';
+  const s = document.getElementById('fromPrSelect'); if (s) s.value = '';
   addRow();
 }
 
