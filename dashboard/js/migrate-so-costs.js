@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('migSelBtn').addEventListener('click', () => migrate(pending().filter(r => mcSelected.has(r.soNo))));
   document.getElementById('migAllBtn').addEventListener('click', () => migrate(pending()));
   document.getElementById('backfillBtn').addEventListener('click', backfill);
+  document.getElementById('matchTypeBtn').addEventListener('click', matchTypes);
   document.getElementById('removeMigBtn').addEventListener('click', removeMigrated);
   load();
 });
@@ -192,6 +193,18 @@ async function backfill() {
     const r = await postFlow('backfillMigratedRecords', {});
     if (!r || !r.success) throw new Error((r && r.message) || 'Backfill failed');
     flash(`Backfilled ${r.invoicesCreated || 0} invoice(s) and ${r.receivingsCreated || 0} receiving record(s). The Financial Snapshot now includes migrated sales orders.`, true);
+  } catch (e) { flash(e.message, false); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+// Label every sales order International/Local to match its migrated COGS Type.
+async function matchTypes() {
+  const btn = document.getElementById('matchTypeBtn');
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Matching…';
+  try {
+    const r = await postFlow('matchSupplierTypes', {});
+    if (!r || !r.success) throw new Error((r && r.message) || 'Match failed');
+    flash(`Matched supplier type (International/Local) for ${r.updated || 0} sales order(s).`, true);
   } catch (e) { flash(e.message, false); }
   finally { btn.disabled = false; btn.textContent = orig; }
 }

@@ -30,7 +30,7 @@ var SCHEMA = {
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At'],
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total'],
 
-  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At'],
+  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price'],
 
   PurchaseOrders:     ['PO No', 'SO No', 'Date', 'Supplier', 'Currency', 'Total Purchase (FC)', 'Status', 'Created By', 'Created At', 'PDF Link',
@@ -420,7 +420,7 @@ function getSalesOrders() {
     return {
       soNo: String(s['SO No']), quotationNo: s['Quotation No'], date: s['Date'], customer: s['Customer'],
       status: s['Status'], total: _num(s['Total']), createdBy: s['Created By'], createdAt: s['Created At'],
-      rowIndex: s.rowIndex,
+      supplierType: s['Supplier Type'] || '', rowIndex: s.rowIndex,
       items: its.map(function (r) { return {
         itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Price/Unit']), total: _num(r['Total Price']) }; })
@@ -436,7 +436,7 @@ function createSalesOrder(p) {
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
-    total, p.createdBy || '', _now()]);
+    total, p.createdBy || '', _now(), p.supplierType || '']);
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
@@ -456,6 +456,31 @@ function _flowAutoCreateShipment(soNo, customer, item, createdBy) {
   } catch (e) { /* never block the SO write */ }
 }
 
+// Set a Sales Order's Supplier Type label (International/Local) from a cost type. Best-effort.
+function _setSoSupplierType(soNo, cogsType) {
+  try {
+    var label = String(cogsType) === 'international' ? 'International' : 'Local';
+    var col = SCHEMA.SalesOrders.indexOf('Supplier Type') + 1;
+    if (col < 1) return;
+    var sh = _sheet('SalesOrders');
+    _rows('SalesOrders').forEach(function (r) {
+      if (String(r['SO No']) === String(soNo)) sh.getRange(r.rowIndex, col, 1, 1).setValues([[label]]);
+    });
+  } catch (e) { /* best-effort */ }
+}
+
+// Backfill the Supplier Type (International/Local) label on every SO from its SOCostDetails COGS Type.
+function matchSupplierTypes(p) {
+  var updated = 0;
+  _rows('SOCostDetails').forEach(function (c) {
+    var soNo = String(c['SO No'] || '');
+    if (!soNo) return;
+    _setSoSupplierType(soNo, c['COGS Type']);
+    updated++;
+  });
+  return { success: true, updated: updated, message: 'Matched supplier type for ' + updated + ' sales order(s).' };
+}
+
 // Bulk-import legacy Sales Orders (header + items). Preserves the original SO No, skips any that already
 // exist (idempotent), tolerant of blank customer / zero-item records so no legacy record is lost.
 function importSalesOrders(p) {
@@ -473,7 +498,7 @@ function importSalesOrders(p) {
       var total = 0;
       items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
       soSh.appendRow([no, so.quotationNo || '', so.date || _now(), so.customer || '(unknown)',
-        so.status || 'Open', total, so.createdBy || 'Migrated (legacy)', _now()]);
+        so.status || 'Open', total, so.createdBy || 'Migrated (legacy)', _now(), so.supplierType || '']);
       items.forEach(function (it) {
         itemSh.appendRow([no, it.itemNo || '', it.itemName || '', _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)]);
       });
@@ -544,7 +569,8 @@ function updateSalesOrder(p) {
   _rows('SalesOrders').forEach(function (r) {
     if (String(r['SO No']) === String(no)) {
       sh.getRange(r.rowIndex, 1, 1, SCHEMA.SalesOrders.length).setValues([[no, p.quotationNo || r['Quotation No'],
-        p.date || r['Date'], p.customer, p.status || r['Status'], total, r['Created By'], r['Created At']]]);
+        p.date || r['Date'], p.customer, p.status || r['Status'], total, r['Created By'], r['Created At'],
+        (p.supplierType != null ? p.supplierType : (r['Supplier Type'] || ''))]]);
     }
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
@@ -1491,7 +1517,8 @@ function importSOCostDetails(p) {
       // Also create a header-only Sales Order if one doesn't exist yet (per decision).
       if (!soHeaders[soNo]) {
         soSh.appendRow([soNo, '', c.soDate || c.date || _now(), c.customerName || c.customer || '(unknown)',
-          'Closed', _num(c.sales), 'Migrated (legacy)', _now()]);
+          'Closed', _num(c.sales), 'Migrated (legacy)', _now(),
+          (String(c.cogsType) === 'international' ? 'International' : 'Local')]);
         soHeaders[soNo] = true;
         headersCreated++;
       }
@@ -1597,6 +1624,7 @@ function backfillMigratedRecords(p) {
   cds.forEach(function (c) {
     var soNo = String(c['SO No'] || '');
     if (!soNo) { skipped++; return; }
+    _setSoSupplierType(soNo, c['COGS Type']);   // auto-match the Intl/Local label from the cost type
     var sales = _num(c['Sales']), cogs = _num(c['Total COGS']);
     var customer = c['Customer'] || '(unknown)', date = c['Date'] || _now();
     // Invoice — only if the SO has no invoice at all (never duplicate a real new-flow invoice).
@@ -1659,9 +1687,11 @@ function saveSOCostDetails(p) {
     var hasHeader = _rows('SalesOrders').some(function (r) { return String(r['SO No']) === soNo; });
     if (!hasHeader) {
       _sheet('SalesOrders').appendRow([soNo, '', c.date || _now(), c.customer || '(unknown)',
-        'Closed', sales, 'Manual (edited)', _now()]);
+        'Closed', sales, 'Manual (edited)', _now(),
+        (cogsType === 'international' ? 'International' : 'Local')]);
     }
   }
+  _setSoSupplierType(soNo, cogsType);   // keep the SO's Intl/Local label in sync with the cost type
   // Regenerate this SO's migrated Invoice + Receiving from the new breakdown so the process detail
   // (receiving shipping/duties + invoice COGS) and the invoice-driven widgets reflect the edit.
   try {
@@ -2179,6 +2209,7 @@ var _MODULE_MAP = {
   importSOCostDetails: ['Sales Order', 'Cost Imported'], saveSOCostDetails: ['Sales Order', 'Cost Edited'],
   backfillMigratedRecords: ['Sales Order', 'Records Backfilled'],
   deleteMigratedRecords: ['Sales Order', 'Migrated Cleared'],
+  matchSupplierTypes: ['Sales Order', 'Type Matched'],
   importPricingSubmissions: ['Pricing Request', 'Imported']
 };
 
@@ -2434,6 +2465,7 @@ var HANDLERS = {
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
   getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails, saveSOCostDetails: saveSOCostDetails,
   backfillMigratedRecords: backfillMigratedRecords, deleteMigratedRecords: deleteMigratedRecords,
+  matchSupplierTypes: matchSupplierTypes,
   importPricingSubmissions: importPricingSubmissions,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,

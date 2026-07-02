@@ -85,6 +85,7 @@ async function saveSO() {
   const payload = {
     soNo, quotationNo: document.getElementById('quotationNo').value, customer,
     date: document.getElementById('date').value, status: document.getElementById('status').value,
+    supplierType: document.getElementById('soSupplierType').value,
     createdBy: soSession.name, items: JSON.stringify(items)
   };
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -104,6 +105,7 @@ function resetForm() {
   document.getElementById('loadQuotation').value = '';
   document.getElementById('customer').value = '';
   document.getElementById('status').value = 'Open';
+  const st = document.getElementById('soSupplierType'); if (st) st.value = '';
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Sales Order';
@@ -154,6 +156,14 @@ function buildSOFilters() {
   }
 }
 
+// International / Local supplier label badge (blank → em dash).
+function soTypeBadge(t) {
+  const v = String(t || '');
+  if (v === 'International') return '<span class="flow-badge" style="background:rgba(37,99,235,0.12);color:#1d4ed8;">International</span>';
+  if (v === 'Local') return '<span class="flow-badge" style="background:rgba(100,116,139,0.14);color:#475569;">Local</span>';
+  return '<span style="color:var(--text-muted,#64748b);">—</span>';
+}
+
 function renderSOs() {
   const c = document.getElementById('listContainer');
   const q = (document.getElementById('soSearch').value || '').trim().toLowerCase();
@@ -172,9 +182,9 @@ function renderSOs() {
   if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
   if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
-  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
+  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td>${flowEsc(s.soNo)}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
-    <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td class="num">${flowMoney(s.total, 'PHP')}</td><td>${s.items.length}</td>
+    <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td>${s.items.length}</td>
     <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")'>Docs</button>
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
     <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button></td></tr>`).join('')}</tbody></table>`;
@@ -190,6 +200,7 @@ function editSO(no) {
   document.getElementById('customer').value = s.customer;
   document.getElementById('date').value = flowDate(s.date);
   document.getElementById('status').value = s.status || 'Open';
+  document.getElementById('soSupplierType').value = s.supplierType || '';
   document.getElementById('formTitle').textContent = 'Edit ' + s.soNo;
   document.getElementById('itemRows').innerHTML = '';
   (s.items || []).forEach(addRow);
