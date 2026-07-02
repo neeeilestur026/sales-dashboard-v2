@@ -440,28 +440,50 @@ function _payslipHtml(emp, cutoff) {
 }
 
 // Load html2pdf on demand (same CDN as the payroll-approval PDF), then run cb.
-function _ensureHtml2pdf(cb) {
-  if (typeof html2pdf !== 'undefined') { cb(); return; }
-  const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-  s.onload = () => cb();
-  s.onerror = () => alert('Could not load the PDF library — check your connection and try again.');
-  document.head.appendChild(s);
-}
+// Render the payslip HTML in a hidden same-origin iframe, then run html2pdf INSIDE that iframe
+// (waiting two animation frames so it's laid out/painted) and download. Mirrors the working
+// _renderPayrollSnapshotPdfBase64 pattern in management-home.js — the off-screen <div> approach
+// produced blank pages because html2canvas captured before layout/paint.
+const _HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
 
 function _renderPayslipPdf(innerHtml, filename) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;';
-  wrap.innerHTML = '<style>' + _PAYSLIP_CSS + '</style>' + innerHtml;
-  document.body.appendChild(wrap);
-  const remove = () => { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); };
-  html2pdf().set({
-    margin: 10, filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['css', 'legacy'] },
-  }).from(wrap).save().then(remove).catch(remove);
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:820px;height:1160px;opacity:0;border:0;z-index:-1;';
+  document.body.appendChild(iframe);
+  let done = false;
+  const cleanup = () => { if (!done) { done = true; try { document.body.removeChild(iframe); } catch (e) {} } };
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _PAYSLIP_CSS +
+    ' body{margin:0;background:#fff;}</style></head><body>' + innerHtml + '</body></html>');
+  doc.close();
+  const win = iframe.contentWindow;
+
+  const run = () => win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
+    try {
+      win.html2pdf().set({
+        margin: 10, filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 820, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] },
+      }).from(win.document.body).save()
+        .then(() => setTimeout(cleanup, 1500))
+        .catch((err) => { cleanup(); alert('Failed to generate the payslip PDF: ' + (err && err.message || err)); });
+    } catch (err) { cleanup(); alert('Failed to generate the payslip PDF.'); }
+  }));
+
+  if (win.html2pdf) { run(); }
+  else {
+    const sc = doc.createElement('script');
+    sc.src = _HTML2PDF_CDN;
+    sc.onload = run;
+    sc.onerror = () => { cleanup(); alert('Could not load the PDF library — check your connection and try again.'); };
+    doc.head.appendChild(sc);
+  }
+  // Safety net if save() never resolves.
+  setTimeout(cleanup, 15000);
 }
 
 // Download one employee's payslip PDF for a cutoff.
@@ -471,7 +493,7 @@ function downloadPayslip(empName, cutoff) {
   if (!emp) { alert('Employee not found.'); return; }
   const fn = 'Payslip_' + (emp.lastName + '_' + emp.firstName).replace(/[^a-z0-9]/gi, '_') +
     '_' + _currentYear + '-' + _currentMonth + '_' + cutoff + '.pdf';
-  _ensureHtml2pdf(() => _renderPayslipPdf(_payslipHtml(emp, cutoff), fn));
+  _renderPayslipPdf(_payslipHtml(emp, cutoff), fn);
 }
 
 // Download all active employees' payslips for a cutoff as one multi-page PDF (one per page).
@@ -482,7 +504,7 @@ function downloadAllPayslips(cutoff) {
   const html = list.map((emp, i) =>
     `<div style="${i < list.length - 1 ? 'page-break-after:always;' : ''}">${_payslipHtml(emp, cutoff)}</div>`).join('');
   const fn = 'Payslips_' + _currentYear + '-' + _currentMonth + '_' + cutoff + '.pdf';
-  _ensureHtml2pdf(() => _renderPayslipPdf(html, fn));
+  _renderPayslipPdf(html, fn);
 }
 
 function _onHoursInput(input) {
