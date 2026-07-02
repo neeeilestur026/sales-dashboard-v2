@@ -7,7 +7,9 @@ let rcSession = null;
 let rcOrders = [];      // sheet purchase orders: {poId, client, norm, vendor, goods, ship, duties, deliv, intl, status, lines, soNo}
 let rcStock = [];       // Warehouse rows (inventory, never written to an SO)
 let rcSos = [];         // 2026 sales orders (with current sales/cogs resolved)
+let rcCds = {};         // full SOCostDetails records by soNo (for the pre-apply backup)
 let rcSelected = new Set();
+const RC_BACKUP_KEY = 'rc2026Backup';
 
 document.addEventListener('DOMContentLoaded', () => {
   rcSession = requireAccountingOrAdmin();
@@ -20,6 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('applySelBtn').addEventListener('click', () => apply([...rcSelected]));
   document.getElementById('applyAllBtn').addEventListener('click', () => apply(rcOrders.map((o, i) => o.soNo ? i : -1).filter(i => i >= 0)));
+  document.getElementById('revertBtn').addEventListener('click', revertLast);
+  document.getElementById('restoreFileBtn').addEventListener('click', () => document.getElementById('restoreFile').click());
+  document.getElementById('restoreFile').addEventListener('change', restoreFromFile);
+  _updateBackupStatus();
 });
 
 function _msg(t, ok) { const el = document.getElementById('msg'); el.textContent = t; el.style.color = ok ? '#15803d' : '#dc2626'; }
@@ -108,6 +114,7 @@ function buildOrders(rows) {
 // 2026 SOs with their current (system) sales + COGS resolved.
 function buildSos(sos, cds, invs) {
   const cdBySo = {}; cds.forEach(cd => { cdBySo[String(cd.soNo)] = cd; });
+  rcCds = cdBySo;   // keep the full records for the pre-apply backup
   const invBySo = {}; invs.forEach(v => { const k = String(v.soNo || ''); if (!k) return; invBySo[k] = (invBySo[k] || 0) + _n(v.totalSales); });
   rcSos = sos.filter(s => _yr(s.date) === '2026').map(s => {
     const k = String(s.soNo), cd = cdBySo[k];
@@ -236,13 +243,12 @@ async function apply(idxs) {
     if (o.logistics) b.logistics = o.logistics;
   });
   const soNos = Object.keys(bySo);
-  if (!confirm(`Write the actual purchase costs into ${soNos.length} sales order(s)? This replaces their current COGS with the sheet figures (revenue is kept).`)) return;
-  const prog = document.getElementById('prog'), bar = document.getElementById('progBar');
-  prog.style.display = 'block';
-  let done = 0, errs = [];
-  for (const soNo of soNos) {
+  if (!confirm(`Write the actual purchase costs into ${soNos.length} sales order(s)? This replaces their current COGS with the sheet figures (revenue is kept). A backup of the current values is saved first, so you can revert.`)) return;
+  // ── Backup: snapshot each target SO's CURRENT cost detail so the apply can be reverted ──
+  _saveBackup(soNos);
+  const records = soNos.map(soNo => {
     const so = soByNo(soNo), b = bySo[soNo];
-    const rec = {
+    return {
       soNo, customer: so.customer, date: flowDate(so.date), sales: so.sales,
       cogsType: b.intl ? 'international' : 'local',
       purchaseOfGoods: Math.round(b.goods * 100) / 100,
@@ -252,14 +258,24 @@ async function apply(idxs) {
       deliveryToOffice: 0, localCharges: 0, bankChargeCOGS: 0, bankChargeShipping: 0,
       shippingCompany: b.logistics || '',
     };
+  });
+  await _writeRecords(records, 'Applied actual costs to');
+}
+
+// Sequentially write cost-detail records (used by both Apply and Revert), then refresh the system side.
+async function _writeRecords(records, verb) {
+  const prog = document.getElementById('prog'), bar = document.getElementById('progBar');
+  prog.style.display = 'block';
+  let done = 0; const errs = [];
+  for (const rec of records) {
     try {
       const res = await postFlow('saveSOCostDetails', { record: JSON.stringify(rec) });
       if (!res.success) throw new Error(res.message);
-    } catch (e) { errs.push(soNo + ': ' + e.message); }
-    done++; bar.style.width = Math.round(done / soNos.length * 100) + '%';
+    } catch (e) { errs.push(rec.soNo + ': ' + e.message); }
+    done++; bar.style.width = Math.round(done / records.length * 100) + '%';
   }
   prog.style.display = 'none'; bar.style.width = '0';
-  _msg(errs.length ? `Applied ${soNos.length - errs.length}/${soNos.length} — errors: ${errs.join('; ')}` : `Applied actual costs to ${soNos.length} sales order(s).`, !errs.length);
+  _msg(errs.length ? `${verb} ${records.length - errs.length}/${records.length} — errors: ${errs.join('; ')}` : `${verb} ${records.length} sales order(s).`, !errs.length);
   // Refresh the system side so the GAP column reflects the writes.
   try {
     const [soRes, cdRes, invRes] = await Promise.all([
@@ -271,4 +287,80 @@ async function apply(idxs) {
     rcSelected = new Set();
     render();
   } catch (e) { /* leave as-is */ }
+}
+
+// ── Backup & revert ───────────────────────────────────────────────────────────
+// Snapshot the CURRENT cost detail of each target SO (or existed:false when it has none),
+// keep it in localStorage and auto-download a JSON file so the restore point is durable.
+function _saveBackup(soNos) {
+  const records = soNos.map(soNo => {
+    const cd = rcCds[String(soNo)];
+    if (!cd) {
+      const so = soByNo(soNo) || {};
+      return { existed: false, soNo: String(soNo), customer: so.customer || '', date: flowDate(so.date) || '', sales: so.sales || 0 };
+    }
+    return {
+      existed: true, soNo: String(cd.soNo), customer: cd.customer || '', date: flowDate(cd.date) || '',
+      sales: _n(cd.sales), cogsType: cd.cogsType || 'local',
+      purchaseOfGoods: _n(cd.purchaseOfGoods), bankChargeCOGS: _n(cd.bankChargeCOGS),
+      dutiesAndTaxes: _n(cd.dutiesAndTaxes), bankChargeShipping: _n(cd.bankChargeShipping),
+      shippingCompany: cd.shippingCompany || '', shippingCost: _n(cd.shippingCost),
+      localCharges: _n(cd.localCharges), deliveryToOffice: _n(cd.deliveryToOffice),
+      deliveryToClient: _n(cd.deliveryToClient), source: cd.source || '',
+    };
+  });
+  const backup = { takenAt: new Date().toISOString(), by: (rcSession && rcSession.name) || '', records };
+  try { localStorage.setItem(RC_BACKUP_KEY, JSON.stringify(backup)); } catch (e) { /* still downloads */ }
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'reconcile-2026-backup-' + backup.takenAt.replace(/[:.]/g, '-') + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  _updateBackupStatus();
+}
+
+function _readLocalBackup() {
+  try { return JSON.parse(localStorage.getItem(RC_BACKUP_KEY) || 'null'); } catch (e) { return null; }
+}
+
+function _updateBackupStatus() {
+  const el = document.getElementById('backupStatus');
+  if (!el) return;
+  const b = _readLocalBackup();
+  el.textContent = b ? `Backup: ${b.records.length} SO(s) · ${new Date(b.takenAt).toLocaleString()}` : 'No backup yet.';
+}
+
+// Restore records from a backup object (revert). existed:false SOs are restored as a
+// zero-component record carrying their prior sales — the closest restorable state.
+async function _restoreBackup(backup, label) {
+  const recs = (backup && backup.records) || [];
+  if (!recs.length) { _msg('Backup has no records.', false); return; }
+  if (!confirm(`Revert ${recs.length} sales order(s) to the values captured ${new Date(backup.takenAt).toLocaleString()}? The income statement returns to those figures.`)) return;
+  const records = recs.map(r => Object.assign({
+    cogsType: 'local', purchaseOfGoods: 0, bankChargeCOGS: 0, dutiesAndTaxes: 0, bankChargeShipping: 0,
+    shippingCompany: '', shippingCost: 0, localCharges: 0, deliveryToOffice: 0, deliveryToClient: 0,
+  }, r));
+  await _writeRecords(records, label);
+}
+
+function revertLast() {
+  const b = _readLocalBackup();
+  if (!b) { _msg('No backup in this browser — use “Restore from file…” with a downloaded backup.', false); return; }
+  return _restoreBackup(b, 'Reverted');
+}
+
+function restoreFromFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const b = JSON.parse(rd.result);
+      if (!b || !Array.isArray(b.records)) throw new Error('Not a reconcile backup file.');
+      _restoreBackup(b, 'Restored');
+    } catch (e) { _msg('Invalid backup file: ' + e.message, false); }
+  };
+  rd.readAsText(file);
 }

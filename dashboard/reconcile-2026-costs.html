@@ -65,6 +65,10 @@
             <button class="btn btn-sm btn-secondary" id="selAllBtn">Select all matched</button>
             <button class="btn btn-sm btn-primary" id="applySelBtn">Apply selected</button>
             <button class="btn btn-sm btn-primary" id="applyAllBtn">Apply all matched</button>
+            <button class="btn btn-sm btn-secondary" id="revertBtn" title="Restore every affected sales order to its pre-apply cost values (a backup is saved automatically before each apply)">↩ Revert last apply</button>
+            <button class="btn btn-sm btn-secondary" id="restoreFileBtn" title="Restore from a downloaded reconcile-2026-backup-*.json file">Restore from file…</button>
+            <input type="file" id="restoreFile" accept="application/json" style="display:none;">
+            <span id="backupStatus" style="font-size:0.72rem;color:var(--text-muted);"></span>
             <span id="msg" style="margin-left:auto;font-size:0.8rem;"></span>
           </div>
           <div class="mig-prog" id="prog"><span id="progBar"></span></div>
