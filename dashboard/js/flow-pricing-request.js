@@ -671,9 +671,8 @@ async function savePricing() {
   const usingEngine = !!pePrNo;
   const msgEl = usingEngine ? 'peMsg' : 'modalMsg';
   const prNo = usingEngine ? pePrNo : document.getElementById('modalPrNo').value;
-  const dest = document.getElementById('mDest').value;
+  const dest = document.getElementById('mDest').value;   // optional — blank = no delivery (local pickup)
   if (!prNo) { flowMsg(msgEl, 'Load a request to price first.', false); return; }
-  if (!dest) { flowMsg(msgEl, 'Select a destination.', false); return; }
   const destObj = flowDestinationByName(dest);
   const comm = flowNum(document.getElementById('mComm').value);
   const marg = flowNum(document.getElementById('mMarg').value);
