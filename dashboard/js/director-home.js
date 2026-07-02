@@ -476,7 +476,7 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
         format = [105, Math.max(120, Math.round(px * 25.4 / 96) + 10)];
       }
       win.html2pdf().set({
-        margin: [5, 6, 5, 6], filename,
+        margin: 6, filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: 440, logging: false },
         jsPDF: { unit: 'mm', format, orientation: 'portrait' },
