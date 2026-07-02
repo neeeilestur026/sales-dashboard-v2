@@ -341,12 +341,13 @@ const _PAYSLIP_CSS = `
 .payslip .ps-kv { font-size:10px; margin:1px 0; word-break:break-word; }
 .payslip .ps-kv b { font-weight:700; }
 .payslip .ps-sec { font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.05em; margin:2px 0; }
-.payslip .ps-line { display:flex; justify-content:space-between; gap:10px; margin:1px 0; }
-.payslip .ps-line > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.payslip .ps-line .r { flex:0 0 auto; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.payslip .ps-sub { font-weight:800; }
-.payslip .ps-net { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-weight:800; font-size:14px; margin:4px 0; }
-.payslip .ps-net span:last-child { flex:0 0 auto; white-space:nowrap; }
+.payslip .ps-t { width:100%; border-collapse:collapse; table-layout:fixed; }
+.payslip .ps-t td { padding:1px 0; font-size:11px; vertical-align:top; }
+.payslip .ps-t td.l { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px; }
+.payslip .ps-t td.r { width:42%; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.payslip .ps-t tr.sub td { font-weight:800; }
+.payslip .ps-net-t td { font-weight:800; font-size:14px; padding:3px 0; }
+.payslip .ps-net-t td.r { width:50%; }
 .payslip .ps-sign { margin-top:22px; font-size:9px; text-align:center; }
 .payslip .ps-sign .ln { border-top:1px solid #000; margin:0 6px; padding-top:2px; }
 .payslip .ps-foot { text-align:center; font-size:8px; color:#333; margin-top:8px; }
@@ -405,8 +406,9 @@ function _payslipHtml(emp, cutoff) {
   const pr = _payslipPeriod(cutoff);
   const hn = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + ' hrs';
   const totalHrs = s.regHrs + s.otHrs + s.holidayHrs;
-  const line = (label, val, cls) => `<div class="ps-line${cls ? ' ' + cls : ''}"><span>${esc(label)}</span><span class="r">${val}</span></div>`;
-  const money = (label, val, cls) => line(label, peso(val), cls);
+  // Fixed 2-column table rows: the amount column has a set width so it can never run off the page edge.
+  const row = (label, val, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td class="l">${esc(label)}</td><td class="r">${val}</td></tr>`;
+  const money = (label, val, cls) => row(label, peso(val), cls);
   return `<div class="payslip">
     <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
       <img class="ps-logo" src="${location.origin}/images/logo-login.png" alt="" onerror="this.style.display='none'">
@@ -418,27 +420,33 @@ function _payslipHtml(emp, cutoff) {
     <div class="ps-kv"><b>Rate:</b> ${peso(s.dailyRate)}/day &middot; ${peso(s.hourlyRate)}/hr</div>
     <div class="ps-sep"></div>
     <div class="ps-sec">Hours Worked</div>
-    ${line('Regular', hn(s.regHrs))}
-    ${line('Overtime', hn(s.otHrs))}
-    ${line('Holiday', hn(s.holidayHrs))}
-    ${line('Total Hours', hn(totalHrs), 'ps-sub')}
+    <table class="ps-t"><tbody>
+      ${row('Regular', hn(s.regHrs))}
+      ${row('Overtime', hn(s.otHrs))}
+      ${row('Holiday', hn(s.holidayHrs))}
+      ${row('Total Hours', hn(totalHrs), 'sub')}
+    </tbody></table>
     <div class="ps-sep"></div>
     <div class="ps-sec">Earnings</div>
-    ${money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
-    ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
-    ${money('Holiday (' + hn(s.holidayHrs) + ' x2)', s.holidayPay)}
-    ${money('Other Income', s.otherIncome)}
-    ${money('GROSS PAY', s.grossPay, 'ps-sub')}
+    <table class="ps-t"><tbody>
+      ${money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
+      ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
+      ${money('Holiday (' + hn(s.holidayHrs) + ' x2)', s.holidayPay)}
+      ${money('Other Income', s.otherIncome)}
+      ${money('GROSS PAY', s.grossPay, 'sub')}
+    </tbody></table>
     <div class="ps-sep"></div>
     <div class="ps-sec">Deductions</div>
-    ${money('Pag-IBIG', s.pagibig)}
-    ${money('SSS', s.sss)}
-    ${money('PhilHealth', s.philhealth)}
-    ${money('Advances', s.advances)}
-    ${money('Withholding Tax', s.wtax)}
-    ${money('TOTAL DEDUCTIONS', s.totalDed, 'ps-sub')}
+    <table class="ps-t"><tbody>
+      ${money('Pag-IBIG', s.pagibig)}
+      ${money('SSS', s.sss)}
+      ${money('PhilHealth', s.philhealth)}
+      ${money('Advances', s.advances)}
+      ${money('Withholding Tax', s.wtax)}
+      ${money('TOTAL DEDUCTIONS', s.totalDed, 'sub')}
+    </tbody></table>
     <div class="ps-sep"></div>
-    <div class="ps-net"><span>NET PAY</span><span>${peso(s.netPay)}</span></div>
+    <table class="ps-t ps-net-t"><tbody><tr><td class="l">NET PAY</td><td class="r">${peso(s.netPay)}</td></tr></tbody></table>
     <div class="ps-sep"></div>
     <div class="ps-sign"><div class="ln">Received by &mdash; ${esc(s.empName)}</div></div>
     <div class="ps-foot">Generated ${esc(new Date().toLocaleString('en-PH'))}<br>System-generated payslip</div>
