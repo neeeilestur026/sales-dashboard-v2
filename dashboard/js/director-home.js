@@ -332,18 +332,21 @@ function _empKey(name) {
 // ─── Per-employee payslip PDF (per cutoff, full breakdown, downloadable) ───────────
 // Thermal-receipt style (80mm): monospace, dashed separators, label/value rows.
 const _PAYSLIP_CSS = `
-.payslip { font-family:'Courier New', Courier, monospace; color:#000; width:100%; box-sizing:border-box; padding:6px 8px; font-size:11px; line-height:1.4; }
+.payslip { font-family:'Courier New', Courier, monospace; color:#000; width:100%; box-sizing:border-box; padding:8px 12px; font-size:11px; line-height:1.4; }
 .payslip .ps-head { text-align:center; margin-bottom:4px; }
 .payslip .ps-co { font-size:13px; font-weight:800; letter-spacing:0.3px; }
+.payslip .ps-logo { display:block; margin:5px auto 2px; height:48px; max-width:70%; object-fit:contain; }
 .payslip .ps-doc { font-size:11px; font-weight:700; letter-spacing:3px; margin-top:2px; }
 .payslip .ps-sep { border-top:1px dashed #000; margin:6px 0; }
 .payslip .ps-kv { font-size:10px; margin:1px 0; word-break:break-word; }
 .payslip .ps-kv b { font-weight:700; }
 .payslip .ps-sec { font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.05em; margin:2px 0; }
-.payslip .ps-line { display:flex; justify-content:space-between; gap:8px; margin:1px 0; }
-.payslip .ps-line .r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.payslip .ps-line { display:flex; justify-content:space-between; gap:10px; margin:1px 0; }
+.payslip .ps-line > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.payslip .ps-line .r { flex:0 0 auto; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .payslip .ps-sub { font-weight:800; }
-.payslip .ps-net { display:flex; justify-content:space-between; align-items:baseline; font-weight:800; font-size:14px; margin:4px 0; }
+.payslip .ps-net { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-weight:800; font-size:14px; margin:4px 0; }
+.payslip .ps-net span:last-child { flex:0 0 auto; white-space:nowrap; }
 .payslip .ps-sign { margin-top:22px; font-size:9px; text-align:center; }
 .payslip .ps-sign .ln { border-top:1px solid #000; margin:0 6px; padding-top:2px; }
 .payslip .ps-foot { text-align:center; font-size:8px; color:#333; margin-top:8px; }
@@ -405,7 +408,9 @@ function _payslipHtml(emp, cutoff) {
   const line = (label, val, cls) => `<div class="ps-line${cls ? ' ' + cls : ''}"><span>${esc(label)}</span><span class="r">${val}</span></div>`;
   const money = (label, val, cls) => line(label, peso(val), cls);
   return `<div class="payslip">
-    <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div><div class="ps-doc">PAYSLIP</div></div>
+    <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
+      <img class="ps-logo" src="${location.origin}/images/logo-login.png" alt="" onerror="this.style.display='none'">
+      <div class="ps-doc">PAYSLIP</div></div>
     <div class="ps-sep"></div>
     <div class="ps-kv"><b>Employee:</b> ${esc(s.empName)}</div>
     <div class="ps-kv"><b>Period:</b> ${esc(pr.label)}</div>
@@ -451,7 +456,7 @@ const _HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1
 // whitespace); false uses a fixed page with page-breaks (one receipt per page for "all").
 function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:340px;height:1400px;opacity:0;border:0;z-index:-1;';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:460px;height:1400px;opacity:0;border:0;z-index:-1;';
   document.body.appendChild(iframe);
   let done = false;
   const cleanup = () => { if (!done) { done = true; try { document.body.removeChild(iframe); } catch (e) {} } };
@@ -459,21 +464,21 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
   const doc = iframe.contentDocument || iframe.contentWindow.document;
   doc.open();
   doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _PAYSLIP_CSS +
-    ' body{margin:0;background:#fff;width:320px;}</style></head><body>' + innerHtml + '</body></html>');
+    ' body{margin:0;background:#fff;width:440px;}</style></head><body>' + innerHtml + '</body></html>');
   doc.close();
   const win = iframe.contentWindow;
 
   const run = () => win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
     try {
-      let format = [80, 230];   // 80mm receipt page
+      let format = [105, 240];   // 105mm-wide page
       if (singleMeasure) {
         const px = win.document.body.scrollHeight || 900;
-        format = [80, Math.max(120, Math.round(px * 25.4 / 96) + 8)];
+        format = [105, Math.max(120, Math.round(px * 25.4 / 96) + 10)];
       }
       win.html2pdf().set({
-        margin: 4, filename,
+        margin: [5, 6, 5, 6], filename,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: 320, logging: false },
+        html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: 440, logging: false },
         jsPDF: { unit: 'mm', format, orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(win.document.body).save()
@@ -482,11 +487,23 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
     } catch (err) { cleanup(); alert('Failed to generate the payslip PDF.'); }
   }));
 
-  if (win.html2pdf) { run(); }
+  // Wait for images (the logo) to finish loading before capturing, else html2canvas paints them blank.
+  const gate = () => {
+    const imgs = Array.prototype.slice.call(win.document.images || []);
+    const pending = imgs.filter(im => !im.complete);
+    if (!pending.length) { run(); return; }
+    let left = pending.length, fired = false;
+    const go = () => { if (!fired) { fired = true; run(); } };
+    pending.forEach(im => { im.addEventListener('load', () => { if (--left <= 0) go(); });
+      im.addEventListener('error', () => { if (--left <= 0) go(); }); });
+    setTimeout(go, 3000);   // fallback so a slow/failed image never blocks the download
+  };
+
+  if (win.html2pdf) { gate(); }
   else {
     const sc = doc.createElement('script');
     sc.src = _HTML2PDF_CDN;
-    sc.onload = run;
+    sc.onload = gate;
     sc.onerror = () => { cleanup(); alert('Could not load the PDF library — check your connection and try again.'); };
     doc.head.appendChild(sc);
   }
