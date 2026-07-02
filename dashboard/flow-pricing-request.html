@@ -51,7 +51,7 @@
     .pe-pnl-table tr.bold td { font-weight:700; color:var(--text,#0f172a); }
 
     /* ── Original pricing-engine design (config grid · readouts · line table · breakdown table) ── */
-    .pe-config-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem 1.25rem; margin-bottom:0.75rem; }
+    .pe-config-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem 1.25rem; margin-bottom:0.75rem; }
     .pe-config-grid label { display:block; font-size:0.72rem; font-weight:700; color:var(--text-muted,#94a3b8); margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.04em; }
     .pe-config-grid select, .pe-config-grid input { width:100%; padding:0.5rem 0.7rem; background:var(--bg-card,#fff); border:1.5px solid var(--border,#e2e8f0); border-radius:8px; color:var(--text,#1e293b); font-size:0.875rem; box-sizing:border-box; }
     .pe-readout { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:0.9rem; padding:0.65rem 1rem; background:var(--bg-inset,#f1f5f9); border-radius:10px; border:1px solid var(--border,#e2e8f0); }
@@ -64,6 +64,8 @@
     .pe-line-table input, .pe-line-table select { width:100%; padding:0.38rem 0.5rem; background:var(--bg-card,#fff); border:1.5px solid var(--border,#e2e8f0); border-radius:6px; color:var(--text,#1e293b); font-size:0.82rem; box-sizing:border-box; }
     .pe-line-table input[type="number"] { text-align:right; }
     .pe-line-table .td-name { font-size:0.8rem; color:var(--text,#0f172a); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pe-remove { background:none; border:none; color:var(--text-muted,#94a3b8); cursor:pointer; padding:0.25rem; border-radius:4px; font-size:0.95rem; line-height:1; }
+    .pe-remove:hover { color:#dc2626; background:#fef2f2; }
     .pe-results-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:0.5rem; }
     .pe-results-table { width:100%; border-collapse:collapse; font-size:0.77rem; min-width:1100px; }
     .pe-results-table th { text-align:left; padding:0.5rem 0.45rem; font-size:0.64rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#e2e8f0); white-space:nowrap; background:var(--bg-inset,#f1f5f9); letter-spacing:0.04em; }
