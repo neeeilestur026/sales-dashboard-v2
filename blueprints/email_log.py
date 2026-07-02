@@ -42,6 +42,20 @@ _session_cache: dict[str, dict] = {}   # token -> { username, role, _ts }
 _creds_cache: dict[str, dict] = {}     # username -> { enc_blob, _ts }
 
 
+def _email_config_problem() -> Optional[str]:
+    """If the server can't do email at all (missing deploy config), return an actionable message.
+    Without DASHBOARD_APPS_SCRIPT_URL the backend can't reach Code.gs to validate the session, so every
+    call would otherwise fail with a misleading 401 'Invalid session' — surface the real cause instead."""
+    if not DASHBOARD_APPS_SCRIPT_URL:
+        return ("Email service is not configured on the server: DASHBOARD_APPS_SCRIPT_URL is not set. "
+                "Set it (and EMAIL_CRED_KEY / INTERNAL_SHARED_SECRET) in the deployment's Environment, "
+                "then redeploy.")
+    if not EMAIL_CRED_KEY:
+        return ("Email service is not configured on the server: EMAIL_CRED_KEY is not set. "
+                "Set it in the deployment's Environment, then redeploy.")
+    return None
+
+
 def _fernet() -> Optional[Fernet]:
     if not EMAIL_CRED_KEY:
         return None
@@ -388,8 +402,9 @@ def _get_token() -> str:
 
 @email_log_bp.route("/api/email/setup", methods=["POST"])
 def email_setup():
-    if not EMAIL_CRED_KEY or not INTERNAL_SHARED_SECRET:
-        return jsonify({"success": False, "message": "Server not configured (missing EMAIL_CRED_KEY / INTERNAL_SHARED_SECRET)"}), 500
+    _cfg = _email_config_problem()
+    if _cfg or not INTERNAL_SHARED_SECRET:
+        return jsonify({"success": False, "message": _cfg or "Email service is not configured on the server: INTERNAL_SHARED_SECRET is not set."}), 503
     body = request.get_json(silent=True) or {}
     token = body.get("sessionToken", "")
     addr = (body.get("godaddyEmail") or "").strip()
@@ -434,6 +449,9 @@ def email_setup():
 
 @email_log_bp.route("/api/email/test", methods=["POST"])
 def email_test():
+    _cfg = _email_config_problem()
+    if _cfg:
+        return jsonify({"success": False, "message": _cfg}), 503
     body = request.get_json(silent=True) or {}
     token = body.get("sessionToken", "")
     addr = (body.get("godaddyEmail") or "").strip()
@@ -457,6 +475,9 @@ def email_test():
 
 @email_log_bp.route("/api/email/today", methods=["GET", "POST"])
 def email_today():
+    _cfg = _email_config_problem()
+    if _cfg:
+        return jsonify({"success": False, "message": _cfg}), 503
     token = ""
     if request.method == "POST":
         body = request.get_json(silent=True) or {}
@@ -493,6 +514,9 @@ def email_today():
 @email_log_bp.route("/api/email/feed", methods=["POST"])
 def email_feed():
     """Feed recent messages from a logical folder (inbox/sent/spam); inbox/spam classified."""
+    _cfg = _email_config_problem()
+    if _cfg:
+        return jsonify({"success": False, "message": _cfg}), 503
     body = request.get_json(silent=True) or {}
     token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
     session = _validate_session(token)
@@ -525,6 +549,9 @@ def email_feed():
 
 @email_log_bp.route("/api/email/status", methods=["GET", "POST"])
 def email_status():
+    _cfg = _email_config_problem()
+    if _cfg:
+        return jsonify({"success": False, "configured": False, "message": _cfg}), 503
     token = ""
     if request.method == "POST":
         body = request.get_json(silent=True) or {}
@@ -543,6 +570,9 @@ def email_status():
 
 @email_log_bp.route("/api/email/disconnect", methods=["POST"])
 def email_disconnect():
+    _cfg = _email_config_problem()
+    if _cfg or not INTERNAL_SHARED_SECRET:
+        return jsonify({"success": False, "message": _cfg or "Email service is not configured on the server: INTERNAL_SHARED_SECRET is not set."}), 503
     body = request.get_json(silent=True) or {}
     token = body.get("sessionToken", "")
     session = _validate_session(token)
