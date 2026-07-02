@@ -251,45 +251,45 @@ function miRenderMonthly(models, expByMonth) {
   return `<div style="overflow-x:auto;"><table class="is-table">
     <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th><th class="num">Expenses</th><th class="num">Net Profit</th><th></th></tr></thead>
     <tbody>${rows}${grand}</tbody></table></div>
-    <p class="is-note">Click a month to see its sales orders; click a sales order to see its revenue & COGS component breakdown (Purchase of Goods · Duties &amp; Taxes · Delivery · Other). Expenses are allocated to each sales order by its revenue share.</p>`;
+    <p class="is-note">Click a month to see its sales orders; click a sales order to see its revenue & COGS component breakdown (Purchase of Goods · Duties &amp; Taxes · Delivery · Other). Operating expenses are deducted at the month total, not per sales order.</p>`;
 }
 
 function miRenderYearly(models, totExp, totRev) {
   return `<div style="overflow-x:auto;">${miSoTable(models, totExp, totRev, 'y')}</div>
-    <p class="is-note">Each sales order for the year. Click one to see its revenue & COGS component breakdown. Expenses are allocated by revenue share.</p>`;
+    <p class="is-note">Each sales order for the year. Click one to see its revenue & COGS component breakdown. Operating expenses are deducted at the period total, not per sales order.</p>`;
 }
 
-/** Per-SO table (used by both monthly-expand and yearly). `tag` namespaces row ids. */
+/** Per-SO table (used by both monthly-expand and yearly). `tag` namespaces row ids.
+ *  Per-SO rows show Revenue/COGS/Gross Profit only — operating expenses are NOT allocated per SO;
+ *  they are deducted once at the period total (footer). */
 function miSoTable(list, periodExp, periodRev, tag) {
   const rows = list.slice().sort((a, b) => (_id(b.date) || '').localeCompare(_id(a.date) || '')).map((m, j) => {
-    const alloc = periodRev > 0 ? periodExp * (m.sales / periodRev) : 0;
-    const net = m.gp - alloc;
     const rid = tag + '_' + j;
-    const idx = miModels.indexOf(m);
     const sumRow = `<tr class="is-sorow" onclick="miToggleSo('${rid}')">
       <td><strong>${_ie(m.soNo)}</strong>${m.costNotSet ? ' <span class="is-warn" title="No cost recorded — click to open, then Edit costs">⚠ cost not set</span>' : ''}${m.date ? `<span class="is-sub2">${_ie(_id(m.date))}</span>` : ''}</td>
       <td>${_ie(m.customer) || '—'}</td>
       <td class="num">${_im(m.sales)}</td>
       <td class="num" style="color:#ef4444;">${m.cogs ? _miPar(m.cogs) : '—'}</td>
-      <td class="num" style="color:${_miCol(m.gp)};font-weight:600;">${_im(m.gp)}</td>
-      <td class="num" style="color:#f97316;">${alloc ? _miPar(alloc) : '—'}</td>
-      <td class="num" style="color:${_miCol(net)};font-weight:700;">${_im(net)}</td>
+      <td class="num" style="color:${_miCol(m.gp)};font-weight:700;">${_im(m.gp)}</td>
       <td class="num"><button type="button" class="is-exp" id="isSBtn_${rid}">▸</button></td>
     </tr>`;
-    const detail = `<tr id="isSDetail_${rid}" class="is-detailrow" style="display:none;"><td colspan="8">${miSoBreakdown(m, alloc, net)}</td></tr>`;
+    const detail = `<tr id="isSDetail_${rid}" class="is-detailrow" style="display:none;"><td colspan="6">${miSoBreakdown(m)}</td></tr>`;
     return sumRow + detail;
   }).join('');
   const tRev = list.reduce((s, m) => s + m.sales, 0), tCogs = list.reduce((s, m) => s + m.cogs, 0);
+  const tGp = tRev - tCogs, tNet = tGp - periodExp;
   const foot = `<tr class="is-subtotal"><td colspan="2">Total (${list.length} SO${list.length !== 1 ? 's' : ''})</td>
     <td class="num">${_im(tRev)}</td><td class="num" style="color:#ef4444;">${_miPar(tCogs)}</td>
-    <td class="num" style="color:${_miCol(tRev - tCogs)};">${_im(tRev - tCogs)}</td>
-    <td class="num" style="color:#f97316;">${_miPar(periodExp)}</td>
-    <td class="num" style="color:${_miCol(tRev - tCogs - periodExp)};">${_im(tRev - tCogs - periodExp)}</td><td></td></tr>`;
-  return `<table class="is-subtable"><thead><tr><th>Sales Order</th><th>Client</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th><th class="num">Expenses</th><th class="num">Net Profit</th><th></th></tr></thead><tbody>${rows}${foot}</tbody></table>`;
+    <td class="num" style="color:${_miCol(tGp)};">${_im(tGp)}</td><td></td></tr>
+    <tr class="is-subtotal"><td colspan="4" class="num">Less: Operating Expenses (this period)</td>
+    <td class="num" style="color:#f97316;">${periodExp ? _miPar(periodExp) : '—'}</td><td></td></tr>
+    <tr class="is-subtotal"><td colspan="4" class="num" style="font-weight:800;">Net Profit</td>
+    <td class="num" style="color:${_miCol(tNet)};font-weight:800;">${_im(tNet)}</td><td></td></tr>`;
+  return `<table class="is-subtable"><thead><tr><th>Sales Order</th><th>Client</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th><th></th></tr></thead><tbody>${rows}${foot}</tbody></table>`;
 }
 
 /** Level 3: revenue + COGS component breakdown for one SO. */
-function miSoBreakdown(m, alloc, net) {
+function miSoBreakdown(m) {
   const line = (label, val, neg, bold) => `<tr${bold ? ' class="b"' : ''}><td>${label}</td><td class="num"${neg ? ' style="color:#ef4444;"' : ''}>${neg ? _miPar(val) : _im(val)}</td></tr>`;
   let cogsRows, note;
   if (m.migrated && m.cd) {
@@ -326,8 +326,6 @@ function miSoBreakdown(m, alloc, net) {
       ${cogsRows}
       ${line('Total COGS', m.cogs, true, true)}
       <tr class="tot"><td>Gross Profit</td><td class="num" style="color:${_miCol(m.gp)};">${_im(m.gp)}</td></tr>
-      ${line('Less: Operating Expenses (allocated)', alloc, true)}
-      <tr class="tot"><td>Net Profit</td><td class="num" style="color:${_miCol(net)};">${_im(net)}</td></tr>
     </tbody></table>
     <p class="is-note" style="margin:0.5rem 0 0;">${note}</p>
   </div>`;
