@@ -462,9 +462,11 @@ const _HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1
 
 // Receipt size: 80mm wide. singleMeasure=true fits the page height to one receipt (no trailing
 // whitespace); false uses a fixed page with page-breaks (one receipt per page for "all").
+const _PS_BODY_PX = 400;   // receipt render width in px (~106mm at 96dpi — "a little wider" than 80mm)
+
 function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:460px;height:1400px;opacity:0;border:0;z-index:-1;';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:' + (_PS_BODY_PX + 40) + 'px;height:1600px;opacity:0;border:0;z-index:-1;';
   document.body.appendChild(iframe);
   let done = false;
   const cleanup = () => { if (!done) { done = true; try { document.body.removeChild(iframe); } catch (e) {} } };
@@ -472,22 +474,24 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
   const doc = iframe.contentDocument || iframe.contentWindow.document;
   doc.open();
   doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _PAYSLIP_CSS +
-    ' body{margin:0;background:#fff;width:440px;}</style></head><body>' + innerHtml + '</body></html>');
+    ' body{margin:0;background:#fff;width:' + _PS_BODY_PX + 'px;}</style></head><body>' + innerHtml + '</body></html>');
   doc.close();
   const win = iframe.contentWindow;
 
   const run = () => win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
     try {
-      let format = [105, 240];   // 105mm-wide page
-      if (singleMeasure) {
-        const px = win.document.body.scrollHeight || 900;
-        format = [105, Math.max(120, Math.round(px * 25.4 / 96) + 10)];
-      }
+      // Derive the PDF page from the ACTUAL rendered content size (1px = 1/96in) so the page is exactly
+      // as wide as the content — html2pdf renders unscaled, so a too-narrow page crops the right column.
+      const px2mm = 25.4 / 96, margin = 6;
+      const wpx = win.document.body.scrollWidth || _PS_BODY_PX;
+      const hpx = win.document.body.scrollHeight || 1000;
+      const pageW = Math.round(wpx * px2mm) + margin * 2;
+      const pageH = singleMeasure ? Math.max(120, Math.round(hpx * px2mm) + margin * 2) : 245;
       win.html2pdf().set({
-        margin: 6, filename,
+        margin: margin, filename,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: 440, logging: false },
-        jsPDF: { unit: 'mm', format, orientation: 'portrait' },
+        html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false },
+        jsPDF: { unit: 'mm', format: [pageW, pageH], orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(win.document.body).save()
         .then(() => setTimeout(cleanup, 1500))
