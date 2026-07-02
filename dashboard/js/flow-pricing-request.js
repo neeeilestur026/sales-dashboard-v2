@@ -199,23 +199,65 @@ function prTableHtml(rows) {
     <tbody>${rows.map(prRowHtml).join('')}</tbody></table>`;
 }
 
+// Migrated / imported pricing history (old records) — kept separate from live requests.
+function prIsMigrated(r) { return r.status === 'Migrated' || !!r.legacyId; }
+// Newest-first: by date desc, then PR No desc (same ordering as the Pricing History section).
+function prSortNewest(rows) {
+  return rows.slice().sort((a, b) =>
+    String(b.date || '').localeCompare(String(a.date || '')) || String(b.prNo).localeCompare(String(a.prNo)));
+}
+
+// A collapsible section (reuses .rep-group) with a title, count, and a PR table.
+function prGroupSection(title, rows, opts) {
+  opts = opts || {};
+  if (!rows.length) return '';
+  return `<details class="${opts.history ? 'rep-group pr-history-group' : 'rep-group'}"${opts.open ? ' open' : ''}>
+    <summary><span class="rep-name">${flowEsc(title)}</span>
+      <span class="rep-meta">${rows.length} request(s)</span></summary>
+    <div style="overflow-x:auto;margin-top:0.5rem;">${prTableHtml(prSortNewest(rows))}</div>
+  </details>`;
+}
+
+// Admin "All": stage-grouped sections (newest-first), migrated/old history separated to the bottom.
+function renderAdminAllGrouped(rows) {
+  const active = rows.filter(r => !prIsMigrated(r));
+  const migrated = rows.filter(prIsMigrated);
+  const GROUPS = [
+    ['For Supplier Pricing', ['Requested', 'Sourcing', 'For Mgmt Pricing']],
+    ['Final Pricing — from Management', ['Mgmt Priced']],
+    ['Forwarded to Sales', ['Returned to Sales', 'Quoted']],
+  ];
+  const known = GROUPS.reduce((a, g) => a.concat(g[1]), []);
+  let html = GROUPS.map(g => prGroupSection(g[0], active.filter(r => g[1].includes(r.status)), { open: true })).join('');
+  const other = active.filter(r => !known.includes(r.status));
+  html += prGroupSection('Other', other, { open: true });
+  html += prGroupSection('Migrated / Old History', migrated, { history: true });
+  return html || '<p style="color:var(--text-muted,#64748b);">Nothing here.</p>';
+}
+
 function renderList() {
   const c = document.getElementById('listContainer');
   const rows = filteredList();
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">Nothing here.</p>'; return; }
+  // Admin "All": organize by stage + separate migrated/old history.
+  if (prRole === 'admin' && !prFilter) { c.innerHTML = renderAdminAllGrouped(rows); return; }
   if (prOversight) {
-    // Group by sales rep for clear oversight.
+    // Group by sales rep; within each, newest-first with migrated rows pushed to the bottom.
     const groups = {};
     rows.forEach(r => { const k = r.requestedBy || 'Unassigned'; (groups[k] = groups[k] || []).push(r); });
     const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
-    c.innerHTML = names.map((name, i) => `<details class="rep-group"${i === 0 ? ' open' : ''}>
+    c.innerHTML = names.map((name, i) => {
+      const g = prSortNewest(groups[name].filter(r => !prIsMigrated(r)))
+        .concat(prSortNewest(groups[name].filter(prIsMigrated)));
+      return `<details class="rep-group"${i === 0 ? ' open' : ''}>
       <summary><span class="rep-name">${flowEsc(name)}</span>
-        <span class="rep-meta">${groups[name].length} request(s)</span></summary>
-      <div style="overflow-x:auto;margin-top:0.5rem;">${prTableHtml(groups[name])}</div>
-    </details>`).join('');
+        <span class="rep-meta">${g.length} request(s)</span></summary>
+      <div style="overflow-x:auto;margin-top:0.5rem;">${prTableHtml(g)}</div>
+    </details>`;
+    }).join('');
     return;
   }
-  c.innerHTML = prTableHtml(rows);
+  c.innerHTML = prTableHtml(prSortNewest(rows));
 }
 
 function rowActions(r) {
