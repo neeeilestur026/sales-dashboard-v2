@@ -301,3 +301,29 @@ def payment_request_pdf():
 
     fname = f"Payment_Request_{sanitize_filename(data.get('prNo', 'NoRef'))}.pdf"
     return _pdf_response(pdf_bytes, fname)
+
+
+# ── Google Sheet CSV proxy (for the reconcile-2026-costs tool) ─────────────────
+# Browsers can't fetch the docs.google.com CSV export cross-origin. This is NOT an
+# open proxy: the URL is constructed server-side from two validated params only.
+@flow_bp.route("/flow/sheet-csv", methods=["GET"])
+def sheet_csv():
+    import re as _re
+    import requests as http_requests
+    sheet_id = (request.args.get("id") or "").strip()
+    gid = (request.args.get("gid") or "0").strip()
+    if not _re.fullmatch(r"[A-Za-z0-9_-]{10,80}", sheet_id):
+        return jsonify({"success": False, "message": "Invalid sheet id."}), 400
+    if not _re.fullmatch(r"\d{1,12}", gid):
+        return jsonify({"success": False, "message": "Invalid gid."}), 400
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    try:
+        resp = http_requests.get(url, timeout=30, allow_redirects=True)
+        if resp.status_code != 200:
+            return jsonify({"success": False, "message": f"Sheet fetch failed (HTTP {resp.status_code}). Is the sheet link-accessible?"}), 502
+        out = make_response(resp.content)
+        out.headers["Content-Type"] = "text/csv; charset=utf-8"
+        return out
+    except Exception as e:
+        logger.exception("sheet-csv proxy failed")
+        return jsonify({"success": False, "message": f"Sheet fetch failed: {e}"}), 502

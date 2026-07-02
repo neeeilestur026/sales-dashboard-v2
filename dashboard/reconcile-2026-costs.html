@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reconcile 2026 Costs — Purchase Summary → Income Statement</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .report { max-width: 1380px; margin: 0 auto; }
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
+    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-body { padding: 1.4rem 1.6rem; }
+    .mig-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1.3rem; }
+    .mig-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--bg-inset); }
+    .mig-tile .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; }
+    .mig-tile .v { font-size: clamp(0.9rem, 1.7vw, 1.25rem); font-weight: 800; color: var(--text-primary); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .mig-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
+    .mig-toolbar input, .mig-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: #fff; }
+    .mig-prog { height: 8px; border-radius: 99px; background: var(--bg-inset); overflow: hidden; margin: 0.4rem 0 0.8rem; display: none; }
+    .mig-prog > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+    .mig-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .mig-table th { text-align: left; padding: 0.5rem 0.55rem; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 2px solid var(--border); background: var(--bg-inset); white-space: nowrap; }
+    .mig-table th.num, .mig-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mig-table td { padding: 0.42rem 0.55rem; border-bottom: 1px solid var(--border); }
+    .mig-table select { max-width: 220px; padding: 0.28rem 0.35rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.76rem; }
+    .mig-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.64rem; font-weight: 700; }
+    .mig-badge.done { background: rgba(22,163,74,0.12); color: #15803d; }
+    .mig-badge.pend { background: rgba(245,158,11,0.14); color: #b45309; }
+    .mig-badge.intl { background: rgba(37,99,235,0.12); color: #1d4ed8; }
+    .mig-badge.local { background: rgba(100,116,139,0.14); color: #475569; }
+    .gap-pos { color: #dc2626; font-weight: 700; }
+    .gap-neg { color: #d97706; font-weight: 700; }
+    .gap-ok  { color: #16a34a; font-weight: 700; }
+    .sect-title { font-size: 0.95rem; font-weight: 800; margin: 1.4rem 0 0.6rem; color: var(--text-primary); }
+    .dr-empty { padding: 1.4rem; text-align: center; color: var(--text-muted); font-style: italic; font-size: 0.86rem; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="report">
+      <div class="report-sheet">
+        <div class="report-head">
+          <div>
+            <h1>Reconcile 2026 Costs</h1>
+            <div class="meta">Import the actual 2026 purchase costs (Summary of Purchase sheet) into each sales order's cost detail — replaces estimated COGS with real figures. Revenue is kept from the system. Idempotent, safe to re-run.</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="sheetId" value="1Raw7nFMzow3L3HCsOb9OjEGORXgZVPiwNX7pP8z2yJQ" style="width:330px;padding:0.45rem 0.6rem;border:1px solid var(--border);border-radius:8px;font-size:0.78rem;" title="Google Sheet ID">
+            <button class="btn btn-sm btn-primary" id="loadBtn">Load &amp; Match</button>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="mig-kpis">
+            <div class="mig-tile"><div class="l">Sheet purchase orders</div><div class="v" id="kOrders">—</div></div>
+            <div class="mig-tile"><div class="l">Actual cost (sheet)</div><div class="v" id="kActual">—</div></div>
+            <div class="mig-tile"><div class="l">System 2026 COGS</div><div class="v" id="kSystem">—</div></div>
+            <div class="mig-tile"><div class="l">Net gap</div><div class="v" id="kGap">—</div></div>
+            <div class="mig-tile"><div class="l">Matched / unmatched</div><div class="v" id="kMatch">—</div></div>
+          </div>
+          <div class="mig-toolbar">
+            <button class="btn btn-sm btn-secondary" id="selAllBtn">Select all matched</button>
+            <button class="btn btn-sm btn-primary" id="applySelBtn">Apply selected</button>
+            <button class="btn btn-sm btn-primary" id="applyAllBtn">Apply all matched</button>
+            <span id="msg" style="margin-left:auto;font-size:0.8rem;"></span>
+          </div>
+          <div class="mig-prog" id="prog"><span id="progBar"></span></div>
+          <div id="container" style="overflow-x:auto;"><div class="dr-empty">Click “Load &amp; Match” to fetch the sheet and reconcile against the 2026 sales orders.</div></div>
+          <div id="extra"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/reconcile-2026-costs.js"></script>
+</body>
+</html>
