@@ -330,24 +330,23 @@ function _empKey(name) {
 }
 
 // ─── Per-employee payslip PDF (per cutoff, full breakdown, downloadable) ───────────
+// Thermal-receipt style (80mm): monospace, dashed separators, label/value rows.
 const _PAYSLIP_CSS = `
-.payslip { font-family: Arial, Helvetica, sans-serif; color:#1e293b; width:100%; box-sizing:border-box; padding:6px 4px; }
-.payslip .ps-head { text-align:center; border-bottom:2px solid #0f766e; padding-bottom:8px; margin-bottom:12px; }
-.payslip .ps-co { font-size:16px; font-weight:800; letter-spacing:0.5px; color:#0f172a; }
-.payslip .ps-doc { font-size:13px; font-weight:700; color:#0f766e; letter-spacing:2px; margin-top:2px; }
-.payslip .ps-meta { display:flex; flex-wrap:wrap; gap:4px 24px; font-size:12px; margin-bottom:12px; }
-.payslip .ps-meta div { min-width:45%; }
-.payslip .ps-meta b { color:#0f172a; }
-.payslip table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px; }
-.payslip th { text-align:left; background:#f1f5f9; color:#475569; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; padding:5px 8px; border:1px solid #e2e8f0; }
-.payslip td { padding:5px 8px; border:1px solid #e2e8f0; }
-.payslip td.n { text-align:right; font-variant-numeric:tabular-nums; }
-.payslip tr.sub td { font-weight:700; background:#f8fafc; }
-.payslip .ps-net { display:flex; justify-content:space-between; align-items:center; background:#ecfdf5; border:1.5px solid #10b981; border-radius:8px; padding:10px 14px; margin:6px 0 16px; }
-.payslip .ps-net .l { font-size:13px; font-weight:700; color:#065f46; text-transform:uppercase; letter-spacing:0.05em; }
-.payslip .ps-net .v { font-size:20px; font-weight:800; color:#047857; }
-.payslip .ps-sign { display:flex; gap:40px; margin-top:28px; font-size:11px; }
-.payslip .ps-sign div { flex:1; border-top:1px solid #475569; padding-top:4px; text-align:center; color:#64748b; }
+.payslip { font-family:'Courier New', Courier, monospace; color:#000; width:100%; box-sizing:border-box; padding:6px 8px; font-size:11px; line-height:1.4; }
+.payslip .ps-head { text-align:center; margin-bottom:4px; }
+.payslip .ps-co { font-size:13px; font-weight:800; letter-spacing:0.3px; }
+.payslip .ps-doc { font-size:11px; font-weight:700; letter-spacing:3px; margin-top:2px; }
+.payslip .ps-sep { border-top:1px dashed #000; margin:6px 0; }
+.payslip .ps-kv { font-size:10px; margin:1px 0; word-break:break-word; }
+.payslip .ps-kv b { font-weight:700; }
+.payslip .ps-sec { font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.05em; margin:2px 0; }
+.payslip .ps-line { display:flex; justify-content:space-between; gap:8px; margin:1px 0; }
+.payslip .ps-line .r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.payslip .ps-sub { font-weight:800; }
+.payslip .ps-net { display:flex; justify-content:space-between; align-items:baseline; font-weight:800; font-size:14px; margin:4px 0; }
+.payslip .ps-sign { margin-top:22px; font-size:9px; text-align:center; }
+.payslip .ps-sign .ln { border-top:1px solid #000; margin:0 6px; padding-top:2px; }
+.payslip .ps-foot { text-align:center; font-size:8px; color:#333; margin-top:8px; }
 `;
 
 // Period label + date range for a cutoff (reuses the existing date-range builder).
@@ -397,45 +396,47 @@ function _computePaySlip(emp, cutoff) {
   };
 }
 
-// One employee's branded payslip block (styled by _PAYSLIP_CSS).
+// One employee's payslip block, thermal-receipt style (styled by _PAYSLIP_CSS).
 function _payslipHtml(emp, cutoff) {
   const s = _computePaySlip(emp, cutoff);
   const pr = _payslipPeriod(cutoff);
-  const hrs = n => (n > 0 ? n.toFixed(1) + ' hrs' : '—');
-  const earn = (label, sub, val) =>
-    `<tr><td>${esc(label)}${sub ? ` <span style="color:#94a3b8;">(${esc(sub)})</span>` : ''}</td><td class="n">${peso(val)}</td></tr>`;
-  const ded = (label, val) => `<tr><td>${esc(label)}</td><td class="n">${peso(val)}</td></tr>`;
+  const hn = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + ' hrs';
+  const totalHrs = s.regHrs + s.otHrs + s.holidayHrs;
+  const line = (label, val, cls) => `<div class="ps-line${cls ? ' ' + cls : ''}"><span>${esc(label)}</span><span class="r">${val}</span></div>`;
+  const money = (label, val, cls) => line(label, peso(val), cls);
   return `<div class="payslip">
     <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div><div class="ps-doc">PAYSLIP</div></div>
-    <div class="ps-meta">
-      <div><b>Employee:</b> ${esc(s.empName)}</div>
-      <div><b>Pay Period:</b> ${esc(pr.label)}</div>
-      <div><b>Coverage:</b> ${esc(pr.range)}</div>
-      <div><b>Daily Rate:</b> ${peso(s.dailyRate)} &nbsp; <b>Hourly:</b> ${peso(s.hourlyRate)}</div>
-    </div>
-    <table>
-      <thead><tr><th>Earnings</th><th style="text-align:right;">Amount</th></tr></thead>
-      <tbody>
-        ${earn('Basic Pay', hrs(s.regHrs), s.basicPay)}
-        ${earn('Overtime Pay', hrs(s.otHrs) + ' @1.25', s.otPay)}
-        ${earn('Holiday Pay', hrs(s.holidayHrs) + ' @2.0', s.holidayPay)}
-        ${earn('Other Income', '', s.otherIncome)}
-        <tr class="sub"><td>GROSS PAY</td><td class="n">${peso(s.grossPay)}</td></tr>
-      </tbody>
-    </table>
-    <table>
-      <thead><tr><th>Deductions</th><th style="text-align:right;">Amount</th></tr></thead>
-      <tbody>
-        ${ded('Pag-IBIG', s.pagibig)}
-        ${ded('SSS', s.sss)}
-        ${ded('PhilHealth', s.philhealth)}
-        ${ded('Advances', s.advances)}
-        ${ded('Withholding Tax', s.wtax)}
-        <tr class="sub"><td>TOTAL DEDUCTIONS</td><td class="n">${peso(s.totalDed)}</td></tr>
-      </tbody>
-    </table>
-    <div class="ps-net"><span class="l">Net Pay</span><span class="v">${peso(s.netPay)}</span></div>
-    <div class="ps-sign"><div>Prepared by</div><div>Received by (${esc(s.empName)})</div></div>
+    <div class="ps-sep"></div>
+    <div class="ps-kv"><b>Employee:</b> ${esc(s.empName)}</div>
+    <div class="ps-kv"><b>Period:</b> ${esc(pr.label)}</div>
+    <div class="ps-kv"><b>Coverage:</b> ${esc(pr.range)}</div>
+    <div class="ps-kv"><b>Rate:</b> ${peso(s.dailyRate)}/day &middot; ${peso(s.hourlyRate)}/hr</div>
+    <div class="ps-sep"></div>
+    <div class="ps-sec">Hours Worked</div>
+    ${line('Regular', hn(s.regHrs))}
+    ${line('Overtime', hn(s.otHrs))}
+    ${line('Holiday', hn(s.holidayHrs))}
+    ${line('Total Hours', hn(totalHrs), 'ps-sub')}
+    <div class="ps-sep"></div>
+    <div class="ps-sec">Earnings</div>
+    ${money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
+    ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
+    ${money('Holiday (' + hn(s.holidayHrs) + ' x2)', s.holidayPay)}
+    ${money('Other Income', s.otherIncome)}
+    ${money('GROSS PAY', s.grossPay, 'ps-sub')}
+    <div class="ps-sep"></div>
+    <div class="ps-sec">Deductions</div>
+    ${money('Pag-IBIG', s.pagibig)}
+    ${money('SSS', s.sss)}
+    ${money('PhilHealth', s.philhealth)}
+    ${money('Advances', s.advances)}
+    ${money('Withholding Tax', s.wtax)}
+    ${money('TOTAL DEDUCTIONS', s.totalDed, 'ps-sub')}
+    <div class="ps-sep"></div>
+    <div class="ps-net"><span>NET PAY</span><span>${peso(s.netPay)}</span></div>
+    <div class="ps-sep"></div>
+    <div class="ps-sign"><div class="ln">Received by &mdash; ${esc(s.empName)}</div></div>
+    <div class="ps-foot">Generated ${esc(new Date().toLocaleString('en-PH'))}<br>System-generated payslip</div>
   </div>`;
 }
 
@@ -446,9 +447,11 @@ function _payslipHtml(emp, cutoff) {
 // produced blank pages because html2canvas captured before layout/paint.
 const _HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
 
-function _renderPayslipPdf(innerHtml, filename) {
+// Receipt size: 80mm wide. singleMeasure=true fits the page height to one receipt (no trailing
+// whitespace); false uses a fixed page with page-breaks (one receipt per page for "all").
+function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:820px;height:1160px;opacity:0;border:0;z-index:-1;';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:340px;height:1400px;opacity:0;border:0;z-index:-1;';
   document.body.appendChild(iframe);
   let done = false;
   const cleanup = () => { if (!done) { done = true; try { document.body.removeChild(iframe); } catch (e) {} } };
@@ -456,17 +459,22 @@ function _renderPayslipPdf(innerHtml, filename) {
   const doc = iframe.contentDocument || iframe.contentWindow.document;
   doc.open();
   doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _PAYSLIP_CSS +
-    ' body{margin:0;background:#fff;}</style></head><body>' + innerHtml + '</body></html>');
+    ' body{margin:0;background:#fff;width:320px;}</style></head><body>' + innerHtml + '</body></html>');
   doc.close();
   const win = iframe.contentWindow;
 
   const run = () => win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
     try {
+      let format = [80, 230];   // 80mm receipt page
+      if (singleMeasure) {
+        const px = win.document.body.scrollHeight || 900;
+        format = [80, Math.max(120, Math.round(px * 25.4 / 96) + 8)];
+      }
       win.html2pdf().set({
-        margin: 10, filename,
+        margin: 4, filename,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 820, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: 320, logging: false },
+        jsPDF: { unit: 'mm', format, orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(win.document.body).save()
         .then(() => setTimeout(cleanup, 1500))
@@ -493,7 +501,7 @@ function downloadPayslip(empName, cutoff) {
   if (!emp) { alert('Employee not found.'); return; }
   const fn = 'Payslip_' + (emp.lastName + '_' + emp.firstName).replace(/[^a-z0-9]/gi, '_') +
     '_' + _currentYear + '-' + _currentMonth + '_' + cutoff + '.pdf';
-  _renderPayslipPdf(_payslipHtml(emp, cutoff), fn);
+  _renderPayslipPdf(_payslipHtml(emp, cutoff), fn, true);
 }
 
 // Download all active employees' payslips for a cutoff as one multi-page PDF (one per page).
@@ -504,7 +512,7 @@ function downloadAllPayslips(cutoff) {
   const html = list.map((emp, i) =>
     `<div style="${i < list.length - 1 ? 'page-break-after:always;' : ''}">${_payslipHtml(emp, cutoff)}</div>`).join('');
   const fn = 'Payslips_' + _currentYear + '-' + _currentMonth + '_' + cutoff + '.pdf';
-  _renderPayslipPdf(html, fn);
+  _renderPayslipPdf(html, fn, false);
 }
 
 function _onHoursInput(input) {
