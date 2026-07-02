@@ -107,7 +107,11 @@ function prActions(r) {
   const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.4rem;">${label}</button>`;
   let a = `<button class="link-btn" onclick='prGenPdf("${no}")'>PDF</button>` + B(`openDocsModal("Payment Request","${no}")`, 'Docs');
   const editable = st === 'Draft' || st === 'Rejected';
-  if (prCanCreate && editable) a += B(`prSubmit("${no}")`, 'Submit') + B(`prEdit("${no}")`, 'Edit') + B(`prDelete("${no}")`, 'Delete', 'del-btn');
+  if (prCanCreate) {
+    if (editable) a += B(`prSubmit("${no}")`, 'Submit');
+    a += B(`prEdit("${no}")`, 'Edit');                          // editable at any status
+    if (editable) a += B(`prDelete("${no}")`, 'Delete', 'del-btn');
+  }
   if (role === 'director' && st === 'Pending Director') a += B(`prApprove("${no}")`, 'Approve') + B(`prReject("${no}")`, 'Reject', 'del-btn');
   if (role === 'management' && st === 'Pending Management') a += B(`prApprove("${no}")`, 'Approve') + B(`prReject("${no}")`, 'Reject', 'del-btn');
   return a;

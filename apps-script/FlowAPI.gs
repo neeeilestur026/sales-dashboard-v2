@@ -38,7 +38,7 @@ var SCHEMA = {
   PurchaseOrderItems: ['PO No', 'Item No', 'Item Name', 'Qty', 'Purchase Price/Unit (FC)', 'Total (FC)'],
 
   APAging: ['AP No', 'PO No', 'Supplier', 'Currency', 'Amount (FC)', 'Amount (PHP)', 'Status',
-            'Due Date', 'Paid (PHP)', 'Notes', 'Created At', 'Updated At'],
+            'Due Date', 'Paid (PHP)', 'Notes', 'Created At', 'Updated At', 'PR No'],
 
   MaterialsReceiving: ['MR No', 'PO No', 'Date', 'Supplier', 'Currency', 'Customs Duties (PHP)',
                        'VAT (PHP)', 'Delivery Charges (PHP)', 'Other Charges (PHP)',
@@ -626,7 +626,7 @@ function createPurchaseOrder(p) {
   // rate, entered on the PO form) pre-fills Amount (PHP) so AP aging + the balance sheet populate.
   var apNo = _nextNumber('APAging', 1, 'AP');
   var amountPHP = _num(p.totalPHP) > 0 ? _num(p.totalPHP) : '';
-  _append('APAging', [apNo, no, p.supplier, currency, total, amountPHP, 'Unpaid', '', 0, '', _now(), _now()]);
+  _append('APAging', [apNo, no, p.supplier, currency, total, amountPHP, 'Unpaid', '', 0, '', _now(), _now(), '']);
   // GL: Dr Purchases Clearing / Cr Accounts Payable (Total Purchase Order).
   _postJournal('PO', no, p.date || _now(), currency, [
     { account: ACC.CLEARING, debit: total, memo: 'PO ' + no + ' — ' + p.supplier },
@@ -693,11 +693,14 @@ function deletePurchaseOrder(p) {
 //  AP AGING
 // ════════════════════════════════════════════════════════════════════════════
 function getAPAging() {
+  var prByNo = {};
+  _rows('PaymentRequests').forEach(function (pr) { prByNo[String(pr['PR No'])] = pr['Status'] || ''; });
   return { success: true, data: _rows('APAging').map(function (r) {
     return {
       apNo: r['AP No'], poNo: r['PO No'], supplier: r['Supplier'], currency: r['Currency'] || 'PHP',
       amountFC: _num(r['Amount (FC)']), amountPHP: _num(r['Amount (PHP)']), status: r['Status'],
       dueDate: r['Due Date'], paidPHP: _num(r['Paid (PHP)']), notes: r['Notes'],
+      prNo: r['PR No'] || '', prStatus: (prByNo[String(r['PR No'] || '')] || ''),
       createdAt: r['Created At'], updatedAt: r['Updated At'], rowIndex: r.rowIndex
     };
   }) };
@@ -1344,6 +1347,17 @@ function _poPayablePHP(poNo) {
   return php > 0 ? php : fc;
 }
 
+// Stamp the PR No onto every AP Aging row for a PO, so the payment request shows on its AP entry.
+function _linkPrToAp(poNo, prNo) {
+  if (!poNo) return;
+  var col = SCHEMA.APAging.indexOf('PR No') + 1;
+  if (col < 1) return;
+  var sh = _sheet('APAging');
+  _rows('APAging').forEach(function (r) {
+    if (String(r['PO No']) === String(poNo)) sh.getRange(r.rowIndex, col, 1, 1).setValues([[prNo]]);
+  });
+}
+
 function createPaymentRequest(p) {
   var type = (p.type === 'Other') ? 'Other' : 'PO';
   var no = p.prNo || _nextNumber('PaymentRequests', 1, 'PR');
@@ -1363,14 +1377,14 @@ function createPaymentRequest(p) {
     p.purpose || '', p.department || '', p.bankName || '', p.accountName || '', p.accountNumber || '',
     p.paymentMethod || '', p.dueDate || '', p.remarks || '', 'Draft', p.createdBy || p.actorName || '',
     p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now()]);
+  if (type === 'PO') _linkPrToAp(poNo, no);   // connect the PR to this PO's AP Aging entry
   return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
 }
 
 function updatePaymentRequest(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
-  var st = String(r['Status']);
-  if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Only Draft / Rejected requests can be edited.' };
+  // Editable at any status (accounting can update details/amount even after submit/approval).
   var fields = { 'Supplier': p.supplier, 'Payee': p.payee, 'Currency': p.currency, 'Purpose': p.purpose,
     'Department': p.department, 'Bank Name': p.bankName, 'Account Name': p.accountName,
     'Account Number': p.accountNumber, 'Payment Method': p.paymentMethod, 'Due Date': p.dueDate, 'Remarks': p.remarks };
@@ -1384,7 +1398,15 @@ function updatePaymentRequest(p) {
 function deletePaymentRequest(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
+  var poNo = r['PO No'];
   _sheet('PaymentRequests').deleteRow(r.rowIndex);
+  // Clear the AP link if it pointed at this PR.
+  if (poNo) {
+    var col = SCHEMA.APAging.indexOf('PR No') + 1, sh = _sheet('APAging');
+    _rows('APAging').forEach(function (a) {
+      if (String(a['PO No']) === String(poNo) && String(a['PR No']) === String(p.prNo)) sh.getRange(a.rowIndex, col, 1, 1).setValues([['']]);
+    });
+  }
   return { success: true, prNo: p.prNo, message: 'Payment Request deleted.' };
 }
 

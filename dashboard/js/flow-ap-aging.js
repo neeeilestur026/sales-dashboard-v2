@@ -34,7 +34,7 @@ function render() {
     <th>AP No</th><th>PO</th><th>Supplier</th><th>Cur</th><th class="num">Amount (FC)</th>
     <th class="num" style="width:130px;">Amount (PHP)</th><th style="width:110px;">Status</th>
     <th style="width:140px;">Due Date</th><th class="num" style="width:120px;">Paid (PHP)</th>
-    <th style="width:160px;">Notes</th><th></th></tr></thead><tbody>${apData.map(rowHtml).join('')}</tbody></table>`;
+    <th style="width:160px;">Notes</th><th style="width:150px;">Payment Request</th><th></th></tr></thead><tbody>${apData.map(rowHtml).join('')}</tbody></table>`;
   updateKpis();
 }
 
@@ -47,6 +47,7 @@ function rowHtml(r) {
     <td><input type="date" class="f-due" value="${flowDate(r.dueDate)}"></td>
     <td class="num"><input type="number" step="any" min="0" class="f-paid" value="${r.paidPHP || ''}" placeholder="0.00"></td>
     <td><input type="text" class="f-notes" value="${flowEsc(r.notes)}"></td>
+    <td>${r.prNo ? `<a class="link-btn" href="flow-payment-requests.html" title="Open Payment Requests">${flowEsc(r.prNo)}</a>${r.prStatus ? ' ' + (typeof flowStatusBadge === 'function' ? flowStatusBadge(r.prStatus) : flowEsc(r.prStatus)) : ''}` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;"><button class="link-btn" onclick="saveRow(${r.rowIndex}, this)">Save</button>
     <button class="link-btn" onclick='openDocsModal("AP Aging","${flowEsc(r.apNo)}")' style="margin-left:0.4rem;">Docs</button></td></tr>`;
 }
