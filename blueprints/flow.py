@@ -7,7 +7,9 @@ the flow already holds final prices; Drive-save is handled separately by FlowAPI
 """
 
 import base64
+import json
 import logging
+import re
 from io import BytesIO
 from datetime import datetime
 
@@ -86,6 +88,60 @@ def _pdf_response(pdf_bytes, filename):
     return resp
 
 
+def _embed_quo_data(pdf_bytes, payload):
+    """Embed the source quotation payload as base64 JSON in the PDF's /QuoData metadata.
+
+    Lets a later import of a system-generated quotation PDF recover the EXACT data
+    (customer/date/items/doc) instead of re-parsing the rendered tables. Best-effort:
+    on any failure the original bytes are returned unchanged. Per-item images are stripped
+    (too large / not needed for the editable re-import)."""
+    try:
+        items = []
+        for it in (payload.get("items") or []):
+            items.append({
+                "itemNo": it.get("itemNo"),
+                "itemName": it.get("itemName"),
+                "qty": it.get("qty"),
+                "price": it.get("price"),
+                "description": it.get("description"),
+            })
+        data = {
+            "customer": payload.get("customer"),
+            "date": payload.get("date"),
+            "quotationNo": payload.get("quotationNo"),
+            "vatOption": payload.get("vatOption", "inclusive"),
+            "items": items,
+            "doc": payload.get("doc") or {},
+        }
+        blob = base64.b64encode(json.dumps(data).encode("utf-8")).decode("ascii")
+        reader = PdfReader(BytesIO(pdf_bytes))
+        writer = PdfWriter()
+        for pg in reader.pages:
+            writer.add_page(pg)
+        if reader.metadata:
+            writer.add_metadata({k: v for k, v in reader.metadata.items()})
+        writer.add_metadata({"/QuoData": blob})
+        out = BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    except Exception as e:
+        logger.warning("Embedding /QuoData failed: %s", e)
+        return pdf_bytes
+
+
+def _read_quo_data(pdf_bytes):
+    """Return the embedded /QuoData dict from a system-generated quotation PDF, or None."""
+    try:
+        meta = PdfReader(BytesIO(pdf_bytes)).metadata or {}
+        blob = meta.get("/QuoData")
+        if not blob:
+            return None
+        return json.loads(base64.b64decode(str(blob)).decode("utf-8"))
+    except Exception as e:
+        logger.warning("Reading /QuoData failed: %s", e)
+        return None
+
+
 @flow_bp.route("/flow/quotation-pdf", methods=["POST"])
 def quotation_pdf():
     """Render a flow quotation as a branded PDF (identical layout to the legacy generator)."""
@@ -142,6 +198,7 @@ def quotation_pdf():
         pdf_bytes = build_quotation_pdf_bytes(items, images, client_details, terms,
                                               summary, desc_mode=desc_mode, note=_s(doc.get("note")))
         pdf_bytes = _merge_brochures(pdf_bytes, data.get("brochures"))
+        pdf_bytes = _embed_quo_data(pdf_bytes, data)
     except Exception as e:
         logger.exception("Flow quotation PDF failed")
         return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
@@ -327,3 +384,171 @@ def sheet_csv():
     except Exception as e:
         logger.exception("sheet-csv proxy failed")
         return jsonify({"success": False, "message": f"Sheet fetch failed: {e}"}), 502
+
+
+def _pp_num(v):
+    """Parse a currency/number string like '₱1,250.00' or '16' → float (0.0 on failure)."""
+    if v is None:
+        return 0.0
+    s = re.sub(r"[^0-9.\-]", "", str(v))
+    try:
+        return float(s) if s not in ("", "-", ".") else 0.0
+    except ValueError:
+        return 0.0
+
+
+def _parse_quotation_pdf(pdf_bytes):
+    """Best-effort scrape of a flow-layout quotation PDF via pdfplumber.
+
+    Returns (data_dict, warnings). Targets the item table header
+    Item No. | Description | Model No. | QTY (UOM) | Unit Price (PHP) | Total Amount (PHP)
+    and the header text (customer, date, subject, ref/RFQ, VAT)."""
+    warnings = []
+    try:
+        import pdfplumber
+    except Exception:
+        return None, ["pdfplumber is not installed on the server."]
+
+    items = []
+    full_text = ""
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+                full_text += "\n" + (page.extract_text() or "")
+                for table in (page.extract_tables() or []):
+                    if not table:
+                        continue
+                    header = [str(c or "").strip().lower() for c in table[0]]
+                    joined = " ".join(header)
+                    if "item no" not in joined or "description" not in joined:
+                        continue
+                    def _col(*names):
+                        for i, h in enumerate(header):
+                            if any(n in h for n in names):
+                                return i
+                        return None
+                    c_desc = _col("description")
+                    c_model = _col("model")
+                    c_itemno = _col("item no")
+                    c_qty = _col("qty", "uom")
+                    c_price = _col("unit price")
+                    for row in table[1:]:
+                        cells = [str(c or "").strip() for c in row]
+                        def _get(i):
+                            return cells[i] if (i is not None and i < len(cells)) else ""
+                        desc = _get(c_desc)
+                        model = _get(c_model)
+                        itemno = _get(c_itemno)
+                        qty = _pp_num(_get(c_qty))
+                        price = _pp_num(_get(c_price))
+                        if not desc and not model and not itemno:
+                            continue
+                        if not qty and not price and not desc:
+                            continue
+                        items.append({
+                            "itemNo": (model or itemno or "").replace("\n", " ").strip(),
+                            "itemName": desc.replace("\n", " ").strip(),
+                            "qty": qty,
+                            "price": price,
+                            "description": desc.replace("\n", " ").strip(),
+                        })
+    except Exception as e:
+        logger.warning("pdfplumber parse failed: %s", e)
+        return None, [f"Could not read the PDF: {e}"]
+
+    # Fallback: pdfplumber's table detection sometimes captures only the header row
+    # (the Description cell is a nested Paragraph). Scrape the item lines from the text.
+    # Line format: "<n> <Description...> <ModelNo> <qty> <unitPrice> <lineTotal>"
+    if not items:
+        row_re = re.compile(
+            r"^\s*(\d+)\s+(.+?)\s+(\S+)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$")
+        for ln in full_text.splitlines():
+            m = row_re.match(ln)
+            if not m:
+                continue
+            desc = m.group(2).strip()
+            model = m.group(3).strip()
+            qty = _pp_num(m.group(4))
+            price = _pp_num(m.group(5))
+            if not desc or (not qty and not price):
+                continue
+            items.append({
+                "itemNo": model, "itemName": desc, "qty": qty,
+                "price": price, "description": desc,
+            })
+
+    if not items:
+        warnings.append("No item table was recognized — add the items manually.")
+
+    def _find(pattern):
+        m = re.search(pattern, full_text, re.IGNORECASE)
+        return m.group(1).strip() if m else ""
+
+    subject = _find(r"Subject:\s*(.+)")
+    ref_no = _find(r"Ref\s*No:\s*(.+)")
+    rfq_no = _find(r"RFQ\s*No:\s*(.+)")
+    attention = _find(r"Attention:\s*(.+)")
+    designation = _find(r"Designation:\s*(.+)")
+    email = _find(r"Email:\s*(.+)")
+    date = _find(r"Date:\s*(.+)")
+    vat_option = "inclusive" if re.search(r"VAT\s*Inclusive", full_text, re.IGNORECASE) else "exclusive"
+
+    # Customer name: the bold line just before "Attention:" is hard to isolate from text;
+    # fall back to the first non-empty line if present. Admin edits this anyway.
+    customer = ""
+    if attention:
+        before = full_text.split("Attention:")[0].strip().splitlines()
+        _skip = ("quotation", "date:", "ref no", "rfq", "office address", "h.o estur",
+                 "blk", "district", "philippines", "san jose")
+        for ln in reversed(before):
+            ln = ln.strip()
+            low = ln.lower()
+            if not ln or any(s in low for s in _skip) or re.fullmatch(r"[\d,.\s]+", ln):
+                continue
+            customer = ln
+            break
+
+    data = {
+        "customer": customer,
+        "date": date,
+        "quotationNo": ref_no,
+        "vatOption": vat_option,
+        "items": items,
+        "doc": {
+            "attention": attention,
+            "designation": designation,
+            "email": email,
+            "subject": subject,
+            "rfqNo": rfq_no,
+        },
+    }
+    if not customer:
+        warnings.append("Customer name could not be detected — please fill it in.")
+    return data, warnings
+
+
+@flow_bp.route("/flow/import-quotation-pdf", methods=["POST"])
+def import_quotation_pdf():
+    """Read an uploaded quotation PDF → return editable draft data.
+
+    Prefers the exact embedded /QuoData (system-generated PDFs); otherwise falls back
+    to a best-effort pdfplumber parse. Read-only: never writes to the flow."""
+    f = request.files.get("pdf")
+    if not f:
+        return jsonify({"success": False, "message": "No PDF uploaded."}), 400
+    try:
+        pdf_bytes = f.read()
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Could not read upload: {e}"}), 400
+    if not pdf_bytes:
+        return jsonify({"success": False, "message": "Empty file."}), 400
+
+    exact = _read_quo_data(pdf_bytes)
+    if exact:
+        exact.setdefault("doc", {})
+        return jsonify({"success": True, "source": "exact", "warnings": [], **exact})
+
+    data, warnings = _parse_quotation_pdf(pdf_bytes)
+    if data is None:
+        return jsonify({"success": False, "message": (warnings or ["Could not parse PDF."])[0]}), 422
+    return jsonify({"success": True, "source": "parsed", "warnings": warnings, **data})

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Import Quotation (PDF)</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Import Quotation (PDF)</h1>
+      <p>Admin-only. Import an existing quotation PDF (same layout as the system's flow quotation), edit everything,
+        then save it as a new <b>Draft</b> flow quotation — <b>bypassing the Purchase Request</b>. Imported items are
+        automatically added to Inventory (at zero stock).</p>
+    </div>
+
+    <!-- Import step -->
+    <div class="chart-card" style="margin-bottom:1.25rem;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">1 · Import a PDF</h3>
+      <div class="flow-form">
+        <div class="full">
+          <label>Quotation PDF</label>
+          <input type="file" id="pdfFile" accept="application/pdf">
+        </div>
+      </div>
+      <div class="flow-actions">
+        <button type="button" class="btn btn-primary" id="importBtn" onclick="doImport()">Import &amp; Edit</button>
+        <span id="importSource" class="flow-badge" style="display:none;"></span>
+      </div>
+      <div id="importMsg" class="flow-msg" style="display:none;"></div>
+      <div id="importWarnings" style="display:none;margin-top:0.5rem;font-size:0.82rem;color:#b45309;"></div>
+    </div>
+
+    <!-- Editable form -->
+    <div class="chart-card" id="editCard" style="margin-bottom:1.25rem;display:none;">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">2 · Review &amp; edit</h3>
+      <div class="flow-form">
+        <div><label>Customer *</label><input type="text" id="customer" required></div>
+        <div><label>Quotation No <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional — auto if blank)</span></label><input type="text" id="quotationNo" placeholder="auto-generated"></div>
+        <div><label>Date</label><input type="date" id="date"></div>
+        <div><label>VAT</label><select id="vatOption">
+          <option value="inclusive">VAT Inclusive (12%)</option>
+          <option value="exclusive">VAT Exclusive</option>
+          <option value="zero">Zero-Rated</option>
+        </select></div>
+      </div>
+
+      <table class="flow-table flow-items" style="margin-top:0.75rem;">
+        <thead><tr>
+          <th style="width:16%;">Item No</th><th style="width:34%;">Description</th>
+          <th class="num" style="width:13%;">Qty</th><th class="num" style="width:16%;">Unit Price</th>
+          <th class="num" style="width:16%;">Line Total</th><th></th>
+        </tr></thead>
+        <tbody id="itemRows"></tbody>
+      </table>
+      <div class="flow-actions">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
+      </div>
+
+      <h4 style="font-size:0.85rem;font-weight:600;margin:1rem 0 0.5rem;">Document details <span style="font-weight:400;color:var(--text-muted,#64748b);">(used when you generate the PDF)</span></h4>
+      <div class="flow-form">
+        <div class="full"><label>Subject</label><input type="text" id="docSubject"></div>
+        <div class="full"><label>Address</label><input type="text" id="docAddress"></div>
+        <div><label>Attention</label><input type="text" id="docAttention"></div>
+        <div><label>Designation</label><input type="text" id="docDesignation"></div>
+        <div><label>Email</label><input type="text" id="docEmail"></div>
+        <div><label>RFQ No.</label><input type="text" id="docRfqNo"></div>
+        <div><label>Validity</label><input type="text" id="docValidity" placeholder="e.g. 30 days"></div>
+        <div><label>Delivery</label><input type="text" id="docDelivery"></div>
+        <div><label>Payment</label><input type="text" id="docPayment"></div>
+        <div><label>Warranty</label><input type="text" id="docWarranty" value="1 year warranty against factory defect"></div>
+      </div>
+
+      <div class="flow-actions" style="margin-top:0.75rem;">
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveImported()">Save as Draft Quotation</button>
+      </div>
+      <div id="saveMsg" class="flow-msg" style="display:none;"></div>
+      <div id="saveResult" style="display:none;margin-top:0.6rem;font-size:0.85rem;"></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/admin-import-quotation.js"></script>
+</body>
+</html>
