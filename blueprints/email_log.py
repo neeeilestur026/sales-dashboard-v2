@@ -69,16 +69,16 @@ def _fernet() -> Optional[Fernet]:
         return None
 
 
-def _gs_post(payload: dict) -> dict:
+def _gs_post(payload: dict, timeout: int = 30) -> dict:
     if not DASHBOARD_APPS_SCRIPT_URL:
         return {"success": False, "message": "DASHBOARD_APPS_SCRIPT_URL not configured"}
     try:
         resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                  timeout=30, allow_redirects=False)
+                                  timeout=timeout, allow_redirects=False)
         if resp.status_code in (301, 302, 303, 307, 308):
             loc = resp.headers.get("Location")
             if loc:
-                resp = http_requests.get(loc, timeout=30)
+                resp = http_requests.get(loc, timeout=timeout)
         return resp.json()
     except Exception as exc:
         logger.error("_gs_post error: %s", exc)
@@ -664,8 +664,23 @@ def email_users():
     if _users_cache.get("users") and (now - _users_cache.get("_ts", 0)) < _USERS_CACHE_TTL:
         return jsonify({"success": True, "users": _users_cache["users"], "cached": True})
 
-    result = _gs_post({"action": "getUsersForBackend", "sharedSecret": INTERNAL_SHARED_SECRET})
+    # Apps Script cold starts routinely exceed 30s — give the roster scan headroom, and retry once
+    # on a transport-style failure (timeout / connection error; never on an explicit Code.gs reply).
+    payload = {"action": "getUsersForBackend", "sharedSecret": INTERNAL_SHARED_SECRET}
+    result = _gs_post(payload, timeout=60)
+    def _is_explicit(res):
+        m = str(res.get("message", "")).strip().lower()
+        return m == "forbidden" or "unknown action" in m
+    if not result.get("success") and not _is_explicit(result):
+        time.sleep(0.5)
+        result = _gs_post(payload, timeout=60)
     if not result.get("success"):
+        # Stale fallback: the roster changes rarely — serve the last good list rather than dropping
+        # the whole sent-email section because Apps Script was slow this once.
+        if _users_cache.get("users"):
+            logger.warning("email_users: Code.gs failed (%s) — serving stale roster",
+                           result.get("message"))
+            return jsonify({"success": True, "users": _users_cache["users"], "stale": True})
         msg = str(result.get("message", "")).strip()
         if msg.lower() == "forbidden":
             msg = ("Code.gs rejected the request: INTERNAL_SHARED_SECRET mismatch. Set the matching "
