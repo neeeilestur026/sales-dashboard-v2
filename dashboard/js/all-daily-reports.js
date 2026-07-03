@@ -65,7 +65,7 @@ async function adrLoadAllEmails() {
     const uname = u.username || u.fullName || u.name;                 // creds are keyed by login username
     const disp = u.fullName || u.name || u.username;                  // cards are keyed by display name
     if (!uname) return Promise.resolve();
-    return apiFetchEmailLogToday(uname).then(r => {
+    return apiFetchEmailLogToday(uname, _date()).then(r => {
       adrEmails[disp] = { emails: (r && r.success && r.emails) || [], needsSetup: !!(r && r.needsSetup) };
     }).catch(() => { adrEmails[disp] = { emails: [], needsSetup: false }; });
   }));
@@ -141,12 +141,12 @@ function render() {
 
 // The user's per-day sent emails (auto-loaded up front in adrLoadAllEmails), rendered inline.
 function adrEmailHtml(name) {
-  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails Today</div>`;
+  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_e(_date())}</div>`;
   const rec = adrEmails[name];
   if (!rec) return head + `<div class="dr-empty" style="font-size:0.8rem;">—</div>`;
   if (rec.needsSetup) return head + `<div class="dr-empty" style="font-size:0.8rem;">${_e(name)} hasn't connected their mailbox.</div>`;
   const emails = rec.emails || [];
-  if (!emails.length) return head + `<div class="dr-empty" style="font-size:0.8rem;">No emails sent today.</div>`;
+  if (!emails.length) return head + `<div class="dr-empty" style="font-size:0.8rem;">No emails sent on ${_e(_date())}.</div>`;
   return head + `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>
     <tbody>${emails.map(m => `<tr><td>${_e(m.sentAt || m.time || '')}</td><td>${_e(m.recipient || '')}</td><td>${_e(m.subject || '')}</td></tr>`).join('')}</tbody></table></div>`;
 }

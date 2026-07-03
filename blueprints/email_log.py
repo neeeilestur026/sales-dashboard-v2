@@ -396,8 +396,9 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
             pass
 
 
-def fetch_sent_today(addr: str, pwd: str, debug: dict = None) -> list[dict]:
-    """Connect to GoDaddy IMAP, return a list of headers for emails sent today (PH local time)."""
+def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict = None) -> list[dict]:
+    """Connect to GoDaddy IMAP; return headers for emails sent on `target_date` (PH local, YYYY-MM-DD),
+    or today when omitted."""
     conn = _imap_login(addr, pwd)
     try:
         folder = _open_sent(conn)
@@ -405,13 +406,19 @@ def fetch_sent_today(addr: str, pwd: str, debug: dict = None) -> list[dict]:
             raise RuntimeError("Could not open Sent folder")
         if debug is not None:
             debug["folder"] = folder
-        # IMAP SINCE searches by server date; widen by 1 day to catch all of "today" in PH
-        # (e.g. PH 8 AM = previous-day 00 UTC for some servers). We then filter client-side.
-        now_ph = datetime.now(PH_TZ)
-        today_ph = now_ph.date()
-        since_dt = now_ph - timedelta(days=1)
-        date_str = since_dt.strftime("%d-%b-%Y")
-        typ, data = conn.search(None, f'SINCE {date_str}')
+        today_ph = datetime.now(PH_TZ).date()
+        target = today_ph
+        if target_date:
+            try:
+                target = datetime.strptime(target_date, "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                target = today_ph
+        is_today = (target == today_ph)
+        # Bound the IMAP search to the target day (±1 day covers PH↔server timezone edges); then filter
+        # client-side to exactly `target` in PH local time.
+        since_str = (target - timedelta(days=1)).strftime("%d-%b-%Y")
+        before_str = (target + timedelta(days=2)).strftime("%d-%b-%Y")
+        typ, data = conn.search(None, f'SINCE {since_str} BEFORE {before_str}')
         if typ != "OK" or not data or not data[0]:
             if debug is not None:
                 debug["windowCount"] = 0
@@ -451,8 +458,12 @@ def fetch_sent_today(addr: str, pwd: str, debug: dict = None) -> list[dict]:
                         sent_dt = datetime.fromtimestamp(time.mktime(tup), tz=timezone.utc)
                 except Exception:
                     sent_dt = None
-            # Only include emails actually sent today in PH local time (keep undated ones).
-            if sent_dt and sent_dt.astimezone(PH_TZ).date() != today_ph:
+            # Keep only messages sent on the target PH date. Undated messages are kept only for "today"
+            # (so a past-date window doesn't leak undated mail).
+            if sent_dt:
+                if sent_dt.astimezone(PH_TZ).date() != target:
+                    continue
+            elif not is_today:
                 continue
             # Decode MIME-encoded headers BEFORE parsing addresses — otherwise
             # getaddresses can't extract the email from "=?UTF-8?B?...?= <a@b>"
@@ -587,9 +598,11 @@ def email_today():
     if not session:
         return jsonify({"success": False, "message": "Invalid session"}), 401
     # Oversight roles may request another user's sent mail (management "see what each user is doing").
-    target_user = ""
-    if request.method == "POST":
-        target_user = ((request.get_json(silent=True) or {}).get("user") or "").strip()
+    body = request.get_json(silent=True) or {} if request.method == "POST" else {}
+    target_user = (body.get("user") or "").strip()
+    # Which date's sent mail to fetch (default today). Validate strictly.
+    req_date = (body.get("date") or request.args.get("date") or "").strip()
+    target_date = req_date if re.fullmatch(r"\d{4}-\d{2}-\d{2}", req_date) else None
     oversight = str(session.get("role", "")).lower() in ("admin", "accounting", "management", "director")
     lookup_user = target_user if (target_user and oversight) else session["username"]
     enc_blob = _get_enc_creds(lookup_user)
@@ -599,11 +612,11 @@ def email_today():
     if not decrypted:
         return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
     addr, pwd = decrypted
-    want_debug = oversight and (request.args.get("debug") or (request.get_json(silent=True) or {}).get("debug") if request.method == "POST" else request.args.get("debug"))
+    want_debug = oversight and (body.get("debug") or request.args.get("debug"))
     dbg = {} if want_debug else None
     try:
-        emails = fetch_sent_today(addr, pwd, debug=dbg)
-        resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user}
+        emails = fetch_sent_today(addr, pwd, target_date=target_date, debug=dbg)
+        resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user, "date": target_date or datetime.now(PH_TZ).date().isoformat()}
         if dbg is not None:
             resp["debug"] = dbg
         return jsonify(resp)

@@ -105,7 +105,7 @@ async function loadEmails() {
   let emails = [], needsSetup = false;
   try {
     if (typeof apiFetchEmailLogToday === 'function') {
-      const r = await apiFetchEmailLogToday();
+      const r = await apiFetchEmailLogToday(undefined, _date());
       needsSetup = !!(r && r.needsSetup);
       emails = (r && r.success && r.emails) || (r && r.data) || [];
     }
@@ -121,7 +121,7 @@ async function loadEmails() {
   body.innerHTML = emails.length ? emails.map(r => {
     const t = r.sentAt || r.time || r.date || '';
     return `<tr><td>${_esc(t)}</td><td>${_esc(r.recipient || r.to || '')}</td><td>${_esc(r.subject || '')}</td><td>${_esc(r.category || '')}</td></tr>`;
-  }).join('') : '<tr><td colspan="4" class="dr-empty">No emails sent today.</td></tr>';
+  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.</td></tr>`;
 }
 
 // ── Per-rep Notes (flow backend, scoped by user) ──
