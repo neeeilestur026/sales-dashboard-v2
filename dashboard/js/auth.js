@@ -387,6 +387,7 @@ function renderNavbar(activePage) {
           <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
           <a href="migrate-so-costs.html" class="${activePage === 'migrate-so-costs' ? 'active' : ''}">Migrate SO Costs</a>
           <a href="reconcile-2026-costs.html" class="${activePage === 'reconcile-2026-costs' ? 'active' : ''}">Reconcile 2026 Costs</a>
+          <a href="replace-2026-sos.html" class="${activePage === 'replace-2026-sos' ? 'active' : ''}">Replace 2026 SOs</a>
           <a href="migrate-collections.html" class="${activePage === 'migrate-collections' ? 'active' : ''}">Migrate Collections</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
@@ -446,6 +447,7 @@ function renderNavbar(activePage) {
           <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
           <a href="migrate-so-costs.html" class="${activePage === 'migrate-so-costs' ? 'active' : ''}">Migrate SO Costs</a>
           <a href="reconcile-2026-costs.html" class="${activePage === 'reconcile-2026-costs' ? 'active' : ''}">Reconcile 2026 Costs</a>
+          <a href="replace-2026-sos.html" class="${activePage === 'replace-2026-sos' ? 'active' : ''}">Replace 2026 SOs</a>
           <a href="migrate-collections.html" class="${activePage === 'migrate-collections' ? 'active' : ''}">Migrate Collections</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>

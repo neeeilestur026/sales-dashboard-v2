@@ -21,6 +21,12 @@ var SHEET_ID = '1ND6d0OK1xJ3wM29L4EsD-Xia44FXfD7HOZx8tms9Msk'; // ← paste the 
 // Optional: Drive folder ID for saved quotation/PO PDFs. Blank → auto find/create "Flow Documents".
 var FLOW_DRIVE_FOLDER_ID = '';
 
+// Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
+// behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
+var FLOW_VERSION = 64;   // Addendum 64: deleteMigratedRecords({year}) + saveSOCostDetails status/source
+
+function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
+
 // ── Tab schemas (tab name → header row) ──────────────────────────────────────
 var SCHEMA = {
   Inventory: ['Item No', 'Description', 'Available Balance', 'Purchase Price/Unit',
@@ -1698,18 +1704,21 @@ function saveSOCostDetails(p) {
   var rowArr = [soNo, c.customer || '', c.date || '', sales, cogsType, _num(c.purchaseOfGoods),
     _num(c.bankChargeCOGS), _num(c.dutiesAndTaxes), _num(c.bankChargeShipping), c.shippingCompany || '',
     _num(c.shippingCost), _num(c.localCharges), _num(c.deliveryToOffice), _num(c.deliveryToClient),
-    totalCOGS, grossProfit, 'Manual (edited)', _now()];
+    totalCOGS, grossProfit,
+    (c.source === 'import' ? 'Migrated (reconciliation)' : 'Manual (edited)'), _now()];
   var sh = _sheet('SOCostDetails');
   var existing = _rows('SOCostDetails').filter(function (r) { return String(r['SO No']) === soNo; })[0];
   if (existing) {
     sh.getRange(existing.rowIndex, 1, 1, rowArr.length).setValues([rowArr]);
   } else {
     sh.appendRow(rowArr);
-    // Create a header-only Sales Order if one doesn't exist yet.
+    // Create a header-only Sales Order if one doesn't exist yet. Imports (c.source==='import') keep the
+    // file's real status and are tagged 'Migrated (legacy)' so a future year-scoped wipe removes them.
     var hasHeader = _rows('SalesOrders').some(function (r) { return String(r['SO No']) === soNo; });
     if (!hasHeader) {
       _sheet('SalesOrders').appendRow([soNo, '', c.date || _now(), c.customer || '(unknown)',
-        'Closed', sales, 'Manual (edited)', _now(),
+        c.status || 'Closed', sales,
+        (c.source === 'import' ? 'Migrated (legacy)' : 'Manual (edited)'), _now(),
         (cogsType === 'international' ? 'International' : 'Local')]);
     }
   }
@@ -1737,29 +1746,32 @@ function saveSOCostDetails(p) {
 function deleteMigratedRecords(p) {
   var counts = { soCosts: 0, salesOrders: 0, invoices: 0, receivings: 0 };
   var byRowDesc = function (a, b) { return b.rowIndex - a.rowIndex; };
+  // Optional year scope (e.g. '2026'): only delete rows whose Date falls in that year.
+  var year = String((p && p.year) || '').trim();
+  var inYear = function (v) { return !year || _dateStr(v).indexOf(year) === 0; };
   // SOCostDetails — anything migrated or manually edited (all originate from the migration).
   var scdSh = _sheet('SOCostDetails');
-  _rows('SOCostDetails').filter(function (r) { var s = String(r['Source'] || ''); return s.indexOf('Migrated') === 0 || s === 'Manual (edited)'; })
+  _rows('SOCostDetails').filter(function (r) { var s = String(r['Source'] || ''); return (s.indexOf('Migrated') === 0 || s === 'Manual (edited)') && inYear(r['Date']); })
     .sort(byRowDesc).forEach(function (r) { scdSh.deleteRow(r.rowIndex); counts.soCosts++; });
   // Header-only migrated Sales Orders.
   var soSh = _sheet('SalesOrders');
-  _rows('SalesOrders').filter(function (r) { var cb = String(r['Created By'] || ''); return cb === 'Migrated (legacy)' || cb === 'Manual (edited)'; })
+  _rows('SalesOrders').filter(function (r) { var cb = String(r['Created By'] || ''); return (cb === 'Migrated (legacy)' || cb === 'Manual (edited)') && inYear(r['Date']); })
     .sort(byRowDesc).forEach(function (r) { soSh.deleteRow(r.rowIndex); counts.salesOrders++; });
   // Migrated Invoices + their items.
   var invSh = _sheet('Invoices'), invNos = {};
-  _rows('Invoices').filter(function (v) { return String(v['Created By']) === 'Migrated (legacy)'; })
+  _rows('Invoices').filter(function (v) { return String(v['Created By']) === 'Migrated (legacy)' && inYear(v['Date']); })
     .sort(byRowDesc).forEach(function (v) { invNos[String(v['INV No'])] = true; invSh.deleteRow(v.rowIndex); counts.invoices++; });
   var invItemSh = _sheet('InvoiceItems');
   _rows('InvoiceItems').filter(function (r) { return invNos[String(r['INV No'])]; }).sort(byRowDesc).forEach(function (r) { invItemSh.deleteRow(r.rowIndex); });
   // Migrated Receiving + their items.
   var mrSh = _sheet('MaterialsReceiving'), mrNos = {};
-  _rows('MaterialsReceiving').filter(function (m) { return String(m['Received By']) === 'Migrated (legacy)'; })
+  _rows('MaterialsReceiving').filter(function (m) { return String(m['Received By']) === 'Migrated (legacy)' && inYear(m['Date']); })
     .sort(byRowDesc).forEach(function (m) { mrNos[String(m['MR No'])] = true; mrSh.deleteRow(m.rowIndex); counts.receivings++; });
   var rcvItemSh = _sheet('ReceivingItems');
   _rows('ReceivingItems').filter(function (r) { return mrNos[String(r['MR No'])]; }).sort(byRowDesc).forEach(function (r) { rcvItemSh.deleteRow(r.rowIndex); });
   return { success: true, soCosts: counts.soCosts, salesOrders: counts.salesOrders,
-    invoices: counts.invoices, receivings: counts.receivings,
-    message: 'Removed migrated: ' + counts.soCosts + ' cost detail(s), ' + counts.salesOrders + ' SO(s), ' +
+    invoices: counts.invoices, receivings: counts.receivings, year: year || 'all',
+    message: 'Removed migrated' + (year ? ' (' + year + ')' : '') + ': ' + counts.soCosts + ' cost detail(s), ' + counts.salesOrders + ' SO(s), ' +
       counts.invoices + ' invoice(s), ' + counts.receivings + ' receiving(s).' };
 }
 
@@ -2460,6 +2472,7 @@ function savePRPDF(p) {
 
 // ── Action registry ──────────────────────────────────────────────────────────
 var HANDLERS = {
+  getVersion: getVersion,
   getInventory: getInventory, addInventoryItem: addInventoryItem,
   updateInventoryItem: updateInventoryItem, deleteInventoryItem: deleteInventoryItem,
   getQuotations: getQuotations, createQuotation: createQuotation,
