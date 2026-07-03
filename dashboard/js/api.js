@@ -86,33 +86,53 @@ async function fetchFromAPI(params, options = {}) {
   const query = new URLSearchParams(params).toString();
   const url = `${APPS_SCRIPT_URL}?${query}`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
-
   const promise = (async () => {
+    // Retry 429/5xx + network blips with backoff. 404 is NOT retried here: the production
+    // deployment 404s ALL GETs systemically, so retrying would only slow already-failing calls.
+    const _retryable = s => s === 408 || s === 429 || s >= 500;
+    const _sleep = ms => new Promise(r => setTimeout(r, ms));
+    const attempts = 3;
+    let lastErr;
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        redirect: 'follow',
-        signal: controller.signal
-      });
-      clearTimeout(timer);
+      for (let i = 0; i < attempts; i++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            redirect: 'follow',
+            signal: controller.signal
+          });
+          clearTimeout(timer);
 
-      if (!response.ok) {
-        throw new Error(`Server responded with status ${response.status}`);
-      }
+          if (!response.ok) {
+            if (_retryable(response.status) && i < attempts - 1) {
+              lastErr = new Error(`Server responded with status ${response.status}`);
+              await _sleep(500 * (i + 1));
+              continue;
+            }
+            throw new Error(`Server responded with status ${response.status}`);
+          }
 
-      const data = await response.json();
-      if (data.authError) { _handleAuthError(); throw new Error(data.message || 'Session expired.'); }
-      if (cacheable) _cacheSet(key, data);
-      return data;
-    } catch (error) {
-      clearTimeout(timer);
-      console.error('API Error:', error);
-      if (error.name === 'AbortError') {
-        throw new Error('Request timed out. The server took too long to respond.');
+          const data = await response.json();
+          if (data.authError) { _handleAuthError(); throw new Error(data.message || 'Session expired.'); }
+          if (cacheable) _cacheSet(key, data);
+          return data;
+        } catch (error) {
+          clearTimeout(timer);
+          if (error.name === 'AbortError') {
+            lastErr = new Error('Request timed out. The server took too long to respond.');
+            if (i < attempts - 1) { await _sleep(500 * (i + 1)); continue; }
+            console.error('API Error:', lastErr);
+            throw lastErr;
+          }
+          if (error.message && /Session expired/.test(error.message)) throw error;
+          console.error('API Error:', error);
+          throw new Error(error.message || 'Unable to connect to the server.');
+        }
       }
-      throw new Error(error.message || 'Unable to connect to the server.');
+      console.error('API Error:', lastErr);
+      throw lastErr || new Error('Unable to connect to the server.');
     } finally {
       delete _inflight[key];
     }
@@ -150,27 +170,47 @@ async function _postMutation(params) {
     }
   } catch (e) {}
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
-
-  try {
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(params)
-    });
-    clearTimeout(timer);
-    if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
-    const data = await response.json();
-    if (data.authError) { _handleAuthError(); throw new Error(data.message || 'Session expired.'); }
-    return data;
-  } catch (error) {
-    clearTimeout(timer);
-    if (error.name === 'AbortError') throw new Error('Request timed out. The server took too long to respond.');
-    throw new Error(error.message || 'Unable to connect to the server.');
+  // Apps Script POSTs bounce through a ONE-TIME googleusercontent echo URL that intermittently
+  // returns 404/429/5xx before the handler even runs (seen live on login). Retry transients with
+  // backoff — same pattern as flow-api.js postFlow. A bounced request never reached the handler,
+  // so a retry doesn't double-write.
+  const _transient = s => s === 404 || s === 408 || s === 429 || s >= 500;
+  const _sleep = ms => new Promise(r => setTimeout(r, ms));
+  const attempts = 3;
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(params)
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        if (_transient(response.status) && i < attempts - 1) {
+          lastErr = new Error(`Server responded with status ${response.status}`);
+          await _sleep(600 * (i + 1));
+          continue;
+        }
+        throw new Error(`Server responded with status ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.authError) { _handleAuthError(); throw new Error(data.message || 'Session expired.'); }
+      return data;
+    } catch (error) {
+      clearTimeout(timer);
+      if (error.name === 'AbortError') throw new Error('Request timed out. The server took too long to respond.');
+      if (error.message && /Session expired/.test(error.message)) throw error;   // never retry auth errors
+      lastErr = new Error(error.message || 'Unable to connect to the server.');
+      if (i < attempts - 1) { await _sleep(600 * (i + 1)); continue; }
+      throw lastErr;
+    }
   }
+  throw lastErr || new Error('Unable to connect to the server.');
 }
 
 /**
