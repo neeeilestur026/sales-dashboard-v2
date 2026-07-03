@@ -414,6 +414,8 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
             except (TypeError, ValueError):
                 target = today_ph
         is_today = (target == today_ph)
+        if debug is not None:
+            debug["date"] = target.isoformat()
         # Bound the IMAP search to the target day (±1 day covers PH↔server timezone edges); then filter
         # client-side to exactly `target` in PH local time.
         since_str = (target - timedelta(days=1)).strftime("%d-%b-%Y")
@@ -612,13 +614,13 @@ def email_today():
     if not decrypted:
         return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
     addr, pwd = decrypted
-    want_debug = oversight and (body.get("debug") or request.args.get("debug"))
-    dbg = {} if want_debug else None
+    # Always collect a small diagnostic (folder / window / matched) — no PII — so the UI can explain
+    # an empty day ("checked Sent, 0 in window") instead of a bare "no emails".
+    meta = {}
     try:
-        emails = fetch_sent_today(addr, pwd, target_date=target_date, debug=dbg)
-        resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user, "date": target_date or datetime.now(PH_TZ).date().isoformat()}
-        if dbg is not None:
-            resp["debug"] = dbg
+        emails = fetch_sent_today(addr, pwd, target_date=target_date, debug=meta)
+        resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user,
+                "date": target_date or datetime.now(PH_TZ).date().isoformat(), "meta": meta}
         return jsonify(resp)
     except imaplib.IMAP4.error as exc:
         # Likely password changed — invalidate cache so next call re-fetches

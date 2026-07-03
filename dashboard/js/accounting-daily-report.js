@@ -25,9 +25,28 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
 
   load();
+  const poll = setInterval(() => {
+    if (document.visibilityState === 'visible' && _date() === flowToday()) refreshLive();
+  }, 60000);
+  window.addEventListener('pagehide', () => clearInterval(poll));
 });
 
 function _date() { return document.getElementById('datePicker').value; }
+let drEmailMeta = null;
+function _emailMetaHint() {
+  const m = drEmailMeta;
+  return (m && m.folder) ? ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>` : '';
+}
+
+// Live refresh of read-only sections (activity + sent emails) — never touches the notes field.
+async function refreshLive() {
+  try {
+    const res = await fetchFlow('getActivityLog', { date: _date(), user: drSession.name });
+    drEntries = (res && res.data) || [];
+    render();
+  } catch (e) { /* keep previous */ }
+  loadEmails();
+}
 
 async function load() {
   const date = _date();
@@ -106,6 +125,7 @@ async function loadEmails() {
       const r = await apiFetchEmailLogToday(undefined, _date());
       needsSetup = !!(r && r.needsSetup);
       emails = (r && r.success && r.emails) || (r && r.data) || [];
+      drEmailMeta = (r && r.meta) || null;
     }
   } catch (e) { emails = []; }
   emails = Array.isArray(emails) ? emails : [];
@@ -117,7 +137,7 @@ async function loadEmails() {
   body.innerHTML = emails.length ? emails.map(r => {
     const t = r.sentAt || r.time || r.date || '';
     return `<tr><td>${_esc(t)}</td><td>${_esc(r.recipient || r.to || '')}</td><td>${_esc(r.subject || '')}</td><td>${_esc(r.category || '')}</td></tr>`;
-  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.</td></tr>`;
+  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.${_emailMetaHint()}</td></tr>`;
 }
 
 // ── Per-day Notes (flow backend) — scoped to this user ──

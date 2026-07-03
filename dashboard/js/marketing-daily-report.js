@@ -34,9 +34,28 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
   renderTasks();
   load();
+  const poll = setInterval(() => {
+    if (document.visibilityState === 'visible' && _date() === flowToday()) refreshLive();
+  }, 60000);
+  window.addEventListener('pagehide', () => clearInterval(poll));
 });
 
 function _date() { return document.getElementById('datePicker').value; }
+let mdrEmailMeta = null;
+function _emailMetaHint() {
+  const m = mdrEmailMeta;
+  return (m && m.folder) ? ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>` : '';
+}
+
+// Live refresh of read-only sections (activity + sent emails) — never touches the notes field.
+async function refreshLive() {
+  try {
+    const res = await fetchFlow('getActivityLog', { date: _date(), user: mdrSession.name });
+    mdrEntries = ((res && res.data) || []).filter(e => e.module === 'Marketing' || e.module === 'Call');
+    render();
+  } catch (e) { /* keep previous */ }
+  loadEmails();
+}
 
 async function load() {
   const date = _date();
@@ -104,6 +123,7 @@ async function loadEmails() {
       const r = await apiFetchEmailLogToday(undefined, _date());
       needsSetup = !!(r && r.needsSetup);
       emails = (r && r.success && r.emails) || (r && r.data) || [];
+      mdrEmailMeta = (r && r.meta) || null;
     }
   } catch (e) { emails = []; }
   emails = Array.isArray(emails) ? emails : [];
@@ -117,7 +137,7 @@ async function loadEmails() {
   body.innerHTML = emails.length ? emails.map(r => {
     const t = r.sentAt || r.time || r.date || '';
     return `<tr><td>${_esc(t)}</td><td>${_esc(r.recipient || r.to || '')}</td><td>${_esc(r.subject || '')}</td><td>${_esc(r.category || '')}</td></tr>`;
-  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.</td></tr>`;
+  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.${_emailMetaHint()}</td></tr>`;
 }
 
 async function loadNotes() {

@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await checkAlreadySubmitted();
   await loadFeed();
+  // Keep today's feed + sent emails auto-updating while the tab is visible (loadFeed never touches notes).
+  const poll = setInterval(() => { if (document.visibilityState === 'visible') loadFeed(); }, 60000);
+  window.addEventListener('pagehide', () => clearInterval(poll));
 });
 
 function _todayISO() {

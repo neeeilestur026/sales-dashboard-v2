@@ -7,7 +7,15 @@
 let drSession = null;
 let drEntries = [];        // this rep's activity entries for the selected date
 let drEmailCount = 0;
+let drEmailMeta = null;    // {folder, windowCount, matched, date} diagnostic from the mail fetch
 let drCalls = [];          // this rep's logged calls for the selected date
+
+// Muted diagnostic appended when a day shows zero sent emails (explains why: folder/window/matched).
+function _emailMetaHint() {
+  const m = drEmailMeta;
+  if (!m || !m.folder) return '';
+  return ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>`;
+}
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Inventory'];
 
 function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -30,9 +38,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('logCallBtn').addEventListener('click', logCall);
 
   load();
+  // Auto-refresh the read-only parts (activity + sent emails + calls) every 60s while viewing TODAY
+  // and the tab is visible — so sent emails keep updating during the day. Notes are never touched.
+  const poll = setInterval(() => {
+    if (document.visibilityState === 'visible' && _date() === flowToday()) refreshLive();
+  }, 60000);
+  window.addEventListener('pagehide', () => clearInterval(poll));
 });
 
 function _date() { return document.getElementById('datePicker').value; }
+
+// Live refresh of the read-only sections only (safe to run on a timer — leaves the notes field alone).
+async function refreshLive() {
+  const date = _date();
+  try {
+    const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
+    drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
+    render();
+  } catch (e) { /* keep previous */ }
+  loadEmails();
+  if (typeof loadCalls === 'function') loadCalls();
+}
 
 async function load() {
   const date = _date();
@@ -108,6 +134,7 @@ async function loadEmails() {
       const r = await apiFetchEmailLogToday(undefined, _date());
       needsSetup = !!(r && r.needsSetup);
       emails = (r && r.success && r.emails) || (r && r.data) || [];
+      drEmailMeta = (r && r.meta) || null;
     }
   } catch (e) { emails = []; }
   emails = Array.isArray(emails) ? emails : [];
@@ -121,7 +148,7 @@ async function loadEmails() {
   body.innerHTML = emails.length ? emails.map(r => {
     const t = r.sentAt || r.time || r.date || '';
     return `<tr><td>${_esc(t)}</td><td>${_esc(r.recipient || r.to || '')}</td><td>${_esc(r.subject || '')}</td><td>${_esc(r.category || '')}</td></tr>`;
-  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.</td></tr>`;
+  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.${_emailMetaHint()}</td></tr>`;
 }
 
 // ── Per-rep Notes (flow backend, scoped by user) ──

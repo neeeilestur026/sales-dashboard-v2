@@ -28,6 +28,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   document.getElementById('userSearch').addEventListener('input', render);
   load();
+  // Auto-update the whole oversight view (activity + every user's sent emails) while viewing TODAY.
+  // Longer interval — it fans out IMAP to every user, so don't hammer GoDaddy.
+  const poll = setInterval(() => {
+    if (document.visibilityState === 'visible' && _date() === flowToday()) load();
+  }, 180000);
+  window.addEventListener('pagehide', () => clearInterval(poll));
 });
 
 function _date() { return document.getElementById('datePicker').value; }
