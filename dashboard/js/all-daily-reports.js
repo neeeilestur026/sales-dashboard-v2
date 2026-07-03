@@ -23,8 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderNavbar('all-daily-reports');
   const picker = document.getElementById('datePicker');
   picker.value = flowToday();
-  picker.addEventListener('change', load);
-  document.getElementById('refreshBtn').addEventListener('click', load);
+  picker.addEventListener('change', () => load());   // wrapped: the change Event must not become the `fresh` arg
+  document.getElementById('refreshBtn').addEventListener('click', () => load(true));   // fresh: bypass the flow read-cache
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   document.getElementById('userSearch').addEventListener('input', render);
   load();
@@ -38,25 +38,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function _date() { return document.getElementById('datePicker').value; }
 
-async function load() {
+// Progressive load: paint activity IMMEDIATELY, then notes, then emails batch-by-batch — instead of
+// blocking the first render on the slowest data (per-user IMAP fetches take seconds each).
+// A sequence counter discards stale async completions when a new load supersedes (poll/date change).
+let adrLoadSeq = 0;
+let adrEmailsLoading = false;
+async function load(fresh) {
+  const seq = ++adrLoadSeq;
+  const opts = fresh ? { fresh: true } : {};
   const date = _date();
   document.getElementById('reportMeta').textContent =
     `For ${date} · Oversight by ${adrSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
+
+  // 1) Activity → first paint right away.
   try {
-    const res = await fetchFlow('getActivityLog', { date });   // ALL users
+    const res = await fetchFlow('getActivityLog', { date }, opts);   // ALL users
+    if (seq !== adrLoadSeq) return;
     adrEntries = (res && res.data) || [];
   } catch (e) {
+    if (seq !== adrLoadSeq) return;
     adrEntries = [];
     document.getElementById('userReports').innerHTML = `<div class="dr-empty">${_e(e.message)}</div>`;
   }
-  // Fetch each active user's personal note for the day (best-effort, parallel).
   adrNotes = {};
+  adrEmailsLoading = true;
+  render();
+
+  // 2) Notes (parallel, best-effort) → repaint when done.
   const users = Array.from(new Set(adrEntries.map(e => e.user).filter(Boolean)));
-  await Promise.all(users.map(u =>
-    fetchFlow('getDailyNote', { date, user: u }).then(r => { if (r && r.notes) adrNotes[u] = r.notes; }).catch(() => {})
-  ));
-  // Pull every user's per-day sent emails from GoDaddy (all roles EXCEPT director) and auto-aggregate.
-  await adrLoadAllEmails();
+  Promise.all(users.map(u =>
+    fetchFlow('getDailyNote', { date, user: u }, opts).then(r => { if (r && r.notes) adrNotes[u] = r.notes; }).catch(() => {})
+  )).then(() => { if (seq === adrLoadSeq) render(); });
+
+  // 3) Sent emails (batched IMAP — the slow part) → repaint after each batch, flag cleared at the end.
+  await adrLoadAllEmails(seq);
+  if (seq !== adrLoadSeq) return;
+  adrEmailsLoading = false;
   render();
 }
 
@@ -65,7 +82,7 @@ async function load() {
 // unbounded parallel fan-out caused 401s (cold Flask session cache racing validateSession) and
 // 500s (GoDaddy throttles concurrent IMAP logins from one IP).
 let adrRosterError = '';
-async function adrLoadAllEmails() {
+async function adrLoadAllEmails(seq) {
   adrEmails = {};
   adrRosterError = '';
   if (typeof apiFetchEmailUsers !== 'function' || typeof apiFetchEmailLogToday !== 'function') return;
@@ -93,8 +110,11 @@ async function adrLoadAllEmails() {
   // so the batches never race a cold validateSession.
   try { await apiFetchEmailLogToday(undefined, date); } catch (e) { /* warm-up only */ }
   // Batches of 3 — enough parallelism to stay fast without tripping GoDaddy's per-IP IMAP limits.
+  // Repaint after each batch so email sections fill in progressively instead of all at the end.
   for (let i = 0; i < targets.length; i += 3) {
     await Promise.all(targets.slice(i, i + 3).map(fetchOne));
+    if (seq !== undefined && seq !== adrLoadSeq) return;   // superseded by a newer load
+    render();
   }
 }
 
@@ -112,10 +132,14 @@ function render() {
   document.getElementById('sumSales').textContent = _m(sumAmt(e => e.module === 'Invoice' && e.action === 'Issued'));
   document.getElementById('sumPaid').textContent = _m(sumAmt(e => e.module === 'AP Aging'));
   document.getElementById('sumPdfs').textContent = adrEntries.filter(e => e.action === 'PDF Saved').length;
-  // total sent emails across all users (appended to the report meta line)
+  // total sent emails across all users (appended to the report meta line; re-computed on every
+  // progressive repaint so the count grows as batches land instead of freezing at the first paint)
   const totalEmails = Object.values(adrEmails).reduce((s, v) => s + ((v.emails || []).length), 0);
   const meta = document.getElementById('reportMeta');
-  if (meta && !/sent email/.test(meta.textContent)) meta.textContent += ` · ${totalEmails} sent email(s)`;
+  if (meta) {
+    const base = meta.textContent.replace(/ · \d+ sent email\(s\).*$/, '');
+    meta.textContent = base + (adrEmailsLoading ? ` · ${totalEmails} sent email(s) (loading…)` : ` · ${totalEmails} sent email(s)`);
+  }
 
   // ── Group by user ──
   const byUser = {};
@@ -173,6 +197,7 @@ function adrEmailHtml(name) {
   if (!rec) {
     // Roster unavailable → say WHY instead of a bare dash.
     if (adrRosterError) return head + `<div class="dr-empty" style="font-size:0.8rem;color:#b45309;">Sent emails unavailable — ${_e(adrRosterError)}</div>`;
+    if (adrEmailsLoading) return head + `<div class="dr-empty" style="font-size:0.8rem;">Loading sent emails…</div>`;
     return head + `<div class="dr-empty" style="font-size:0.8rem;">—</div>`;
   }
   if (rec.needsSetup) return head + `<div class="dr-empty" style="font-size:0.8rem;">${_e(name)} hasn't connected their mailbox.</div>`;

@@ -40,9 +40,13 @@ GODADDY_IMAP_PORT = int(os.environ.get("GODADDY_IMAP_PORT", "993"))
 _SESSION_CACHE_TTL = 300       # validated sessions cached 5 min
 _CREDS_CACHE_TTL = 1800        # encrypted creds cached 30 min
 _USERS_CACHE_TTL = 600         # backend user roster cached 10 min
+_SENT_TTL_TODAY = 120          # sent-mail cache: today's list refreshes every ~2 min
+_SENT_TTL_PAST = 3600          # past dates are immutable history — cache 1 h
+_SENT_CACHE_MAX = 500          # bound memory
 _session_cache: dict[str, dict] = {}   # token -> { username, role, _ts }
 _creds_cache: dict[str, dict] = {}     # username -> { enc_blob, _ts }
 _users_cache: dict = {}                # { users: [...], _ts }
+_sent_mail_cache: dict = {}            # (username, date) -> { emails, meta, addr, _ts }
 
 
 def _email_config_problem() -> Optional[str]:
@@ -179,7 +183,8 @@ def _company_from_email(addr: str) -> str:
 
 
 def _imap_login(addr: str, pwd: str) -> imaplib.IMAP4_SSL:
-    conn = imaplib.IMAP4_SSL(GODADDY_IMAP_HOST, GODADDY_IMAP_PORT)
+    # 15s socket timeout: a hung GoDaddy connection must fail fast instead of stalling a worker.
+    conn = imaplib.IMAP4_SSL(GODADDY_IMAP_HOST, GODADDY_IMAP_PORT, timeout=15)
     conn.login(addr, pwd)
     return conn
 
@@ -625,21 +630,39 @@ def email_today():
     if not decrypted:
         return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
     addr, pwd = decrypted
+
+    # Per-(user, date) cache: today refreshes every ~2 min (the oversight page polls every 3), and
+    # past dates are immutable history (1 h). Skips a full IMAP login+search per user per request —
+    # the single biggest speed win for the all-users aggregation, and far fewer GoDaddy logins.
+    ph_today = datetime.now(PH_TZ).date().isoformat()
+    eff_date = target_date or ph_today
+    cache_key = (lookup_user, eff_date)
+    cached = _sent_mail_cache.get(cache_key)
+    ttl = _SENT_TTL_TODAY if eff_date == ph_today else _SENT_TTL_PAST
+    if cached and (time.time() - cached["_ts"]) < ttl:
+        return jsonify({"success": True, "emails": cached["emails"], "godaddyEmail": cached["addr"],
+                        "user": lookup_user, "date": eff_date, "meta": cached["meta"], "cached": True})
+
     # Always collect a small diagnostic (folder / window / matched) — no PII — so the UI can explain
     # an empty day ("checked Sent, 0 in window") instead of a bare "no emails".
     meta = {}
     try:
         emails = fetch_sent_today(addr, pwd, target_date=target_date, debug=meta)
+        if len(_sent_mail_cache) >= _SENT_CACHE_MAX:
+            _sent_mail_cache.pop(next(iter(_sent_mail_cache)))
+        _sent_mail_cache[cache_key] = {"emails": emails, "meta": meta, "addr": addr, "_ts": time.time()}
         resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user,
-                "date": target_date or datetime.now(PH_TZ).date().isoformat(), "meta": meta}
+                "date": eff_date, "meta": meta}
         return jsonify(resp)
     except imaplib.IMAP4.error as exc:
         # Likely password changed — invalidate cache so next call re-fetches
         _creds_cache.pop(lookup_user, None)
         return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
     except Exception as exc:
+        # Structured JSON (200) instead of a 500: the client renders the per-user error state either
+        # way, and transient IMAP timeouts stop spamming the console as server errors.
         logger.error("fetch_sent_today error: %s", exc)
-        return jsonify({"success": False, "message": str(exc)}), 500
+        return jsonify({"success": False, "message": str(exc)})
 
 
 @email_log_bp.route("/api/email/users", methods=["POST"])

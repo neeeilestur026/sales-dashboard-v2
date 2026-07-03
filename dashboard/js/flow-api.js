@@ -17,31 +17,75 @@ function _flowConfigured() {
 function _flowTransient(status) { return status === 404 || status === 408 || status === 429 || status >= 500; }
 function _flowSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-/** GET read-only action. Retries transient failures a few times with backoff. */
-async function fetchFlow(action, params = {}) {
+// ─── Read cache ─────────────────────────────────
+// Apps Script GETs take 1–3s each and every page re-fetched everything on load. Reads are cached in
+// sessionStorage for a short TTL (so navigating between pages reuses fresh data) and concurrent
+// identical GETs share one in-flight promise (navbar notifications + page body often overlap).
+// Any successful postFlow MUTATION clears the whole cache — "save → refresh list" always sees fresh data.
+const _FLOW_CACHE_TTL = 60000;                 // 60s
+const _FLOW_CACHE_PREFIX = 'flowCache:';
+const _flowInflight = {};                      // key -> Promise (page-lifetime)
+
+function _flowCacheGet(key) {
+  try {
+    const raw = sessionStorage.getItem(_FLOW_CACHE_PREFIX + key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || (Date.now() - obj.t) > _FLOW_CACHE_TTL) return null;
+    return obj.data;
+  } catch (e) { return null; }
+}
+function _flowCacheSet(key, data) {
+  try { sessionStorage.setItem(_FLOW_CACHE_PREFIX + key, JSON.stringify({ t: Date.now(), data })); }
+  catch (e) { /* quota/private mode — run uncached */ }
+}
+function _flowCacheClear() {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && k.indexOf(_FLOW_CACHE_PREFIX) === 0) sessionStorage.removeItem(k);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+/** GET read-only action. Cached (60s, sessionStorage) + in-flight dedupe; retries transient failures.
+ *  Pass { fresh: true } as opts to bypass the cache (manual Refresh buttons). */
+async function fetchFlow(action, params = {}, opts = {}) {
   if (!_flowConfigured()) throw new Error('Flow backend not configured. Set FLOW_API_URL in js/flow-api.js.');
   const q = new URLSearchParams(Object.assign({ action }, params)).toString();
-  const attempts = 4;
-  let lastErr;
-  for (let i = 0; i < attempts; i++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 30000);
-    try {
-      const res = await fetch(`${FLOW_API_URL}?${q}`, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
-      clearTimeout(timer);
-      if (!res.ok) {
-        if (_flowTransient(res.status) && i < attempts - 1) { lastErr = new Error(`Server responded with status ${res.status}`); await _flowSleep(400 * (i + 1)); continue; }
-        throw new Error(`Server responded with status ${res.status}`);
-      }
-      return await res.json();
-    } catch (e) {
-      clearTimeout(timer);
-      lastErr = (e.name === 'AbortError') ? new Error('Request timed out.') : new Error(e.message || 'Unable to reach the flow backend.');
-      if (i < attempts - 1) { await _flowSleep(400 * (i + 1)); continue; }
-      throw lastErr;
-    }
+  if (!opts.fresh) {
+    const hit = _flowCacheGet(q);
+    if (hit !== null) return hit;
+    if (_flowInflight[q]) return _flowInflight[q];
   }
-  throw lastErr || new Error('Unable to reach the flow backend.');
+  const run = (async () => {
+    const attempts = 4;
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000);
+      try {
+        const res = await fetch(`${FLOW_API_URL}?${q}`, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) {
+          if (_flowTransient(res.status) && i < attempts - 1) { lastErr = new Error(`Server responded with status ${res.status}`); await _flowSleep(400 * (i + 1)); continue; }
+          throw new Error(`Server responded with status ${res.status}`);
+        }
+        const data = await res.json();
+        _flowCacheSet(q, data);
+        return data;
+      } catch (e) {
+        clearTimeout(timer);
+        lastErr = (e.name === 'AbortError') ? new Error('Request timed out.') : new Error(e.message || 'Unable to reach the flow backend.');
+        if (i < attempts - 1) { await _flowSleep(400 * (i + 1)); continue; }
+        throw lastErr;
+      }
+    }
+    throw lastErr || new Error('Unable to reach the flow backend.');
+  })();
+  _flowInflight[q] = run;
+  try { return await run; }
+  finally { delete _flowInflight[q]; }
 }
 
 /** POST mutation. Items/objects are JSON-stringified by the caller as needed. */
@@ -75,7 +119,9 @@ async function postFlow(action, params = {}) {
         if (_flowTransient(res.status) && i < attempts - 1) { lastErr = new Error(`Server responded with status ${res.status}`); await _flowSleep(500 * (i + 1)); continue; }
         throw new Error(`Server responded with status ${res.status}`);
       }
-      return await res.json();
+      const data = await res.json();
+      _flowCacheClear();   // any mutation may invalidate any cached read
+      return data;
     } catch (e) {
       clearTimeout(timer);
       lastErr = (e.name === 'AbortError') ? new Error('Request timed out.') : new Error(e.message || 'Unable to reach the flow backend.');
