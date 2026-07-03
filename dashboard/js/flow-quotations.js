@@ -6,14 +6,25 @@ let qSession = null;
 let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
 let qReturnedPRs = [];      // sales: PRs Returned to Sales, loadable into a quotation
 let qFromPr = '';           // when set, Save creates the quotation from this PR (carries mgmt final prices)
+let qAdmin = false;         // admin: free-typed item rows (incl. new items) auto-added to inventory on save
 
 document.addEventListener('DOMContentLoaded', async () => {
   qSession = requireQuotationAccess();
   if (!qSession) return;
   qIsOversight = qSession.role !== 'sales';
+  qAdmin = qSession.role === 'admin';
   renderNavbar('flow-quotations');
   // Only admin/accounting can open the rest of the flow — show the sub-nav to them.
   if (qSession.role === 'admin' || qSession.role === 'accounting') renderFlowNav('flow-quotations.html');
+  // Admin: switch the item table to free-typed rows (Item No · Description · …) so brand-new items
+  // can be quoted directly and auto-added to inventory on save (no PR/management pricing needed).
+  if (qAdmin) {
+    const head = document.getElementById('itemHead');
+    if (head) head.innerHTML = '<tr><th style="width:18%;">Item No</th><th style="width:30%;">Description</th>' +
+      '<th class="num" style="width:12%;">Quoted Qty</th><th class="num" style="width:16%;">Quoted Price</th>' +
+      '<th class="num" style="width:16%;">Line Total</th><th></th></tr>';
+    const nib = document.getElementById('newItemBtn'); if (nib) nib.style.display = 'none';
+  }
   document.getElementById('date').value = flowToday();
   await loadInventory();
   addRow();
@@ -84,6 +95,24 @@ function addPrRow(it) {
 async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); qInventory = (r && r.data) || []; }
   catch (e) { qInventory = []; }
+  qFillDatalist();
+}
+
+// Admin: populate the item-no autocomplete from inventory (Item No — Description).
+function qFillDatalist() {
+  const dl = document.getElementById('qInvList');
+  if (!dl || !qAdmin) return;
+  dl.innerHTML = qInventory.map(i =>
+    `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+}
+
+// Admin: when the typed item-no matches an inventory item, auto-fill its description.
+function onItemNoType(inp) {
+  const inv = qInventory.find(i => String(i.itemNo).toLowerCase() === String(inp.value).trim().toLowerCase());
+  if (inv) {
+    const desc = inp.closest('tr').querySelector('.i-desc');
+    if (desc && !desc.value.trim()) desc.value = inv.description || '';
+  }
 }
 
 function itemOptions(selected) {
@@ -94,12 +123,23 @@ function itemOptions(selected) {
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td><select onchange="onItemPick(this)">${itemOptions(item && item.itemNo)}</select></td>
-    <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
-    <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
-    <td class="num lineTotal">0.00</td>
-    <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
+  if (qAdmin) {
+    // Free-typed row: Item No (with inventory autocomplete) · Description · Qty · Price · Line Total.
+    tr.innerHTML = `
+      <td><input type="text" class="i-no" list="qInvList" value="${item ? flowEsc(item.itemNo) : ''}" oninput="onItemNoType(this)" placeholder="Item No"></td>
+      <td><input type="text" class="i-desc" value="${item ? flowEsc(item.itemName || item.description) : ''}" placeholder="Description"></td>
+      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
+      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
+      <td class="num lineTotal">0.00</td>
+      <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
+  } else {
+    tr.innerHTML = `
+      <td><select onchange="onItemPick(this)">${itemOptions(item && item.itemNo)}</select></td>
+      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
+      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
+      <td class="num lineTotal">0.00</td>
+      <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
+  }
   tb.appendChild(tr);
   recalc();
 }
@@ -109,8 +149,10 @@ function onItemPick(sel) { recalc(); }
 function recalc() {
   let total = 0;
   document.querySelectorAll('#itemRows tr').forEach(tr => {
-    const qty = flowNum(tr.children[1].querySelector('input').value);
-    const price = flowNum(tr.children[2].querySelector('input').value);
+    // qty/price are the two number inputs immediately before the .lineTotal cell (layout-agnostic).
+    const nums = tr.querySelectorAll('input[type="number"]');
+    const qty = flowNum(nums[0] ? nums[0].value : 0);
+    const price = flowNum(nums[1] ? nums[1].value : 0);
     const lt = qty * price;
     tr.querySelector('.lineTotal').textContent = lt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     total += lt;
@@ -121,15 +163,20 @@ function recalc() {
 function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach(tr => {
-    const itemNo = tr.children[0].querySelector('select').value;
-    if (!itemNo) return;
-    const inv = qInventory.find(i => i.itemNo === itemNo);
-    items.push({
-      itemNo,
-      itemName: inv ? inv.description : itemNo,
-      qty: flowNum(tr.children[1].querySelector('input').value),
-      price: flowNum(tr.children[2].querySelector('input').value)
-    });
+    const nums = tr.querySelectorAll('input[type="number"]');
+    const qty = flowNum(nums[0] ? nums[0].value : 0);
+    const price = flowNum(nums[1] ? nums[1].value : 0);
+    if (qAdmin) {
+      const itemNo = (tr.querySelector('.i-no').value || '').trim();
+      const desc = (tr.querySelector('.i-desc').value || '').trim();
+      if (!itemNo && !desc) return;                        // skip empty row
+      items.push({ itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price });
+    } else {
+      const itemNo = tr.children[0].querySelector('select').value;
+      if (!itemNo) return;
+      const inv = qInventory.find(i => i.itemNo === itemNo);
+      items.push({ itemNo, itemName: inv ? inv.description : itemNo, qty, price });
+    }
   });
   return items;
 }
@@ -191,11 +238,29 @@ async function saveQuotation() {
     customer, date: document.getElementById('date').value,
     createdBy: qSession.name, items: JSON.stringify(items)
   };
+  // Admin creating a new quotation: save as an editable Draft (bypasses PR/management pricing).
+  if (qAdmin && !editingNo) payload.status = 'Draft';
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const res = await postFlow(editingNo ? 'updateQuotation' : 'createQuotation', payload);
     if (!res.success) throw new Error(res.message);
-    flowMsg('formMsg', `${res.message} (${res.quotationNo || quotationNo})`, true);
+    let extra = '';
+    // Admin: auto-add any brand-new items to inventory (balance 0). Ignore "already exists".
+    if (qAdmin && !editingNo) {
+      let added = 0;
+      for (const it of items) {
+        const exists = qInventory.some(i => String(i.itemNo).toLowerCase() === String(it.itemNo).toLowerCase());
+        if (exists) continue;
+        try {
+          const inv = await postFlow('addInventoryItem', {
+            itemNo: it.itemNo, description: it.itemName || it.itemNo, balance: 0, currency: 'PHP'
+          });
+          if (inv.success) added++;
+        } catch (e) { /* best-effort */ }
+      }
+      if (added) { extra = ` · ${added} new item(s) added to inventory`; await loadInventory(); }
+    }
+    flowMsg('formMsg', `${res.message} (${res.quotationNo || payload.quotationNo})${extra}`, true);
     resetForm();
     await loadQuotations();
   } catch (e) { flowMsg('formMsg', e.message, false); }
