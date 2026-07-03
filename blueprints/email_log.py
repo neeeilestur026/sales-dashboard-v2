@@ -10,6 +10,7 @@ Trust model:
 """
 
 import os
+import re
 import time
 import imaplib
 import email as email_pkg
@@ -172,28 +173,107 @@ def _imap_login(addr: str, pwd: str) -> imaplib.IMAP4_SSL:
     return conn
 
 
-def _select_sent(conn: imaplib.IMAP4_SSL) -> bool:
-    for folder in ('"Sent"', '"Sent Items"', '"INBOX.Sent"', 'Sent', 'Sent Items'):
-        try:
-            typ, _ = conn.select(folder, readonly=True)
-            if typ == "OK":
-                return True
-        except imaplib.IMAP4.error:
-            continue
-    return False
-
-
 # Candidate folder names per logical mailbox (servers differ).
 _FOLDER_CANDIDATES = {
     "inbox": ('"INBOX"', 'INBOX'),
-    "sent": ('"Sent"', '"Sent Items"', '"INBOX.Sent"', 'Sent', 'Sent Items'),
+    "sent": ('"Sent"', '"Sent Items"', '"INBOX.Sent"', '"INBOX.Sent Items"', 'Sent', 'Sent Items'),
     "spam": ('"Junk"', '"Spam"', '"Junk E-mail"', '"INBOX.Junk"', '"INBOX.spam"',
              '"Bulk Mail"', 'Junk', 'Spam'),
 }
 
+_LIST_RE = re.compile(rb'\((?P<flags>[^)]*)\)\s+(?:"[^"]*"|NIL)\s+(?P<name>"(?:[^"\\]|\\.)*"|\S+)\s*$')
+
+
+def _list_mailboxes(conn: imaplib.IMAP4_SSL) -> list[tuple[str, str]]:
+    """Return [(flags_lower, mailbox_name), …] from IMAP LIST (name unquoted)."""
+    out = []
+    try:
+        typ, data = conn.list()
+        if typ != "OK" or not data:
+            return out
+        for line in data:
+            if line is None:
+                continue
+            b = line if isinstance(line, bytes) else str(line).encode()
+            m = _LIST_RE.search(b)
+            if not m:
+                continue
+            flags = m.group("flags").decode(errors="replace").lower()
+            name = m.group("name").decode(errors="replace")
+            if name.startswith('"') and name.endswith('"'):
+                name = name[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            out.append((flags, name))
+    except imaplib.IMAP4.error:
+        pass
+    return out
+
+
+def _mailbox_count(conn: imaplib.IMAP4_SSL, name: str) -> int:
+    """SELECT a mailbox read-only and return its message count, or -1 if it can't be opened."""
+    try:
+        typ, data = conn.select('"' + name.replace('"', '\\"') + '"', readonly=True)
+        if typ == "OK" and data and data[0] is not None:
+            return int(data[0])
+    except (imaplib.IMAP4.error, ValueError, TypeError):
+        pass
+    return -1
+
+
+def _find_sent_mailbox(conn: imaplib.IMAP4_SSL) -> Optional[str]:
+    """Discover the REAL Sent mailbox: prefer the \\Sent special-use folder, then a 'sent'-named one,
+    preferring a mailbox that actually contains messages (avoids an empty decoy 'Sent')."""
+    boxes = _list_mailboxes(conn)
+    special = [nm for fl, nm in boxes if "\\sent" in fl]
+    named = [nm for fl, nm in boxes if re.search(r'(^|[./\\])sent', nm, re.I)]
+    # ordered, de-duped candidates: special-use first, then sent-named
+    ordered = []
+    for nm in special + named:
+        if nm not in ordered:
+            ordered.append(nm)
+    if not ordered:
+        return None
+    best = None
+    for nm in ordered:
+        c = _mailbox_count(conn, nm)
+        if c > 0:
+            return nm            # a populated sent folder — use it
+        if c == 0 and best is None:
+            best = nm            # remember an openable-but-empty one as fallback
+    return best or ordered[0]
+
+
+def _open_sent(conn: imaplib.IMAP4_SSL) -> Optional[str]:
+    """Open the Sent folder read-only; returns the selected mailbox name, or None."""
+    nm = _find_sent_mailbox(conn)
+    if nm and _mailbox_count(conn, nm) >= 0:
+        return nm
+    # Fallback: the old hardcoded candidate list, preferring one with messages.
+    empty = None
+    for folder in _FOLDER_CANDIDATES["sent"]:
+        try:
+            typ, data = conn.select(folder, readonly=True)
+        except imaplib.IMAP4.error:
+            continue
+        if typ == "OK":
+            try:
+                n = int(data[0]) if data and data[0] is not None else 0
+            except (ValueError, TypeError):
+                n = 0
+            if n > 0:
+                return folder.strip('"')
+            if empty is None:
+                empty = folder.strip('"')
+    return empty
+
+
+def _select_sent(conn: imaplib.IMAP4_SSL) -> bool:
+    return _open_sent(conn) is not None
+
 
 def _select_folder(conn: imaplib.IMAP4_SSL, kind: str) -> bool:
     """Select a logical folder (inbox/sent/spam) read-only; True if found."""
+    if kind == "sent":
+        return _open_sent(conn) is not None
     for folder in _FOLDER_CANDIDATES.get(kind, ()):
         try:
             typ, _ = conn.select(folder, readonly=True)
@@ -316,12 +396,15 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
             pass
 
 
-def fetch_sent_today(addr: str, pwd: str) -> list[dict]:
+def fetch_sent_today(addr: str, pwd: str, debug: dict = None) -> list[dict]:
     """Connect to GoDaddy IMAP, return a list of headers for emails sent today (PH local time)."""
     conn = _imap_login(addr, pwd)
     try:
-        if not _select_sent(conn):
+        folder = _open_sent(conn)
+        if not folder:
             raise RuntimeError("Could not open Sent folder")
+        if debug is not None:
+            debug["folder"] = folder
         # IMAP SINCE searches by server date; widen by 1 day to catch all of "today" in PH
         # (e.g. PH 8 AM = previous-day 00 UTC for some servers). We then filter client-side.
         now_ph = datetime.now(PH_TZ)
@@ -330,30 +413,45 @@ def fetch_sent_today(addr: str, pwd: str) -> list[dict]:
         date_str = since_dt.strftime("%d-%b-%Y")
         typ, data = conn.search(None, f'SINCE {date_str}')
         if typ != "OK" or not data or not data[0]:
+            if debug is not None:
+                debug["windowCount"] = 0
             return []
         ids = data[0].split()
+        if debug is not None:
+            debug["windowCount"] = len(ids)
         if not ids:
             return []
         # Batch fetch all headers in a single round-trip — sequential per-id fetches
-        # over 50+ messages exceeds Render's gateway timeout (502).
+        # over 50+ messages exceeds Render's gateway timeout (502). INTERNALDATE is a
+        # reliable fallback when the Date header is missing/oddly-stamped by webmail.
         id_set = b",".join(ids)
-        typ, msg_data = conn.fetch(id_set, "(BODY.PEEK[HEADER.FIELDS (TO CC BCC SUBJECT DATE MESSAGE-ID)])")
+        typ, msg_data = conn.fetch(id_set, "(INTERNALDATE BODY.PEEK[HEADER.FIELDS (TO CC BCC SUBJECT DATE MESSAGE-ID)])")
         if typ != "OK" or not msg_data:
             return []
         out = []
         for part in msg_data:
             if not isinstance(part, tuple) or len(part) < 2:
                 continue
+            envelope = part[0] if isinstance(part[0], (bytes, bytearray)) else b""
             hdr_bytes = part[1]
             msg = email_pkg.message_from_bytes(hdr_bytes)
             subject = _decode_mime(msg.get("Subject", ""))
             date_hdr = msg.get("Date", "")
             message_id = (msg.get("Message-ID", "") or "").strip("<>")
-            # Only include emails actually sent today in PH local time
+            # Prefer the Date header; fall back to the server INTERNALDATE when it's missing/unparseable.
+            sent_dt = None
             try:
                 sent_dt = parsedate_to_datetime(date_hdr) if date_hdr else None
             except (TypeError, ValueError):
                 sent_dt = None
+            if sent_dt is None:
+                try:
+                    tup = imaplib.Internaldate2tuple(envelope)
+                    if tup:
+                        sent_dt = datetime.fromtimestamp(time.mktime(tup), tz=timezone.utc)
+                except Exception:
+                    sent_dt = None
+            # Only include emails actually sent today in PH local time (keep undated ones).
             if sent_dt and sent_dt.astimezone(PH_TZ).date() != today_ph:
                 continue
             # Decode MIME-encoded headers BEFORE parsing addresses — otherwise
@@ -376,6 +474,8 @@ def fetch_sent_today(addr: str, pwd: str) -> list[dict]:
                 "sentAt": sent_dt.astimezone(PH_TZ).isoformat() if sent_dt else date_hdr,
                 "messageId": message_id,
             })
+        if debug is not None:
+            debug["matched"] = len(out)
         return out
     finally:
         try:
@@ -499,9 +599,14 @@ def email_today():
     if not decrypted:
         return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
     addr, pwd = decrypted
+    want_debug = oversight and (request.args.get("debug") or (request.get_json(silent=True) or {}).get("debug") if request.method == "POST" else request.args.get("debug"))
+    dbg = {} if want_debug else None
     try:
-        emails = fetch_sent_today(addr, pwd)
-        return jsonify({"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user})
+        emails = fetch_sent_today(addr, pwd, debug=dbg)
+        resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user}
+        if dbg is not None:
+            resp["debug"] = dbg
+        return jsonify(resp)
     except imaplib.IMAP4.error as exc:
         # Likely password changed — invalidate cache so next call re-fetches
         _creds_cache.pop(lookup_user, None)
