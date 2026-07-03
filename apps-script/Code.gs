@@ -672,6 +672,9 @@ function doGet(e) {
       case 'getEmailCredentialsForBackend':
         result = handleGetEmailCredentialsForBackend(params);
         break;
+      case 'getUsersForBackend':
+        result = handleGetUsersForBackend(params);
+        break;
       case 'getMyLeaves':
         result = handleGetMyLeaves(params);
         break;
@@ -770,6 +773,29 @@ function handleGetEmailCredentialsForBackend(params) {
   var colIdx = _emailCredsColumnIndex_(usersSheet);
   var encBlob = String(found.row[colIdx] || '');
   return { success: true, encBlob: encBlob };
+}
+
+// Backend-only user roster (shared-secret gated, like the creds handler above). Returns
+// username/role/fullName ONLY — never the password or encrypted email-creds columns.
+// Used by the Flask /api/email/users proxy for the oversight sent-email aggregation.
+function handleGetUsersForBackend(params) {
+  var sharedSecret = PropertiesService.getScriptProperties().getProperty('INTERNAL_SHARED_SECRET');
+  if (!sharedSecret || String(params.sharedSecret || '') !== sharedSecret) {
+    return { success: false, message: 'Forbidden' };
+  }
+  var usersSheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
+  var data = usersSheet.getDataRange().getValues();
+  var users = [];
+  for (var i = 1; i < data.length; i++) {
+    var username = String(data[i][0] || '').trim();
+    if (!username) continue;
+    users.push({
+      username: username,
+      role: String(data[i][2] || '').trim().toLowerCase(),
+      fullName: String(data[i][3] || '').trim()
+    });
+  }
+  return { success: true, users: users };
 }
 
 // ─── ACTION: login ───────────────────────────────────────────
@@ -2843,6 +2869,9 @@ function doPost(e) {
         break;
       case 'getEmailCredentialsForBackend':
         result = handleGetEmailCredentialsForBackend(body);
+        break;
+      case 'getUsersForBackend':
+        result = handleGetUsersForBackend(body);
         break;
 
       default:

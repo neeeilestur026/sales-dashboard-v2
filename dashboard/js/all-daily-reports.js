@@ -60,21 +60,42 @@ async function load() {
   render();
 }
 
-// Fetch the whole user list and, for everyone except director, pull their sent-today emails in parallel.
+// Fetch the whole user roster (via the Flask proxy — the production Code.gs deployment 404s on GET
+// getUsers) and, for everyone except director, pull their sent emails in SMALL BATCHES: the old
+// unbounded parallel fan-out caused 401s (cold Flask session cache racing validateSession) and
+// 500s (GoDaddy throttles concurrent IMAP logins from one IP).
+let adrRosterError = '';
 async function adrLoadAllEmails() {
   adrEmails = {};
-  if (typeof apiGetUsers !== 'function' || typeof apiFetchEmailLogToday !== 'function') return;
+  adrRosterError = '';
+  if (typeof apiFetchEmailUsers !== 'function' || typeof apiFetchEmailLogToday !== 'function') return;
   let list = [];
-  try { const r = await apiGetUsers(); list = (r && (r.data || r.users)) || []; } catch (e) { return; }
+  try {
+    const r = await apiFetchEmailUsers();
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not load the user list.');
+    list = r.users || [];
+  } catch (e) {
+    adrRosterError = e.message || 'Could not load the user list.';
+    return;
+  }
   const targets = list.filter(u => String(u.role || '').toLowerCase() !== 'director');
-  await Promise.all(targets.map(u => {
+  const date = _date();
+  const fetchOne = (u) => {
     const uname = u.username || u.fullName || u.name;                 // creds are keyed by login username
     const disp = u.fullName || u.name || u.username;                  // cards are keyed by display name
     if (!uname) return Promise.resolve();
-    return apiFetchEmailLogToday(uname, _date()).then(r => {
-      adrEmails[disp] = { emails: (r && r.success && r.emails) || [], needsSetup: !!(r && r.needsSetup) };
-    }).catch(() => { adrEmails[disp] = { emails: [], needsSetup: false }; });
-  }));
+    return apiFetchEmailLogToday(uname, date).then(r => {
+      if (r && r.success) adrEmails[disp] = { emails: r.emails || [], needsSetup: !!r.needsSetup };
+      else adrEmails[disp] = { emails: [], needsSetup: !!(r && r.needsSetup), error: (r && r.message) || 'load failed' };
+    }).catch(e => { adrEmails[disp] = { emails: [], needsSetup: false, error: e.message || 'load failed' }; });
+  };
+  // Warm the Flask session cache with ONE call (the viewer's own mailbox) before fanning out,
+  // so the batches never race a cold validateSession.
+  try { await apiFetchEmailLogToday(undefined, date); } catch (e) { /* warm-up only */ }
+  // Batches of 3 — enough parallelism to stay fast without tripping GoDaddy's per-IP IMAP limits.
+  for (let i = 0; i < targets.length; i += 3) {
+    await Promise.all(targets.slice(i, i + 3).map(fetchOne));
+  }
 }
 
 function _isDoc(a) { return ['Created', 'Issued', 'Received', 'Added'].includes(a); }
@@ -149,8 +170,13 @@ function render() {
 function adrEmailHtml(name) {
   const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_e(_date())}</div>`;
   const rec = adrEmails[name];
-  if (!rec) return head + `<div class="dr-empty" style="font-size:0.8rem;">—</div>`;
+  if (!rec) {
+    // Roster unavailable → say WHY instead of a bare dash.
+    if (adrRosterError) return head + `<div class="dr-empty" style="font-size:0.8rem;color:#b45309;">Sent emails unavailable — ${_e(adrRosterError)}</div>`;
+    return head + `<div class="dr-empty" style="font-size:0.8rem;">—</div>`;
+  }
   if (rec.needsSetup) return head + `<div class="dr-empty" style="font-size:0.8rem;">${_e(name)} hasn't connected their mailbox.</div>`;
+  if (rec.error) return head + `<div class="dr-empty" style="font-size:0.8rem;color:#b45309;">Couldn't load (${_e(rec.error)}) — retrying on the next refresh.</div>`;
   const emails = rec.emails || [];
   if (!emails.length) return head + `<div class="dr-empty" style="font-size:0.8rem;">No emails sent on ${_e(_date())}.</div>`;
   return head + `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>

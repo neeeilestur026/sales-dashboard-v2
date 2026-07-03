@@ -39,8 +39,10 @@ GODADDY_IMAP_PORT = int(os.environ.get("GODADDY_IMAP_PORT", "993"))
 
 _SESSION_CACHE_TTL = 300       # validated sessions cached 5 min
 _CREDS_CACHE_TTL = 1800        # encrypted creds cached 30 min
+_USERS_CACHE_TTL = 600         # backend user roster cached 10 min
 _session_cache: dict[str, dict] = {}   # token -> { username, role, _ts }
 _creds_cache: dict[str, dict] = {}     # username -> { enc_blob, _ts }
+_users_cache: dict = {}                # { users: [...], _ts }
 
 
 def _email_config_problem() -> Optional[str]:
@@ -84,7 +86,11 @@ def _gs_post(payload: dict) -> dict:
 
 
 def _validate_session(token: str) -> Optional[dict]:
-    """Return { username, role } if token is valid, else None. Caches 5 min."""
+    """Return { username, role } if token is valid, else None. Caches 5 min.
+
+    Retries once on a TRANSPORT failure (Code.gs unreachable / transient error) so a burst of
+    concurrent requests on a cold cache doesn't 401 spuriously. An explicitly invalid token
+    (Code.gs answered, said no) is never retried."""
     if not token:
         return None
     now = time.time()
@@ -92,6 +98,11 @@ def _validate_session(token: str) -> Optional[dict]:
     if cached and (now - cached["_ts"]) < _SESSION_CACHE_TTL:
         return {"username": cached["username"], "role": cached["role"]}
     result = _gs_post({"action": "validateSession", "token": token})
+    # _gs_post's exception path returns {success:False, message:<transport error>} with no 'valid' key;
+    # a real Code.gs "invalid token" reply carries valid:False. Retry only the former.
+    if not result.get("success") and "valid" not in result:
+        time.sleep(0.5)
+        result = _gs_post({"action": "validateSession", "token": token})
     if not result.get("success") or not result.get("valid"):
         return None
     username = result.get("username") or result.get("name") or ""
@@ -629,6 +640,45 @@ def email_today():
     except Exception as exc:
         logger.error("fetch_sent_today error: %s", exc)
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@email_log_bp.route("/api/email/users", methods=["POST"])
+def email_users():
+    """User roster for the oversight sent-email aggregation (all-daily-reports).
+
+    Proxies the shared-secret Code.gs action getUsersForBackend (POST — the production deployment
+    404s on GET, which is why the client can't call getUsers directly). Oversight roles only.
+    Returns [{username, fullName, role}] — no passwords/creds. Cached ~10 min."""
+    _cfg = _email_config_problem()
+    if _cfg:
+        return jsonify({"success": False, "message": _cfg}), 503
+    body = request.get_json(silent=True) or {}
+    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
+    session = _validate_session(token)
+    if not session:
+        return jsonify({"success": False, "message": "Invalid session"}), 401
+    if str(session.get("role", "")).lower() not in ("admin", "accounting", "management", "director"):
+        return jsonify({"success": False, "message": "Forbidden (oversight roles only)"}), 403
+
+    now = time.time()
+    if _users_cache.get("users") and (now - _users_cache.get("_ts", 0)) < _USERS_CACHE_TTL:
+        return jsonify({"success": True, "users": _users_cache["users"], "cached": True})
+
+    result = _gs_post({"action": "getUsersForBackend", "sharedSecret": INTERNAL_SHARED_SECRET})
+    if not result.get("success"):
+        msg = str(result.get("message", "")).strip()
+        if msg.lower() == "forbidden":
+            msg = ("Code.gs rejected the request: INTERNAL_SHARED_SECRET mismatch. Set the matching "
+                   "Script Property in the Code.gs project.")
+        elif "unknown action" in msg.lower():
+            msg = ("The production Code.gs does not have the getUsersForBackend action yet — paste "
+                   "handleGetUsersForBackend + its doPost case from the repo Code.gs into the live "
+                   "project and redeploy.")
+        return jsonify({"success": False, "message": msg or "Could not load users."}), 502
+    users = result.get("users") or []
+    _users_cache["users"] = users
+    _users_cache["_ts"] = now
+    return jsonify({"success": True, "users": users})
 
 
 @email_log_bp.route("/api/email/feed", methods=["POST"])

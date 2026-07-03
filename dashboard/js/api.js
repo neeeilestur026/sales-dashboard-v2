@@ -422,6 +422,12 @@ async function apiFetchEmailFeed(folder, days) {
   return _flaskFetch('/api/email/feed', { folder, days: days || 14 });
 }
 
+/** Oversight-only user roster [{username, fullName, role}] for the sent-email aggregation.
+ *  Proxied through Flask (POST) because the production Code.gs deployment 404s on GET getUsers. */
+async function apiFetchEmailUsers() {
+  return _flaskFetch('/api/email/users', {});
+}
+
 /** Whether the agent already has GoDaddy credentials configured. */
 async function apiGetEmailStatus() {
   return _flaskFetch('/api/email/status', {});
