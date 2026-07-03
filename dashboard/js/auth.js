@@ -845,145 +845,98 @@ async function loadNotifications() {
   if (!session) return;
   const notifications = [];
 
+  // Flow-backed notifications. The old bell called production Code.gs GET actions (getDailyReports /
+  // getInventory / getClientTracker / getTodayCounts / getMyNotifications) — that deployment 404s ALL
+  // GET requests, so every call errored and the bell was dead for every role. Rebuilt on FlowAPI.
+  // Pages without flow-api.js (legacy) simply show "No notifications" — no failing network calls.
+  const role = String(session.role || '').toLowerCase();
   try {
-    if (session.role === 'admin') {
-      // Check for agents who haven't submitted reports today
-      const reportResult = await fetchFromAPI({ action: 'getDailyReports', date: new Date().toISOString().slice(0, 10) });
-      if (reportResult.success && reportResult.data) {
-        const notSubmitted = reportResult.data.filter(r => !r.submitted);
-        if (notSubmitted.length > 0) {
-          notifications.push({
-            icon: 'report',
-            color: '#f97316',
-            text: notSubmitted.length + ' agent(s) haven\'t submitted daily reports',
-            link: 'admin-reports.html'
-          });
-        }
-        // Urgent issues
-        const urgent = reportResult.data.filter(r => r.submitted && r.urgentIssues && r.urgentIssues.length > 0);
-        urgent.forEach(r => {
-          notifications.push({
-            icon: 'urgent',
-            color: '#ef4444',
-            text: r.agentName + ' reported ' + r.urgentIssues.length + ' urgent issue(s)',
-            link: 'admin-reports.html'
-          });
-        });
-      }
+    if (typeof fetchFlow === 'function') {
+      const jobs = [];
 
-      // Check inventory low stock
-      try {
-        const invResult = await fetchFromAPI({ action: 'getInventory' });
-        if (invResult.success && invResult.data) {
-          const lowStock = invResult.data.filter(i => i.qty < 10);
-          if (lowStock.length > 0) {
+      // Low stock — oversight roles. Flow inventory keys stock on `balance`; items deliberately sit
+      // at 0 (product-master entries from imports), so "low" means running low: 0 < balance < 10.
+      if (['admin', 'accounting', 'management', 'director'].includes(role)) {
+        jobs.push(fetchFlow('getInventory').then(r => {
+          const low = ((r && r.data) || []).filter(i => { const b = parseFloat(i.balance) || 0; return b > 0 && b < 10; });
+          if (low.length > 0) {
             notifications.push({
-              icon: 'inventory',
-              color: '#ef4444',
-              text: lowStock.length + ' item(s) with low stock',
+              icon: 'inventory', color: '#ef4444',
+              text: low.length + ' item(s) with low stock',
               link: 'flow-inventory.html'
             });
           }
-        }
-      } catch (e) { /* inventory may not exist yet */ }
-    }
+        }).catch(() => {}));
+      }
 
-    if (session.role === 'management') {
-      try {
-        const invResult = await fetchFromAPI({ action: 'getInventory' });
-        if (invResult.success && invResult.data) {
-          const lowStock = invResult.data.filter(i => i.qty < 10);
-          if (lowStock.length > 0) {
+      // Quotations awaiting MY approval (admin → Pending Admin; management/director → Pending Management).
+      if (role === 'admin' || role === 'management' || role === 'director') {
+        const stage = role === 'admin' ? 'Pending Admin' : 'Pending Management';
+        jobs.push(fetchFlow('getQuotations').then(r => {
+          const pending = ((r && r.data) || []).filter(q => q.status === stage);
+          if (pending.length > 0) {
             notifications.push({
-              icon: 'inventory',
-              color: '#ef4444',
-              text: lowStock.length + ' item(s) with low stock',
-              link: 'management-home.html'
+              icon: 'report', color: '#f97316',
+              text: pending.length + ' quotation(s) awaiting your approval',
+              link: 'flow-quotations.html'
             });
           }
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    if (session.role === 'sales') {
-      // Check overdue follow-ups
-      const sheetIds = { quotationSheetId: session.quotationSheetId || '' };
-      const tracker = await fetchFromAPI({ action: 'getClientTracker', agentName: session.name, ...sheetIds });
-      if (tracker.success && tracker.data) {
-        const today = new Date().toISOString().slice(0, 10);
-        const overdue = tracker.data.filter(d => d.followUpDate && d.followUpDate < today && d.status === 'Pending');
-        if (overdue.length > 0) {
-          notifications.push({
-            icon: 'urgent',
-            color: '#ef4444',
-            text: overdue.length + ' overdue follow-up(s) need attention',
-            link: 'performance.html'
-          });
-        }
+        }).catch(() => {}));
       }
 
-      // Check if daily report submitted
-      const counts = await fetchFromAPI({ action: 'getTodayCounts', agentName: session.name, quotationSheetId: session.quotationSheetId || '', prSheetId: session.prSheetId || '' });
-      if (counts.success && !counts.alreadySubmitted) {
-        notifications.push({
-          icon: 'report',
-          color: '#f97316',
-          text: 'You haven\'t submitted today\'s daily report',
-          link: 'report.html'
-        });
+      // Purchase orders awaiting management approval.
+      if (role === 'management' || role === 'director') {
+        jobs.push(fetchFlow('getPurchaseOrders').then(r => {
+          const pending = ((r && r.data) || []).filter(p => p.status === 'Pending Management');
+          if (pending.length > 0) {
+            notifications.push({
+              icon: 'report', color: '#f97316',
+              text: pending.length + ' purchase order(s) awaiting your approval',
+              link: 'flow-purchase-orders.html'
+            });
+          }
+        }).catch(() => {}));
       }
 
-      // Check quotation approval status changes
-      try {
-        const qNotifs = await fetchFromAPI({ action: 'getMyQuotationNotifications', agentName: session.name, quotationSheetId: session.quotationSheetId || '' });
-        if (qNotifs.success && qNotifs.data) {
-          const lastSeen = localStorage.getItem('lastSeenQuotationNotif') || '';
-          const approved = qNotifs.data.filter(q => q.status === 'Approved' && q.date > lastSeen);
-          const rejected = qNotifs.data.filter(q => q.status === 'Rejected' && q.date > lastSeen);
+      // Sales: my quotations that came back — Approved (ready to send) or Rejected (fix + resubmit).
+      if (role === 'sales') {
+        jobs.push(fetchFlow('getQuotations', { createdBy: session.name }).then(r => {
+          const mine = (r && r.data) || [];
+          const approved = mine.filter(q => q.status === 'Approved');
+          const rejected = mine.filter(q => q.status === 'Rejected');
           if (approved.length > 0) {
             notifications.push({
-              icon: 'report',
-              color: '#22c55e',
-              text: approved.length + ' quotation(s) approved',
-              link: 'performance.html'
+              icon: 'report', color: '#22c55e',
+              text: approved.length + ' quotation(s) approved — ready to send to the client',
+              link: 'flow-quotations.html'
             });
           }
           if (rejected.length > 0) {
+            const reason = rejected[0].approvalNote ? ' — ' + rejected[0].approvalNote : '';
             notifications.push({
-              icon: 'urgent',
-              color: '#ef4444',
-              text: rejected.length + ' quotation(s) rejected' + (rejected[0].rejectionReason ? ' — ' + rejected[0].rejectionReason : ''),
-              link: 'performance.html'
+              icon: 'urgent', color: '#ef4444',
+              text: rejected.length + ' quotation(s) rejected' + reason,
+              link: 'flow-quotations.html'
             });
           }
-          // Update last seen to today
-          if (qNotifs.data.length > 0) {
-            localStorage.setItem('lastSeenQuotationNotif', new Date().toISOString().slice(0, 10));
-          }
-        }
-      } catch (e) { /* ignore */ }
-    }
+        }).catch(() => {}));
 
-    // Persistent notifications for all roles
-    try {
-      const persNotifs = await fetchFromAPI({ action: 'getMyNotifications', username: session.name, role: session.role });
-      if (persNotifs.success && persNotifs.data) {
-        persNotifs.data.forEach(n => {
-          notifications.push({
-            icon: n.type.includes('rejected') || n.type.includes('Rejected') ? 'urgent' : 'report',
-            color: n.type.includes('rejected') || n.type.includes('Rejected') ? '#ef4444' : '#22c55e',
-            text: n.title + ': ' + n.message,
-            link: n.link || '#'
-          });
-        });
+        // Pricing requests returned to me with management final prices.
+        jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
+          const returned = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales');
+          if (returned.length > 0) {
+            notifications.push({
+              icon: 'report', color: '#22c55e',
+              text: returned.length + ' pricing request(s) returned with final prices',
+              link: 'flow-pricing-request.html'
+            });
+          }
+        }).catch(() => {}));
       }
-      if (persNotifs.success && persNotifs.data && persNotifs.data.length > 0) {
-        fetchFromAPI({ action: 'markNotificationsRead', username: session.name });
-      }
-    } catch (e) { /* ignore */ }
-  } catch (e) {
-    notifications.push({ icon: 'error', color: '#64748b', text: 'Could not load notifications', link: '#' });
-  }
+
+      await Promise.all(jobs);
+    }
+  } catch (e) { /* best-effort — an empty bell beats an error entry */ }
 
   // Update badge
   const badge = document.getElementById('notifBadge');
