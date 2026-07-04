@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-pricing-request');
   renderSteps(prRole === 'sales' ? 0 : prRole === 'management' ? 2 : 1);
   setupRoleUI();
-  if (prRole === 'sales') {
+  if (prRole === 'sales' || prRole === 'admin') {
     document.getElementById('date').value = flowToday();
     await loadInventory();
     addRow();
@@ -66,8 +66,9 @@ function setupRoleUI() {
       ['All', 'Sourcing', 'Pricing', 'Verify', 'Done']);
     prFilter = '';
   } else if (prRole === 'admin') {
+    document.getElementById('salesFormCard').style.display = '';   // admin can also start a purchase request
     listTitle.textContent = 'Sourcing & Verification Queue';
-    blurb.textContent = 'Source suppliers and prices for each item, then forward to management. After management prices it, verify and return to sales.';
+    blurb.textContent = 'Create a purchase request below, or source suppliers and prices for each item then forward to management. After management prices it, verify and return to sales.';
     seg.innerHTML = segBtns(['Requested,Sourcing', 'Mgmt Priced', ''], ['To Source', 'To Verify', 'All']);
     prFilter = 'Requested,Sourcing';
   } else { // management
@@ -280,7 +281,7 @@ function openPr(no) {
   if (prRole === 'management') { loadFlowPricing(no); return; }
   document.getElementById('modalPrNo').value = no;
   document.getElementById('modalTitle').textContent = r.prNo;
-  document.getElementById('modalSub').textContent = `${r.customer} · requested by ${r.requestedBy} · ${flowDate(r.date)} · ${r.status}`;
+  document.getElementById('modalSub').textContent = `${r.customer}${r.clientLocation ? ' (' + r.clientLocation + ')' : ''} · requested by ${r.requestedBy} · ${flowDate(r.date)} · ${r.status}`;
   document.getElementById('modalMsg').style.display = 'none';
   const body = document.getElementById('modalBody');
   const foot = document.getElementById('modalFoot');
@@ -301,7 +302,9 @@ function openPr(no) {
     body.innerHTML = verifyTable(r);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       <button class="btn btn-primary" onclick="verifyReturn()">Verify &amp; Return to Sales</button>`;
-  } else if (prRole === 'sales' && r.status === 'Returned to Sales') {
+  } else if (r.status === 'Returned to Sales' &&
+             (prRole === 'sales' || (prRole === 'admin' && String(r.requestedBy) === String(prSession.name)))) {
+    // Sales, or the admin who created this PR, can build the quotation from the returned (priced) request.
     body.innerHTML = readonlyTable(r, true);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       <button class="btn btn-secondary" onclick="openPdf('${flowEsc(no)}')">Generate PR PDF</button>
@@ -321,6 +324,7 @@ function readonlyTable(r, priced) {
       <td>${flowEsc(i.supplier || '—')}</td><td>${flowEsc(i.principal || '—')}</td>
       ${priced ? `<td class="num">${i.finalPrice ? flowMoney(i.finalPrice, 'PHP') : '—'}</td>` : ''}
       <td>${i.included ? '✓' : '—'}</td></tr>`).join('')}</tbody></table></div>
+    ${r.clientLocation ? `<p class="pr-meta" style="margin-top:0.5rem;">Client Location: <b>${flowEsc(r.clientLocation)}</b></p>` : ''}
     ${r.notes ? `<p class="pr-meta" style="margin-top:0.5rem;">Notes: <b>${flowEsc(r.notes)}</b></p>` : ''}`;
 }
 
@@ -335,7 +339,12 @@ function currencySelect(sel) {
 }
 
 function sourcingTable(r) {
-  return `<p class="pr-meta">Set the supplier, principal, currency, supplier price (FC) and CBM per item. You can also correct the product description — it updates the quotation. Untick items that won't be quoted.</p>
+  return `<div style="margin-bottom:0.75rem;">
+      <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Client Location</label>
+      <input type="text" id="srcLocation" value="${flowEsc(r.clientLocation || '')}" placeholder="e.g. Cebu City, Cebu"
+        style="width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+    </div>
+    <p class="pr-meta">Set the supplier, principal, currency, supplier price (FC) and CBM per item. You can also correct the product description — it updates the quotation. Untick items that won't be quoted.</p>
     <div style="overflow-x:auto;"><table class="flow-table" id="srcTable" style="min-width:860px;"><thead><tr>
       <th>Item No</th><th>Product Description</th><th class="num">Qty</th><th>Supplier</th><th>Principal</th><th>Cur</th>
       <th class="num">Price (FC)</th><th class="num">CBM</th><th>Incl</th></tr></thead><tbody>${r.items.map(i =>
@@ -370,8 +379,10 @@ function collectSourcing() {
 
 async function saveSourcing(forward) {
   const prNo = document.getElementById('modalPrNo').value;
+  const locEl = document.getElementById('srcLocation');
+  const clientLocation = locEl ? locEl.value.trim() : '';
   try {
-    const res = await postFlow('updatePRSourcing', { prNo, items: JSON.stringify(collectSourcing()) });
+    const res = await postFlow('updatePRSourcing', { prNo, clientLocation, items: JSON.stringify(collectSourcing()) });
     if (!res.success) throw new Error(res.message);
     if (forward) {
       const f = await postFlow('submitForPricing', { prNo });

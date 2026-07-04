@@ -76,7 +76,7 @@ var SCHEMA = {
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
-                    'Priced Items JSON'],
+                    'Priced Items JSON', 'Client Location'],
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price'],
 
@@ -1804,7 +1804,7 @@ function importPricingSubmissions(p) {
       sh.appendRow([prNo, s.date || _now(), s.submittedBy || '', s.customer || s.client || '',
         s.destination || '', _num(s.commissionPct), _num(s.marginPct), 'Migrated', '',
         'Migrated from ' + (legacyId || 'legacy pricing') + (s.status ? ' (was ' + s.status + ')' : ''),
-        _now(), _now(), legacyId, itemsJson, '']); // + Priced Items JSON (col 15)
+        _now(), _now(), legacyId, itemsJson, '', '']); // + Priced Items JSON (15) + Client Location (16)
       items.forEach(function (it, i) {
         itemSh.appendRow([prNo, i + 1, it.modelNo || it.itemNo || '', it.name || it.itemName || '',
           _num(it.qty), it.uom || '', it.remarks || '', true, it.supplier || '',
@@ -2341,6 +2341,7 @@ function getPricingRequests(p) {
       prNo: h['PR No'], date: h['Date'], requestedBy: h['Requested By'], customer: h['Customer'],
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
+      clientLocation: h['Client Location'] || '',
       legacyId: h['Legacy ID'] || '', legacyItemsJson: h['Legacy Items JSON'] || '',
       pricedItemsJson: h['Priced Items JSON'] || '',
       items: its.map(function (r) {
@@ -2378,7 +2379,8 @@ function createPricingRequest(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var no = p.prNo || _nextNumber('PricingRequests', 1, 'PR');
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
-    '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '']); // + Legacy ID / Legacy Items JSON / Priced Items JSON
+    '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '']);
+    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
@@ -2399,6 +2401,14 @@ function updatePRSourcing(p) {
     // col 4: Item Name — admin can correct the product description; it flows to the quotation.
     if (u.itemName !== undefined) sh.getRange(row.rowIndex, 4, 1, 1).setValues([[u.itemName || '']]);
   });
+  // Header-level Client Location (one per request) — set during sourcing when provided.
+  if (p.clientLocation !== undefined) {
+    var locCol = SCHEMA.PricingRequests.indexOf('Client Location') + 1;
+    var hsh = _sheet('PricingRequests');
+    _rows('PricingRequests').forEach(function (h) {
+      if (String(h['PR No']) === String(p.prNo)) hsh.getRange(h.rowIndex, locCol, 1, 1).setValues([[p.clientLocation || '']]);
+    });
+  }
   _setPRStatus(p.prNo, 'Sourcing');
   return { success: true, prNo: p.prNo, message: 'Sourcing saved.' };
 }
