@@ -774,6 +774,10 @@
     /* ── New flow sections ── */
     .mgmt-newsec { background:var(--bg-card,#fff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.2rem 1.4rem; margin-bottom:1.25rem; box-shadow:var(--shadow-sm,0 1px 3px rgba(15,23,42,0.06)); }
     .mgmt-newsec > h2 { margin:0 0 0.9rem; font-size:1.05rem; font-weight:700; color:var(--text-primary,#0f172a); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+    .newsec-chevron { display:inline-flex; transition:transform 0.25s ease; color:var(--text-muted,#64748b); }
+    .mgmt-newsec.collapsed .newsec-chevron { transform:rotate(-90deg); }
+    .mgmt-newsec.collapsed > h2 { margin-bottom:0; }
+    .mgmt-newsec.collapsed > :not(h2) { display:none; }
     .mgmt-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.7rem; }
     .mgmt-kpi { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:0.75rem 0.9rem; }
     .mgmt-kpi .l { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; }
@@ -957,8 +961,11 @@
       <div id="mgmtDrBody"><div class="mf-empty">Loading…</div></div>
     </div>
 
-    <div class="mgmt-newsec">
-      <h2>📦 Inventory <span class="is-state" style="margin-left:auto;font-weight:400;">Process Flow</span></h2>
+    <div class="mgmt-newsec" id="newsec-inventory">
+      <h2 style="cursor:pointer;" onclick="mgmtToggleNewsec('newsec-inventory')">📦 Inventory
+        <span class="is-state" style="margin-left:auto;font-weight:400;">Process Flow</span>
+        <span class="newsec-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </h2>
       <div id="mgmtInvBody"><div class="mf-empty">Loading…</div></div>
     </div>
 
@@ -1652,6 +1659,12 @@
         _openSection(el);
       }
       if (!skipStorage) _saveSectionState();
+    }
+
+    // Collapse/expand a .mgmt-newsec (flow sections) by clicking its header.
+    function mgmtToggleNewsec(id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('collapsed');
     }
 
     function expandAll() {

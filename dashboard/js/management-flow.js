@@ -124,16 +124,27 @@ async function mfLoadInventory() {
   const c = document.getElementById('mgmtInvBody');
   c.innerHTML = '<div class="mf-empty">Loading inventory…</div>';
   try {
-    const r = await fetchFlow('getInventory');
+    const [r, po] = await Promise.all([
+      fetchFlow('getInventory'),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] }))
+    ]);
     const items = (r && r.data) || [];
     if (!items.length) { c.innerHTML = '<div class="mf-empty">No inventory items.</div>'; return; }
+    // Items on any Purchase Order are "ordered already".
+    const orderedSet = new Set();
+    ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
+      if (it && it.itemNo != null && String(it.itemNo).trim() !== '') orderedSet.add(String(it.itemNo).toLowerCase());
+    }));
+    const isOrdered = i => orderedSet.has(String(i.itemNo).toLowerCase());
+    const orderedN = items.filter(isOrdered).length;
     const low = items.filter(i => _mfn(i.balance) <= 0);
     const rows = items.slice().sort((a, b) => _mfn(a.balance) - _mfn(b.balance)).slice(0, 20).map(i => `<tr>
       <td>${_mfe(i.itemNo)}</td><td>${_mfe(i.description)}</td>
       <td class="num"${_mfn(i.balance) <= 0 ? ' style="color:#ef4444;font-weight:700;"' : ''}>${_mfn(i.balance)}</td>
-      <td class="num">${_mfm(i.landedCost)}</td><td class="num">${_mfm(i.totalLanded)}</td></tr>`).join('');
-    c.innerHTML = `<div class="mf-invmeta">${items.length} item(s) · ${low.length} at/below zero · total value ${_mfm(items.reduce((s, i) => s + _mfn(i.totalLanded), 0))}</div>
-      <div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <td class="num">${_mfm(i.landedCost)}</td><td class="num">${_mfm(i.totalLanded)}</td>
+      <td>${isOrdered(i) ? '<span style="color:#16a34a;font-weight:700;">✅ PO</span>' : '<span style="color:#94a3b8;">—</span>'}</td></tr>`).join('');
+    c.innerHTML = `<div class="mf-invmeta">${items.length} item(s) · ${orderedN} ordered · ${items.length - orderedN} not ordered · ${low.length} at/below zero · total value ${_mfm(items.reduce((s, i) => s + _mfn(i.totalLanded), 0))}</div>
+      <div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th><th>Ordered?</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div style="margin-top:0.5rem;"><a href="flow-inventory.html" class="link-btn">View all inventory →</a></div>`;
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
 }

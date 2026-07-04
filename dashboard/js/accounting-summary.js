@@ -141,8 +141,10 @@ function render() {
     <div class="as-kpis">${kpis.map(([l, v]) => `<div class="as-kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('')}</div>
 
     <div class="as-grid2">
-      <div>
-        <div class="as-sect-title">Profit Report (P&amp;L)</div>
+      <div class="as-sect">
+        <div class="as-sect-title" onclick="asToggle(this)"><span>Profit Report (P&amp;L)</span>
+          <span class="as-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></div>
+        <div class="as-sect-body">
         <table class="as-pl"><tbody>
           <tr class="bold"><td>Revenue (Sales)</td><td class="n">${_m(revenue)}</td><td class="n">100.0%</td></tr>
           <tr><td>Less: Cost of Goods Sold</td><td class="n" style="color:#f97316;">(${_m(cogs)})</td><td class="n">${pct(cogs)}</td></tr>
@@ -151,9 +153,12 @@ function render() {
           <tr class="bold final"><td>Net Income</td><td class="n" style="color:${netIncome >= 0 ? '#16a34a' : '#ef4444'};">${_m(netIncome)}</td><td class="n">${pct(netIncome)}</td></tr>
         </tbody></table>
         <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.5rem;">Revenue &amp; COGS come from issued invoices in the period. The flow capitalizes duties/delivery into inventory cost (recovered through COGS) and routes VAT to Input&nbsp;VAT, so operating costs appear under Costs &amp; Expenses.</p>
+        </div>
       </div>
-      <div>
-        <div class="as-sect-title">Costs &amp; Expenses</div>
+      <div class="as-sect">
+        <div class="as-sect-title" onclick="asToggle(this)"><span>Costs &amp; Expenses</span>
+          <span class="as-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></div>
+        <div class="as-sect-body">
         <table class="as-pl"><tbody>
           <tr><td>Cost of Goods Sold</td><td class="n">${_m(cogs)}</td></tr>
           <tr><td>Customs Duties</td><td class="n">${_m(duties)}</td></tr>
@@ -164,6 +169,7 @@ function render() {
           <tr><td>AP Paid (period)</td><td class="n">${_m(apPaidPeriod)}</td></tr>
           <tr class="bold"><td>AP Outstanding (open, all)</td><td class="n">${_m(apOutAll)}</td></tr>
         </tbody></table>
+        </div>
       </div>
     </div>
 
@@ -213,6 +219,15 @@ function _tbl(title, headers, numCols, rows, totals) {
   const foot = (rows.length && totals)
     ? `<tr class="bold">${totals.map((t, i) => `<td${isNum(i) ? ' class="num"' : ''}>${t == null ? '' : t}</td>`).join('')}</tr>` : '';
   return `<div class="as-sect">
-    <div class="as-sect-title">${title} <span class="pill">${rows.length}</span></div>
-    <div style="overflow-x:auto;"><table class="flow-table"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div></div>`;
+    <div class="as-sect-title" onclick="asToggle(this)">
+      <span>${title} <span class="pill">${rows.length}</span></span>
+      <span class="as-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+    </div>
+    <div class="as-sect-body"><div style="overflow-x:auto;"><table class="flow-table"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div></div></div>`;
+}
+
+// Collapse/expand a report section by clicking its title.
+function asToggle(titleEl) {
+  const sect = titleEl.closest('.as-sect');
+  if (sect) sect.classList.toggle('collapsed');
 }

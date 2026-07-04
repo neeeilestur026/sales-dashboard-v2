@@ -286,21 +286,35 @@ function _emptyMsg(msg) {
 async function loadInventorySnapshot() {
   const wrap = document.getElementById('invSnapshotWrap');
   try {
-    const r = await fetchFlow('getInventory');
-    const rows = ((r && r.data) || []).slice(0, 30);
-    if (rows.length === 0) {
+    // Inventory + POs: flag items that already have a purchase order ("ordered already").
+    const [r, po] = await Promise.all([
+      fetchFlow('getInventory'),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] }))
+    ]);
+    const all = (r && r.data) || [];
+    const orderedSet = new Set();
+    ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
+      if (it && it.itemNo != null && String(it.itemNo).trim() !== '') orderedSet.add(String(it.itemNo).toLowerCase());
+    }));
+    const isOrdered = it => orderedSet.has(String(it.itemNo).toLowerCase());
+    if (all.length === 0) {
       wrap.innerHTML = _emptyMsg('No inventory items found.');
       return;
     }
-    wrap.innerHTML = _tableHtml(
-      ['Item No', 'Description', 'Balance', 'Landed/Unit'],
-      rows.map(item => [
-        `<span class="ref">${esc(item.itemNo || '—')}</span>`,
-        esc(item.description || '—'),
-        `<span class="amt">${flowNum(item.balance).toLocaleString()}</span>`,
-        `<span class="amt">${flowMoney(item.landedCost, item.currency)}</span>`,
-      ])
-    );
+    const orderedN = all.filter(isOrdered).length;
+    const rows = all.slice(0, 30);
+    wrap.innerHTML =
+      `<div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-bottom:0.4rem;font-weight:600;">${orderedN} ordered · ${all.length - orderedN} not ordered</div>` +
+      _tableHtml(
+        ['Item No', 'Description', 'Balance', 'Landed/Unit', 'Ordered?'],
+        rows.map(item => [
+          `<span class="ref">${esc(item.itemNo || '—')}</span>`,
+          esc(item.description || '—'),
+          `<span class="amt">${flowNum(item.balance).toLocaleString()}</span>`,
+          `<span class="amt">${flowMoney(item.landedCost, item.currency)}</span>`,
+          isOrdered(item) ? '<span style="color:#16a34a;font-weight:700;">✅ PO</span>' : '<span style="color:#94a3b8;">—</span>',
+        ])
+      );
   } catch (err) {
     if (wrap) wrap.innerHTML = _emptyMsg('Failed to load inventory.');
   }

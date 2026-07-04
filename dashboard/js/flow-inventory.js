@@ -2,6 +2,7 @@
 let invData = [];
 let invSession = null;
 let invCanDelete = false;   // only admin/accounting may remove items; sales can add/edit only
+let invOrderedSet = new Set();   // Item Nos that appear in any Purchase Order (= "ordered already")
 
 document.addEventListener('DOMContentLoaded', async () => {
   invSession = requireInventoryAccess();
@@ -22,13 +23,23 @@ async function loadInventory() {
   const c = document.getElementById('container');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const res = await fetchFlow('getInventory');
-    invData = (res && res.data) || [];
+    // Inventory + Purchase Orders in parallel; an item is "ordered already" when its Item No is on any PO.
+    const [inv, po] = await Promise.all([
+      fetchFlow('getInventory'),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] }))
+    ]);
+    invData = (inv && inv.data) || [];
+    invOrderedSet = new Set();
+    ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
+      if (it && it.itemNo != null && String(it.itemNo).trim() !== '') invOrderedSet.add(String(it.itemNo).toLowerCase());
+    }));
     render();
   } catch (e) {
     c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`;
   }
 }
+
+function invIsOrdered(r) { return invOrderedSet.has(String(r.itemNo).toLowerCase()); }
 
 function render() {
   const q = (document.getElementById('search').value || '').toLowerCase();
@@ -41,7 +52,21 @@ function render() {
     ? `<th>Item No</th><th>Description</th><th></th>`
     : `<th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Purchase/Unit</th>
        <th class="num">Shipping/Unit</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th><th>Cur</th><th></th>`;
-  c.innerHTML = `<table class="flow-table"><thead><tr>${head}</tr></thead><tbody>${rows.map(rowHtml).join('')}</tbody></table>`;
+  // Two groups: not-ordered first (actionable), then ordered (already has a purchase order).
+  const notOrdered = rows.filter(r => !invIsOrdered(r));
+  const ordered = rows.filter(invIsOrdered);
+  const group = (label, list) => `
+    <div style="font-size:0.9rem;font-weight:700;margin:0 0 0.5rem;display:flex;align-items:center;gap:0.5rem;">
+      ${label}
+      <span style="font-weight:600;font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;background:var(--bg-inset,#eef2f6);color:var(--text-secondary,#475569);">${list.length}</span>
+    </div>
+    ${list.length
+      ? `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>${head}</tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table></div>`
+      : '<p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
+  c.innerHTML =
+    group('🟠 Not yet ordered', notOrdered) +
+    `<div style="height:1.1rem;"></div>` +
+    group('✅ Ordered · has a purchase order', ordered);
 }
 
 function rowHtml(r) {
