@@ -200,7 +200,12 @@ function adrEmailHtml(name) {
     if (adrEmailsLoading) return head + `<div class="dr-empty" style="font-size:0.8rem;">Loading sent emails…</div>`;
     return head + `<div class="dr-empty" style="font-size:0.8rem;">—</div>`;
   }
-  if (rec.needsSetup) return head + `<div class="dr-empty" style="font-size:0.8rem;">${_e(name)} hasn't connected their mailbox.</div>`;
+  if (rec.needsSetup) {
+    const why = rec.reconnect
+      ? `${_e(name)} needs to reconnect their mailbox — ${_e(rec.message || 'the stored credentials could not be read.')}`
+      : `${_e(name)} hasn't connected their mailbox.`;
+    return head + `<div class="dr-empty" style="font-size:0.8rem;">${why}</div>`;
+  }
   if (rec.error) return head + `<div class="dr-empty" style="font-size:0.8rem;color:#b45309;">Couldn't load (${_e(rec.error)}) — retrying on the next refresh.</div>`;
   const emails = rec.emails || [];
   if (!emails.length) return head + `<div class="dr-empty" style="font-size:0.8rem;">No emails sent on ${_e(_date())}.</div>`;

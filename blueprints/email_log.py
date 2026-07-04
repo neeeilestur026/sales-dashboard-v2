@@ -628,7 +628,14 @@ def email_today():
         return jsonify({"success": True, "needsSetup": True, "emails": [], "user": lookup_user})
     decrypted = _decrypt(enc_blob)
     if not decrypted:
-        return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
+        # Creds were encrypted under an OLDER EMAIL_CRED_KEY (key rotated) — unrecoverable without the
+        # old key. Return a graceful "reconnect" state (200) instead of a 500, and drop the cached blob
+        # so a reconnect is picked up immediately. The user just re-connects their mailbox once.
+        _creds_cache.pop(lookup_user, None)
+        return jsonify({"success": True, "needsSetup": True, "reconnect": True, "emails": [],
+                        "user": lookup_user,
+                        "message": "Stored email credentials couldn't be read (the encryption key changed). "
+                                   "Reconnect this mailbox."})
     addr, pwd = decrypted
 
     # Per-(user, date) cache: today refreshes every ~2 min (the oversight page polls every 3), and
@@ -742,7 +749,11 @@ def email_feed():
         return jsonify({"success": True, "needsSetup": True, "emails": [], "folder": kind})
     decrypted = _decrypt(enc_blob)
     if not decrypted:
-        return jsonify({"success": False, "message": "Stored credentials could not be decrypted (key rotated?)"}), 500
+        # Key rotated — graceful reconnect state (200) rather than a 500. Same as /api/email/today.
+        _creds_cache.pop(session["username"], None)
+        return jsonify({"success": True, "needsSetup": True, "reconnect": True, "emails": [], "folder": kind,
+                        "message": "Stored email credentials couldn't be read (the encryption key changed). "
+                                   "Reconnect your mailbox."})
     addr, pwd = decrypted
     try:
         emails = fetch_folder(addr, pwd, kind, days=days)
