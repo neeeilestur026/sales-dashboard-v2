@@ -171,11 +171,11 @@ function requireInventoryAccess() {
     window.location.href = 'index.html';
     return null;
   }
-  if (!['admin', 'accounting', 'sales'].includes(session.role)) {
+  if (!['admin', 'accounting', 'sales', 'management', 'director'].includes(session.role)) {
     window.location.href = _homeForRole(session.role);
     return null;
   }
-  return session;
+  return session;   // management/director are read-only viewers (handled in flow-inventory.js)
 }
 
 /**

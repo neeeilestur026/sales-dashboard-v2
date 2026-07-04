@@ -2,18 +2,25 @@
 let invData = [];
 let invSession = null;
 let invCanDelete = false;   // only admin/accounting may remove items; sales can add/edit only
+let invReadOnly = false;    // management/director can view only (no add/edit/delete)
 let invOrderedSet = new Set();   // Item Nos that appear in any Purchase Order (= "ordered already")
 
 document.addEventListener('DOMContentLoaded', async () => {
   invSession = requireInventoryAccess();
   if (!invSession) return;
   invCanDelete = invSession.role === 'admin' || invSession.role === 'accounting';
+  invReadOnly = invSession.role === 'management' || invSession.role === 'director';
   renderNavbar('flow-inventory');
   // Sales can't open the rest of the flow — only show the flow sub-nav to admin/accounting.
   if (invCanDelete) renderFlowNav('flow-inventory.html');
   if (invSession.role === 'sales') {
     const note = document.getElementById('salesNote');
     if (note) note.style.display = '';
+  }
+  // Management/director view read-only — hide the add/edit form entirely.
+  if (invReadOnly) {
+    const form = document.getElementById('invFormCard');
+    if (form) form.style.display = 'none';
   }
   document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
   await loadInventory();
@@ -70,7 +77,8 @@ function render() {
 }
 
 function rowHtml(r) {
-  const actions = `<td style="white-space:nowrap;">
+  // Read-only (management/director): no action buttons.
+  const actions = invReadOnly ? '<td></td>' : `<td style="white-space:nowrap;">
       <button class="link-btn" onclick='editItem(${r.rowIndex})'>Edit</button>
       ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex})' style="margin-left:0.5rem;">Delete</button>` : ''}
     </td>`;
@@ -85,10 +93,7 @@ function rowHtml(r) {
     <td class="num">${flowMoney(r.landedCost, r.currency)}</td>
     <td class="num">${flowMoney(r.totalLanded, r.currency)}</td>
     <td>${flowEsc(r.currency)}</td>
-    <td style="white-space:nowrap;">
-      <button class="link-btn" onclick='editItem(${r.rowIndex})'>Edit</button>
-      ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex})' style="margin-left:0.5rem;">Delete</button>` : ''}
-    </td></tr>`;
+    ${actions}</tr>`;
 }
 
 function editItem(rowIndex) {
