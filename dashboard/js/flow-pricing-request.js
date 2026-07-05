@@ -296,7 +296,8 @@ function openPr(no) {
     body.innerHTML = pricingPanel(r);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       <button class="btn btn-primary" onclick="savePricing()">Return to Admin (priced)</button>`;
-    setTimeout(recalcPricing, 0);
+    // Seed forex/duties from the principal once on open (mUpdateReadouts no longer auto-seeds on empty).
+    setTimeout(() => { mUpdateReadouts(true); recalcPricing(); }, 0);
     peLoadPriceHistory(r.customer);
   } else if (canSource && r.status === 'Mgmt Priced') {
     body.innerHTML = verifyTable(r);
@@ -489,8 +490,11 @@ function mUpdateReadouts(resetRates) {
   set('mOrigin', p ? p.origin : '—');
   const pfx = document.getElementById('mForexPrefix'); if (pfx) pfx.textContent = p ? `1 ${p.currency} = ₱` : '1 — = ₱';
   const fx = document.getElementById('mForex'), du = document.getElementById('mDuties');
-  if (fx && (resetRates || !fx.value)) fx.value = p ? p.forex : '';
-  if (du && (resetRates || du.value === '')) du.value = p ? p.dutiesPct : '';
+  // Only (re)seed the editable rate inputs on an intentional reset (principal change / load) — NOT on
+  // every recalc, otherwise clearing the field to empty snaps it back to the default and the last digit
+  // can never be deleted.
+  if (fx && resetRates) fx.value = p ? p.forex : '';
+  if (du && resetRates) du.value = p ? p.dutiesPct : '';
   set('peCbmRate', d ? flowMoney(d.cbmRate, 'PHP') + '/CBM' : '—');
   set('peMinDeliv', d ? flowMoney(d.minCharge, 'PHP') : '—');
 }
