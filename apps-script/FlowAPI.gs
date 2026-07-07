@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 67;   // A76: PR Drive folders per requester · A77: PR Doc JSON (client contact details)
+var FLOW_VERSION = 68;   // A76 PR Drive folders · A77 Doc JSON · A78 collision-proof numbering + idempotent create
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -76,7 +76,7 @@ var SCHEMA = {
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
-                    'Priced Items JSON', 'Client Location', 'Doc JSON'],
+                    'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref'],
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price'],
 
@@ -181,7 +181,14 @@ function _append(name, arr) {
   _sheet(name).appendRow(arr);
 }
 
-/** Next document number: PREFIX-YYYYMM-NNN (NNN unique per month). */
+/** Next document number: PREFIX-YYYYMM-NNN (NNN unique per month).
+ *
+ * COLLISION-PROOF: the sequence is a ScriptProperties counter per prefix+month, advanced under the
+ * mutation lock. Sheet reads across executions can be STALE for a short window after a write, so the
+ * old max(sheet)+1 approach could issue the SAME number to two back-to-back creates — their line items
+ * then merged under one document (seen live: PR-202607-167 carried another request's 5 items).
+ * The counter only moves forward; the sheet scan remains as a seed/floor so manually imported numbers
+ * are still respected. */
 function _nextNumber(name, col, prefix) {
   var sh = _sheet(name);
   var last = sh.getLastRow();
@@ -199,7 +206,15 @@ function _nextNumber(name, col, prefix) {
       }
     });
   }
-  return stem + ('00' + (max + 1)).slice(-3);
+  var n = max + 1;
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var key = 'seq_' + name + '_' + prefix + '_' + ym;
+    var stored = parseInt(props.getProperty(key), 10) || 0;
+    n = Math.max(stored, max) + 1;
+    props.setProperty(key, String(n));
+  } catch (e) { /* Properties unavailable → fall back to the sheet max (previous behavior) */ }
+  return stem + ('00' + n).slice(-3);
 }
 
 function _num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
@@ -1808,7 +1823,7 @@ function importPricingSubmissions(p) {
       sh.appendRow([prNo, s.date || _now(), s.submittedBy || '', s.customer || s.client || '',
         s.destination || '', _num(s.commissionPct), _num(s.marginPct), 'Migrated', '',
         'Migrated from ' + (legacyId || 'legacy pricing') + (s.status ? ' (was ' + s.status + ')' : ''),
-        _now(), _now(), legacyId, itemsJson, '', '', '']); // + Priced Items JSON (15) + Client Location (16) + Doc JSON (17)
+        _now(), _now(), legacyId, itemsJson, '', '', '', '']); // + Priced Items JSON (15) + Client Location (16) + Doc JSON (17) + Client Ref (18)
       items.forEach(function (it, i) {
         itemSh.appendRow([prNo, i + 1, it.modelNo || it.itemNo || '', it.name || it.itemName || '',
           _num(it.qty), it.uom || '', it.remarks || '', true, it.supplier || '',
@@ -2391,11 +2406,20 @@ function createPricingRequest(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  // Idempotency: a retried submission (transport bounce → the client re-POSTs) carries the same
+  // clientRef — return the already-created PR instead of writing a duplicate.
+  if (p.clientRef) {
+    var dupe = _rows('PricingRequests').filter(function (h) {
+      return String(h['Client Ref'] || '') === String(p.clientRef);
+    })[0];
+    if (dupe) return { success: true, prNo: dupe['PR No'], duplicate: true,
+      message: 'Purchase request submitted to admin.' };
+  }
   var no = p.prNo || _nextNumber('PricingRequests', 1, 'PR');
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
     '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '',
-    p.docJson || '']);
-    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON
+    p.docJson || '', p.clientRef || '']);
+    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',

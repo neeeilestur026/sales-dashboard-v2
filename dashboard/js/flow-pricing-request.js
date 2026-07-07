@@ -138,7 +138,18 @@ function collectItems() {
 }
 
 async function saveRequest() {
-  const items = collectItems();
+  let items = collectItems();
+  // Drop EXACT duplicate lines (same item/qty/uom/remarks) — ordering the identical line twice is
+  // always accidental; a real repeat order bumps the qty instead.
+  const seen = new Set();
+  const before = items.length;
+  items = items.filter(i => {
+    const k = [i.itemNo, i.itemName, i.qty, i.uom, i.remarks].join('|');
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const droppedDupes = before - items.length;
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
@@ -157,7 +168,10 @@ async function saveRequest() {
   const payload = {
     customer, date, notes: document.getElementById('notes').value.trim(),
     requestedBy: prSession.name, items: JSON.stringify(items),
-    docJson: JSON.stringify(doc)
+    docJson: JSON.stringify(doc),
+    // Idempotency key: if the network bounces and postFlow retries, the backend returns the
+    // already-created PR instead of writing a duplicate.
+    clientRef: 'CR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
   };
   btn.disabled = true; btn.textContent = 'Submitting...';
   try {
@@ -175,6 +189,7 @@ async function saveRequest() {
         'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
       extra = link ? ' · PDF saved to Drive' : ' · PDF pending (generate later if needed)';
     } catch (e) { extra = ' · PDF could not be generated (you can generate it later)'; }
+    if (droppedDupes) extra += ` · ${droppedDupes} duplicate line(s) removed`;
     flowMsg('formMsg', `${res.message} (${res.prNo})${extra}`, true);
     await loadRequests();
   } catch (e) { flowMsg('formMsg', e.message, false); }
