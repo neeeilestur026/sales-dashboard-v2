@@ -276,11 +276,13 @@ function renderList() {
 function rowActions(r) {
   const open = `<button class="link-btn" onclick='openPr("${flowEsc(r.prNo)}")'>Open</button>`;
   const docs = ` <button class="link-btn" onclick='openDocsModal("Pricing Request","${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">Docs</button>`;
+  // PR PDFs are auto-saved to Drive on creation — show the View link on ANY row that has one
+  // (sales "My Requests" and the admin/oversight lists alike).
+  const view = r.pdfLink
+    ? ` <a class="link-btn" href="${flowEsc(r.pdfLink)}" target="_blank" style="margin-left:0.5rem;">View PDF</a>` : '';
   if (prRole === 'sales' && r.status === 'Returned to Sales')
-    return open + docs + ` <button class="link-btn" onclick='openPdf("${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">PR PDF</button>`;
-  if (prRole === 'sales' && r.status === 'Quoted' && r.pdfLink)
-    return open + docs + ` <a class="link-btn" href="${flowEsc(r.pdfLink)}" target="_blank" style="margin-left:0.5rem;">View PDF</a>`;
-  return open + docs;
+    return open + docs + ` <button class="link-btn" onclick='openPdf("${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">PR PDF</button>` + view;
+  return open + docs + view;
 }
 
 // ─── Detail / action modal ───────────────────────

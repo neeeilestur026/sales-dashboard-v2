@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 65;   // Addendum 72: saveSOCostDetails ALWAYS ensures the SO header (upsert path too)
+var FLOW_VERSION = 66;   // Addendum 76: PR PDFs saved to Drive under "Purchase Request/<requester>/"
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1861,11 +1861,21 @@ function _flowFolder() {
   return it.hasNext() ? it.next() : DriveApp.createFolder('Flow Documents');
 }
 
-/** Save any base64 file to the Flow Documents folder; returns { url, id }. */
-function _saveFileToDrive(base64, fileName, mimeType) {
+/** Purchase-request PDFs live in "Purchase Request/<requester name>/" — one subfolder per user
+ *  (sales or admin, whoever created the request). Find-or-create both levels. */
+function _prUserFolder(userName) {
+  var rootIt = DriveApp.getFoldersByName('Purchase Request');
+  var root = rootIt.hasNext() ? rootIt.next() : DriveApp.createFolder('Purchase Request');
+  var name = String(userName || 'Unknown').trim() || 'Unknown';
+  var subIt = root.getFoldersByName(name);
+  return subIt.hasNext() ? subIt.next() : root.createFolder(name);
+}
+
+/** Save any base64 file to Drive (default: the Flow Documents folder); returns { url, id }. */
+function _saveFileToDrive(base64, fileName, mimeType, folder) {
   var bytes = Utilities.base64Decode(base64);
   var blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', fileName || 'document');
-  var file = _flowFolder().createFile(blob);
+  var file = (folder || _flowFolder()).createFile(blob);
   try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
   return { url: file.getUrl(), id: file.getId() };
 }
@@ -2479,7 +2489,16 @@ function createQuotationFromPR(p) {
 
 function savePRPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
-  var link = _savePdfToDrive(p.pdfBase64, p.fileName);
+  // Save under "Purchase Request/<requester>/" — the requester comes from the PR record itself
+  // (works for both the auto-save-on-create and the manual Generate button), falling back to
+  // the acting user when the PR row isn't found.
+  var requester = '';
+  if (p.prNo) {
+    var row = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(p.prNo); })[0];
+    if (row) requester = String(row['Requested By'] || '');
+  }
+  var folder = _prUserFolder(requester || p.actorName || 'Unknown');
+  var link = _saveFileToDrive(p.pdfBase64, p.fileName || ((p.prNo || 'PR') + '.pdf'), 'application/pdf', folder).url;
   if (p.prNo) _setCellByKey('PricingRequests', 'PR No', p.prNo, 'PDF Link', link);
   return { success: true, link: link, prNo: p.prNo, message: 'PR PDF saved to Drive.' };
 }

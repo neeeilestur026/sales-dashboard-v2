@@ -22,11 +22,17 @@ from pdf_generators.pr_pdf import PRDocTemplate
 logger = logging.getLogger(__name__)
 
 
+_MAX_DESC_CHARS = 1200   # a description longer than this can't fit a page row — truncate with an ellipsis
+
+
 def _format_description(description, description_style):
     """Format description text, supporting markdown-like bullets (verbatim from blueprints/pr.py)."""
     if not description or not str(description).strip():
         return Paragraph("", description_style)
-    lines = str(description).splitlines()
+    text = str(description)
+    if len(text) > _MAX_DESC_CHARS:
+        text = text[:_MAX_DESC_CHARS].rstrip() + " …"
+    lines = text.splitlines()
     out = []
     for raw in lines:
         line = raw.rstrip()
@@ -83,7 +89,43 @@ def build_pr_pdf_bytes(pr_details, items, desc_mode="short"):
         for item in items
     ]
 
-    def create_item_table(data_rows, per_page):
+    # ── Geometry shared by measurement + table building ──
+    BASE_COL_WIDTHS = [32, 140, 105, 56, 58, 109]
+    _scale = doc.frame_width / float(sum(BASE_COL_WIDTHS))
+    COL_WIDTHS = [w * _scale for w in BASE_COL_WIDTHS]
+    DESC_IDX = 1
+    DEFAULT_ROW_H = 38.0
+    EXTRA_PAD = 6.0
+    HEADER_ROW_H = 38.0
+    TRAILING_ROW_H = 38.0
+    # Space the last page must reserve below the table: the 0.08+0.2+0.25in spacers plus the
+    # signature block (0.5in gap + underline + name/position lines) ≈ 115pt.
+    SIG_ALLOWANCE = 115.0
+
+    # Usable frame height: PRDocTemplate's Frame keeps ReportLab's default 6pt top/bottom padding.
+    FRAME_PAD = 12.0
+    SAFETY = 4.0
+    usable_height = doc.frame_height - FRAME_PAD - SAFETY
+
+    def _row_height(row, cap=None):
+        """Measured height of a data row (description column drives the wrap)."""
+        desc_obj = row[DESC_IDX]
+        try:
+            wrap_w = max(10, COL_WIDTHS[DESC_IDX] - 8)
+            _, h = desc_obj.wrap(wrap_w, 10000) if hasattr(desc_obj, "wrap") else (wrap_w, 0)
+        except Exception:
+            h = 0
+        h = max(DEFAULT_ROW_H, h + EXTRA_PAD)
+        # Clamp a pathological single row to what a page can hold (clips rather than crashing the build).
+        if cap is not None:
+            h = min(h, cap)
+        return h
+
+    def create_item_table(data_rows, fill_budget):
+        """Build one page's item table. Rows are the real items for this page; empty ruled rows are
+        added only while they still fit `fill_budget` (the remaining vertical space) — the old code
+        blindly padded to a fixed 10 rows, which overflowed the frame whenever descriptions were tall
+        and pushed the signature to an extra page."""
         header_row = [
             Paragraph("Item No.", header_style),
             Paragraph("Item Description", header_style),
@@ -93,32 +135,20 @@ def build_pr_pdf_bytes(pr_details, items, desc_mode="short"):
             Paragraph("Remarks", header_style),
         ]
         empty_row = [Paragraph("", normal_style)] * 6
-        BASE_COL_WIDTHS = [32, 140, 105, 56, 58, 109]
-        scale = doc.frame_width / float(sum(BASE_COL_WIDTHS))
-        COL_WIDTHS = [w * scale for w in BASE_COL_WIDTHS]
-        DESC_IDX = 1
-        DEFAULT_ROW_H = 38.0
-        EXTRA_PAD = 6.0
-        desc_col_w = COL_WIDTHS[DESC_IDX]
 
-        visible_rows = list(data_rows[:per_page])
-        while len(visible_rows) < per_page:
+        visible_rows = list(data_rows)
+        row_heights = [_row_height(r, cap=fill_budget) for r in visible_rows]
+        # Pad with empty form rows only while they fit the remaining budget (keep at least the real rows).
+        used = sum(row_heights)
+        while used + DEFAULT_ROW_H <= fill_budget:
             visible_rows.append(empty_row)
-
-        row_heights = []
-        for row in visible_rows:
-            desc_obj = row[DESC_IDX]
-            try:
-                wrap_w = max(10, desc_col_w - 8)
-                _, h = desc_obj.wrap(wrap_w, 10000) if hasattr(desc_obj, "wrap") else (wrap_w, 0)
-            except Exception:
-                h = 0
-            row_heights.append(max(DEFAULT_ROW_H, h + EXTRA_PAD))
+            row_heights.append(DEFAULT_ROW_H)
+            used += DEFAULT_ROW_H
 
         table_data = [header_row] + visible_rows
-        final_heights = [38.0] + row_heights
+        final_heights = [HEADER_ROW_H] + row_heights
         table_data.append([Paragraph("", normal_style)] * 6)
-        final_heights.append(38.0)
+        final_heights.append(TRAILING_ROW_H)
 
         table = Table(table_data, colWidths=COL_WIDTHS, rowHeights=final_heights)
         table.setStyle(TableStyle([
@@ -170,12 +200,30 @@ def build_pr_pdf_bytes(pr_details, items, desc_mode="short"):
         ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
 
+    # ── Height-aware pagination ──
+    # Chunk the real rows by MEASURED height (per_page is only an upper cap on rows/page), so tall
+    # multi-line descriptions never overflow the frame or push the signature onto an extra page.
     per_page = 10 if desc_mode == "short" else 3
-    chunks = [pdf_rows[i:i + per_page] for i in range(0, len(pdf_rows), per_page)] or [[]]
-    for idx, chunk in enumerate(chunks):
+    page_budget = usable_height - HEADER_ROW_H - TRAILING_ROW_H - (0.08 + 0.2) * inch
+    last_page_budget = page_budget - SIG_ALLOWANCE   # the last page must also hold the signature block
+
+    chunks = []
+    cur, cur_h = [], 0.0
+    for row in pdf_rows:
+        h = _row_height(row, cap=last_page_budget)
+        # break BEFORE adding when this row wouldn't fit even the tighter last-page budget
+        if cur and (len(cur) >= per_page or cur_h + h > last_page_budget):
+            chunks.append((cur, cur_h))
+            cur, cur_h = [], 0.0
+        cur.append(row)
+        cur_h += h
+    chunks.append((cur, cur_h))     # always at least one (possibly empty) page
+
+    for idx, (chunk, chunk_h) in enumerate(chunks):
         is_last = (idx == len(chunks) - 1)
+        budget = last_page_budget if is_last else page_budget
         elements.append(Spacer(1, 0.08 * inch))
-        elements.append(create_item_table(chunk, per_page))
+        elements.append(create_item_table(chunk, budget))
         elements.append(Spacer(1, 0.2 * inch))
         if is_last:
             elements.append(Spacer(1, 0.25 * inch))
