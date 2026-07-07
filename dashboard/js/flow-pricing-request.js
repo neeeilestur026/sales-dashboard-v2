@@ -143,16 +143,28 @@ async function saveRequest() {
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
+  const date = document.getElementById('date').value;
   const payload = {
-    customer, date: document.getElementById('date').value, notes: document.getElementById('notes').value.trim(),
+    customer, date, notes: document.getElementById('notes').value.trim(),
     requestedBy: prSession.name, items: JSON.stringify(items)
   };
   btn.disabled = true; btn.textContent = 'Submitting...';
   try {
     const res = await postFlow('createPricingRequest', payload);
     if (!res.success) throw new Error(res.message);
-    flowMsg('formMsg', `${res.message} (${res.prNo})`, true);
     resetForm();
+    // Auto-generate the branded PR PDF and save it to Drive + the PDF Link column (best-effort,
+    // never blocks creation). No tab pops open (background) — it's an automatic archive on creation.
+    let extra = '';
+    try {
+      btn.textContent = 'Saving PDF...';
+      const { link } = await generateFlowPdf('/flow/pr-pdf',
+        { prNo: res.prNo, customer, date, requestedBy: prSession.name,
+          items: items.map(i => ({ itemNo: i.itemNo, itemName: i.itemName, qty: i.qty, uom: i.uom, remarks: i.remarks })) },
+        'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
+      extra = link ? ' · PDF saved to Drive' : ' · PDF pending (generate later if needed)';
+    } catch (e) { extra = ' · PDF could not be generated (you can generate it later)'; }
+    flowMsg('formMsg', `${res.message} (${res.prNo})${extra}`, true);
     await loadRequests();
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Submit to Admin'; }

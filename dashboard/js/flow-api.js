@@ -233,7 +233,8 @@ function fileToDataURL(file) {
  * Drive via FlowAPI. Returns the Drive link (or '' if Drive save was skipped/failed).
  * route: '/flow/quotation-pdf' | '/flow/po-pdf'; saveAction: 'saveQuotationPDF' | 'savePOPDF'.
  */
-async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileName) {
+async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileName, opts) {
+  opts = opts || {};
   const res = await fetch(route, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
@@ -243,7 +244,8 @@ async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileN
     throw new Error(msg);
   }
   const blob = await res.blob();
-  try { window.open(URL.createObjectURL(blob), '_blank'); } catch (e) {}
+  // opts.background: save to Drive silently (no tab) — used for auto-save on record creation.
+  if (!opts.background) { try { window.open(URL.createObjectURL(blob), '_blank'); } catch (e) {} }
   let link = '';
   if (_flowConfigured()) {
     try {
