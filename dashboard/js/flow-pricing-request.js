@@ -144,9 +144,20 @@ async function saveRequest() {
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
   const date = document.getElementById('date').value;
+  // Client contact details — printed on the PR PDF's COMPANY INFORMATION block and persisted on the
+  // request (Doc JSON) so a later re-generation prefills them.
+  const gv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const doc = {
+    companyName: customer, companyAddress: gv('prAddress'),
+    contactPerson: gv('prContact'), designation: gv('prDesignation'),
+    contactEmail: gv('prEmail'), contactPhone: gv('prPhone'),
+    dateNeeded: gv('prDateNeeded'), urgency: gv('prUrgency'), prNumberClient: gv('prClientNo'),
+    preparedByName: prSession.name
+  };
   const payload = {
     customer, date, notes: document.getElementById('notes').value.trim(),
-    requestedBy: prSession.name, items: JSON.stringify(items)
+    requestedBy: prSession.name, items: JSON.stringify(items),
+    docJson: JSON.stringify(doc)
   };
   btn.disabled = true; btn.textContent = 'Submitting...';
   try {
@@ -159,7 +170,7 @@ async function saveRequest() {
     try {
       btn.textContent = 'Saving PDF...';
       const { link } = await generateFlowPdf('/flow/pr-pdf',
-        { prNo: res.prNo, customer, date, requestedBy: prSession.name,
+        { prNo: res.prNo, customer, date, requestedBy: prSession.name, doc,
           items: items.map(i => ({ itemNo: i.itemNo, itemName: i.itemName, qty: i.qty, uom: i.uom, remarks: i.remarks })) },
         'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
       extra = link ? ' · PDF saved to Drive' : ' · PDF pending (generate later if needed)';
@@ -175,6 +186,8 @@ function resetForm() {
   document.getElementById('customer').value = '';
   document.getElementById('notes').value = '';
   document.getElementById('date').value = flowToday();
+  ['prContact', 'prDesignation', 'prEmail', 'prPhone', 'prAddress', 'prDateNeeded', 'prUrgency', 'prClientNo']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formMsg').style.display = 'none';
   addRow();
@@ -871,12 +884,21 @@ function openPdf(no) {
   document.getElementById('pdfPrNo').value = no;
   document.getElementById('pdfModalSub').textContent = `${r.prNo} · ${r.customer} · ${r.items.length} item(s)`;
   const d = flowLoadDefaults('pr');
-  document.getElementById('pdfCompanyName').value = d.CompanyName || r.customer || '';
-  ['CompanyAddress', 'ContactPerson', 'Designation', 'ContactEmail', 'ContactPhone',
-   'PreparedByName', 'PreparedByPosition'].forEach(f => {
-    const el = document.getElementById('pdf' + f);
-    if (el && d[f] !== undefined && d[f] !== '') el.value = d[f];
-  });
+  // The PR's own stored contact details (captured on the create form) take precedence over the
+  // browser-remembered defaults — re-generating reproduces the original document.
+  let stored = {};
+  try { stored = JSON.parse(r.docJson || '{}') || {}; } catch (e) { stored = {}; }
+  const sv = (field, key) => {
+    const el = document.getElementById('pdf' + field);
+    if (!el) return;
+    if (stored[key] !== undefined && stored[key] !== '') el.value = stored[key];
+    else if (d[field] !== undefined && d[field] !== '') el.value = d[field];
+  };
+  document.getElementById('pdfCompanyName').value = stored.companyName || d.CompanyName || r.customer || '';
+  sv('CompanyAddress', 'companyAddress'); sv('ContactPerson', 'contactPerson');
+  sv('Designation', 'designation'); sv('ContactEmail', 'contactEmail'); sv('ContactPhone', 'contactPhone');
+  sv('DateNeeded', 'dateNeeded'); sv('Urgency', 'urgency'); sv('PrNumberClient', 'prNumberClient');
+  sv('PreparedByName', 'preparedByName'); sv('PreparedByPosition', 'preparedByPosition');
   if (!document.getElementById('pdfPreparedByName').value) document.getElementById('pdfPreparedByName').value = r.requestedBy || prSession.name;
   document.getElementById('pdfModalMsg').style.display = 'none';
   document.getElementById('pdfModal').classList.add('open');

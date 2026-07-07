@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 66;   // Addendum 76: PR PDFs saved to Drive under "Purchase Request/<requester>/"
+var FLOW_VERSION = 67;   // A76: PR Drive folders per requester · A77: PR Doc JSON (client contact details)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -76,7 +76,7 @@ var SCHEMA = {
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
-                    'Priced Items JSON', 'Client Location'],
+                    'Priced Items JSON', 'Client Location', 'Doc JSON'],
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price'],
 
@@ -1808,7 +1808,7 @@ function importPricingSubmissions(p) {
       sh.appendRow([prNo, s.date || _now(), s.submittedBy || '', s.customer || s.client || '',
         s.destination || '', _num(s.commissionPct), _num(s.marginPct), 'Migrated', '',
         'Migrated from ' + (legacyId || 'legacy pricing') + (s.status ? ' (was ' + s.status + ')' : ''),
-        _now(), _now(), legacyId, itemsJson, '', '']); // + Priced Items JSON (15) + Client Location (16)
+        _now(), _now(), legacyId, itemsJson, '', '', '']); // + Priced Items JSON (15) + Client Location (16) + Doc JSON (17)
       items.forEach(function (it, i) {
         itemSh.appendRow([prNo, i + 1, it.modelNo || it.itemNo || '', it.name || it.itemName || '',
           _num(it.qty), it.uom || '', it.remarks || '', true, it.supplier || '',
@@ -2355,7 +2355,7 @@ function getPricingRequests(p) {
       prNo: h['PR No'], date: h['Date'], requestedBy: h['Requested By'], customer: h['Customer'],
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
-      clientLocation: h['Client Location'] || '',
+      clientLocation: h['Client Location'] || '', docJson: h['Doc JSON'] || '',
       legacyId: h['Legacy ID'] || '', legacyItemsJson: h['Legacy Items JSON'] || '',
       pricedItemsJson: h['Priced Items JSON'] || '',
       items: its.map(function (r) {
@@ -2393,8 +2393,9 @@ function createPricingRequest(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var no = p.prNo || _nextNumber('PricingRequests', 1, 'PR');
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
-    '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '']);
-    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location
+    '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '',
+    p.docJson || '']);
+    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',

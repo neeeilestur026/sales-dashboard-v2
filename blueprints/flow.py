@@ -288,9 +288,11 @@ def pr_pdf():
     desc_mode = (data.get("descMode") or doc.get("descMode") or "short").strip().lower()
 
     items = []
-    for it in raw_items:
+    for idx, it in enumerate(raw_items, start=1):
         items.append({
-            "item_no": _s(it.get("itemNo")),
+            # Item No. is the SEQUENCE (1, 2, 3…) like the reference form + the quotation;
+            # the inventory item number belongs in Model / Part No.
+            "item_no": str(idx),
             "item_description": _s(it.get("itemName")),
             "model_no": _s(it.get("modelNo") or it.get("itemNo")),
             "quantity": _s(it.get("qty")),
