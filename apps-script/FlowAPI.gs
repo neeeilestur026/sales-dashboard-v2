@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 69;   // A76 folders · A77 Doc JSON · A78 numbering/idempotency · A79 Properties-backed PR dedupe
+var FLOW_VERSION = 70;   // A79 dedupe · A80 resetSequenceCounters (resync numbering after cleanup)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1758,6 +1758,28 @@ function saveSOCostDetails(p) {
 }
 
 /**
+ * Resync the document-number counters after a manual cleanup. The numbering counters live in
+ * ScriptProperties (seq_<sheet>_<prefix>_<yyyymm>) and are monotonic (collision-safe), so deleting rows
+ * leaves a gap. Clearing the counter(s) makes the next _nextNumber recompute from the current sheet max —
+ * e.g. after deleting PR 168/169 (last = 166), the next PR becomes 167.
+ * Optional p.prefix (e.g. 'PR') limits the reset to that document type.
+ */
+function resetSequenceCounters(p) {
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties();
+  var pref = String((p && p.prefix) || '').trim();
+  var cleared = [];
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('seq_') !== 0) return;
+    if (pref && k.indexOf('_' + pref + '_') === -1) return;   // e.g. seq_PricingRequests_PR_202607
+    props.deleteProperty(k);
+    cleared.push(k);
+  });
+  return { success: true, cleared: cleared.length, keys: cleared,
+    message: 'Numbering resynced — ' + cleared.length + ' counter(s) cleared. Next number derives from the current sheet.' };
+}
+
+/**
  * Remove ALL migrated sales-order records so they can be re-migrated cleanly: the migrated SOCostDetails
  * rows, the header-only migrated SalesOrders, and the migrated Invoices/Receiving (+ their item rows).
  * Real new-flow records are untouched. Deletes bottom-up to preserve row indices.
@@ -2569,6 +2591,7 @@ var HANDLERS = {
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
   getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails, saveSOCostDetails: saveSOCostDetails,
   backfillMigratedRecords: backfillMigratedRecords, deleteMigratedRecords: deleteMigratedRecords,
+  resetSequenceCounters: resetSequenceCounters,
   matchSupplierTypes: matchSupplierTypes,
   importPricingSubmissions: importPricingSubmissions,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
@@ -2603,5 +2626,5 @@ var MUTATIONS = {
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1,
   importSOCostDetails: 1, saveSOCostDetails: 1, importPricingSubmissions: 1, backfillMigratedRecords: 1,
-  deleteMigratedRecords: 1
+  deleteMigratedRecords: 1, resetSequenceCounters: 1
 };

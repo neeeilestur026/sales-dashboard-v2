@@ -67,6 +67,7 @@ function setupRoleUI() {
     prFilter = '';
   } else if (prRole === 'admin') {
     document.getElementById('salesFormCard').style.display = '';   // admin can also start a purchase request
+    const rb = document.getElementById('resyncBtn'); if (rb) rb.style.display = '';   // numbering maintenance (admin only)
     listTitle.textContent = 'Sourcing & Verification Queue';
     blurb.textContent = 'Create a purchase request below, or source suppliers and prices for each item then forward to management. After management prices it, verify and return to sales.';
     seg.innerHTML = segBtns(['Requested,Sourcing', 'Mgmt Priced', ''], ['To Source', 'To Verify', 'All']);
@@ -180,18 +181,25 @@ async function saveRequest() {
     resetForm();
     // Auto-generate the branded PR PDF and save it to Drive + the PDF Link column (best-effort,
     // never blocks creation). No tab pops open (background) — it's an automatic archive on creation.
-    let extra = '';
+    let extra = '', savedLink = '';
     try {
       btn.textContent = 'Saving PDF...';
       const { link } = await generateFlowPdf('/flow/pr-pdf',
         { prNo: res.prNo, customer, date, requestedBy: prSession.name, doc,
           items: items.map(i => ({ itemNo: i.itemNo, itemName: i.itemName, qty: i.qty, uom: i.uom, remarks: i.remarks })) },
         'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
+      savedLink = link || '';
       extra = link ? ' · PDF saved to Drive' : ' · PDF pending (generate later if needed)';
     } catch (e) { extra = ' · PDF could not be generated (you can generate it later)'; }
     if (droppedDupes) extra += ` · ${droppedDupes} duplicate line(s) removed`;
     flowMsg('formMsg', `${res.message} (${res.prNo})${extra}`, true);
     await loadRequests();
+    // The PDF Link cell was just written; a re-read can be momentarily stale (empty), so the "View PDF"
+    // link wouldn't show until a later refresh. We already have the link in memory — patch the row now.
+    if (savedLink) {
+      const row = prList.find(x => String(x.prNo) === String(res.prNo));
+      if (row && !row.pdfLink) { row.pdfLink = savedLink; renderList(); }
+    }
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Submit to Admin'; }
 }
@@ -218,6 +226,20 @@ async function loadRequests() {
     prList = (res && res.data) || [];
     renderList();
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+// Admin maintenance: after deleting PR rows in the sheet, resync the monotonic numbering counter so the
+// next PR resumes from the current highest number (fills the gap left by the deletion).
+async function resyncNumbering() {
+  if (!confirm('Resync PR numbering to the current sheet?\n\nDo this only AFTER deleting the unwanted PR rows in the sheet — the next purchase request will then continue from the highest remaining PR number.')) return;
+  const btn = document.getElementById('resyncBtn');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Resyncing…'; }
+  try {
+    const res = await postFlow('resetSequenceCounters', { prefix: 'PR' });
+    alert(res && res.success ? (res.message || 'Numbering resynced.') : (res.message || 'Failed to resync.'));
+  } catch (e) { alert(e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = orig || 'Resync numbering'; } }
 }
 
 function filteredList() {

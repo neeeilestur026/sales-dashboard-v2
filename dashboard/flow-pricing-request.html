@@ -172,6 +172,7 @@
         <h3 style="font-size:0.95rem;font-weight:600;" id="listTitle">My Requests</h3>
         <div style="display:flex;gap:0.6rem;align-items:center;">
           <span class="seg" id="filterSeg"></span>
+          <button class="btn btn-sm btn-secondary" id="resyncBtn" style="display:none;" onclick="resyncNumbering()" title="After deleting PR rows in the sheet, click to resume numbering from the current highest PR.">Resync numbering</button>
           <button class="btn btn-sm btn-secondary" onclick="loadRequests()">Refresh</button>
         </div>
       </div>
