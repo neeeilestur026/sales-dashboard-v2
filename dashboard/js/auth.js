@@ -425,7 +425,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'accounting') {
-    const flowActive = (activePage || '').indexOf('flow') === 0;
+    const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders';
     const reportsActive = ['accounting-daily-report', 'payment-requests'].includes(activePage);
     const acctMenuActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
@@ -444,6 +444,7 @@ function renderNavbar(activePage) {
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
+          <a href="management-sales-orders.html" class="${activePage === 'management-sales-orders' ? 'active' : ''}">Sales Orders — All</a>
           <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
           <a href="migrate-so-costs.html" class="${activePage === 'migrate-so-costs' ? 'active' : ''}">Migrate SO Costs</a>
           <a href="reconcile-2026-costs.html" class="${activePage === 'reconcile-2026-costs' ? 'active' : ''}">Reconcile 2026 Costs</a>

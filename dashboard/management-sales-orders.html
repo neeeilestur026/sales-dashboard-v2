@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales Orders — Management Dashboard</title>
+  <title>Sales Orders — Overview</title>
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .mso-toolbar {
@@ -128,8 +128,9 @@
   <script src="js/flow-api.js"></script>
   <script>
     (function () {
-      var session = (typeof requireManagement === 'function') ? requireManagement() : null;
-      if (typeof requireManagement === 'function' && !session) return;
+      // Oversight roles (admin | accounting | management | director) may view this read-only overview.
+      var session = (typeof requireOversight === 'function') ? requireOversight() : null;
+      if (typeof requireOversight === 'function' && !session) return;
       if (typeof renderNavbar === 'function') renderNavbar('management-sales-orders');
 
       var allOrders = [];
