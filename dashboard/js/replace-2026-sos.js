@@ -6,7 +6,7 @@
    label, writes the full cost breakdown, regenerates the migrated Invoice + Receiving).
    File totals: Revenue ₱8,535,630.46 · COGS ₱3,720,768.54 · GP ₱4,814,861.92. */
 
-const RS_MIN_VERSION = 64;            // FlowAPI FLOW_VERSION that added the year-scoped wipe
+const RS_MIN_VERSION = 65;            // v64: year-scoped wipe · v65: import ALWAYS ensures the SO header
 const RS_EXP_SALES = 8535630.46;
 const RS_EXP_COGS  = 3720768.54;
 
@@ -177,6 +177,12 @@ async function runWipe() {
 
 // ── Step 2: import the 37 SOs (header + full cost breakdown + regenerated invoice/receiving each) ──
 async function runImport() {
+  // v65 gate: older backends only create the SO header on the FIRST cost save (upsert path skipped it),
+  // which left SOs headerless and made SO counts disagree across dashboards. Refuse to repeat that.
+  if (rsSystem.version < RS_MIN_VERSION) {
+    _status('importMsg', `Blocked: FlowAPI backend is version ${rsSystem.version || 'unknown'} — redeploy apps-script/FlowAPI.gs (v${RS_MIN_VERSION}) first so the import also repairs missing SO headers.`, false);
+    return;
+  }
   if (!confirm('Import all ' + REPLACE_2026.length + ' sales orders from the reconciliation file?')) return;
   const btn = document.getElementById('importBtn');
   btn.disabled = true;
@@ -205,6 +211,12 @@ function runVerify() {
   const missing = REPLACE_2026.filter(r => !costBySo[String(r.soNo)]);
   checks.push([`All ${REPLACE_2026.length} file SOs present in system cost details`, missing.length === 0,
     missing.length ? 'missing: ' + missing.map(m => m.soNo).join(', ') : '']);
+  // Headers are what every SO list/count reads (accounting, admin, management) — cost details alone
+  // aren't enough. This check was missing when 29 headerless SOs slipped through unnoticed.
+  const hdrBySo = {}; rsSystem.sos.forEach(s => { hdrBySo[String(s.soNo)] = s; });
+  const noHdr = REPLACE_2026.filter(r => !hdrBySo[String(r.soNo)]);
+  checks.push([`All ${REPLACE_2026.length} file SOs have a Sales Order header (visible in every SO list)`, noHdr.length === 0,
+    noHdr.length ? `${noHdr.length} missing: ` + noHdr.map(m => m.soNo).join(', ') : '']);
   let sumSales = 0, sumCogs = 0, rowBad = [];
   REPLACE_2026.forEach(r => {
     const cd = costBySo[String(r.soNo)];

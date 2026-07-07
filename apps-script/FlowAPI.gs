@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 64;   // Addendum 64: deleteMigratedRecords({year}) + saveSOCostDetails status/source
+var FLOW_VERSION = 65;   // Addendum 72: saveSOCostDetails ALWAYS ensures the SO header (upsert path too)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1712,15 +1712,19 @@ function saveSOCostDetails(p) {
     sh.getRange(existing.rowIndex, 1, 1, rowArr.length).setValues([rowArr]);
   } else {
     sh.appendRow(rowArr);
-    // Create a header-only Sales Order if one doesn't exist yet. Imports (c.source==='import') keep the
-    // file's real status and are tagged 'Migrated (legacy)' so a future year-scoped wipe removes them.
-    var hasHeader = _rows('SalesOrders').some(function (r) { return String(r['SO No']) === soNo; });
-    if (!hasHeader) {
-      _sheet('SalesOrders').appendRow([soNo, '', c.date || _now(), c.customer || '(unknown)',
-        c.status || 'Closed', sales,
-        (c.source === 'import' ? 'Migrated (legacy)' : 'Manual (edited)'), _now(),
-        (cogsType === 'international' ? 'International' : 'Local')]);
-    }
+  }
+  // ALWAYS ensure a Sales Order header exists (not only on the first-ever cost save). The old
+  // append-branch-only check left SOs headerless when the cost row already existed at import time
+  // (upsert path) but the header had been wiped — SO lists then disagreed with the invoice-driven
+  // totals across dashboards. Existing headers (incl. native ones) are never modified here.
+  // Imports (c.source==='import') keep the file's real status and are tagged 'Migrated (legacy)'
+  // so a future year-scoped wipe removes them.
+  var hasHeader = _rows('SalesOrders').some(function (r) { return String(r['SO No']) === soNo; });
+  if (!hasHeader) {
+    _sheet('SalesOrders').appendRow([soNo, '', c.date || _now(), c.customer || '(unknown)',
+      c.status || 'Closed', sales,
+      (c.source === 'import' ? 'Migrated (legacy)' : 'Manual (edited)'), _now(),
+      (cogsType === 'international' ? 'International' : 'Local')]);
   }
   _setSoSupplierType(soNo, cogsType);   // keep the SO's Intl/Local label in sync with the cost type
   // Regenerate this SO's migrated Invoice + Receiving from the new breakdown so the process detail
