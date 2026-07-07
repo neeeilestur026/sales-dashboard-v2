@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 68;   // A76 PR Drive folders · A77 Doc JSON · A78 collision-proof numbering + idempotent create
+var FLOW_VERSION = 69;   // A76 folders · A77 Doc JSON · A78 numbering/idempotency · A79 Properties-backed PR dedupe
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2407,8 +2407,16 @@ function createPricingRequest(p) {
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   // Idempotency: a retried submission (transport bounce → the client re-POSTs) carries the same
-  // clientRef — return the already-created PR instead of writing a duplicate.
+  // clientRef — return the already-created PR instead of writing a duplicate. The ScriptProperties
+  // check is authoritative (strongly consistent, immune to the Sheets read-after-write staleness that
+  // caused the merging); the sheet scan is a secondary fallback.
+  var crefKey = p.clientRef ? ('pr_cref_' + p.clientRef) : '';
   if (p.clientRef) {
+    try {
+      var prevNo = PropertiesService.getScriptProperties().getProperty(crefKey);
+      if (prevNo) return { success: true, prNo: prevNo, duplicate: true,
+        message: 'Purchase request submitted to admin.' };
+    } catch (e) { /* fall through to the sheet scan */ }
     var dupe = _rows('PricingRequests').filter(function (h) {
       return String(h['Client Ref'] || '') === String(p.clientRef);
     })[0];
@@ -2425,6 +2433,9 @@ function createPricingRequest(p) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
       true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0]);
   });
+  // Record clientRef → PR No so a retried submission returns THIS number without re-writing, even if
+  // the sheet write hasn't propagated to a subsequent read.
+  if (crefKey) { try { PropertiesService.getScriptProperties().setProperty(crefKey, String(no)); } catch (e) {} }
   return { success: true, prNo: no, message: 'Purchase request submitted to admin.' };
 }
 
