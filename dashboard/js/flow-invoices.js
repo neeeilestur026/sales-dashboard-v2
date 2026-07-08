@@ -103,7 +103,8 @@ async function saveInvoice() {
   const payload = {
     soNo: ivCurrent.soNo, customer, date: document.getElementById('date').value,
     invNo: document.getElementById('invNo').value.trim(),
-    createdBy: ivSession.name, items: JSON.stringify(items)
+    createdBy: ivSession.name, items: JSON.stringify(items),
+    clientRef: flowClientRef()                              // idempotent create (safe retry)
   };
   btn.disabled = true; btn.textContent = 'Saving...';
   try {

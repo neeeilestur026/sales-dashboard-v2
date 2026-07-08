@@ -158,6 +158,7 @@ async function savePO() {
     exchangeRate: poFxRate(), totalPHP: poTotalPHP(),
     createdBy: poSession.name, items: JSON.stringify(items)
   };
+  if (!editingNo) payload.clientRef = flowClientRef();     // idempotent create (safe retry)
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const res = await postFlow(editingNo ? 'updatePurchaseOrder' : 'createPurchaseOrder', payload);

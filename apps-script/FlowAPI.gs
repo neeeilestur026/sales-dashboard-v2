@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 70;   // A79 dedupe · A80 resetSequenceCounters (resync numbering after cleanup)
+var FLOW_VERSION = 71;   // A82 scan fixes: dash→N/A item nos · clientRef dedupe on creates · AP notes clearable · matchSupplierTypes locked · receiving SO No
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -288,11 +288,28 @@ function _findInventory(itemNo) {
   return null;
 }
 
-/** Normalize an Item No: a blank or "n/a" (any case) becomes the literal text 'N/A'. */
+/** Normalize an Item No: a blank, "n/a" (any case), or dash-only string becomes the literal 'N/A'
+ *  (users also type "-" for no-code items — without this, the second "-" add is rejected as a
+ *  duplicate and the admin-quotation auto-inventory loop silently skips the item). */
 function _normItemNo(v) {
   var s = String(v == null ? '' : v).trim();
-  if (!s || s.toLowerCase() === 'n/a' || s.toLowerCase() === 'na') return 'N/A';
+  if (!s || s.toLowerCase() === 'n/a' || s.toLowerCase() === 'na' || /^[-–—]+$/.test(s)) return 'N/A';
   return s;
+}
+
+/** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
+ *  carries the same clientRef returns the originally created doc number instead of writing again.
+ *  ScriptProperties is strongly consistent (immune to the Sheets read-after-write staleness that
+ *  caused the A78 merging), and all mutations already run under the script lock. */
+function _refSeen(action, clientRef) {
+  if (!clientRef) return null;
+  try { return PropertiesService.getScriptProperties().getProperty('cref_' + action + '_' + clientRef); }
+  catch (e) { return null; }
+}
+function _refStore(action, clientRef, no) {
+  if (!clientRef) return;
+  try { PropertiesService.getScriptProperties().setProperty('cref_' + action + '_' + clientRef, String(no)); }
+  catch (e) { /* best-effort — worst case a retry re-runs, same as before */ }
 }
 
 function addInventoryItem(p) {
@@ -385,6 +402,8 @@ function createQuotation(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  var dup = _refSeen('createQuotation', p.clientRef);
+  if (dup) return { success: true, quotationNo: dup, duplicate: true, message: 'Quotation created.' };
   var no = p.quotationNo || _nextNumber('Quotations', 1, 'QTN');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
@@ -398,6 +417,7 @@ function createQuotation(p) {
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
+  _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
 }
 
@@ -453,6 +473,8 @@ function createSalesOrder(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  var dup = _refSeen('createSalesOrder', p.clientRef);
+  if (dup) return { success: true, soNo: dup, duplicate: true, message: 'Sales Order created.' };
   var no = p.soNo || _nextNumber('SalesOrders', 1, 'SO');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
@@ -463,6 +485,7 @@ function createSalesOrder(p) {
   });
   // Auto-create the shipment-monitoring timeline for this order (flow-native).
   _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
+  _refStore('createSalesOrder', p.clientRef, no);
   return { success: true, soNo: no, message: 'Sales Order created.' };
 }
 
@@ -633,6 +656,8 @@ function createPurchaseOrder(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.supplier) return { success: false, message: 'Supplier is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  var dup = _refSeen('createPurchaseOrder', p.clientRef);
+  if (dup) return { success: true, poNo: dup, duplicate: true, message: 'Purchase Order created, AP entry and journal posted.' };
   var no = p.poNo || _nextNumber('PurchaseOrders', 1, 'PO');
   var currency = p.currency || 'PHP';
   var total = 0;
@@ -653,6 +678,7 @@ function createPurchaseOrder(p) {
     { account: ACC.CLEARING, debit: total, memo: 'PO ' + no + ' — ' + p.supplier },
     { account: ACC.AP, credit: total, memo: 'AP ' + apNo + ' — ' + p.supplier }
   ]);
+  _refStore('createPurchaseOrder', p.clientRef, no);
   return { success: true, poNo: no, apNo: apNo, message: 'Purchase Order created, AP entry and journal posted.' };
 }
 
@@ -734,11 +760,13 @@ function updateAPAging(p) {
   var headers = SCHEMA.APAging;
   var cur = sh.getRange(ri, 1, 1, headers.length).getValues()[0];
   function set(col, val) { if (val !== undefined && val !== null && val !== '') cur[col] = val; }
+  // Text fields must be CLEARABLE — write whenever supplied, including '' (matches updateARAging).
+  function setText(col, val) { if (val !== undefined && val !== null) cur[col] = val; }
   set(5, p.amountPHP !== undefined ? _num(p.amountPHP) : undefined); // Amount (PHP)
   set(6, p.status);                                                  // Status
-  set(7, p.dueDate);                                                 // Due Date
+  setText(7, p.dueDate);                                             // Due Date (clearable)
   set(8, p.paidPHP !== undefined ? _num(p.paidPHP) : undefined);     // Paid (PHP)
-  set(9, p.notes);                                                   // Notes
+  setText(9, p.notes);                                               // Notes (clearable)
   cur[11] = _now();                                                  // Updated At
   sh.getRange(ri, 1, 1, headers.length).setValues([cur]);
   // GL: payment of A/P — Dr Accounts Payable / Cr Cash (PHP). Amount = paid, or full PHP if marked Paid.
@@ -803,6 +831,9 @@ function recordCollection(p) {
   var ewt = _num(p.ewt);                                  // creditable withholding tax (2307) on this collection
   if (ewt < 0) ewt = 0;
   if (ewt > amount) ewt = amount;
+  var dup = _refSeen('recordCollection', p.clientRef);
+  if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
+    status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
   var colNo = _nextNumber('Collections', 1, 'COL');
   _append('Collections', [colNo, p.arNo, ar['INV No'], ar['SO No'], ar['Customer'], p.date || _dateStr(_now()),
     amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt]);
@@ -820,6 +851,7 @@ function recordCollection(p) {
   if (ewtTotal > 0) lines.push({ account: ACC.CWT, debit: ewtTotal, memo: 'EWT 2307 — ' + p.arNo });
   lines.push({ account: ACC.AR, credit: collected, memo: 'Collection of ' + p.arNo });
   _postJournal('ARCOLL', p.arNo, _now(), 'PHP', lines);
+  _refStore('recordCollection', p.clientRef, colNo);
   return { success: true, collectionNo: colNo, arNo: p.arNo, collected: collected, status: status,
     message: 'Collection ' + colNo + ' recorded.' };
 }
@@ -1045,6 +1077,8 @@ function _apPaidPHP(poNo) {
 function createReceiving(p) {
   var items = JSON.parse(p.items || '[]');
   if (!items.length) return { success: false, message: 'At least one received item is required.' };
+  var dupRc = _refSeen('createReceiving', p.clientRef);
+  if (dupRc) return { success: true, mrNo: dupRc, duplicate: true, message: 'Materials received; inventory, landed cost and journal updated.' };
   var currency = p.currency || 'PHP';
   var duties = _num(p.duties), vat = _num(p.vat), delivery = _num(p.delivery), other = _num(p.other);
   var totalShipping = duties + vat + delivery + other;
@@ -1057,8 +1091,16 @@ function createReceiving(p) {
   var paidPHP = _apPaidPHP(p.poNo);
 
   var no = p.mrNo || _nextNumber('MaterialsReceiving', 1, 'MR');
+  // SO No (13th col) comes from the PO so receiving joins back to its sales order.
+  var rcSoNo = (function () {
+    var rows = _rows('PurchaseOrders');
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i]['PO No']) === String(p.poNo)) return String(rows[i]['SO No'] || '');
+    }
+    return '';
+  })();
   _append('MaterialsReceiving', [no, p.poNo || '', p.date || _now(), p.supplier || '', currency,
-    duties, vat, delivery, other, totalShipping, p.receivedBy || '', _now()]);
+    duties, vat, delivery, other, totalShipping, p.receivedBy || '', _now(), rcSoNo]);
 
   var sh = _sheet('ReceivingItems');
   var purchaseTot = 0, shipTot = 0, receivedFC = 0;
@@ -1088,6 +1130,7 @@ function createReceiving(p) {
     { account: ACC.CLEARING, credit: purchaseTot, memo: 'Clear PO ' + (p.poNo || '') },
     { account: ACC.CASH, credit: shipTot + vatAlloc, memo: 'Shipping + VAT for ' + no }
   ]);
+  _refStore('createReceiving', p.clientRef, no);
   return { success: true, mrNo: no, message: 'Materials received; inventory, landed cost and journal updated.' };
 }
 
@@ -1114,6 +1157,8 @@ function createInvoice(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  var dup = _refSeen('createInvoice', p.clientRef);
+  if (dup) return { success: true, invNo: dup, duplicate: true, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
   var totalSales = 0, totalCOGS = 0;
   var sh = _sheet('InvoiceItems');
@@ -1140,6 +1185,7 @@ function createInvoice(p) {
   // Auto-create the Accounts Receivable entry (client owes the invoiced sales amount, in PHP).
   var arNo = _nextNumber('ARAging', 1, 'AR');
   _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales, 0, 'Unpaid', '', '', _now(), _now()]);
+  _refStore('createInvoice', p.clientRef, no);
   return { success: true, invNo: no, arNo: arNo, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
 }
 
@@ -2609,7 +2655,7 @@ var HANDLERS = {
 var MUTATIONS = {
   addInventoryItem: 1, updateInventoryItem: 1, deleteInventoryItem: 1,
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1,
-  createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1,
+  createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,

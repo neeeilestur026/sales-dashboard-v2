@@ -18,7 +18,8 @@ def sanitize_filename(s):
     """Sanitize filename by removing invalid characters and replacing spaces."""
     if not s:
         return "Unknown"
-    s = re.sub(r"[^\w\s-]", "", s.strip()).replace(" ", "_")
+    # Sheets returns numeric-looking cells (doc numbers, supplier names) as numbers — coerce first.
+    s = re.sub(r"[^\w\s-]", "", str(s).strip()).replace(" ", "_")
     return s if s else "Unknown"
 
 

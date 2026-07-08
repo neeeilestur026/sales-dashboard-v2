@@ -88,6 +88,7 @@ async function saveSO() {
     supplierType: document.getElementById('soSupplierType').value,
     createdBy: soSession.name, items: JSON.stringify(items)
   };
+  if (!soNo) payload.clientRef = flowClientRef();          // idempotent create (safe retry)
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const res = await postFlow(soNo ? 'updateSalesOrder' : 'createSalesOrder', payload);

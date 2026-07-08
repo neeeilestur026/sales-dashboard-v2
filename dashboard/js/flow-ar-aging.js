@@ -108,7 +108,8 @@ async function submitCollection() {
       date: document.getElementById('collectDate').value,
       method: document.getElementById('collectMethod').value,
       ref: document.getElementById('collectRef').value.trim(),
-      notes: document.getElementById('collectNotes').value.trim()
+      notes: document.getElementById('collectNotes').value.trim(),
+      clientRef: flowClientRef()                            // idempotent create (safe retry)
     });
     if (!res.success) throw new Error(res.message);
     flowMsg('collectMsg', `${res.message} (status: ${res.status})`, true);

@@ -262,6 +262,7 @@ async function saveQuotation() {
     customer, date: document.getElementById('date').value,
     createdBy: qSession.name, items: JSON.stringify(items)
   };
+  if (!editingNo) payload.clientRef = flowClientRef();                 // idempotent create (safe retry)
   // Admin creating a new quotation: save as an editable Draft (bypasses PR/management pricing).
   if (qAdmin && !editingNo) payload.status = 'Draft';
   btn.disabled = true; btn.textContent = 'Saving...';

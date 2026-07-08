@@ -12,7 +12,7 @@ var _storedProfitReportsResult = null;
 var _storedSoDataResult = null;
 var _incomeStatementEntries = [];
 
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function fmtEmailSentAt(iso) {
   if (!iso) return '';
@@ -3000,7 +3000,8 @@ function _mgmtAuditDateRangeDefault() {
   if (!df) return;
   const d = new Date();
   d.setDate(d.getDate() - 30);
-  df.value = d.toISOString().slice(0,10);
+  // Manila-local date (toISOString is UTC → off-by-one before 8 AM PH)
+  df.value = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
 async function mgmtAuditLogExportCsv() {

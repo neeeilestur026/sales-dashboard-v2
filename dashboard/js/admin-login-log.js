@@ -2,7 +2,7 @@
    admin-login-log.js — Login log viewer logic
    ═══════════════════════════════════════════════ */
 
-function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const session = requireAdmin();

@@ -95,12 +95,8 @@
 
         if (result.success) {
           saveSession(result);
-          if (result.role === 'admin') window.location.href = 'admin.html';
-          else if (result.role === 'accounting') window.location.href = 'accounting-home.html';
-          else if (result.role === 'management') window.location.href = 'management-home.html';
-          else if (result.role === 'director') window.location.href = 'director-home.html';
-          else if (result.role === 'hr') window.location.href = 'hr-home.html';
-          else window.location.href = 'dashboard.html';
+          // Single source of truth for role→home (covers marketing etc. — auth.js)
+          window.location.href = _homeForRole(result.role);
         } else {
           errorText.textContent = result.message || 'Invalid username or password';
           errorMsg.classList.add('visible');

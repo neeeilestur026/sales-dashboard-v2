@@ -131,7 +131,8 @@ async function saveReceiving() {
     poNo: rcCurrent.poNo, supplier: rcCurrent.supplier, currency: rcCurrent.currency || 'PHP',
     date: document.getElementById('date').value, receivedBy: rcSession.name,
     duties: rcShip.duties, vat: rcShip.vat, delivery: rcShip.delivery, other: rcShip.other,
-    items: JSON.stringify(items)
+    items: JSON.stringify(items),
+    clientRef: flowClientRef()                              // idempotent create (safe retry)
   };
   btn.disabled = true; btn.textContent = 'Saving...';
   try {

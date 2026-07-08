@@ -520,15 +520,6 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
 # ── Routes ────────────────────────────────────────────────────────
 
 
-def _get_token() -> str:
-    return (
-        request.headers.get("X-Session-Token")
-        or (request.json or {}).get("sessionToken", "")
-        if request.is_json else
-        request.headers.get("X-Session-Token", "")
-    )
-
-
 @email_log_bp.route("/api/email/setup", methods=["POST"])
 def email_setup():
     _cfg = _email_config_problem()
@@ -762,8 +753,10 @@ def email_feed():
         _creds_cache.pop(session["username"], None)
         return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
     except Exception as exc:
-        logger.error("email_feed error: %s", exc)
-        return jsonify({"success": False, "message": str(exc)}), 500
+        # Transient IMAP/network failures are an expected condition, not a server fault —
+        # return structured JSON (200) like /api/email/today so the UI shows the message cleanly.
+        logger.warning("email_feed error: %s", exc)
+        return jsonify({"success": False, "message": str(exc)})
 
 
 @email_log_bp.route("/api/email/status", methods=["GET", "POST"])

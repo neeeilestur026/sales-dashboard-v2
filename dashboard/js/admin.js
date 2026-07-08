@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load recent activity feed from the Process Flow movement log (today)
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = flowToday();   // Manila-local (toISOString is UTC → shows yesterday before 8 AM PH)
     const res = await fetchFlow('getActivityLog', { date: today });
     const entries = (res && res.data) || [];
     const feedEl = document.getElementById('activityFeed');
@@ -247,7 +247,7 @@ async function loadTaskOverview() {
 // ── Helpers ──────────────────────────────────────────────
 
 function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function fmtPHP(val) {
@@ -1579,7 +1579,7 @@ function _smFmtDate(iso) {
 
 function _esc(str) {
   if (str == null) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ─── Admin Email Modal (Follow Up / Supplier Inquiry) ─────────────

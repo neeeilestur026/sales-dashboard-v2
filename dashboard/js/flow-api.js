@@ -98,11 +98,29 @@ function _flowActorRole() {
   catch (e) { return ''; }
 }
 
+/** One-shot idempotency token for a form submission — send as `clientRef` on create-mutations so a
+ *  transport retry can never double-write (the backend dedupes on it). */
+function flowClientRef() {
+  return 'CR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+// Updates/deletes/status-sets rewrite the same row and the bulk importers dedupe server-side, so
+// repeating them is harmless. Creates/appends (create*/add*/log*/record*) are NOT safe to repeat
+// unless they carry a clientRef the backend dedupes on.
+function _flowIdempotentAction(action) {
+  return /^(update|delete|set|save|approve|reject|submit|verify|advance|reclassify|match|reset|backfill|fill|import|send)/.test(action);
+}
+
 async function postFlow(action, params = {}) {
   if (!_flowConfigured()) throw new Error('Flow backend not configured. Set FLOW_API_URL in js/flow-api.js.');
   const body = Object.assign({ actorName: _flowActor(), actorRole: _flowActorRole() }, params, { action });
   const payload = JSON.stringify(body);
-  const attempts = 4;
+  // A retried POST can double-write when the first attempt actually committed (post-commit response
+  // loss, client timeout, or Google's HTML-error-page-with-200) — proven live by the A78 PR merger.
+  // So: auto-retry only mutations that are idempotent by nature, or that carry a clientRef token
+  // the backend dedupes on. Unprotected creates get ONE attempt and surface the error instead.
+  const retriable = !!body.clientRef || _flowIdempotentAction(action);
+  const attempts = retriable ? 4 : 1;
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     const ctrl = new AbortController();
@@ -114,8 +132,6 @@ async function postFlow(action, params = {}) {
       });
       clearTimeout(timer);
       if (!res.ok) {
-        // Transient redirect/load failures retry. The bulk importers dedupe server-side, so a retry
-        // never double-writes; single mutations almost always 404 before the handler runs.
         if (_flowTransient(res.status) && i < attempts - 1) { lastErr = new Error(`Server responded with status ${res.status}`); await _flowSleep(500 * (i + 1)); continue; }
         throw new Error(`Server responded with status ${res.status}`);
       }
@@ -124,7 +140,9 @@ async function postFlow(action, params = {}) {
       return data;
     } catch (e) {
       clearTimeout(timer);
-      lastErr = (e.name === 'AbortError') ? new Error('Request timed out.') : new Error(e.message || 'Unable to reach the flow backend.');
+      lastErr = (e.name === 'AbortError')
+        ? new Error('Request timed out — refresh and check the list before retrying.')
+        : new Error(e.message || 'Unable to reach the flow backend.');
       if (i < attempts - 1) { await _flowSleep(500 * (i + 1)); continue; }
       throw lastErr;
     }
@@ -135,7 +153,7 @@ async function postFlow(action, params = {}) {
 // ─── Shared UI helpers ───────────────────────────
 function flowEsc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function flowNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 function flowMoney(v, cur) {

@@ -267,7 +267,7 @@ function openRecModal(entity, rowIndex) {
 }
 function fieldHtml(f, rec) {
   const [key, label, type, opts, span] = f;
-  const v = rec ? (rec[key] != null ? rec[key] : '') : (key === 'date' ? new Date().toISOString().slice(0, 10) : '');
+  const v = rec ? (rec[key] != null ? rec[key] : '') : (key === 'date' ? flowToday() : '');
   const cls = span === 'full' ? ' class="full"' : '';
   let input;
   if (type === 'select') input = `<select data-key="${key}">${(opts || []).map(o => `<option${String(v) === o ? ' selected' : ''}>${o}</option>`).join('')}</select>`;

@@ -2,7 +2,7 @@
    accounting-home.js — Accounting Home page logic
    ═══════════════════════════════════════════════ */
 
-function _acctEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _acctEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 document.addEventListener('DOMContentLoaded', () => {
   const session = requireAccounting();

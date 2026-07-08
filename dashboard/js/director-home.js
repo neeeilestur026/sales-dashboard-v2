@@ -80,13 +80,23 @@ async function loadPeriod() {
   const periodA = year + '-' + month + '-A';
   const periodB = year + '-' + month + '-B';
 
-  // Load hours and register for both cutoffs
-  const [hA, hB, rA, rB] = await Promise.all([
-    apiGetPayrollHours(periodA),
-    apiGetPayrollHours(periodB),
-    apiGetPayrollRegister(periodA),
-    apiGetPayrollRegister(periodB)
-  ]);
+  // Load hours and register for both cutoffs. A transient backend failure must render an
+  // inline error, not abort as an unhandled rejection leaving the grids stuck on the intro text.
+  let hA, hB, rA, rB;
+  try {
+    [hA, hB, rA, rB] = await Promise.all([
+      apiGetPayrollHours(periodA),
+      apiGetPayrollHours(periodB),
+      apiGetPayrollRegister(periodA),
+      apiGetPayrollRegister(periodB)
+    ]);
+  } catch (e) {
+    ['hoursAGrid', 'payAGrid', 'hoursBGrid', 'payBGrid'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<p style="color:#ef4444;">Could not load payroll data: ${esc(e.message)} — click Load again to retry.</p>`;
+    });
+    return;
+  }
 
   // Build lookup maps
   _hoursA = {};
@@ -841,6 +851,9 @@ async function saveRegister(cutoff) {
     const holidayPay = holidayHrs * hourlyRate * 2;
     const otPay      = otHrs * hourlyRate * 1.25;
     const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
+    // Same statutory-deduction base as renderPayGrid/_computePaySlip (gross INCLUDING holiday pay),
+    // so the saved defaults equal what was displayed — saving must never change the numbers.
+    const grossPay   = basicPay + holidayPay + otPay + otherIncome;
     const saved = registerMap[empName] || {};
 
     return {
@@ -850,8 +863,8 @@ async function saveRegister(cutoff) {
       otPay:       otPay,
       otherIncome: otherIncome,
       pagibig:     saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100),
-      sss:         saved.sss        !== undefined ? saved.sss        : _calcSSS(basicPay + otPay + otherIncome),
-      philhealth:  saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(basicPay + otPay + otherIncome),
+      sss:         saved.sss        !== undefined ? saved.sss        : _calcSSS(grossPay),
+      philhealth:  saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(grossPay),
       advances:    saved.advances   || 0,
       wtax:        saved.wtax       || 0
     };
@@ -1204,7 +1217,8 @@ function esc(value) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function peso(value) {

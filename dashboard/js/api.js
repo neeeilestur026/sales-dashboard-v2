@@ -87,8 +87,10 @@ async function fetchFromAPI(params, options = {}) {
   const url = `${APPS_SCRIPT_URL}?${query}`;
 
   const promise = (async () => {
-    // Retry 429/5xx + network blips with backoff. 404 is NOT retried here: the production
-    // deployment 404s ALL GETs systemically, so retrying would only slow already-failing calls.
+    // Retry 408/429/5xx + network blips with backoff. Apps Script also intermittently returns a
+    // Google HTML error page WITH HTTP 200 on heavy reads (getStats/getClients/getCollections/…) —
+    // response.json() then throws a SyntaxError, and one retry almost always succeeds, so
+    // JSON-parse failures are retried below like timeouts.
     const _retryable = s => s === 408 || s === 429 || s >= 500;
     const _sleep = ms => new Promise(r => setTimeout(r, ms));
     const attempts = 3;
@@ -127,6 +129,12 @@ async function fetchFromAPI(params, options = {}) {
             throw lastErr;
           }
           if (error.message && /Session expired/.test(error.message)) throw error;
+          // Google's intermittent HTML-error-page-with-200 → JSON parse throws; retry it.
+          if ((error.name === 'SyntaxError' || /Unexpected token|not valid JSON/i.test(error.message || '')) && i < attempts - 1) {
+            lastErr = new Error('Server returned a non-JSON response.');
+            await _sleep(500 * (i + 1));
+            continue;
+          }
           console.error('API Error:', error);
           throw new Error(error.message || 'Unable to connect to the server.');
         }
