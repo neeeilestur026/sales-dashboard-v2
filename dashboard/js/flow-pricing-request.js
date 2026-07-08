@@ -101,16 +101,18 @@ async function loadInventory() {
 }
 
 // ─── Sales: request form ─────────────────────────
-function itemOptions(selected) {
+// Option value = the inventory rowIndex (UNIQUE), NOT the itemNo — many items share itemNo "N/A", so
+// keying on itemNo made every N/A pick resolve to the first N/A row (the "grease gun" phantom).
+function itemOptions(selectedRowIndex) {
   return '<option value="">— select item —</option>' + prInventory.map(i =>
-    `<option value="${flowEsc(i.itemNo)}"${String(i.itemNo) === String(selected) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+    `<option value="${flowEsc(i.rowIndex)}"${String(i.rowIndex) === String(selectedRowIndex) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
 }
 
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><select>${itemOptions(item && item.itemNo)}</select></td>
+    <td><select>${itemOptions(item && item.rowIndex)}</select></td>
     <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 1}"></td>
     <td><input type="text" value="${item ? flowEsc(item.uom || '') : ''}" placeholder="pc"></td>
     <td><input type="text" value="${item ? flowEsc(item.remarks || '') : ''}" placeholder="optional"></td>
@@ -125,11 +127,12 @@ function countLines() {
 function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach(tr => {
-    const itemNo = tr.children[0].querySelector('select').value;
-    if (!itemNo) return;
-    const inv = prInventory.find(i => String(i.itemNo) === String(itemNo));
+    const key = tr.children[0].querySelector('select').value;   // rowIndex of the picked inventory row
+    if (!key) return;
+    const inv = prInventory.find(i => String(i.rowIndex) === String(key));
+    if (!inv) return;
     items.push({
-      itemNo, itemName: inv ? inv.description : itemNo,
+      itemNo: inv.itemNo, itemName: inv.description,
       qty: flowNum(tr.children[1].querySelector('input').value),
       uom: tr.children[2].querySelector('input').value.trim(),
       remarks: tr.children[3].querySelector('input').value.trim()

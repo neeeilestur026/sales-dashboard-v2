@@ -81,15 +81,8 @@ async function loadFromPR(prNo) {
 
 // A form row for a PR item priced at its Final Price; injects a select option for non-inventory items.
 function addPrRow(it) {
+  // addRow keys inventory rows by rowIndex and injects a raw option for non-inventory items (like PR lines).
   addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: flowNum(it.finalPrice) });
-  const sel = document.querySelector('#itemRows tr:last-child select');
-  if (sel && String(sel.value) !== String(it.itemNo || '')) {
-    const opt = document.createElement('option');
-    opt.value = it.itemNo || '';
-    opt.textContent = (it.itemNo ? it.itemNo + ' — ' : '') + (it.itemName || '');
-    opt.selected = true;
-    sel.appendChild(opt);
-  }
 }
 
 async function loadInventory() {
@@ -115,9 +108,18 @@ function onItemNoType(inp) {
   }
 }
 
-function itemOptions(selected) {
+// Option value = inventory rowIndex (UNIQUE). Keying on itemNo was broken because many items share
+// itemNo "N/A" — every N/A pick resolved to the first N/A row (a phantom item).
+function itemOptions(selectedRowIndex) {
   return '<option value="">— select item —</option>' + qInventory.map(i =>
-    `<option value="${flowEsc(i.itemNo)}"${i.itemNo === selected ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+    `<option value="${flowEsc(i.rowIndex)}"${String(i.rowIndex) === String(selectedRowIndex) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+}
+// The inventory rowIndex whose itemNo AND description match a saved/loaded item (for pre-selection); '' if none.
+function invRowKey(item) {
+  if (!item) return '';
+  const m = qInventory.find(i => String(i.itemNo) === String(item.itemNo || '') &&
+    String(i.description) === String(item.itemName || item.description || ''));
+  return m ? String(m.rowIndex) : '';
 }
 
 function addRow(item) {
@@ -134,11 +136,23 @@ function addRow(item) {
       <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
   } else {
     tr.innerHTML = `
-      <td><select onchange="onItemPick(this)">${itemOptions(item && item.itemNo)}</select></td>
+      <td><select onchange="onItemPick(this)">${itemOptions(invRowKey(item))}</select></td>
       <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
       <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
       <td class="num lineTotal">0.00</td>
       <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
+    // A saved/loaded item not found in inventory (e.g. a PR final-priced line or a since-deleted item):
+    // keep it as a raw option carrying its own data so collectItems preserves it instead of dropping it.
+    if (item && !invRowKey(item) && (item.itemNo || item.itemName || item.description)) {
+      const sel = tr.querySelector('select');
+      const opt = document.createElement('option');
+      opt.value = 'raw';
+      opt.dataset.no = item.itemNo || '';
+      opt.dataset.name = item.itemName || item.description || '';
+      opt.textContent = (item.itemNo ? item.itemNo + ' — ' : '') + (item.itemName || item.description || '');
+      opt.selected = true;
+      sel.appendChild(opt);
+    }
   }
   tb.appendChild(tr);
   recalc();
@@ -172,10 +186,20 @@ function collectItems() {
       if (!itemNo && !desc) return;                        // skip empty row
       items.push({ itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price });
     } else {
-      const itemNo = tr.children[0].querySelector('select').value;
-      if (!itemNo) return;
-      const inv = qInventory.find(i => i.itemNo === itemNo);
-      items.push({ itemNo, itemName: inv ? inv.description : itemNo, qty, price });
+      const sel = tr.children[0].querySelector('select');
+      const key = sel.value;                                 // rowIndex of the picked inventory row, or "raw"
+      if (!key) return;
+      if (key === 'raw') {                                   // non-inventory line (PR item / since-deleted)
+        const opt = sel.options[sel.selectedIndex];
+        const no = (opt && opt.dataset.no) || '';
+        const nm = (opt && opt.dataset.name) || '';
+        if (!no && !nm) return;
+        items.push({ itemNo: no || 'N/A', itemName: nm || no || 'N/A', qty, price });
+        return;
+      }
+      const inv = qInventory.find(i => String(i.rowIndex) === String(key));
+      if (!inv) return;
+      items.push({ itemNo: inv.itemNo, itemName: inv.description, qty, price });
     }
   });
   return items;
@@ -489,7 +513,8 @@ async function submitPdf() {
     quotationNo: pdfQuote.quotationNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
     vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc,
     items: (pdfQuote.items || []).map(it => {
-      const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo));
+      // Match on itemNo AND name so N/A-numbered items don't grab another N/A row's description.
+      const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
       return {
         itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
         description: (inv && inv.description) || it.itemName || '',  // multi-line desc from inventory
