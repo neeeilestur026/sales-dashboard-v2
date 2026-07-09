@@ -39,9 +39,9 @@ PAGE_W, PAGE_H = A4                          # 595.27 x 841.89 pt
 PX = PAGE_W / 820.0                          # spec px (820px sheet) → pt
 MARGIN = 48 * PX
 TOP_BAR_H = 6 * PX                           # gradient accent bar, very top
-TOP_MARGIN = 40 * PX + TOP_BAR_H
+TOP_MARGIN = 32 * PX + TOP_BAR_H
 FOOTER_BAND_H = (16 * 2 + 14) * PX
-BOTTOM_MARGIN = FOOTER_BAND_H + 16 * PX
+BOTTOM_MARGIN = FOOTER_BAND_H + 10 * PX
 CONTENT_W = PAGE_W - 2 * MARGIN
 
 # ── Color system: ONE accent drives everything ────────────────────────────────
@@ -213,51 +213,27 @@ class _Thumb(Flowable):
         c.restoreState()
 
 
-class _RefChip(Flowable):
-    """Reference pill: accentSoft fill, accentBorder border, accent dot + quote number."""
-
-    def __init__(self, text):
-        super().__init__()
-        self.text = str(text or "").strip() or "—"
-        self.fsize = 11.5 * PX
-        self.pad_x = 12 * PX
-        self.pad_y = 5 * PX
-        self.dot = 6 * PX
-        tw = pdfmetrics.stringWidth(self.text, LATO_B, self.fsize)
-        self.width = self.pad_x * 2 + self.dot + 6 * PX + tw
-        self.height = self.pad_y * 2 + self.fsize * 1.15
-
-    def draw(self):
-        c = self.canv
-        c.saveState()
-        c.setFillColor(ACCENT_SOFT)
-        c.setStrokeColor(ACCENT_BORDER)
-        c.setLineWidth(1)
-        c.roundRect(0, 0, self.width, self.height, self.height / 2, stroke=1, fill=1)
-        cy = self.height / 2
-        c.setFillColor(ACCENT)
-        c.circle(self.pad_x + self.dot / 2, cy, self.dot / 2, stroke=0, fill=1)
-        c.setFillColor(ACCENT_DARK)
-        c.setFont(LATO_B, self.fsize)
-        c.drawString(self.pad_x + self.dot + 6 * PX, cy - self.fsize * 0.36, self.text)
-        c.restoreState()
-
-
-class _ChipRight(Flowable):
-    """Right-aligns a chip inside the full content width."""
-
-    def __init__(self, chip, box_w):
-        super().__init__()
-        self.chip = chip
-        self.width = box_w
-        self.height = chip.height
-
-    def draw(self):
-        self.chip.canv = self.canv
-        self.canv.saveState()
-        self.canv.translate(self.width - self.chip.width, 0)
-        self.chip.draw()
-        self.canv.restoreState()
+def _draw_ref_chip(c, right_x, top_y, text):
+    """Reference pill drawn at FIXED canvas coordinates (right-aligned at right_x, top at top_y)."""
+    text = str(text or "").strip() or "—"
+    fsize = 11.5 * PX
+    pad_x, pad_y, dot = 12 * PX, 5 * PX, 6 * PX
+    tw = pdfmetrics.stringWidth(text, LATO_B, fsize)
+    w = pad_x * 2 + dot + 6 * PX + tw
+    h = pad_y * 2 + fsize * 1.15
+    x, y = right_x - w, top_y - h
+    c.saveState()
+    c.setFillColor(ACCENT_SOFT)
+    c.setStrokeColor(ACCENT_BORDER)
+    c.setLineWidth(1)
+    c.roundRect(x, y, w, h, h / 2, stroke=1, fill=1)
+    cy = y + h / 2
+    c.setFillColor(ACCENT)
+    c.circle(x + pad_x + dot / 2, cy, dot / 2, stroke=0, fill=1)
+    c.setFillColor(ACCENT_DARK)
+    c.setFont(LATO_B, fsize)
+    c.drawString(x + pad_x + dot + 6 * PX, cy - fsize * 0.36, text)
+    c.restoreState()
 
 
 class _GradientBar(Flowable):
@@ -268,7 +244,7 @@ class _GradientBar(Flowable):
         self.width = width
         self.label = label
         self.amount = amount
-        self.height = 14 * 2 * PX + 18 * PX * 1.1
+        self.height = 11 * 2 * PX + 18 * PX * 1.1
 
     def draw(self):
         c = self.canv
@@ -332,12 +308,16 @@ class _NumberedCanvas(_canvas.Canvas):
         super().save()
 
 
+HEADER_LOCK_H = 76 * PX     # fixed header zone: logo left, QUOTATION + chip right (page 1)
+
+
 class _QuoTemplate(BaseDocTemplate):
-    def __init__(self, buf, footer_left, footer_right, **kw):
+    def __init__(self, buf, footer_left, footer_right, ref_no="", **kw):
         super().__init__(buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
                          topMargin=TOP_MARGIN, bottomMargin=BOTTOM_MARGIN, **kw)
         self._footer_left = footer_left
         self._footer_right = footer_right
+        self._ref_no = ref_no
         frame = Frame(MARGIN, BOTTOM_MARGIN, CONTENT_W, PAGE_H - TOP_MARGIN - BOTTOM_MARGIN,
                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
         self.addPageTemplates([PageTemplate(id="quo", frames=[frame], onPage=self._on_page)])
@@ -350,9 +330,37 @@ class _QuoTemplate(BaseDocTemplate):
         canvas.linearGradient(x, y, x + w, y, [ACCENT, ACCENT_DARK], extend=False)
         canvas.restoreState()
 
+    def _draw_locked_header(self, canvas):
+        """Logo + QUOTATION title + reference chip at FIXED coordinates (page 1 only) —
+        nothing in the content flow can ever move them."""
+        top = PAGE_H - TOP_MARGIN                  # top of the header zone
+        try:
+            pil = PILImage.open(_LOGO_PATH)
+            iw, ih = pil.size
+            h = HEADER_LOCK_H
+            w = h * (iw / ih) if ih else h
+            canvas.drawImage(_LOGO_PATH, MARGIN, top - h, w, h,
+                             preserveAspectRatio=True, mask="auto")
+        except Exception:
+            canvas.saveState()
+            canvas.setFillColor(HEADING)
+            canvas.setFont(ARCH_B, 16 * PX)
+            canvas.drawString(MARGIN, top - 16 * PX, COMPANY_NAME)
+            canvas.restoreState()
+        title_size = 46 * PX
+        canvas.saveState()
+        canvas.setFillColor(ACCENT)
+        canvas.setFont(ARCH_XB, title_size)
+        canvas.drawRightString(PAGE_W - MARGIN, top - title_size * 0.82, "QUOTATION")
+        canvas.restoreState()
+        _draw_ref_chip(canvas, PAGE_W - MARGIN, top - title_size * 0.95 - 6 * PX, self._ref_no)
+
     def _on_page(self, canvas, doc):
         # 6px gradient bar flush at the very top (square document corners)
         self._grad_rect(canvas, 0, PAGE_H - TOP_BAR_H, PAGE_W, TOP_BAR_H)
+        # locked header on the first page
+        if canvas.getPageNumber() == 1:
+            self._draw_locked_header(canvas)
         # gradient footer band
         self._grad_rect(canvas, 0, 0, PAGE_W, FOOTER_BAND_H)
         canvas.saveState()
@@ -375,7 +383,7 @@ def build_summary_table(total_ex_vat, vat_option):
             "total": total_ex_vat + vat, "vat_option": opt}
 
 
-def _card(content, width, fill, border=HAIR_E, left_accent=False, pad=(16, 14)):
+def _card(content, width, fill, border=HAIR_E, left_accent=False, pad=(16, 8)):
     """A rounded card table around a list of flowables."""
     t = Table([[content]], colWidths=[width])
     style = [
@@ -411,28 +419,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     footer_right = "  ·  ".join(x for x in footer_bits if x)
 
     buf = BytesIO()
-    doc = _QuoTemplate(buf, COMPANY_NAME, footer_right)
+    doc = _QuoTemplate(buf, COMPANY_NAME, footer_right, ref_no=cd.get("reference_no"))
     story = []
 
-    # ── Row A: logo | QUOTATION + reference chip ──
-    try:
-        pil = PILImage.open(_LOGO_PATH)
-        iw, ih = pil.size
-        h = 76 * PX
-        logo_cell = RLImage(_LOGO_PATH, width=h * (iw / ih) if ih else h, height=h)
-    except Exception:
-        logo_cell = Paragraph(f"<b>{_esc(COMPANY_NAME)}</b>", _ps("logoFb", 16, HEADING, ARCH_B))
-    title_cell = [
-        Paragraph("QUOTATION", _ps("quoTitle", 46, ACCENT, ARCH_XB, align=2, leading_mult=0.95)),
-        Spacer(1, 6 * PX),
-        _ChipRight(_RefChip(cd.get("reference_no")), CONTENT_W * 0.55),
-    ]
-    row_a = Table([[logo_cell, title_cell]], colWidths=[CONTENT_W * 0.45, CONTENT_W * 0.55])
-    row_a.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                               ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(row_a)
-    story.append(Spacer(1, 18 * PX))
+    # ── Row A: LOCKED header zone — logo + QUOTATION + chip are drawn by the page template at
+    # fixed canvas coordinates (page 1); the story just reserves the space so nothing overlaps.
+    story.append(Spacer(1, HEADER_LOCK_H + 4 * PX))
 
     # ── Row B: seller | meta card ──
     seller = Paragraph(
@@ -450,14 +442,14 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     meta_inner.setStyle(TableStyle([
         ("LINEBELOW", (0, 0), (-1, -2), 1, HAIR_E),
         ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 4 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * PX)]))
+        ("TOPPADDING", (0, 0), (-1, -1), 3 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * PX)]))
     meta_card = _card([meta_inner], 300 * PX, CARD_A)
     row_b = Table([[seller, "", meta_card]], colWidths=[CONTENT_W - 300 * PX - 28 * PX, 28 * PX, 300 * PX])
     row_b.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                                ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(row_b)
-    story.append(Spacer(1, 14 * PX))
+    story.append(Spacer(1, 8 * PX))
 
     # ── Row C: PREPARED FOR card | SUBJECT card ──
     cust_bits = [f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_sp('PREPARED FOR')}</font><br/>",
@@ -483,7 +475,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(row_c)
-    story.append(Spacer(1, 14 * PX))
+    story.append(Spacer(1, 8 * PX))
 
     # ── Brand strip (brand list only) ──
     strip_para = Paragraph(
@@ -491,7 +483,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         _ps("brands", 11, ACCENT_DARK, leading_mult=1.4))
     strip = _card([strip_para], CONTENT_W, ACCENT_SOFT, border=ACCENT_BORDER, pad=(16, 10))
     story.append(strip)
-    story.append(Spacer(1, 12 * PX))
+    story.append(Spacer(1, 9 * PX))
 
     # ── Items table ──
     col_w = [36 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
@@ -502,7 +494,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
              Paragraph("QTY", head_r), Paragraph("UNIT PRICE", head_r), Paragraph("AMOUNT", head_r)]]
 
     title_st = _ps("itTitle", 13, HEADING, ARCH_SB, leading_mult=1.3)
-    sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.4)
+    sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.32)
     idx_st = _ps("itIdx", 12.5, LABELB, LATO_B)
     qty_st = _ps("itQty", 12.5, TEXT, LATO_B, align=2)
     uom_st = _ps("itUom", 10.5, LABELB, align=2)
@@ -529,8 +521,15 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                 ln = ln.strip()
                 if not ln or ln == name:
                     continue
+                # cap per-line length + total lines so one item row can never grow taller
+                # than a page (an unsplittable table row would crash the render)
+                if len(ln) > 160:
+                    ln = ln[:157].rstrip() + "…"
                 sub_lines.append(("• " + _esc(ln.lstrip("-*• ").strip()))
                                  if ln[:1] in "-*•" else _esc(ln))
+                if len(sub_lines) >= 14:
+                    sub_lines.append("…")
+                    break
         has_code = code and code.lower() != "n/a" and code != name
 
         if paired:
@@ -584,9 +583,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LINEBELOW", (0, 1), (-1, -1), 1, HAIR_F0),
         ("LEFTPADDING", (0, 0), (-1, -1), 8 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 8 * PX),
         ("TOPPADDING", (0, 0), (-1, 0), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 10 * PX),
-        ("TOPPADDING", (0, 1), (-1, -1), 12 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 12 * PX)]))
+        ("TOPPADDING", (0, 1), (-1, -1), 9 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 9 * PX)]))
     story.append(items_tbl)
-    story.append(Spacer(1, 14 * PX))
+    story.append(Spacer(1, 10 * PX))
 
     # ── Totals (right-aligned, 340px) ──
     opt = summary.get("vat_option", "inclusive")
@@ -608,8 +607,8 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         t = Table(tot_rows, colWidths=[tot_w - 130 * PX, 130 * PX])
         t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1, HAIR_E),
                                ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                               ("TOPPADDING", (0, 0), (-1, -1), 7 * PX),
-                               ("BOTTOMPADDING", (0, 0), (-1, -1), 7 * PX)]))
+                               ("TOPPADDING", (0, 0), (-1, -1), 4 * PX),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * PX)]))
         blocks.append(t)
         blocks.append(Spacer(1, 8 * PX))
     blocks.append(_GradientBar(tot_w, grand_text, "PHP " + _fmt(summary["total"])))
@@ -619,7 +618,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                      ("TOPPADDING", (0, 0), (-1, -1), 0),
                                      ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(KeepTogether(totals_wrap))
-    story.append(Spacer(1, 12 * PX))
+    story.append(Spacer(1, 10 * PX))
 
     # ── Terms strip ──
     term_cells = []
@@ -635,18 +634,18 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("INNERGRID", (0, 0), (-1, -1), 1, HAIR_EC),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 15 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 15 * PX),
-        ("TOPPADDING", (0, 0), (-1, -1), 13 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 13 * PX)]))
+        ("TOPPADDING", (0, 0), (-1, -1), 9 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 9 * PX)]))
     story.append(KeepTogether(terms_tbl))
-    story.append(Spacer(1, 16 * PX))
+    story.append(Spacer(1, 9 * PX))
 
     # ── Bank details | signature ──
-    kv = _ps("kv", 12, BODY2, leading_mult=1.6)
+    kv = _ps("kv", 12, BODY2, leading_mult=1.4)
     bank_body = "<br/>".join(
         f"<font color='{_hx(LABELA)}'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
     bank_w = CONTENT_W - 250 * PX - 40 * PX
     bank_col = [_SectionHead("BANK DETAILS", bank_w), Spacer(1, 8 * PX), Paragraph(bank_body, kv)]
 
-    sig_space = Table([[""]], colWidths=[250 * PX], rowHeights=[34 * PX])
+    sig_space = Table([[""]], colWidths=[250 * PX], rowHeights=[22 * PX])
     sig_space.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1.5, HexColor("#dddddd")),
                                    ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
     sig_col = [_SectionHead("SINCERELY YOURS", 250 * PX), Spacer(1, 4 * PX), sig_space, Spacer(1, 5 * PX),
@@ -669,7 +668,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                   ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                   ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(KeepTogether(bank_sig))
-    story.append(Spacer(1, 12 * PX))
+    story.append(Spacer(1, 8 * PX))
 
     # ── Note + disclaimer ──
     note = (note or "").strip()
