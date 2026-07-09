@@ -969,8 +969,11 @@
       <div id="mgmtInvBody"><div class="mf-empty">Loading…</div></div>
     </div>
 
-    <div class="mgmt-newsec">
-      <h2>💱 Pricing History <span class="is-state" id="mgmtPrMeta" style="margin-left:auto;font-weight:400;">Process Flow</span></h2>
+    <div class="mgmt-newsec" id="newsec-pricing">
+      <h2 style="cursor:pointer;" onclick="mgmtToggleNewsec('newsec-pricing')">💱 Pricing History
+        <span class="is-state" id="mgmtPrMeta" style="margin-left:auto;font-weight:400;">Process Flow</span>
+        <span class="newsec-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </h2>
       <div class="is-controls">
         <input type="text" id="mgmtPrSearch" placeholder="Search customer / principal / PR no…" style="min-width:260px;">
         <select id="mgmtPrFilter">
