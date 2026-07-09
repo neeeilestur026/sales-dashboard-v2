@@ -406,6 +406,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                               summary_table_data, desc_mode="short", note=""):
     """Render the quotation PDF (v2 layout) and return its bytes. Same contract as before."""
     cd = client_details or {}
+    desc_mode = (desc_mode or "").strip().lower()          # "short" hides description sub-lines
     terms = terms_and_conditions or {}
     if isinstance(summary_table_data, dict):
         summary = summary_table_data
@@ -516,20 +517,24 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         paired = (orig_code and orig_code != code) or (orig_name and orig_name != name)
 
         sub_lines = []
-        if desc and desc != name:
+        if desc and desc != name and desc_mode != "short":
+            # Cap by estimated RENDERED height, not raw characters: the description column is
+            # ~219pt wide (~55 chars per visual line), and a single table row taller than the
+            # frame cannot split → LayoutError. Budget ≈ 24 visual lines per item, 160 chars/line.
+            visual_budget = 24
             for ln in desc.splitlines():
                 ln = ln.strip()
                 if not ln or ln == name:
                     continue
-                # cap per-line length + total lines so one item row can never grow taller
-                # than a page (an unsplittable table row would crash the render)
                 if len(ln) > 160:
                     ln = ln[:157].rstrip() + "…"
-                sub_lines.append(("• " + _esc(ln.lstrip("-*• ").strip()))
-                                 if ln[:1] in "-*•" else _esc(ln))
-                if len(sub_lines) >= 14:
+                cost = max(1, -(-len(ln) // 55))            # ceil(len/55) wrapped-line estimate
+                if cost > visual_budget:
                     sub_lines.append("…")
                     break
+                visual_budget -= cost
+                sub_lines.append(("• " + _esc(ln.lstrip("-*• ").strip()))
+                                 if ln[:1] in "-*•" else _esc(ln))
         has_code = code and code.lower() != "n/a" and code != name
 
         if paired:
@@ -624,9 +629,13 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     term_cells = []
     for label, key in [("VALIDITY", "validity"), ("DELIVERY", "delivery"),
                        ("PAYMENT", "payment"), ("WARRANTY", "warranty")]:
+        # cap: an extreme term would make this single unsplittable row taller than a page
+        term_txt = str(terms.get(key) or "—")
+        if len(term_txt) > 280:
+            term_txt = term_txt[:277].rstrip() + "…"
         term_cells.append([Paragraph(_sp(label), _ps("teLb", 9.5, ACCENT_DARK, LATO_B)),
                            Spacer(1, 3 * PX),
-                           Paragraph(_esc(terms.get(key) or "—"), _ps("teVal", 13, TEXT, leading_mult=1.35))])
+                           Paragraph(_esc(term_txt), _ps("teVal", 13, TEXT, leading_mult=1.35))])
     terms_tbl = Table([term_cells], colWidths=[CONTENT_W / 4.0] * 4)
     terms_tbl.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 1, HAIR_EC),
@@ -652,7 +661,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                Paragraph(f"<font name='{ARCH_B}' size={14 * PX:.1f} color='{_hx(HEADING)}'>{_esc(sig_name)}</font>",
                          _ps("sigNm", 14, HEADING, leading_mult=1.3))]
     if cd.get("signature_designation"):
-        sig_col.append(Paragraph(_esc(cd["signature_designation"]), _ps("sigTi", 12, MUTED8)))
+        sig_col.append(Paragraph(_esc(str(cd["signature_designation"])[:200]), _ps("sigTi", 12, MUTED8)))
     extra = []
     if cd.get("signature_viber"):
         extra.append(f"<font color='{_hx(LABELA)}'>Viber:</font> {_esc(cd['signature_viber'])}")

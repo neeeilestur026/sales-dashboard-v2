@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 73;   // A86 requested-vs-offered item pairing preserved PR→quotation (72: A84 code edit · 71: A82 scan fixes)
+var FLOW_VERSION = 74;   // scan fix: updateQuotation preserves the requested-vs-offered pairing on edit (73: A86 pairing · 72: A84 · 71: A82)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -441,7 +441,9 @@ function updateQuotation(p) {
     }
   }
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
+    // keep the requested-vs-offered pairing across edits (same 8 columns as createQuotation)
+    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+            it.origItemNo || '', it.origItemName || ''];
   });
   return { success: true, quotationNo: no, message: 'Quotation updated.' };
 }
