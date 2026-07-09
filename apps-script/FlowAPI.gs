@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 71;   // A82 scan fixes: dash→N/A item nos · clientRef dedupe on creates · AP notes clearable · matchSupplierTypes locked · receiving SO No
+var FLOW_VERSION = 72;   // A84 sourcing can replace the item CODE (supplier's own) — carries into pricing + quotation (71: A82 scan fixes)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2516,6 +2516,11 @@ function updatePRSourcing(p) {
     // cols 8-13: Included, Supplier, Principal, Currency, Supplier Price (FC), CBM
     sh.getRange(row.rowIndex, 8, 1, 6).setValues([[!!u.included, u.supplier || '', u.principal || '',
       u.currency || 'PHP', _num(u.supplierPrice), _num(u.cbm)]]);
+    // col 3: Item No — admin can replace the code with the supplier's own (blank = keep original,
+    // so an accidental clear never wipes it). Carries through pricing and into the quotation.
+    if (u.itemNo !== undefined && String(u.itemNo).trim() !== '') {
+      sh.getRange(row.rowIndex, 3, 1, 1).setValues([[String(u.itemNo).trim()]]);
+    }
     // col 4: Item Name — admin can correct the product description; it flows to the quotation.
     if (u.itemName !== undefined) sh.getRange(row.rowIndex, 4, 1, 1).setValues([[u.itemName || '']]);
   });

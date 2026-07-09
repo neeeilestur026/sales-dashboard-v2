@@ -412,12 +412,12 @@ function sourcingTable(r) {
       <input type="text" id="srcLocation" value="${flowEsc(r.clientLocation || '')}" placeholder="e.g. Cebu City, Cebu"
         style="width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
     </div>
-    <p class="pr-meta">Set the supplier, principal, currency, supplier price (FC) and CBM per item. You can also correct the product description — it updates the quotation. Untick items that won't be quoted.</p>
+    <p class="pr-meta">Set the supplier, principal, currency, supplier price (FC) and CBM per item. You can replace the <b>item code</b> and <b>product description</b> with the supplier's own — the updated code/description carries through management pricing and into the quotation. (Leave the code as-is to keep yours.) Untick items that won't be quoted.</p>
     <div style="overflow-x:auto;"><table class="flow-table" id="srcTable" style="min-width:860px;"><thead><tr>
       <th>Item No</th><th>Product Description</th><th class="num">Qty</th><th>Supplier</th><th>Principal</th><th>Cur</th>
       <th class="num">Price (FC)</th><th class="num">CBM</th><th>Incl</th></tr></thead><tbody>${r.items.map(i =>
       `<tr data-line="${i.line}">
-        <td>${flowEsc(i.itemNo)}</td>
+        <td><input type="text" class="s-no" value="${flowEsc(i.itemNo)}" style="min-width:110px;"></td>
         <td><input type="text" class="s-name" value="${flowEsc(i.itemName || '')}" style="min-width:200px;"></td>
         <td class="num">${flowNum(i.qty)}</td>
         <td><input type="text" class="s-sup" value="${flowEsc(i.supplier || '')}"></td>
@@ -433,6 +433,7 @@ function collectSourcing() {
   document.querySelectorAll('#srcTable tbody tr').forEach(tr => {
     updates.push({
       line: flowNum(tr.getAttribute('data-line')),
+      itemNo: tr.querySelector('.s-no').value.trim(),      // supplier's own code (blank = keep original)
       itemName: tr.querySelector('.s-name').value.trim(),
       included: tr.querySelector('.s-incl').checked,
       supplier: tr.querySelector('.s-sup').value.trim(),
