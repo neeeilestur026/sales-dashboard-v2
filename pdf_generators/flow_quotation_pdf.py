@@ -1,15 +1,18 @@
-"""Flow quotation PDF renderer — modern flat layout (Addendum 85).
+"""Flow quotation PDF renderer — modern layout v2 (Addendum 87).
 
-Implements the red-accent reference design: logo + light "QUOTATION" title, seller
-address + Date/RFQ/Sales-Person meta, CUSTOMER + SUBJECT blocks, brands strip,
-red-header items table with product thumbnails, VAT-aware totals with a highlighted
-grand-total box, 4-column terms strip, bank details + signature columns, disclaimer,
-and a full-bleed accent footer band on every page.
+Implements the gradient/card design from the user's reference: 6px gradient top bar,
+Archivo/Lato typography, reference pill chip, meta / PREPARED FOR / SUBJECT cards,
+AUTHORIZED DISTRIBUTOR strip, gradient-header items table with zebra rows and rounded
+thumbnails, requested-vs-offered pairing (A86), gradient grand-total bar, terms strip,
+rule-line section headings with a signature line, disclaimer, and a full-bleed gradient
+footer band with "Page X of Y" on every page.
 
-Standalone (ReportLab only): no Google Apps Script / Excel / legacy-template
-dependency. The legacy `/quotation/` generator is untouched. The spec is written in
-px on an 820px sheet — every dimension is scaled to A4 via the PX factor so the
-proportions match the reference exactly. ACCENT is the single theming constant.
+The DOCUMENT corners stay square — the reference's rounded sheet / drop shadow / gray
+desk are on-screen web effects only. Rounded corners apply only to inner elements.
+
+Standalone (ReportLab + vendored TTFs in static/fonts; falls back to Helvetica if the
+fonts are missing so rendering never fails). ACCENT is the single theming token — the
+dark/soft/border shades and every bar, chip, and border derive from it.
 """
 
 import logging
@@ -17,10 +20,13 @@ import os
 from io import BytesIO
 
 from reportlab.lib import colors
-from reportlab.lib.colors import HexColor
+from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as _canvas
 from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, KeepTogether,
                                 PageTemplate, Paragraph, Spacer, Table, TableStyle)
 from reportlab.platypus import Image as RLImage
@@ -28,36 +34,87 @@ from PIL import Image as PILImage
 
 logger = logging.getLogger(__name__)
 
-# ── Theme ─────────────────────────────────────────────────────────────────────
+# ── Page metrics ──────────────────────────────────────────────────────────────
 PAGE_W, PAGE_H = A4                          # 595.27 x 841.89 pt
 PX = PAGE_W / 820.0                          # spec px (820px sheet) → pt
-ACCENT = HexColor("#C0392B")                 # the single theming variable
+MARGIN = 48 * PX
+TOP_BAR_H = 6 * PX                           # gradient accent bar, very top
+TOP_MARGIN = 40 * PX + TOP_BAR_H
+FOOTER_BAND_H = (16 * 2 + 14) * PX
+BOTTOM_MARGIN = FOOTER_BAND_H + 16 * PX
+CONTENT_W = PAGE_W - 2 * MARGIN
+
+# ── Color system: ONE accent drives everything ────────────────────────────────
+def _mix(c1, c2, t):
+    """Mix color c1 toward c2 by t (0..1)."""
+    return Color(c1.red + (c2.red - c1.red) * t,
+                 c1.green + (c2.green - c1.green) * t,
+                 c1.blue + (c2.blue - c1.blue) * t)
+
+ACCENT = HexColor("#C0392B")                            # the single theming token
+ACCENT_DARK = _mix(ACCENT, colors.black, 0.28)
+ACCENT_SOFT = _mix(ACCENT, colors.white, 0.92)
+ACCENT_BORDER = _mix(ACCENT, colors.white, 0.72)
+
+HEADING = HexColor("#1a1a1a")
 TEXT = HexColor("#333333")
-SECONDARY = HexColor("#555555")
-MUTED = HexColor("#888888")
-LABEL = HexColor("#999999")
-SUBLINE = HexColor("#777777")
-TITLE_DARK = HexColor("#222222")
-HAIRLINE = HexColor("#ececec")
-HAIRLINE2 = HexColor("#eeeeee")
-TOTAL_FILL = HexColor("#faf0ee")
-TOTAL_BORDER = HexColor("#f0d8d3")
-STRIP_FILL = HexColor("#f6f4f2")
+BODY2 = HexColor("#555555")
+BODY3 = HexColor("#666666")
+MUTED7 = HexColor("#777777")
+MUTED8 = HexColor("#888888")
+LABEL9 = HexColor("#999999")
+LABELA = HexColor("#aaaaaa")
+LABELB = HexColor("#bbbbbb")
+HAIR_E = HexColor("#eeeeee")
+HAIR_F0 = HexColor("#f0f0f0")
+HAIR_EC = HexColor("#ececec")
+CARD_A = HexColor("#faf9f8")
+CARD_B = HexColor("#fbfbfc")
+THUMB_BORDER = HexColor("#e6e6e6")
 STRIPE_A = HexColor("#f4f4f4")
 STRIPE_B = HexColor("#ececec")
 LINK = HexColor("#2b5fb8")
 
-MARGIN = 48 * PX                             # 48px side inset
-TOP_MARGIN = 44 * PX                         # 44px top padding
-FOOTER_BAND_H = (16 * 2 + 14) * PX           # 16px vert padding × 2 + one text line
-BOTTOM_MARGIN = FOOTER_BAND_H + 18 * PX
-CONTENT_W = PAGE_W - 2 * MARGIN
+# ── Fonts: vendored Lato/Archivo, graceful Helvetica fallback ─────────────────
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_FONT_DIR = os.path.join(_ROOT, "static", "fonts")
+_LOGO_PATH = os.path.join(_ROOT, "static", "images", "logo.png")
 
+_FONTS = {
+    "Lato": ("Lato-Regular.ttf", "Helvetica"),
+    "Lato-Bold": ("Lato-Bold.ttf", "Helvetica-Bold"),
+    "Lato-Black": ("Lato-Black.ttf", "Helvetica-Bold"),
+    "Archivo-SemiBold": ("Archivo-SemiBold.ttf", "Helvetica-Bold"),
+    "Archivo-Bold": ("Archivo-Bold.ttf", "Helvetica-Bold"),
+    "Archivo-ExtraBold": ("Archivo-ExtraBold.ttf", "Helvetica-Bold"),
+}
+_FACE = {}
+for _name, (_file, _fallback) in _FONTS.items():
+    try:
+        pdfmetrics.registerFont(TTFont(_name, os.path.join(_FONT_DIR, _file)))
+        _FACE[_name] = _name
+    except Exception:
+        logger.warning("font %s unavailable — falling back to %s", _name, _fallback)
+        _FACE[_name] = _fallback
+try:  # inline <b> inside Lato paragraphs
+    pdfmetrics.registerFontFamily("Lato", normal=_FACE["Lato"], bold=_FACE["Lato-Bold"],
+                                  italic=_FACE["Lato"], boldItalic=_FACE["Lato-Bold"])
+except Exception:
+    pass
+
+LATO = _FACE["Lato"]
+LATO_B = _FACE["Lato-Bold"]
+LATO_BLK = _FACE["Lato-Black"]
+ARCH_SB = _FACE["Archivo-SemiBold"]
+ARCH_B = _FACE["Archivo-Bold"]
+ARCH_XB = _FACE["Archivo-ExtraBold"]
+
+# ── Company constants ─────────────────────────────────────────────────────────
 COMPANY_NAME = "H.O ESTUR CORPORATION"
 COMPANY_ADDRESS = ("Blk 90 Lot 2 & 4 Ph 1 University Heights, Brgy Kaypian,\n"
                    "District 1, San Jose Del Monte, Bulacan,\nPhilippines, 3023")
-BRANDS = ("Authorized brands:  Cejn | Snap-on Bluepoint | Hydraulic Technologies | "
-          "Chicago Pneumatics | RAD Torque Solutions")
+COMPANY_WEBSITE = "www.hiescorp.com"
+BRANDS = "Cejn  ·  Snap-on Bluepoint  ·  Hydraulic Technologies  ·  Chicago Pneumatics  ·  RAD Torque Solutions"
 BANK_LINES = [
     ("Bank Branch", "Metrobank / SJDM-Quirino Highway Branch"),
     ("SWIFT Code", "MBTCPHMM"),
@@ -68,8 +125,6 @@ BANK_LINES = [
 ]
 DISCLAIMER = ("This quotation was prepared electronically and is valid without a signature. "
               "Prices are quoted in Philippine Pesos unless otherwise stated.")
-_LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "static", "images", "logo.png")
 
 
 def _fmt(n):
@@ -83,16 +138,26 @@ def _esc(s):
     return (str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _ps(name, size_px, color=TEXT, font="Helvetica", align=0, leading_mult=1.45, **kw):
-    """ParagraphStyle from spec px sizes."""
+def _hx(c):
+    return "#%02x%02x%02x" % (int(c.red * 255), int(c.green * 255), int(c.blue * 255))
+
+
+def _sp(text):
+    """Letter-spaced micro-label ('PREPARED FOR' → 'P R E P A R E D  F O R')."""
+    return " ".join(list(str(text).replace(" ", " ")))
+
+
+def _ps(name, size_px, color=TEXT, font=None, align=0, leading_mult=1.45, **kw):
     size = size_px * PX
-    return ParagraphStyle(name=name, fontName=font, fontSize=size, textColor=color,
+    return ParagraphStyle(name=name, fontName=font or LATO, fontSize=size, textColor=color,
                           alignment=align, leading=size * leading_mult, **kw)
 
 
-# ── Thumbnail flowable: real product image, or the striped placeholder ───────
+# ── Custom flowables ──────────────────────────────────────────────────────────
 class _Thumb(Flowable):
-    SIZE = 64 * PX
+    """66px product thumbnail, rounded, strictly boxed; striped placeholder when no image."""
+    SIZE = 66 * PX
+    RAD = 6 * PX
 
     def __init__(self, img_bytes=None):
         super().__init__()
@@ -103,53 +168,170 @@ class _Thumb(Flowable):
         c = self.canv
         s = self.SIZE
         c.saveState()
-        c.setStrokeColor(HAIRLINE)
-        c.setLineWidth(1)
+        clip = c.beginPath()
+        clip.roundRect(0, 0, s, s, self.RAD)
+        c.clipPath(clip, stroke=0, fill=0)
+        drew = False
         if self.img_bytes:
             try:
                 pil = PILImage.open(BytesIO(self.img_bytes))
                 if pil.mode not in ("RGB", "RGBA"):
                     pil = pil.convert("RGB")
-                pil.thumbnail((220, 220))   # embed small — the slot is 64px; keeps PDFs light
+                pil.thumbnail((220, 220))          # embed small — slot is 66px
                 iw, ih = pil.size
                 scale = min(s / iw, s / ih) if iw and ih else 1
                 w, h = iw * scale, ih * scale
+                c.setFillColor(colors.white)
+                c.rect(0, 0, s, s, stroke=0, fill=1)
                 c.drawImage(ImageReader(pil), (s - w) / 2, (s - h) / 2, w, h,
                             preserveAspectRatio=True, mask="auto")
-                c.rect(0, 0, s, s)
-                c.restoreState()
-                return
+                drew = True
             except Exception:
                 logger.warning("thumbnail decode failed; using placeholder")
-        # 45° repeating-stripe placeholder + monospace caption
-        c.setFillColor(STRIPE_A)
-        c.rect(0, 0, s, s, stroke=0, fill=1)
-        # clip to the box so the diagonal stripes never bleed outside
-        p = c.beginPath()
-        p.rect(0, 0, s, s)
-        c.clipPath(p, stroke=0, fill=0)
-        c.setStrokeColor(STRIPE_B)
-        c.setLineWidth(2.2)
-        stripes = c.beginPath()
-        step = 7 * PX
-        x = -s
-        while x < s:
-            stripes.moveTo(x, 0)
-            stripes.lineTo(x + s, s)
-            x += step
-        c.drawPath(stripes, stroke=1, fill=0)
-        c.setFillColor(colors.white)
-        cap_w = s * 0.9
-        c.rect((s - cap_w) / 2, s * 0.37, cap_w, s * 0.26, stroke=0, fill=1)
-        c.setFillColor(MUTED)
-        c.setFont("Courier", 6.5 * PX)
-        c.drawCentredString(s / 2, s * 0.45, "product shot")
-        c.setStrokeColor(HAIRLINE)
-        c.rect(0, 0, s, s)
+        if not drew:
+            c.setFillColor(STRIPE_A)
+            c.rect(0, 0, s, s, stroke=0, fill=1)
+            c.setStrokeColor(STRIPE_B)
+            c.setLineWidth(2.2)
+            stripes = c.beginPath()
+            x = -s
+            while x < s:
+                stripes.moveTo(x, 0)
+                stripes.lineTo(x + s, s)
+                x += 7 * PX
+            c.drawPath(stripes, stroke=1, fill=0)
+            c.setFillColor(colors.white)
+            c.rect(s * 0.06, s * 0.38, s * 0.88, s * 0.24, stroke=0, fill=1)
+            c.setFillColor(MUTED8)
+            c.setFont("Courier", 6.5 * PX)
+            c.drawCentredString(s / 2, s * 0.45, "product shot")
+        c.restoreState()
+        c.saveState()
+        c.setStrokeColor(THUMB_BORDER)
+        c.setLineWidth(1)
+        c.roundRect(0, 0, s, s, self.RAD, stroke=1, fill=0)
         c.restoreState()
 
 
-# ── Page template: white sheet + full-bleed accent footer band every page ────
+class _RefChip(Flowable):
+    """Reference pill: accentSoft fill, accentBorder border, accent dot + quote number."""
+
+    def __init__(self, text):
+        super().__init__()
+        self.text = str(text or "").strip() or "—"
+        self.fsize = 11.5 * PX
+        self.pad_x = 12 * PX
+        self.pad_y = 5 * PX
+        self.dot = 6 * PX
+        tw = pdfmetrics.stringWidth(self.text, LATO_B, self.fsize)
+        self.width = self.pad_x * 2 + self.dot + 6 * PX + tw
+        self.height = self.pad_y * 2 + self.fsize * 1.15
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        c.setFillColor(ACCENT_SOFT)
+        c.setStrokeColor(ACCENT_BORDER)
+        c.setLineWidth(1)
+        c.roundRect(0, 0, self.width, self.height, self.height / 2, stroke=1, fill=1)
+        cy = self.height / 2
+        c.setFillColor(ACCENT)
+        c.circle(self.pad_x + self.dot / 2, cy, self.dot / 2, stroke=0, fill=1)
+        c.setFillColor(ACCENT_DARK)
+        c.setFont(LATO_B, self.fsize)
+        c.drawString(self.pad_x + self.dot + 6 * PX, cy - self.fsize * 0.36, self.text)
+        c.restoreState()
+
+
+class _ChipRight(Flowable):
+    """Right-aligns a chip inside the full content width."""
+
+    def __init__(self, chip, box_w):
+        super().__init__()
+        self.chip = chip
+        self.width = box_w
+        self.height = chip.height
+
+    def draw(self):
+        self.chip.canv = self.canv
+        self.canv.saveState()
+        self.canv.translate(self.width - self.chip.width, 0)
+        self.chip.draw()
+        self.canv.restoreState()
+
+
+class _GradientBar(Flowable):
+    """Grand-total bar: rounded accent→accentDark gradient, white label + amount."""
+
+    def __init__(self, width, label, amount):
+        super().__init__()
+        self.width = width
+        self.label = label
+        self.amount = amount
+        self.height = 14 * 2 * PX + 18 * PX * 1.1
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        clip = c.beginPath()
+        clip.roundRect(0, 0, self.width, self.height, 8 * PX)
+        c.clipPath(clip, stroke=0, fill=0)
+        c.linearGradient(0, 0, self.width, 0, [ACCENT, ACCENT_DARK], extend=False)
+        c.setFillColor(colors.white)
+        c.setFont(ARCH_B, 13 * PX)
+        c.drawString(18 * PX, self.height / 2 - 13 * PX * 0.36, self.label)
+        c.setFont(ARCH_XB, 18 * PX)
+        c.drawRightString(self.width - 18 * PX, self.height / 2 - 18 * PX * 0.36, self.amount)
+        c.restoreState()
+
+
+class _SectionHead(Flowable):
+    """Uppercase accentDark heading with a flex-fill hairline rule to the right."""
+
+    def __init__(self, text, width):
+        super().__init__()
+        self.text = _sp(text)
+        self.width = width
+        self.fsize = 11 * PX
+        self.height = self.fsize * 1.4
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        c.setFillColor(ACCENT_DARK)
+        c.setFont(LATO_B, self.fsize)
+        base = self.height / 2 - self.fsize * 0.36
+        c.drawString(0, base, self.text)
+        tw = pdfmetrics.stringWidth(self.text, LATO_B, self.fsize)
+        c.setStrokeColor(HAIR_E)
+        c.setLineWidth(1)
+        mid = self.height / 2
+        c.line(tw + 10 * PX, mid, self.width, mid)
+        c.restoreState()
+
+
+# ── Page chrome: gradient top bar + footer band; Page X of Y via 2-pass canvas ─
+class _NumberedCanvas(_canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_states = []
+
+    def showPage(self):
+        self._saved_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_states)
+        for state in self._saved_states:
+            self.__dict__.update(state)
+            self.setFillColor(LABELA)
+            self.setFont(LATO, 9.5 * PX)
+            self.drawRightString(PAGE_W - MARGIN, FOOTER_BAND_H + 5 * PX,
+                                 f"Page {self._pageNumber} of {total}")
+            super().showPage()
+        super().save()
+
+
 class _QuoTemplate(BaseDocTemplate):
     def __init__(self, buf, footer_left, footer_right, **kw):
         super().__init__(buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
@@ -160,17 +342,26 @@ class _QuoTemplate(BaseDocTemplate):
                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
         self.addPageTemplates([PageTemplate(id="quo", frames=[frame], onPage=self._on_page)])
 
-    def _on_page(self, canvas, doc):
+    def _grad_rect(self, canvas, x, y, w, h):
         canvas.saveState()
-        # footer band (full bleed, every page)
-        canvas.setFillColor(ACCENT)
-        canvas.rect(0, 0, PAGE_W, FOOTER_BAND_H, stroke=0, fill=1)
-        y = FOOTER_BAND_H / 2 - (13 * PX) / 2 + 2
+        clip = canvas.beginPath()
+        clip.rect(x, y, w, h)
+        canvas.clipPath(clip, stroke=0, fill=0)
+        canvas.linearGradient(x, y, x + w, y, [ACCENT, ACCENT_DARK], extend=False)
+        canvas.restoreState()
+
+    def _on_page(self, canvas, doc):
+        # 6px gradient bar flush at the very top (square document corners)
+        self._grad_rect(canvas, 0, PAGE_H - TOP_BAR_H, PAGE_W, TOP_BAR_H)
+        # gradient footer band
+        self._grad_rect(canvas, 0, 0, PAGE_W, FOOTER_BAND_H)
+        canvas.saveState()
+        y = FOOTER_BAND_H / 2 - (12 * PX) * 0.36
         canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 13 * PX)
+        canvas.setFont(ARCH_XB, 12 * PX)
         canvas.drawString(MARGIN, y, self._footer_left)
-        canvas.setFillColor(colors.Color(1, 1, 1, alpha=0.92))
-        canvas.setFont("Helvetica", 11 * PX)
+        canvas.setFillColor(Color(1, 1, 1, alpha=0.92))
+        canvas.setFont(LATO, 12 * PX)
         canvas.drawRightString(PAGE_W - MARGIN, y, self._footer_right)
         canvas.restoreState()
 
@@ -184,130 +375,148 @@ def build_summary_table(total_ex_vat, vat_option):
             "total": total_ex_vat + vat, "vat_option": opt}
 
 
+def _card(content, width, fill, border=HAIR_E, left_accent=False, pad=(16, 14)):
+    """A rounded card table around a list of flowables."""
+    t = Table([[content]], colWidths=[width])
+    style = [
+        ("BACKGROUND", (0, 0), (-1, -1), fill),
+        ("BOX", (0, 0), (-1, -1), 1, border),
+        ("ROUNDEDCORNERS", [6 * PX] * 4),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), pad[0] * PX),
+        ("RIGHTPADDING", (0, 0), (-1, -1), pad[0] * PX),
+        ("TOPPADDING", (0, 0), (-1, -1), pad[1] * PX),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), pad[1] * PX),
+    ]
+    if left_accent:
+        style.append(("LINEBEFORE", (0, 0), (0, -1), 3, ACCENT))
+    t.setStyle(TableStyle(style))
+    return t
+
+
 def build_quotation_pdf_bytes(items, images, client_details, terms_and_conditions,
                               summary_table_data, desc_mode="short", note=""):
-    """Render the quotation PDF (modern layout) and return its bytes.
-
-    items: dicts with item_no, product_name, product_code, quantity,
-           total_amount (unit price), total_unit_price (line total), description.
-    images: {item_no: image-bytes}. summary_table_data: dict from build_summary_table.
-    desc_mode is accepted for compatibility (single unified layout).
-    """
+    """Render the quotation PDF (v2 layout) and return its bytes. Same contract as before."""
     cd = client_details or {}
     terms = terms_and_conditions or {}
     if isinstance(summary_table_data, dict):
         summary = summary_table_data
-    else:  # defensive: recompute from items if an old-style list sneaks in
+    else:
         total = sum(float(i.get("total_unit_price") or 0) for i in (items or []))
         summary = build_summary_table(total, "inclusive")
 
     sig_name = str(cd.get("signature_name") or "").strip()
-    footer_right = " · ".join(x for x in [str(cd.get("signature_mobile") or "").strip(),
-                                          str(cd.get("signature_email") or "").strip()] if x)
+    footer_bits = [str(cd.get("signature_mobile") or "").strip(),
+                   str(cd.get("signature_email") or "").strip(), COMPANY_WEBSITE]
+    footer_right = "  ·  ".join(x for x in footer_bits if x)
 
     buf = BytesIO()
     doc = _QuoTemplate(buf, COMPANY_NAME, footer_right)
     story = []
 
-    # ── Header row 1: logo | QUOTATION + ref ──
+    # ── Row A: logo | QUOTATION + reference chip ──
     try:
         pil = PILImage.open(_LOGO_PATH)
         iw, ih = pil.size
-        h = 74 * PX
-        w = h * (iw / ih) if ih else h
-        logo_cell = RLImage(_LOGO_PATH, width=w, height=h)
+        h = 76 * PX
+        logo_cell = RLImage(_LOGO_PATH, width=h * (iw / ih) if ih else h, height=h)
     except Exception:
-        logo_cell = Paragraph(f"<b>{_esc(COMPANY_NAME)}</b>",
-                              _ps("logoFallback", 16, TITLE_DARK, "Helvetica-Bold"))
+        logo_cell = Paragraph(f"<b>{_esc(COMPANY_NAME)}</b>", _ps("logoFb", 16, HEADING, ARCH_B))
     title_cell = [
-        Paragraph("QUOTATION", _ps("quoTitle", 44, ACCENT, "Helvetica", align=2, leading_mult=1.05)),
-        Spacer(1, 4 * PX),
-        Paragraph(f"# {_esc(cd.get('reference_no'))}",
-                  _ps("quoRef", 14, SECONDARY, "Helvetica-Bold", align=2)),
+        Paragraph("QUOTATION", _ps("quoTitle", 46, ACCENT, ARCH_XB, align=2, leading_mult=0.95)),
+        Spacer(1, 6 * PX),
+        _ChipRight(_RefChip(cd.get("reference_no")), CONTENT_W * 0.55),
     ]
-    row1 = Table([[logo_cell, title_cell]], colWidths=[CONTENT_W * 0.45, CONTENT_W * 0.55])
-    row1.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                              ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                              ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                              ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(row1)
-    story.append(Spacer(1, 22 * PX))
+    row_a = Table([[logo_cell, title_cell]], colWidths=[CONTENT_W * 0.45, CONTENT_W * 0.55])
+    row_a.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(row_a)
+    story.append(Spacer(1, 18 * PX))
 
-    # ── Header row 2: seller address | Date / RFQ / Sales Person ──
+    # ── Row B: seller | meta card ──
     seller = Paragraph(
-        f"<b><font size={14 * PX:.1f}>{_esc(COMPANY_NAME)}</font></b><br/>"
-        + "<br/>".join(_esc(l) for l in COMPANY_ADDRESS.split("\n")),
-        _ps("seller", 12.5, SECONDARY))
+        f"<font name='{ARCH_B}' size={15 * PX:.1f} color='{_hx(HEADING)}'>{_esc(COMPANY_NAME)}</font><br/>"
+        + "<br/>".join(_esc(l) for l in COMPANY_ADDRESS.split("\n"))
+        + f"<br/><font name='{LATO_B}' color='{_hx(ACCENT_DARK)}'>{COMPANY_WEBSITE}</font>",
+        _ps("seller", 13, BODY3, leading_mult=1.6))
     meta_rows = []
-    label_st = _ps("metaLabel", 12, MUTED)
-    value_st = _ps("metaValue", 12, TEXT, "Helvetica-Bold", align=2)
     for label, value in [("Date", cd.get("quotation_date")),
                          ("RFQ No.", cd.get("reference_rfq_no") or "—"),
                          ("Sales Person", sig_name)]:
-        meta_rows.append([Paragraph(label, label_st), Paragraph(_esc(value), value_st)])
-    meta = Table(meta_rows, colWidths=[110 * PX, 190 * PX])
-    meta.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                              ("TOPPADDING", (0, 0), (-1, -1), 2 * PX),
-                              ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * PX)]))
-    row2 = Table([[seller, meta]], colWidths=[CONTENT_W - 300 * PX, 300 * PX])
-    row2.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                              ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                              ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(row2)
-    story.append(Spacer(1, 20 * PX))
+        meta_rows.append([Paragraph(_esc(label), _ps("mLb", 13, LABEL9)),
+                          Paragraph(_esc(value), _ps("mVal", 13, TEXT, LATO_B, align=2))])
+    meta_inner = Table(meta_rows, colWidths=[105 * PX, (300 - 32 - 105) * PX])
+    meta_inner.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, -2), 1, HAIR_E),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 4 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * PX)]))
+    meta_card = _card([meta_inner], 300 * PX, CARD_A)
+    row_b = Table([[seller, "", meta_card]], colWidths=[CONTENT_W - 300 * PX - 28 * PX, 28 * PX, 300 * PX])
+    row_b.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(row_b)
+    story.append(Spacer(1, 14 * PX))
 
-    # ── Header row 3: CUSTOMER | SUBJECT (hairline top border) ──
-    cust_parts = ["<font size={:.1f} color='#999999'><b>C U S T O M E R</b></font><br/>".format(11 * PX),
-                  f"<b><font size={15 * PX:.1f} color='#222222'>{_esc(cd.get('client_name'))}</font></b>"]
+    # ── Row C: PREPARED FOR card | SUBJECT card ──
+    cust_bits = [f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_sp('PREPARED FOR')}</font><br/>",
+                 f"<font name='{ARCH_B}' size={16 * PX:.1f} color='{_hx(HEADING)}'>{_esc(cd.get('client_name'))}</font>"]
     if cd.get("client_address"):
-        cust_parts.append("<br/>" + "<br/>".join(
-            _esc(l) for l in str(cd["client_address"]).splitlines() if l.strip()))
+        cust_bits.append("<br/>" + "<br/>".join(_esc(l) for l in str(cd["client_address"]).splitlines() if l.strip()))
     att = " · ".join(x for x in [str(cd.get("attention") or "").strip(),
                                  str(cd.get("designation") or "").strip()] if x)
     if att:
-        cust_parts.append(f"<br/><b>Attention:</b> {_esc(att)}")
+        cust_bits.append(f"<br/><b>Attention:</b> {_esc(att)}")
     if cd.get("email"):
-        cust_parts.append(f"<br/><font color='#2b5fb8'>{_esc(cd['email'])}</font>")
-    customer = Paragraph("".join(cust_parts), _ps("customer", 12.5, SECONDARY))
-    subject = Paragraph(
-        "<font size={:.1f} color='#999999'><b>S U B J E C T</b></font><br/>".format(11 * PX)
-        + f"<b>{_esc(cd.get('subject') or ('Quotation for ' + str(cd.get('client_name') or '')))}</b>",
-        _ps("subject", 13, TEXT, align=2))
-    row3 = Table([[customer, subject]], colWidths=[CONTENT_W - 250 * PX, 250 * PX])
-    row3.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEABOVE", (0, 0), (-1, 0), 1, HAIRLINE2),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 14 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(row3)
+        cust_bits.append(f"<br/><font color='{_hx(LINK)}'>{_esc(cd['email'])}</font>")
+    cust_para = Paragraph("".join(cust_bits), _ps("cust", 13, BODY3, leading_mult=1.5))
+    subj_para = Paragraph(
+        f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(LABEL9)}'>{_sp('SUBJECT')}</font><br/>"
+        f"<font name='{LATO_B}'>{_esc(cd.get('subject') or ('Quotation for ' + str(cd.get('client_name') or '')))}</font>",
+        _ps("subj", 13, TEXT, leading_mult=1.5))
+    cust_w = CONTENT_W - 250 * PX - 24 * PX
+    row_c = Table([[_card([cust_para], cust_w, CARD_B, left_accent=True), "",
+                    _card([subj_para], 250 * PX, CARD_B)]],
+                  colWidths=[cust_w, 24 * PX, 250 * PX])
+    row_c.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(row_c)
+    story.append(Spacer(1, 14 * PX))
+
+    # ── Brand strip ──
+    tag_color = _mix(ACCENT_DARK, ACCENT_SOFT, 0.25)
+    strip_para = Paragraph(
+        f"<font name='{LATO_BLK}' size={9.5 * PX:.1f} color='{_hx(tag_color)}'>{_sp('AUTHORIZED DISTRIBUTOR')}</font>"
+        f"&nbsp;&nbsp;<font color='{_hx(ACCENT_BORDER)}'>|</font>&nbsp;&nbsp;"
+        f"<font name='{LATO_B}' size={11 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_esc(BRANDS)}</font>",
+        _ps("brands", 11, ACCENT_DARK, leading_mult=1.4))
+    strip = _card([strip_para], CONTENT_W, ACCENT_SOFT, border=ACCENT_BORDER, pad=(16, 10))
+    story.append(strip)
     story.append(Spacer(1, 12 * PX))
 
-    # ── Brands strip ──
-    strip = Table([[Paragraph(_esc(BRANDS), _ps("brands", 11, MUTED))]], colWidths=[CONTENT_W])
-    strip.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), STRIP_FILL),
-        ("LINEBEFORE", (0, 0), (0, -1), 3, ACCENT),
-        ("LEFTPADDING", (0, 0), (-1, -1), 14 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 14 * PX),
-        ("TOPPADDING", (0, 0), (-1, -1), 9 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 9 * PX)]))
-    story.append(strip)
-    story.append(Spacer(1, 10 * PX))
-
     # ── Items table ──
-    col_w = [34 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
+    col_w = [36 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
     col_w[1] = CONTENT_W - col_w[0] - col_w[2] - col_w[3] - col_w[4]
-    head_st = _ps("thead", 12, colors.white, "Helvetica-Bold")
-    head_r = _ps("theadR", 12, colors.white, "Helvetica-Bold", align=2)
-    rows = [[Paragraph("#", head_st), Paragraph("Item &amp; Description", head_st),
-             Paragraph("Qty", head_r), Paragraph("Unit Price", head_r), Paragraph("Amount", head_r)]]
-    title_st = _ps("itTitle", 13, TITLE_DARK, "Helvetica-Bold", leading_mult=1.3)
-    sub_st = _ps("itSub", 11.5, SUBLINE, leading_mult=1.35)
-    num_st = _ps("itNum", 12.5, SECONDARY)
-    qty_st = _ps("itQty", 12.5, TEXT, align=2)
-    uom_st = _ps("itUom", 10, MUTED, align=2)
-    price_st = _ps("itPrice", 12.5, TEXT, align=2)
-    amt_st = _ps("itAmt", 12.5, TEXT, "Helvetica-Bold", align=2)
+    head_l = _ps("thL", 11, colors.white, ARCH_B)
+    head_r = _ps("thR", 11, colors.white, ARCH_B, align=2)
+    rows = [[Paragraph("#", head_l), Paragraph("ITEM &amp; DESCRIPTION", head_l),
+             Paragraph("QTY", head_r), Paragraph("UNIT PRICE", head_r), Paragraph("AMOUNT", head_r)]]
 
-    offer_label_st = _ps("offerLabel", 9.5, ACCENT, "Helvetica-Bold", leading_mult=1.2)
+    title_st = _ps("itTitle", 13, HEADING, ARCH_SB, leading_mult=1.3)
+    sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.4)
+    idx_st = _ps("itIdx", 12.5, LABELB, LATO_B)
+    qty_st = _ps("itQty", 12.5, TEXT, LATO_B, align=2)
+    uom_st = _ps("itUom", 10.5, LABELB, align=2)
+    price_st = _ps("itPrice", 12.5, BODY2, align=2)
+    amt_st = _ps("itAmt", 12.5, HEADING, LATO_B, align=2)
+    offer_label_st = _ps("offerLb", 9.5, ACCENT_DARK, LATO_B, leading_mult=1.25)
+
+    def model_line(code):
+        return (f"<font color='{_hx(LABELB)}'>Model No.</font> "
+                f"<font color='{_hx(MUTED8)}'>{_esc(code)}</font>")
+
     for it in items:
         no = it.get("item_no")
         name = str(it.get("product_name") or "").strip()
@@ -315,12 +524,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         desc = str(it.get("description") or "").strip()
         orig_code = str(it.get("orig_code") or "").strip()
         orig_name = str(it.get("orig_name") or "").strip()
-        # Requested-vs-offered (A86): when the supplier's own code/description replaced the
-        # client's during sourcing, show WHAT THE CLIENT REQUESTED first, then OUR OFFER.
         paired = (orig_code and orig_code != code) or (orig_name and orig_name != name)
+
         sub_lines = []
-        if code and code.lower() != "n/a" and code != name:
-            sub_lines.append(f"Model No.: {_esc(code)}")
         if desc and desc != name:
             for ln in desc.splitlines():
                 ln = ln.strip()
@@ -328,153 +534,152 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                     continue
                 sub_lines.append(("• " + _esc(ln.lstrip("-*• ").strip()))
                                  if ln[:1] in "-*•" else _esc(ln))
+        has_code = code and code.lower() != "n/a" and code != name
+
         if paired:
             req_name = orig_name or name
-            req_sub = f"Model No.: {_esc(orig_code)}" if (orig_code and orig_code.lower() != "n/a"
-                                                          and orig_code != req_name) else ""
             text_col = [Paragraph(_esc(req_name), title_st)]
-            if req_sub:
-                text_col.append(Paragraph(req_sub, sub_st))
+            if orig_code and orig_code.lower() != "n/a" and orig_code != req_name:
+                text_col.append(Paragraph(model_line(orig_code), sub_st))
             text_col.append(Spacer(1, 4 * PX))
-            text_col.append(Paragraph("O U R &nbsp; O F F E R", offer_label_st))
-            text_col.append(Paragraph(f"<b><font color='#222222'>{_esc(name)}</font></b>", sub_st))
+            text_col.append(Paragraph(_sp("OUR OFFER"), offer_label_st))
+            text_col.append(Paragraph(
+                f"<font name='{ARCH_SB}' color='{_hx(HEADING)}'>{_esc(name)}</font>", sub_st))
             if sub_lines:
                 text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))
+            if has_code:
+                text_col.append(Paragraph(model_line(code), sub_st))
         else:
             text_col = [Paragraph(_esc(name), title_st)]
             if sub_lines:
                 text_col.append(Spacer(1, 2 * PX))
                 text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))
+            if has_code:
+                text_col.append(Paragraph(model_line(code), sub_st))
+
         img_bytes = (images or {}).get(no)
         desc_cell = Table([[_Thumb(img_bytes), text_col]],
                           colWidths=[_Thumb.SIZE + 10 * PX,
-                                     col_w[1] - _Thumb.SIZE - 10 * PX - 12 * PX])
+                                     col_w[1] - _Thumb.SIZE - 10 * PX - 10 * PX])
         desc_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
                                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                        ("TOPPADDING", (0, 0), (-1, -1), 0),
                                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-        qty_txt = f"{float(it.get('quantity') or 0):g}"
-        qty_cell = [Paragraph(qty_txt, qty_st), Paragraph(str(it.get("uom") or "pc(s)"), uom_st)]
-        rows.append([Paragraph(str(no), num_st), desc_cell, qty_cell,
+        try:
+            idx_txt = f"{int(no):02d}"
+        except Exception:
+            idx_txt = str(no)
+        qty_cell = [Paragraph(f"{float(it.get('quantity') or 0):.1f}", qty_st),
+                    Paragraph(str(it.get("uom") or "pc(s)"), uom_st)]
+        rows.append([Paragraph(idx_txt, idx_st), desc_cell, qty_cell,
                      Paragraph(_fmt(it.get("total_amount")), price_st),
                      Paragraph(_fmt(it.get("total_unit_price")), amt_st)])
 
     items_tbl = Table(rows, colWidths=col_w, repeatRows=1)
     items_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+        # header: two-tone gradient fake (spec: #/description = accent, numeric = accentDark)
+        ("BACKGROUND", (0, 0), (1, 0), ACCENT),
+        ("BACKGROUND", (2, 0), (-1, 0), ACCENT_DARK),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, CARD_B]),
+        ("BOX", (0, 0), (-1, -1), 1, HAIR_EC),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 1), (-1, -1), 1, HAIRLINE),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 6 * PX),
-        ("TOPPADDING", (0, 0), (-1, 0), 9 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 9 * PX),
+        ("LINEBELOW", (0, 1), (-1, -1), 1, HAIR_F0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 8 * PX),
+        ("TOPPADDING", (0, 0), (-1, 0), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 10 * PX),
         ("TOPPADDING", (0, 1), (-1, -1), 12 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 12 * PX)]))
     story.append(items_tbl)
     story.append(Spacer(1, 14 * PX))
 
-    # ── Totals block (right-aligned, 320px) ──
-    tot_label = _ps("totLabel", 12.5, HexColor("#666666"))
-    tot_value = _ps("totValue", 12.5, TEXT, "Helvetica-Bold", align=2)
-    grand_label = _ps("grandLabel", 13, ACCENT, "Helvetica-Bold")
-    grand_value = _ps("grandValue", 13, ACCENT, "Helvetica-Bold", align=2)
+    # ── Totals (right-aligned, 340px) ──
     opt = summary.get("vat_option", "inclusive")
     tot_rows = []
     if opt == "inclusive":
-        tot_rows = [[Paragraph("Total Amount (VAT Exclusive)", tot_label),
-                     Paragraph("PHP " + _fmt(summary["total_ex_vat"]), tot_value)],
-                    [Paragraph("VAT (12%)", tot_label),
-                     Paragraph("PHP " + _fmt(summary["vat"]), tot_value)]]
+        tot_rows = [[Paragraph("Total Amount (VAT Exclusive)", _ps("tl1", 13, MUTED7)),
+                     Paragraph("PHP " + _fmt(summary["total_ex_vat"]), _ps("tv1", 13, TEXT, LATO_B, align=2))],
+                    [Paragraph("VAT (12%)", _ps("tl2", 13, MUTED7)),
+                     Paragraph("PHP " + _fmt(summary["vat"]), _ps("tv2", 13, TEXT, LATO_B, align=2))]]
         grand_text = "Total (VAT Inclusive)"
     elif opt == "zero":
         grand_text = "Total (Zero-Rated)"
     else:
         grand_text = "Total (VAT Exclusive)"
 
-    tot_w = [200 * PX, 120 * PX]
+    tot_w = 340 * PX
     blocks = []
     if tot_rows:
-        t = Table(tot_rows, colWidths=tot_w)
-        t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1, HAIRLINE),
-                               ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                               ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        t = Table(tot_rows, colWidths=[tot_w - 130 * PX, 130 * PX])
+        t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1, HAIR_E),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                ("TOPPADDING", (0, 0), (-1, -1), 7 * PX),
                                ("BOTTOMPADDING", (0, 0), (-1, -1), 7 * PX)]))
         blocks.append(t)
-        blocks.append(Spacer(1, 6 * PX))
-    g = Table([[Paragraph(grand_text, grand_label),
-                Paragraph("PHP " + _fmt(summary["total"]), grand_value)]],
-              colWidths=[tot_w[0] - 14 * PX, tot_w[1] + 14 * PX])
-    g.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), TOTAL_FILL),
-                           ("BOX", (0, 0), (-1, -1), 1, TOTAL_BORDER),
-                           ("LEFTPADDING", (0, 0), (0, 0), 14 * PX),
-                           ("RIGHTPADDING", (-1, 0), (-1, 0), 14 * PX),
-                           ("TOPPADDING", (0, 0), (-1, -1), 11 * PX),
-                           ("BOTTOMPADDING", (0, 0), (-1, -1), 11 * PX)]))
-    blocks.append(g)
+        blocks.append(Spacer(1, 8 * PX))
+    blocks.append(_GradientBar(tot_w, grand_text, "PHP " + _fmt(summary["total"])))
     totals_wrap = Table([[blocks]], colWidths=[CONTENT_W])
-    totals_wrap.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), CONTENT_W - 320 * PX),
+    totals_wrap.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), CONTENT_W - tot_w),
                                      ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                      ("TOPPADDING", (0, 0), (-1, -1), 0),
                                      ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(KeepTogether(totals_wrap))
     story.append(Spacer(1, 12 * PX))
 
-    # ── Terms strip: 4 equal columns ──
-    term_label = _ps("termLabel", 10, LABEL, "Helvetica-Bold")
-    term_value = _ps("termValue", 12, TEXT, leading_mult=1.35)
+    # ── Terms strip ──
     term_cells = []
-    for label, key in [("V A L I D I T Y", "validity"), ("D E L I V E R Y", "delivery"),
-                       ("P A Y M E N T", "payment"), ("W A R R A N T Y", "warranty")]:
-        term_cells.append([Paragraph(label, term_label), Spacer(1, 3 * PX),
-                           Paragraph(_esc(terms.get(key.replace(" ", "").lower()) or "—"), term_value)])
+    for label, key in [("VALIDITY", "validity"), ("DELIVERY", "delivery"),
+                       ("PAYMENT", "payment"), ("WARRANTY", "warranty")]:
+        term_cells.append([Paragraph(_sp(label), _ps("teLb", 9.5, ACCENT_DARK, LATO_B)),
+                           Spacer(1, 3 * PX),
+                           Paragraph(_esc(terms.get(key) or "—"), _ps("teVal", 13, TEXT, leading_mult=1.35))])
     terms_tbl = Table([term_cells], colWidths=[CONTENT_W / 4.0] * 4)
     terms_tbl.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 1, HAIRLINE),
-        ("INNERGRID", (0, 0), (-1, -1), 1, HAIRLINE),
+        ("BOX", (0, 0), (-1, -1), 1, HAIR_EC),
+        ("ROUNDEDCORNERS", [8 * PX] * 4),
+        ("INNERGRID", (0, 0), (-1, -1), 1, HAIR_EC),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 12 * PX),
-        ("TOPPADDING", (0, 0), (-1, -1), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 10 * PX)]))
+        ("LEFTPADDING", (0, 0), (-1, -1), 15 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 15 * PX),
+        ("TOPPADDING", (0, 0), (-1, -1), 13 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 13 * PX)]))
     story.append(KeepTogether(terms_tbl))
-    story.append(Spacer(1, 14 * PX))
+    story.append(Spacer(1, 16 * PX))
 
     # ── Bank details | signature ──
-    bank_head = _ps("bankHead", 11, ACCENT, "Helvetica-Bold")
-    kv_line = _ps("kv", 12, SECONDARY, leading_mult=1.5)
+    kv = _ps("kv", 12, BODY2, leading_mult=1.6)
     bank_body = "<br/>".join(
-        f"<font color='#999999'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
-    bank_col = [Paragraph("B A N K &nbsp; D E T A I L S", bank_head), Spacer(1, 6 * PX),
-                Paragraph(bank_body, kv_line)]
-    sig_lines = [f"<b><font size={14 * PX:.1f} color='#222222'>{_esc(sig_name)}</font></b>"]
+        f"<font color='{_hx(LABELA)}'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
+    bank_w = CONTENT_W - 250 * PX - 40 * PX
+    bank_col = [_SectionHead("BANK DETAILS", bank_w), Spacer(1, 8 * PX), Paragraph(bank_body, kv)]
+
+    sig_space = Table([[""]], colWidths=[250 * PX], rowHeights=[34 * PX])
+    sig_space.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1.5, HexColor("#dddddd")),
+                                   ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+    sig_col = [_SectionHead("SINCERELY YOURS", 250 * PX), Spacer(1, 4 * PX), sig_space, Spacer(1, 5 * PX),
+               Paragraph(f"<font name='{ARCH_B}' size={14 * PX:.1f} color='{_hx(HEADING)}'>{_esc(sig_name)}</font>",
+                         _ps("sigNm", 14, HEADING, leading_mult=1.3))]
     if cd.get("signature_designation"):
-        sig_lines.append(f"<font color='#777777'>{_esc(cd['signature_designation'])}</font>")
+        sig_col.append(Paragraph(_esc(cd["signature_designation"]), _ps("sigTi", 12, MUTED8)))
     extra = []
     if cd.get("signature_viber"):
-        extra.append(f"<font color='#999999'>Viber:</font> {_esc(cd['signature_viber'])}")
+        extra.append(f"<font color='{_hx(LABELA)}'>Viber:</font> {_esc(cd['signature_viber'])}")
     if cd.get("signature_mobile"):
-        extra.append(f"<font color='#999999'>Mobile:</font> {_esc(cd['signature_mobile'])}")
+        extra.append(f"<font color='{_hx(LABELA)}'>Mobile:</font> {_esc(cd['signature_mobile'])}")
     if cd.get("signature_email"):
-        extra.append(f"<font color='#2b5fb8'>{_esc(cd['signature_email'])}</font>")
-    sig_col = [Paragraph("S I N C E R E L Y &nbsp; Y O U R S", bank_head), Spacer(1, 6 * PX),
-               Paragraph("<br/>".join(sig_lines), _ps("sigName", 12.5, TEXT, leading_mult=1.5))]
+        extra.append(f"<font color='{_hx(LINK)}'>{_esc(cd['signature_email'])}</font>")
     if extra:
-        sig_col += [Spacer(1, 5 * PX), Paragraph("<br/>".join(extra), kv_line)]
-    bank_sig = Table([[bank_col, sig_col]],
-                     colWidths=[CONTENT_W - 250 * PX - 40 * PX, 250 * PX + 40 * PX])
-    bank_sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                                  ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                  ("RIGHTPADDING", (0, 0), (0, 0), 40 * PX),
-                                  ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                                  ("LEFTPADDING", (1, 0), (1, 0), 40 * PX),
-                                  ("TOPPADDING", (0, 0), (-1, -1), 0),
-                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(KeepTogether(bank_sig))
-    story.append(Spacer(1, 10 * PX))
+        sig_col += [Spacer(1, 4 * PX), Paragraph("<br/>".join(extra), kv)]
 
-    # ── Optional note + disclaimer ──
+    bank_sig = Table([[bank_col, "", sig_col]], colWidths=[bank_w, 40 * PX, 250 * PX])
+    bank_sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                  ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                  ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(KeepTogether(bank_sig))
+    story.append(Spacer(1, 12 * PX))
+
+    # ── Note + disclaimer ──
     note = (note or "").strip()
     if note:
-        story.append(Paragraph(f"<b>Note:</b> {_esc(note)}", _ps("note", 11.5, SECONDARY)))
-        story.append(Spacer(1, 6 * PX))
-    story.append(Paragraph(DISCLAIMER, _ps("disclaimer", 11, LABEL)))
+        story.append(Paragraph(f"<b>Note:</b> {_esc(note)}", _ps("note", 11.5, BODY2)))
+        story.append(Spacer(1, 5 * PX))
+    story.append(Paragraph(DISCLAIMER, _ps("disc", 10.5, LABELA, leading_mult=1.55)))
 
-    doc.build(story)
+    doc.build(story, canvasmaker=_NumberedCanvas)
     return buf.getvalue()
