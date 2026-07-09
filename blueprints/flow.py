@@ -165,6 +165,10 @@ def quotation_pdf():
             "total_amount": price,
             "total_unit_price": qty * price,
             "description": _s(it.get("description")),
+            # requested-vs-offered (A86): the client's ORIGINAL code/description when admin
+            # replaced them with the supplier's own during sourcing
+            "orig_code": _s(it.get("origItemNo")),
+            "orig_name": _s(it.get("origItemName")),
         })
         img = _decode_data_url(it.get("imageDataUrl"))
         if img:

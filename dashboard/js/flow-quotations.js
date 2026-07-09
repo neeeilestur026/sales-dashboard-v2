@@ -82,7 +82,8 @@ async function loadFromPR(prNo) {
 // A form row for a PR item priced at its Final Price; injects a select option for non-inventory items.
 function addPrRow(it) {
   // addRow keys inventory rows by rowIndex and injects a raw option for non-inventory items (like PR lines).
-  addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: flowNum(it.finalPrice) });
+  addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: flowNum(it.finalPrice),
+           origItemNo: it.origItemNo || '', origItemName: it.origItemName || '' });
 }
 
 async function loadInventory() {
@@ -125,6 +126,12 @@ function invRowKey(item) {
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
+  // Preserve the requested-vs-offered pairing (A86) across edits: PR-derived items carry the
+  // client's ORIGINAL code/description; stamp them on the row so collectItems round-trips them.
+  if (item && (item.origItemNo || item.origItemName)) {
+    tr.dataset.origNo = item.origItemNo || '';
+    tr.dataset.origName = item.origItemName || '';
+  }
   if (qAdmin) {
     // Free-typed row: Item No (with inventory autocomplete) · Description · Qty · Price · Line Total.
     tr.innerHTML = `
@@ -180,11 +187,12 @@ function collectItems() {
     const nums = tr.querySelectorAll('input[type="number"]');
     const qty = flowNum(nums[0] ? nums[0].value : 0);
     const price = flowNum(nums[1] ? nums[1].value : 0);
+    const orig = { origItemNo: tr.dataset.origNo || '', origItemName: tr.dataset.origName || '' };
     if (qAdmin) {
       const itemNo = (tr.querySelector('.i-no').value || '').trim();
       const desc = (tr.querySelector('.i-desc').value || '').trim();
       if (!itemNo && !desc) return;                        // skip empty row
-      items.push({ itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price });
+      items.push({ itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price, ...orig });
     } else {
       const sel = tr.children[0].querySelector('select');
       const key = sel.value;                                 // rowIndex of the picked inventory row, or "raw"
@@ -194,12 +202,12 @@ function collectItems() {
         const no = (opt && opt.dataset.no) || '';
         const nm = (opt && opt.dataset.name) || '';
         if (!no && !nm) return;
-        items.push({ itemNo: no || 'N/A', itemName: nm || no || 'N/A', qty, price });
+        items.push({ itemNo: no || 'N/A', itemName: nm || no || 'N/A', qty, price, ...orig });
         return;
       }
       const inv = qInventory.find(i => String(i.rowIndex) === String(key));
       if (!inv) return;
-      items.push({ itemNo: inv.itemNo, itemName: inv.description, qty, price });
+      items.push({ itemNo: inv.itemNo, itemName: inv.description, qty, price, ...orig });
     }
   });
   return items;
@@ -518,6 +526,7 @@ async function submitPdf() {
       const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
       return {
         itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
+        origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',  // requested vs offered
         description: (inv && inv.description) || it.itemName || '',  // multi-line desc from inventory
         imageDataUrl: pdfImages[it.itemNo] || ''
       };

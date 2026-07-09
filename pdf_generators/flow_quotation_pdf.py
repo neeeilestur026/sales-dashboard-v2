@@ -110,6 +110,7 @@ class _Thumb(Flowable):
                 pil = PILImage.open(BytesIO(self.img_bytes))
                 if pil.mode not in ("RGB", "RGBA"):
                     pil = pil.convert("RGB")
+                pil.thumbnail((220, 220))   # embed small — the slot is 64px; keeps PDFs light
                 iw, ih = pil.size
                 scale = min(s / iw, s / ih) if iw and ih else 1
                 w, h = iw * scale, ih * scale
@@ -277,9 +278,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LINEABOVE", (0, 0), (-1, 0), 1, HAIRLINE2),
         ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 16 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        ("TOPPADDING", (0, 0), (-1, -1), 14 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(row3)
-    story.append(Spacer(1, 14 * PX))
+    story.append(Spacer(1, 12 * PX))
 
     # ── Brands strip ──
     strip = Table([[Paragraph(_esc(BRANDS), _ps("brands", 11, MUTED))]], colWidths=[CONTENT_W])
@@ -289,7 +290,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LEFTPADDING", (0, 0), (-1, -1), 14 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 14 * PX),
         ("TOPPADDING", (0, 0), (-1, -1), 9 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 9 * PX)]))
     story.append(strip)
-    story.append(Spacer(1, 12 * PX))
+    story.append(Spacer(1, 10 * PX))
 
     # ── Items table ──
     col_w = [34 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
@@ -306,11 +307,17 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     price_st = _ps("itPrice", 12.5, TEXT, align=2)
     amt_st = _ps("itAmt", 12.5, TEXT, "Helvetica-Bold", align=2)
 
+    offer_label_st = _ps("offerLabel", 9.5, ACCENT, "Helvetica-Bold", leading_mult=1.2)
     for it in items:
         no = it.get("item_no")
         name = str(it.get("product_name") or "").strip()
         code = str(it.get("product_code") or "").strip()
         desc = str(it.get("description") or "").strip()
+        orig_code = str(it.get("orig_code") or "").strip()
+        orig_name = str(it.get("orig_name") or "").strip()
+        # Requested-vs-offered (A86): when the supplier's own code/description replaced the
+        # client's during sourcing, show WHAT THE CLIENT REQUESTED first, then OUR OFFER.
+        paired = (orig_code and orig_code != code) or (orig_name and orig_name != name)
         sub_lines = []
         if code and code.lower() != "n/a" and code != name:
             sub_lines.append(f"Model No.: {_esc(code)}")
@@ -321,10 +328,23 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                     continue
                 sub_lines.append(("• " + _esc(ln.lstrip("-*• ").strip()))
                                  if ln[:1] in "-*•" else _esc(ln))
-        text_col = [Paragraph(_esc(name), title_st)]
-        if sub_lines:
-            text_col.append(Spacer(1, 2 * PX))
-            text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))
+        if paired:
+            req_name = orig_name or name
+            req_sub = f"Model No.: {_esc(orig_code)}" if (orig_code and orig_code.lower() != "n/a"
+                                                          and orig_code != req_name) else ""
+            text_col = [Paragraph(_esc(req_name), title_st)]
+            if req_sub:
+                text_col.append(Paragraph(req_sub, sub_st))
+            text_col.append(Spacer(1, 4 * PX))
+            text_col.append(Paragraph("O U R &nbsp; O F F E R", offer_label_st))
+            text_col.append(Paragraph(f"<b><font color='#222222'>{_esc(name)}</font></b>", sub_st))
+            if sub_lines:
+                text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))
+        else:
+            text_col = [Paragraph(_esc(name), title_st)]
+            if sub_lines:
+                text_col.append(Spacer(1, 2 * PX))
+                text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))
         img_bytes = (images or {}).get(no)
         desc_cell = Table([[_Thumb(img_bytes), text_col]],
                           colWidths=[_Thumb.SIZE + 10 * PX,
@@ -347,7 +367,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LINEBELOW", (0, 1), (-1, -1), 1, HAIRLINE),
         ("LEFTPADDING", (0, 0), (-1, -1), 6 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 6 * PX),
         ("TOPPADDING", (0, 0), (-1, 0), 9 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 9 * PX),
-        ("TOPPADDING", (0, 1), (-1, -1), 14 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 14 * PX)]))
+        ("TOPPADDING", (0, 1), (-1, -1), 12 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 12 * PX)]))
     story.append(items_tbl)
     story.append(Spacer(1, 14 * PX))
 
@@ -396,7 +416,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                      ("TOPPADDING", (0, 0), (-1, -1), 0),
                                      ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(KeepTogether(totals_wrap))
-    story.append(Spacer(1, 16 * PX))
+    story.append(Spacer(1, 12 * PX))
 
     # ── Terms strip: 4 equal columns ──
     term_label = _ps("termLabel", 10, LABEL, "Helvetica-Bold")
@@ -414,11 +434,11 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LEFTPADDING", (0, 0), (-1, -1), 12 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 12 * PX),
         ("TOPPADDING", (0, 0), (-1, -1), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 10 * PX)]))
     story.append(KeepTogether(terms_tbl))
-    story.append(Spacer(1, 20 * PX))
+    story.append(Spacer(1, 14 * PX))
 
     # ── Bank details | signature ──
     bank_head = _ps("bankHead", 11, ACCENT, "Helvetica-Bold")
-    kv_line = _ps("kv", 12, SECONDARY, leading_mult=1.7)
+    kv_line = _ps("kv", 12, SECONDARY, leading_mult=1.5)
     bank_body = "<br/>".join(
         f"<font color='#999999'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
     bank_col = [Paragraph("B A N K &nbsp; D E T A I L S", bank_head), Spacer(1, 6 * PX),

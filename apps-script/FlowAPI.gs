@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 72;   // A84 sourcing can replace the item CODE (supplier's own) — carries into pricing + quotation (71: A82 scan fixes)
+var FLOW_VERSION = 73;   // A86 requested-vs-offered item pairing preserved PR→quotation (72: A84 code edit · 71: A82 scan fixes)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -34,7 +34,8 @@ var SCHEMA = {
 
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At'],
-  QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total'],
+  QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
+                   'Orig Item No', 'Orig Item Name'],
 
   SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price'],
@@ -78,7 +79,8 @@ var SCHEMA = {
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
                     'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref'],
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
-                        'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price'],
+                        'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price',
+                        'Orig Item No', 'Orig Item Name'],
 
   // ── Generic per-record document attachments (any process step) ──
   Documents: ['Doc ID', 'Module', 'Ref No', 'Doc Type', 'File Name', 'Drive Link', 'File ID',
@@ -385,7 +387,8 @@ function getQuotations(p) {
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
-        price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']) }; })
+        price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
+        origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '' }; })
     };
   }) };
 }
@@ -415,7 +418,8 @@ function createQuotation(p) {
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
     creatorRole, '', '', '']);
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
+    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+            it.origItemNo || '', it.origItemName || ''];
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -2446,7 +2450,8 @@ function getPricingRequests(p) {
           line: _num(r['Line']), itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
           uom: r['UOM'], remarks: r['Remarks'], included: (r['Included'] === true || String(r['Included']) === 'true'),
           supplier: r['Supplier'], principal: r['Principal'], currency: r['Currency'] || 'PHP',
-          supplierPrice: _num(r['Supplier Price (FC)']), cbm: _num(r['CBM']), finalPrice: _num(r['Final Price'])
+          supplierPrice: _num(r['Supplier Price (FC)']), cbm: _num(r['CBM']), finalPrice: _num(r['Final Price']),
+          origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || ''
         };
       })
     };
@@ -2499,7 +2504,7 @@ function createPricingRequest(p) {
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
-      true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0]);
+      true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0, '', '']);   // trailing: Orig Item No/Name
   });
   // Record clientRef → PR No so a retried submission returns THIS number without re-writing, even if
   // the sheet write hasn't propagated to a subsequent read.
@@ -2518,11 +2523,23 @@ function updatePRSourcing(p) {
       u.currency || 'PHP', _num(u.supplierPrice), _num(u.cbm)]]);
     // col 3: Item No — admin can replace the code with the supplier's own (blank = keep original,
     // so an accidental clear never wipes it). Carries through pricing and into the quotation.
+    // The client's ORIGINAL code/description is preserved once (cols 15/16, first change wins) so the
+    // quotation can show "requested vs offered".
     if (u.itemNo !== undefined && String(u.itemNo).trim() !== '') {
-      sh.getRange(row.rowIndex, 3, 1, 1).setValues([[String(u.itemNo).trim()]]);
+      var newNo = String(u.itemNo).trim();
+      if (String(row['Item No']) !== newNo && !String(row['Orig Item No'] || '').trim()) {
+        sh.getRange(row.rowIndex, 15, 1, 1).setValues([[row['Item No']]]);
+      }
+      sh.getRange(row.rowIndex, 3, 1, 1).setValues([[newNo]]);
     }
     // col 4: Item Name — admin can correct the product description; it flows to the quotation.
-    if (u.itemName !== undefined) sh.getRange(row.rowIndex, 4, 1, 1).setValues([[u.itemName || '']]);
+    if (u.itemName !== undefined) {
+      var newName = u.itemName || '';
+      if (newName && String(row['Item Name']) !== newName && !String(row['Orig Item Name'] || '').trim()) {
+        sh.getRange(row.rowIndex, 16, 1, 1).setValues([[row['Item Name']]]);
+      }
+      sh.getRange(row.rowIndex, 4, 1, 1).setValues([[newName]]);
+    }
   });
   // Header-level Client Location (one per request) — set during sourcing when provided.
   if (p.clientLocation !== undefined) {
@@ -2584,7 +2601,8 @@ function createQuotationFromPR(p) {
     return String(r['PR No']) === String(p.prNo)
       && (r['Included'] === true || String(r['Included']) === 'true') && _num(r['Final Price']) > 0;
   }).map(function (r) {
-    return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']) };
+    return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']),
+             origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '' };
   });
   if (!qItems.length) return { success: false, message: 'No included, priced items to quote.' };
   // New quotation starts as Draft (creator = the requesting sales user) → enters the approval workflow.
