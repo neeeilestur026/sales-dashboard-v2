@@ -485,11 +485,8 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     story.append(row_c)
     story.append(Spacer(1, 14 * PX))
 
-    # ── Brand strip ──
-    tag_color = _mix(ACCENT_DARK, ACCENT_SOFT, 0.25)
+    # ── Brand strip (brand list only) ──
     strip_para = Paragraph(
-        f"<font name='{LATO_BLK}' size={9.5 * PX:.1f} color='{_hx(tag_color)}'>{_sp('AUTHORIZED DISTRIBUTOR')}</font>"
-        f"&nbsp;&nbsp;<font color='{_hx(ACCENT_BORDER)}'>|</font>&nbsp;&nbsp;"
         f"<font name='{LATO_B}' size={11 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_esc(BRANDS)}</font>",
         _ps("brands", 11, ACCENT_DARK, leading_mult=1.4))
     strip = _card([strip_para], CONTENT_W, ACCENT_SOFT, border=ACCENT_BORDER, pad=(16, 10))
