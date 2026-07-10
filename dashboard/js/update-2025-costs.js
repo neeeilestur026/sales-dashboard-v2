@@ -1,0 +1,332 @@
+/* update-2025-costs.js — write the complete 2025 cost breakdown (SalesOrder_2025.xlsx, embedded
+   below) into each 2025 sales order's cost detail via saveSOCostDetails: purchase of goods, bank
+   charges, shipment cost, import duties, local charges and delivery-to-client, plus the
+   International/Local label. The backend regenerates the SO's migrated invoice/receiving so the
+   income statement & summaries reflect the real COGS. Revenue is always kept from the system —
+   the file has no selling prices. */
+
+let ucSession = null;
+let ucOrders = [];      // file purchase groups: {poId, client, norm, vendor, goods, bank, ship, duties, local, deliv, intl, lines[], soNo}
+let ucStock = [];       // Warehouse groups (inventory, never written to an SO)
+let ucSos = [];         // 2025 sales orders (with current sales/cogs resolved)
+let ucCds = {};         // full SOCostDetails records by soNo (for the pre-apply backup)
+let ucSelected = new Set();
+let ucOpen = new Set();          // expanded item-line rows
+const UC_BACKUP_KEY = 'uc2025Backup';
+
+// ── Embedded dataset: SalesOrder_2025.xlsx, one entry per PO NUMBER group ────
+const UC25_DATA = [{"poId":"2025-01","client":"Philcement Corporation","clientPO":"180100003867","vendor":"Power Team Hydraulic Technologies","logistics":"Foureleven","date":"2025-08-01","airSea":"SEA INTERNATIONAL","goods":870757.11,"bank":1470.75,"ship":52004.73,"duties":132923.61,"local":0.0,"deliv":0.0,"lines":[{"code":"TWHC11","desc":"Torque Wrench, 11134 ftlbs/15095 Nm, Sq Drv, 1-1/2\"","qty":1.0,"usd":8959.0},{"code":"PE55TWP-4-220-BS","desc":"PUMP, Elec/Hyd - 220/230V, 50/60 hz (4-Ports)","qty":1.0,"usd":5629.0},{"code":"21045","desc":"TUBE, OIL LINE","qty":1.0,"usd":87.0},{"code":"21091","desc":"COUPLING","qty":1.0,"usd":24.0},{"code":"10303","desc":"O-RING(-018)0.739IDX0.070NITRILE80","qty":2.0,"usd":12.0},{"code":"10271","desc":"O-RING(-112)0.487IDX0.103NITRILE70","qty":2.0,"usd":12.0},{"code":"10445","desc":"SPRINGCOMOD.166IDX.XXXR.580L.751 MW","qty":4.0,"usd":24.0}],"intl":true,"wh":false},{"poId":"2025-02","client":"Philcement Corporation","clientPO":"180100004263","vendor":"Black Iron Italy","logistics":"DHL Global","date":"02/18/2025","airSea":"AIR INTERNATIONAL","goods":34491.32,"bank":685.3,"ship":83509.04,"duties":8667.34,"local":0.0,"deliv":0.0,"lines":[{"code":"SD112-55","desc":"Impact socket Blackiron square drive 1\u201d 1/2 hex 55 mm af \u2013 s","qty":1.0,"usd":72.11},{"code":"SD112-212","desc":"Impact socket Blackiron square drive 1\u201d 1/2 hex 2\"1/2 af \u2013 s","qty":1.0,"usd":96.14},{"code":"SD112-65","desc":"Impact socket Blackiron square drive 1\u201d 1/2 hex 65 mm af \u2013 s","qty":1.0,"usd":95.25},{"code":"SD112-75","desc":"Impact socket Blackiron square drive 1\u201d 1/2 hex 75 mm af","qty":1.0,"usd":132.51},{"code":"SD112-85","desc":"Impact socket Blackiron square drive 1\u201d 1/2 hex 85 mm af \u2013 s","qty":1.0,"usd":168.45}],"intl":true,"wh":false},{"poId":"2025-03","client":"1 DRIVE DEEP IMPACT 33MM","clientPO":"","vendor":"JYL Enterprises Inc.","logistics":"","date":"02/24/2026","airSea":"LOCAL","goods":12520.76,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":470.0,"lines":[{"code":"","desc":"","qty":2.0,"usd":5884.0},{"code":"","desc":"1 DRIVE DEEP IMPACT 41MM","qty":2.0,"usd":7024.0}],"intl":false,"wh":false},{"poId":"2025-04","client":"Panabo Trucking Services, Inc.","clientPO":"2320003733","vendor":"Ken tool Hardware Corporation","logistics":"","date":"2025-04-03","airSea":"LOCAL","goods":15201.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":165.0,"lines":[{"code":"","desc":"IMPACT DEEP SOCKET 1\" DRIVE # \n21MM SK TOOL","qty":7.0,"usd":11823.0}],"intl":false,"wh":false},{"poId":"2025-05","client":"Panabo Trucking Services, Inc.","clientPO":"","vendor":"Ken tool Hardware Corporation","logistics":"","date":"03/19/2025","airSea":"LOCAL","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"IMPACT DEEP SOCKET 1\" DRIVE # \n21MM SK TOOL","qty":2.0,"usd":3378.0}],"intl":false,"wh":false},{"poId":"2025-06","client":"SMC MALITA POWER INC.","clientPO":"MPI100008684","vendor":"Ken tool Hardware Corporation","logistics":"","date":"03/29/2025","airSea":"LOCAL","goods":78800.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"HYDRAULIC PULLER KIT, MAX. STROKE 80 MM (3.1 IN), NOMINAL WO","qty":1.0,"usd":78800.0}],"intl":false,"wh":false},{"poId":"2025-07","client":"Philcement Corporation","clientPO":"180100004572","vendor":"Power Team Hydraulic Technologies","logistics":"DHL EXPRESS","date":"04/16/2026","airSea":"AIR INTERNATIONAL","goods":154114.45,"bank":0.0,"ship":6000.46,"duties":12862.22,"local":1192.46,"deliv":1198.4,"lines":[{"code":"RLS300","desc":"CYL,30TON,1/2\"STROKE","qty":2.0,"usd":1179.36},{"code":"P300","desc":"HAND PUMP, 2-SPD, .160-2.6 CU IN/STROKE","qty":1.0,"usd":725.76},{"code":"9670","desc":"TEE ADPT, 1/4\", 3/8\" NPTF F, 3/8\" NPTF M","qty":1.0,"usd":49.84},{"code":"9051","desc":"GAUGE, 4\", UNIVERSAL, DRY, 10k/200 PSI","qty":1.0,"usd":181.44},{"code":"9077","desc":"GGE 4\" 0-150TON C/R/RD/RLS, DRY 2000 PSI","qty":1.0,"usd":181.44}],"intl":true,"wh":false},{"poId":"2025-08","client":"Philcement Corporation","clientPO":"1811000000001","vendor":"Power Team Hydraulic Technologies","logistics":"","date":"04/30/2025","airSea":"SEA INTERNATIONAL","goods":116271.52,"bank":0.0,"ship":45724.47,"duties":33418.07,"local":4973.69,"deliv":0.0,"lines":[{"code":"C1006C","desc":"CYL, 100 TON 6-5/8\" STROKE","qty":1.0,"usd":2408.0}],"intl":true,"wh":false},{"poId":"2025-09","client":"Semirara Mining & Power Corporation","clientPO":"SMPO-106230","vendor":"Power Team Hydraulic Technologies","logistics":"FOURELEVEN","date":"05/30/2025","airSea":"SEA INTERNATIONAL","goods":566737.99,"bank":1396.25,"ship":47538.02,"duties":122263.81,"local":0.0,"deliv":0.0,"lines":[{"code":"PE604BF1P","desc":"PUMP, ELEC./HYD., 230VAC, 50/60 HZ, AUTO","qty":1.0,"usd":10106.1}],"intl":true,"wh":false},{"poId":"2025-10","client":"SMC MALITA POWER INC.","clientPO":"MPI100009003","vendor":"Power Team Hydraulic Technologies","logistics":"","date":"2026-10-06","airSea":"SEA INTERNATIONAL","goods":239778.8,"bank":1133.0,"ship":45785.07,"duties":45131.52,"local":0.0,"deliv":4779.45,"lines":[{"code":"RH120","desc":"CYL, 12 TON, 5/6\" STROKE SINGLE ACTING S/R CENTER HOLE","qty":1.0,"usd":592.2},{"code":"RH306","desc":"CYL, 30 TON, 6\" STROKE SINGLE ACTING S/R CENTER HOLE","qty":1.0,"usd":1498.0},{"code":"PT116","desc":"PULLER, MANUAL 3JAW 40 TON","qty":1.0,"usd":1064.2},{"code":"P159","desc":"HAND PUMP, 2-SPEED, .160-2.6 CU IN/STROKE","qty":1.0,"usd":608.3},{"code":"9795","desc":"QUICK COUPLER, COMPLETE","qty":1.0,"usd":87.5},{"code":"9670","desc":"TEE ADPT, 1/4\", 3/8\" NPTF F, 3/8\" NPTF M","qty":1.0,"usd":62.3},{"code":"9040","desc":"GAUGE,2.5\"UNIVERSAL,FILLED, 2500/500 PSI","qty":1.0,"usd":123.9},{"code":"9758","desc":"HOSE, RUBBER .25\" INTERNAL DIA, 10'","qty":1.0,"usd":152.0}],"intl":true,"wh":false},{"poId":"2025-12","client":"WAREHOUSE","clientPO":"","vendor":"Power Team Hydraulic Technologies","logistics":"","date":"06/30/2026","airSea":"SEA INTERNATIONAL","goods":136428.64,"bank":975.8,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"9670","desc":"TEE ADPT, 1/4\", 3/8\" NPTF F, 3/8\" NPTF M","qty":1.0,"usd":65.1},{"code":"9758","desc":"HOSE, RUBBER 25\" INTERNAL DIA, 10","qty":2.0,"usd":320.6},{"code":"9798","desc":"HALF COUPLER, HYD 3/8\" NPTF M","qty":2.0,"usd":86.8},{"code":"9795","desc":"QUICK COUPLER, COMPLETE","qty":1.0,"usd":91.7},{"code":"P300D","desc":"HAND PUMP, 2-SPD, .160-2.6 CU IN/STROKE","qty":1.0,"usd":1339.1},{"code":"9077","desc":"GGE 4\" 0-150TON C/R/RD/RLS, DRY 2000 PSI","qty":1.0,"usd":238.0},{"code":"10431","desc":"FITTING, NUT 5/8-18 F (3/8 OD TUBE)","qty":3.0,"usd":99.9},{"code":"21045","desc":"TUBE, OIL LINE U","qty":1.0,"usd":117.9},{"code":"10430","desc":"TUBE,SLEEVE 3/8 DIA.","qty":3.0,"usd":51.3}],"intl":true,"wh":true},{"poId":"2025-11","client":"Panabo Trucking Services Inc","clientPO":"232004139","vendor":"JYL Enterprises Inc.","logistics":"","date":"2026-11-06","airSea":"LOCAL","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":1255.0,"lines":[{"code":"","desc":"MODEL: 3206AM KOKEN BRAND 3/8sd-27pc","qty":1.0,"usd":9834.0}],"intl":false,"wh":false},{"poId":"2025-13","client":"Panabo Trucking Services, Inc","clientPO":"2320004224","vendor":"Gold Tools Enterprise","logistics":"","date":"2025-07-07","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":1243.0,"lines":[{"code":"BB2001","desc":"Harris Welding and Cutting Outfit Complete Set","qty":1.0,"usd":14300.0}],"intl":false,"wh":false},{"poId":"2025-14","client":"Semirara Miing & Power Corporation","clientPO":"SMPO-106212","vendor":"Sun Hydraulic Pte Ltd","logistics":"","date":"2025-04-07","airSea":"","goods":9647.5,"bank":596.9,"ship":4507.59,"duties":367.45,"local":0.0,"deliv":0.0,"lines":[{"code":"RSSM 50","desc":"Single Acting Low Height Flat Cylinders","qty":2.0,"usd":170.0}],"intl":true,"wh":false},{"poId":"2025-15","client":"Therma Visayas, Inc.","clientPO":"1500004163","vendor":"7 Tiger Metal Works","logistics":"","date":"07/14/2025","airSea":"LOCAL","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":9227.0,"lines":[{"code":"","desc":"B1 High Tensile G8.8 hex Bolt Full Thread\u00b7 lOtnm x 25'mm \u2022 1","qty":1600.0,"usd":4800.0},{"code":"","desc":"BI High tensile G8.8Nut 10 mm 1.5P","qty":1600.0,"usd":2080.0},{"code":"","desc":"BI ordinary Flat Washer 3/8 (10 mm)","qty":1600.0,"usd":1120.0},{"code":"","desc":"HDG A325 Heavy duty Hex Bolt 1/2\" x 3-1/2\"","qty":400.0,"usd":10000.0},{"code":"","desc":"HDG 2H Heavy duty Hex Nut (ASTMA194)","qty":400.0,"usd":2600.0},{"code":"","desc":"HDGASTM F436 Flat Washer","qty":400.0,"usd":2000.0}],"intl":false,"wh":false},{"poId":"2025-16","client":"JGC Philippines, Inc.","clientPO":"PO4500025455","vendor":"Toolec, Inc.","logistics":"","date":"07/14/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":5337.2,"lines":[{"code":"CUTMASTER 82","desc":"VICTOR THERMAL DYNAMICS (1-1130-1), Air","qty":1.0,"usd":179768.0},{"code":"","desc":"VICTOR TD 9-8215 ELECTRODE","qty":20.0,"usd":10760.0},{"code":"","desc":"VICTOR TD 9-8211 TIP","qty":100.0,"usd":37400.0},{"code":"","desc":"VICTOR TD 9-8218 SHIELD CUP","qty":1.0,"usd":1548.0}],"intl":false,"wh":false},{"poId":"2025-17","client":"Petra Cement Inc.","clientPO":"PDC1811000000102","vendor":"Power Team Hydraulic Technologies","logistics":"","date":"07/16/2026","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"RSS101","desc":"CYL, 10 TON 1-1/2\" STROKE, S/A S/R SHORTY","qty":1.0,"usd":402.5},{"code":"P59","desc":"HAND PUMP, 2-SPD, .305 CU IN/STROKE","qty":1.0,"usd":415.1},{"code":"9756","desc":"HOSE, RUBBER 25\" INTERNAL DIA, 6'","qty":1.0,"usd":126.0},{"code":"9670","desc":"TEE ADPT, 1/4\", 3/8\" NPTF F, 3/8\" NPTF M","qty":1.0,"usd":65.1},{"code":"9795","desc":"QUICK COUPLER, COMPLETE","qty":1.0,"usd":91.7},{"code":"9798","desc":"HALF COUPLER, HYD, 3/8\" NPTF M","qty":1.0,"usd":43.4},{"code":"9065","desc":"GGE 4\" 0-30TON RH/RLS/RSS, DRY 2000 PSI","qty":1.0,"usd":238.0}],"intl":false,"wh":false},{"poId":"2025-19","client":"Petra Cement Inc.","clientPO":"PDC1811000000275","vendor":"Ken tool Hardware Corporation","logistics":"","date":"08/16/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Angel Grinder 9553b 4\"","qty":2.0,"usd":8400.0},{"code":"","desc":"Impact Wrench Cordless with charger heavy","qty":2.0,"usd":28400.0},{"code":"","desc":"Bench vise with anvil 8","qty":1.0,"usd":4140.0},{"code":"","desc":"Feeler Gauge","qty":1.0,"usd":330.0},{"code":"","desc":"Hand drill 6412 10MM Brand: MAKIT","qty":1.0,"usd":3650.0}],"intl":false,"wh":false},{"poId":"2025-20","client":"SOUTH LUZON THERMAL","clientPO":"EMP1000031","vendor":"Abasco Tools Trading LLC","logistics":"","date":"08/20/2025","airSea":"","goods":0.0,"bank":0.0,"ship":32892.5,"duties":3461.88,"local":4348.28,"deliv":904.0,"lines":[{"code":"","desc":"IMP/DEEP SOCKET 1/2\" DR X 17MM 6 PT #*78L","qty":10.0,"usd":210.0},{"code":"","desc":"IMP/DEEP SOCKET 1/2\" DR X 19MM 6PT #*78L","qty":10.0,"usd":230.0},{"code":"","desc":"IMPACT DEEP SOCKET 1/2\" DR X 30MM *78L","qty":10.0,"usd":294.0},{"code":"KDTW4100T","desc":"TORQUE WRENCH 20-100 NM / 16.6 75.6 FT LB 1/2\" DR","qty":1.0,"usd":404.25}],"intl":true,"wh":false},{"poId":"2025-21","client":"Warehouse","clientPO":"","vendor":"Power Team Hydraulic Technologies","logistics":"","date":"2025-06-09","airSea":"","goods":21928.68,"bank":638.7,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"9689","desc":"CONNECTOR, 1/4\" NPTF M, 3/8\" NPTF F","qty":5.0,"usd":143.5},{"code":"9796","desc":"KIT, HYD COUPLER 3/8\" NPTF F, W/DUST CAP","qty":1.0,"usd":56.0},{"code":"9795","desc":"QUICK COUPLER, COMPLETE","qty":2.0,"usd":183.4}],"intl":true,"wh":true},{"poId":"2025-23","client":"Warehouse","clientPO":"","vendor":"Gold Tools Enterprise","logistics":"","date":"09/26/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"BB2001","desc":"Harris Welding and Cutting Outfit Complete Set","qty":3.0,"usd":42900.0},{"code":"","desc":"Harris 6290-2 Cutting Tip for Acetylene","qty":6.0,"usd":2220.0}],"intl":false,"wh":true},{"poId":"2025-24","client":"Semirara Mining & Power Corporation","clientPO":"SMPO-106788","vendor":"Abasco Tools Trading LLC","logistics":"","date":"2025-11-09","airSea":"","goods":103226.68,"bank":882.9,"ship":64813.84,"duties":16310.15,"local":1192.46,"deliv":0.0,"lines":[{"code":"","desc":"VERNIER CALIPER WITH NIB STYLE JAWS AND FINE ADJUSTMENT 0-15","qty":2.0,"usd":6615.0}],"intl":true,"wh":false},{"poId":"2025-25","client":"Taganito HPAL Nickel Corporation","clientPO":"3120012999 | T16","vendor":"Chicago Pnuematics Tools","logistics":"","date":"2025-12-09","airSea":"","goods":1529841.71,"bank":5174.0,"ship":90833.24,"duties":255208.58,"local":0.0,"deliv":0.0,"lines":[{"code":"6151590380","desc":"IMPACT WRENCH_CP6135-D80 1 1/2\"","qty":4.0,"usd":33930.0}],"intl":true,"wh":false},{"poId":"2025-26","client":"warehouse","clientPO":"","vendor":"CEJN Products Far East PTE LTD","logistics":"FOURELEVEN","date":"09/15/2026","airSea":"","goods":119150.38,"bank":931.1,"ship":47131.38,"duties":38379.35,"local":0.0,"deliv":0.0,"lines":[{"code":"999999999","desc":"CEJN 720BAR TWIN HOSE, BLACK/YELLOW, DN6, 6M HOSE LENGTH, WI","qty":3.0,"usd":945.9},{"code":"999999999","desc":"CEJN 720BAR TWIN HOSE, BLACK/YELLOW, DN6, 3M HOSE LENGTH, WI","qty":3.0,"usd":662.4},{"code":"999999999","desc":"700BAR HOSE, BLACK, DN6, 6M HOSE LENGTH, END 1: 102311404 AN","qty":5.0,"usd":545.0},{"code":"999999999","desc":"CEJN 720BAR HOSE, RED, DN6, 6M HOSE LENGTH, END 1: 102311404","qty":2.0,"usd":303.4},{"code":"999999999","desc":"CEJN 720BAR HOSE, RED, DN6, 3M HOSE LENGTH,","qty":2.0,"usd":210.4}],"intl":true,"wh":true},{"poId":"2025-27","client":"Durastress Corporation","clientPO":"6962","vendor":"Power Team Hydraulic Technologies","logistics":"","date":"09/29/2025","airSea":"","goods":0.0,"bank":0.0,"ship":5708.17,"duties":25710.62,"local":1192.46,"deliv":0.0,"lines":[{"code":"300625","desc":"KIT, REPAIR SEAL BRAND POWER TEAM","qty":2.0,"usd":464.0},{"code":"58841A","desc":"ARMATURE, 230 VOLT BRAND POWER TEAM","qty":2.0,"usd":1880.0}],"intl":true,"wh":false},{"poId":"2025-28","client":"Petra Cement Inc.","clientPO":"PDC1811000000384","vendor":"Ken tool Hardware Corporation","logistics":"","date":"09/23/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"TWO JAW PULLER 18\" KWT","qty":1.0,"usd":5500.0},{"code":"","desc":"THREE JAW PULLER 8\" KWT","qty":1.0,"usd":5500.0},{"code":"","desc":"Pipe Wrench 14\" STANLEY","qty":1.0,"usd":780.0},{"code":"","desc":"Pipe Wrench 16\" STANLEY","qty":1.0,"usd":1140.0},{"code":"","desc":"FEELER GAUGE SKS","qty":1.0,"usd":380.0},{"code":"","desc":"ADJUSTABLE HOOK SPANNER 6 PCS SK TOOL","qty":1.0,"usd":2850.0},{"code":"","desc":"VERNIER CALIPER 12\" MITUTOYO","qty":1.0,"usd":5800.0},{"code":"","desc":"Thread Pitch Gauge, Metric KASTAR","qty":1.0,"usd":980.0},{"code":"","desc":"Thread Pitch Gauge, Imperial KASTAR","qty":1.0,"usd":980.0},{"code":"","desc":"Pulley gauge 12 ANGLE 29 TO 90 DEGREE KASTAR","qty":1.0,"usd":980.0}],"intl":false,"wh":false},{"poId":"2025-29","client":"Petra Cement Inc.","clientPO":"PDC1811000000429","vendor":"Tools Savvy Marketing Corp.","logistics":"","date":"2025-06-10","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Makita DTL061Z 18V Cordless Angle Impact Driver (LXT-Series)","qty":2.0,"usd":20480.0},{"code":"","desc":"Makita MKP3PT182 18V LXT Power Source Kit / Battery & Charge","qty":1.0,"usd":22780.0}],"intl":false,"wh":false},{"poId":"2025-30","client":"Petra Cement Inc.","clientPO":"PDC1811000000449","vendor":"Tools Savvy Marketing Corp.","logistics":"","date":"2025-08-10","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Harris BB2001 Cutting & Welding Outfit","qty":1.0,"usd":15680.0}],"intl":false,"wh":false},{"poId":"2025-31","client":"Petra Cement Inc.","clientPO":"PDC1811000000449","vendor":"Tools Savvy Marketing Corp.","logistics":"","date":"2025-09-10","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Harris 188L/188R Falshback Arrster for Welding & Cutting Out","qty":2.0,"usd":12400.0}],"intl":false,"wh":false},{"poId":"2025-32","client":"Petra Cement Inc.","clientPO":"PDC1811000000459","vendor":"Tools Savvy Marketing Corp.","logistics":"","date":"10/15/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Makita DGP180Z Cordless Grease Gun 145 mL/min (5.0 oz/min) 6","qty":2.0,"usd":33840.0}],"intl":false,"wh":false},{"poId":"2025-33","client":"Petra Cement Inc.","clientPO":"PDC1811000000458","vendor":"Yale Hardware Corp.","logistics":"","date":"10/15/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Hans Tools Digital Torque Wrench 4178D2-135 (1/2\"DR ~ 6.8-13","qty":2.0,"usd":37600.0},{"code":"","desc":"Hans Tools Digital Torque Wrench 4178D2-340 (1/2\"DR ~ 30-340","qty":1.0,"usd":20800.0}],"intl":false,"wh":false},{"poId":"2025-34","client":"Philcement Corporation","clientPO":"180100005491","vendor":"Toolec, Inc.","logistics":"","date":"10/29/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":18154.48,"lines":[{"code":"","desc":"ASTROWELD Model 850C, CC-DC. Thyristor type welding machine.","qty":1.0,"usd":298020.0}],"intl":false,"wh":false},{"poId":"2025-35","client":"Therma Luzon Inc.","clientPO":"150001445","vendor":"Arc Infinite Good Trading OPC","logistics":"","date":"11/14/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":2510.0,"lines":[{"code":"","desc":"Powerhouse TIG 300 Pulse 2in1 (TIG/MMA) DC Inverter Welding ","qty":1.0,"usd":23520.0}],"intl":false,"wh":false},{"poId":"2025-36","client":"South Luzon Thermal Energy Corporation","clientPO":"AQP1007244","vendor":"Xinxiang Jintian Hydraulic Transmission ","logistics":"DHL","date":"11/15/2025","airSea":"","goods":15943.5,"bank":638.5,"ship":5150.39,"duties":4743.37,"local":5629.77,"deliv":0.0,"lines":[{"code":"","desc":"FUSIBLE PLUG","qty":10.0,"usd":120.0},{"code":"","desc":"EXPLOSIVE PLUG","qty":10.0,"usd":150.0}],"intl":true,"wh":false},{"poId":"2025-37","client":"Malita Power Inc.","clientPO":"MPI100009558","vendor":"Henan Bowey Machinery Equipment Co., Ltd","logistics":"","date":"11/20/2025","airSea":"","goods":11204.0,"bank":0.0,"ship":4475.84,"duties":0.0,"local":3169.19,"deliv":0.0,"lines":[{"code":"","desc":"P. FILTER ELEMENT, DU 40.31044.25G, ELEMENT NO. 312624, FOR ","qty":10.0,"usd":190.0}],"intl":true,"wh":false},{"poId":"2025-38","client":"JGC Philippines, Inc.","clientPO":"4500025873","vendor":"Chicago Pneumatics Tools","logistics":"DHL","date":"11/22/2025","airSea":"","goods":218264.96,"bank":1246.2,"ship":46539.01,"duties":39381.29,"local":1469.22,"deliv":0.0,"lines":[{"code":"6151590080","desc":"CP6920-D24 1\" DUAL IMPACT WRENCH","qty":1.0,"usd":1141.25},{"code":"6151590390","desc":"CP6930-D35 1-1/2\" IMPACT WRENCH","qty":1.0,"usd":3672.59}],"intl":true,"wh":false},{"poId":"2025-39","client":"Mariveles Power Generation Corporation","clientPO":"MVS-PO100003122","vendor":"Trimatt Hardware Tools","logistics":"","date":"11/26/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"PIPE WRENCH, 12\" HEAVY DUTY STRAIGHT, RIDGID P/N: 31015","qty":4.0,"usd":11600.0}],"intl":false,"wh":false},{"poId":"2025-40","client":"JGC Philippines, Inc.","clientPO":"4500025884","vendor":"Radical Torque Solutions Pty Ltd","logistics":"","date":"11/27/2025","airSea":"","goods":847072.19,"bank":3129.1,"ship":53082.66,"duties":141725.88,"local":1326.86,"deliv":0.0,"lines":[{"code":"22238","desc":"RAD 30DX TOOL KIT 1.0\"SD 900 - 3,000 LBF.FT inc Reaction Arm","qty":1.0,"usd":6396.5},{"code":"15328","desc":"RAD 60DX TOOL KIT 1.5\"SD 2000 - 6,000 LBF.FT inc Reaction Ar","qty":1.0,"usd":8021.75}],"intl":true,"wh":false},{"poId":"2025-41","client":"Asian Aerospace Corporation","clientPO":"OSH-25-035","vendor":"Aolai Rescue Technology Co.,Ltd","logistics":"FOURELEVEN","date":"11/27/2025","airSea":"","goods":235000.0,"bank":1292.5,"ship":135224.0,"duties":73268.8,"local":31991.95,"deliv":0.0,"lines":[{"code":"AL970","desc":"Hand-held petrol circular saw","qty":8.0,"usd":8000.0}],"intl":true,"wh":false},{"poId":"2025-42","client":"Petra Cement Inc.","clientPO":"PDC1811000000648","vendor":"Tools Savvy Marketing Corp.","logistics":"","date":"2025-01-12","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"DGP180Z","desc":"Makita 18V Cordless Grease Gun (LXT-Series) Bare","qty":1.0,"usd":16920.0}],"intl":false,"wh":false},{"poId":"2025-43","client":"Petra Cement Inc.","clientPO":"","vendor":"Giga Tools","logistics":"","date":"2025-02-12","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Makita (BL1860B + DC18RC) 6.0 Ah 18V LXT Battery And Rapid C","qty":1.0,"usd":8299.0}],"intl":false,"wh":false},{"poId":"2025-44","client":"Panabo Trucking Services, Inc.","clientPO":"2320004664","vendor":"Tools Savvy Marketing Corp.","logistics":"","date":"2025-05-12","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"HARRIS 6290 CUTTING TIP FOR WELDING & CUTTING OUTFIT ACE/ OX","qty":10.0,"usd":5600.0}],"intl":false,"wh":false},{"poId":"2025-45","client":"Asian Aerospace Corporation","clientPO":"OSH-25-035","vendor":"Aolai Rescue Technology Co.,Ltd","logistics":"","date":"2025-10-12","airSea":"","goods":472160.0,"bank":2006.8,"ship":196100.07,"duties":63492.73,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Hand-held petrol circular saw","qty":8.0,"usd":8000.0}],"intl":true,"wh":false},{"poId":"2025-46","client":"Petra Cement Inc.","clientPO":"PDC1811000000676","vendor":"Yale Hardware Corp.","logistics":"","date":"2025-12-12","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"Striking straight box wrench, 12 point ring, 36 mm","qty":1.0,"usd":1200.0},{"code":"","desc":"Striking straight box wrench, 12 point ring, 41 mm","qty":1.0,"usd":1430.0},{"code":"","desc":"Striking straight box wrench, 12 point ring, 46 mm","qty":1.0,"usd":1890.0},{"code":"","desc":"Striking straight box wrench, 12 point ring, 32 mm","qty":1.0,"usd":950.0},{"code":"","desc":"Striking straight box wrench, 12 point ring, 55 mm","qty":1.0,"usd":3200.0},{"code":"","desc":"Striking straight box wrench, 12 point ring, 30 mm","qty":1.0,"usd":950.0},{"code":"","desc":"Striking straight box wrench, 12 point ring, 60 mm","qty":1.0,"usd":4240.0}],"intl":false,"wh":false},{"poId":"2025-48","client":"Petra Cement Inc.","clientPO":"PDC1811000000698","vendor":"Ken tool Hardware Corporation","logistics":"","date":"12/16/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":0.0,"lines":[{"code":"","desc":"TOKU TCP20 PNEUMATIC JACK HAMMER 23 LBS ACCESSORIES INCLUDED","qty":1.0,"usd":47520.0},{"code":"","desc":"TOKU AA03 PNEUMATIC JACK HAMMER 4.4 LBS ACCESSORIES INCLUDED","qty":2.0,"usd":50600.0}],"intl":false,"wh":false},{"poId":"2025-49","client":"Philcement Corporation","clientPO":"180100005691","vendor":"Snap-on Tools Singapore PTE LTD","logistics":"FEDEX","date":"12/18/2025","airSea":"","goods":104076.0,"bank":900.6,"ship":0.0,"duties":16397.0,"local":0.0,"deliv":0.0,"lines":[{"code":"CT9080K2","desc":"Snap-on, 18 V 1/2\" Drive Monster Lithium Cordless Impact Wre","qty":2.0,"usd":1770.0}],"intl":true,"wh":false},{"poId":"2025-50","client":"Therma Luzon Inc.","clientPO":"150001628","vendor":"Arc Infinite Good Trading OPC","logistics":"","date":"12/18/2025","airSea":"","goods":0.0,"bank":0.0,"ship":0.0,"duties":0.0,"local":0.0,"deliv":2514.0,"lines":[{"code":"TIG 300 striker","desc":"POWERHOUSE AC-DC TIG MMA 2IN1 300A INVERTER HEAVY DUTY WELDI","qty":1.0,"usd":34000.0}],"intl":false,"wh":false}];
+
+document.addEventListener('DOMContentLoaded', () => {
+  ucSession = requireAccountingOrAdmin();
+  if (!ucSession) return;
+  renderNavbar('update-2025-costs');
+  document.getElementById('loadBtn').addEventListener('click', loadAll);
+  document.getElementById('selAllBtn').addEventListener('click', () => {
+    ucOrders.forEach((o, i) => { if (o.soNo) ucSelected.add(i); });
+    render();
+  });
+  document.getElementById('applySelBtn').addEventListener('click', () => apply([...ucSelected]));
+  document.getElementById('applyAllBtn').addEventListener('click', () => apply(ucOrders.map((o, i) => o.soNo ? i : -1).filter(i => i >= 0)));
+  document.getElementById('revertBtn').addEventListener('click', revertLast);
+  document.getElementById('restoreFileBtn').addEventListener('click', () => document.getElementById('restoreFile').click());
+  document.getElementById('restoreFile').addEventListener('change', restoreFromFile);
+  _updateBackupStatus();
+});
+
+function _msg(t, ok) { const el = document.getElementById('msg'); el.textContent = t; el.style.color = ok ? '#15803d' : '#dc2626'; }
+function _n(x) { const v = parseFloat(String(x == null ? '' : x).replace(/,/g, '')); return isFinite(v) ? v : 0; }
+function _norm(s) {
+  return String(s || '').toLowerCase()
+    .replace(/\b(incorporated|corporation|corp|inc|company|co|ltd|opc|the|services|service)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+function _yr(d) { const m = /20\d\d/.exec(String(d || '')); return m ? m[0] : ''; }
+
+// ── Load flow data, prepare groups + auto-match ───────────────────────────────
+async function loadAll() {
+  const c = document.getElementById('container');
+  c.innerHTML = '<div class="dr-empty">Loading flow data…</div>';
+  _msg('', true);
+  try {
+    const [soRes, cdRes, invRes] = await Promise.all([
+      fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+      fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
+      fetchFlow('getInvoices').catch(() => ({ data: [] })),
+    ]);
+    buildOrders();
+    buildSos((soRes && soRes.data) || [], (cdRes && cdRes.data) || [], (invRes && invRes.data) || []);
+    autoMatch();
+    ucSelected = new Set();
+    ucOpen = new Set();
+    render();
+  } catch (e) { c.innerHTML = `<div class="dr-empty" style="color:#dc2626;">${flowEsc(e.message)}</div>`; }
+}
+
+function buildOrders() {
+  const all = UC25_DATA.map(g => Object.assign({}, g, { norm: _norm(g.client), soNo: '' }));
+  ucStock = all.filter(o => o.wh);
+  ucOrders = all.filter(o => !o.wh).sort((a, b) => a.poId.localeCompare(b.poId, undefined, { numeric: true }));
+}
+
+// 2025 SOs with their current (system) sales + COGS resolved.
+function buildSos(sos, cds, invs) {
+  const cdBySo = {}; cds.forEach(cd => { cdBySo[String(cd.soNo)] = cd; });
+  ucCds = cdBySo;   // keep the full records for the pre-apply backup
+  const invBySo = {}; invs.forEach(v => { const k = String(v.soNo || ''); if (!k) return; invBySo[k] = (invBySo[k] || 0) + _n(v.totalSales); });
+  ucSos = sos.filter(s => _yr(s.date) === '2025').map(s => {
+    const k = String(s.soNo), cd = cdBySo[k];
+    return {
+      soNo: k, customer: String(s.customer || '').trim(), norm: _norm(s.customer), date: s.date,
+      cogs: cd ? _n(cd.totalCOGS) : 0,
+      sales: cd && _n(cd.sales) > 0 ? _n(cd.sales) : (invBySo[k] || _n(s.total)),
+      hasCd: !!cd,
+    };
+  }).sort((a, b) => String(flowDate(a.date)).localeCompare(String(flowDate(b.date))));
+}
+
+// Pair each file group to a 2025 SO of the same normalized customer, in date order.
+function autoMatch() {
+  const byNorm = {};
+  ucSos.forEach(s => { (byNorm[s.norm] = byNorm[s.norm] || []).push(s); });
+  const used = {};
+  ucOrders.forEach(o => {
+    if (!o.norm) { o.soNo = ''; return; }
+    let list = byNorm[o.norm];
+    if (!list) {   // loose contains-match for name variants
+      const hit = Object.keys(byNorm).find(k => k && (k.includes(o.norm) || o.norm.includes(k)));
+      list = hit ? byNorm[hit] : null;
+    }
+    if (!list || !list.length) { o.soNo = ''; return; }
+    const idx = used[o.norm] || 0;
+    o.soNo = String((list[Math.min(idx, list.length - 1)]).soNo);
+    used[o.norm] = idx + 1;
+  });
+}
+
+function soByNo(no) { return ucSos.find(s => s.soNo === String(no)); }
+function orderActual(o) { return o.goods + o.bank + o.ship + o.duties + o.local + o.deliv; }
+
+function render() {
+  const c = document.getElementById('container');
+  if (!ucOrders.length) { c.innerHTML = '<div class="dr-empty">No 2025 purchase groups in the embedded file.</div>'; return; }
+  const actualTot = ucOrders.reduce((s, o) => s + orderActual(o), 0);
+  const sysTot = ucSos.reduce((s, x) => s + x.cogs, 0);
+  const matched = ucOrders.filter(o => o.soNo).length;
+  document.getElementById('kOrders').textContent = ucOrders.length + (ucStock.length ? ` (+${ucStock.length} stock)` : '');
+  document.getElementById('kActual').textContent = flowMoney(actualTot, 'PHP');
+  document.getElementById('kSystem').textContent = flowMoney(sysTot, 'PHP');
+  document.getElementById('kGap').textContent = flowMoney(actualTot - sysTot, 'PHP');
+  document.getElementById('kMatch').textContent = `${matched} / ${ucOrders.length - matched}`;
+
+  const sumBySo = {};
+  ucOrders.forEach(o => { if (o.soNo) sumBySo[o.soNo] = (sumBySo[o.soNo] || 0) + orderActual(o); });
+
+  const opts = o => {
+    const own = ucSos.filter(s => s.norm && (s.norm === o.norm || s.norm.includes(o.norm) || o.norm.includes(s.norm)));
+    const rest = ucSos.filter(s => !own.includes(s));
+    const opt = s => `<option value="${flowEsc(s.soNo)}"${s.soNo === o.soNo ? ' selected' : ''}>${flowEsc(s.soNo)} — ${flowEsc(s.customer)}</option>`;
+    return `<option value="">— unassigned —</option>` +
+      (own.length ? `<optgroup label="Same client">${own.map(opt).join('')}</optgroup>` : '') +
+      `<optgroup label="All 2025 SOs">${rest.map(opt).join('')}</optgroup>`;
+  };
+
+  c.innerHTML = `<table class="mig-table"><thead><tr>
+    <th></th><th>PO</th><th>Client (file)</th>
+    <th class="num">Goods</th><th class="num">Bank</th><th class="num">Ship</th><th class="num">Duties</th><th class="num">Local</th><th class="num">Deliv</th>
+    <th class="num">Actual COGS</th><th>Type</th><th>Sales Order</th><th class="num">System COGS</th><th class="num">Gap</th>
+  </tr></thead><tbody>${ucOrders.map((o, i) => {
+    const so = o.soNo ? soByNo(o.soNo) : null;
+    const sysC = so ? so.cogs : 0;
+    const assignedSum = o.soNo ? sumBySo[o.soNo] : 0;
+    const gap = so ? assignedSum - sysC : 0;
+    const gapCls = !so ? '' : Math.abs(gap) < 1 ? 'gap-ok' : (gap > 0 ? 'gap-pos' : 'gap-neg');
+    const main = `<tr>
+      <td><input type="checkbox" data-i="${i}" ${ucSelected.has(i) ? 'checked' : ''} ${o.soNo ? '' : 'disabled'}></td>
+      <td><strong>${flowEsc(o.poId)}</strong>
+        <div style="font-size:0.64rem;color:var(--text-muted);">${flowEsc(o.vendor)}</div>
+        <button type="button" class="link-btn" data-l="${i}">${ucOpen.has(i) ? '▾ hide' : '▸'} ${o.lines.length} item(s)</button></td>
+      <td>${flowEsc(o.client) || '<span class="mig-badge pend">blank client</span>'}</td>
+      <td class="num">${flowMoney(o.goods, 'PHP')}</td>
+      <td class="num">${o.bank ? flowMoney(o.bank, 'PHP') : '—'}</td>
+      <td class="num">${o.ship ? flowMoney(o.ship, 'PHP') : '—'}</td>
+      <td class="num">${o.duties ? flowMoney(o.duties, 'PHP') : '—'}</td>
+      <td class="num">${o.local ? flowMoney(o.local, 'PHP') : '—'}</td>
+      <td class="num">${o.deliv ? flowMoney(o.deliv, 'PHP') : '—'}</td>
+      <td class="num" style="font-weight:700;">${flowMoney(orderActual(o), 'PHP')}</td>
+      <td><span class="mig-badge ${o.intl ? 'intl' : 'local'}">${o.intl ? 'Intl' : 'Local'}</span></td>
+      <td><select data-so="${i}">${opts(o)}</select></td>
+      <td class="num">${so ? flowMoney(sysC, 'PHP') : '—'}</td>
+      <td class="num ${gapCls}">${so ? (Math.abs(gap) < 1 ? '✓' : flowMoney(gap, 'PHP')) : '—'}</td>
+    </tr>`;
+    const detail = ucOpen.has(i) ? `<tr class="uc-lines"><td></td><td colspan="13">
+      <table><thead><tr><th>Item Code</th><th>Description</th><th class="num">Qty</th><th class="num">Cost (USD)</th></tr></thead><tbody>
+      ${o.lines.map(l => `<tr><td>${flowEsc(l.code)}</td><td>${flowEsc(l.desc)}</td><td class="num">${l.qty}</td><td class="num">${l.usd ? flowNum(l.usd).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '—'}</td></tr>`).join('')}
+      </tbody></table></td></tr>` : '';
+    return main + detail;
+  }).join('')}</tbody></table>`;
+
+  c.querySelectorAll('input[type="checkbox"][data-i]').forEach(cb => cb.addEventListener('change', () => {
+    const i = +cb.dataset.i; if (cb.checked) ucSelected.add(i); else ucSelected.delete(i);
+  }));
+  c.querySelectorAll('select[data-so]').forEach(sel => sel.addEventListener('change', () => {
+    const i = +sel.dataset.so; ucOrders[i].soNo = sel.value; if (!sel.value) ucSelected.delete(i); render();
+  }));
+  c.querySelectorAll('button[data-l]').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.l; if (ucOpen.has(i)) ucOpen.delete(i); else ucOpen.add(i); render();
+  }));
+  renderExtra();
+}
+
+// System 2025 SOs with no purchase backing in the file + warehouse stock note.
+function renderExtra() {
+  const assigned = new Set(ucOrders.map(o => o.soNo).filter(Boolean));
+  const orphans = ucSos.filter(s => !assigned.has(s.soNo));
+  let html = '';
+  if (orphans.length) {
+    html += `<div class="sect-title">System 2025 sales orders with NO purchase group in the file — verify their cost manually</div>
+      <table class="mig-table"><thead><tr><th>SO</th><th>Customer</th><th class="num">Sales</th><th class="num">System COGS</th><th></th></tr></thead><tbody>` +
+      orphans.map(s => `<tr><td><strong>${flowEsc(s.soNo)}</strong></td><td>${flowEsc(s.customer)}</td>
+        <td class="num">${flowMoney(s.sales, 'PHP')}</td><td class="num">${flowMoney(s.cogs, 'PHP')}</td>
+        <td>${s.hasCd ? '<span class="mig-badge done">has cost detail</span>' : '<span class="mig-badge pend">no cost</span>'}</td></tr>`).join('') +
+      `</tbody></table>`;
+  }
+  if (ucStock.length) {
+    const t = ucStock.reduce((s, o) => s + orderActual(o), 0);
+    html += `<p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.8rem;">
+      ${ucStock.length} Warehouse stock purchase(s) totalling ${flowMoney(t, 'PHP')} are inventory — not written to any sales order.</p>`;
+  }
+  document.getElementById('extra').innerHTML = html;
+}
+
+// ── Apply: sum the selected groups per SO and write the FULL cost breakdown ───
+async function apply(idxs) {
+  const orders = idxs.map(i => ucOrders[i]).filter(o => o && o.soNo);
+  if (!orders.length) { _msg('Nothing selected (assign a Sales Order first).', false); return; }
+  const bySo = {};
+  orders.forEach(o => {
+    const b = bySo[o.soNo] = bySo[o.soNo] || { goods: 0, bank: 0, ship: 0, duties: 0, local: 0, deliv: 0, intl: false, logistics: '' };
+    b.goods += o.goods; b.bank += o.bank; b.ship += o.ship; b.duties += o.duties;
+    b.local += o.local; b.deliv += o.deliv;
+    if (o.intl) b.intl = true;
+    if (o.logistics) b.logistics = o.logistics;
+  });
+  const soNos = Object.keys(bySo);
+  if (!confirm(`Write the 2025 cost breakdown into ${soNos.length} sales order(s)? This replaces their current COGS with the file figures (revenue is kept). A backup of the current values is saved first, so you can revert.`)) return;
+  _saveBackup(soNos);
+  const r2 = v => Math.round(v * 100) / 100;
+  const records = soNos.map(soNo => {
+    const so = soByNo(soNo), b = bySo[soNo];
+    return {
+      soNo, customer: so.customer, date: flowDate(so.date), sales: so.sales,
+      cogsType: b.intl ? 'international' : 'local',
+      purchaseOfGoods: r2(b.goods),
+      bankChargeCOGS: r2(b.bank),
+      dutiesAndTaxes: r2(b.duties),
+      shippingCost: r2(b.ship),
+      localCharges: r2(b.local),
+      deliveryToClient: r2(b.deliv),
+      deliveryToOffice: 0, bankChargeShipping: 0,
+      shippingCompany: b.logistics || '',
+    };
+  });
+  await _writeRecords(records, 'Applied 2025 costs to');
+}
+
+// Sequentially write cost-detail records (used by both Apply and Revert), then refresh the system side.
+async function _writeRecords(records, verb) {
+  const prog = document.getElementById('prog'), bar = document.getElementById('progBar');
+  prog.style.display = 'block';
+  let done = 0; const errs = [];
+  for (const rec of records) {
+    try {
+      const res = await postFlow('saveSOCostDetails', { record: JSON.stringify(rec) });
+      if (!res.success) throw new Error(res.message);
+    } catch (e) { errs.push(rec.soNo + ': ' + e.message); }
+    done++; bar.style.width = Math.round(done / records.length * 100) + '%';
+  }
+  prog.style.display = 'none'; bar.style.width = '0';
+  _msg(errs.length ? `${verb} ${records.length - errs.length}/${records.length} — errors: ${errs.join('; ')}` : `${verb} ${records.length} sales order(s).`, !errs.length);
+  try {
+    const [soRes, cdRes, invRes] = await Promise.all([
+      fetchFlow('getSalesOrders'), fetchFlow('getSOCostDetails'), fetchFlow('getInvoices'),
+    ]);
+    const keep = ucOrders.map(o => ({ poId: o.poId, soNo: o.soNo }));
+    buildSos((soRes && soRes.data) || [], (cdRes && cdRes.data) || [], (invRes && invRes.data) || []);
+    keep.forEach(k => { const o = ucOrders.find(x => x.poId === k.poId); if (o) o.soNo = k.soNo; });
+    ucSelected = new Set();
+    render();
+  } catch (e) { /* leave as-is */ }
+}
+
+// ── Backup & revert (same durable pattern as the 2026 reconcile tool) ─────────
+function _saveBackup(soNos) {
+  const records = soNos.map(soNo => {
+    const cd = ucCds[String(soNo)];
+    if (!cd) {
+      const so = soByNo(soNo) || {};
+      return { existed: false, soNo: String(soNo), customer: so.customer || '', date: flowDate(so.date) || '', sales: so.sales || 0 };
+    }
+    return {
+      existed: true, soNo: String(cd.soNo), customer: cd.customer || '', date: flowDate(cd.date) || '',
+      sales: _n(cd.sales), cogsType: cd.cogsType || 'local',
+      purchaseOfGoods: _n(cd.purchaseOfGoods), bankChargeCOGS: _n(cd.bankChargeCOGS),
+      dutiesAndTaxes: _n(cd.dutiesAndTaxes), bankChargeShipping: _n(cd.bankChargeShipping),
+      shippingCompany: cd.shippingCompany || '', shippingCost: _n(cd.shippingCost),
+      localCharges: _n(cd.localCharges), deliveryToOffice: _n(cd.deliveryToOffice),
+      deliveryToClient: _n(cd.deliveryToClient), source: cd.source || '',
+    };
+  });
+  const backup = { takenAt: new Date().toISOString(), by: (ucSession && ucSession.name) || '', records };
+  try { localStorage.setItem(UC_BACKUP_KEY, JSON.stringify(backup)); } catch (e) { /* still downloads */ }
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'update-2025-backup-' + backup.takenAt.replace(/[:.]/g, '-') + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  _updateBackupStatus();
+}
+
+function _readLocalBackup() {
+  try { return JSON.parse(localStorage.getItem(UC_BACKUP_KEY) || 'null'); } catch (e) { return null; }
+}
+
+function _updateBackupStatus() {
+  const el = document.getElementById('backupStatus');
+  if (!el) return;
+  const b = _readLocalBackup();
+  el.textContent = b ? `Backup: ${b.records.length} SO(s) · ${new Date(b.takenAt).toLocaleString()}` : 'No backup yet.';
+}
+
+async function _restoreBackup(backup, label) {
+  const recs = (backup && backup.records) || [];
+  if (!recs.length) { _msg('Backup has no records.', false); return; }
+  if (!confirm(`Revert ${recs.length} sales order(s) to the values captured ${new Date(backup.takenAt).toLocaleString()}? The income statement returns to those figures.`)) return;
+  const records = recs.map(r => Object.assign({
+    cogsType: 'local', purchaseOfGoods: 0, bankChargeCOGS: 0, dutiesAndTaxes: 0, bankChargeShipping: 0,
+    shippingCompany: '', shippingCost: 0, localCharges: 0, deliveryToOffice: 0, deliveryToClient: 0,
+  }, r));
+  await _writeRecords(records, label);
+}
+
+function revertLast() {
+  const b = _readLocalBackup();
+  if (!b) { _msg('No backup in this browser — use “Restore from file…” with a downloaded backup.', false); return; }
+  return _restoreBackup(b, 'Reverted');
+}
+
+function restoreFromFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const b = JSON.parse(rd.result);
+      if (!b || !Array.isArray(b.records)) throw new Error('Not an update-2025 backup file.');
+      _restoreBackup(b, 'Restored');
+    } catch (e) { _msg('Invalid backup file: ' + e.message, false); }
+  };
+  rd.readAsText(file);
+}
