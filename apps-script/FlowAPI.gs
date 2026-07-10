@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 74;   // scan fix: updateQuotation preserves the requested-vs-offered pairing on edit (73: A86 pairing · 72: A84 · 71: A82)
+var FLOW_VERSION = 75;   // A89 rename quotation number on edit — items/SO-link/docs follow (74: pairing-on-edit · 73: A86 · 72: A84)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -431,21 +431,51 @@ function updateQuotation(p) {
   var items = JSON.parse(p.items || '[]');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+
+  // Optional RENAME: the user may replace the whole quotation number. Every reference
+  // follows (header, items, the SO→quotation link, attached documents); the ActivityLog
+  // keeps the old ref as history. Re-sending the same rename is a no-op (retry-safe).
+  var newNo = String(p.newQuotationNo || '').trim();
+  if (newNo && newNo !== String(no)) {
+    var clash = _rows('Quotations').some(function (r) {
+      return String(r['Quotation No']) === newNo;
+    });
+    if (clash) return { success: false, message: 'Quotation No "' + newNo + '" already exists.' };
+  } else {
+    newNo = String(no);
+  }
+
   var sh = _sheet('Quotations');
   var rows = _rows('Quotations');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i]['Quotation No']) === String(no)) {
-      sh.getRange(rows[i].rowIndex, 1, 1, 7).setValues([[no, p.date || rows[i]['Date'],
+      sh.getRange(rows[i].rowIndex, 1, 1, 7).setValues([[newNo, p.date || rows[i]['Date'],
         p.customer, p.status || rows[i]['Status'], total, rows[i]['Created By'], rows[i]['Created At']]]);
       break;
     }
   }
+  // Items: delete rows keyed on the OLD number, re-append keyed on the new one.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     // keep the requested-vs-offered pairing across edits (same 8 columns as createQuotation)
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+    return [newNo, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || ''];
   });
-  return { success: true, quotationNo: no, message: 'Quotation updated.' };
+  if (newNo !== String(no)) {
+    // Sales orders built from this quotation keep their link.
+    var soSh = _sheet('SalesOrders');
+    _rows('SalesOrders').forEach(function (r) {
+      if (String(r['Quotation No']) === String(no)) soSh.getRange(r.rowIndex, 2, 1, 1).setValues([[newNo]]);
+    });
+    // Attached documents stay linked.
+    var docSh = _sheet('Documents');
+    _rows('Documents').forEach(function (r) {
+      if (String(r['Module']) === 'Quotation' && String(r['Ref No']) === String(no)) {
+        docSh.getRange(r.rowIndex, 3, 1, 1).setValues([[newNo]]);
+      }
+    });
+  }
+  return { success: true, quotationNo: newNo, renamed: newNo !== String(no),
+    message: newNo !== String(no) ? 'Quotation updated and renamed to ' + newNo + '.' : 'Quotation updated.' };
 }
 
 function deleteQuotation(p) {

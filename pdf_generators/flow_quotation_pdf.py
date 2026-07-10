@@ -308,7 +308,9 @@ class _NumberedCanvas(_canvas.Canvas):
         super().save()
 
 
-HEADER_LOCK_H = 76 * PX     # fixed header zone: logo left, QUOTATION + chip right (page 1)
+LOGO_H = 96 * PX            # bigger logo — drawn partly INTO the top margin so content doesn't move
+LOGO_RISE = 14 * PX         # how far above the header zone the logo starts (eats unused margin)
+HEADER_LOCK_H = (96 - 14) * PX   # fixed header zone the flow reserves (logo bottom relative to frame top)
 
 
 class _QuoTemplate(BaseDocTemplate):
@@ -337,9 +339,11 @@ class _QuoTemplate(BaseDocTemplate):
         try:
             pil = PILImage.open(_LOGO_PATH)
             iw, ih = pil.size
-            h = HEADER_LOCK_H
+            h = LOGO_H
             w = h * (iw / ih) if ih else h
-            canvas.drawImage(_LOGO_PATH, MARGIN, top - h, w, h,
+            # start LOGO_RISE above the zone (inside the top margin) so the bigger logo
+            # doesn't push the content down or move the locked title/chip
+            canvas.drawImage(_LOGO_PATH, MARGIN, top + LOGO_RISE - h, w, h,
                              preserveAspectRatio=True, mask="auto")
         except Exception:
             canvas.saveState()
@@ -425,7 +429,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
 
     # ── Row A: LOCKED header zone — logo + QUOTATION + chip are drawn by the page template at
     # fixed canvas coordinates (page 1); the story just reserves the space so nothing overlaps.
-    story.append(Spacer(1, HEADER_LOCK_H + 4 * PX))
+    story.append(Spacer(1, HEADER_LOCK_H + 2 * PX))
 
     # ── Row B: seller | meta card ──
     seller = Paragraph(
@@ -495,7 +499,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
              Paragraph("QTY", head_r), Paragraph("UNIT PRICE", head_r), Paragraph("AMOUNT", head_r)]]
 
     title_st = _ps("itTitle", 13, HEADING, ARCH_SB, leading_mult=1.3)
-    sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.32)
+    sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.28)
     idx_st = _ps("itIdx", 12.5, LABELB, LATO_B)
     qty_st = _ps("itQty", 12.5, TEXT, LATO_B, align=2)
     uom_st = _ps("itUom", 10.5, LABELB, align=2)
@@ -588,7 +592,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LINEBELOW", (0, 1), (-1, -1), 1, HAIR_F0),
         ("LEFTPADDING", (0, 0), (-1, -1), 8 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 8 * PX),
         ("TOPPADDING", (0, 0), (-1, 0), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 10 * PX),
-        ("TOPPADDING", (0, 1), (-1, -1), 9 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 9 * PX)]))
+        ("TOPPADDING", (0, 1), (-1, -1), 8 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 8 * PX)]))
     story.append(items_tbl)
     story.append(Spacer(1, 10 * PX))
 
@@ -623,7 +627,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                      ("TOPPADDING", (0, 0), (-1, -1), 0),
                                      ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(KeepTogether(totals_wrap))
-    story.append(Spacer(1, 10 * PX))
+    story.append(Spacer(1, 8 * PX))
 
     # ── Terms strip ──
     term_cells = []
@@ -645,16 +649,16 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LEFTPADDING", (0, 0), (-1, -1), 15 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 15 * PX),
         ("TOPPADDING", (0, 0), (-1, -1), 9 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 9 * PX)]))
     story.append(KeepTogether(terms_tbl))
-    story.append(Spacer(1, 9 * PX))
+    story.append(Spacer(1, 7 * PX))
 
     # ── Bank details | signature ──
-    kv = _ps("kv", 12, BODY2, leading_mult=1.4)
+    kv = _ps("kv", 12, BODY2, leading_mult=1.35)
     bank_body = "<br/>".join(
         f"<font color='{_hx(LABELA)}'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
     bank_w = CONTENT_W - 250 * PX - 40 * PX
-    bank_col = [_SectionHead("BANK DETAILS", bank_w), Spacer(1, 8 * PX), Paragraph(bank_body, kv)]
+    bank_col = [_SectionHead("BANK DETAILS", bank_w), Spacer(1, 6 * PX), Paragraph(bank_body, kv)]
 
-    sig_space = Table([[""]], colWidths=[250 * PX], rowHeights=[22 * PX])
+    sig_space = Table([[""]], colWidths=[250 * PX], rowHeights=[20 * PX])
     sig_space.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1.5, HexColor("#dddddd")),
                                    ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
     sig_col = [_SectionHead("SINCERELY YOURS", 250 * PX), Spacer(1, 4 * PX), sig_space, Spacer(1, 5 * PX),
@@ -676,15 +680,15 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     bank_sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                                   ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                   ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(KeepTogether(bank_sig))
-    story.append(Spacer(1, 8 * PX))
-
-    # ── Note + disclaimer ──
+    # Bank/signature + note + disclaimer travel as ONE block — the disclaimer can never be
+    # orphaned onto a page by itself (the group is ~110pt, far below a full page, so it always fits).
+    tail = [bank_sig, Spacer(1, 5 * PX)]
     note = (note or "").strip()
     if note:
-        story.append(Paragraph(f"<b>Note:</b> {_esc(note)}", _ps("note", 11.5, BODY2)))
-        story.append(Spacer(1, 5 * PX))
-    story.append(Paragraph(DISCLAIMER, _ps("disc", 10.5, LABELA, leading_mult=1.55)))
+        tail.append(Paragraph(f"<b>Note:</b> {_esc(note)}", _ps("note", 11.5, BODY2)))
+        tail.append(Spacer(1, 5 * PX))
+    tail.append(Paragraph(DISCLAIMER, _ps("disc", 10.5, LABELA, leading_mult=1.55)))
+    story.append(KeepTogether(tail))
 
     doc.build(story, canvasmaker=_NumberedCanvas)
     return buf.getvalue()

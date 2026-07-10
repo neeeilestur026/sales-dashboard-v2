@@ -271,6 +271,8 @@ async function saveQuotation() {
     createdBy: qSession.name, items: JSON.stringify(items)
   };
   if (!editingNo) payload.clientRef = flowClientRef();                 // idempotent create (safe retry)
+  // Editing with a changed number → RENAME the record (whole string editable).
+  if (editingNo && customNo && customNo !== editingNo) payload.newQuotationNo = customNo;
   // Admin creating a new quotation: save as an editable Draft (bypasses PR/management pricing).
   if (qAdmin && !editingNo) payload.status = 'Draft';
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -444,7 +446,9 @@ function editQuotation(no) {
   const q = qList.find(x => x.quotationNo === no);
   if (!q) return;
   document.getElementById('quotationNo').value = q.quotationNo;
-  const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = q.quotationNo; qni.disabled = true; }
+  // The whole quotation number is editable on edit — changing it RENAMES the record
+  // (items, SO link, and attached docs follow; backend rejects duplicates).
+  const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = q.quotationNo; qni.disabled = false; }
   document.getElementById('customer').value = q.customer;
   document.getElementById('date').value = flowDate(q.date);
   document.getElementById('formTitle').textContent = 'Edit ' + q.quotationNo;
