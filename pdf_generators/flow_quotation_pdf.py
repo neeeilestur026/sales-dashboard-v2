@@ -485,7 +485,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     att = " · ".join(x for x in [str(cd.get("attention") or "").strip(),
                                  str(cd.get("designation") or "").strip()] if x)
     if att:
-        cust_bits.append(f"<br/><b>Attention:</b> {_esc(att)}")
+        cust_bits.append(f"<br/><font color='{_hx(TEXT)}'><b>Attention:</b> {_esc(att)}</font>")
     if cd.get("email"):
         cust_bits.append(f"<br/><font color='{_hx(LINK)}'>{_esc(cd['email'])}</font>")
     cust_para = Paragraph("".join(cust_bits), _ps("cust", 13, BODY3, leading_mult=1.5))
@@ -676,7 +676,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # ── Bank details | signature ──
     kv = _ps("kv", 12, BODY2, leading_mult=1.35)
     bank_body = "<br/>".join(
-        f"<font color='{_hx(LABELA)}'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
+        f"<font color='{_hx(TEXT)}'>{_esc(k)}:</font>  {_esc(v)}" for k, v in BANK_LINES)
     bank_w = CONTENT_W - 250 * PX - 40 * PX
     bank_col = [_SectionHead("BANK DETAILS", bank_w), Spacer(1, 6 * PX), Paragraph(bank_body, kv)]
 
@@ -713,7 +713,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # Brand strip sits at the very bottom, just below the disclaimer (moved from the header).
     strip_para = Paragraph(
         f"<font name='{LATO_B}' size={11 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_esc(BRANDS)}</font>",
-        _ps("brands", 11, ACCENT_DARK, leading_mult=1.4))
+        _ps("brands", 11, ACCENT_DARK, align=1, leading_mult=1.4))
     tail.append(Spacer(1, 8 * PX))
     tail.append(_card([strip_para], CONTENT_W, ACCENT_SOFT, border=ACCENT_BORDER, pad=(16, 10)))
     story.append(KeepTogether(tail))
