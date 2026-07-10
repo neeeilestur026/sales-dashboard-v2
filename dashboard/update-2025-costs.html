@@ -49,13 +49,13 @@
         <div class="report-head">
           <div>
             <h1>Update 2025 Costs</h1>
-            <div class="meta">Writes the complete 2025 cost breakdown from <b>SalesOrder_2025.xlsx</b> (embedded) into each 2025 sales order's cost detail — purchase of goods, bank charges, shipment cost, import duties, local charges and delivery, with the International/Local label. <b>Purchase of goods:</b> international orders use the <b>Peso Amount</b> actually paid (the cost column is foreign currency); local orders use the <b>Total Cost per PO</b> (already in pesos). Revenue is kept from the system. ⚠️ marks groups needing review (hover for details). Idempotent, safe to re-run; a backup is saved before every apply.</div>
+            <div class="meta">Writes the complete 2025 cost breakdown from <b>SalesOrder_2025.xlsx</b> (embedded) into each 2025 sales order's cost detail — purchase of goods, bank charges, shipment cost, import duties, local charges and delivery, with the International/Local label. <b>One row per sales order</b>, matched by the file's <b>Client PO number = the SO No in our system</b> (a purchase batch spanning several client POs is split per SO; shipping/duties/local use the file's per-item pro-rata; a shared peso payment or bank charge is allocated by each SO's share of the batch cost). <b>Purchase of goods:</b> international → the <b>Peso Amount</b> actually paid; local → the <b>Total Cost per PO</b> (already pesos). Revenue is kept from the system. ⚠️ marks groups needing review (hover for details); “≈” marks a fuzzy-matched SO number — verify it. A backup is saved before every apply.</div>
           </div>
           <button class="btn btn-sm btn-primary" id="loadBtn">Load &amp; Match</button>
         </div>
         <div class="report-body">
           <div class="mig-kpis">
-            <div class="mig-tile"><div class="l">File purchase groups</div><div class="v" id="kOrders">—</div></div>
+            <div class="mig-tile"><div class="l">File sales orders</div><div class="v" id="kOrders">—</div></div>
             <div class="mig-tile"><div class="l">Actual cost (file)</div><div class="v" id="kActual">—</div></div>
             <div class="mig-tile"><div class="l">System 2025 COGS</div><div class="v" id="kSystem">—</div></div>
             <div class="mig-tile"><div class="l">Net gap</div><div class="v" id="kGap">—</div></div>
