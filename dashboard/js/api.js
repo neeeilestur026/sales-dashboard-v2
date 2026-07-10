@@ -48,7 +48,7 @@ const NO_CACHE_ACTIONS = ['login', 'logout', 'submitDailyReport', 'submitAdminDa
 
 // Read-only actions that must always fetch fresh data (use GET, skip cache).
 // Stale cache caused approved quotations to revert to "Pending" on refresh.
-const NO_CACHE_READS = ['getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports'];
+const NO_CACHE_READS = ['getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister'];
 
 /**
  * General-purpose fetch wrapper with caching.
@@ -208,6 +208,10 @@ async function _postMutation(params) {
       }
       const data = await response.json();
       if (data.authError) { _handleAuthError(); throw new Error(data.message || 'Session expired.'); }
+      // Any mutation that reached the server invalidates every cached read — otherwise a refresh
+      // within the 5-min TTL serves pre-save data (payroll hours "resetting to zero", quotation
+      // approvals reverting, etc.). Mirrors flow-api.js postFlow's _flowCacheClear().
+      clearApiCache();
       return data;
     } catch (error) {
       clearTimeout(timer);
