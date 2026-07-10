@@ -478,7 +478,7 @@ function openPdfModal(no) {
   Object.keys(pdfImages).forEach(k => delete pdfImages[k]);
   document.getElementById('pdfQuotationNo').value = q.quotationNo;
   document.getElementById('pdfModalSub').textContent = `${q.quotationNo} · ${q.customer} · ${q.items.length} item(s)`;
-  document.getElementById('pdfSubject').value = 'Quotation for ' + q.customer;
+  document.getElementById('pdfSubject').value = '';   // no auto-subject — must be typed before generating (required)
   // restore remembered defaults (terms, signatory)
   const d = flowLoadDefaults('quotation');
   ['Address', 'Attention', 'Designation', 'Email', 'Validity', 'Delivery', 'Payment', 'Warranty',
@@ -509,6 +509,11 @@ async function submitPdf() {
   if (!pdfQuote) return;
   const btn = document.getElementById('pdfGenBtn');
   const g = id => document.getElementById('pdf' + id).value.trim();
+  if (!g('Subject')) {
+    flowMsg('pdfModalMsg', 'Subject is required — type the quotation subject before generating.', false);
+    document.getElementById('pdfSubject').focus();
+    return;
+  }
   const doc = {
     address: g('Address'), attention: g('Attention'), designation: g('Designation'), email: g('Email'),
     subject: g('Subject'), rfqNo: g('RfqNo'), note: g('Note'),

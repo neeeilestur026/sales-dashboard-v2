@@ -491,7 +491,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     cust_para = Paragraph("".join(cust_bits), _ps("cust", 13, BODY3, leading_mult=1.5))
     subj_para = Paragraph(
         f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(LABEL9)}'>{_sp('SUBJECT')}</font><br/>"
-        f"<font name='{LATO_B}'>{_esc(cd.get('subject') or ('Quotation for ' + str(cd.get('client_name') or '')))}</font>",
+        f"<font name='{LATO_B}'>{_esc(cd.get('subject') or '')}</font>",
         _ps("subj", 13, TEXT, leading_mult=1.5))
     cust_w = CONTENT_W - 250 * PX - 24 * PX
     row_c = Table([[_card([cust_para], cust_w, CARD_B, left_accent=True), "",
