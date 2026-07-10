@@ -57,12 +57,9 @@ const _PNL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 /** 'YYYY-MM' from any date the flow stores (ISO, 'Wed Mar 26 2026', etc.). */
 function _pnlYM(dateStr) {
-  if (!dateStr) return '';
-  const s = String(dateStr).trim();
-  if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 7);
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-  return '';
+  // Manila-safe (see management-income _miYM): raw UTC prefixes mis-bucket midnight-boundary dates.
+  const s = flowDate(dateStr);
+  return /^\d{4}-\d{2}/.test(s) ? s.slice(0, 7) : '';
 }
 function _pnlFmtMonth(ym) {
   const p = ym.split('-');

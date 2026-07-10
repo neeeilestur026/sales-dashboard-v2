@@ -44,12 +44,10 @@ function miEditCost(idx) {
 }
 
 function _miYM(dateStr) {
-  if (!dateStr) return '';
-  const s = String(dateStr).trim();
-  if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 7);
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-  return '';
+  // Manila-safe: a serialized sheet date like 2025-12-31T16:00Z is Jan-1-2026 PH time — taking the
+  // raw UTC prefix bucketed such SOs into the wrong month/year (e.g. SO 50001445).
+  const s = flowDate(dateStr);
+  return /^\d{4}-\d{2}/.test(s) ? s.slice(0, 7) : '';
 }
 function _miFmtMonth(ym) {
   const p = ym.split('-');

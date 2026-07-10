@@ -41,7 +41,7 @@ function _norm(s) {
     .replace(/\b(incorporated|corporation|corp|inc|company|co|ltd|opc|the|services|service)\b/g, '')
     .replace(/[^a-z0-9]/g, '');
 }
-function _yr(d) { const m = /20\d\d/.exec(String(d || '')); return m ? m[0] : ''; }
+function _yr(d) { const s = flowDate(d); return /^\d{4}/.test(s) ? s.slice(0, 4) : ''; }   // Manila-safe (raw regex mis-read boundary dates)
 
 // ── Load flow data, prepare groups + auto-match ───────────────────────────────
 async function loadAll() {
