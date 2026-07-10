@@ -1,249 +1,169 @@
 /* ═══════════════════════════════════════════════
-   admin-daily-report.js — Auto-feed Daily Report
+   admin-daily-report.js — Admin Daily Report: auto-tracked FLOW activity for the
+   logged-in admin (scoped to session.name) + sent emails + weekly view + notes.
+   Mirrors the sales report (report.js) with admin-relevant modules — the old
+   version read the dead production getters, so PO/SO/shipment/payment/pricing
+   movements never showed; they all live in the flow ActivityLog.
    ═══════════════════════════════════════════════ */
 
-let session = null;
-let alreadySubmitted = false;
-let lastSnapshot = null;
+let drSession = null;
+let drEntries = [];        // this admin's activity entries for the selected date
+let drEmailCount = 0;
+let drEmailMeta = null;    // {folder, windowCount, matched, date} diagnostic from the mail fetch
 
-document.addEventListener('DOMContentLoaded', async () => {
-  session = requireAdmin();
-  if (!session) return;
+function _emailMetaHint() {
+  const m = drEmailMeta;
+  if (!m || !m.folder) return '';
+  return ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>`;
+}
+const MODULE_ORDER = ['Purchase Order', 'Sales Order', 'Shipment', 'Payment Request',
+                      'Pricing Request', 'Quotation', 'Receiving', 'Invoice', 'Inventory', 'Document'];
+
+function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _money(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
+function _modClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
+function _time(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
+
+document.addEventListener('DOMContentLoaded', () => {
+  drSession = requireAdmin();
+  if (!drSession) return;
   renderNavbar('admin-daily-report');
 
-  document.getElementById('reportDate').textContent =
-    new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const picker = document.getElementById('datePicker');
+  picker.value = flowToday();
+  picker.addEventListener('change', load);
+  document.getElementById('refreshBtn').addEventListener('click', load);
+  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
 
-  document.getElementById('refreshBtn').addEventListener('click', loadFeed);
-  document.getElementById('submitBtn').addEventListener('click', submitReport);
-
-  await checkAlreadySubmitted();
-  await loadFeed();
-  // Keep today's feed + sent emails auto-updating while the tab is visible (loadFeed never touches notes).
-  const poll = setInterval(() => { if (document.visibilityState === 'visible') loadFeed(); }, 60000);
+  load();
+  // Auto-refresh the read-only parts every 60s while viewing TODAY and the tab is visible.
+  const poll = setInterval(() => {
+    if (document.visibilityState === 'visible' && _date() === flowToday()) refreshLive();
+  }, 60000);
   window.addEventListener('pagehide', () => clearInterval(poll));
 });
 
-function _todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
+function _date() { return document.getElementById('datePicker').value; }
 
-async function checkAlreadySubmitted() {
+async function refreshLive() {
+  const date = _date();
   try {
-    const result = await apiGetAdminDailyReports({ adminName: session.name, date: _todayISO() });
-    if (result.success && result.data && result.data.length > 0) {
-      alreadySubmitted = true;
-      document.getElementById('submittedBanner').style.display = 'block';
-      document.getElementById('submitBtn').disabled = true;
-      document.getElementById('submitBtn').textContent = 'Already Submitted';
-      const r = result.data[0];
-      if (r && r.notes) document.getElementById('notesField').value = r.notes;
-    }
-  } catch (err) {
-    console.error('check submitted error:', err);
+    const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
+    drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
+    render();
+  } catch (e) { /* keep previous */ }
+  loadEmails();
+}
+
+async function load() {
+  const date = _date();
+  document.getElementById('reportMeta').textContent =
+    `For ${date} · Prepared by ${drSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
+
+  // Every flow mutation (PO/SO create-update, shipment stage updates, payment requests,
+  // PR sourcing/verify, quotations, receiving, invoices, docs…) is auto-logged with the
+  // acting user — this report reads the admin's own movements.
+  try {
+    const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
+    drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
+  } catch (e) {
+    drEntries = [];
+    document.getElementById('timelineBody').innerHTML =
+      `<tr><td colspan="6" class="dr-empty">${_esc(e.message)}</td></tr>`;
   }
+  render();
+  loadEmails();
+  loadNotes();
+  if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect' });
 }
 
-async function loadFeed() {
-  const date = _todayISO();
-  const [autofillRes, emailRes] = await Promise.all([
-    apiGetAdminDailyAutofill(session.name, date).catch(() => ({ success: false })),
-    apiFetchEmailLogToday().catch(() => ({ success: false }))
-  ]);
+function render() {
+  const rows = drEntries;
 
-  const data = (autofillRes && autofillRes.success && autofillRes.data) || {};
-  const emails = (emailRes && emailRes.success && emailRes.emails) || (emailRes && emailRes.data) || [];
+  // ── Summary tiles ──
+  document.getElementById('sumMovements').textContent = rows.length;
+  document.getElementById('sumPOs').textContent = rows.filter(e => e.module === 'Purchase Order').length;
+  document.getElementById('sumSOs').textContent = rows.filter(e => e.module === 'Sales Order').length;
+  document.getElementById('sumShip').textContent = rows.filter(e => e.module === 'Shipment').length;
+  document.getElementById('sumPay').textContent = rows.filter(e => e.module === 'Payment Request').length;
+  document.getElementById('sumPricing').textContent = rows.filter(e => e.module === 'Pricing Request').length;
+  document.getElementById('sumEmails').textContent = drEmailCount;
 
-  lastSnapshot = {
-    purchaseOrders: data.purchaseOrders || [],
-    supplierQuotations: data.supplierQuotations || [],
-    pricingSubmissions: data.pricingSubmissions || [],
-    shipments: data.shipments || [],
-    paymentRequests: data.paymentRequests || [],
-    salesOrders: data.salesOrders || [],
-    emails: Array.isArray(emails) ? emails : []
-  };
+  // ── Timeline ──
+  document.getElementById('tlCount').textContent = rows.length;
+  const tb = document.getElementById('timelineBody');
+  tb.innerHTML = rows.length ? rows.map(e => `
+    <tr>
+      <td>${_esc(_time(e.timestamp))}</td>
+      <td><span class="mod-badge ${_modClass(e.module)}">${_esc(e.module)}</span></td>
+      <td><span class="act-chip">${_esc(e.action)}</span></td>
+      <td>${_esc(e.refNo)}</td>
+      <td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
+      <td class="num">${e.amount ? _money(e.amount) : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No recorded activity for this day.</td></tr>';
 
-  renderSummary(lastSnapshot);
-  renderPO(lastSnapshot.purchaseOrders);
-  renderSQ(lastSnapshot.supplierQuotations);
-  renderPS(lastSnapshot.pricingSubmissions);
-  renderSH(lastSnapshot.shipments);
-  renderPR(lastSnapshot.paymentRequests);
-  renderSO(lastSnapshot.salesOrders);
-  renderEmails(lastSnapshot.emails);
-}
-
-function _escape(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-}
-function _fmtAmount(v) {
-  const n = parseFloat(v);
-  if (!isFinite(n) || n === 0) return '—';
-  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function _statusPill(status) {
-  if (!status) return '<span class="status-pill">—</span>';
-  const s = String(status).toLowerCase().replace(/\s+/g,'-');
-  return `<span class="status-pill status-${_escape(s)}">${_escape(status)}</span>`;
-}
-function _setCount(id, n) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = n;
-}
-function _emptyRow(cols, msg) {
-  return `<tr><td colspan="${cols}" class="empty-state">${msg}</td></tr>`;
+  // ── Per-module sections ──
+  const byMod = {};
+  rows.forEach(e => { (byMod[e.module] = byMod[e.module] || []).push(e); });
+  const mods = MODULE_ORDER.filter(m => byMod[m]).concat(Object.keys(byMod).filter(m => !MODULE_ORDER.includes(m)));
+  document.getElementById('moduleSections').innerHTML = mods.map(m => {
+    const list = byMod[m];
+    return `<div class="dr-sect">
+      <div class="dr-sect-title"><span class="mod-badge ${_modClass(m)}">${_esc(m)}</span> <span class="pill">${list.length}</span></div>
+      <div style="overflow-x:auto;"><table class="flow-table">
+        <thead><tr><th>Time</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
+        <tbody>${list.map(e => `<tr>
+          <td>${_esc(_time(e.timestamp))}</td>
+          <td><span class="act-chip">${_esc(e.action)}</span></td>
+          <td>${_esc(e.refNo)}</td><td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
+          <td class="num">${e.amount ? _money(e.amount) : ''}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
 }
 
-function renderSummary(snap) {
-  const totals = [
-    { label: 'POs', value: snap.purchaseOrders.length },
-    { label: 'Supplier Qtns', value: snap.supplierQuotations.length },
-    { label: 'Pricing', value: snap.pricingSubmissions.length },
-    { label: 'Shipments', value: snap.shipments.length },
-    { label: 'PRs', value: snap.paymentRequests.length },
-    { label: 'SOs', value: snap.salesOrders.length },
-    { label: 'Emails', value: snap.emails.length }
-  ];
-  document.getElementById('summaryRow').innerHTML = totals.map(t =>
-    `<div class="summary-tile"><div class="label">${_escape(t.label)}</div><div class="value">${t.value}</div></div>`
-  ).join('');
-}
-
-function renderPO(rows) {
-  _setCount('poCount', rows.length);
-  const html = rows.length ? rows.map(r =>
-    `<tr><td>${_escape(r.poNo)}</td><td>${_escape(r.vendor)}</td><td>${_fmtAmount(r.amount)}</td><td>${_statusPill(r.status)}</td></tr>`
-  ).join('') : _emptyRow(4, 'No purchase orders created today.');
-  document.getElementById('poBody').innerHTML = html;
-}
-function renderSQ(rows) {
-  _setCount('sqCount', rows.length);
-  const html = rows.length ? rows.map(r =>
-    `<tr><td>${_escape(r.supplier)}</td><td>${_escape(r.item)}</td><td>${_fmtAmount(r.amount)}</td><td>${_escape(r.prNumber)}</td></tr>`
-  ).join('') : _emptyRow(4, 'No supplier quotations received today.');
-  document.getElementById('sqBody').innerHTML = html;
-}
-function renderPS(rows) {
-  _setCount('psCount', rows.length);
-  const html = rows.length ? rows.map(r =>
-    `<tr><td>${_escape(r.id)}</td><td>${_escape(r.submittedBy || '—')}</td><td>${_escape(r.principal)}</td><td>${_escape(r.destination)}</td><td>${_statusPill(r.status)}</td></tr>`
-  ).join('') : _emptyRow(5, 'No pricing submissions today.');
-  document.getElementById('psBody').innerHTML = html;
-}
-function renderSH(rows) {
-  _setCount('shCount', rows.length);
-  const html = rows.length ? rows.map(r => {
-    // Activity-log entries have {action, summary, amount, shipmentId};
-    // legacy/fallback rows have {shipmentId, poNo, client, mode, eta, status}.
-    if (r.action || r.summary) {
-      return `<tr>
-        <td>${_escape(r.shipmentId || '—')}</td>
-        <td colspan="3">${_escape(r.summary || '')}</td>
-        <td>${_fmtAmount(r.amount)}</td>
-        <td>${_statusPill(r.action)}</td>
-      </tr>`;
+// ── Sent Emails (the admin's own mailbox, date-aware) ──
+async function loadEmails() {
+  const body = document.getElementById('emailBody');
+  let emails = [], needsSetup = false;
+  try {
+    if (typeof apiFetchEmailLogToday === 'function') {
+      const r = await apiFetchEmailLogToday(undefined, _date());
+      needsSetup = !!(r && r.needsSetup);
+      emails = (r && r.success && r.emails) || (r && r.data) || [];
+      drEmailMeta = (r && r.meta) || null;
     }
-    return `<tr><td>${_escape(r.shipmentId)}</td><td>${_escape(r.poNo)}</td><td>${_escape(r.client)}</td><td>${_escape(r.mode)}</td><td>${_escape(r.eta)}</td><td>${_statusPill(r.status)}</td></tr>`;
-  }).join('') : _emptyRow(6, 'No shipment activity from you today.');
-  document.getElementById('shBody').innerHTML = html;
-}
-function renderPR(rows) {
-  _setCount('prCount', rows.length);
-  const html = rows.length ? rows.map(r =>
-    `<tr><td>${_escape(r.prNo)}</td><td>${_escape(r.payee)}</td><td>${_fmtAmount(r.amount)}</td><td>${_statusPill(r.status)}</td></tr>`
-  ).join('') : _emptyRow(4, 'No payment requests today.');
-  document.getElementById('prBody').innerHTML = html;
-}
-function renderSO(rows) {
-  _setCount('soCount', rows.length);
-  const html = rows.length ? rows.map(r =>
-    `<tr><td>${_escape(r.soNo)}</td><td>${_escape(r.customer)}</td><td>${_fmtAmount(r.amount)}</td><td>${_statusPill(r.status)}</td></tr>`
-  ).join('') : _emptyRow(4, 'No sales orders today.');
-  document.getElementById('soBody').innerHTML = html;
-}
-function renderEmails(rows) {
-  _setCount('emailCount', rows.length);
-  const html = rows.length ? rows.map(r => {
-    const t = r.sentAt ? new Date(r.sentAt).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '—';
-    const cat = r.category || 'Follow up';
-    const opts = ['Follow up', 'Supplier Inquiry', 'Client Inquiry', 'Ongoing Shipment', 'Pending Shipment'];
-    const selOpts = opts.map(o => `<option${cat===o?' selected':''}>${o}</option>`).join('');
-    return `<tr><td>${_escape(t)}</td><td>${_escape(r.recipient || '')}</td><td>${_escape(r.subject || '')}</td><td><select class="email-cat" data-msgid="${_escape(r.messageId||'')}">${selOpts}</select></td></tr>`;
-  }).join('') : _emptyRow(4, 'No emails sent from GoDaddy today.');
-  document.getElementById('emailBody').innerHTML = html;
-}
-
-async function submitReport() {
-  if (alreadySubmitted) return;
-  const msgEl = document.getElementById('formMsg');
-  msgEl.textContent = '';
-  msgEl.className = 'form-msg';
-
-  if (!lastSnapshot) {
-    msgEl.textContent = 'No data loaded yet. Click Refresh first.';
-    msgEl.className = 'form-msg error';
+  } catch (e) { emails = []; }
+  emails = Array.isArray(emails) ? emails : [];
+  drEmailCount = emails.length;
+  document.getElementById('emailCount').textContent = emails.length;
+  document.getElementById('sumEmails').textContent = emails.length;
+  if (needsSetup) {
+    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
     return;
   }
+  body.innerHTML = emails.length ? emails.map(r => {
+    const t = r.sentAt || r.time || r.date || '';
+    return `<tr><td>${_esc(t)}</td><td>${_esc(r.recipient || r.to || '')}</td><td>${_esc(r.subject || '')}</td><td>${_esc(r.category || '')}</td></tr>`;
+  }).join('') : `<tr><td colspan="4" class="dr-empty">No emails sent on ${_esc(_date())}.${_emailMetaHint()}</td></tr>`;
+}
 
-  // Capture email categories from dropdowns
-  const catSelectors = document.querySelectorAll('.email-cat');
-  const catByMsgId = {};
-  catSelectors.forEach(el => { catByMsgId[el.dataset.msgid] = el.value; });
-  const emailsWithCat = (lastSnapshot.emails || []).map(e => ({
-    ...e, category: catByMsgId[e.messageId || ''] || 'Follow up'
-  }));
-
-  const notes = document.getElementById('notesField').value.trim();
-  const snapshot = {
-    version: 2,
-    capturedAt: new Date().toISOString(),
-    purchaseOrders: lastSnapshot.purchaseOrders,
-    supplierQuotations: lastSnapshot.supplierQuotations,
-    pricingSubmissions: lastSnapshot.pricingSubmissions,
-    shipments: lastSnapshot.shipments,
-    paymentRequests: lastSnapshot.paymentRequests,
-    salesOrders: lastSnapshot.salesOrders,
-    emails: emailsWithCat,
-    notes: notes
-  };
-
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting...';
-
+// ── Per-user Notes ──
+async function loadNotes() {
   try {
-    const result = await apiSubmitAdminDailyReport({
-      adminName: session.name,
-      snapshotData: JSON.stringify(snapshot),
-      notes: notes,
-      // Legacy fields kept empty so backend stays compatible
-      poStatus: '[]',
-      internationalShipment: '[]',
-      localShipment: '[]',
-      deliveryForClient: '[]',
-      pendingInquiry: '[]',
-      receivedQuotation: '[]',
-      otherTasks: '[]'
-    });
+    const r = await fetchFlow('getDailyNote', { date: _date(), user: drSession.name });
+    document.getElementById('notesField').value = (r && r.notes) || '';
+  } catch (e) { /* leave as-is */ }
+}
 
-    if (result.success) {
-      alreadySubmitted = true;
-      msgEl.textContent = 'Report submitted successfully!';
-      msgEl.className = 'form-msg success';
-      document.getElementById('submittedBanner').style.display = 'block';
-      btn.textContent = 'Already Submitted';
-    } else {
-      msgEl.textContent = result.message || 'Failed to submit.';
-      msgEl.className = 'form-msg error';
-      btn.disabled = false;
-      btn.textContent = 'Submit Daily Report';
-    }
-  } catch (err) {
-    msgEl.textContent = 'Error: ' + err.message;
-    msgEl.className = 'form-msg error';
-    btn.disabled = false;
-    btn.textContent = 'Submit Daily Report';
-  }
+async function saveNotes() {
+  const btn = document.getElementById('saveNotesBtn');
+  const msg = document.getElementById('notesMsg');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const r = await postFlow('saveDailyNote', { date: _date(), user: drSession.name, notes: document.getElementById('notesField').value });
+    msg.textContent = r && r.success ? 'Saved ✓' : (r.message || 'Failed');
+  } catch (e) { msg.textContent = e.message; }
+  finally { btn.disabled = false; btn.textContent = 'Save Notes'; setTimeout(() => { msg.textContent = ''; }, 2500); }
 }

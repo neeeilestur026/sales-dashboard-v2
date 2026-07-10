@@ -79,6 +79,7 @@ async function load() {
   loadEmails();
   loadNotes();
   loadCalls();
+  if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect' });
 }
 
 function render() {

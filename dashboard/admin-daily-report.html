@@ -5,204 +5,107 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard — Daily Report</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
   <style>
-    .report-container { max-width: 1000px; margin: 0 auto; }
-    .section-card {
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
-      border-radius: 12px;
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
+    .report { max-width: 1040px; margin: 0 auto; }
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
+    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
+    .report-body { padding: 1.4rem 1.6rem; }
+    .dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
+    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
+    .dr-sect { margin-bottom: 1.6rem; }
+    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+    .dr-sect-title .pill { margin-left: auto; background: var(--accent-light); color: var(--accent-dark); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; }
+    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
+    .mod-PurchaseOrder { background: #eff6ff; color: #1d4ed8; }
+    .mod-SalesOrder { background: #f0fdf4; color: #15803d; }
+    .mod-Shipment { background: #eef2ff; color: #4338ca; }
+    .mod-PaymentRequest { background: #fdf4ff; color: #a21caf; }
+    .mod-PricingRequest { background: #fff7ed; color: #c2410c; }
+    .mod-Quotation { background: #f0fdfa; color: #0f766e; }
+    .mod-Receiving { background: #fefce8; color: #a16207; }
+    .mod-Invoice { background: #fef2f2; color: #b91c1c; }
+    .mod-Inventory { background: #f8fafc; color: #475569; }
+    .mod-Document { background: #f5f3ff; color: #6d28d9; }
+    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
+    .dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+    .notes-area { width: 100%; padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.88rem; font-family: inherit; resize: vertical; min-height: 110px; box-sizing: border-box; }
+    @media print {
+      .navbar, .no-print { display: none !important; }
+      body { background: #fff; }
+      .main-content { padding: 0 !important; margin: 0 !important; }
+      .report-sheet { border: none; box-shadow: none; }
+      .dr-tile, table { break-inside: avoid; }
     }
-    .section-title {
-      font-size: 0.85rem; font-weight: 700; color: var(--text-primary, #f1f5f9);
-      text-transform: uppercase; letter-spacing: 0.05em;
-      margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;
-    }
-    .section-title .count-pill {
-      background: rgba(59,130,246,0.15); color: #60a5fa;
-      padding: 0.15rem 0.5rem; border-radius: 999px;
-      font-size: 0.7rem; font-weight: 600; margin-left: auto;
-    }
-    .feed-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .feed-table th {
-      text-align: left; padding: 0.5rem 0.5rem;
-      color: var(--text-muted, #94a3b8); border-bottom: 1px solid var(--border, #334155);
-      font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
-      white-space: nowrap;
-    }
-    .feed-table td {
-      padding: 0.55rem 0.5rem; border-bottom: 1px solid rgba(148,163,184,0.1);
-      color: var(--text-primary, #e2e8f0); vertical-align: top;
-    }
-    .feed-table tr:last-child td { border-bottom: none; }
-    .empty-state {
-      padding: 1rem; text-align: center; color: var(--text-muted, #64748b);
-      font-size: 0.82rem; font-style: italic;
-    }
-    .status-pill {
-      display: inline-block; padding: 0.15rem 0.55rem;
-      border-radius: 999px; font-size: 0.7rem; font-weight: 600;
-      background: rgba(148,163,184,0.15); color: #cbd5e1;
-    }
-    .status-completed, .status-delivered, .status-approved, .status-paid { background: rgba(34,197,94,0.15); color: #4ade80; }
-    .status-pending, .status-processing, .status-in-progress, .status-in-transit { background: rgba(251,191,36,0.15); color: #fbbf24; }
-    .status-delayed, .status-failed, .status-rejected { background: rgba(239,68,68,0.15); color: #f87171; }
-    .notes-textarea {
-      width: 100%; padding: 0.75rem;
-      background: var(--bg-primary, #0f172a);
-      border: 1px solid var(--border, #334155);
-      border-radius: 8px; color: var(--text-primary, #f1f5f9);
-      font-size: 0.88rem; font-family: inherit;
-      resize: vertical; min-height: 120px; box-sizing: border-box;
-    }
-    .submitted-banner {
-      background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
-      border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;
-      color: #22c55e; font-weight: 600; display: none;
-    }
-    .form-msg { margin-top: 1rem; font-size: 0.85rem; font-weight: 500; text-align: center; }
-    .form-msg.success { color: #22c55e; }
-    .form-msg.error { color: #ef4444; }
-    .btn-submit {
-      display: block; width: 100%; padding: 0.85rem;
-      background: var(--primary, #3b82f6); color: #fff;
-      border: none; border-radius: 8px; font-size: 0.95rem;
-      font-weight: 600; cursor: pointer; margin-top: 0.5rem;
-    }
-    .btn-submit:hover { opacity: 0.9; }
-    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-refresh {
-      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
-      color: #60a5fa; padding: 0.45rem 0.85rem; border-radius: 6px;
-      font-size: 0.8rem; font-weight: 500; cursor: pointer;
-    }
-    .btn-refresh:hover { background: rgba(59,130,246,0.2); }
-    .page-header-row {
-      display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;
-    }
-    .summary-row {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.75rem; margin-bottom: 1.25rem;
-    }
-    .summary-tile {
-      background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155);
-      border-radius: 10px; padding: 0.75rem 0.9rem;
-    }
-    .summary-tile .label { font-size: 0.7rem; color: var(--text-muted, #94a3b8); text-transform: uppercase; letter-spacing: 0.05em; }
-    .summary-tile .value { font-size: 1.35rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin-top: 0.2rem; }
   </style>
 </head>
 <body>
   <header class="navbar" id="navbar"></header>
-
   <main class="main-content">
-    <div class="report-container">
-      <div class="page-header-row">
-        <div>
-          <h1 style="margin:0;">Admin Daily Report</h1>
-          <p id="reportDate" style="margin:0.25rem 0 0; color: var(--text-muted, #94a3b8);"></p>
+    <div class="report">
+      <div class="report-sheet">
+        <div class="report-head">
+          <div>
+            <h1>Admin Daily Report</h1>
+            <div class="meta" id="reportMeta">—</div>
+          </div>
+          <div class="report-controls no-print">
+            <input type="date" id="datePicker">
+            <button class="btn btn-sm btn-secondary" id="refreshBtn">Refresh</button>
+            <button class="btn btn-sm btn-primary" id="printBtn">Print</button>
+          </div>
         </div>
-        <button type="button" class="btn-refresh" id="refreshBtn">Refresh</button>
-      </div>
+        <div class="report-body">
+          <div class="dr-summary" id="summaryRow">
+            <div class="dr-tile"><div class="l">Total Movements</div><div class="v" id="sumMovements">—</div></div>
+            <div class="dr-tile"><div class="l">Purchase Orders</div><div class="v" id="sumPOs">—</div></div>
+            <div class="dr-tile"><div class="l">Sales Orders</div><div class="v" id="sumSOs">—</div></div>
+            <div class="dr-tile"><div class="l">Shipment Updates</div><div class="v" id="sumShip">—</div></div>
+            <div class="dr-tile"><div class="l">Payment Requests</div><div class="v" id="sumPay">—</div></div>
+            <div class="dr-tile"><div class="l">Pricing Actions</div><div class="v" id="sumPricing">—</div></div>
+            <div class="dr-tile"><div class="l">Emails Sent</div><div class="v" id="sumEmails">—</div></div>
+          </div>
 
-      <div id="submittedBanner" class="submitted-banner">
-        You have already submitted today's report. The data below is live for reference.
-      </div>
+          <div class="dr-sect">
+            <div class="dr-sect-title">Activity Timeline <span class="pill" id="tlCount">0</span></div>
+            <div style="overflow-x:auto;"><table class="flow-table">
+              <thead><tr><th>Time</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
+              <tbody id="timelineBody"></tbody>
+            </table></div>
+          </div>
 
-      <div class="summary-row" id="summaryRow"></div>
+          <div id="moduleSections"></div>
 
-      <!-- Purchase Orders -->
-      <div class="section-card">
-        <div class="section-title">Purchase Orders <span class="count-pill" id="poCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>PO No.</th><th>Vendor</th><th>Amount</th><th>Status</th></tr></thead>
-            <tbody id="poBody"></tbody>
-          </table>
-        </div>
-      </div>
+          <div class="dr-sect">
+            <div class="dr-sect-title">Sent Emails (GoDaddy) <span class="pill" id="emailCount">0</span></div>
+            <div style="overflow-x:auto;"><table class="flow-table">
+              <thead><tr><th>Time</th><th>Recipient</th><th>Subject</th><th>Category</th></tr></thead>
+              <tbody id="emailBody"></tbody>
+            </table></div>
+          </div>
 
-      <!-- Supplier Quotations -->
-      <div class="section-card">
-        <div class="section-title">Supplier Quotations Received <span class="count-pill" id="sqCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>Supplier</th><th>Item</th><th>Amount</th><th>PR No.</th></tr></thead>
-            <tbody id="sqBody"></tbody>
-          </table>
-        </div>
-      </div>
+          <div id="weekSect"></div>
 
-      <!-- Pricing Submissions -->
-      <div class="section-card">
-        <div class="section-title">Pricing Submissions <span class="count-pill" id="psCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>ID</th><th>Submitted By</th><th>Principal</th><th>Destination</th><th>Status</th></tr></thead>
-            <tbody id="psBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Shipments -->
-      <div class="section-card">
-        <div class="section-title">Shipments <span class="count-pill" id="shCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>Shipment ID</th><th colspan="3">Activity / Details</th><th>Amount</th><th>Action</th></tr></thead>
-            <tbody id="shBody"></tbody>
-          </table>
+          <div class="dr-sect">
+            <div class="dr-sect-title">My Notes / Other Tasks <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);" id="notesMsg"></span></div>
+            <textarea id="notesField" class="notes-area" placeholder="Follow-ups, coordination, blockers, other tasks..."></textarea>
+            <button class="btn btn-sm btn-primary no-print" id="saveNotesBtn" style="margin-top:0.5rem;">Save Notes</button>
+          </div>
         </div>
       </div>
-
-      <!-- Payment Requests -->
-      <div class="section-card">
-        <div class="section-title">Payment Requests <span class="count-pill" id="prCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>PR No.</th><th>Payee</th><th>Amount</th><th>Status</th></tr></thead>
-            <tbody id="prBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Sales Orders -->
-      <div class="section-card">
-        <div class="section-title">Sales Orders <span class="count-pill" id="soCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>SO No.</th><th>Customer</th><th>Amount</th><th>Status</th></tr></thead>
-            <tbody id="soBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Sent Emails -->
-      <div class="section-card">
-        <div class="section-title">Sent Emails (GoDaddy) <span class="count-pill" id="emailCount">0</span></div>
-        <div style="overflow-x:auto;">
-          <table class="feed-table">
-            <thead><tr><th>Time</th><th>Recipient</th><th>Subject</th><th>Category</th></tr></thead>
-            <tbody id="emailBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Notes -->
-      <div class="section-card">
-        <div class="section-title">Notes / Other Tasks</div>
-        <textarea id="notesField" class="notes-textarea" placeholder="Anything not captured above — manual tasks, blockers, hand-offs, follow-ups..."></textarea>
-      </div>
-
-      <button type="button" class="btn-submit" id="submitBtn">Submit Daily Report</button>
-      <div id="formMsg" class="form-msg"></div>
     </div>
   </main>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/report-week.js"></script>
   <script src="js/admin-daily-report.js"></script>
 </body>
 </html>

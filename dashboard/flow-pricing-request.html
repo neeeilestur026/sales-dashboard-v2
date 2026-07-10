@@ -121,7 +121,7 @@
           <input type="month" id="phMonth" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
           <select id="phStatus" onchange="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
             <option value="">All statuses</option><option>Mgmt Priced</option><option>Verifying</option>
-            <option>Returned to Sales</option><option>Quoted</option><option>Migrated</option>
+            <option value="Returned to Sales">For Quotation</option><option>Quoted</option><option>Migrated</option>
           </select>
           <button type="button" class="btn btn-sm btn-secondary" onclick="clearPricingHistoryFilters()">Clear</button>
         </div>

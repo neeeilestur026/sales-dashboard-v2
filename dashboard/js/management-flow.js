@@ -183,7 +183,7 @@ function mfRenderPricing() {
   const rows = list.map((p, i) => {
     const migrated = String(p.status) === 'Migrated';
     const badge = migrated ? '<span class="flow-badge" style="background:rgba(13,148,136,0.14);color:#0f766e;">Migrated</span>'
-      : `<span class="flow-badge">${_mfe(p.status || '—')}</span>`;
+      : `<span class="flow-badge">${_mfe(p.status === 'Returned to Sales' ? 'For Quotation' : (p.status || '—'))}</span>`;
     const principals = [...new Set((p.items || []).map(it => it.principal).filter(Boolean))].join(', ') || '—';
     return `<tr class="mf-prrow" onclick="mfTogglePricing(${i})" style="cursor:pointer;">
         <td><strong>${_mfe(p.prNo)}</strong>${p.legacyId ? `<div style="font-size:0.68rem;color:var(--text-muted,#64748b);">${_mfe(p.legacyId)}</div>` : ''}</td>

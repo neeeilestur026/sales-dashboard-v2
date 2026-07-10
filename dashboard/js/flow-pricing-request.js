@@ -22,6 +22,9 @@ const BADGE = {
   'Mgmt Priced': 'b-pending', 'Verifying': 'b-pending', 'Returned to Sales': 'b-approved',
   'Quoted': 'b-closed'
 };
+// Display label only — the STORED status stays 'Returned to Sales' so existing rows,
+// filters, and stage-gated logic keep working with zero migration.
+function prStatusLabel(s) { return s === 'Returned to Sales' ? 'For Quotation' : s; }
 
 document.addEventListener('DOMContentLoaded', async () => {
   prSession = requirePricingFlowAccess();
@@ -58,7 +61,7 @@ function setupRoleUI() {
     document.getElementById('salesFormCard').style.display = '';
     listTitle.textContent = 'My Requests';
     blurb.textContent = 'Create a purchase request from inventory items. Admin sources suppliers and management prices it; when it returns you can build the quotation.';
-    seg.innerHTML = segBtns(['', 'Returned to Sales', 'Quoted'], ['All', 'Ready to Quote', 'Quoted']);
+    seg.innerHTML = segBtns(['', 'Returned to Sales', 'Quoted'], ['All', 'For Quotation', 'Quoted']);
   } else if (prOversight) {
     listTitle.textContent = 'All Purchase Requests (by sales rep)';
     blurb.textContent = 'Full oversight of every rep’s pricing requests across all stages. Open any request to review or act on its current stage.';
@@ -255,7 +258,7 @@ function prRowHtml(r) {
   const incl = r.items.filter(i => i.included).length;
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowDate(r.date)}</td><td>${flowEsc(r.customer)}</td>
     <td>${flowEsc(r.requestedBy)}</td><td class="num">${incl}/${r.items.length}</td>
-    <td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(r.status)}</span></td>
+    <td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(prStatusLabel(r.status))}</span></td>
     <td style="white-space:nowrap;">${rowActions(r)}</td></tr>`;
 }
 
@@ -291,7 +294,7 @@ function renderAdminAllGrouped(rows) {
   const GROUPS = [
     ['For Supplier Pricing', ['Requested', 'Sourcing', 'For Mgmt Pricing']],
     ['Final Pricing — from Management', ['Mgmt Priced']],
-    ['Forwarded to Sales', ['Returned to Sales', 'Quoted']],
+    ['For Quotation / Quoted', ['Returned to Sales', 'Quoted']],
   ];
   const known = GROUPS.reduce((a, g) => a.concat(g[1]), []);
   let html = GROUPS.map(g => prGroupSection(g[0], active.filter(r => g[1].includes(r.status)), { open: true })).join('');
@@ -348,7 +351,7 @@ function openPr(no) {
   if (prRole === 'management') { loadFlowPricing(no); return; }
   document.getElementById('modalPrNo').value = no;
   document.getElementById('modalTitle').textContent = r.prNo;
-  document.getElementById('modalSub').textContent = `${r.customer}${r.clientLocation ? ' (' + r.clientLocation + ')' : ''} · requested by ${r.requestedBy} · ${flowDate(r.date)} · ${r.status}`;
+  document.getElementById('modalSub').textContent = `${r.customer}${r.clientLocation ? ' (' + r.clientLocation + ')' : ''} · requested by ${r.requestedBy} · ${flowDate(r.date)} · ${prStatusLabel(r.status)}`;
   document.getElementById('modalMsg').style.display = 'none';
   const body = document.getElementById('modalBody');
   const foot = document.getElementById('modalFoot');
@@ -655,7 +658,7 @@ function loadFlowPricing(prNo) {
   const rowsEl = document.getElementById('peRows');
   if (rowsEl) rowsEl.innerHTML = rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1rem;">No included items to price.</td></tr>';
   const banner = document.getElementById('peEditBanner');
-  if (banner) { banner.style.display = 'flex'; const id = document.getElementById('peEditId'); if (id) id.textContent = `${r.prNo} · ${r.customer || ''} · ${flowEsc(r.status || '')}`; }
+  if (banner) { banner.style.display = 'flex'; const id = document.getElementById('peEditId'); if (id) id.textContent = `${r.prNo} · ${r.customer || ''} · ${flowEsc(prStatusLabel(r.status || ''))}`; }
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = false;
   const db = document.getElementById('peDocsBtn'); if (db) db.disabled = false;
   recalcPricing();
@@ -844,7 +847,7 @@ function renderPricingHistoryTable() {
   const rows = list.map((r, i) => {
     const badge = r.status === 'Migrated' || r.legacyId
       ? '<span class="flow-badge" style="background:rgba(13,148,136,0.14);color:#0f766e;">Migrated</span>'
-      : `<span class="flow-badge ${BADGE[r.status] || 'b-pending'}">${flowEsc(r.status)}</span>`;
+      : `<span class="flow-badge ${BADGE[r.status] || 'b-pending'}">${flowEsc(prStatusLabel(r.status))}</span>`;
     return `<tr class="ph-row">
         <td><strong>${flowEsc(r.prNo)}</strong>${r.legacyId ? `<div style="font-size:0.68rem;color:var(--text-muted,#64748b);">${flowEsc(r.legacyId)}</div>` : ''}</td>
         <td>${flowEsc(flowDate(r.date) || '')}</td>

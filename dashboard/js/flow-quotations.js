@@ -518,8 +518,11 @@ async function submitPdf() {
     SigName: doc.sigName, SigDesignation: doc.sigDesignation, SigViber: doc.sigViber,
     SigMobile: doc.sigMobile, SigEmail: doc.sigEmail
   });
+  // The number SHOWN on the PDF (title chip + filename) is editable in the dialog; the Drive-link
+  // row write below stays keyed on the real record number so the quotation row still gets its link.
+  const displayNo = (document.getElementById('pdfQuotationNo').value || '').trim() || pdfQuote.quotationNo;
   const payload = {
-    quotationNo: pdfQuote.quotationNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
+    quotationNo: displayNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
     vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc,
     items: (pdfQuote.items || []).map(it => {
       // Match on itemNo AND name so N/A-numbered items don't grab another N/A row's description.
@@ -535,7 +538,7 @@ async function submitPdf() {
   btn.disabled = true; btn.textContent = 'Generating...';
   try {
     const { link } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
-      'quotationNo', pdfQuote.quotationNo, `Quotation_${pdfQuote.quotationNo}.pdf`);
+      'quotationNo', pdfQuote.quotationNo, `Quotation_${displayNo}.pdf`);
     flowMsg('pdfModalMsg', link ? 'PDF generated and saved to Drive.' : 'PDF generated (Drive save skipped — backend not configured).', true);
     await loadQuotations();
     if (link) setTimeout(closePdfModal, 900);

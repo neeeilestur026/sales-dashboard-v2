@@ -928,7 +928,7 @@ async function loadNotifications() {
           if (returned.length > 0) {
             notifications.push({
               icon: 'report', color: '#22c55e',
-              text: returned.length + ' pricing request(s) returned with final prices',
+              text: returned.length + ' pricing request(s) ready for quotation (final prices set)',
               link: 'flow-pricing-request.html'
             });
           }
