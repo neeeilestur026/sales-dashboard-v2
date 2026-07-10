@@ -49,7 +49,7 @@
         <div class="report-head">
           <div>
             <h1>Update 2025 Costs</h1>
-            <div class="meta">Writes the complete 2025 cost breakdown from <b>SalesOrder_2025.xlsx</b> (embedded) into each 2025 sales order's cost detail — purchase of goods, bank charges, shipment cost, import duties, local charges and delivery, with the International/Local label. Revenue is kept from the system. Idempotent, safe to re-run; a backup is saved before every apply.</div>
+            <div class="meta">Writes the complete 2025 cost breakdown from <b>SalesOrder_2025.xlsx</b> (embedded) into each 2025 sales order's cost detail — purchase of goods, bank charges, shipment cost, import duties, local charges and delivery, with the International/Local label. <b>Purchase of goods:</b> international orders use the <b>Peso Amount</b> actually paid (the cost column is foreign currency); local orders use the <b>Total Cost per PO</b> (already in pesos). Revenue is kept from the system. ⚠️ marks groups needing review (hover for details). Idempotent, safe to re-run; a backup is saved before every apply.</div>
           </div>
           <button class="btn btn-sm btn-primary" id="loadBtn">Load &amp; Match</button>
         </div>
