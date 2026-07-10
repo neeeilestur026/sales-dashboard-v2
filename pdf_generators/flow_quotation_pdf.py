@@ -55,6 +55,10 @@ ACCENT = HexColor("#C0392B")                            # the single theming tok
 ACCENT_DARK = _mix(ACCENT, colors.black, 0.28)
 ACCENT_SOFT = _mix(ACCENT, colors.white, 0.92)
 ACCENT_BORDER = _mix(ACCENT, colors.white, 0.72)
+# Gradient pair: EVERY gradient element (top bar, QUOTATION title, table header,
+# grand-total bar, footer band) uses one identical 135° fade dark blue → red.
+ACCENT_G1 = HexColor("#1F4E79")                         # gradient start (dark blue)
+ACCENT_G2 = ACCENT                                      # gradient end (red)
 
 HEADING = HexColor("#1a1a1a")
 TEXT = HexColor("#333333")
@@ -252,7 +256,8 @@ class _GradientBar(Flowable):
         clip = c.beginPath()
         clip.roundRect(0, 0, self.width, self.height, 8 * PX)
         c.clipPath(clip, stroke=0, fill=0)
-        c.linearGradient(0, 0, self.width, 0, [ACCENT, ACCENT_DARK], extend=False)
+        # 135° fade (top-left → bottom-right), same pair as every other gradient element
+        c.linearGradient(0, self.height, self.width, 0, [ACCENT_G1, ACCENT_G2], extend=True)
         c.setFillColor(colors.white)
         c.setFont(ARCH_B, 13 * PX)
         c.drawString(18 * PX, self.height / 2 - 13 * PX * 0.36, self.label)
@@ -329,7 +334,8 @@ class _QuoTemplate(BaseDocTemplate):
         clip = canvas.beginPath()
         clip.rect(x, y, w, h)
         canvas.clipPath(clip, stroke=0, fill=0)
-        canvas.linearGradient(x, y, x + w, y, [ACCENT, ACCENT_DARK], extend=False)
+        # 135° fade (top-left → bottom-right): PDF y-axis points up, so start at (x, y+h)
+        canvas.linearGradient(x, y + h, x + w, y, [ACCENT_G1, ACCENT_G2], extend=True)
         canvas.restoreState()
 
     def _draw_locked_header(self, canvas):
@@ -352,10 +358,25 @@ class _QuoTemplate(BaseDocTemplate):
             canvas.drawString(MARGIN, top - 16 * PX, COMPANY_NAME)
             canvas.restoreState()
         title_size = 46 * PX
+        title_y = top - title_size * 0.82
+        title_w = pdfmetrics.stringWidth("QUOTATION", ARCH_XB, title_size)
+        title_x = PAGE_W - MARGIN - title_w
         canvas.saveState()
-        canvas.setFillColor(ACCENT)
-        canvas.setFont(ARCH_XB, title_size)
-        canvas.drawRightString(PAGE_W - MARGIN, top - title_size * 0.82, "QUOTATION")
+        try:
+            # Gradient TITLE: the glyphs become the clipping path (text render mode 7),
+            # then the shared 135° blue→red fade is painted through them.
+            txt = canvas.beginText(title_x, title_y)
+            txt.setTextRenderMode(7)
+            txt.setFont(ARCH_XB, title_size)
+            txt.textLine("QUOTATION")
+            canvas.drawText(txt)
+            canvas.linearGradient(title_x, title_y + title_size * 0.75,
+                                  title_x + title_w, title_y - title_size * 0.1,
+                                  [ACCENT_G1, ACCENT_G2], extend=True)
+        except Exception:
+            canvas.setFillColor(ACCENT)
+            canvas.setFont(ARCH_XB, title_size)
+            canvas.drawRightString(PAGE_W - MARGIN, title_y, "QUOTATION")
         canvas.restoreState()
         _draw_ref_chip(canvas, PAGE_W - MARGIN, top - title_size * 0.95 - 6 * PX, self._ref_no)
 
@@ -482,13 +503,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     story.append(row_c)
     story.append(Spacer(1, 8 * PX))
 
-    # ── Brand strip (brand list only) ──
-    strip_para = Paragraph(
-        f"<font name='{LATO_B}' size={11 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_esc(BRANDS)}</font>",
-        _ps("brands", 11, ACCENT_DARK, leading_mult=1.4))
-    strip = _card([strip_para], CONTENT_W, ACCENT_SOFT, border=ACCENT_BORDER, pad=(16, 10))
-    story.append(strip)
-    story.append(Spacer(1, 9 * PX))
+    # (Brand strip moved to the BOTTOM of the document — see the tail block.)
 
     # ── Items table ──
     col_w = [36 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
@@ -582,10 +597,17 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                      Paragraph(_fmt(it.get("total_unit_price")), amt_st)])
 
     items_tbl = Table(rows, colWidths=col_w, repeatRows=1)
-    items_tbl.setStyle(TableStyle([
-        # header: two-tone gradient fake (spec: #/description = accent, numeric = accentDark)
-        ("BACKGROUND", (0, 0), (1, 0), ACCENT),
-        ("BACKGROUND", (2, 0), (-1, 0), ACCENT_DARK),
+    # Header: ONE continuous blue→red fade across all columns — each cell gets a horizontal
+    # gradient whose start/end colors are sampled at its column boundaries, so the five cells
+    # stitch into a single fade (and it repeats correctly on later pages via repeatRows).
+    total_w = sum(col_w)
+    header_grads, xpos = [], 0.0
+    for ci, cw in enumerate(col_w):
+        c_start = _mix(ACCENT_G1, ACCENT_G2, xpos / total_w)
+        c_end = _mix(ACCENT_G1, ACCENT_G2, (xpos + cw) / total_w)
+        header_grads.append(("BACKGROUND", (ci, 0), (ci, 0), ["HORIZONTAL", c_start, c_end]))
+        xpos += cw
+    items_tbl.setStyle(TableStyle(header_grads + [
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, CARD_B]),
         ("BOX", (0, 0), (-1, -1), 1, HAIR_EC),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -688,6 +710,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         tail.append(Paragraph(f"<b>Note:</b> {_esc(note)}", _ps("note", 11.5, BODY2)))
         tail.append(Spacer(1, 5 * PX))
     tail.append(Paragraph(DISCLAIMER, _ps("disc", 10.5, LABELA, leading_mult=1.55)))
+    # Brand strip sits at the very bottom, just below the disclaimer (moved from the header).
+    strip_para = Paragraph(
+        f"<font name='{LATO_B}' size={11 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_esc(BRANDS)}</font>",
+        _ps("brands", 11, ACCENT_DARK, leading_mult=1.4))
+    tail.append(Spacer(1, 8 * PX))
+    tail.append(_card([strip_para], CONTENT_W, ACCENT_SOFT, border=ACCENT_BORDER, pad=(16, 10)))
     story.append(KeepTogether(tail))
 
     doc.build(story, canvasmaker=_NumberedCanvas)
