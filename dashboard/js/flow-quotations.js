@@ -493,6 +493,7 @@ function openPdfModal(no) {
       <span class="img-state" id="pdfImgState${i}" style="font-size:0.72rem;white-space:nowrap;"></span>
       <input type="file" accept="image/png,image/jpeg,image/webp" onchange="pickPdfImage(this, ${i})">
     </div>`).join('');
+  const br = document.getElementById('pdfBrochures'); if (br) br.value = '';
   document.getElementById('pdfModalMsg').style.display = 'none';
   document.getElementById('pdfModal').classList.add('open');
 }
@@ -570,9 +571,14 @@ async function submitPdf() {
   // The number SHOWN on the PDF (title chip + filename) is editable in the dialog; the Drive-link
   // row write below stays keyed on the real record number so the quotation row still gets its link.
   const displayNo = (document.getElementById('pdfQuotationNo').value || '').trim() || pdfQuote.quotationNo;
+  // optional PDF attachments → appended by the server after the quotation's last page
+  const brFiles = Array.from((document.getElementById('pdfBrochures') || {}).files || []);
+  let brochures = [];
+  try { brochures = await Promise.all(brFiles.map(fileToDataURL)); }
+  catch (e) { flowMsg('pdfModalMsg', 'Could not read an attached PDF — ' + e.message, false); return; }
   const payload = {
     quotationNo: displayNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
-    vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc,
+    vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc, brochures,
     items: (pdfQuote.items || []).map((it, i) => {
       // Match on itemNo AND name so N/A-numbered items don't grab another N/A row's description.
       const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
