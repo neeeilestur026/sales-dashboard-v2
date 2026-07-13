@@ -1,6 +1,7 @@
 /* flow-sales-orders.js — sales orders that load from a quotation */
 let soQuotations = [];
 let soList = [];
+let soCds = {};        // soNo → SOCostDetails record (for the COGS column + Costs editor prefill)
 let soSession = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -118,8 +119,13 @@ async function loadSOs() {
   const c = document.getElementById('listContainer');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const res = await fetchFlow('getSalesOrders');
+    const [res, cdRes] = await Promise.all([
+      fetchFlow('getSalesOrders'),
+      fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
+    ]);
     soList = (res && res.data) || [];
+    soCds = {};
+    ((cdRes && cdRes.data) || []).forEach(cd => { soCds[String(cd.soNo)] = cd; });
     // Most recent sales order first (by date, then SO number).
     soList.sort((a, b) =>
       (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
@@ -183,10 +189,11 @@ function renderSOs() {
   if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
   if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
-  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
+  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td>${flowEsc(s.soNo)}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
-    <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td>${s.items.length}</td>
-    <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")'>Docs</button>
+    <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
+    <td style="white-space:nowrap;"><button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>Costs</button>
+    <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
     <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button></td></tr>`).join('')}</tbody></table>`;
 }
@@ -216,4 +223,39 @@ async function deleteSO(no) {
     if (!res.success) throw new Error(res.message);
     await loadSOs();
   } catch (e) { alert(e.message); }
+}
+
+
+// ─── Cost breakdown (COGS column + inline editor) ─────────────────────────────
+// COGS cell: the recorded Total COGS, or an amber "no cost" badge (same gap the audits flag).
+function soCogsCell(s) {
+  const cd = soCds[String(s.soNo)];
+  if (!cd) return '<span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;">no cost</span>';
+  const gp = flowNum(cd.sales) - flowNum(cd.totalCOGS);
+  return `<span title="Gross profit ₱${gp.toLocaleString('en-US', { minimumFractionDigits: 2 })}">${flowMoney(cd.totalCOGS, 'PHP')}</span>`;
+}
+
+// Open the shared cost editor (so-cost-editor.js) for any SO — historical or new.
+// Prefills from the existing cost record; otherwise a blank record seeded from the SO
+// (sales = SO total, type from the Supplier label). Saving upserts SOCostDetails,
+// recomputes COGS, regenerates the SO's migrated invoice/receiving and re-syncs the label.
+function soEditCost(no) {
+  if (typeof openSoCostEditor !== 'function') { alert('Cost editor not loaded.'); return; }
+  const s = soList.find(x => String(x.soNo) === String(no));
+  if (!s) return;
+  const cd = soCds[String(no)];
+  const prefill = cd ? {
+    soNo: String(s.soNo), customer: s.customer, date: flowDate(s.date), sales: cd.sales,
+    cogsType: cd.cogsType || 'local', shippingCompany: cd.shippingCompany || '',
+    purchaseOfGoods: cd.purchaseOfGoods, bankChargeCOGS: cd.bankChargeCOGS,
+    dutiesAndTaxes: cd.dutiesAndTaxes, bankChargeShipping: cd.bankChargeShipping,
+    shippingCost: cd.shippingCost, localCharges: cd.localCharges,
+    deliveryToOffice: cd.deliveryToOffice, deliveryToClient: cd.deliveryToClient,
+  } : {
+    soNo: String(s.soNo), customer: s.customer, date: flowDate(s.date), sales: flowNum(s.total),
+    cogsType: s.supplierType === 'International' ? 'international' : 'local', shippingCompany: '',
+    purchaseOfGoods: 0, bankChargeCOGS: 0, dutiesAndTaxes: 0, bankChargeShipping: 0,
+    shippingCost: 0, localCharges: 0, deliveryToOffice: 0, deliveryToClient: 0,
+  };
+  openSoCostEditor(prefill, () => loadSOs());
 }

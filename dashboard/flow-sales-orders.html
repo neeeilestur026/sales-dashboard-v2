@@ -26,7 +26,7 @@
         <div><label>Load Quotation</label><select id="loadQuotation" onchange="loadFromQuotation()"></select></div>
         <div><label>Source Quotation No</label><input type="text" id="quotationNo" readonly></div>
         <div><label>Customer *</label><input type="text" id="customer" required></div>
-        <div><label>Date</label><input type="date" id="date"></div>
+        <div><label>Date <span style="font-weight:400;color:var(--text-muted,#64748b);">(can be back-dated, e.g. 2024 / 2025, to record historical orders)</span></label><input type="date" id="date"></div>
         <div><label>Status</label><select id="status"><option>Open</option><option>Delivered</option><option>Invoiced</option><option>Closed</option></select></div>
         <div><label>Supplier Type <span style="font-weight:400;color:var(--text-muted,#64748b);">(label)</span></label><select id="soSupplierType"><option value="">—</option><option>Local</option><option>International</option></select></div>
       </div>
@@ -73,6 +73,7 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
+  <script src="js/so-cost-editor.js"></script>
   <script src="js/flow-sales-orders.js"></script>
 </body>
 </html>

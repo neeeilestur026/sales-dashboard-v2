@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 75;   // A89 rename quotation number on edit — items/SO-link/docs follow (74: pairing-on-edit · 73: A86 · 72: A84)
+var FLOW_VERSION = 76;   // A101 back-dated SOs skip shipment auto-create (75: A89 rename · 74: pairing-on-edit · 73: A86)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -520,7 +520,12 @@ function createSalesOrder(p) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
   // Auto-create the shipment-monitoring timeline for this order (flow-native).
-  _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
+  // Skipped for BACK-DATED orders (date in a prior year): historical SOs recorded by
+  // accounting shouldn't spawn live shipment-tracking rows.
+  var soYear = parseInt(_dateStr(p.date || _now()).slice(0, 4), 10) || 0;
+  if (soYear >= new Date().getFullYear()) {
+    _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
+  }
   _refStore('createSalesOrder', p.clientRef, no);
   return { success: true, soNo: no, message: 'Sales Order created.' };
 }
