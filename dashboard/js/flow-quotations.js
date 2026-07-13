@@ -469,7 +469,7 @@ async function deleteQuotation(no) {
 
 // ─── PDF generation ───────────────────────────────
 let pdfQuote = null;            // the quotation being printed
-const pdfImages = {};           // itemNo → data URL
+const pdfImages = {};           // row INDEX → data URL (itemNo keying collided on duplicate/N-A numbers)
 
 function openPdfModal(no) {
   const q = qList.find(x => x.quotationNo === no);
@@ -490,7 +490,8 @@ function openPdfModal(no) {
   document.getElementById('pdfItems').innerHTML = (q.items || []).map((it, i) => `
     <div class="pdf-item-row">
       <span class="grow">${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)} · ${flowNum(it.qty)} × ${flowMoney(it.price, 'PHP')}</span>
-      <input type="file" accept="image/png,image/jpeg" onchange="pickPdfImage(this, '${flowEsc(it.itemNo)}')">
+      <span class="img-state" id="pdfImgState${i}" style="font-size:0.72rem;white-space:nowrap;"></span>
+      <input type="file" accept="image/png,image/jpeg,image/webp" onchange="pickPdfImage(this, ${i})">
     </div>`).join('');
   document.getElementById('pdfModalMsg').style.display = 'none';
   document.getElementById('pdfModal').classList.add('open');
@@ -498,11 +499,50 @@ function openPdfModal(no) {
 
 function closePdfModal() { document.getElementById('pdfModal').classList.remove('open'); }
 
-async function pickPdfImage(input, itemNo) {
+async function pickPdfImage(input, idx) {
   const file = input.files && input.files[0];
-  if (!file) { delete pdfImages[itemNo]; return; }
-  if (file.size > 5 * 1024 * 1024) { flowMsg('pdfModalMsg', 'Image too large (max 5MB): ' + file.name, false); input.value = ''; return; }
-  try { pdfImages[itemNo] = await fileToDataURL(file); } catch (e) { /* ignore */ }
+  const tag = document.getElementById('pdfImgState' + idx);
+  if (!file) { delete pdfImages[idx]; if (tag) tag.textContent = ''; return; }
+  if (file.size > 25 * 1024 * 1024) {
+    delete pdfImages[idx]; input.value = '';
+    flowMsg('pdfModalMsg', 'Image too large (max 25MB): ' + file.name, false);
+    if (tag) { tag.textContent = '✗ too large'; tag.style.color = '#dc2626'; }
+    return;
+  }
+  try {
+    // Downscale in the browser (the PDF thumbnail is tiny) — phone photos of any size now work,
+    // and the old silent 5MB rejection that left PDFs without their attached images is gone.
+    pdfImages[idx] = await _downscaleImage(file, 900, 0.85);
+    if (tag) { tag.textContent = '✓ image attached'; tag.style.color = '#15803d'; }
+  } catch (e) {
+    delete pdfImages[idx]; input.value = '';
+    flowMsg('pdfModalMsg', 'Could not read image "' + file.name + '" — ' + (e.message || 'unsupported format (use JPG/PNG)'), false);
+    if (tag) { tag.textContent = '✗ failed'; tag.style.color = '#dc2626'; }
+  }
+}
+
+// Resize any picked image to ≤maxDim px and re-encode as JPEG (canvas). Rejects on undecodable files.
+function _downscaleImage(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+        const w = Math.max(1, Math.round((img.width || 1) * scale));
+        const h = Math.max(1, Math.round((img.height || 1) * scale));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);   // flatten PNG transparency onto white
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', quality));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unsupported or corrupted image')); };
+    img.src = url;
+  });
 }
 
 async function submitPdf() {
@@ -533,14 +573,14 @@ async function submitPdf() {
   const payload = {
     quotationNo: displayNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
     vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc,
-    items: (pdfQuote.items || []).map(it => {
+    items: (pdfQuote.items || []).map((it, i) => {
       // Match on itemNo AND name so N/A-numbered items don't grab another N/A row's description.
       const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
       return {
         itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
         origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',  // requested vs offered
         description: (inv && inv.description) || it.itemName || '',  // multi-line desc from inventory
-        imageDataUrl: pdfImages[it.itemNo] || ''
+        imageDataUrl: pdfImages[i] || ''
       };
     })
   };
