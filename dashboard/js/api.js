@@ -135,6 +135,16 @@ async function fetchFromAPI(params, options = {}) {
             await _sleep(500 * (i + 1));
             continue;
           }
+          // Apps Script also intermittently answers without CORS headers mid-redirect — the browser
+          // blocks the response and fetch throws a network-level TypeError ("Failed to fetch" Chrome,
+          // "Load failed" Safari, "NetworkError…" Firefox). GETs are idempotent reads: retry them.
+          // (_postMutation deliberately does NOT get this — a CORS-blocked response may mean the
+          // mutation actually executed, and retrying risks a double-write.)
+          if ((error.name === 'TypeError' || /Failed to fetch|Load failed|NetworkError/i.test(error.message || '')) && i < attempts - 1) {
+            lastErr = new Error('Network hiccup reaching the server.');
+            await _sleep(500 * (i + 1));
+            continue;
+          }
           console.error('API Error:', error);
           throw new Error(error.message || 'Unable to connect to the server.');
         }
