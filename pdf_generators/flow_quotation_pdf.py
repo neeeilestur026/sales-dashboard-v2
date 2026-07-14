@@ -506,20 +506,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # (Brand strip moved to the BOTTOM of the document — see the tail block.)
 
     # ── Items table ──
-    # VAT-inclusive quotations show each line's AMOUNT as the client-facing FINAL (unit ex-VAT × qty
-    # × 1.12) so the per-item figures match the management pricing engine's FINAL column; the unit
-    # price column stays VAT-exclusive. Exclusive/zero-rated keep plain qty × unit amounts.
-    vat_opt = str(summary.get("vat_option") or "inclusive").strip().lower()
-    inc_amounts = vat_opt == "inclusive"
     col_w = [36 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
     col_w[1] = CONTENT_W - col_w[0] - col_w[2] - col_w[3] - col_w[4]
     head_l = _ps("thL", 11, colors.white, ARCH_B)
     head_r = _ps("thR", 11, colors.white, ARCH_B, align=2)
-    unit_hdr = "UNIT PRICE (VAT-EX)" if inc_amounts else "UNIT PRICE"
-    amt_hdr = "AMOUNT (VAT-INC)" if inc_amounts else "AMOUNT"
     rows = [[Paragraph("#", head_l), Paragraph("ITEM &amp; DESCRIPTION", head_l),
-             Paragraph("QTY", head_r), Paragraph(unit_hdr, head_r), Paragraph(amt_hdr, head_r)]]
-    sum_line_amounts = 0.0
+             Paragraph("QTY", head_r), Paragraph("UNIT PRICE", head_r), Paragraph("AMOUNT", head_r)]]
 
     title_st = _ps("itTitle", 13, HEADING, ARCH_SB, leading_mult=1.3)
     sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.28)
@@ -600,12 +592,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             idx_txt = str(no)
         qty_cell = [Paragraph(f"{float(it.get('quantity') or 0):.1f}", qty_st),
                     Paragraph(str(it.get("uom") or "pc(s)"), uom_st)]
-        line_ex = float(it.get("total_unit_price") or 0)               # qty × unit (VAT-ex)
-        line_amt = round(line_ex * 1.12, 2) if inc_amounts else line_ex
-        sum_line_amounts += line_amt
         rows.append([Paragraph(idx_txt, idx_st), desc_cell, qty_cell,
                      Paragraph(_fmt(it.get("total_amount")), price_st),
-                     Paragraph(_fmt(line_amt), amt_st)])
+                     Paragraph(_fmt(it.get("total_unit_price")), amt_st)])
 
     items_tbl = Table(rows, colWidths=col_w, repeatRows=1)
     # Header: ONE continuous blue→red fade across all columns — each cell gets a horizontal
@@ -633,19 +622,15 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     opt = summary.get("vat_option", "inclusive")
     tot_rows = []
     if opt == "inclusive":
-        # Derive VAT + grand total from the per-line rounded amounts so the summary equals the sum
-        # of the AMOUNT column to the centavo (the summary dict's unrounded figures can drift ±1¢).
-        total_ex = float(summary["total_ex_vat"])
-        total_inc = round(sum_line_amounts, 2)
         tot_rows = [[Paragraph("Total Amount (VAT Exclusive)", _ps("tl1", 13, MUTED7)),
-                     Paragraph("PHP " + _fmt(total_ex), _ps("tv1", 13, TEXT, LATO_B, align=2))],
+                     Paragraph("PHP " + _fmt(summary["total_ex_vat"]), _ps("tv1", 13, TEXT, LATO_B, align=2))],
                     [Paragraph("VAT (12%)", _ps("tl2", 13, MUTED7)),
-                     Paragraph("PHP " + _fmt(round(total_inc - total_ex, 2)), _ps("tv2", 13, TEXT, LATO_B, align=2))]]
-        grand_text, grand_amount = "Total (VAT Inclusive)", total_inc
+                     Paragraph("PHP " + _fmt(summary["vat"]), _ps("tv2", 13, TEXT, LATO_B, align=2))]]
+        grand_text = "Total (VAT Inclusive)"
     elif opt == "zero":
-        grand_text, grand_amount = "Total (Zero-Rated)", summary["total"]
+        grand_text = "Total (Zero-Rated)"
     else:
-        grand_text, grand_amount = "Total (VAT Exclusive)", summary["total"]
+        grand_text = "Total (VAT Exclusive)"
 
     tot_w = 340 * PX
     blocks = []
@@ -657,7 +642,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * PX)]))
         blocks.append(t)
         blocks.append(Spacer(1, 8 * PX))
-    blocks.append(_GradientBar(tot_w, grand_text, "PHP " + _fmt(grand_amount)))
+    blocks.append(_GradientBar(tot_w, grand_text, "PHP " + _fmt(summary["total"])))
     totals_wrap = Table([[blocks]], colWidths=[CONTENT_W])
     totals_wrap.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), CONTENT_W - tot_w),
                                      ("RIGHTPADDING", (0, 0), (-1, -1), 0),
