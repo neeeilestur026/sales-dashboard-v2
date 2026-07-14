@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 76;   // A101 back-dated SOs skip shipment auto-create (75: A89 rename · 74: pairing-on-edit · 73: A86)
+var FLOW_VERSION = 77;   // A104 quotation Subject column + manual quotation numbers (76: backdated-SO shipment skip · 75: rename · 74: pairing-on-edit)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -33,7 +33,7 @@ var SCHEMA = {
               'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated'],
 
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
-                   'Created By Role', 'Approval Note', 'Approved By', 'Approved At'],
+                   'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject'],
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
                    'Orig Item No', 'Orig Item Name'],
 
@@ -384,6 +384,7 @@ function getQuotations(p) {
       total: _num(q['Total']) || itemsTotal, createdBy: q['Created By'], createdAt: q['Created At'],
       pdfLink: q['PDF Link'] || '', createdByRole: q['Created By Role'] || '',
       approvalNote: q['Approval Note'] || '', approvedBy: q['Approved By'] || '', approvedAt: q['Approved At'] || '',
+      subject: q['Subject'] || '',
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
@@ -407,6 +408,15 @@ function createQuotation(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var dup = _refSeen('createQuotation', p.clientRef);
   if (dup) return { success: true, quotationNo: dup, duplicate: true, message: 'Quotation created.' };
+  // Explicit numbers are the company's own quotation codes — reject a collision with an existing record.
+  // (Placed AFTER the clientRef idempotency return so a safe retry of the same create still succeeds.)
+  if (p.quotationNo) {
+    var wanted = String(p.quotationNo).toLowerCase();
+    var clash = _rows('Quotations').some(function (r) {
+      return String(r['Quotation No']).toLowerCase() === wanted;
+    });
+    if (clash) return { success: false, message: 'Quotation No "' + p.quotationNo + '" already exists.' };
+  }
   var no = p.quotationNo || _nextNumber('Quotations', 1, 'QTN');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
@@ -416,7 +426,7 @@ function createQuotation(p) {
   var initialStatus = p.status ||
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
-    creatorRole, '', '', '']);
+    creatorRole, '', '', '', p.subject || '']);
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || ''];
@@ -454,6 +464,8 @@ function updateQuotation(p) {
       break;
     }
   }
+  // The subject shows on the PDF and is captured on the form — keep it in sync on edit.
+  if (p.subject !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Subject', p.subject);
   // Items: delete rows keyed on the OLD number, re-append keyed on the new one.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     // keep the requested-vs-offered pairing across edits (same 8 columns as createQuotation)
@@ -2643,7 +2655,9 @@ function createQuotationFromPR(p) {
   });
   if (!qItems.length) return { success: false, message: 'No included, priced items to quote.' };
   // New quotation starts as Draft (creator = the requesting sales user) → enters the approval workflow.
+  // The sales rep types their own quotation code + subject on the form; both carry through here.
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
+    quotationNo: p.quotationNo || '', subject: p.subject || '',
     createdBy: p.actorName || hdr['Requested By'] || '', actorRole: 'sales', items: JSON.stringify(qItems) });
   if (!qres.success) return qres;
   _setPRStatus(p.prNo, 'Quoted', 'Quotation ' + qres.quotationNo);

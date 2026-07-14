@@ -241,14 +241,37 @@ async function createInventoryItem() {
   } catch (e) { flowMsg('niMsg', e.message, false); }
 }
 
+// The quotation number is the company's OWN code and the subject shows on the PDF —
+// both must be typed on every create (no auto-numbering, no auto-subject).
+function qRequireManualFields() {
+  const noEl = document.getElementById('quotationNoInput');
+  const typedNo = (noEl.value || '').trim();
+  if (!typedNo) {
+    flowMsg('formMsg', 'Quotation No is required — type your own quotation code.', false);
+    noEl.focus();
+    return null;
+  }
+  const subEl = document.getElementById('subjectInput');
+  const subject = ((subEl && subEl.value) || '').trim();
+  if (!subject) {
+    flowMsg('formMsg', 'Subject is required — type the quotation subject.', false);
+    if (subEl) subEl.focus();
+    return null;
+  }
+  return { typedNo, subject };
+}
+
 async function saveQuotation() {
   // Loaded from a returned PR: create via createQuotationFromPR so the management final prices are
   // applied and the PR flips to Quoted; then open the new quotation's review.
   if (qFromPr && !document.getElementById('quotationNo').value) {
+    const manual = qRequireManualFields();
+    if (!manual) return;
     const btn = document.getElementById('saveBtn');
     btn.disabled = true; btn.textContent = 'Creating...';
     try {
-      const res = await postFlow('createQuotationFromPR', { prNo: qFromPr });
+      const res = await postFlow('createQuotationFromPR',
+        { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject });
       if (!res.success) throw new Error(res.message);
       window.location.href = 'flow-quotations.html?review=' + encodeURIComponent(res.quotationNo || '');
       return;
@@ -264,10 +287,26 @@ async function saveQuotation() {
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
   const editingNo = document.getElementById('quotationNo').value;      // hidden edit-key
-  const customNo = (document.getElementById('quotationNoInput').value || '').trim();
+  const manual = qRequireManualFields();                               // required on create AND edit
+  if (!manual) return;
+  const customNo = manual.typedNo;
+  if (!editingNo) {
+    // Duplicate check against the FULL list — sales' own qList holds only their quotations.
+    try {
+      const all = await fetchFlow('getQuotations', {});
+      const clash = ((all && all.data) || [])
+        .some(q => String(q.quotationNo).toLowerCase() === customNo.toLowerCase());
+      if (clash) {
+        flowMsg('formMsg', `Quotation No "${customNo}" already exists — open it with Edit instead.`, false);
+        document.getElementById('quotationNoInput').focus();
+        return;
+      }
+    } catch (e) { /* offline check is best-effort; the server rejects duplicates too */ }
+  }
   const payload = {
-    quotationNo: editingNo || customNo,                                // custom number on create
+    quotationNo: editingNo || customNo,                                // the typed code on create
     customer, date: document.getElementById('date').value,
+    subject: manual.subject,
     createdBy: qSession.name, items: JSON.stringify(items)
   };
   if (!editingNo) payload.clientRef = flowClientRef();                 // idempotent create (safe retry)
@@ -305,6 +344,7 @@ async function saveQuotation() {
 function resetForm() {
   document.getElementById('quotationNo').value = '';
   const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = ''; qni.disabled = false; }
+  const subj = document.getElementById('subjectInput'); if (subj) subj.value = '';
   document.getElementById('customer').value = '';
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
@@ -450,6 +490,7 @@ function editQuotation(no) {
   // (items, SO link, and attached docs follow; backend rejects duplicates).
   const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = q.quotationNo; qni.disabled = false; }
   document.getElementById('customer').value = q.customer;
+  const subj = document.getElementById('subjectInput'); if (subj) subj.value = q.subject || '';
   document.getElementById('date').value = flowDate(q.date);
   document.getElementById('formTitle').textContent = 'Edit ' + q.quotationNo;
   document.getElementById('itemRows').innerHTML = '';
@@ -478,7 +519,8 @@ function openPdfModal(no) {
   Object.keys(pdfImages).forEach(k => delete pdfImages[k]);
   document.getElementById('pdfQuotationNo').value = q.quotationNo;
   document.getElementById('pdfModalSub').textContent = `${q.quotationNo} · ${q.customer} · ${q.items.length} item(s)`;
-  document.getElementById('pdfSubject').value = '';   // no auto-subject — must be typed before generating (required)
+  // Prefill from the subject typed at creation (stored on the record); still editable + required.
+  document.getElementById('pdfSubject').value = q.subject || '';
   // restore remembered defaults (terms, signatory)
   const d = flowLoadDefaults('quotation');
   ['Address', 'Attention', 'Designation', 'Email', 'Validity', 'Delivery', 'Payment', 'Warranty',
