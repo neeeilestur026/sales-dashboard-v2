@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 77;   // A104 quotation Subject column + manual quotation numbers (76: backdated-SO shipment skip · 75: rename · 74: pairing-on-edit)
+var FLOW_VERSION = 78;   // A105 from-PR quotations carry ₱0 freebie items (77: Subject column + manual quotation numbers · 76: backdated-SO shipment skip)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2646,9 +2646,11 @@ function createQuotationFromPR(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
   var hdr = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(p.prNo); })[0];
   if (!hdr) return { success: false, message: 'PR not found.' };
+  // Carry EVERY included item — ₱0 final prices are freebies the client must still see on the
+  // quotation (previously `Final Price > 0` silently dropped them).
   var qItems = _rows('PricingRequestItems').filter(function (r) {
     return String(r['PR No']) === String(p.prNo)
-      && (r['Included'] === true || String(r['Included']) === 'true') && _num(r['Final Price']) > 0;
+      && (r['Included'] === true || String(r['Included']) === 'true');
   }).map(function (r) {
     return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']),
              origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '' };

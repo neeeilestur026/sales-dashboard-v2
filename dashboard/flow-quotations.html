@@ -79,10 +79,11 @@
 
       <div class="flow-form">
         <div><label>Quotation No. (shown on the PDF)</label><input type="text" id="pdfQuotationNo" placeholder="e.g. 2026-276-ADM-…"></div>
-        <div><label>VAT</label><select id="pdfVat"><option value="inclusive">VAT Inclusive (12%)</option><option value="exclusive">VAT Exclusive</option><option value="zero">Zero-Rated</option></select></div>
+        <div><label>VAT</label><select id="pdfVat" onchange="updatePdfTotalPreview()"><option value="inclusive">VAT Inclusive (12%)</option><option value="exclusive">VAT Exclusive</option><option value="zero">Zero-Rated</option></select></div>
         <div><label>Format</label><select id="pdfDescMode"><option value="long">Full description</option><option value="short">Short (compact)</option></select></div>
         <div><label>Subject *</label><input type="text" id="pdfSubject" required placeholder="Required — type the quotation subject"></div>
       </div>
+      <div id="pdfTotalPreview" style="margin-top:0.4rem;padding:0.45rem 0.6rem;background:var(--bg-inset,#eef2f6);border-radius:8px;font-size:0.82rem;color:var(--text-secondary,#475569);"></div>
 
       <div class="group-title">Client</div>
       <div class="flow-form">

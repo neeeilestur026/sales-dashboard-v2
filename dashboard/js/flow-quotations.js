@@ -512,6 +512,24 @@ async function deleteQuotation(no) {
 let pdfQuote = null;            // the quotation being printed
 const pdfImages = {};           // row INDEX → data URL (itemNo keying collided on duplicate/N-A numbers)
 
+// Client-facing total preview: mirrors the PDF's math (per-line VAT-inclusive rounding) so the
+// rep sees the exact grand total the client will read BEFORE generating — with the chosen VAT option.
+function updatePdfTotalPreview() {
+  const box = document.getElementById('pdfTotalPreview');
+  if (!box || !pdfQuote) return;
+  const items = pdfQuote.items || [];
+  const ex = items.reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+  const opt = (document.getElementById('pdfVat') || {}).value || 'inclusive';
+  if (opt === 'inclusive') {
+    const inc = items.reduce((s, it) => s + Math.round(flowNum(it.qty) * flowNum(it.price) * 1.12 * 100) / 100, 0);
+    box.innerHTML = `Client-facing total: <b>${flowMoney(inc, 'PHP')}</b> (VAT Inclusive — items ${flowMoney(ex, 'PHP')} + 12% VAT; line amounts show VAT-inclusive finals)`;
+  } else if (opt === 'zero') {
+    box.innerHTML = `Client-facing total: <b>${flowMoney(ex, 'PHP')}</b> (Zero-Rated)`;
+  } else {
+    box.innerHTML = `Client-facing total: <b>${flowMoney(ex, 'PHP')}</b> (VAT Exclusive — no VAT shown to the client)`;
+  }
+}
+
 function openPdfModal(no) {
   const q = qList.find(x => x.quotationNo === no);
   if (!q) return;
@@ -519,6 +537,10 @@ function openPdfModal(no) {
   Object.keys(pdfImages).forEach(k => delete pdfImages[k]);
   document.getElementById('pdfQuotationNo').value = q.quotationNo;
   document.getElementById('pdfModalSub').textContent = `${q.quotationNo} · ${q.customer} · ${q.items.length} item(s)`;
+  // Always start at VAT Inclusive — never silently inherit the previous quotation's VAT choice
+  // (a leftover "Exclusive" here is exactly how a client-facing total went out 12% low).
+  const vatSel = document.getElementById('pdfVat'); if (vatSel) vatSel.value = 'inclusive';
+  updatePdfTotalPreview();
   // Prefill from the subject typed at creation (stored on the record); still editable + required.
   document.getElementById('pdfSubject').value = q.subject || '';
   // restore remembered defaults (terms, signatory)
