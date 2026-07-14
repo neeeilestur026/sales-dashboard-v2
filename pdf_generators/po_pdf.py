@@ -230,7 +230,9 @@ class PODocTemplate(BaseDocTemplate):
                     formatted_date = datetime.now().strftime("%B %d, %Y")
             else:
                 formatted_date = datetime.now().strftime("%B %d, %Y")
-            label_x = self.page_width - self.rightMargin - 150
+            # Left-aligned with the Payment Terms / Ship To / Date Needed column below
+            # (same x as payment_terms_x), so the right header reads as one clean block.
+            label_x = self.leftMargin + self.frame_width - 3.0 * inch
             po_number_y = self.page_height - 1.0 * inch
             po_date_y = self.page_height - 1.2 * inch
             canvas.drawString(label_x, po_number_y, f"PO No: {po_number}")

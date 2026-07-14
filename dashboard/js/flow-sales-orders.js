@@ -82,9 +82,25 @@ async function saveSO() {
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
-  const soNo = document.getElementById('soNo').value;
+  let soNo = document.getElementById('soNo').value;
+  // Creating: the SO No must be typed manually (it is the client's PO number) and be unique.
+  if (!soNo) {
+    const typed = (document.getElementById('soNoInput').value || '').trim();
+    if (!typed) {
+      flowMsg('formMsg', 'SO No is required — type the client\'s PO number.', false);
+      document.getElementById('soNoInput').focus();
+      return;
+    }
+    if (soList.some(x => String(x.soNo).toLowerCase() === typed.toLowerCase())) {
+      flowMsg('formMsg', 'SO No "' + typed + '" already exists — open it with Edit instead.', false);
+      document.getElementById('soNoInput').focus();
+      return;
+    }
+    soNo = '';   // stays empty so the create/update branch below is unchanged
+    var soNoTyped = typed;
+  }
   const payload = {
-    soNo, quotationNo: document.getElementById('quotationNo').value, customer,
+    soNo: soNo || soNoTyped, quotationNo: document.getElementById('quotationNo').value, customer,
     date: document.getElementById('date').value, status: document.getElementById('status').value,
     supplierType: document.getElementById('soSupplierType').value,
     createdBy: soSession.name, items: JSON.stringify(items)
@@ -103,6 +119,8 @@ async function saveSO() {
 
 function resetForm() {
   document.getElementById('soNo').value = '';
+  const ni = document.getElementById('soNoInput');
+  if (ni) { ni.value = ''; ni.disabled = false; }
   document.getElementById('quotationNo').value = '';
   document.getElementById('loadQuotation').value = '';
   document.getElementById('customer').value = '';
@@ -204,6 +222,8 @@ function editSO(no) {
   const s = soList.find(x => String(x.soNo) === String(no));
   if (!s) return;
   document.getElementById('soNo').value = s.soNo;
+  const ni = document.getElementById('soNoInput');
+  if (ni) { ni.value = s.soNo; ni.disabled = true; }   // the SO number is the record key — not renameable here
   document.getElementById('quotationNo').value = s.quotationNo || '';
   document.getElementById('customer').value = s.customer;
   document.getElementById('date').value = flowDate(s.date);

@@ -23,6 +23,7 @@
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Sales Order</h3>
       <input type="hidden" id="soNo" value="">
       <div class="flow-form">
+        <div><label>SO No * <span style="font-weight:400;color:var(--text-muted,#64748b);">(the client's PO number — required)</span></label><input type="text" id="soNoInput" required placeholder="e.g. 180100003867 / PDC1811…"></div>
         <div><label>Load Quotation</label><select id="loadQuotation" onchange="loadFromQuotation()"></select></div>
         <div><label>Source Quotation No</label><input type="text" id="quotationNo" readonly></div>
         <div><label>Customer *</label><input type="text" id="customer" required></div>
