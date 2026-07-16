@@ -261,6 +261,13 @@ function qRequireManualFields() {
   return { typedNo, subject };
 }
 
+// Read a discount-% input, clamped to 0–100 (blank/invalid → 0).
+function qDiscountVal(id) {
+  const el = document.getElementById(id);
+  const n = flowNum(el && el.value);
+  return Math.max(0, Math.min(100, n || 0));
+}
+
 async function saveQuotation() {
   // Loaded from a returned PR: create via createQuotationFromPR so the management final prices are
   // applied and the PR flips to Quoted; then open the new quotation's review.
@@ -271,7 +278,7 @@ async function saveQuotation() {
     btn.disabled = true; btn.textContent = 'Creating...';
     try {
       const res = await postFlow('createQuotationFromPR',
-        { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject });
+        { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject, discountPct: qDiscountVal('discountInput') });
       if (!res.success) throw new Error(res.message);
       window.location.href = 'flow-quotations.html?review=' + encodeURIComponent(res.quotationNo || '');
       return;
@@ -307,6 +314,7 @@ async function saveQuotation() {
     quotationNo: editingNo || customNo,                                // the typed code on create
     customer, date: document.getElementById('date').value,
     subject: manual.subject,
+    discountPct: qDiscountVal('discountInput'),                        // % off the total, before VAT
     createdBy: qSession.name, items: JSON.stringify(items)
   };
   if (!editingNo) payload.clientRef = flowClientRef();                 // idempotent create (safe retry)
@@ -345,6 +353,7 @@ function resetForm() {
   document.getElementById('quotationNo').value = '';
   const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = ''; qni.disabled = false; }
   const subj = document.getElementById('subjectInput'); if (subj) subj.value = '';
+  const disc = document.getElementById('discountInput'); if (disc) disc.value = '';
   document.getElementById('customer').value = '';
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
@@ -390,8 +399,14 @@ function quotationActions(q) {
 }
 
 // Total shown even if the stored Total is 0/blank (self-heals from the line items on the client).
-function qtnTotal(q) {
+// Gross ex-VAT subtotal (Σ qty×price), preferring the stored total.
+function qtnGross(q) {
   return flowNum(q.total) || (q.items || []).reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+}
+// Net after the discount (before VAT) — what the client actually pays ex-VAT.
+function qtnTotal(q) {
+  const d = Math.max(0, Math.min(100, flowNum(q.discountPct) || 0));
+  return qtnGross(q) * (1 - d / 100);
 }
 
 function quotationRow(q) {
@@ -400,7 +415,7 @@ function quotationRow(q) {
   const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
   return `<tr><td>${flowEsc(q.quotationNo)}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
-    <td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td><td>${q.items.length}</td>
+    <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
 }
@@ -439,7 +454,11 @@ function openReviewModal(no) {
   document.getElementById('qrSub').innerHTML =
     `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}`;
   const items = q.items || [];
-  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
+  const qDisc = Math.max(0, Math.min(100, flowNum(q.discountPct) || 0));
+  const discRows = qDisc > 0
+    ? `<tr><td colspan="3">Subtotal</td><td class="num">${flowMoney(qtnGross(q), 'PHP')}</td></tr>
+       <tr style="color:#0f766e;"><td colspan="3">Less: Discount (${flowNum(q.discountPct)}%)</td><td class="num">− ${flowMoney(qtnGross(q) * qDisc / 100, 'PHP')}</td></tr>` : '';
+  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}${discRows}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total${qDisc > 0 ? ' (after discount, before VAT)' : ''}</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
   const pv = document.getElementById('qrPdf');
   const fid = q.pdfLink ? ((q.pdfLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || [])[1]) : null;
   if (fid) pv.innerHTML = `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
@@ -491,6 +510,7 @@ function editQuotation(no) {
   const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = q.quotationNo; qni.disabled = false; }
   document.getElementById('customer').value = q.customer;
   const subj = document.getElementById('subjectInput'); if (subj) subj.value = q.subject || '';
+  const disc = document.getElementById('discountInput'); if (disc) disc.value = flowNum(q.discountPct) || '';
   document.getElementById('date').value = flowDate(q.date);
   document.getElementById('formTitle').textContent = 'Edit ' + q.quotationNo;
   document.getElementById('itemRows').innerHTML = '';
@@ -521,6 +541,8 @@ function openPdfModal(no) {
   document.getElementById('pdfModalSub').textContent = `${q.quotationNo} · ${q.customer} · ${q.items.length} item(s)`;
   // Prefill from the subject typed at creation (stored on the record); still editable + required.
   document.getElementById('pdfSubject').value = q.subject || '';
+  // Discount % prefilled from the record (editable — lets a rejected quote be re-priced at regen time).
+  const pd = document.getElementById('pdfDiscount'); if (pd) pd.value = flowNum(q.discountPct) || '';
   // restore remembered defaults (terms, signatory)
   const d = flowLoadDefaults('quotation');
   ['Address', 'Attention', 'Designation', 'Email', 'Validity', 'Delivery', 'Payment', 'Warranty',
@@ -620,7 +642,8 @@ async function submitPdf() {
   catch (e) { flowMsg('pdfModalMsg', 'Could not read an attached PDF — ' + e.message, false); return; }
   const payload = {
     quotationNo: displayNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
-    vatOption: document.getElementById('pdfVat').value, descMode: doc.descMode, doc, brochures,
+    vatOption: document.getElementById('pdfVat').value, discountPct: qDiscountVal('pdfDiscount'),
+    descMode: doc.descMode, doc, brochures,
     items: (pdfQuote.items || []).map((it, i) => {
       // Match on itemNo AND name so N/A-numbered items don't grab another N/A row's description.
       const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));

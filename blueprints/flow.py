@@ -196,7 +196,8 @@ def quotation_pdf():
         "payment": _s(doc.get("payment")),
         "warranty": _s(doc.get("warranty")) or "1 year warranty against factory defect",
     }
-    summary = build_summary_table(total_ex_vat, data.get("vatOption", "inclusive"))
+    summary = build_summary_table(total_ex_vat, data.get("vatOption", "inclusive"),
+                                  _num(data.get("discountPct")))
 
     try:
         pdf_bytes = build_quotation_pdf_bytes(items, images, client_details, terms,

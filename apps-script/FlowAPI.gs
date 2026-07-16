@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 77;   // A104 quotation Subject column + manual quotation numbers (76: backdated-SO shipment skip · 75: rename · 74: pairing-on-edit)
+var FLOW_VERSION = 78;   // A107 quotation Discount % column (77: Subject + manual numbers · 76: backdated-SO shipment skip · 75: rename)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -33,7 +33,7 @@ var SCHEMA = {
               'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated'],
 
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
-                   'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject'],
+                   'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %'],
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
                    'Orig Item No', 'Orig Item Name'],
 
@@ -384,7 +384,7 @@ function getQuotations(p) {
       total: _num(q['Total']) || itemsTotal, createdBy: q['Created By'], createdAt: q['Created At'],
       pdfLink: q['PDF Link'] || '', createdByRole: q['Created By Role'] || '',
       approvalNote: q['Approval Note'] || '', approvedBy: q['Approved By'] || '', approvedAt: q['Approved At'] || '',
-      subject: q['Subject'] || '',
+      subject: q['Subject'] || '', discountPct: _num(q['Discount %']) || 0,
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
@@ -426,7 +426,7 @@ function createQuotation(p) {
   var initialStatus = p.status ||
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
-    creatorRole, '', '', '', p.subject || '']);
+    creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0]);
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || ''];
@@ -466,6 +466,8 @@ function updateQuotation(p) {
   }
   // The subject shows on the PDF and is captured on the form — keep it in sync on edit.
   if (p.subject !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Subject', p.subject);
+  // Discount % (off the pre-VAT total) — persist edits so the regenerated PDF uses it.
+  if (p.discountPct !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Discount %', _num(p.discountPct) || 0);
   // Items: delete rows keyed on the OLD number, re-append keyed on the new one.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     // keep the requested-vs-offered pairing across edits (same 8 columns as createQuotation)
@@ -2657,7 +2659,7 @@ function createQuotationFromPR(p) {
   // New quotation starts as Draft (creator = the requesting sales user) → enters the approval workflow.
   // The sales rep types their own quotation code + subject on the form; both carry through here.
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
-    quotationNo: p.quotationNo || '', subject: p.subject || '',
+    quotationNo: p.quotationNo || '', subject: p.subject || '', discountPct: _num(p.discountPct) || 0,
     createdBy: p.actorName || hdr['Requested By'] || '', actorRole: 'sales', items: JSON.stringify(qItems) });
   if (!qres.success) return qres;
   _setPRStatus(p.prNo, 'Quoted', 'Quotation ' + qres.quotationNo);

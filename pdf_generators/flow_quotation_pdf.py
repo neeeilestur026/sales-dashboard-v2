@@ -400,12 +400,23 @@ class _QuoTemplate(BaseDocTemplate):
 
 
 # ── Public API (route contract unchanged) ─────────────────────────────────────
-def build_summary_table(total_ex_vat, vat_option):
-    """Totals for the summary block. Returns a dict the renderer interprets."""
+def build_summary_table(total_ex_vat, vat_option, discount_pct=0):
+    """Totals for the summary block. Returns a dict the renderer interprets.
+
+    A quotation-level discount % is applied to the pre-VAT subtotal: VAT and the grand total are
+    computed on the discounted (net) amount. `total_ex_vat` in the returned dict is the NET ex-VAT
+    figure (so the existing renderer keys keep their meaning); `gross_ex_vat`/`discount_*` carry the
+    extra rows. When discount_pct == 0 the output is identical to before (net == gross)."""
     opt = (vat_option or "inclusive").strip().lower()
-    vat = total_ex_vat * 0.12 if opt == "inclusive" else 0.0
-    return {"total_ex_vat": total_ex_vat, "vat": vat,
-            "total": total_ex_vat + vat, "vat_option": opt}
+    try:
+        dp = max(0.0, min(100.0, float(discount_pct or 0)))
+    except (TypeError, ValueError):
+        dp = 0.0
+    disc_amt = round(total_ex_vat * dp / 100.0, 2)
+    net_ex = total_ex_vat - disc_amt
+    vat = net_ex * 0.12 if opt == "inclusive" else 0.0
+    return {"gross_ex_vat": total_ex_vat, "discount_pct": dp, "discount_amt": disc_amt,
+            "total_ex_vat": net_ex, "vat": vat, "total": net_ex + vat, "vat_option": opt}
 
 
 def _card(content, width, fill, border=HAIR_E, left_accent=False, pad=(16, 8)):
@@ -620,12 +631,21 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
 
     # ── Totals (right-aligned, 340px) ──
     opt = summary.get("vat_option", "inclusive")
+    dp = summary.get("discount_pct", 0) or 0
     tot_rows = []
+    # A quotation-level discount inserts a Subtotal + "Less: Discount (X%)" pair before the VAT rows.
+    if dp > 0:
+        pct_txt = ("%g" % dp)
+        tot_rows.append([Paragraph("Subtotal (VAT Exclusive)", _ps("td0", 13, MUTED7)),
+                         Paragraph("PHP " + _fmt(summary["gross_ex_vat"]), _ps("td0v", 13, TEXT, LATO_B, align=2))])
+        tot_rows.append([Paragraph("Less: Discount (" + pct_txt + "%)", _ps("td1", 13, ACCENT_DARK)),
+                         Paragraph("− PHP " + _fmt(summary["discount_amt"]), _ps("td1v", 13, ACCENT_DARK, LATO_B, align=2))])
     if opt == "inclusive":
-        tot_rows = [[Paragraph("Total Amount (VAT Exclusive)", _ps("tl1", 13, MUTED7)),
-                     Paragraph("PHP " + _fmt(summary["total_ex_vat"]), _ps("tv1", 13, TEXT, LATO_B, align=2))],
-                    [Paragraph("VAT (12%)", _ps("tl2", 13, MUTED7)),
-                     Paragraph("PHP " + _fmt(summary["vat"]), _ps("tv2", 13, TEXT, LATO_B, align=2))]]
+        net_label = "Net (VAT Exclusive)" if dp > 0 else "Total Amount (VAT Exclusive)"
+        tot_rows += [[Paragraph(net_label, _ps("tl1", 13, MUTED7)),
+                      Paragraph("PHP " + _fmt(summary["total_ex_vat"]), _ps("tv1", 13, TEXT, LATO_B, align=2))],
+                     [Paragraph("VAT (12%)", _ps("tl2", 13, MUTED7)),
+                      Paragraph("PHP " + _fmt(summary["vat"]), _ps("tv2", 13, TEXT, LATO_B, align=2))]]
         grand_text = "Total (VAT Inclusive)"
     elif opt == "zero":
         grand_text = "Total (Zero-Rated)"

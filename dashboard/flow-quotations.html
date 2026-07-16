@@ -28,6 +28,7 @@
         <div><label>Customer *</label><input type="text" id="customer" required></div>
         <div><label>Quotation No * <span style="font-weight:400;color:var(--text-muted,#64748b);">(your own quotation code — required)</span></label><input type="text" id="quotationNoInput" required placeholder="e.g. 2026-276-ADM-…"></div>
         <div><label>Date</label><input type="date" id="date"></div>
+        <div><label>Discount % <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional — off the total, before VAT)</span></label><input type="number" id="discountInput" min="0" max="100" step="any" placeholder="0"></div>
         <div class="full"><label>Subject * <span style="font-weight:400;color:var(--text-muted,#64748b);">(shown on the PDF — required)</span></label><input type="text" id="subjectInput" required placeholder="e.g. KITO ELECTRIC CHAIN HOIST"></div>
       </div>
       <p class="flow-msg" style="display:block;background:var(--bg-inset,#eef2f6);color:var(--text-secondary,#475569);">You can create a quotation directly here — a Purchase Request is <b>optional</b>. New quotations start as <b>Draft</b>; submit for approval from the list below once ready.</p>
@@ -80,6 +81,7 @@
       <div class="flow-form">
         <div><label>Quotation No. (shown on the PDF)</label><input type="text" id="pdfQuotationNo" placeholder="e.g. 2026-276-ADM-…"></div>
         <div><label>VAT</label><select id="pdfVat"><option value="inclusive">VAT Inclusive (12%)</option><option value="exclusive">VAT Exclusive</option><option value="zero">Zero-Rated</option></select></div>
+        <div><label>Discount % <span style="font-weight:400;color:var(--text-muted,#64748b);">(before VAT)</span></label><input type="number" id="pdfDiscount" min="0" max="100" step="any" placeholder="0"></div>
         <div><label>Format</label><select id="pdfDescMode"><option value="long">Full description</option><option value="short">Short (compact)</option></select></div>
         <div><label>Subject *</label><input type="text" id="pdfSubject" required placeholder="Required — type the quotation subject"></div>
       </div>
