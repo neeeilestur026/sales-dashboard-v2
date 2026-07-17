@@ -406,13 +406,18 @@ function openSourcingEdit(no) {
   // Past the pricing stage, management's final prices are already set — editing supplier costs here
   // won't move them; the request must be re-priced by management if the final price should change.
   const late = ['Mgmt Priced', 'Returned to Sales', 'Quoted'].includes(r.status);
-  const hint = late || r.status === 'For Mgmt Pricing'
-    ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ Editing supplier prices here does <b>not</b> change management's final prices — have management re-price the request if the final price must move.</p>`
-    : '';
+  const hint = late
+    ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ Editing supplier prices here does <b>not</b> change management's final prices — use <b>Save &amp; Send for Re-pricing</b> so management re-prices with the new costs.</p>`
+    : (r.status === 'For Mgmt Pricing'
+      ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ This request is already queued for management pricing — the engine will pick up the updated supplier prices when management opens it.</p>`
+      : '');
   body.innerHTML = hint + sourcingTable(r);
+  // Post-pricing stages get a one-click "save + send back to management" so the final price
+  // is recomputed from the corrected costs (submitForPricing just flips the status back).
   foot.innerHTML = `<button class="btn btn-secondary" onclick="openPr('${flowEsc(no)}')">← Back</button>
     <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}')">📎 Supplier Quotation (PDF)</button>
-    <button class="btn btn-primary" onclick="saveSourcing(false)">Save Changes</button>`;
+    <button class="btn ${late ? 'btn-secondary' : 'btn-primary'}" onclick="saveSourcing(false)">Save Changes</button>
+    ${late ? `<button class="btn btn-primary" onclick="saveSourcing(true)">Save &amp; Send for Re-pricing</button>` : ''}`;
 }
 function closePr() { document.getElementById('prModal').classList.remove('open'); }
 
@@ -678,9 +683,14 @@ function loadFlowPricing(prNo) {
   }
   const rowsHtml = inc.map((i, idx) => {
     const b = bdBy[String(i.itemNo)] || {};
+    // Buy price + CBM come from the item's CURRENT sourcing values — admin re-sourcing updates them,
+    // and setMgmtPricing writes management's own edits back there too, so they are always the latest.
+    // The saved breakdown is only a fallback for legacy/migrated rows that carry no supplier price
+    // (seeding from the breakdown made re-pricing show the STALE buy price after an admin edit).
     return peRowHtml(i, idx, {
-      buyPrice: (b.buyPrice != null ? b.buyPrice : i.supplierPrice),
-      discount: b.discount, qty: i.qty, cbm: (b.cbm != null ? b.cbm : i.cbm)
+      buyPrice: (flowNum(i.supplierPrice) ? i.supplierPrice : (b.buyPrice != null ? b.buyPrice : 0)),
+      discount: b.discount, qty: i.qty,
+      cbm: (flowNum(i.cbm) ? i.cbm : (b.cbm != null ? b.cbm : 0))
     });
   }).join('');
   const rowsEl = document.getElementById('peRows');
