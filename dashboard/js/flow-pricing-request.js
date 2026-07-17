@@ -372,19 +372,47 @@ function openPr(no) {
   } else if (canSource && r.status === 'Mgmt Priced') {
     body.innerHTML = verifyTable(r);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
+      ${srcEditBtn(no)}
       <button class="btn btn-primary" onclick="verifyReturn()">Verify &amp; Return to Sales</button>`;
   } else if (r.status === 'Returned to Sales' &&
              (prRole === 'sales' || (prRole === 'admin' && String(r.requestedBy) === String(prSession.name)))) {
     // Sales, or the admin who created this PR, can build the quotation from the returned (priced) request.
     body.innerHTML = readonlyTable(r, true);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
+      ${prRole === 'admin' ? srcEditBtn(no) : ''}
       <button class="btn btn-secondary" onclick="openPdf('${flowEsc(no)}')">Generate PR PDF</button>
       <button class="btn btn-primary" onclick="makeQuotation('${flowEsc(no)}')">Create Quotation</button>`;
   } else {
     body.innerHTML = readonlyTable(r, false);
-    foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>`;
+    foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
+      ${canSource ? srcEditBtn(no) : ''}`;
   }
   document.getElementById('prModal').classList.add('open');
+}
+
+// Admin (and oversight) can correct the supplier pricing at ANY stage — the button swaps the modal
+// to the editable sourcing table; saving never touches the PR's status (updatePRSourcing is a pure
+// item/header write, and this path never calls submitForPricing).
+function srcEditBtn(no) {
+  return `<button class="btn btn-secondary" onclick="openSourcingEdit('${flowEsc(no)}')">✎ Edit Supplier Pricing</button>`;
+}
+
+function openSourcingEdit(no) {
+  const r = curPr(no);
+  if (!r) return;
+  const body = document.getElementById('modalBody');
+  const foot = document.getElementById('modalFoot');
+  document.getElementById('modalMsg').style.display = 'none';
+  // Past the pricing stage, management's final prices are already set — editing supplier costs here
+  // won't move them; the request must be re-priced by management if the final price should change.
+  const late = ['Mgmt Priced', 'Returned to Sales', 'Quoted'].includes(r.status);
+  const hint = late || r.status === 'For Mgmt Pricing'
+    ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ Editing supplier prices here does <b>not</b> change management's final prices — have management re-price the request if the final price must move.</p>`
+    : '';
+  body.innerHTML = hint + sourcingTable(r);
+  foot.innerHTML = `<button class="btn btn-secondary" onclick="openPr('${flowEsc(no)}')">← Back</button>
+    <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}')">📎 Supplier Quotation (PDF)</button>
+    <button class="btn btn-primary" onclick="saveSourcing(false)">Save Changes</button>`;
 }
 function closePr() { document.getElementById('prModal').classList.remove('open'); }
 
