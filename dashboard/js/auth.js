@@ -384,12 +384,6 @@ function renderNavbar(activePage) {
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="admin-import-quotation.html" class="${activePage === 'admin-import-quotation' ? 'active' : ''}">Import Quotation</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
-          <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
-          <a href="migrate-so-costs.html" class="${activePage === 'migrate-so-costs' ? 'active' : ''}">Migrate SO Costs</a>
-          <a href="reconcile-2026-costs.html" class="${activePage === 'reconcile-2026-costs' ? 'active' : ''}">Reconcile 2026 Costs</a>
-          <a href="replace-2026-sos.html" class="${activePage === 'replace-2026-sos' ? 'active' : ''}">Replace 2026 SOs</a>
-          <a href="update-2025-costs.html" class="${activePage === 'update-2025-costs' ? 'active' : ''}">Update 2025 Costs</a>
-          <a href="migrate-collections.html" class="${activePage === 'migrate-collections' ? 'active' : ''}">Migrate Collections</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
@@ -400,8 +394,6 @@ function renderNavbar(activePage) {
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
-          <a href="migrate-expenses.html" class="${activePage === 'migrate-expenses' ? 'active' : ''}">Migrate Expenses</a>
-          <a href="migrate-pricing.html" class="${activePage === 'migrate-pricing' ? 'active' : ''}">Migrate Pricing</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
@@ -446,12 +438,6 @@ function renderNavbar(activePage) {
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
           <a href="management-sales-orders.html" class="${activePage === 'management-sales-orders' ? 'active' : ''}">Sales Orders — All</a>
-          <a href="migrate-sales-orders.html" class="${activePage === 'migrate-sales-orders' ? 'active' : ''}">Migrate Sales Orders</a>
-          <a href="migrate-so-costs.html" class="${activePage === 'migrate-so-costs' ? 'active' : ''}">Migrate SO Costs</a>
-          <a href="reconcile-2026-costs.html" class="${activePage === 'reconcile-2026-costs' ? 'active' : ''}">Reconcile 2026 Costs</a>
-          <a href="replace-2026-sos.html" class="${activePage === 'replace-2026-sos' ? 'active' : ''}">Replace 2026 SOs</a>
-          <a href="update-2025-costs.html" class="${activePage === 'update-2025-costs' ? 'active' : ''}">Update 2025 Costs</a>
-          <a href="migrate-collections.html" class="${activePage === 'migrate-collections' ? 'active' : ''}">Migrate Collections</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
@@ -462,8 +448,6 @@ function renderNavbar(activePage) {
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
-          <a href="migrate-expenses.html" class="${activePage === 'migrate-expenses' ? 'active' : ''}">Migrate Expenses</a>
-          <a href="migrate-pricing.html" class="${activePage === 'migrate-pricing' ? 'active' : ''}">Migrate Pricing</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
         </div>
       </div>
