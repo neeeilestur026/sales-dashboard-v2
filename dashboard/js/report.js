@@ -79,7 +79,7 @@ async function load() {
   loadEmails();
   loadNotes();
   loadCalls();
-  if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect' });
+  if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', withCalls: true, modules: ['Quotation', 'Pricing Request', 'Inventory'] });
 }
 
 function render() {

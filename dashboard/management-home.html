@@ -959,6 +959,21 @@
         <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
       </div>
       <div id="mgmtDrBody"><div class="mf-empty">Loading…</div></div>
+
+      <!-- Team Weekly Report: per-user task charts for the Mon–Sun week of the picked date (A110) -->
+      <div style="margin-top:1.4rem;border-top:1px solid var(--border,#e2e8f0);padding-top:1rem;">
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <h3 style="font-size:0.95rem;font-weight:700;margin:0;">📊 Team Weekly Report</h3>
+          <span id="mfTwRange" style="font-size:0.8rem;color:var(--text-muted,#64748b);"></span>
+          <span style="margin-left:auto;display:inline-flex;gap:0.35rem;">
+            <button class="btn btn-sm btn-secondary" onclick="mfTwNav(-1)" title="Previous week">◀</button>
+            <button class="btn btn-sm btn-secondary" id="mfTwReset" onclick="mfTwNav(0)" style="display:none;" title="Back to this week">↺</button>
+            <button class="btn btn-sm btn-secondary" id="mfTwNext" onclick="mfTwNav(1)" title="Next week">▶</button>
+            <button class="btn btn-sm btn-primary" id="mfTwPdfBtn" onclick="mfTwPdf()" disabled>📄 View / Save PDF</button>
+          </span>
+        </div>
+        <div id="mfTwBody"><div class="mf-empty">Loading team weekly report…</div></div>
+      </div>
     </div>
 
     <div class="mgmt-newsec" id="newsec-inventory">

@@ -25,10 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const dp = document.getElementById('mgmtDrDate');
   if (dp) {
     dp.value = flowToday();
-    dp.addEventListener('change', mfLoadDailyReports);
+    dp.addEventListener('change', () => { mfLoadDailyReports(); _mfTwOffset = 0; mfLoadTeamWeek(); });
     const s = document.getElementById('mgmtDrSearch');
     if (s) s.addEventListener('input', mfRenderDailyReports);
     mfLoadDailyReports();
+    if (document.getElementById('mfTwBody')) mfLoadTeamWeek();   // Team Weekly Report (A110)
   }
 });
 
@@ -315,4 +316,259 @@ function mfRenderDailyReports() {
       </div>
     </details>`;
   }).join('');
+}
+
+// ═══ Team Weekly Report (A110) — per-user task charts for a Mon–Sun week, PDF-exportable ═══
+// Data: getActivityLog ×7 (all users) + getSalesCalls ×7 (all users) + per-user sent emails
+// (roster via apiFetchEmailUsers; users whose first day answers needsSetup are skipped for the
+// rest of the week). Charts: Chart.js bars (lazy CDN). PDF: proven hidden-iframe html2pdf
+// pattern with each chart canvas swapped for an <img> so html2canvas can't blank it.
+
+let _mfTwOffset = 0, _mfTwSeq = 0, _mfTwUsers = null, _mfTwCharts = [];
+const MF_TW_TASKS = [
+  ['Calls', 'calls'], ['Emails', 'emails'], ['Quotations', 'Quotation'],
+  ['Purchase Requests', 'Pricing Request'], ['Sales Orders', 'Sales Order'],
+  ['Purchase Orders', 'Purchase Order'], ['Invoices', 'Invoice'], ['Other', 'other'],
+];
+
+function _mfTwDays() {
+  const base = (document.getElementById('mgmtDrDate') || {}).value || flowToday();
+  const d = new Date(base + 'T00:00:00');
+  if (isNaN(d)) return [];
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7) + _mfTwOffset * 7);
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const x = new Date(mon); x.setDate(mon.getDate() + i);
+    out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+function mfTwNav(delta) {
+  _mfTwOffset = delta === 0 ? 0 : _mfTwOffset + delta;
+  mfLoadTeamWeek();
+}
+
+async function mfLoadTeamWeek() {
+  const body = document.getElementById('mfTwBody');
+  if (!body) return;
+  const seq = ++_mfTwSeq;
+  const days = _mfTwDays();
+  if (!days.length) return;
+  const today = flowToday();
+  const range = document.getElementById('mfTwRange');
+  if (range) range.textContent = `${days[0]} – ${days[6]}${_mfTwOffset ? ` (${_mfTwOffset > 0 ? '+' : ''}${_mfTwOffset} wk)` : ''}`;
+  const nextBtn = document.getElementById('mfTwNext');
+  if (nextBtn) nextBtn.disabled = _mfTwWeekAfterIsFuture(days);
+  const resetBtn = document.getElementById('mfTwReset');
+  if (resetBtn) resetBtn.style.display = _mfTwOffset ? '' : 'none';
+  const pdfBtn = document.getElementById('mfTwPdfBtn');
+  if (pdfBtn) pdfBtn.disabled = true;
+  body.innerHTML = '<div class="mf-empty">Loading team weekly report…</div>';
+
+  // Activity + calls ×7 (all users) in parallel; future days skipped.
+  const [acts, calls] = await Promise.all([
+    Promise.all(days.map(d => d > today ? Promise.resolve([])
+      : fetchFlow('getActivityLog', { date: d }).then(r => (r && r.data) || []).catch(() => []))),
+    Promise.all(days.map(d => d > today ? Promise.resolve([])
+      : fetchFlow('getSalesCalls', { date: d }).then(r => (r && r.data) || []).catch(() => []))),
+  ]);
+  if (seq !== _mfTwSeq) return;
+
+  // Per-user aggregation.
+  const users = {};
+  const U = name => users[name] = users[name] || { moves: 0, calls: 0, emails: 0, other: 0,
+    perDay: new Array(7).fill(0), mods: {} };
+  days.forEach((d, i) => {
+    acts[i].forEach(e => {
+      if (e.module === 'Call') return;
+      const u = U(e.user || '(unknown)');
+      u.moves++; u.perDay[i]++;
+      u.mods[e.module] = (u.mods[e.module] || 0) + 1;
+    });
+    calls[i].forEach(c => { const u = U(c.user || '(unknown)'); u.calls++; });
+  });
+  _mfTwUsers = { users, days };
+  mfTwRender();                                   // paint activity/calls immediately
+
+  // Emails per user — roster (skip director), day 1 first (skip the rest when not connected).
+  try {
+    if (typeof apiFetchEmailUsers === 'function' && typeof apiFetchEmailLogToday === 'function') {
+      const ro = await apiFetchEmailUsers();
+      const roster = ((ro && ro.users) || []).filter(u => String(u.role) !== 'director');
+      const jobs = [];
+      for (const u of roster) {
+        const name = u.fullName || u.username;
+        const pastDays = days.filter(d => d <= today);
+        if (!pastDays.length) continue;
+        jobs.push(async () => {
+          const first = await apiFetchEmailLogToday(u.username, pastDays[0]).catch(() => null);
+          if (seq !== _mfTwSeq) return;
+          if (!first || first.needsSetup) return;             // not connected — skip the week
+          U(name).emails += ((first.emails || []).length);
+          for (let i = 1; i < pastDays.length; i += 3) {
+            await Promise.all(pastDays.slice(i, i + 3).map(async d => {
+              const r = await apiFetchEmailLogToday(u.username, d).catch(() => null);
+              if (r && r.success && Array.isArray(r.emails)) U(name).emails += r.emails.length;
+            }));
+            if (seq !== _mfTwSeq) return;
+          }
+        });
+      }
+      for (let i = 0; i < jobs.length; i += 2) {              // 2 users at a time (IMAP-friendly)
+        await Promise.all(jobs.slice(i, i + 2).map(j => j()));
+        if (seq !== _mfTwSeq) return;
+        mfTwRender();                                          // progressive email fill-in
+      }
+    }
+  } catch (e) { /* emails are best-effort — the report still stands on activity+calls */ }
+  if (seq === _mfTwSeq && pdfBtn) pdfBtn.disabled = false;
+}
+
+function _mfTwWeekAfterIsFuture(days) {
+  // disable ▶ when the FOLLOWING week starts after today
+  const last = new Date(days[6] + 'T00:00:00');
+  last.setDate(last.getDate() + 1);
+  const nextStart = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
+  return nextStart > flowToday();
+}
+
+function _mfTwCounts(u) {
+  return MF_TW_TASKS.map(([label, key]) => {
+    if (key === 'calls') return u.calls;
+    if (key === 'emails') return u.emails;
+    if (key === 'other') {
+      const named = MF_TW_TASKS.map(t => t[1]);
+      return Object.entries(u.mods).reduce((s, [m, n]) => s + (named.includes(m) ? 0 : n), 0);
+    }
+    return u.mods[key] || 0;
+  });
+}
+
+function mfTwRender() {
+  const body = document.getElementById('mfTwBody');
+  if (!body || !_mfTwUsers) return;
+  const { users, days } = _mfTwUsers;
+  const names = Object.keys(users).sort((a, b) => users[b].moves - users[a].moves || a.localeCompare(b));
+  if (!names.length) { body.innerHTML = '<div class="mf-empty">No team activity in this week.</div>'; return; }
+  const tot = f => names.reduce((s, n) => s + users[n][f], 0);
+  const totMod = m => names.reduce((s, n) => s + (users[n].mods[m] || 0), 0);
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const cards = names.map((name, i) => {
+    const u = users[name];
+    const counts = _mfTwCounts(u);
+    const countRow = MF_TW_TASKS.map(([label], j) =>
+      `<td class="num">${counts[j]}</td>`).join('');
+    const spark = days.map((d, j) =>
+      `<span title="${_mfe(d)}" style="display:inline-block;min-width:1.5rem;text-align:center;padding:0.1rem 0.15rem;border-radius:4px;background:${u.perDay[j] ? 'var(--accent-light,#e6f4f1)' : 'var(--bg-inset,#f1f5f9)'};font-size:0.68rem;">${dayNames[j].slice(0, 2)} ${u.perDay[j]}</span>`).join(' ');
+    return `<div class="mfTw-card" style="border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.9rem;background:#fff;page-break-inside:avoid;">
+      <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+        <strong style="font-size:0.95rem;">${_mfe(name)}</strong>
+        <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.emails} email(s)</span>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(260px,1.2fr) 1fr;gap:0.9rem;align-items:center;margin-top:0.6rem;">
+        <div><canvas id="mfTwChart_${i}" height="150"></canvas></div>
+        <div style="overflow-x:auto;">
+          <table class="flow-table" style="font-size:0.75rem;">
+            <thead><tr>${MF_TW_TASKS.map(([l]) => `<th class="num" style="font-size:0.62rem;">${_mfe(l)}</th>`).join('')}</tr></thead>
+            <tbody><tr>${countRow}</tr></tbody>
+          </table>
+          <div style="margin-top:0.45rem;">${spark}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `<div id="mfTwSheet" style="background:#fff;">
+    <div style="text-align:center;margin-bottom:0.9rem;">
+      <div style="font-weight:800;font-size:1.05rem;letter-spacing:0.02em;">H.O ESTUR CORPORATION</div>
+      <div style="font-size:0.82rem;color:var(--text-muted,#64748b);">Team Weekly Report · ${_mfe(days[0])} – ${_mfe(days[6])}</div>
+    </div>
+    <div class="dr-tiles" style="margin-bottom:0.9rem;">
+      <div class="dr-tile"><div class="l">Team Members Active</div><div class="v">${names.length}</div></div>
+      <div class="dr-tile"><div class="l">Movements</div><div class="v">${tot('moves')}</div></div>
+      <div class="dr-tile"><div class="l">Calls</div><div class="v">${tot('calls')}</div></div>
+      <div class="dr-tile"><div class="l">Emails</div><div class="v">${tot('emails')}</div></div>
+      <div class="dr-tile"><div class="l">Quotations</div><div class="v">${totMod('Quotation')}</div></div>
+      <div class="dr-tile"><div class="l">Purchase Requests</div><div class="v">${totMod('Pricing Request')}</div></div>
+    </div>
+    ${cards}
+  </div>`;
+  mfTwDrawCharts(names);
+}
+
+async function mfTwDrawCharts(names) {
+  try {
+    if (typeof loadLib === 'function') await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+    if (typeof Chart === 'undefined') return;
+    _mfTwCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
+    _mfTwCharts = [];
+    names.forEach((name, i) => {
+      const cv = document.getElementById('mfTwChart_' + i);
+      if (!cv) return;
+      _mfTwCharts.push(new Chart(cv.getContext('2d'), {
+        type: 'bar',
+        data: { labels: MF_TW_TASKS.map(t => t[0]),
+                datasets: [{ data: _mfTwCounts(_mfTwUsers.users[name]), backgroundColor: '#0d9488' }] },
+        options: { animation: false, responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } },
+                    x: { ticks: { font: { size: 9 } } } } }
+      }));
+    });
+  } catch (e) { /* charts are decorative — counts tables already carry the data */ }
+}
+
+// PDF: clone the report sheet, swap chart canvases for images, render via the proven
+// hidden-iframe html2pdf pattern (same-origin doc + double-rAF so nothing captures blank).
+async function mfTwPdf() {
+  const sheet = document.getElementById('mfTwSheet');
+  if (!sheet || !_mfTwUsers) return;
+  const btn = document.getElementById('mfTwPdfBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Rendering…'; }
+  try {
+    const clone = sheet.cloneNode(true);
+    // canvas → <img> (html2canvas renders live canvases inconsistently; a data-URL img is exact)
+    sheet.querySelectorAll('canvas').forEach((cv, i) => {
+      const imgs = clone.querySelectorAll('canvas');
+      const target = imgs[i];
+      if (!target) return;
+      const img = document.createElement('img');
+      try { img.src = cv.toDataURL('image/png'); } catch (e) { return; }
+      img.style.width = '100%';
+      target.parentNode.replaceChild(img, target);
+    });
+    const days = _mfTwUsers.days;
+    const fileName = `Team_Weekly_Report_${days[0]}_${days[6]}.pdf`;
+    await new Promise((resolve, reject) => {
+      const ifr = document.createElement('iframe');
+      ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:900px;height:1200px;opacity:0;border:0;z-index:-1;';
+      document.body.appendChild(ifr);
+      const doc = ifr.contentDocument, win = ifr.contentWindow;
+      const css = Array.from(document.styleSheets).map(s => s.ownerNode && s.ownerNode.outerHTML || '').join('');
+      doc.open();
+      doc.write('<!DOCTYPE html><html><head><meta charset="utf-8">' + css +
+        '<style>body{margin:0;background:#fff;padding:18px;font-family:Inter,system-ui,sans-serif;}.mfTw-card{page-break-inside:avoid;}</style></head><body>' +
+        clone.outerHTML + '</body></html>');
+      doc.close();
+      const run = () => {
+        const w = win.html2pdf || window.html2pdf;
+        if (!w) { cleanup(); reject(new Error('html2pdf not loaded')); return; }
+        w().set({ margin: 8, filename: fileName, image: { type: 'jpeg', quality: 0.95 },
+                  html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 860 },
+                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                  pagebreak: { mode: ['css', 'legacy'] } })
+          .from(doc.body).save().then(() => { cleanup(); resolve(); })
+          .catch(err => { cleanup(); reject(err); });
+      };
+      const cleanup = () => { try { document.body.removeChild(ifr); } catch (e) {} };
+      win.requestAnimationFrame(() => win.requestAnimationFrame(run));
+    });
+  } catch (e) {
+    alert('PDF failed: ' + (e && e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📄 View / Save PDF'; }
+  }
 }

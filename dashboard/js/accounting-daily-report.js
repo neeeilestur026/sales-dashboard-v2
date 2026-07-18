@@ -65,7 +65,7 @@ async function load() {
   render();
   loadEmails();
   loadNotes();
-  if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect' });
+  if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', modules: ['Invoice', 'Receiving', 'Collection', 'Expense', 'Quotation'] });
 }
 
 function _filtered() { return drEntries; }
