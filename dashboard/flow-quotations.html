@@ -68,6 +68,19 @@
         <h3 style="font-size:0.95rem;font-weight:600;">Quotations</h3>
         <button class="btn btn-sm btn-secondary" onclick="loadQuotations()">Refresh</button>
       </div>
+
+      <!-- Older quotations stay fully actionable — pick the month one was created in to find it. -->
+      <div class="flow-actions no-print" style="gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.6rem;">
+        <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#475569);">Month</label>
+        <select id="qMonthFilter" onchange="renderQuotationList()"
+                style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;min-width:150px;">
+          <option value="">All months</option>
+        </select>
+        <input type="text" id="qSearch" placeholder="Search quotation no, customer or subject..." oninput="renderQuotationList()"
+               style="flex:1;min-width:220px;padding:0.4rem 0.65rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;">
+        <span id="qListCount" style="font-size:0.78rem;color:var(--text-muted,#64748b);font-variant-numeric:tabular-nums;"></span>
+      </div>
+
       <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>

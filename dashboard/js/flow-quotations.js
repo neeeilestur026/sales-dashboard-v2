@@ -377,8 +377,64 @@ async function loadQuotations() {
     const res = await fetchFlow('getQuotations', params);
     qList = (res && res.data) || [];
     if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
-    c.innerHTML = qIsOversight ? renderGroupedByRep() : renderQuotationTable(qList);
+    qBuildMonthOptions();
+    renderQuotationList();
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+/** 'yyyy-MM' of the month a quotation was created in. */
+function qMonthKey(q) { return String(flowDate(q.date) || '').slice(0, 7); }
+
+const Q_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+function qMonthLabel(key) {
+  const m = /^(\d{4})-(\d{2})$/.exec(key);
+  return m ? `${Q_MONTH_NAMES[+m[2] - 1]} ${m[1]}` : key;
+}
+
+/** Month options built from the quotations actually present, newest first. */
+function qBuildMonthOptions() {
+  const sel = document.getElementById('qMonthFilter');
+  if (!sel) return;
+  const counts = {};
+  qList.forEach(q => { const k = qMonthKey(q); if (k) counts[k] = (counts[k] || 0) + 1; });
+  const keys = Object.keys(counts).sort().reverse();
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">All months</option>` +
+    keys.map(k => `<option value="${k}">${qMonthLabel(k)} (${counts[k]})</option>`).join('');
+  if (keep && keys.indexOf(keep) >= 0) sel.value = keep;    // survive a refresh
+}
+
+/** Filter by month + free text, then render. Old quotations keep every action — the filter only
+ *  narrows which rows are shown, never what can be done with them. */
+function renderQuotationList() {
+  const c = document.getElementById('listContainer');
+  if (!c) return;
+  const month = (document.getElementById('qMonthFilter') || {}).value || '';
+  const term = ((document.getElementById('qSearch') || {}).value || '').trim().toLowerCase();
+  let rows = qList;
+  if (month) rows = rows.filter(q => qMonthKey(q) === month);
+  if (term) {
+    rows = rows.filter(q => [q.quotationNo, q.customer, q.subject, q.createdBy]
+      .some(v => String(v == null ? '' : v).toLowerCase().includes(term)));
+  }
+  // Newest first so the most recent work is at the top of whichever month is selected.
+  rows = rows.slice().sort((a, b) => String(flowDate(b.date)).localeCompare(String(flowDate(a.date))) ||
+    String(b.quotationNo).localeCompare(String(a.quotationNo)));
+
+  const count = document.getElementById('qListCount');
+  if (count) {
+    const total = rows.reduce((s, q) => s + qtnTotal(q), 0);
+    count.textContent = rows.length
+      ? `${rows.length} of ${qList.length} quotation(s) · ${flowMoney(total, 'PHP')}`
+      : `0 of ${qList.length} quotation(s)`;
+  }
+  if (!rows.length) {
+    c.innerHTML = `<p style="color:var(--text-muted,#64748b);">No quotations match this filter${
+      month ? ` — nothing in ${flowEsc(qMonthLabel(month))}` : ''}.</p>`;
+    return;
+  }
+  c.innerHTML = qIsOversight ? renderGroupedByRep(rows) : renderQuotationTable(rows);
 }
 
 function quotationActions(q) {
@@ -506,10 +562,10 @@ function renderQuotationTable(rows) {
   return `<table class="flow-table"><thead><tr><th>Quotation No</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${rows.map(quotationRow).join('')}</tbody></table>`;
 }
 
-// Oversight: group all reps' quotations into collapsible sections (one per Created By).
-function renderGroupedByRep() {
+// Oversight: group the (filtered) quotations into collapsible sections (one per Created By).
+function renderGroupedByRep(rows) {
   const groups = {};
-  qList.forEach(q => { const k = q.createdBy || 'Unassigned'; (groups[k] = groups[k] || []).push(q); });
+  (rows || qList).forEach(q => { const k = q.createdBy || 'Unassigned'; (groups[k] = groups[k] || []).push(q); });
   const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   return names.map((name, i) => {
     const rows = groups[name];
