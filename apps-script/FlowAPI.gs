@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 79;   // A115 inventory Type (Stock/Catalog) + importInventory + PO stock hook (78: Discount % · 77: Subject + manual numbers)
+var FLOW_VERSION = 80;   // A114 PO duplicate-number rejection + deleteAPEntry (79: inventory Type/import · 78: Discount %)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -810,6 +810,11 @@ function createPurchaseOrder(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var dup = _refSeen('createPurchaseOrder', p.clientRef);
   if (dup) return { success: true, poNo: dup, duplicate: true, message: 'Purchase Order created, AP entry and journal posted.' };
+  // A same-number duplicate PO leaves a second AP entry behind and doubles the payment request
+  // built from that PO (the PRF-2026-63 incident) — reject an explicit number that already exists.
+  if (p.poNo && _rows('PurchaseOrders').some(function (r) { return String(r['PO No']) === String(p.poNo); })) {
+    return { success: false, message: 'PO No already exists — open it with Edit instead.' };
+  }
   var no = p.poNo || _nextNumber('PurchaseOrders', 1, 'PO');
   var currency = p.currency || 'PHP';
   var total = 0;
@@ -937,6 +942,18 @@ function updateAPAging(p) {
     _removeJournal('APPAY', apNo);
   }
   return { success: true, message: 'AP entry updated.', apNo: apNo, poNo: cur[1] };
+}
+
+/** Delete a single AP Aging entry outright — for stale duplicates left behind when a PO was
+ *  re-created or its sheet row hand-deleted (the PRF-2026-63 incident). Refuses when any payment
+ *  has been recorded (delete the payment history first) and cleans the entry's payment journal. */
+function deleteAPEntry(p) {
+  var r = _rows('APAging').filter(function (x) { return String(x['AP No']) === String(p.apNo); })[0];
+  if (!r) return { success: false, message: 'AP entry not found.' };
+  if (_num(r['Paid (PHP)']) > 0) return { success: false, message: 'This AP entry has recorded payments — it cannot be deleted.' };
+  _removeJournal('APPAY', r['AP No']);
+  _sheet('APAging').deleteRow(r.rowIndex);
+  return { success: true, apNo: p.apNo, message: 'AP entry ' + p.apNo + ' deleted.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2468,7 +2485,7 @@ var _MODULE_MAP = {
   createSalesOrder: ['Sales Order', 'Created'], updateSalesOrder: ['Sales Order', 'Updated'], deleteSalesOrder: ['Sales Order', 'Deleted'],
   importSalesOrders: ['Sales Order', 'Imported'],
   createPurchaseOrder: ['Purchase Order', 'Created'], updatePurchaseOrder: ['Purchase Order', 'Updated'], deletePurchaseOrder: ['Purchase Order', 'Deleted'],
-  updateAPAging: ['AP Aging', 'Updated'],
+  updateAPAging: ['AP Aging', 'Updated'], deleteAPEntry: ['AP Aging', 'Deleted'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
@@ -2796,7 +2813,7 @@ var HANDLERS = {
   updateSalesOrder: updateSalesOrder, deleteSalesOrder: deleteSalesOrder, importSalesOrders: importSalesOrders,
   getPurchaseOrders: getPurchaseOrders, createPurchaseOrder: createPurchaseOrder,
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
-  getAPAging: getAPAging, updateAPAging: updateAPAging,
+  getAPAging: getAPAging, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
@@ -2836,7 +2853,7 @@ var MUTATIONS = {
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1,
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
-  updateAPAging: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
+  updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,

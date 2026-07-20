@@ -2,7 +2,7 @@
    Load a PO → request supplier payment. Approval: Director → Management.
    Reuses the legacy PRF PDF via /flow/payment-request-pdf. */
 
-let prSession = null, prCanCreate = false, prPOs = [], prList = [], prAP = {};
+let prSession = null, prCanCreate = false, prPOs = [], prList = [], prAP = {}, prAPCount = {};
 
 document.addEventListener('DOMContentLoaded', async () => {
   prSession = requireOversight();           // admin/accounting/management/director
@@ -23,9 +23,12 @@ async function loadPOOptions() {
     ]);
     prPOs = (po && po.data) || [];
     prAP = {};
+    prAPCount = {};
     ((ap && ap.data) || []).forEach(a => {
       const k = String(a.poNo);
       prAP[k] = (prAP[k] || 0) + (flowNum(a.amountPHP) || 0) - 0;
+      // Count only entries carrying an amount — a zeroed/annotated stale row shouldn't warn.
+      if (flowNum(a.amountPHP) > 0) prAPCount[k] = (prAPCount[k] || 0) + 1;
     });
     document.getElementById('loadPO').innerHTML = '<option value="">— select a purchase order —</option>' +
       prPOs.slice().sort((a, b) => (flowDate(b.date) || '').localeCompare(flowDate(a.date) || ''))
@@ -41,6 +44,16 @@ function loadFromPO() {
   const php = prAP[String(no)] || 0;
   document.getElementById('amount').value = php > 0 ? php : '';
   document.getElementById('purpose').value = `Supplier payment for ${p.poNo}` + (p.soNo ? ` (SO ${p.soNo})` : '');
+  // Duplicate-AP guard (the PRF-2026-63 incident): the amount is the SUM of every AP entry for this
+  // PO — if more than one carries an amount, say so loudly instead of silently doubling.
+  const warn = document.getElementById('apDupWarn');
+  if (warn) {
+    const n = prAPCount[String(no)] || 0;
+    warn.style.display = n > 1 ? '' : 'none';
+    warn.textContent = n > 1
+      ? `⚠ ${n} AP entries found for this PO — the amount above is their SUM. Check AP Aging for stale duplicates before submitting.`
+      : '';
+  }
 }
 
 async function savePR() {
