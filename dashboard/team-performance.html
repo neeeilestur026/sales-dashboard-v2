@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Performance — HI-ESCORP</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <style>
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
+                    padding: 1.5rem 1.75rem; box-shadow: var(--shadow-sm, 0 1px 2px rgba(15,23,42,0.05)); }
+    .report-head { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;
+                   border-bottom: 2px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.25rem; }
+    .report-head h1 { font-size: 1.3rem; font-weight: 800; margin: 0; }
+    .report-head .meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
+    .report-controls { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .report-controls input, .report-controls select {
+      padding: 0.42rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
+    .tp-weeknav { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .tp-weeknav .rng { font-weight: 700; font-size: 0.9rem; }
+    .mf-empty { padding: 1.2rem; text-align: center; color: var(--text-muted); font-style: italic; font-size: 0.86rem; }
+    @media print {
+      .navbar, .no-print { display: none !important; }
+      body { background: #fff; }
+      .main-content { padding: 0 !important; margin: 0 !important; }
+      .report-sheet { border: none; box-shadow: none; }
+      .mfTw-card { break-inside: avoid; }
+      details { display: block !important; }
+      details > summary { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <main class="main-content">
+    <div class="container">
+      <div class="report-sheet">
+        <div class="report-head">
+          <div>
+            <h1>Team Performance</h1>
+            <div class="meta" id="tpMeta">—</div>
+          </div>
+          <div class="report-controls no-print">
+            <select id="tpRoleFilter" title="Filter by role">
+              <option value="">All roles</option>
+              <option value="sales">Sales</option>
+              <option value="accounting">Accounting</option>
+              <option value="admin">Admin</option>
+              <option value="marketing">Marketing</option>
+            </select>
+            <input type="text" id="tpSearch" placeholder="Search a person...">
+            <button class="btn btn-sm btn-secondary" id="tpRefresh">Refresh</button>
+            <button class="btn btn-sm btn-secondary" id="tpPrint">Print</button>
+            <button class="btn btn-sm btn-primary" id="tpPdfBtn">📄 Team Weekly PDF</button>
+          </div>
+        </div>
+
+        <div class="tp-weeknav no-print">
+          <button class="btn btn-sm btn-secondary" onclick="tpNavWeek(-1)" title="Previous week">◀</button>
+          <button class="btn btn-sm btn-secondary" id="tpResetBtn" onclick="tpNavWeek(0)" style="display:none;" title="Back to this week">↺</button>
+          <button class="btn btn-sm btn-secondary" id="tpNextBtn" onclick="tpNavWeek(1)" title="Next week">▶</button>
+          <span class="rng" id="tpRange">—</span>
+        </div>
+
+        <div id="tpBody"><div class="mf-empty">Loading team performance…</div></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/report-pdf.js"></script>
+  <script src="js/team-performance.js"></script>
+  <script src="js/team-performance-page.js"></script>
+</body>
+</html>

@@ -102,3 +102,39 @@
 .rep-group .rep-name { color: var(--text-primary, #0f172a); }
 .rep-group .rep-meta { margin-left: auto; font-weight: 500; font-size: 0.78rem; color: var(--text-muted, #64748b); }
 .rep-group > div { padding: 0 0.75rem 0.75rem; }
+
+
+/* ═══ Shared daily/weekly report surfaces ═══
+   Promoted from the report pages' inline <style> blocks so the Team Performance page (and anything
+   after it) doesn't become a fourth copy. The existing inline copies are left alone — they win by
+   cascade order anyway, so removing them would be pointless risk. */
+.dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
+.dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+.dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
+.dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; }
+.mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
+.mod-Quotation { background: #f0fdfa; color: #0f766e; }
+.mod-SalesOrder, .mod-Sales\.Order { background: #f0fdf4; color: #15803d; }
+.mod-PurchaseOrder, .mod-Purchase\.Order { background: #eff6ff; color: #1d4ed8; }
+.mod-APAging, .mod-AP\.Aging { background: #fff7ed; color: #c2410c; }
+.mod-Receiving { background: #ecfeff; color: #0e7490; }
+.mod-Invoice { background: #f0fdfa; color: #0f766e; }
+.mod-Inventory { background: #f8fafc; color: #475569; }
+.mod-PricingRequest, .mod-Pricing\.Request { background: #fef3c7; color: #b45309; }
+.mod-Document { background: #f1f5f9; color: #475569; }
+.act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
+.dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+    /* Per-user report card */
+.urep { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 0.9rem; overflow: hidden; background: var(--bg-card); }
+.urep > summary { list-style: none; cursor: pointer; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.7rem; background: var(--bg-inset, #f1f5f9); transition: background 0.15s ease; }
+.urep > summary::-webkit-details-marker { display: none; }
+.urep > summary::before { content: '▸'; color: var(--text-muted); transition: transform 0.15s ease; }
+.urep[open] > summary::before { transform: rotate(90deg); }
+.urep > summary:hover { background: var(--accent-light, #ccfbf1); }
+.urep .uname { font-weight: 700; color: var(--text-primary); }
+.urep .ustat { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.urep-body { padding: 1rem; }
+.urep-note { margin-top: 0.7rem; padding: 0.6rem 0.8rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 0.84rem; color: #78350f; white-space: pre-wrap; }
+.umods { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
+    
