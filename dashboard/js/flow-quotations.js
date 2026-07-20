@@ -517,7 +517,7 @@ function quotationRow(q) {
   return `<tr><td>${flowEsc(q.quotationNo)}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
-    <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+    <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn" title="Opens the last PDF saved to Drive — it does NOT re-read the quotation. If you edited the price or discount since, click PDF to regenerate.">View saved</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
 }
 
