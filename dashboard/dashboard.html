@@ -301,20 +301,6 @@
 
           <div class="acard">
             <div class="acard-top">
-              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Quotation Generator</h3>
-                <p class="acard-desc">Send quotations to clients</p>
-              </div>
-            </div>
-            <div class="acard-stat"><span class="stat-number" id="quotationToday2">—</span> sent today</div>
-            <a id="quotationLink" href="#" target="_blank" class="acard-cta">Open App</a>
-          </div>
-
-          <div class="acard">
-            <div class="acard-top">
               <span class="acard-icon" style="background:#eef2ff;color:#6366f1;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
               </span>
@@ -432,7 +418,6 @@
     // Watches the canonical IDs that dashboard.js writes to.
     (function mirrorStats() {
       const pairs = [
-        ['quotationToday', 'quotationToday2'],
         ['prToday', 'prToday2'],
         ['clientCount', 'clientCount2'],
         ['reportStatus', 'reportStatusInline']

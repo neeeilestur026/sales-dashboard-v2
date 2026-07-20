@@ -14,14 +14,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('greeting').innerHTML = getGreeting(session.name);
 
   // ─── App URLs (relative paths on same Render domain) ─────
+  // The legacy /quotation generator is intentionally NOT linked here: it renders the pre-redesign
+  // layout and writes to its own sheet, so a quotation made there never reaches the process flow.
+  // Sales create quotations at flow-quotations.html, which produces the current design.
   const APP_URLS = {
-    quotation: '/quotation',
-    pr:        '/pr'
+    pr: '/pr'
   };
 
   // Set app links — use relative paths (tools are Flask blueprints on same server)
-  setAppLink('prLink',        APP_URLS.pr);
-  setAppLink('quotationLink', APP_URLS.quotation);
+  setAppLink('prLink', APP_URLS.pr);
 
   // Fetch stats
   const sheetIds = {

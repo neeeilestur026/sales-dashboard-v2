@@ -110,6 +110,8 @@ def _embed_quo_data(pdf_bytes, payload):
             "date": payload.get("date"),
             "quotationNo": payload.get("quotationNo"),
             "vatOption": payload.get("vatOption", "inclusive"),
+            # Without this a re-imported PDF silently loses its discount and re-renders at full price.
+            "discountPct": payload.get("discountPct"),
             "items": items,
             "doc": payload.get("doc") or {},
         }

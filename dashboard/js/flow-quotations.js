@@ -387,6 +387,9 @@ function quotationActions(q) {
   const isSales = role === 'sales', isAdmin = role === 'admin';
   const isCreator = String(q.createdBy) === String(qSession.name);
   const editable = st === 'Draft' || st === 'Rejected';
+  // Approved/Sent are finished states — the way back in is Revise (audited, and re-enters approval),
+  // never a silent Edit. The backend enforces the same rule.
+  const reopenable = st === 'Sent' || st === 'Approved';
   const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.5rem;">${label}</button>`;
   // Everyone can Review (read-only details + PDF). Approvers get Approve/Reject inside the modal.
   let a = `<button class="link-btn" onclick='openReviewModal("${no}")'>Review</button>`
@@ -395,7 +398,8 @@ function quotationActions(q) {
   if (editable && (isCreator || isAdmin || isSales || role === 'accounting'))
     a += B(`submitQuotationAction("${no}")`, st === 'Rejected' ? 'Re-submit' : 'Submit');
   if ((isSales || isAdmin) && editable) a += B(`editQuotation("${no}")`, 'Edit') + B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
-  else if (isAdmin) a += B(`editQuotation("${no}")`, 'Edit');
+  // Client came back asking for a different price? Reopen it — creator, sales or admin.
+  if (reopenable && (isCreator || isSales || isAdmin)) a += B(`reviseQuotationAction("${no}")`, 'Revise');
   if (isSales && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
   return a;
 }
@@ -443,6 +447,21 @@ function rejectQuotationAction(no) {
 function sendQuotationAction(no) {
   if (!confirm('Mark quotation ' + no + ' as sent to the client?')) return;
   _qAction('sendQuotation', no);
+}
+
+/** Reopen an Approved/Sent quotation and drop the user straight into the edit form, so revising is
+ *  one action rather than "unlock, then go find it again". Re-priced quotations go back through
+ *  approval before they can be re-sent. */
+async function reviseQuotationAction(no) {
+  if (!confirm(`Reopen ${no} for revision?\n\nIt returns to Draft so you can change the items, prices or discount. It will need approval again before it can be sent.`)) return;
+  const reason = prompt('Reason for the revision (optional — e.g. "client requested re-pricing"):', '');
+  if (reason === null) return;
+  try {
+    const r = await postFlow('reviseQuotation', { quotationNo: no, reason });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not reopen this quotation.');
+    await loadQuotations();
+    editQuotation(no);            // land in the form, prefilled and ready to re-price
+  } catch (e) { alert(e.message); }
 }
 
 // ─── Review modal (see details + PDF before approving) ─────────────

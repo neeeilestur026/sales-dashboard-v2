@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 81;   // A118 daily report submission + weekly performance (80: PO dup rejection · 79: inventory Type/import)
+var FLOW_VERSION = 82;   // A119 reviseQuotation + edit gate (81: daily report submission · 80: PO dup rejection)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -542,9 +542,23 @@ function createQuotation(p) {
   return { success: true, quotationNo: no, message: 'Quotation created.' };
 }
 
+/** A quotation is editable only while it is the creator's to change. Once it enters approval it is
+ *  what an approver reviewed, and once Approved/Sent it is what a client was quoted — so edits there
+ *  must go through reviseQuotation, which reopens it to Draft and leaves an audit trail. Enforced
+ *  server-side because the front-end button rule alone left an unguarded admin path. */
+function _quotationEditable(status) {
+  var st = String(status || 'Draft');
+  return st === 'Draft' || st === 'Rejected' || st === 'Open' || st === '';
+}
+
 function updateQuotation(p) {
   var no = p.quotationNo;
   if (!no) return { success: false, message: 'quotationNo required.' };
+  var cur = _quotationRow(no);
+  if (cur && !_quotationEditable(cur['Status'])) {
+    return { success: false, message: 'This quotation is ' + cur['Status'] +
+      ' — use Revise to reopen it for editing.' };
+  }
   var items = JSON.parse(p.items || '[]');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
@@ -2292,6 +2306,27 @@ function sendQuotation(p) {
   return { success: true, quotationNo: p.quotationNo, status: 'Sent', message: 'Quotation marked as sent to client.' };
 }
 
+/** Reopen an Approved or Sent quotation for revision — the client asked for different pricing, or a
+ *  figure was wrong. Returns it to Draft (same number, so the client keeps quoting one reference) and
+ *  clears the approval, because a re-priced quotation must be approved again before it is re-sent.
+ *  The previously sent PDF stays in Drive on the record's PDF Link, so the old version is not lost. */
+function reviseQuotation(p) {
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  var q = _quotationRow(p.quotationNo);
+  if (!q) return { success: false, message: 'Quotation not found.' };
+  var st = String(q['Status'] || '');
+  if (st !== 'Sent' && st !== 'Approved') {
+    return { success: false, message: 'Only an Approved or Sent quotation can be revised (now: ' + (st || 'Draft') + ').' };
+  }
+  var who = p.actorName || '';
+  var note = 'Reopened for revision' + (who ? ' by ' + who : '') + (p.reason ? ' — ' + p.reason : '');
+  _setQuotationCells(p.quotationNo, {
+    'Status': 'Draft', 'Approved By': '', 'Approved At': '', 'Approval Note': note,
+  });
+  return { success: true, quotationNo: p.quotationNo, status: 'Draft', previousStatus: st,
+    message: 'Quotation reopened for revision — it will need approval again before it can be sent.' };
+}
+
 // ── Purchase Order approval (admin creates → management/director approves) ──
 function _poRow(no) {
   return _rows('PurchaseOrders').filter(function (po) { return String(po['PO No']) === String(no); })[0];
@@ -2511,6 +2546,7 @@ var _MODULE_MAP = {
   addDocument: ['Document', 'Attached'], deleteDocument: ['Document', 'Removed'],
   submitQuotationApproval: ['Quotation', 'Submitted'], approveQuotation: ['Quotation', 'Approved'],
   rejectQuotation: ['Quotation', 'Rejected'], sendQuotation: ['Quotation', 'Sent'],
+  reviseQuotation: ['Quotation', 'Revised'],
   submitPOApproval: ['Purchase Order', 'Submitted'], approvePO: ['Purchase Order', 'Approved'],
   rejectPO: ['Purchase Order', 'Rejected'],
   saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed'],
@@ -2958,7 +2994,7 @@ var HANDLERS = {
   verifyReturnToSales: verifyReturnToSales, createQuotationFromPR: createQuotationFromPR, savePRPDF: savePRPDF,
   addDocument: addDocument, getDocuments: getDocuments, deleteDocument: deleteDocument,
   submitQuotationApproval: submitQuotationApproval, approveQuotation: approveQuotation,
-  rejectQuotation: rejectQuotation, sendQuotation: sendQuotation,
+  rejectQuotation: rejectQuotation, sendQuotation: sendQuotation, reviseQuotation: reviseQuotation,
   submitPOApproval: submitPOApproval, approvePO: approvePO, rejectPO: rejectPO
 };
 
@@ -2977,7 +3013,7 @@ var MUTATIONS = {
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
   addDocument: 1, deleteDocument: 1,
-  submitQuotationApproval: 1, approveQuotation: 1, rejectQuotation: 1, sendQuotation: 1,
+  submitQuotationApproval: 1, approveQuotation: 1, rejectQuotation: 1, sendQuotation: 1, reviseQuotation: 1,
   submitPOApproval: 1, approvePO: 1, rejectPO: 1,
   setOpeningBalance: 1,
   advanceShipmentStage: 1, updateShipment: 1,
