@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (form) form.style.display = 'none';
   }
   document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
+  // Admin/accounting classify items (Stock vs Catalog); sales adds are always Catalog (quoting items).
+  if (invCanDelete) document.getElementById('invTypeWrap').style.display = '';
   await loadInventory();
 });
 
@@ -59,21 +61,35 @@ function render() {
     ? `<th>Item No</th><th>Description</th><th></th>`
     : `<th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Purchase/Unit</th>
        <th class="num">Shipping/Unit</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th><th>Cur</th><th></th>`;
-  // Two groups: not-ordered first (actionable), then ordered (already has a purchase order).
-  const notOrdered = rows.filter(r => !invIsOrdered(r));
-  const ordered = rows.filter(invIsOrdered);
-  const group = (label, list) => `
+  const group = (label, list, sub) => `
     <div style="font-size:0.9rem;font-weight:700;margin:0 0 0.5rem;display:flex;align-items:center;gap:0.5rem;">
       ${label}
       <span style="font-weight:600;font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;background:var(--bg-inset,#eef2f6);color:var(--text-secondary,#475569);">${list.length}</span>
+      ${sub ? `<span style="font-weight:500;font-size:0.75rem;color:var(--text-muted,#64748b);">${sub}</span>` : ''}
     </div>
     ${list.length
       ? `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>${head}</tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table></div>`
       : '<p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
-  c.innerHTML =
-    group('🟠 Not yet ordered', notOrdered) +
-    `<div style="height:1.1rem;"></div>` +
-    group('✅ Ordered · has a purchase order', ordered);
+  const typed = rows.some(r => r.type === 'Stock' || r.type === 'Catalog');
+  if (typed) {
+    // Authoritative split: Stocks (real inventory — migrated old-system stocks, received goods,
+    // anything that reached a Purchase Order) vs Catalog (quotation/PR items not yet purchased).
+    const stock = rows.filter(r => r.type === 'Stock');
+    const catalog = rows.filter(r => r.type !== 'Stock');
+    const units = stock.reduce((s, r) => s + flowNum(r.balance), 0);
+    c.innerHTML =
+      group('📦 Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`) +
+      `<div style="height:1.1rem;"></div>` +
+      group('📋 Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order');
+  } else {
+    // Pre-classification fallback (backend not yet on v79): keep the ordered/not-ordered split.
+    const notOrdered = rows.filter(r => !invIsOrdered(r));
+    const ordered = rows.filter(invIsOrdered);
+    c.innerHTML =
+      group('🟠 Not yet ordered', notOrdered) +
+      `<div style="height:1.1rem;"></div>` +
+      group('✅ Ordered · has a purchase order', ordered);
+  }
 }
 
 function rowHtml(r) {
@@ -106,6 +122,7 @@ function editItem(rowIndex) {
   document.getElementById('purchasePrice').value = r.purchasePrice;
   document.getElementById('shippingCost').value = r.shippingCost;
   document.getElementById('currency').value = r.currency || 'PHP';
+  document.getElementById('invType').value = (r.type === 'Catalog') ? 'Catalog' : 'Stock';
   document.getElementById('formTitle').textContent = 'Edit Item ' + r.itemNo;
   document.getElementById('submitBtn').textContent = 'Save Changes';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -132,6 +149,8 @@ async function submitItem(e) {
     shippingCost: document.getElementById('shippingCost').value || 0,
     currency: document.getElementById('currency').value
   };
+  // Only admin/accounting see the Type control; sales adds fall to the backend Catalog default.
+  if (invCanDelete) payload.type = document.getElementById('invType').value;
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const res = await postFlow(rowIndex ? 'updateInventoryItem' : 'addInventoryItem', payload);

@@ -23,14 +23,16 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 78;   // A107 quotation Discount % column (77: Subject + manual numbers · 76: backdated-SO shipment skip · 75: rename)
+var FLOW_VERSION = 79;   // A115 inventory Type (Stock/Catalog) + importInventory + PO stock hook (78: Discount % · 77: Subject + manual numbers)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
 // ── Tab schemas (tab name → header row) ──────────────────────────────────────
 var SCHEMA = {
+  // Type: 'Stock' = real inventory (migrated old-system stocks, received goods, or anything that
+  // reached a Purchase Order — even at 0 qty) · 'Catalog' = quotation/PR working items not yet bought.
   Inventory: ['Item No', 'Description', 'Available Balance', 'Purchase Price/Unit',
-              'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated'],
+              'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated', 'Type'],
 
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %'],
@@ -160,6 +162,10 @@ function _sheet(name) {
     if (blank && blank.getName() !== name && blank.getLastRow() === 0 && ss.getSheets().length > 1) {
       try { ss.deleteSheet(blank); } catch (e) {}
     }
+  } else if (sh.getLastColumn() > 0 && sh.getLastColumn() < headers.length) {
+    // The schema grew since this tab was created (e.g. Inventory 'Type') — label the new columns.
+    sh.getRange(1, sh.getLastColumn() + 1, 1, headers.length - sh.getLastColumn())
+      .setValues([headers.slice(sh.getLastColumn())]).setFontWeight('bold');
   }
   return sh;
 }
@@ -277,7 +283,8 @@ function getInventory() {
       itemNo: r['Item No'], description: r['Description'], balance: _num(r['Available Balance']),
       purchasePrice: _num(r['Purchase Price/Unit']), shippingCost: _num(r['Shipping Cost/Unit']),
       landedCost: _num(r['Landed Cost/Unit']), totalLanded: _num(r['Total Landed Cost']),
-      currency: r['Currency'] || 'PHP', lastUpdated: r['Last Updated'], rowIndex: r.rowIndex
+      currency: r['Currency'] || 'PHP', lastUpdated: r['Last Updated'],
+      type: r['Type'] || '', rowIndex: r.rowIndex
     };
   }) };
 }
@@ -320,8 +327,10 @@ function addInventoryItem(p) {
   // 'N/A' is a placeholder for miscellaneous / no-code items — allow multiple, skip the dedupe check.
   if (itemNo !== 'N/A' && _findInventory(itemNo)) return { success: false, message: 'Item No already exists.' };
   var c = _invComputed(p.balance, p.purchasePrice, p.shippingCost);
+  // Nothing becomes real stock unless deliberate: adds default to Catalog (quotation working items).
+  var type = (p.type === 'Stock') ? 'Stock' : 'Catalog';
   _append('Inventory', [itemNo, String(p.description).trim(), _num(p.balance),
-    _num(p.purchasePrice), _num(p.shippingCost), c.landed, c.total, p.currency || 'PHP', _now()]);
+    _num(p.purchasePrice), _num(p.shippingCost), c.landed, c.total, p.currency || 'PHP', _now(), type]);
   return { success: true, message: 'Item added.' };
 }
 
@@ -330,9 +339,11 @@ function updateInventoryItem(p) {
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
   var c = _invComputed(p.balance, p.purchasePrice, p.shippingCost);
-  sh.getRange(ri, 1, 1, SCHEMA.Inventory.length).setValues([[_normItemNo(p.itemNo),
+  sh.getRange(ri, 1, 1, 9).setValues([[_normItemNo(p.itemNo),
     String(p.description).trim(), _num(p.balance), _num(p.purchasePrice), _num(p.shippingCost),
     c.landed, c.total, p.currency || 'PHP', _now()]]);
+  // Type is written only when explicitly supplied, so a plain edit never reclassifies the item.
+  if (p.type === 'Stock' || p.type === 'Catalog') sh.getRange(ri, 10, 1, 1).setValues([[p.type]]);
   return { success: true, message: 'Item updated.' };
 }
 
@@ -343,7 +354,8 @@ function deleteInventoryItem(p) {
   return { success: true, message: 'Item deleted.' };
 }
 
-/** Adjust an inventory item by delta qty and (optionally) set new cost basis. Creates if missing. */
+/** Adjust an inventory item by delta qty and (optionally) set new cost basis. Creates if missing.
+ *  Goods that move through Receiving/Issuance are by definition real inventory → Type 'Stock'. */
 function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, currency) {
   var sh = _sheet('Inventory');
   var existing = _findInventory(itemNo);
@@ -355,12 +367,97 @@ function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, c
     var c = _invComputed(balance, purchase, shipping);
     sh.getRange(existing.rowIndex, 3, 1, 7).setValues([[balance, purchase, shipping, c.landed, c.total,
       currency || existing['Currency'] || 'PHP', _now()]]);
+    if (existing['Type'] !== 'Stock') sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
   } else {
     var bal = Math.max(0, _num(deltaQty));
     var c2 = _invComputed(bal, newPurchase, newShipping);
     _append('Inventory', [String(itemNo).trim(), String(itemName || itemNo).trim(), bal,
-      _num(newPurchase), _num(newShipping), c2.landed, c2.total, currency || 'PHP', _now()]);
+      _num(newPurchase), _num(newShipping), c2.landed, c2.total, currency || 'PHP', _now(), 'Stock']);
   }
+}
+
+/** An item processed into a Purchase Order becomes an inventory record (0 qty or not): existing
+ *  Catalog rows are promoted to Stock; unknown item codes get a Stock row at balance 0. 'N/A'
+ *  placeholder codes are skipped — misc PO charges (fuel, freight lines) aren't inventory and can't
+ *  be identified among the many N/A rows. */
+function _ensureInventoryStock(itemNo, itemName) {
+  var no = _normItemNo(itemNo);
+  if (no === 'N/A') return;
+  var sh = _sheet('Inventory');
+  var existing = _findInventory(no);
+  if (existing) {
+    if (existing['Type'] !== 'Stock') sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
+  } else {
+    _append('Inventory', [no, String(itemName || no).trim(), 0, 0, 0, 0, 0, 'PHP', _now(), 'Stock']);
+  }
+}
+
+/** Bulk import of the OLD system's stock list (Model No · Description · Qty). Idempotent upsert by
+ *  Item No: existing rows get their balance set from the old system ONLY while still 0 (a live
+ *  received balance is never clobbered — flagged instead) and are promoted to Stock; unknown items
+ *  are appended as Stock rows carrying the old quantity. Pure record write — no journals. */
+function importInventory(p) {
+  var items = JSON.parse(p.items || '[]');
+  if (!items.length) return { success: false, message: 'No items supplied.' };
+  var sh = _sheet('Inventory');
+  var created = 0, updated = 0, skippedBalance = [];
+  items.forEach(function (it) {
+    var no = _normItemNo(it.itemNo);
+    var desc = String(it.description || no).trim();
+    var qty = _num(it.qty);
+    // N/A rows are never merged by code — but match by description so a re-run stays idempotent.
+    var existing = (no === 'N/A')
+      ? _rows('Inventory').filter(function (r) {
+          return _normItemNo(r['Item No']) === 'N/A' && String(r['Description']).trim() === desc;
+        })[0] || null
+      : _findInventory(no);
+    if (existing) {
+      var bal = _num(existing['Available Balance']);
+      if (bal === 0) {
+        var c = _invComputed(qty, existing['Purchase Price/Unit'], existing['Shipping Cost/Unit']);
+        sh.getRange(existing.rowIndex, 3, 1, 7).setValues([[qty, _num(existing['Purchase Price/Unit']),
+          _num(existing['Shipping Cost/Unit']), c.landed, c.total, existing['Currency'] || 'PHP', _now()]]);
+      } else if (bal !== qty) {
+        skippedBalance.push(no + ' (system ' + bal + ' vs old ' + qty + ')');
+      }
+      sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
+      updated++;
+    } else {
+      _append('Inventory', [no, desc, qty, 0, 0, 0, 0, 'PHP', _now(), 'Stock']);
+      created++;
+    }
+  });
+  return { success: true, created: created, updated: updated, skippedBalance: skippedBalance,
+    message: 'Inventory imported: ' + created + ' added, ' + updated + ' merged' +
+      (skippedBalance.length ? ' (' + skippedBalance.length + ' balance conflicts kept as-is)' : '') + '.' };
+}
+
+/** One-time backfill: classify every un-typed inventory row — Stock when it has a balance or its
+ *  Item No appears on any Purchase Order / Receiving, else Catalog. Also normalizes legacy dash-only
+ *  Item Nos to 'N/A' (pickers key on rowIndex, so the rename is safe). Safe to re-run. */
+function classifyInventory() {
+  var sh = _sheet('Inventory');
+  var rows = _rows('Inventory');
+  if (!rows.length) return { success: true, stock: 0, catalog: 0, message: 'Inventory is empty.' };
+  var onRecord = {};
+  _rows('PurchaseOrderItems').forEach(function (r) { onRecord[String(r['Item No']).trim().toLowerCase()] = 1; });
+  _rows('ReceivingItems').forEach(function (r) { onRecord[String(r['Item No']).trim().toLowerCase()] = 1; });
+  var stock = 0, catalog = 0, renamed = 0;
+  var types = rows.map(function (r) {
+    var t = r['Type'];
+    if (t !== 'Stock' && t !== 'Catalog') {
+      t = (_num(r['Available Balance']) > 0 || onRecord[String(r['Item No']).trim().toLowerCase()]) ? 'Stock' : 'Catalog';
+    }
+    if (t === 'Stock') stock++; else catalog++;
+    if (/^[-–—]+$/.test(String(r['Item No']).trim())) {
+      sh.getRange(r.rowIndex, 1, 1, 1).setValues([['N/A']]);
+      renamed++;
+    }
+    return [t];
+  });
+  sh.getRange(2, 10, types.length, 1).setValues(types);
+  return { success: true, stock: stock, catalog: catalog, renamed: renamed,
+    message: 'Classified: ' + stock + ' stock · ' + catalog + ' catalog' + (renamed ? ' · ' + renamed + ' dash codes → N/A' : '') + '.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -723,6 +820,8 @@ function createPurchaseOrder(p) {
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
+  // An item processed into a PO is inventory (0 qty or not): promote Catalog rows / create missing ones.
+  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName); });
   // Auto-create the Accounts Payable entry. FC amount flows in; the PHP estimate (Total × exchange
   // rate, entered on the PO form) pre-fills Amount (PHP) so AP aging + the balance sheet populate.
   var apNo = _nextNumber('APAging', 1, 'AP');
@@ -754,6 +853,7 @@ function updatePurchaseOrder(p) {
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
+  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName); });
   // Keep the linked AP entry's FC amount + currency in sync. Refresh the PHP estimate too when a new
   // one is supplied and the AP is still untouched (Unpaid, nothing paid) — don't clobber manual edits.
   var apSh = _sheet('APAging');
@@ -2363,6 +2463,7 @@ function deleteSalesCall(p) {
 // ════════════════════════════════════════════════════════════════════════════
 var _MODULE_MAP = {
   addInventoryItem: ['Inventory', 'Added'], updateInventoryItem: ['Inventory', 'Updated'], deleteInventoryItem: ['Inventory', 'Deleted'],
+  importInventory: ['Inventory', 'Imported'], classifyInventory: ['Inventory', 'Classified'],
   createQuotation: ['Quotation', 'Created'], updateQuotation: ['Quotation', 'Updated'], deleteQuotation: ['Quotation', 'Deleted'],
   createSalesOrder: ['Sales Order', 'Created'], updateSalesOrder: ['Sales Order', 'Updated'], deleteSalesOrder: ['Sales Order', 'Deleted'],
   importSalesOrders: ['Sales Order', 'Imported'],
@@ -2688,6 +2789,7 @@ var HANDLERS = {
   getVersion: getVersion,
   getInventory: getInventory, addInventoryItem: addInventoryItem,
   updateInventoryItem: updateInventoryItem, deleteInventoryItem: deleteInventoryItem,
+  importInventory: importInventory, classifyInventory: classifyInventory,
   getQuotations: getQuotations, createQuotation: createQuotation,
   updateQuotation: updateQuotation, deleteQuotation: deleteQuotation,
   getSalesOrders: getSalesOrders, createSalesOrder: createSalesOrder,
@@ -2730,6 +2832,7 @@ var HANDLERS = {
 // Actions that mutate the sheets (run under a script lock).
 var MUTATIONS = {
   addInventoryItem: 1, updateInventoryItem: 1, deleteInventoryItem: 1,
+  importInventory: 1, classifyInventory: 1,
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1,
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,

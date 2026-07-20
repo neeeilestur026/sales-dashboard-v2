@@ -225,7 +225,8 @@ async function createInventoryItem() {
     balance: document.getElementById('niBal').value || 0,
     purchasePrice: document.getElementById('niPP').value || 0,
     shippingCost: document.getElementById('niSC').value || 0,
-    currency: 'PHP'
+    currency: 'PHP',
+    type: 'Catalog'   // quotation working item — becomes Stock once it reaches a purchase order
   };
   if (!payload.itemNo || !payload.description) { flowMsg('niMsg', 'Item No and Description required.', false); return; }
   try {
@@ -335,7 +336,8 @@ async function saveQuotation() {
         if (exists) continue;
         try {
           const inv = await postFlow('addInventoryItem', {
-            itemNo: it.itemNo, description: it.itemName || it.itemNo, balance: 0, currency: 'PHP'
+            itemNo: it.itemNo, description: it.itemName || it.itemNo, balance: 0, currency: 'PHP',
+            type: 'Catalog'   // quotation working item — not yet purchased
           });
           if (inv.success) added++;
         } catch (e) { /* best-effort */ }

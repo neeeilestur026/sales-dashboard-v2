@@ -28,6 +28,8 @@
           <div><label>Purchase Price / Unit</label><input type="number" id="purchasePrice" step="any" min="0" value="0"></div>
           <div><label>Shipping Cost / Unit</label><input type="number" id="shippingCost" step="any" min="0" value="0"></div>
           <div><label>Currency</label><select id="currency"></select></div>
+          <div id="invTypeWrap" style="display:none;"><label>Type <span style="font-weight:400;color:var(--text-muted,#64748b);">(Stock = real inventory · Catalog = quotation item)</span></label>
+            <select id="invType"><option value="Stock">Stock</option><option value="Catalog">Catalog</option></select></div>
         </div>
         <div class="flow-actions">
           <button type="submit" class="btn btn-primary" id="submitBtn">Add Item</button>

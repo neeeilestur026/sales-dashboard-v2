@@ -291,20 +291,25 @@ async function loadInventorySnapshot() {
       fetchFlow('getInventory'),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] }))
     ]);
-    const all = (r && r.data) || [];
+    const everything = (r && r.data) || [];
+    // The home snapshot shows REAL inventory only (Type 'Stock' — migrated stocks / received /
+    // PO-processed items); quotation Catalog items live on the Inventory page's own section.
+    // Fallback: before the backend classifies types, show everything as before.
+    const typed = everything.some(it => it.type === 'Stock' || it.type === 'Catalog');
+    const all = typed ? everything.filter(it => it.type === 'Stock') : everything;
     const orderedSet = new Set();
     ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
       if (it && it.itemNo != null && String(it.itemNo).trim() !== '') orderedSet.add(String(it.itemNo).toLowerCase());
     }));
     const isOrdered = it => orderedSet.has(String(it.itemNo).toLowerCase());
     if (all.length === 0) {
-      wrap.innerHTML = _emptyMsg('No inventory items found.');
+      wrap.innerHTML = _emptyMsg('No stock items found.');
       return;
     }
     const orderedN = all.filter(isOrdered).length;
     const rows = all.slice(0, 30);
     wrap.innerHTML =
-      `<div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-bottom:0.4rem;font-weight:600;">${orderedN} ordered · ${all.length - orderedN} not ordered</div>` +
+      `<div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-bottom:0.4rem;font-weight:600;">${typed ? `${all.length} stock item(s) · ${everything.length - all.length} catalog hidden` : `${orderedN} ordered · ${all.length - orderedN} not ordered`}</div>` +
       _tableHtml(
         ['Item No', 'Description', 'Balance', 'Landed/Unit', 'Ordered?'],
         rows.map(item => [

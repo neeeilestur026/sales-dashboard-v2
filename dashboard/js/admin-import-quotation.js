@@ -141,7 +141,8 @@ async function saveImported() {
       try {
         const inv = await postFlow('addInventoryItem', {
           itemNo: r.itemNo, description: r.description || r.itemNo,
-          balance: 0, currency: 'PHP'
+          balance: 0, currency: 'PHP',
+          type: 'Catalog'   // imported quotation item — not yet purchased
         });
         if (inv.success) added++;
         else if (/already exists/i.test(inv.message || '')) existed++;
