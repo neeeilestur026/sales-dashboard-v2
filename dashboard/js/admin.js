@@ -294,9 +294,8 @@ async function loadInventorySnapshot() {
     const everything = (r && r.data) || [];
     // The home snapshot shows REAL inventory only (Type 'Stock' — migrated stocks / received /
     // PO-processed items); quotation Catalog items live on the Inventory page's own section.
-    // Fallback: before the backend classifies types, show everything as before.
-    const typed = everything.some(it => it.type === 'Stock' || it.type === 'Catalog');
-    const all = typed ? everything.filter(it => it.type === 'Stock') : everything;
+    const all = flowStockItems(everything);
+    const typed = all.length !== everything.length || everything.some(it => it.type === 'Stock' || it.type === 'Catalog');
     const orderedSet = new Set();
     ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
       if (it && it.itemNo != null && String(it.itemNo).trim() !== '') orderedSet.add(String(it.itemNo).toLowerCase());

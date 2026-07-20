@@ -845,7 +845,9 @@ async function loadNotifications() {
       // at 0 (product-master entries from imports), so "low" means running low: 0 < balance < 10.
       if (['admin', 'accounting', 'management', 'director'].includes(role)) {
         jobs.push(fetchFlow('getInventory').then(r => {
-          const low = ((r && r.data) || []).filter(i => { const b = parseFloat(i.balance) || 0; return b > 0 && b < 10; });
+          // Real stocks only — quotation Catalog items are never "low stock".
+          const stockOnly = (typeof flowStockItems === 'function') ? flowStockItems((r && r.data) || []) : ((r && r.data) || []);
+          const low = stockOnly.filter(i => { const b = parseFloat(i.balance) || 0; return b > 0 && b < 10; });
           if (low.length > 0) {
             notifications.push({
               icon: 'inventory', color: '#ef4444',

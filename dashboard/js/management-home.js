@@ -90,7 +90,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const [acctResult, teamResult, inventoryResult, paymentResult, loginResult, dailyReportsResult, hrSummaryResult, soStatsResult, soDataResult, mroResult, miResult, collectionsResult, expensesResult, profitReportsResult, shipmentsResult, hrRecruitmentResult, hrEmployeesResult, hrLeaveResult, hrReviewsResult, hrTrainingResult, hrTasksResult, hrMemosResult, hrGrievancesResult, hrCampaignsResult, hrContentResult, hrAccredResult, hrBirthdayResult] = await Promise.allSettled([
     fetchFromAPI({ action: 'getAccountingDashboard', range: 'month' }),
     fetchFromAPI({ action: 'getTeamSummary' }),
-    fetchFromAPI({ action: 'getInventory' }),
+    // Inventory Snapshot reads the NEW flow inventory (Stock items only — the real stocks), mapped
+    // to the legacy shape renderInventorySnapshot expects (modelNo/qty/lastUpdated).
+    fetchFlow('getInventory').then(function (r) {
+      return { success: true, data: flowStockItems((r && r.data) || []).map(function (i) {
+        return { modelNo: i.itemNo, description: i.description, qty: i.balance,
+                 lastUpdated: i.lastUpdated ? flowDate(i.lastUpdated) : '' };
+      }) };
+    }),
     fetchFromAPI({ action: 'getPaymentRequests' }),
     fetchFromAPI({ action: 'getLoginLog', limit: 20 }),
     fetchFromAPI({ action: 'getAllDailyReports', date: todayStr }),

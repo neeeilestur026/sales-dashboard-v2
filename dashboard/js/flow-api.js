@@ -156,6 +156,15 @@ function flowEsc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function flowNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+/** The REAL inventory view: Stock items only (migrated old-system stocks, received goods, anything
+ *  processed into a PO). Falls back to all items while the backend hasn't classified types yet
+ *  (pre-v79), so no view ever goes blank. Quotation Catalog items live on the Inventory page. */
+function flowStockItems(items) {
+  const a = items || [];
+  const typed = a.some(i => i && (i.type === 'Stock' || i.type === 'Catalog'));
+  return typed ? a.filter(i => i && i.type === 'Stock') : a;
+}
 function flowMoney(v, cur) {
   const sym = { PHP: '₱', USD: '$', EUR: '€', SGD: 'S$', AUD: 'A$', JPY: '¥', GBP: '£' };
   return (sym[cur] || (cur ? cur + ' ' : '')) + flowNum(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -589,7 +589,7 @@
         const cogs = invoices.reduce((s, v) => s + flowNum(v.totalCOGS), 0);
         const apOut = aps.filter(a => (a.status || '').toLowerCase() !== 'paid')
           .reduce((s, a) => s + (flowNum(a.amountPHP) - flowNum(a.paidPHP)), 0);
-        const invVal = items.reduce((s, i) => s + flowNum(i.totalLanded), 0);
+        const invVal = flowStockItems(items).reduce((s, i) => s + flowNum(i.totalLanded), 0);   // real stocks only
         set('afkpiSales', flowMoney(sales, 'PHP'));
         set('afkpiCogs', flowMoney(cogs, 'PHP'));
         set('afkpiGp', flowMoney(sales - cogs, 'PHP'));

@@ -47,7 +47,7 @@ async function mfLoadKpis() {
     const sales = invs.reduce((s, v) => s + _mfn(v.totalSales), 0);
     const cogs = invs.reduce((s, v) => s + _mfn(v.totalCOGS), 0);
     const apOut = aps.filter(a => (a.status || '').toLowerCase() !== 'paid').reduce((s, a) => s + (_mfn(a.amountPHP) - _mfn(a.paidPHP)), 0);
-    const invVal = items.reduce((s, i) => s + _mfn(i.totalLanded), 0);
+    const invVal = flowStockItems(items).reduce((s, i) => s + _mfn(i.totalLanded), 0);   // real stocks only
     set('mgmtKpiRevenue', _mfm(sales));
     set('mgmtKpiCogs', _mfm(cogs));
     set('mgmtKpiGp', _mfm(sales - cogs));
@@ -131,9 +131,8 @@ async function mfLoadInventory() {
     ]);
     const everything = (r && r.data) || [];
     // Show REAL inventory only (Type 'Stock'); quotation Catalog items are on the Inventory page.
-    // Fallback: before the backend classifies types, show everything as before.
-    const typed = everything.some(i => i.type === 'Stock' || i.type === 'Catalog');
-    const items = typed ? everything.filter(i => i.type === 'Stock') : everything;
+    const items = flowStockItems(everything);
+    const typed = items.length !== everything.length || everything.some(i => i.type === 'Stock' || i.type === 'Catalog');
     if (!items.length) { c.innerHTML = '<div class="mf-empty">No stock items.</div>'; return; }
     // Items on any Purchase Order are "ordered already".
     const orderedSet = new Set();
