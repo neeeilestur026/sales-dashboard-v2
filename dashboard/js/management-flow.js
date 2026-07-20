@@ -125,31 +125,41 @@ async function mfLoadInventory() {
   const c = document.getElementById('mgmtInvBody');
   c.innerHTML = '<div class="mf-empty">Loading inventory…</div>';
   try {
-    const [r, po] = await Promise.all([
-      fetchFlow('getInventory'),
-      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] }))
-    ]);
+    const r = await fetchFlow('getInventory');
     const everything = (r && r.data) || [];
     // Show REAL inventory only (Type 'Stock'); quotation Catalog items are on the Inventory page.
     const items = flowStockItems(everything);
     const typed = items.length !== everything.length || everything.some(i => i.type === 'Stock' || i.type === 'Catalog');
     if (!items.length) { c.innerHTML = '<div class="mf-empty">No stock items.</div>'; return; }
-    // Items on any Purchase Order are "ordered already".
-    const orderedSet = new Set();
-    ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
-      if (it && it.itemNo != null && String(it.itemNo).trim() !== '') orderedSet.add(String(it.itemNo).toLowerCase());
-    }));
-    const isOrdered = i => orderedSet.has(String(i.itemNo).toLowerCase());
-    const orderedN = items.filter(isOrdered).length;
-    const low = items.filter(i => _mfn(i.balance) <= 0);
-    const rows = items.slice().sort((a, b) => _mfn(a.balance) - _mfn(b.balance)).slice(0, 20).map(i => `<tr>
+    // Compact card: KPI chips → on-hand table (running-low first, fixed-height scroll) →
+    // zero-balance records collapsed. The card height stays bounded whatever the item count.
+    const onHand = items.filter(i => _mfn(i.balance) > 0).sort((a, b) => _mfn(a.balance) - _mfn(b.balance));
+    const zero = items.filter(i => !(_mfn(i.balance) > 0));
+    const units = onHand.reduce((s, i) => s + _mfn(i.balance), 0);
+    const value = items.reduce((s, i) => s + _mfn(i.totalLanded), 0);
+    const lowN = onHand.filter(i => _mfn(i.balance) < 10).length;
+    const chip = (l, v, color) => `<div class="mf-invkpi"><div class="l">${l}</div><div class="v"${color ? ` style="color:${color};"` : ''}>${v}</div></div>`;
+    const rowHtml = i => `<tr>
       <td>${_mfe(i.itemNo)}</td><td>${_mfe(i.description)}</td>
-      <td class="num"${_mfn(i.balance) <= 0 ? ' style="color:#ef4444;font-weight:700;"' : ''}>${_mfn(i.balance)}</td>
-      <td class="num">${_mfm(i.landedCost)}</td><td class="num">${_mfm(i.totalLanded)}</td>
-      <td>${isOrdered(i) ? '<span style="color:#16a34a;font-weight:700;">✅ PO</span>' : '<span style="color:#94a3b8;">—</span>'}</td></tr>`).join('');
-    c.innerHTML = `<div class="mf-invmeta">${items.length} stock item(s)${typed ? ` · ${everything.length - items.length} catalog hidden` : ''} · ${orderedN} ordered · ${low.length} at/below zero · total value ${_mfm(items.reduce((s, i) => s + _mfn(i.totalLanded), 0))}</div>
-      <div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th><th>Ordered?</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div style="margin-top:0.5rem;"><a href="flow-inventory.html" class="link-btn">View all inventory →</a></div>`;
+      <td class="num"${_mfn(i.balance) > 0 && _mfn(i.balance) < 10 ? ' style="color:#d97706;font-weight:700;"' : ''}>${_mfn(i.balance)}</td>
+      <td class="num">${_mfm(i.landedCost)}</td><td class="num">${_mfm(i.totalLanded)}</td></tr>`;
+    const tbl = list => `<div class="mf-invscroll"><table class="flow-table"><thead><tr>
+      <th>Item No</th><th>Description</th><th class="num">Qty</th><th class="num">Landed/Unit</th><th class="num">Value</th></tr></thead>
+      <tbody>${list.map(rowHtml).join('')}</tbody></table></div>`;
+    c.innerHTML = `
+      <div class="mf-invkpis">
+        ${chip('On Hand', onHand.length)}
+        ${chip('Units', units.toLocaleString())}
+        ${chip('Stock Value', _mfm(value))}
+        ${chip('Running Low', lowN, lowN ? '#d97706' : null)}
+        ${chip('Zero Balance', zero.length, zero.length ? '#94a3b8' : null)}
+      </div>
+      ${onHand.length ? tbl(onHand) : '<div class="mf-empty">Nothing on hand.</div>'}
+      ${zero.length ? `<details style="margin-top:0.55rem;">
+        <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">📋 Stock records at zero balance (${zero.length}) — purchased/ordered items, none on hand</summary>
+        <div style="margin-top:0.45rem;">${tbl(zero)}</div>
+      </details>` : ''}
+      <div class="mf-invmeta" style="margin:0.55rem 0 0;">${items.length} stock item(s)${typed ? ` · ${everything.length - items.length} catalog hidden` : ''} · <a href="flow-inventory.html" class="link-btn">View all inventory →</a></div>`;
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
 }
 

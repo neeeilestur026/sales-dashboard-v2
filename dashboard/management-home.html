@@ -832,6 +832,15 @@
     /* approvals + daily reports */
     .mf-empty { padding:1.2rem; text-align:center; color:var(--text-muted,#64748b); font-style:italic; font-size:0.86rem; }
     .mf-invmeta { font-size:0.78rem; color:var(--text-muted,#64748b); margin-bottom:0.5rem; }
+    /* Compact inventory card: KPI chips + a fixed-height scrolling table (card never grows tall). */
+    .mf-invkpis { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.65rem; }
+    .mf-invkpi { flex:1 1 110px; min-width:100px; background:var(--bg-inset,#f4f6f9); border:1px solid var(--border,#e2e8f0);
+                 border-radius:10px; padding:0.45rem 0.65rem; }
+    .mf-invkpi .l { font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); }
+    .mf-invkpi .v { font-size:0.98rem; font-weight:800; color:var(--text-primary,#0f172a); font-variant-numeric:tabular-nums; }
+    .mf-invscroll { max-height:300px; overflow-y:auto; overflow-x:auto; border:1px solid var(--border,#e2e8f0); border-radius:10px; }
+    .mf-invscroll table { margin:0; }
+    .mf-invscroll thead th { position:sticky; top:0; background:var(--bg-card,#fff); z-index:1; box-shadow:0 1px 0 var(--border,#e2e8f0); }
     .dr-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:0.6rem; margin-bottom:0.9rem; }
     .dr-tile { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.6rem 0.8rem; text-align:center; }
     .dr-tile .l { font-size:0.64rem; text-transform:uppercase; color:var(--text-muted,#64748b); font-weight:700; }
