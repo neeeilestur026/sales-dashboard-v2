@@ -347,8 +347,47 @@ async function saveQuotation() {
     flowMsg('formMsg', `${res.message} (${res.quotationNo || payload.quotationNo})${extra}`, true);
     resetForm();
     await loadQuotations();
+    // The refetch right after a write can return the PRE-save record (Sheets read-after-write
+    // staleness) — and that stale copy then sits in the 60s client cache, so a PDF generated now
+    // would carry the OLD price/discount. Overwrite the list entry with what we KNOW we saved.
+    const finalNo = editingNo ? customNo : (res.quotationNo || customNo);
+    qPatchLocal(finalNo, {
+      customer, date: payload.date, subject: manual.subject,
+      discountPct: payload.discountPct, items
+    }, editingNo || null);
+    // A revised/edited quotation must go back through approval (Admin → Management) before it can
+    // be sent — offer the submission right away so it isn't forgotten. (Not automatic: once
+    // Pending, the server blocks further edits, so incremental saving must stay possible.)
+    if (editingNo && confirm(`Saved. Submit ${finalNo} for approval now?\n\nIt will go to Admin, then Management, for approval before it can be sent to the client.`)) {
+      try {
+        const sub = await postFlow('submitQuotationApproval', { quotationNo: finalNo });
+        if (!sub.success) throw new Error(sub.message);
+        qPatchLocal(finalNo, { status: sub.status || 'Pending Admin' });
+        flowMsg('formMsg', `${finalNo} submitted for approval — now ${sub.status || 'Pending Admin'}.`, true);
+      } catch (e) { flowMsg('formMsg', 'Saved, but submitting for approval failed: ' + e.message, false); }
+    }
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Save Quotation'; }
+}
+
+/** Overwrite (or insert) the qList entry with the values we KNOW were just saved. The refetch after
+ *  a write can serve the pre-save record (Sheets read-after-write staleness), and that stale response
+ *  is cached for 60s — so the saved values are authoritative here (same class of fix as the A80
+ *  pdfLink patch). Recomputes line totals + the gross total; clears the flow cache so the stale
+ *  response can't resurface on the next page load. `oldNo` handles a rename (replace in place). */
+function qPatchLocal(no, saved, oldNo) {
+  let i = qList.findIndex(q => String(q.quotationNo) === String(no));
+  if (i < 0 && oldNo) i = qList.findIndex(q => String(q.quotationNo) === String(oldNo));
+  const base = i >= 0 ? qList[i] : { quotationNo: no, status: 'Draft', createdBy: qSession.name, items: [] };
+  const rec = Object.assign({}, base, saved, { quotationNo: no });
+  if (saved.items) {
+    rec.items = saved.items.map(it => Object.assign({}, it, { lineTotal: flowNum(it.qty) * flowNum(it.price) }));
+    rec.total = rec.items.reduce((s, it) => s + it.lineTotal, 0);
+  }
+  if (i >= 0) qList[i] = rec; else qList.push(rec);
+  try { _flowCacheClear(); } catch (e) { /* cache clear is best-effort */ }
+  qBuildMonthOptions();
+  renderQuotationList();
 }
 
 function resetForm() {
