@@ -953,8 +953,11 @@
       <div id="mgmtApprovals"><div class="mf-empty">Loading…</div></div>
     </div>
 
-    <div class="mgmt-newsec">
-      <h2>🗒️ Daily Reports <span class="is-state" id="mgmtDrMeta" style="margin-left:auto;font-weight:400;"></span></h2>
+    <div class="mgmt-newsec" id="newsec-daily-reports">
+      <h2 style="cursor:pointer;" onclick="mgmtToggleNewsec('newsec-daily-reports')">🗒️ Daily Reports
+        <span class="is-state" id="mgmtDrMeta" style="margin-left:auto;font-weight:400;"></span>
+        <span class="newsec-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </h2>
       <div class="is-controls">
         <label style="font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">Date</label>
         <input type="date" id="mgmtDrDate">

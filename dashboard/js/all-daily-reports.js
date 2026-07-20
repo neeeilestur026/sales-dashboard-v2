@@ -9,6 +9,7 @@ let adrSession = null;
 let adrEntries = [];        // all users' activity for the selected date
 let adrNotes = {};          // user -> note text
 let adrEmails = {};         // display name -> { emails, needsSetup } (per-day GoDaddy sent mail, all roles except director)
+let adrSubs = {};           // user -> that day's submitted daily report (what they stand behind)
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 
 function _e(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -69,6 +70,14 @@ async function load(fresh) {
   Promise.all(users.map(u =>
     fetchFlow('getDailyNote', { date, user: u }, opts).then(r => { if (r && r.notes) adrNotes[u] = r.notes; }).catch(() => {})
   )).then(() => { if (seq === adrLoadSeq) render(); });
+
+  // 2b) Submitted daily reports for the date — read-only here; management acknowledges on its own
+  //     dashboard. Absent until the backend carries submitDailyReport, which reads as unsubmitted.
+  adrSubs = {};
+  fetchFlow('getDailyReports', { date }, opts)
+    .then(r => { if (r && r.success) (r.data || []).forEach(x => { adrSubs[String(x.user).trim()] = x; }); })
+    .catch(() => {})
+    .then(() => { if (seq === adrLoadSeq) render(); });
 
   // 3) Sent emails (batched IMAP — the slow part) → repaint after each batch, flag cleared at the end.
   await adrLoadAllEmails(seq);
@@ -147,6 +156,7 @@ function render() {
   let names = Object.keys(byUser).sort((a, b) => a.localeCompare(b));
   // include users with only a note (no activity)
   Object.keys(adrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
+  Object.keys(adrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
   // include users who sent emails today but had no flow activity
   Object.keys(adrEmails).forEach(u => { if (!byUser[u] && (adrEmails[u].emails || []).length) { byUser[u] = []; names.push(u); } });
   names = Array.from(new Set(names));
@@ -176,7 +186,7 @@ function render() {
       </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No movements (note only).</td></tr>';
     return `<details class="urep"${i === 0 ? ' open' : ''} data-user="${_e(name)}">
       <summary><span class="uname">${_e(name)}</span>
-        <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}</span></summary>
+        <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}${adrSubs[String(name).trim()] ? ` · <span style="color:${adrSubs[String(name).trim()].status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted</span>` : ' · <span style="color:#b45309;">not submitted</span>'}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
         <div style="overflow-x:auto;"><table class="flow-table">
@@ -184,6 +194,7 @@ function render() {
           <tbody>${tl}</tbody>
         </table></div>
         ${adrEmailHtml(name)}
+        ${adrSubmissionHtml(adrSubs[String(name).trim()])}
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_e(note)}</div>` : ''}
       </div>
     </details>`;
@@ -191,6 +202,24 @@ function render() {
 }
 
 // The user's per-day sent emails (auto-loaded up front in adrLoadAllEmails), rendered inline.
+/** What the person wrote when they submitted. Read-only here — management acknowledges reports on
+ *  its own dashboard, so this view stays a pure oversight read. */
+function adrSubmissionHtml(sub) {
+  if (!sub) return '';
+  const part = (label, text) => text
+    ? `<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#0d9488;margin-top:0.4rem;">${label}</div>
+       <div style="font-size:0.84rem;white-space:pre-wrap;">${_e(text)}</div>` : '';
+  const body = part('Highlights', sub.highlights) + part('Blockers', sub.blockers) + part('Plan', sub.plan);
+  return `<div style="margin-top:0.7rem;border-left:3px solid var(--accent,#0d9488);background:var(--bg-inset,#f8fafc);padding:0.6rem 0.85rem;border-radius:0 8px 8px 0;">
+    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+      <strong style="font-size:0.8rem;">Daily report submitted</strong>
+      <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${_e(_time(sub.submittedAt))}${(parseFloat(sub.submitCount) || 0) > 1 ? ` · updated ${parseFloat(sub.submitCount)}×` : ''}</span>
+      ${sub.status === 'Reviewed' ? `<span style="margin-left:auto;font-size:0.75rem;color:#0d9488;font-weight:700;">✓ Reviewed by ${_e(sub.reviewedBy)}</span>` : ''}
+    </div>
+    ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
+  </div>`;
+}
+
 function adrEmailHtml(name) {
   const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_e(_date())}</div>`;
   const rec = adrEmails[name];

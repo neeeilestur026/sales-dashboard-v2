@@ -256,7 +256,7 @@ function mfTogglePricing(i) {
 }
 
 // ── Auto Daily Reports (ported from all-daily-reports.js) ──
-let mfDrEntries = [], mfDrNotes = {};
+let mfDrEntries = [], mfDrNotes = {}, mfDrSubs = {};
 const MF_MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 function _mfModClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _mfTime(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
@@ -278,6 +278,12 @@ async function mfLoadDailyReports() {
   await Promise.all(users.map(u =>
     fetchFlow('getDailyNote', { date, user: u }).then(r => { if (r && r.notes) mfDrNotes[u] = r.notes; }).catch(() => {})
   ));
+  // What each person actually SUBMITTED for the day (vs what the system merely recorded).
+  mfDrSubs = {};
+  try {
+    const sr = await fetchFlow('getDailyReports', { date });
+    if (sr && sr.success) (sr.data || []).forEach(x => { mfDrSubs[String(x.user).trim()] = x; });
+  } catch (e) { /* pre-v81 backend — the day simply shows as unsubmitted */ }
   mfRenderDailyReports();
 }
 
@@ -297,6 +303,7 @@ function mfRenderDailyReports() {
   mfDrEntries.forEach(e => { const u = e.user || 'Unknown'; (byUser[u] = byUser[u] || []).push(e); });
   let names = Object.keys(byUser).sort((a, b) => a.localeCompare(b));
   Object.keys(mfDrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
+  Object.keys(mfDrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
   if (q) names = names.filter(n => n.toLowerCase().includes(q));
 
   const cont = document.getElementById('mgmtDrBody');
@@ -317,18 +324,53 @@ function mfRenderDailyReports() {
         <td style="color:var(--text-secondary);">${_mfe(e.summary)}</td>
         <td class="num">${e.amount ? _mfm(e.amount) : ''}</td>
       </tr>`).join('') : '<tr><td colspan="6" class="mf-empty">No movements (note only).</td></tr>';
+    const sub = mfDrSubs[String(name).trim()];
+    const subChip = sub
+      ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted ${_mfe(_mfTime(sub.submittedAt))}${sub.status === 'Reviewed' ? ' · reviewed' : ''}</span>`
+      : ' · <span style="color:#b45309;">not submitted</span>';
     return `<details class="urep"${i === 0 ? ' open' : ''}>
       <summary><span class="uname">${_mfe(name)}</span>
-        <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${note ? ' · 📝 note' : ''}</span></summary>
+        <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${note ? ' · 📝 note' : ''}${subChip}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
         <div style="overflow-x:auto;"><table class="flow-table">
           <thead><tr><th>Time</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
           <tbody>${tl}</tbody></table></div>
+        ${mfSubmissionHtml(sub)}
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_mfe(note)}</div>` : ''}
       </div>
     </details>`;
   }).join('');
+}
+
+/** What the person wrote when they submitted, plus management's acknowledgement control. */
+function mfSubmissionHtml(sub) {
+  if (!sub) return '';
+  const part = (label, text) => text
+    ? `<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#0d9488;margin-top:0.4rem;">${label}</div>
+       <div style="font-size:0.84rem;white-space:pre-wrap;">${_mfe(text)}</div>` : '';
+  const body = part('Highlights', sub.highlights) + part('Blockers', sub.blockers) + part('Plan', sub.plan);
+  const review = sub.status === 'Reviewed'
+    ? `<span style="font-size:0.75rem;color:#0d9488;font-weight:700;">✓ Reviewed by ${_mfe(sub.reviewedBy)}${sub.reviewNote ? ` — ${_mfe(sub.reviewNote)}` : ''}</span>`
+    : `<button class="link-btn" onclick="mfReviewReport('${_mfe(sub.reportNo)}')">Mark reviewed</button>`;
+  return `<div style="margin-top:0.7rem;border-left:3px solid var(--accent,#0d9488);background:var(--bg-inset,#f8fafc);padding:0.6rem 0.85rem;border-radius:0 8px 8px 0;">
+    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+      <strong style="font-size:0.8rem;">Daily report submitted</strong>
+      <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${_mfe(_mfTime(sub.submittedAt))}${_mfn(sub.submitCount) > 1 ? ` · updated ${_mfn(sub.submitCount)}×` : ''}</span>
+      <span style="margin-left:auto;">${review}</span>
+    </div>
+    ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
+  </div>`;
+}
+
+async function mfReviewReport(reportNo) {
+  const note = prompt('Optional comment for this report:', '');
+  if (note === null) return;
+  try {
+    const r = await postFlow('reviewDailyReport', { reportNo, reviewNote: note });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not mark reviewed.');
+    mfLoadDailyReports();
+  } catch (e) { alert(e.message); }
 }
 
 // ═══ Team Weekly Report — delegated to the shared team-performance module ═══
