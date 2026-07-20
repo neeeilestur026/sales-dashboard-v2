@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 80;   // A114 PO duplicate-number rejection + deleteAPEntry (79: inventory Type/import · 78: Discount %)
+var FLOW_VERSION = 81;   // A118 daily report submission + weekly performance (80: PO dup rejection · 79: inventory Type/import)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -75,6 +75,16 @@ var SCHEMA = {
   // ── Daily report: auto-logged activity + per-day notes ──
   ActivityLog: ['Timestamp', 'Date', 'User', 'Module', 'Action', 'Ref No', 'Summary', 'Amount', 'Currency'],
   DailyNotes:  ['Date', 'Notes', 'Updated By', 'Updated At'],
+
+  // ── Daily report SUBMISSION (one row per user per day; the frozen snapshot the user stands behind
+  //    plus their narrative). Column ORDER IS FROZEN — _sheet self-migrates appended columns, but a
+  //    reorder would corrupt existing rows. ──
+  DailyReports: ['Report No', 'Date', 'User', 'Role', 'Status',
+                 'Movements', 'Calls', 'Emails', 'Docs', 'PDFs', 'Amount',
+                 'Counts JSON', 'Metrics JSON',
+                 'Highlights', 'Blockers', 'Plan', 'Notes',
+                 'Submitted At', 'Updated At', 'Submit Count', 'Client Ref',
+                 'Reviewed By', 'Reviewed At', 'Review Note'],
 
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
@@ -2597,6 +2607,111 @@ function saveDailyNote(p) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  DAILY REPORT SUBMISSION  (role dashboards → management / HR)
+//
+//  The ActivityLog says what the system recorded; a DailyReports row says what the PERSON stands
+//  behind — the frozen counters at submit time plus their own highlights/blockers/plan. One row per
+//  (Date, User), updatable all day: the first 'Submitted At' is never overwritten, while
+//  'Submit Count'/'Updated At' keep the revision history honest.
+//
+//  NOTE: submitDailyReport is deliberately ABSENT from _MODULE_MAP. _dispatch auto-logs every
+//  successful mutation, so logging a submission would append an ActivityLog row and inflate the very
+//  movement count the report just froze — corrupting every weekly aggregate downstream. This row IS
+//  the audit trail.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Locate the (Date, User) row — _setCellByKey only matches one key column, so scan like saveDailyNote. */
+function _dailyReportRow(date, user) {
+  var rows = _rows('DailyReports');
+  for (var i = 0; i < rows.length; i++) {
+    if (_dateStr(rows[i]['Date']) === String(date) && String(rows[i]['User']).trim() === String(user).trim()) {
+      return rows[i];
+    }
+  }
+  return null;
+}
+
+function _dailyReportOut(r) {
+  function parse(v) { try { return JSON.parse(v || '{}') || {}; } catch (e) { return {}; } }
+  return {
+    reportNo: r['Report No'], date: _dateStr(r['Date']), user: r['User'], role: r['Role'],
+    status: r['Status'] || 'Submitted',
+    movements: _num(r['Movements']), calls: _num(r['Calls']), emails: _num(r['Emails']),
+    docs: _num(r['Docs']), pdfs: _num(r['PDFs']), amount: _num(r['Amount']),
+    counts: parse(r['Counts JSON']), metrics: parse(r['Metrics JSON']),
+    countsJson: r['Counts JSON'] || '', metricsJson: r['Metrics JSON'] || '',
+    highlights: r['Highlights'] || '', blockers: r['Blockers'] || '', plan: r['Plan'] || '',
+    notes: r['Notes'] || '',
+    submittedAt: r['Submitted At'], updatedAt: r['Updated At'], submitCount: _num(r['Submit Count']),
+    reviewedBy: r['Reviewed By'] || '', reviewedAt: r['Reviewed At'] || '', reviewNote: r['Review Note'] || '',
+    rowIndex: r.rowIndex
+  };
+}
+
+function submitDailyReport(p) {
+  var user = String(p.user || p.actorName || '').trim();
+  if (!user) return { success: false, message: 'User is required.' };
+  var date = p.date ? _dateStr(p.date) : _dateStr(_now());
+  // postFlow retries any action matching /^submit/ — without this a retry double-counts the revision.
+  var dup = _refSeen('submitDailyReport', p.clientRef);
+  if (dup) {
+    var seen = _dailyReportRow(date, user);
+    return { success: true, reportNo: dup, date: date, user: user, duplicate: true,
+      submitCount: seen ? _num(seen['Submit Count']) : 1, message: 'Daily report already submitted.' };
+  }
+  var sh = _sheet('DailyReports');
+  var existing = _dailyReportRow(date, user);
+  var now = _now();
+  var no = existing ? existing['Report No'] : _nextNumber('DailyReports', 1, 'DR');
+  var count = existing ? _num(existing['Submit Count']) + 1 : 1;
+  var submittedAt = existing ? existing['Submitted At'] : now;   // first submission time is permanent
+  var status = (existing && String(existing['Status']) === 'Reviewed') ? 'Reviewed' : 'Submitted';
+  var vals = [no, date, user, p.role || p.actorRole || '', status,
+    _num(p.movements), _num(p.calls), _num(p.emails), _num(p.docs), _num(p.pdfs), _num(p.amount),
+    p.countsJson || '{}', p.metricsJson || '{}',
+    p.highlights || '', p.blockers || '', p.plan || '', p.notes || '',
+    submittedAt, now, count, p.clientRef || '',
+    existing ? (existing['Reviewed By'] || '') : '',
+    existing ? (existing['Reviewed At'] || '') : '',
+    existing ? (existing['Review Note'] || '') : ''];
+  if (existing) sh.getRange(existing.rowIndex, 1, 1, SCHEMA.DailyReports.length).setValues([vals]);
+  else _append('DailyReports', vals);
+  _refStore('submitDailyReport', p.clientRef, no);
+  return { success: true, reportNo: no, date: date, user: user, submitCount: count,
+    submittedAt: submittedAt, updatedAt: now,
+    message: count > 1 ? 'Daily report updated.' : 'Daily report submitted.' };
+}
+
+function getDailyReports(p) {
+  var rows = _rows('DailyReports');
+  p = p || {};
+  if (p.date)  rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
+  if (p.start) rows = rows.filter(function (r) { return _dateStr(r['Date']) >= String(p.start); });
+  if (p.end)   rows = rows.filter(function (r) { return _dateStr(r['Date']) <= String(p.end); });
+  if (p.user)  rows = rows.filter(function (r) { return String(r['User']).trim() === String(p.user).trim(); });
+  if (p.role)  rows = rows.filter(function (r) { return String(r['Role']).toLowerCase() === String(p.role).toLowerCase(); });
+  if (p.status) rows = rows.filter(function (r) { return String(r['Status']) === String(p.status); });
+  rows.sort(function (a, b) {
+    var d = _dateStr(b['Date']).localeCompare(_dateStr(a['Date']));
+    return d || String(a['User']).localeCompare(String(b['User']));
+  });
+  return { success: true, data: rows.map(_dailyReportOut) };
+}
+
+/** Management acknowledges a submitted report (optionally with a comment). */
+function reviewDailyReport(p) {
+  if (!p.reportNo) return { success: false, message: 'reportNo required.' };
+  var ok = _setCellByKey('DailyReports', 'Report No', p.reportNo, 'Status', 'Reviewed');
+  if (!ok) return { success: false, message: 'Daily report not found.' };
+  _setCellByKey('DailyReports', 'Report No', p.reportNo, 'Reviewed By', p.actorName || '');
+  _setCellByKey('DailyReports', 'Report No', p.reportNo, 'Reviewed At', _now());
+  if (p.reviewNote !== undefined) {
+    _setCellByKey('DailyReports', 'Report No', p.reportNo, 'Review Note', p.reviewNote || '');
+  }
+  return { success: true, reportNo: p.reportNo, message: 'Daily report marked reviewed.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  SALES PRICING-REQUEST FLOW
 //  PR (sales) → Sourcing (admin) → Mgmt Pricing → Verify (admin) → Sales → Quotation
 // ════════════════════════════════════════════════════════════════════════════
@@ -2837,6 +2952,7 @@ var HANDLERS = {
   importPricingSubmissions: importPricingSubmissions,
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
+  submitDailyReport: submitDailyReport, getDailyReports: getDailyReports, reviewDailyReport: reviewDailyReport,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
   verifyReturnToSales: verifyReturnToSales, createQuotationFromPR: createQuotationFromPR, savePRPDF: savePRPDF,
@@ -2857,7 +2973,7 @@ var MUTATIONS = {
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,
-  saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1,
+  saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
   addDocument: 1, deleteDocument: 1,

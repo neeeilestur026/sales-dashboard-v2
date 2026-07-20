@@ -15,6 +15,7 @@
 let _rwSeq = 0;
 let _rwOpts = null;      // last init opts — week navigation re-renders with these
 let _rwOffset = 0;       // weeks relative to the week of the picked date (0 = that week)
+let _rwData = null;      // last rendered aggregate — lets the PDF build without re-fetching
 
 function _rwEsc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
 
@@ -64,6 +65,7 @@ async function _rwRender() {
       <button class="btn btn-sm btn-secondary" onclick="rwNavWeek(-1)" title="Previous week">◀</button>
       ${_rwOffset !== 0 ? `<button class="btn btn-sm btn-secondary" onclick="rwNavWeek(0)" title="Back to the selected date's week">↺</button>` : ''}
       <button class="btn btn-sm btn-secondary" onclick="rwNavWeek(1)" title="Next week" ${canNext ? '' : 'disabled'}>▶</button>
+      <button class="btn btn-sm btn-secondary" onclick="rwWeekPdf()" title="Download this week as a PDF report">📄 PDF</button>
     </span>`;
   const titleHtml = `<div class="dr-sect-title" style="display:flex;align-items:center;gap:0.6rem;">
     📅 Week ${_rwEsc(days[0])} – ${_rwEsc(days[6])}${_rwOffset !== 0 ? ` <span class="act-chip">${_rwOffset < 0 ? _rwOffset : '+' + _rwOffset} wk</span>` : ''}${navHtml}</div>`;
@@ -105,6 +107,17 @@ async function _rwRender() {
   const [acts, calls] = await Promise.all([Promise.all(actPromises), Promise.all(callPromises), fetchEmails()]);
   if (seq !== _rwSeq) return;
 
+  // This user's own submitted reports for the week — drives the compliance tile and the PDF's
+  // narrative sections. Absent until the backend carries submitDailyReport; treat that as "none".
+  let subs = [];
+  try {
+    const sr = await fetchFlow('getDailyReports', { start: days[0], end: days[6], user });
+    if (sr && sr.success) subs = sr.data || [];
+  } catch (e) { /* pre-v81 backend — no submissions to show */ }
+  if (seq !== _rwSeq) return;
+  const subByDate = {};
+  subs.forEach(s => { subByDate[s.date] = s; });
+
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const totalMoves = acts.reduce((s, a) => s + a.length, 0);
   const totalEmails = emailCounts.reduce((s, n) => s + n, 0);
@@ -120,6 +133,8 @@ async function _rwRender() {
     `<div class="dr-tile"><div class="l">Emails Sent</div><div class="v">${totalEmails}</div></div>`,
     ...modList.map(m =>
       `<div class="dr-tile"><div class="l">${_rwEsc(/y$|s$|ing$/.test(m) ? m : m + 's')}</div><div class="v">${byMod[m] || 0}</div></div>`),
+    (() => { const past = days.filter(d => d <= today), done = past.filter(d => subByDate[d]).length;
+      return `<div class="dr-tile"><div class="l">Reports Submitted</div><div class="v"${done < past.length ? ' style="color:#b45309;"' : ''}>${done}/${past.length}</div></div>`; })(),
     `<div class="dr-tile"><div class="l">Most Active Module</div><div class="v" style="font-size:1rem;">${top ? _rwEsc(top[0]) + ' (' + top[1] + ')' : '—'}</div></div>`,
   ].join('');
 
@@ -136,6 +151,7 @@ async function _rwRender() {
       <td class="num">${isFuture ? '—' : acts[i].length}</td>
       ${withCalls ? `<td class="num">${isFuture ? '—' : calls[i].length}</td>` : ''}
       <td class="num">${isFuture ? '—' : emailCounts[i]}</td>
+      <td>${isFuture ? '' : (subByDate[d] ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#cbd5e1;">—</span>')}</td>
       <td style="font-size:0.72rem;color:var(--text-muted,#64748b);">${isFuture ? '' : (mix || '—')}</td>
     </tr>`;
   }).join('');
@@ -143,8 +159,52 @@ async function _rwRender() {
   mount.innerHTML = `<div class="dr-sect">${titleHtml}
     <div class="dr-summary" style="margin-bottom:0.9rem;">${tiles}</div>
     <div style="overflow-x:auto;"><table class="flow-table">
-      <thead><tr><th>Day</th><th>Date</th><th class="num">Movements</th>${withCalls ? '<th class="num">Calls</th>' : ''}<th class="num">Emails Sent</th><th>Top Tasks</th></tr></thead>
+      <thead><tr><th>Day</th><th>Date</th><th class="num">Movements</th>${withCalls ? '<th class="num">Calls</th>' : ''}<th class="num">Emails Sent</th><th>Submitted</th><th>Top Tasks</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
+
+  // Keep the aggregate so the PDF button can build its document without re-fetching the week.
+  _rwData = { user, days, acts, calls, emailCounts, byMod, subByDate, today, modList, withCalls };
+}
+
+/** This user's own week as a PDF — the same document management and HR receive for them. */
+function rwWeekPdf() {
+  if (!_rwData || typeof flowReportPdf !== 'function') return;
+  const d = _rwData;
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const docActions = ['Created', 'Issued', 'Received', 'Added'];
+  const flat = [].concat.apply([], d.acts);
+  const past = d.days.filter(x => x <= d.today);
+  const tasks = [];
+  if (d.withCalls) tasks.push(['Calls', d.calls.reduce((s, c) => s + c.length, 0)]);
+  tasks.push(['Emails', d.emailCounts.reduce((s, n) => s + n, 0)]);
+  d.modList.forEach(m => tasks.push([m, d.byMod[m] || 0]));
+  const named = d.modList.slice();
+  tasks.push(['Other', Object.keys(d.byMod).filter(m => named.indexOf(m) < 0).reduce((s, m) => s + d.byMod[m], 0)]);
+
+  const model = {
+    name: d.user, role: (JSON.parse(localStorage.getItem('session') || '{}').role) || '',
+    weekStart: d.days[0], weekEnd: d.days[6], generatedAt: flowToday(),
+    totals: {
+      moves: flat.length,
+      calls: d.calls.reduce((s, c) => s + c.length, 0),
+      emails: d.emailCounts.reduce((s, n) => s + n, 0),
+      docs: flat.filter(e => docActions.indexOf(e.action) >= 0).length,
+      pdfs: flat.filter(e => e.action === 'PDF Saved').length,
+      amount: 0,
+      submitted: past.filter(x => d.subByDate[x]).length,
+      reportableDays: past.length,
+    },
+    tasks,
+    days: d.days.map((x, i) => ({
+      date: x, dayName: dayNames[i], moves: d.acts[i].length, calls: d.calls[i].length,
+      emails: d.emailCounts[i], submitted: !!d.subByDate[x], future: x > d.today,
+    })),
+    submissions: Object.keys(d.subByDate).map(k => d.subByDate[k]),
+  };
+  flowReportPdf({
+    html: flowPersonWeekHtml(model), scale: 3,
+    filename: `Weekly_Performance_${String(d.user).replace(/[^A-Za-z0-9]+/g, '_')}_${d.days[0]}_${d.days[6]}.pdf`,
+  }).catch(err => alert('PDF failed: ' + err.message));
 }

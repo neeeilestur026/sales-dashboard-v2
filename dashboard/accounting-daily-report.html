@@ -51,10 +51,12 @@
           <div>
             <h1>Accounting Daily Report</h1>
             <div class="meta" id="reportMeta">—</div>
+            <div class="meta no-print" id="drSubmitChip" style="margin-top:0.2rem;"></div>
           </div>
           <div class="report-controls no-print">
             <input type="date" id="datePicker">
             <button class="btn btn-sm btn-secondary" id="refreshBtn">Refresh</button>
+            <button class="btn btn-sm btn-secondary" id="pdfBtn">📄 PDF</button>
             <button class="btn btn-sm btn-primary" id="printBtn">Print</button>
           </div>
         </div>
@@ -93,6 +95,8 @@
             <textarea id="notesField" class="notes-area" placeholder="Bank rec, follow-ups, blockers, manual tasks..."></textarea>
             <button class="btn btn-sm btn-primary no-print" id="saveNotesBtn" style="margin-top:0.5rem;">Save Notes</button>
           </div>
+
+          <div id="submitSect"></div>
         </div>
       </div>
     </div>
@@ -102,6 +106,8 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/report-week.js"></script>
+  <script src="js/report-pdf.js"></script>
+  <script src="js/report-submit.js"></script>
   <script src="js/accounting-daily-report.js"></script>
 </body>
 </html>

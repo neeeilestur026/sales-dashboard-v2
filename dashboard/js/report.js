@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   picker.addEventListener('change', load);
   document.getElementById('refreshBtn').addEventListener('click', load);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('pdfBtn').addEventListener('click', _drDayPdf);
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
   document.getElementById('logCallBtn').addEventListener('click', logCall);
 
@@ -80,6 +81,43 @@ async function load() {
   loadNotes();
   loadCalls();
   if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', withCalls: true, modules: ['Quotation', 'Pricing Request', 'Inventory'] });
+  // Submission card — initialized from load() only (never the poller), so typing is never interrupted.
+  if (typeof initReportSubmit === 'function') {
+    initReportSubmit({
+      user: drSession.name, role: 'sales', date, mountId: 'submitSect', chipId: 'drSubmitChip',
+      getSnapshot: () => ({
+        entries: drEntries, calls: drCalls.length, emails: drEmailCount,
+        notes: (document.getElementById('notesField') || {}).value || '',
+      }),
+    });
+  }
+}
+
+/** This rep's day as a PDF — the same document management/HR see for them. */
+function _drDayPdf() {
+  const date = _date();
+  const byMod = {};
+  drEntries.forEach(e => {
+    const m = e.module || 'Other';
+    (byMod[m] = byMod[m] || []).push({ time: _time(e.timestamp), action: e.action, refNo: e.refNo, summary: e.summary, amount: e.amount });
+  });
+  const order = MODULE_ORDER.concat(Object.keys(byMod).filter(m => MODULE_ORDER.indexOf(m) < 0));
+  const model = {
+    name: drSession.name, role: 'sales', date, generatedAt: flowToday(),
+    totals: {
+      moves: drEntries.length, calls: drCalls.length, emails: drEmailCount,
+      docs: drEntries.filter(e => ['Created', 'Issued', 'Received', 'Added'].indexOf(e.action) >= 0).length,
+      pdfs: drEntries.filter(e => e.action === 'PDF Saved').length, amount: 0,
+    },
+    modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
+    calls: drCalls.map(c => ({ time: _time(c.createdAt), contact: c.contact, company: c.company, outcome: c.outcome, notes: c.notes })),
+    notes: (document.getElementById('notesField') || {}).value || '',
+    submission: (typeof _rsRecord !== 'undefined') ? _rsRecord : null,
+  };
+  flowReportPdf({
+    html: flowPersonDayHtml(model), scale: 3,
+    filename: `Daily_Report_${String(drSession.name).replace(/[^A-Za-z0-9]+/g, '_')}_${date}.pdf`,
+  }).catch(err => alert('PDF failed: ' + err.message));
 }
 
 function render() {
@@ -92,6 +130,7 @@ function render() {
   document.getElementById('sumInv').textContent = rows.filter(e => e.module === 'Inventory' && e.action === 'Added').length;
   document.getElementById('sumPdfs').textContent = rows.filter(e => e.action === 'PDF Saved').length;
   document.getElementById('sumEmails').textContent = drEmailCount;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
 
   // ── Timeline (chronological, newest first as returned) ──
   document.getElementById('tlCount').textContent = rows.length;
@@ -141,6 +180,7 @@ async function loadEmails() {
   emails = Array.isArray(emails) ? emails : [];
   drEmailCount = emails.length;
   document.getElementById('emailCount').textContent = emails.length;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
   document.getElementById('sumEmails').textContent = emails.length;
   if (needsSetup) {
     body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
@@ -179,6 +219,7 @@ async function loadCalls() {
   } catch (e) { drCalls = []; }
   document.getElementById('sumCalls').textContent = drCalls.length;
   document.getElementById('callCount').textContent = drCalls.length;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
   document.getElementById('callBody').innerHTML = drCalls.length ? drCalls.map(c => `
     <tr>
       <td>${_esc(_time(c.createdAt))}</td>

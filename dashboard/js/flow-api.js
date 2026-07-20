@@ -169,6 +169,19 @@ function flowMoney(v, cur) {
   const sym = { PHP: '₱', USD: '$', EUR: '€', SGD: 'S$', AUD: 'A$', JPY: '¥', GBP: '£' };
   return (sym[cur] || (cur ? cur + ' ' : '')) + flowNum(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+/** True when the DEPLOYED FlowAPI is at least version n. The Apps Script backend is redeployed by
+ *  hand, so a feature can be live in the front-end before its actions exist — an unknown action
+ *  answers HTTP 200 with {success:false}, never a throw. Memoized; false on any error. */
+let _flowVerPromise = null;
+function flowVersionAtLeast(n) {
+  if (!_flowVerPromise) {
+    _flowVerPromise = fetchFlow('getVersion')
+      .then(r => (r && r.success) ? flowNum(r.version) : 0)
+      .catch(() => 0);
+  }
+  return _flowVerPromise.then(v => v >= n);
+}
 // Timezone-safe date → 'yyyy-MM-dd'. A plain date string passes through unchanged; a Date/ISO datetime
 // is formatted in PH time (Asia/Manila) so a Manila-midnight value serialized to UTC (…T16:00Z) does NOT
 // truncate to the previous day.

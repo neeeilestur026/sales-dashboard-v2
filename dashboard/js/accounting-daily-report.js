@@ -4,6 +4,7 @@
 
 let drSession = null;
 let drEntries = [];        // all activity entries for the selected date
+let drEmailCount = 0;      // today's sent-email count (also feeds the daily-report submission)
 const MODULE_ORDER = ['Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory'];
 
 function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -22,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   picker.addEventListener('change', load);
   document.getElementById('refreshBtn').addEventListener('click', load);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('pdfBtn').addEventListener('click', _drDayPdf);
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
 
   load();
@@ -66,6 +68,51 @@ async function load() {
   loadEmails();
   loadNotes();
   if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', modules: ['Invoice', 'Receiving', 'Collection', 'Expense', 'Quotation'] });
+  // Submission card — initialized from load() only (never the poller), so typing is never interrupted.
+  if (typeof initReportSubmit === 'function') {
+    const sum = (pred) => drEntries.filter(pred).reduce((s, e) => s + _num(e.amount), 0);
+    initReportSubmit({
+      user: drSession.name, role: 'accounting', date, mountId: 'submitSect', chipId: 'drSubmitChip',
+      getSnapshot: () => ({
+        entries: drEntries, calls: 0, emails: drEmailCount,
+        notes: (document.getElementById('notesField') || {}).value || '',
+        amount: sum(e => e.module === 'Invoice' && e.action === 'Issued'),
+        metrics: {
+          salesInvoiced: sum(e => e.module === 'Invoice' && e.action === 'Issued'),
+          apPaid: sum(e => e.module === 'AP Aging'),
+          received: sum(e => e.module === 'Receiving'),
+        },
+      }),
+    });
+  }
+}
+
+/** This accountant's day as a PDF. */
+function _drDayPdf() {
+  const date = _date();
+  const byMod = {};
+  drEntries.forEach(e => {
+    const m = e.module || 'Other';
+    (byMod[m] = byMod[m] || []).push({ time: _time(e.timestamp), action: e.action, refNo: e.refNo, summary: e.summary, amount: e.amount });
+  });
+  const order = MODULE_ORDER.concat(Object.keys(byMod).filter(m => MODULE_ORDER.indexOf(m) < 0));
+  const sum = (pred) => drEntries.filter(pred).reduce((s, e) => s + _num(e.amount), 0);
+  const model = {
+    name: drSession.name, role: 'accounting', date, generatedAt: flowToday(),
+    totals: {
+      moves: drEntries.length, calls: 0, emails: drEmailCount,
+      docs: drEntries.filter(e => ['Created', 'Issued', 'Received', 'Added'].indexOf(e.action) >= 0).length,
+      pdfs: drEntries.filter(e => e.action === 'PDF Saved').length,
+      amount: sum(e => e.module === 'Invoice' && e.action === 'Issued'), amountLabel: 'Invoiced',
+    },
+    modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
+    notes: (document.getElementById('notesField') || {}).value || '',
+    submission: (typeof _rsRecord !== 'undefined') ? _rsRecord : null,
+  };
+  flowReportPdf({
+    html: flowPersonDayHtml(model), scale: 3,
+    filename: `Daily_Report_${String(drSession.name).replace(/[^A-Za-z0-9]+/g, '_')}_${date}.pdf`,
+  }).catch(err => alert('PDF failed: ' + err.message));
 }
 
 function _filtered() { return drEntries; }
@@ -82,6 +129,7 @@ function render() {
   document.getElementById('sumPaid').textContent = _money(sum(e => e.module === 'AP Aging'));
   document.getElementById('sumReceived').textContent = _money(sum(e => e.module === 'Receiving'));
   document.getElementById('sumPdfs').textContent = rows.filter(e => e.action === 'PDF Saved').length;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
 
   // ── Timeline (chronological, newest first as returned) ──
   document.getElementById('tlCount').textContent = rows.length;
@@ -130,7 +178,9 @@ async function loadEmails() {
     }
   } catch (e) { emails = []; }
   emails = Array.isArray(emails) ? emails : [];
+  drEmailCount = emails.length;
   document.getElementById('emailCount').textContent = emails.length;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
   if (needsSetup) {
     body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
     return;

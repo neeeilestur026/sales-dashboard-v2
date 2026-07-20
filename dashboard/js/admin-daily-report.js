@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   picker.addEventListener('change', load);
   document.getElementById('refreshBtn').addEventListener('click', load);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('pdfBtn').addEventListener('click', _drDayPdf);
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
 
   load();
@@ -76,6 +77,42 @@ async function load() {
   loadEmails();
   loadNotes();
   if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', modules: ['Purchase Order', 'Sales Order', 'Shipment', 'Payment Request', 'Pricing Request'] });
+  // Submission card — initialized from load() only (never the poller), so typing is never interrupted.
+  if (typeof initReportSubmit === 'function') {
+    initReportSubmit({
+      user: drSession.name, role: 'admin', date, mountId: 'submitSect', chipId: 'drSubmitChip',
+      getSnapshot: () => ({
+        entries: drEntries, calls: 0, emails: drEmailCount,
+        notes: (document.getElementById('notesField') || {}).value || '',
+      }),
+    });
+  }
+}
+
+/** This admin's day as a PDF. */
+function _drDayPdf() {
+  const date = _date();
+  const byMod = {};
+  drEntries.forEach(e => {
+    const m = e.module || 'Other';
+    (byMod[m] = byMod[m] || []).push({ time: _time(e.timestamp), action: e.action, refNo: e.refNo, summary: e.summary, amount: e.amount });
+  });
+  const order = MODULE_ORDER.concat(Object.keys(byMod).filter(m => MODULE_ORDER.indexOf(m) < 0));
+  const model = {
+    name: drSession.name, role: 'admin', date, generatedAt: flowToday(),
+    totals: {
+      moves: drEntries.length, calls: 0, emails: drEmailCount,
+      docs: drEntries.filter(e => ['Created', 'Issued', 'Received', 'Added'].indexOf(e.action) >= 0).length,
+      pdfs: drEntries.filter(e => e.action === 'PDF Saved').length, amount: 0,
+    },
+    modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
+    notes: (document.getElementById('notesField') || {}).value || '',
+    submission: (typeof _rsRecord !== 'undefined') ? _rsRecord : null,
+  };
+  flowReportPdf({
+    html: flowPersonDayHtml(model), scale: 3,
+    filename: `Daily_Report_${String(drSession.name).replace(/[^A-Za-z0-9]+/g, '_')}_${date}.pdf`,
+  }).catch(err => alert('PDF failed: ' + err.message));
 }
 
 function render() {
@@ -89,6 +126,7 @@ function render() {
   document.getElementById('sumPay').textContent = rows.filter(e => e.module === 'Payment Request').length;
   document.getElementById('sumPricing').textContent = rows.filter(e => e.module === 'Pricing Request').length;
   document.getElementById('sumEmails').textContent = drEmailCount;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
 
   // ── Timeline ──
   document.getElementById('tlCount').textContent = rows.length;
@@ -138,6 +176,7 @@ async function loadEmails() {
   emails = Array.isArray(emails) ? emails : [];
   drEmailCount = emails.length;
   document.getElementById('emailCount').textContent = emails.length;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
   document.getElementById('sumEmails').textContent = emails.length;
   if (needsSetup) {
     body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
