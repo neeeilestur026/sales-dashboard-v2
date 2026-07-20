@@ -290,7 +290,7 @@ async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileN
   if (_flowConfigured()) {
     try {
       const b64 = await blobToBase64(blob);
-      const params = { pdfBase64: b64, fileName: fileName || 'document.pdf' };
+      const params = Object.assign({ pdfBase64: b64, fileName: fileName || 'document.pdf' }, opts.extra || {});
       params[idKey] = idValue;
       const save = await postFlow(saveAction, params);
       if (save && save.success) link = save.link || '';

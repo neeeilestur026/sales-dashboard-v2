@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 82;   // A119 reviseQuotation + edit gate (81: daily report submission · 80: PO dup rejection)
+var FLOW_VERSION = 83;   // A123 quotation PDF stamp + approve guard (82: reviseQuotation + edit gate · 81: daily report submission)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -35,7 +35,8 @@ var SCHEMA = {
               'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated', 'Type'],
 
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
-                   'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %'],
+                   'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %',
+                   'PDF Data JSON'],
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
                    'Orig Item No', 'Orig Item Name'],
 
@@ -492,6 +493,7 @@ function getQuotations(p) {
       pdfLink: q['PDF Link'] || '', createdByRole: q['Created By Role'] || '',
       approvalNote: q['Approval Note'] || '', approvedBy: q['Approved By'] || '', approvedAt: q['Approved At'] || '',
       subject: q['Subject'] || '', discountPct: _num(q['Discount %']) || 0,
+      pdfData: q['PDF Data JSON'] || '',
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
@@ -2180,7 +2182,12 @@ function _setCellByKey(sheetName, keyCol, keyVal, header, value) {
 function saveQuotationPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
   var link = _savePdfToDrive(p.pdfBase64, p.fileName);
-  if (p.quotationNo) _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Link', link);
+  if (p.quotationNo) {
+    _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Link', link);
+    // What this PDF was rendered from (doc fields + a stamp of the figures it shows), so the UI can
+    // tell later whether the saved document still matches the record.
+    if (p.pdfData) _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Data JSON', p.pdfData);
+  }
   return { success: true, link: link, message: 'Quotation PDF saved to Drive.' };
 }
 
@@ -2267,12 +2274,39 @@ function submitQuotationApproval(p) {
   return { success: true, quotationNo: p.quotationNo, status: next, message: 'Submitted for approval (' + next + ').' };
 }
 
+/* True ONLY when the saved PDF's stamp positively proves it shows different figures from the record.
+   A missing/unparseable stamp returns false — legacy documents must never be blocked by a guess (the
+   UI is the stricter gate). Compares pure numbers (line count, total qty, total amount, discount) so
+   date/string formatting differences between client and server can't raise a false alarm. */
+function _quotationPdfMismatch(q) {
+  try {
+    if (!q || !q['PDF Link'] || !q['PDF Data JSON']) return false;
+    var stamp = (JSON.parse(q['PDF Data JSON']) || {}).stamp;
+    if (!stamp || !stamp.items || !stamp.items.length) return false;
+    var was = { n: stamp.items.length, qty: 0, amt: 0 };
+    stamp.items.forEach(function (s) {
+      var f = String(s).split('|');
+      was.qty += _num(f[1]); was.amt += _num(f[1]) * _num(f[2]);
+    });
+    var its = _rows('QuotationItems').filter(function (r) {
+      return String(r['Quotation No']) === String(q['Quotation No']);
+    });
+    var now = { n: its.length, qty: 0, amt: 0 };
+    its.forEach(function (r) { now.qty += _num(r['Quoted Qty']); now.amt += _num(r['Quoted Qty']) * _num(r['Quoted Price']); });
+    return was.n !== now.n || Math.abs(was.qty - now.qty) > 0.001 || Math.abs(was.amt - now.amt) > 0.01
+      || _num(stamp.discountPct) !== _num(q['Discount %']);
+  } catch (e) { return false; }
+}
+
 function approveQuotation(p) {
   if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
   var q = _quotationRow(p.quotationNo);
   if (!q) return { success: false, message: 'Quotation not found.' };
   var st = String(q['Status'] || '');
   var role = p.actorRole || '';
+  if (_quotationPdfMismatch(q)) {
+    return { success: false, message: 'The saved PDF does not match this quotation — regenerate it before approving.' };
+  }
   if (st === 'Pending Admin') {
     if (!_isAdminTier(role)) return { success: false, message: 'Only admin can approve at this stage.' };
     _setQuotationCells(p.quotationNo, { 'Status': 'Pending Management' });

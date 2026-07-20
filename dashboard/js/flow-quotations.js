@@ -355,6 +355,12 @@ async function saveQuotation() {
       customer, date: payload.date, subject: manual.subject,
       discountPct: payload.discountPct, items
     }, editingNo || null);
+    // Refresh the saved PDF so the document can't contradict the figures — but ONLY when that is
+    // lossless. Attached product photos aren't stored anywhere, so a quotation whose PDF carries one
+    // is left alone and flagged out-of-date instead of silently losing its picture.
+    if (await qAutoRefreshPdf(finalNo)) {
+      flowMsg('formMsg', `${res.message} (${finalNo})${extra} · PDF refreshed to match.`, true);
+    }
     // A revised/edited quotation must go back through approval (Admin → Management) before it can
     // be sent — offer the submission right away so it isn't forgotten. (Not automatic: once
     // Pending, the server blocks further edits, so incremental saving must stay possible.)
@@ -368,6 +374,39 @@ async function saveQuotation() {
     }
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Save Quotation'; }
+}
+
+/** Re-render the saved PDF from its stored document fields + the CURRENT items, silently (no tab).
+ *  Only runs when it can be done without losing content: there must be a saved PDF, the doc fields
+ *  must have been captured, and the previous PDF must not have carried an attached photo (those are
+ *  never stored, so re-rendering would drop them). Returns true when the Drive file was replaced. */
+async function qAutoRefreshPdf(no) {
+  const q = qList.find(x => String(x.quotationNo) === String(no));
+  if (!q || !q.pdfLink) return false;
+  const info = qPdfInfo(q);
+  if (!info.doc || info.hasImages) return false;            // nothing to render from, or would lose a photo
+  if (qPdfState(q) === 'fresh') return false;               // already matches
+  const vatOption = info.vatOption || 'inclusive';
+  const payload = {
+    quotationNo: q.quotationNo, customer: q.customer, date: flowDate(q.date),
+    vatOption, discountPct: flowNum(q.discountPct) || 0, descMode: info.descMode || 'long',
+    doc: info.doc, brochures: [],
+    items: (q.items || []).map(it => {
+      const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
+      return { itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
+        origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
+        description: (inv && inv.description) || it.itemName || '', imageDataUrl: '' };
+    })
+  };
+  const pdfData = JSON.stringify({ v: 1, doc: info.doc, vatOption, descMode: payload.descMode,
+    hasImages: false, stamp: qPdfStamp(q, vatOption) });
+  try {
+    const { link } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
+      'quotationNo', q.quotationNo, `Quotation_${q.quotationNo}.pdf`, { background: true, extra: { pdfData } });
+    if (!link) return false;
+    qPatchLocal(q.quotationNo, { pdfLink: link, pdfData });
+    return true;
+  } catch (e) { return false; }   // best-effort — the out-of-date banner catches whatever this misses
 }
 
 /** Overwrite (or insert) the qList entry with the values we KNOW were just saved. The refetch after
@@ -517,7 +556,12 @@ function quotationRow(q) {
   return `<tr><td>${flowEsc(q.quotationNo)}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
-    <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn" title="Opens the last PDF saved to Drive — it does NOT re-read the quotation. If you edited the price or discount since, click PDF to regenerate.">View saved</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+    <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn"${qPdfState(q) === 'fresh'
+        ? ' title="The saved PDF matches this quotation."'
+        : ` style="color:#b91c1c;" title="${qPdfState(q) === 'stale'
+            ? 'This saved PDF no longer matches the quotation — click PDF to regenerate.'
+            : 'This PDF predates change-tracking, so it can\'t be confirmed to match — click PDF to regenerate.'}"`
+      }>${qPdfState(q) === 'fresh' ? '' : '⚠ '}View saved</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
 }
 
@@ -577,18 +621,46 @@ function openReviewModal(no) {
   document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}${discRows}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total${qDisc > 0 ? ' (after discount, before VAT)' : ''}</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
   const pv = document.getElementById('qrPdf');
   const fid = q.pdfLink ? ((q.pdfLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || [])[1]) : null;
-  if (fid) pv.innerHTML = `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
-  else if (q.pdfLink) pv.innerHTML = `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
+  // The panel below is a FILE saved on Drive, not a live render — say so loudly when it no longer
+  // matches the figures above, because that mismatch is exactly what an approver must not miss.
+  const pdfState = qPdfState(q);
+  const regenBtn = `<button class="btn btn-sm btn-primary" style="margin-top:0.5rem;" onclick="qrRegenerate('${flowEsc(q.quotationNo)}')">Regenerate PDF</button>`;
+  let warn = '';
+  if (pdfState === 'stale') {
+    const was = qPdfSavedTotals(q);
+    warn = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">
+      <div style="font-weight:700;color:#b91c1c;font-size:0.85rem;">⚠ This document is out of date</div>
+      <div style="font-size:0.8rem;color:#7f1d1d;margin-top:0.25rem;">
+        It shows <b>${flowMoney(was.net, 'PHP')}</b>${was.discountPct ? ` (${was.discountPct}% discount)` : ''} —
+        the quotation is now <b>${flowMoney(qtnTotal(q), 'PHP')}</b>${flowNum(q.discountPct) ? ` (${flowNum(q.discountPct)}% discount)` : ''}.
+        ${qPdfInfo(q).hasImages ? 'Re-attach the product photo when regenerating.' : ''}
+      </div>${regenBtn}</div>`;
+  } else if (pdfState === 'unverified') {
+    warn = `<div style="background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">
+      <div style="font-weight:700;color:#92400e;font-size:0.85rem;">⚠ This document can't be verified</div>
+      <div style="font-size:0.8rem;color:#78350f;margin-top:0.25rem;">It was generated before change-tracking, so it may not match the figures above. Regenerate it to confirm.</div>
+      ${regenBtn}</div>`;
+  }
+  if (fid) pv.innerHTML = warn + `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
+  else if (q.pdfLink) pv.innerHTML = warn + `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
   else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();openPdfModal('${flowEsc(q.quotationNo)}')">generate the PDF</button> first.</div>`;
   const foot = document.getElementById('qrFoot');
+  // Approving a quotation whose attached document shows different figures is the failure this guards
+  // against — so Approve waits for a matching PDF. Reject always stays available.
+  const blockApprove = pdfState === 'stale' || pdfState === 'unverified';
+  const approveBtn = blockApprove
+    ? `<button type="button" class="btn btn-primary" disabled style="opacity:0.5;cursor:not-allowed;" title="Regenerate the PDF first — the attached document does not match the figures above.">Approve</button>`
+    : `<button type="button" class="btn btn-primary" onclick="qrApprove('${flowEsc(q.quotationNo)}')">Approve</button>`;
   foot.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Close</button>` +
     (isApprover
-      ? `<button type="button" class="btn btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>
-         <button type="button" class="btn btn-primary" onclick="qrApprove('${flowEsc(q.quotationNo)}')">Approve</button>`
+      ? `<button type="button" class="btn btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>` + approveBtn
       : `<span style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-left:auto;">${st.indexOf('Pending') === 0 ? 'Awaiting ' + st.replace('Pending ', '') + ' approval' : ''}</span>`);
   document.getElementById('qrModal').classList.add('open');
 }
 function closeReviewModal() { document.getElementById('qrModal').classList.remove('open'); }
+/** From the out-of-date banner: straight into the PDF dialog, prefilled from the stored doc fields
+ *  so nothing has to be retyped (openPdfModal restores them). */
+function qrRegenerate(no) { closeReviewModal(); openPdfModal(no); }
 function qrApprove(no) { closeReviewModal(); _qAction('approveQuotation', no); }
 function qrReject(no) {
   const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
@@ -644,6 +716,41 @@ async function deleteQuotation(no) {
   } catch (e) { alert(e.message); }
 }
 
+// ─── Saved-PDF freshness ──────────────────────────
+// The row's PDF is a file on Drive; it only changes when someone regenerates. These helpers record
+// what a PDF was rendered from, so the UI can tell whether the saved document still matches.
+
+/** Everything that changes the document's contents, as a comparable object. */
+function qPdfStamp(q, vatOption) {
+  return {
+    customer: String(q.customer || ''), date: flowDate(q.date) || '',
+    subject: String(q.subject || ''), discountPct: flowNum(q.discountPct) || 0,
+    vatOption: vatOption || '',
+    items: (q.items || []).map(it => `${it.itemNo}|${flowNum(it.qty)}|${flowNum(it.price)}`)
+  };
+}
+
+/** 'none' (no PDF) · 'fresh' · 'stale' (proven different) · 'unverified' (PDF predates stamping). */
+function qPdfState(q) {
+  if (!q || !q.pdfLink) return 'none';
+  let data = null;
+  try { data = q.pdfData ? JSON.parse(q.pdfData) : null; } catch (e) { data = null; }
+  if (!data || !data.stamp) return 'unverified';
+  const now = qPdfStamp(q, data.stamp.vatOption || data.vatOption || '');
+  return JSON.stringify(now) === JSON.stringify(data.stamp) ? 'fresh' : 'stale';
+}
+function qPdfInfo(q) { try { return q.pdfData ? (JSON.parse(q.pdfData) || {}) : {}; } catch (e) { return {}; } }
+
+/** What the saved document shows, for the out-of-date banner (from its own stamp). */
+function qPdfSavedTotals(q) {
+  const s = (qPdfInfo(q).stamp) || {};
+  const gross = (s.items || []).reduce((t, x) => {
+    const f = String(x).split('|'); return t + flowNum(f[1]) * flowNum(f[2]);
+  }, 0);
+  const d = Math.max(0, Math.min(100, flowNum(s.discountPct) || 0));
+  return { gross, discountPct: d, net: gross * (1 - d / 100) };
+}
+
 // ─── PDF generation ───────────────────────────────
 let pdfQuote = null;            // the quotation being printed
 const pdfImages = {};           // row INDEX → data URL (itemNo keying collided on duplicate/N-A numbers)
@@ -666,6 +773,30 @@ function openPdfModal(no) {
     const el = document.getElementById('pdf' + f);
     if (el && d[f] !== undefined && d[f] !== '') el.value = d[f];
   });
+  // This quotation's OWN fields from its last PDF beat the browser-wide defaults, so regenerating
+  // after a re-price reproduces the same document (incl. RFQ No, which defaults never carried).
+  const prev = qPdfInfo(q);
+  if (prev.doc) {
+    [['address', 'Address'], ['attention', 'Attention'], ['designation', 'Designation'],
+     ['email', 'Email'], ['rfqNo', 'RfqNo'], ['note', 'Note'], ['validity', 'Validity'],
+     ['delivery', 'Delivery'], ['payment', 'Payment'], ['warranty', 'Warranty'],
+     ['sigName', 'SigName'], ['sigDesignation', 'SigDesignation'], ['sigViber', 'SigViber'],
+     ['sigMobile', 'SigMobile'], ['sigEmail', 'SigEmail']].forEach(([k, id]) => {
+      const el = document.getElementById('pdf' + id);
+      if (el && prev.doc[k]) el.value = prev.doc[k];
+    });
+    // (Subject deliberately NOT restored — the record's current subject wins.)
+    const vs = document.getElementById('pdfVat'); if (vs && prev.vatOption) vs.value = prev.vatOption;
+    const dm = document.getElementById('pdfDescMode'); if (dm && prev.descMode) dm.value = prev.descMode;
+  }
+  // A regenerated document must re-attach any product photo — it was never stored.
+  const imgWarn = document.getElementById('pdfImgWarn');
+  if (imgWarn) {
+    const needsPhoto = prev.hasImages && qPdfState(q) !== 'fresh';
+    imgWarn.style.display = needsPhoto ? 'block' : 'none';
+    imgWarn.textContent = needsPhoto
+      ? '⚠ The previous PDF had a product photo attached. Photos are not stored — re-attach it below, or the new document will not have it.' : '';
+  }
   // item image pickers
   document.getElementById('pdfItems').innerHTML = (q.items || []).map((it, i) => `
     <div class="pdf-item-row">
@@ -772,11 +903,20 @@ async function submitPdf() {
     })
   };
   btn.disabled = true; btn.textContent = 'Generating...';
+  // Record what this PDF is rendered from, so the saved document can be checked against the record
+  // later (and refreshed automatically when that can be done without losing an attached photo).
+  const hasImages = (pdfQuote.items || []).some((it, i) => !!pdfImages[i]);
+  const pdfData = JSON.stringify({
+    v: 1, doc, vatOption: payload.vatOption, descMode: doc.descMode, hasImages,
+    stamp: qPdfStamp(Object.assign({}, pdfQuote, { discountPct: payload.discountPct }), payload.vatOption)
+  });
   try {
     const { link } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
-      'quotationNo', pdfQuote.quotationNo, `Quotation_${displayNo}.pdf`);
+      'quotationNo', pdfQuote.quotationNo, `Quotation_${displayNo}.pdf`, { extra: { pdfData } });
     flowMsg('pdfModalMsg', link ? 'PDF generated and saved to Drive.' : 'PDF generated (Drive save skipped — backend not configured).', true);
     await loadQuotations();
+    // The list refetch can lag the write (Sheets read-after-write) — patch what we know.
+    if (link) qPatchLocal(pdfQuote.quotationNo, { pdfLink: link, pdfData, discountPct: payload.discountPct });
     if (link) setTimeout(closePdfModal, 900);
   } catch (e) {
     flowMsg('pdfModalMsg', e.message, false);
