@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 83;   // A123 quotation PDF stamp + approve guard (82: reviseQuotation + edit gate · 81: daily report submission)
+var FLOW_VERSION = 84;   // A128 revisePaymentRequest + PR edit gate (83: quotation PDF stamp + approve guard · 82: reviseQuotation)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1646,10 +1646,21 @@ function createPaymentRequest(p) {
   return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
 }
 
+/* A payment request is a money instrument: once it is submitted or approved, silently rewriting the
+   amount / payee / bank account would let an approved payment be redirected with nobody re-checking
+   it. So editing is confined to Draft/Rejected, and the only way back into an in-flight or approved
+   request is revisePaymentRequest below, which clears every approval first. */
+function _prEditable(status) {
+  var s = String(status || 'Draft');
+  return s === 'Draft' || s === 'Rejected' || s === '';
+}
+
 function updatePaymentRequest(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
-  // Editable at any status (accounting can update details/amount even after submit/approval).
+  if (!_prEditable(r['Status'])) {
+    return { success: false, message: 'This payment request is ' + r['Status'] + ' — use Revise to reopen it for editing.' };
+  }
   var fields = { 'Supplier': p.supplier, 'Payee': p.payee, 'Currency': p.currency, 'Purpose': p.purpose,
     'Department': p.department, 'Bank Name': p.bankName, 'Account Name': p.accountName,
     'Account Number': p.accountNumber, 'Payment Method': p.paymentMethod, 'Due Date': p.dueDate, 'Remarks': p.remarks };
@@ -1683,6 +1694,28 @@ function submitPaymentRequest(p) {
   var next = String(r['Type']) === 'Other' ? 'Pending Accounting' : 'Pending Director';
   _prSet(p.prNo, { 'Status': next, 'Approval Note': '' });
   return { success: true, prNo: p.prNo, status: next, message: 'Submitted for approval (' + next + ').' };
+}
+
+/* Reopen a submitted/approved payment request for correction. Every approval tick is cleared, so the
+   revised request must travel the whole approval chain again before anyone can pay it. */
+function revisePaymentRequest(p) {
+  if (!p.prNo) return { success: false, message: 'prNo required.' };
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  var st = String(r['Status'] || 'Draft');
+  if (_prEditable(st)) {
+    return { success: false, message: 'This payment request is ' + st + ' — it is already editable.' };
+  }
+  var note = 'Reopened for revision by ' + (p.actorName || 'a user') + (p.reason ? ' — ' + p.reason : '');
+  _prSet(p.prNo, {
+    'Status': 'Draft',
+    'Acct Approved By': '', 'Acct Approved At': '',
+    'Dir Approved By': '', 'Dir Approved At': '',
+    'Mgmt Approved By': '', 'Mgmt Approved At': '',
+    'Approval Note': note
+  });
+  return { success: true, prNo: p.prNo, status: 'Draft', previousStatus: st,
+           message: 'Payment Request reopened for revision — all approvals cleared; it must be approved again.' };
 }
 
 function approvePaymentRequest(p) {
@@ -2590,6 +2623,7 @@ var _MODULE_MAP = {
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
   approvePaymentRequest: ['Payment Request', 'Approved'], rejectPaymentRequest: ['Payment Request', 'Rejected'],
   savePaymentRequestPDF: ['Payment Request', 'PDF Saved'],
+  revisePaymentRequest: ['Payment Request', 'Revised'],
   importSOCostDetails: ['Sales Order', 'Cost Imported'], saveSOCostDetails: ['Sales Order', 'Cost Edited'],
   backfillMigratedRecords: ['Sales Order', 'Records Backfilled'],
   deleteMigratedRecords: ['Sales Order', 'Migrated Cleared'],
@@ -3015,6 +3049,7 @@ var HANDLERS = {
   updatePaymentRequest: updatePaymentRequest, deletePaymentRequest: deletePaymentRequest,
   submitPaymentRequest: submitPaymentRequest, approvePaymentRequest: approvePaymentRequest,
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
+  revisePaymentRequest: revisePaymentRequest,
   getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails, saveSOCostDetails: saveSOCostDetails,
   backfillMigratedRecords: backfillMigratedRecords, deleteMigratedRecords: deleteMigratedRecords,
   resetSequenceCounters: resetSequenceCounters,
@@ -3052,7 +3087,7 @@ var MUTATIONS = {
   setOpeningBalance: 1,
   advanceShipmentStage: 1, updateShipment: 1,
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
-  approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1,
+  approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1, revisePaymentRequest: 1,
   importSOCostDetails: 1, saveSOCostDetails: 1, importPricingSubmissions: 1, backfillMigratedRecords: 1,
   deleteMigratedRecords: 1, resetSequenceCounters: 1
 };

@@ -37,11 +37,31 @@ async function savePR() {
   try {
     const res = await postFlow(editing ? 'updatePaymentRequest' : 'createPaymentRequest', payload);
     if (!res.success) throw new Error(res.message);
-    flowMsg('formMsg', `${res.message}`, true);
+    const finalNo = res.prNo || payload.prNo;
     resetForm();
     await loadPRs();
+    // The refetch right after a write can return the PRE-save row (Sheets read-after-write
+    // staleness) — and the PDF is built from this list, so a stale row would print the old
+    // amount/payee/bank. Overwrite the entry with what we KNOW was just saved.
+    prPatchLocal(finalNo, payload);
+    // Keep the saved PDF honest: it is derived entirely from these fields (no attachments), so
+    // re-rendering after every save is lossless and stops the stored PDF from going stale.
+    const refreshed = await prAutoRefreshPdf(finalNo);
+    flowMsg('formMsg', `${res.message}${refreshed ? ' · PDF updated to match.' : ''}`, true);
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Save Payment Request'; }
+}
+
+/** Overwrite (or insert) the prList entry with the values we KNOW were just written, then repaint.
+ *  Mirrors the proven qPatchLocal fix on the quotations page. */
+function prPatchLocal(no, saved) {
+  const i = prList.findIndex(r => String(r.prNo) === String(no));
+  const base = i >= 0 ? prList[i] : { prNo: no, status: 'Draft', createdBy: prSession.name, currency: 'PHP' };
+  const rec = Object.assign({}, base, saved, { prNo: no });
+  if (saved && saved.amount !== undefined) rec.amount = flowNum(saved.amount);
+  if (i >= 0) prList[i] = rec; else prList.unshift(rec);
+  try { _flowCacheClear(); } catch (e) { /* best-effort */ }
+  renderPRs();
 }
 
 function resetForm() {
@@ -59,9 +79,16 @@ async function loadPRs() {
   try {
     const res = await fetchFlow('getPaymentRequests', { type: 'Other' });
     prList = (res && res.data) || [];
-    if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; return; }
-    c.innerHTML = `<table class="flow-table"><thead><tr><th>PR No</th><th>Payee</th><th>Purpose</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead><tbody>${prList.map(prRow).join('')}</tbody></table>`;
+    renderPRs();
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+/** Paint the list from prList (no refetch) — so a local patch can repaint immediately. */
+function renderPRs() {
+  const c = document.getElementById('listContainer');
+  if (!c) return;
+  if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; return; }
+  c.innerHTML = `<table class="flow-table"><thead><tr><th>PR No</th><th>Payee</th><th>Purpose</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead><tbody>${prList.map(prRow).join('')}</tbody></table>`;
 }
 
 function prRow(r) {
@@ -72,8 +99,27 @@ function prRow(r) {
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowEsc(r.payee)}</td><td>${flowEsc(r.purpose)}</td>
     <td class="num">${flowMoney(r.amount, 'PHP')}</td><td>${flowStatusBadge(st)}${note}</td>
     <td style="font-size:0.74rem;color:var(--text-secondary,#475569);">${appr}</td>
-    <td>${r.pdfLink ? `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+    <td>${prPdfCell(r)}</td>
     <td style="white-space:nowrap;">${prActions(r)}</td></tr>`;
+}
+
+/** The stored PDF is a file on Drive — it only changes when it is regenerated. Saving auto-refreshes
+ *  it, but if that best-effort refresh ever fails, flag the link rather than let a stale document
+ *  pass for a current one. */
+function prPdfStale(r) {
+  if (!r.pdfLink) return false;
+  if (r.pdfAt) return false;                       // refreshed in this session
+  const upd = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
+  const crt = r.createdAt ? new Date(r.createdAt).getTime() : 0;
+  return upd > 0 && crt > 0 && (upd - crt) > 60000;  // edited well after creation
+}
+function prPdfCell(r) {
+  if (!r.pdfLink) return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  const stale = prPdfStale(r);
+  const title = stale
+    ? "This saved PDF may predate the latest edit — click PDF to regenerate it."
+    : 'The saved PDF matches this request.';
+  return `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn"${stale ? ' style="color:#b45309;"' : ''} title="${title}">${stale ? '⚠ ' : ''}View</a>`;
 }
 
 function prActions(r) {
@@ -82,6 +128,9 @@ function prActions(r) {
   let a = `<button class="link-btn" onclick='prGenPdf("${no}")'>PDF</button>` + B(`openDocsModal("Payment Request","${no}")`, 'Docs');
   const editable = st === 'Draft' || st === 'Rejected';
   if (prCanCreate && editable) a += B(`prSubmit("${no}")`, 'Submit') + B(`prEdit("${no}")`, 'Edit') + B(`prDelete("${no}")`, 'Delete', 'del-btn');
+  // In flight or already approved? Correcting it means re-opening it — which drops every approval,
+  // so an amended payee/amount/bank account can never inherit the old sign-offs.
+  if (prCanCreate && !editable) a += B(`prRevise("${no}")`, 'Revise');
   // Accounting approves first; then management and director each approve at Pending Final.
   if (role === 'accounting' && st === 'Pending Accounting') a += B(`prApprove("${no}")`, 'Approve') + B(`prReject("${no}")`, 'Reject', 'del-btn');
   if (st === 'Pending Final') {
@@ -118,21 +167,66 @@ function prEdit(no) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+/** Reopen a submitted/approved request so it can be corrected. Every approval is cleared server-side,
+ *  so the revised request must be approved again before it can be paid. */
+async function prRevise(no) {
+  if (!confirm(`Reopen ${no} for revision?\n\nIt returns to Draft and ALL approvals (Accounting, Management, Director) are cleared — it must be approved again before payment.`)) return;
+  const reason = prompt('Reason for the revision (optional — e.g. "wrong account number"):', '');
+  if (reason === null) return;
+  try {
+    const res = await postFlow('revisePaymentRequest', { prNo: no, reason });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not reopen this payment request.');
+    await loadPRs();
+    prEdit(no);                 // land in the form, prefilled and ready to correct
+  } catch (e) { alert(e.message); }
+}
+
+/** The PRF payload for a record — one source of truth for both manual and automatic generation. */
+function prPdfPayload(r) {
+  return {
+    prNo: r.prNo, requestDate: flowDate(r.createdAt), requestedBy: r.createdBy, department: r.department,
+    purpose: r.purpose, payee: r.payee, bankName: r.bankName, accountName: r.accountName,
+    accountNumber: r.accountNumber, paymentMethod: r.paymentMethod, currency: r.currency || 'PHP',
+    amount: r.amount, dueDate: flowDate(r.dueDate), remarks: r.remarks,
+  };
+}
+
+/** Render the PRF and store it on the record. `background` suppresses the preview tab (used by the
+ *  save path). Returns the Drive link, or '' when the Drive save was skipped. */
+async function prRenderPdf(r, background) {
+  const resp = await fetch('/flow/payment-request-pdf', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prPdfPayload(r))
+  });
+  if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.message || 'PDF generation failed.'); }
+  const blob = await resp.blob();
+  if (!background) window.open(URL.createObjectURL(blob), '_blank');
+  const b64 = await blobToBase64(blob);
+  const save = await postFlow('savePaymentRequestPDF', {
+    prNo: r.prNo, pdfBase64: b64, fileName: 'Payment_Request_' + r.prNo + '.pdf'
+  }).catch(() => null);
+  return (save && save.link) || '';
+}
+
+/** Silently re-render the stored PDF so it always matches the record. Lossless — the PRF is built
+ *  purely from these fields, nothing is attached that could be lost. Best-effort. */
+async function prAutoRefreshPdf(no) {
+  const r = prList.find(x => String(x.prNo) === String(no));
+  if (!r) return false;
+  try {
+    const link = await prRenderPdf(r, true);
+    if (!link) return false;
+    r.pdfLink = link;
+    r.pdfAt = Date.now();      // local freshness marker for the stale badge
+    renderPRs();
+    return true;
+  } catch (e) { return false; }
+}
+
 async function prGenPdf(no) {
   const r = prList.find(x => x.prNo === no); if (!r) return;
   try {
-    const payload = {
-      prNo: r.prNo, requestDate: flowDate(r.createdAt), requestedBy: r.createdBy, department: r.department,
-      purpose: r.purpose, payee: r.payee, bankName: r.bankName, accountName: r.accountName,
-      accountNumber: r.accountNumber, paymentMethod: r.paymentMethod, currency: r.currency, amount: r.amount,
-      dueDate: flowDate(r.dueDate), remarks: r.remarks,
-    };
-    const resp = await fetch('/flow/payment-request-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.message || 'PDF generation failed.'); }
-    const blob = await resp.blob();
-    window.open(URL.createObjectURL(blob), '_blank');
-    const b64 = await blobToBase64(blob);
-    await postFlow('savePaymentRequestPDF', { prNo: r.prNo, pdfBase64: b64, fileName: 'Payment_Request_' + r.prNo + '.pdf' }).catch(() => {});
+    const link = await prRenderPdf(r, false);
+    if (link) { r.pdfLink = link; r.pdfAt = Date.now(); }
     loadPRs();
   } catch (e) { alert(e.message); }
 }
