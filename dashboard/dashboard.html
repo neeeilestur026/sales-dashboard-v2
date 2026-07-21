@@ -5,405 +5,240 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sales Dashboard — Home</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/bento-skin.css">
   <link rel="stylesheet" href="css/training-mode.css">
   <style>
-    /* ── Scoped redesign tokens (additive, don't touch styles.css) ─ */
-    .hero {
-      position: relative;
-      border-radius: 20px;
-      padding: 1.75rem 2rem;
-      margin-bottom: 1.5rem;
-      background:
-        radial-gradient(1200px 200px at 0% 0%, rgba(251,146,60,0.10), transparent 60%),
-        radial-gradient(800px 200px at 100% 100%, rgba(99,102,241,0.10), transparent 60%),
-        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-      border: 1px solid var(--border, #e2e8f0);
-      box-shadow: var(--shadow-sm);
-      overflow: hidden;
+    /* ── Bento layout (scoped, additive; does not touch styles.css) ── */
+    body{background:#eef1f5 !important;font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+    .main-content{
+      --ac:#4f46e5; --acd:#3730a3; --ac-hover:#4338ca; --soft:#e0e7ff;
+      --page:#f3f5f7; --card:#fff; --tile2:#eef2f6; --line:#d7dce3;
+      --ink:#111827; --ink2:#8b93a1;
+      background:radial-gradient(1000px 500px at 12% -8%,#eef1f5,#f3f5f7 60%) !important;
+      min-height:100vh;
+      padding:104px 28px 40px !important;
+      max-width:1320px; margin:0 auto;
     }
-    .hero-row {
-      display: flex; flex-wrap: wrap; align-items: center;
-      justify-content: space-between; gap: 1rem;
-    }
-    .hero h1 {
-      font-size: 1.6rem; font-weight: 700; color: var(--text-primary);
-      margin: 0; letter-spacing: -0.01em;
-    }
-    .hero p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
-    .hero-meta { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-    .hero-pill {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.4rem 0.85rem; border-radius: 999px;
-      font-size: 0.78rem; font-weight: 600;
-      background: #fff; border: 1px solid var(--border);
-      color: var(--text-secondary);
-    }
-    .hero-pill.warn { background: var(--warning-light); color: var(--warning); border-color: rgba(217,119,6,0.25); }
-    .hero-pill.ok   { background: var(--success-light); color: var(--success); border-color: rgba(22,163,74,0.25); }
-    .hero-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    @media (max-width:900px){ .main-content{ padding:96px 16px 32px !important; } }
+    .bento-h1{font:800 26px/1 'Inter',sans-serif;letter-spacing:-.02em;color:var(--ink)}
+    .bento-sub{font:400 13.5px 'Inter',sans-serif;color:var(--ink2);margin-top:7px}
+    .b-card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+      box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35);
+      transition:transform .18s cubic-bezier(.4,0,.2,1),box-shadow .25s cubic-bezier(.4,0,.2,1),border-color .2s}
+    a.b-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px -18px rgba(15,23,42,.45);border-color:color-mix(in srgb,var(--ac) 40%,var(--line))}
+    a.b-card:active{transform:translateY(-1px) scale(.99)}
+    .b-ic{border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .b-pill{border-radius:999px;display:inline-flex;align-items:center;gap:7px}
+    .b-btn{border-radius:999px;padding:11px 20px;font:600 13px 'Inter',sans-serif;color:#fff;
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 88%,#fff),var(--ac));
+      box-shadow:0 6px 16px -8px color-mix(in srgb,var(--ac) 80%,transparent);
+      transition:transform .18s cubic-bezier(.4,0,.2,1),filter .18s}
+    .b-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+    .b-btn:active{transform:scale(.97)}
+    .b-btn.sec{background:var(--card);color:var(--ink) !important;border:1px solid var(--line);box-shadow:none}
+    .b-tabnum{font-variant-numeric:tabular-nums}
+    .b-row{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap}
+    .b-lbl{font:600 11px 'Inter',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+    @media (prefers-reduced-motion:reduce){.b-card,.b-btn{transition:none}}
 
-    /* KPI strip */
-    .kpi-grid {
-      display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
-      gap: 0.85rem; margin-bottom: 1.5rem;
-    }
-    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-    .kpi-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 14px; padding: 1rem 1.1rem;
-      box-shadow: var(--shadow-xs);
-      display: flex; flex-direction: column; gap: 0.4rem;
-      transition: var(--transition);
-    }
-    .kpi-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-    .kpi-head {
-      display: flex; align-items: center; justify-content: space-between;
-      font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.06em;
-    }
-    .kpi-icon {
-      width: 30px; height: 30px; border-radius: 8px;
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-    .kpi-value { font-size: 1.85rem; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
-    .kpi-foot { font-size: 0.78rem; color: var(--text-muted); }
+    /* Target progress bars — markup generated by dashboard.js makeProgressBar() */
+    .progress-row{margin-bottom:.9rem}
+    .progress-row:last-child{margin-bottom:0}
+    .progress-label{display:flex;justify-content:space-between;align-items:center;
+      font:500 12.5px 'Inter',sans-serif;color:var(--ink2);margin-bottom:6px}
+    .progress-label strong{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+    .progress-bar-bg{width:100%;height:8px;border-radius:999px;background:var(--tile2);overflow:hidden}
+    .progress-bar-fill{height:100%;border-radius:999px;transition:width .6s ease}
 
-    /* Section headings */
-    .sect-head {
-      display: flex; align-items: center; justify-content: space-between;
-      margin: 0.5rem 0 0.75rem;
-    }
-    .sect-head h2 {
-      font-size: 0.78rem; font-weight: 700; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.08em; margin: 0;
-    }
-    .sect-head .muted { font-size: 0.78rem; color: var(--text-muted); }
-
-    /* Two-column main layout */
-    .home-grid {
-      display: grid; grid-template-columns: 2fr 1fr;
-      gap: 1.25rem; align-items: start;
-    }
-    @media (max-width: 1100px) { .home-grid { grid-template-columns: 1fr; } }
-
-    /* App cards — refreshed */
-    .app-grid-v2 {
-      display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
-      gap: 0.85rem;
-    }
-    @media (max-width: 700px) { .app-grid-v2 { grid-template-columns: 1fr; } }
-    .acard {
-      position: relative;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1rem 1.1rem;
-      transition: var(--transition);
-      box-shadow: var(--shadow-xs);
-      display: flex; flex-direction: column; gap: 0.5rem;
-    }
-    .acard:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--border-strong); }
-    .acard-top {
-      display: flex; align-items: center; gap: 0.7rem;
-    }
-    .acard-icon {
-      width: 38px; height: 38px; border-radius: 10px;
-      display: inline-flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .acard-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0; }
-    .acard-desc { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
-    .acard-stat {
-      display: flex; align-items: center; gap: 0.4rem;
-      font-size: 0.8rem; color: var(--text-secondary);
-      padding: 0.45rem 0.6rem; background: var(--bg-inset);
-      border-radius: 8px; margin-top: 0.2rem;
-    }
-    .acard-stat .stat-number { font-weight: 700; color: var(--text-primary); }
-    .acard-cta {
-      display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
-      padding: 0.5rem 0.9rem; border-radius: 8px;
-      font-size: 0.82rem; font-weight: 600;
-      background: var(--accent); color: #fff !important;
-      transition: var(--transition); margin-top: 0.25rem;
-    }
-    .acard-cta:hover { background: var(--accent-hover); transform: translateX(2px); }
-    .acard-cta.subtle { background: var(--bg-inset); color: var(--text-primary) !important; }
-    .acard-cta.subtle:hover { background: var(--border); }
-
-    /* Side panel */
-    .side-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 14px; padding: 1.1rem 1.2rem;
-      box-shadow: var(--shadow-xs); margin-bottom: 1rem;
-    }
-    .side-card h3 {
-      font-size: 0.88rem; font-weight: 700; color: var(--text-primary);
-      margin: 0 0 0.85rem; display: flex; align-items: center; gap: 0.45rem;
-    }
-    .side-card.alert {
-      border-color: rgba(220,38,38,0.3);
-      background: linear-gradient(180deg, var(--danger-light), #fff);
-    }
-    .side-card.alert h3 { color: var(--danger); }
-
-    .progress-row { margin-bottom: 0.95rem; }
-    .progress-row:last-child { margin-bottom: 0; }
-    .progress-label {
-      display: flex; justify-content: space-between; align-items: center;
-      font-size: 0.8rem; margin-bottom: 0.35rem; color: var(--text-secondary);
-    }
-    .progress-label strong { color: var(--text-primary); font-weight: 700; }
-    .progress-bar-bg {
-      width: 100%; height: 8px; border-radius: 999px;
-      background: var(--bg-inset); overflow: hidden;
-    }
-    .progress-bar-fill {
-      height: 100%; border-radius: 999px;
-      transition: width 0.6s ease;
-      background: linear-gradient(90deg, var(--accent), var(--accent-hover));
-    }
-
-    .overdue-item {
-      padding: 0.55rem 0; border-bottom: 1px solid var(--border);
-      font-size: 0.82rem; display: flex; flex-direction: column; gap: 0.15rem;
-    }
-    .overdue-item:last-child { border-bottom: none; }
-    .overdue-item .name { font-weight: 600; color: var(--text-primary); }
-    .overdue-item .meta { color: var(--text-muted); font-size: 0.74rem; }
-    .overdue-item .due  { color: var(--danger); font-size: 0.74rem; font-weight: 600; }
-
-    .empty-mini {
-      font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem 0;
-    }
+    /* Overdue rows — markup generated by dashboard.js */
+    .overdue-item{padding:.55rem 0;border-bottom:1px solid var(--line);
+      font:400 12.5px 'Inter',sans-serif;display:flex;flex-direction:column;gap:2px}
+    .overdue-item:last-child{border-bottom:none}
+    .overdue-item .name{font-weight:600;color:var(--ink)}
+    .overdue-item .meta{color:var(--ink2);font-size:11.5px}
+    .overdue-item .due{color:#b91c1c;font-size:11.5px;font-weight:600}
   </style>
 </head>
 <body>
   <header class="navbar" id="navbar"></header>
 
   <main class="main-content">
-    <!-- HERO -->
-    <section class="hero">
-      <div class="hero-row">
+    <!-- HEADER BAND -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="b-pill" style="border:1px solid var(--line);padding:8px 18px 8px 8px;gap:12px">
+          <span class="b-ic" style="width:40px;height:40px;background:var(--tile2);color:var(--ink);font:800 18px 'Inter',sans-serif" id="dateDay">—</span>
+          <div style="font:600 12px/1.2 'Inter',sans-serif;color:var(--ink)" id="dateMon">&nbsp;</div>
+        </div>
         <div>
-          <h1 class="greeting" id="greeting">Good morning!</h1>
-          <p id="todayLabel">Here's your sales hub overview.</p>
-        </div>
-        <div class="hero-meta">
-          <span class="hero-pill" id="reportPill">
-            <span class="dot"></span>
-            <span id="reportStatus">Loading…</span>
-          </span>
-          <a href="report.html" class="hero-pill" style="background:var(--accent);color:#fff;border-color:var(--accent);">
-            Submit Daily Report →
-          </a>
+          <h1 class="bento-h1 greeting" id="greeting">Good morning!</h1>
+          <p class="bento-sub" id="todayLabel">Here's your sales hub overview.</p>
         </div>
       </div>
-    </section>
-
-    <!-- KPI STRIP -->
-    <div class="kpi-grid stagger">
-      <div class="kpi-card">
-        <div class="kpi-head">
-          Quotations Today
-          <span class="kpi-icon" style="background:var(--accent-light);color:var(--accent-dark);">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="quotationToday">—</div>
-        <div class="kpi-foot">This month: <strong id="monthQuotations">—</strong></div>
-      </div>
-
-      <div class="kpi-card">
-        <div class="kpi-head">
-          PRs Today
-          <span class="kpi-icon" style="background:#eef2ff;color:#6366f1;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="prToday">—</div>
-        <div class="kpi-foot">This month: <strong id="monthPRs">—</strong></div>
-      </div>
-
-      <div class="kpi-card">
-        <div class="kpi-head">
-          Clients
-          <span class="kpi-icon" style="background:#f3e8ff;color:#a855f7;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="clientCount">—</div>
-        <div class="kpi-foot"><a href="clients.html" style="color:var(--accent);font-weight:600;">Manage clients →</a></div>
-      </div>
-
-      <div class="kpi-card">
-        <div class="kpi-head">
-          Pending Actions
-          <span class="kpi-icon" style="background:#fffbeb;color:#d97706;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="pendingCount">—</div>
-        <div class="kpi-foot"><a href="pending-items.html" style="color:var(--accent);font-weight:600;">View pending →</a></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span class="b-pill" id="reportPill" style="background:#fff;border:1px solid var(--line);padding:10px 15px;font:600 12.5px 'Inter',sans-serif;color:var(--ink2)">
+          <span class="dot" style="width:8px;height:8px;border-radius:50%;background:currentColor"></span>
+          <span id="reportStatus">Loading…</span>
+        </span>
+        <a href="report.html" class="b-btn">Submit Daily Report →</a>
       </div>
     </div>
 
-    <!-- MAIN GRID: APPS + SIDE PANEL -->
-    <div class="home-grid">
-      <!-- LEFT: APPS -->
-      <div>
-        <div class="sect-head">
-          <h2>Quick Actions</h2>
-          <span class="muted">Tools you use daily</span>
+    <!-- ROW A: anchor pipeline · KPI tiles · target donut · mini stack -->
+    <div class="b-row">
+      <!-- Anchor "Sales Pipeline" card -->
+      <div class="b-card" style="flex:1.7;min-width:320px;padding:20px 22px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font:700 16px 'Inter',sans-serif;color:var(--ink)">Sales Pipeline</span>
+          <span class="b-pill" style="background:var(--tile2);padding:8px 13px;font:600 12px 'Inter',sans-serif;color:var(--ink)">This Month</span>
         </div>
-        <div class="app-grid-v2 stagger">
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Purchase Requests</h3>
-                <p class="acard-desc">Request pricing for items from suppliers</p>
-              </div>
-            </div>
-            <div class="acard-stat">Request &rarr; sourcing &rarr; pricing &rarr; quote</div>
-            <a href="flow-pricing-request.html" class="acard-cta">New Purchase Request</a>
-          </div>
-
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Quotations</h3>
-                <p class="acard-desc">Create quotations in the process flow</p>
-              </div>
-            </div>
-            <div class="acard-stat">Quote items &amp; generate PDFs</div>
-            <a href="flow-quotations.html" class="acard-cta">Open Quotations</a>
-          </div>
-
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:var(--accent-light);color:var(--accent-dark);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Inventory</h3>
-                <p class="acard-desc">Add &amp; browse item master</p>
-              </div>
-            </div>
-            <div class="acard-stat">Add items (removal is admin-only)</div>
-            <a href="flow-inventory.html" class="acard-cta">Open Inventory</a>
-          </div>
-
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:#eef2ff;color:#6366f1;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">PR Generator</h3>
-                <p class="acard-desc">Create purchase requests</p>
-              </div>
-            </div>
-            <div class="acard-stat"><span class="stat-number" id="prToday2">—</span> sent today</div>
-            <a id="prLink" href="#" target="_blank" class="acard-cta">Open App</a>
-          </div>
-
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:#f0fdf4;color:#16a34a;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Daily Report</h3>
-                <p class="acard-desc">End-of-day activity report</p>
-              </div>
-            </div>
-            <div class="acard-stat" id="reportStatusInline">Loading…</div>
-            <a href="report.html" class="acard-cta">Open Report</a>
-          </div>
-
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:#f3e8ff;color:#a855f7;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Client List</h3>
-                <p class="acard-desc">Manage your client database</p>
-              </div>
-            </div>
-            <div class="acard-stat"><span class="stat-number" id="clientCount2">—</span> clients</div>
-            <a href="clients.html" class="acard-cta subtle">Open Client List</a>
-          </div>
+        <div style="font:500 12.5px 'Inter',sans-serif;color:var(--ink2);margin-top:18px">Quotations this month</div>
+        <div class="b-tabnum" style="font:800 30px 'Inter',sans-serif;color:var(--ac);margin-top:3px" id="monthQuotationsAnchor">—</div>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <a href="flow-quotations.html" class="b-pill" style="background:#111827;color:#fff;padding:12px 30px;font:600 13.5px 'Inter',sans-serif;justify-content:center">New Quote</a>
+          <a href="flow-pricing-request.html" class="b-pill" style="background:var(--tile2);color:var(--ink);padding:12px 30px;font:600 13.5px 'Inter',sans-serif;justify-content:center">New PR</a>
         </div>
-
-        <div class="sect-head" style="margin-top:1.5rem;">
-          <h2>Tracking & Reports</h2>
-          <span class="muted">Historical & pending</span>
-        </div>
-        <div class="app-grid-v2">
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:#fffbeb;color:#d97706;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Pending Items</h3>
-                <p class="acard-desc">PRs needing pricing & quotation approvals</p>
-              </div>
-            </div>
-            <a href="pending-items.html" class="acard-cta subtle">View Pending</a>
+        <div style="height:1px;background:var(--line);margin:18px 0"></div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div>
+            <div style="font:500 12px 'Inter',sans-serif;color:var(--ink2)">Quotations today</div>
+            <div class="b-tabnum" style="font:800 22px 'Inter',sans-serif;color:var(--ink);margin-top:2px" id="quotationTodayAnchor">—</div>
           </div>
+          <a href="pending-items.html" class="b-pill" style="color:var(--ac);font:600 12.5px 'Inter',sans-serif;gap:6px">
+            <span class="b-ic" style="width:30px;height:30px;background:var(--soft)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>View pipeline</a>
+        </div>
+      </div>
 
-          <div class="acard">
-            <div class="acard-top">
-              <span class="acard-icon" style="background:#ecfeff;color:#06b6d4;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              </span>
-              <div>
-                <h3 class="acard-title">Quotation Summary</h3>
-                <p class="acard-desc">All past quotations & PO conversions</p>
-              </div>
-            </div>
-            <a href="quotation-summary.html" class="acard-cta subtle">View Summary</a>
+      <!-- KPI tiles: Quotations / PRs Today -->
+      <div style="flex:1.2;min-width:230px;display:flex;flex-direction:column;gap:14px">
+        <div class="b-card" style="flex:1;padding:17px 19px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span class="b-ic" style="width:38px;height:38px;background:var(--tile2);color:var(--ink)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+            <span class="b-pill" style="background:var(--tile2);padding:7px 12px;font:600 12px 'Inter',sans-serif;color:var(--ink)">This Month</span>
+          </div>
+          <div style="font:500 12.5px 'Inter',sans-serif;color:var(--ink2);margin-top:14px">Quotations Today</div>
+          <div style="font:800 26px 'Inter',sans-serif;color:var(--ac);margin-top:2px" class="b-tabnum"><span id="quotationToday">—</span> <span style="font:500 12px 'Inter',sans-serif;color:var(--ink2)">· <span id="monthQuotations">—</span> total</span></div>
+        </div>
+        <div class="b-card" style="flex:1;padding:17px 19px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span class="b-ic" style="width:38px;height:38px;background:var(--tile2);color:var(--ink)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+            <span class="b-pill" style="background:var(--tile2);padding:7px 12px;font:600 12px 'Inter',sans-serif;color:var(--ink)">This Month</span>
+          </div>
+          <div style="font:500 12.5px 'Inter',sans-serif;color:var(--ink2);margin-top:14px">PRs Today</div>
+          <div style="font:800 26px 'Inter',sans-serif;color:var(--ink);margin-top:2px" class="b-tabnum"><span id="prToday">—</span> <span style="font:500 12px 'Inter',sans-serif;color:var(--ink2)">· <span id="monthPRs">—</span> total</span></div>
+        </div>
+      </div>
+
+      <!-- Dark donut — driven by the real target progress dashboard.js renders -->
+      <div style="flex:.85;min-width:150px;background:#141414;border-radius:20px;padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <svg width="132" height="132" viewBox="0 0 132 132"><circle cx="66" cy="66" r="52" fill="none" stroke="#2c2c2c" stroke-width="14"/><circle id="targetDonutRing" cx="66" cy="66" r="52" fill="none" stroke="var(--ac)" stroke-width="14" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 66 66)"/><text id="targetDonutPct" x="66" y="62" text-anchor="middle" font-family="Inter" font-size="26" font-weight="800" fill="#fff">—</text><text x="66" y="82" text-anchor="middle" font-family="Inter" font-size="11" font-weight="500" fill="#9a9a9a">of target</text></svg>
+        <div style="font:600 12px 'Inter',sans-serif;color:#e5e5e5;margin-top:6px">Monthly Target</div>
+        <div style="font:400 11px 'Inter',sans-serif;color:#8a8a8a;margin-top:3px" id="targetDonutNote">No target set</div>
+      </div>
+
+      <!-- Mini stack: clients / pending -->
+      <div style="flex:.85;min-width:150px;display:flex;flex-direction:column;gap:14px">
+        <a href="clients.html" class="b-card" style="flex:1;padding:16px 18px">
+          <span class="b-ic" style="width:34px;height:34px;background:#f3e8ff;color:#a855f7"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <div class="b-tabnum" style="font:800 24px 'Inter',sans-serif;color:var(--ink);margin-top:10px" id="clientCount">—</div>
+          <div style="font:600 12px 'Inter',sans-serif;color:var(--ac)">Clients →</div>
+        </a>
+        <a href="pending-items.html" class="b-card" style="flex:1;padding:16px 18px">
+          <span class="b-ic" style="width:34px;height:34px;background:#fffbeb;color:#d97706"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+          <div class="b-tabnum" style="font:800 24px 'Inter',sans-serif;color:var(--ink);margin-top:10px" id="pendingCount">—</div>
+          <div style="font:600 12px 'Inter',sans-serif;color:var(--ac)">Pending →</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- ROW B: stage diagram · Quick Actions manager · target/overdue rail -->
+    <div class="b-row" style="margin-top:14px">
+      <!-- Stage diagram — labels only, no counts implied -->
+      <div class="b-card" style="flex:1.1;min-width:280px;padding:20px 22px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font:700 15px 'Inter',sans-serif;color:var(--ink)">Pipeline Stages</span>
+          <span class="b-pill" style="background:var(--tile2);padding:7px 13px;font:600 12px 'Inter',sans-serif;color:var(--ink)">Workflow</span>
+        </div>
+        <div style="position:relative;height:280px;margin-top:14px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="position:absolute;bottom:0;width:238px;height:238px;border-radius:50%;background:var(--ac);opacity:.14;display:flex;justify-content:center;padding-top:14px"><span style="font:700 13px 'Inter',sans-serif;color:var(--ink)">For Pricing</span></div>
+          <div style="position:absolute;bottom:0;width:186px;height:186px;border-radius:50%;background:var(--ac);opacity:.28;display:flex;justify-content:center;padding-top:12px"><span style="font:700 13px 'Inter',sans-serif;color:var(--ink)">Qualified</span></div>
+          <div style="position:absolute;bottom:0;width:132px;height:132px;border-radius:50%;background:var(--ac);opacity:.55;display:flex;justify-content:center;padding-top:11px"><span style="font:700 13px 'Inter',sans-serif;color:#fff">Sent</span></div>
+          <div style="position:absolute;bottom:0;width:84px;height:84px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center"><span style="font:700 13px 'Inter',sans-serif;color:#fff">Won</span></div>
+        </div>
+        <p style="font:400 11.5px/1.5 'Inter',sans-serif;color:var(--ink2);margin-top:10px;text-align:center">The stages a request moves through — the rings show the funnel, not volumes.</p>
+      </div>
+
+      <!-- Quick Actions manager -->
+      <div class="b-card" style="flex:1.9;min-width:400px;padding:20px 22px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font:700 16px 'Inter',sans-serif;color:var(--ink)">Quick Actions</span>
+          <span style="font:500 12px 'Inter',sans-serif;color:var(--ink2)">Tools you use daily</span>
+        </div>
+        <div class="b-row" style="margin-top:16px">
+          <!-- action list -->
+          <div style="flex:1.2;min-width:210px;display:flex;flex-direction:column;gap:10px">
+            <a href="flow-quotations.html" class="b-pill" style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;gap:11px;justify-content:flex-start">
+              <span class="b-ic" style="width:32px;height:32px;background:var(--ac);color:#fff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg></span>
+              <span style="flex:1;font:600 13px 'Inter',sans-serif;color:var(--ink)">Quotations</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+            <a href="flow-inventory.html" class="b-pill" style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;gap:11px;justify-content:flex-start">
+              <span class="b-ic" style="width:32px;height:32px;background:#0891b2;color:#fff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+              <span style="flex:1;font:600 13px 'Inter',sans-serif;color:var(--ink)">Inventory</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+            <a href="report.html" class="b-pill" style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;gap:11px;justify-content:flex-start">
+              <span class="b-ic" style="width:32px;height:32px;background:#16a34a;color:#fff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+              <span style="flex:1;font:600 13px 'Inter',sans-serif;color:var(--ink)">Daily Report</span>
+              <span style="font:600 11px 'Inter',sans-serif;color:var(--ink2)" id="reportStatusInline">—</span></a>
+            <a id="prLink" href="#" target="_blank" class="b-pill" style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;gap:11px;justify-content:flex-start">
+              <span class="b-ic" style="width:32px;height:32px;background:#6366f1;color:#fff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+              <span style="flex:1;font:600 13px 'Inter',sans-serif;color:var(--ink)">PR Generator</span>
+              <span style="font:600 11px 'Inter',sans-serif;color:var(--ink2)"><span class="stat-number" id="prToday2">—</span> today</span></a>
+            <a href="clients.html" class="b-pill" style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;gap:11px;justify-content:flex-start">
+              <span class="b-ic" style="width:32px;height:32px;background:#a855f7;color:#fff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+              <span style="flex:1;font:600 13px 'Inter',sans-serif;color:var(--ink)">Client List</span>
+              <span style="font:600 11px 'Inter',sans-serif;color:var(--ink2)"><span class="stat-number" id="clientCount2">—</span> clients</span></a>
+            <a href="quotation-summary.html" class="b-pill" style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;gap:11px;justify-content:flex-start">
+              <span class="b-ic" style="width:32px;height:32px;background:#06b6d4;color:#fff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+              <span style="flex:1;font:600 13px 'Inter',sans-serif;color:var(--ink)">Quotation Summary</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+          </div>
+          <!-- highlighted PR CTA -->
+          <div style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:16px;padding:18px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <span class="b-ic" style="width:46px;height:46px;background:var(--soft);color:var(--ac)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></span>
+            <div style="font:700 14.5px 'Inter',sans-serif;color:var(--ink);margin-top:11px">Purchase Requests</div>
+            <div style="font:400 11.5px/1.4 'Inter',sans-serif;color:var(--ink2);margin-top:5px">Request pricing from suppliers — sourcing to quote.</div>
+            <a href="flow-pricing-request.html" class="b-btn" style="margin-top:13px;width:100%">New Purchase Request</a>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT: SIDE PANEL -->
-      <div>
-        <!-- Target progress -->
-        <div class="side-card" id="targetSection" style="display:none;">
-          <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <!-- Right rail: target + overdue (JS toggles visibility) -->
+      <div style="flex:1.05;min-width:250px;display:flex;flex-direction:column;gap:14px">
+        <div class="b-card" id="targetSection" style="padding:18px;display:none">
+          <div style="font:700 13.5px 'Inter',sans-serif;color:var(--ink);display:flex;align-items:center;gap:7px;margin-bottom:14px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
             Monthly Target Progress
-          </h3>
+          </div>
           <div id="targetBars"></div>
         </div>
 
-        <!-- Overdue alerts -->
-        <div class="side-card alert" id="overdueSection" style="display:none;">
-          <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div class="b-card" id="overdueSection" style="padding:18px;border-color:#fecaca;background:linear-gradient(180deg,#fef2f2,#fff);display:none">
+          <div style="font:700 13.5px 'Inter',sans-serif;color:#b91c1c;display:flex;align-items:center;gap:7px;margin-bottom:12px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Overdue Follow-ups
-            <span id="overdueCount" style="background:var(--danger);color:#fff;padding:0.1rem 0.55rem;border-radius:999px;font-size:0.7rem;font-weight:700;margin-left:auto;"></span>
-          </h3>
+            <span id="overdueCount" style="margin-left:auto;background:#b91c1c;color:#fff;padding:2px 8px;border-radius:999px;font:700 11px 'Inter',sans-serif"></span>
+          </div>
           <div id="overdueList"></div>
-          <a href="performance.html" class="acard-cta subtle" style="margin-top:0.75rem;color:var(--danger) !important;background:rgba(220,38,38,0.08);">Open Client Tracker →</a>
+          <a href="performance.html" class="b-btn sec" style="margin-top:12px;width:100%;color:#b91c1c !important;background:rgba(220,38,38,.08);border-color:transparent">Open Client Tracker →</a>
         </div>
 
-        <!-- Empty placeholder if neither shown -->
-        <div class="side-card" id="quietState">
-          <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        <div class="b-card" id="quietState" style="padding:18px">
+          <div style="font:700 13.5px 'Inter',sans-serif;color:var(--ink);display:flex;align-items:center;gap:7px;margin-bottom:8px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
             All caught up
-          </h3>
-          <p class="empty-mini" id="quietMsg">No overdue follow-ups. Targets and progress will appear here once set.</p>
+          </div>
+          <p style="font:400 12.5px/1.5 'Inter',sans-serif;color:var(--ink2)" id="quietMsg">No overdue follow-ups. Targets and progress will appear here once set.</p>
         </div>
       </div>
     </div>
@@ -414,13 +249,14 @@
   <script src="js/dashboard.js"></script>
   <script src="js/training-mode.js"></script>
   <script>
-    // Mirror values into duplicate kpi/acard slots that share the same data.
-    // Watches the canonical IDs that dashboard.js writes to.
+    // Mirror the canonical values dashboard.js writes into the bento layout's duplicate slots.
     (function mirrorStats() {
       const pairs = [
         ['prToday', 'prToday2'],
         ['clientCount', 'clientCount2'],
-        ['reportStatus', 'reportStatusInline']
+        ['reportStatus', 'reportStatusInline'],
+        ['quotationToday', 'quotationTodayAnchor'],
+        ['monthQuotations', 'monthQuotationsAnchor']
       ];
       const sync = () => {
         pairs.forEach(([src, dst]) => {
@@ -431,9 +267,25 @@
         const status = (document.getElementById('reportStatus')?.textContent || '').toLowerCase();
         const pill = document.getElementById('reportPill');
         if (pill) {
-          pill.classList.remove('warn', 'ok');
-          if (status.includes('submitted')) pill.classList.add('ok');
-          else if (status.includes('not')) pill.classList.add('warn');
+          if (status.includes('submitted')) { pill.style.background = '#dcfce7'; pill.style.color = '#15803d'; pill.style.borderColor = 'rgba(22,163,74,.25)'; }
+          else if (status.includes('not')) { pill.style.background = '#fde9d6'; pill.style.color = '#b45309'; pill.style.borderColor = 'rgba(180,83,9,.25)'; }
+        }
+        // Donut = the REAL target progress dashboard.js renders into #targetBars.
+        // No target set → the ring stays empty and the figure stays "—" (never a placeholder number).
+        const bars = document.getElementById('targetBars');
+        const ring = document.getElementById('targetDonutRing');
+        const pctEl = document.getElementById('targetDonutPct');
+        const note = document.getElementById('targetDonutNote');
+        if (bars && ring && pctEl) {
+          const found = (bars.textContent || '').match(/\((\d+)%\)/g) || [];
+          if (found.length) {
+            const nums = found.map(s => parseInt(s.replace(/\D/g, ''), 10) || 0);
+            const avg = Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+            const C = 326.7;
+            ring.setAttribute('stroke-dashoffset', String(C * (1 - Math.min(avg, 100) / 100)));
+            pctEl.textContent = avg + '%';
+            if (note) note.textContent = nums.length > 1 ? 'Average of ' + nums.length + ' targets' : 'This month';
+          }
         }
         // Hide quiet state if either side card is visible
         const quiet = document.getElementById('quietState');
@@ -444,34 +296,24 @@
         }
       };
       const obs = new MutationObserver(sync);
-      pairs.forEach(([src]) => {
-        const el = document.getElementById(src);
-        if (el) obs.observe(el, { childList: true, characterData: true, subtree: true });
-      });
-      // Also watch overdue/target sections for visibility
-      ['overdueSection', 'targetSection'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) obs.observe(el, { attributes: true, attributeFilter: ['style'] });
-      });
-      // Today label
-      const tl = document.getElementById('todayLabel');
-      if (tl) {
-        const d = new Date();
-        tl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      }
-      // Run periodic sync until first paint completes
-      let n = 0;
-      const t = setInterval(() => { sync(); if (++n > 20) clearInterval(t); }, 250);
+      pairs.forEach(([src]) => { const el = document.getElementById(src); if (el) obs.observe(el, { childList: true, characterData: true, subtree: true }); });
+      const tb = document.getElementById('targetBars'); if (tb) obs.observe(tb, { childList: true, characterData: true, subtree: true });
+      ['overdueSection', 'targetSection'].forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el, { attributes: true, attributeFilter: ['style'] }); });
+      // Date pill + today label
+      const d = new Date();
+      const dd = document.getElementById('dateDay'); if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      const dm = document.getElementById('dateMon'); if (dm) dm.innerHTML = d.toLocaleDateString('en-US', { weekday: 'short' }) + ',<br>' + d.toLocaleDateString('en-US', { month: 'long' });
+      const tl = document.getElementById('todayLabel'); if (tl) tl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      let n = 0; const t = setInterval(() => { sync(); if (++n > 20) clearInterval(t); }, 250);
     })();
 
-    // Pending count from existing endpoint(s) — best effort, silent on failure
+    // Pending count — best effort, silent on failure
     (async function loadPending() {
       const el = document.getElementById('pendingCount');
       if (!el) return;
       try {
         const session = JSON.parse(sessionStorage.getItem('session') || 'null') || JSON.parse(localStorage.getItem('session') || 'null');
         if (!session) { el.textContent = '—'; return; }
-        // Try a lightweight call; if endpoint not present, fall back gracefully
         if (typeof apiGetPendingCount === 'function') {
           const r = await apiGetPendingCount(session.name);
           if (r && r.success) { el.textContent = r.count ?? '—'; return; }

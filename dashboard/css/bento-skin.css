@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ══ Bento skin (indigo) — additive; overrides tokens only, no markup/JS changes ══
+   Linked AFTER css/styles.css on the sales-journey pages only. Every other role's
+   pages keep the original teal look. ══ */
+
+:root{
+  --accent:#4f46e5; --accent-hover:#4338ca; --accent-dark:#3730a3; --accent-light:#e0e7ff;
+  --accent-ring:rgba(79,70,229,.18);
+  --radius:16px; --radius-lg:20px; --radius-sm:10px;
+}
+body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:radial-gradient(1100px 520px at 12% -8%,#eef1f5,#eef2f6 60%);}
+/* Header band */
+.page-header{padding:6px 2px 2px;margin-bottom:20px;}
+.page-header h1{font:800 26px/1 'Inter',sans-serif;letter-spacing:-.02em;color:var(--text-primary);}
+.page-header p{font:400 13.5px 'Inter',sans-serif;color:var(--text-muted);margin-top:8px;}
+/* Cards */
+.chart-card{border-radius:18px !important;box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35) !important;border:1px solid var(--border) !important;padding:20px 22px !important;}
+/* Buttons → pills */
+.btn,.btn-primary,.btn-secondary,.btn-sm{border-radius:999px !important;font-weight:600 !important;transition:transform .18s cubic-bezier(.4,0,.2,1),filter .18s,background .2s !important;}
+.btn-primary{background:linear-gradient(180deg,#6a63ea,#4f46e5) !important;color:#fff !important;border:none !important;box-shadow:0 6px 16px -8px rgba(79,70,229,.7) !important;}
+.btn-primary:hover{filter:brightness(1.06);transform:translateY(-1px);}
+.btn-primary:active{transform:scale(.97);}
+.btn-secondary{background:#fff !important;color:var(--text-primary) !important;border:1px solid var(--border) !important;}
+.btn-secondary:hover{background:#f1f5f9 !important;}
+/* Inputs */
+input,select,textarea{border-radius:9px !important;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent) !important;box-shadow:0 0 0 3px var(--accent-ring) !important;}
+/* Nav active + tables inherit --accent automatically */
+.flow-modal{border-radius:20px !important;}
+@media (prefers-reduced-motion:reduce){.btn,.btn-primary{transition:none !important;}}
