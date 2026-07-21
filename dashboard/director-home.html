@@ -5,171 +5,139 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Director Payroll Dashboard</title>
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/bento-skin-director.css">
   <link rel="stylesheet" href="css/flow.css">
   <style>
-    /* ── Director Payroll — modern light "Teal & Slate" theme ── */
-    .main-content { max-width: 1400px; padding-left: 0.9rem; padding-right: 0.9rem; }
-
-    /* Hero header */
-    .pay-hero {
-      background: linear-gradient(135deg, var(--accent, #0d9488), var(--accent-dark, #0f766e));
-      border-radius: var(--radius-lg, 16px); padding: 1.4rem 1.6rem; margin-bottom: 1.1rem;
-      color: #fff; box-shadow: var(--shadow-md, 0 6px 20px rgba(13,148,136,0.18));
+    /* ══ Bento reference design — self-contained; drives the whole page look ══ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    :root{
+      --ac:#4f46e5; --acd:#3730a3; --soft:#e0e7ff;
+      --card:#fff; --tile2:#eef2f6; --line:#d7dce3; --ink:#111827; --ink2:#8b93a1;
+      --accent:#4f46e5; --accent-hover:#4338ca; --accent-dark:#3730a3; --accent-light:#e0e7ff; --accent-ring:rgba(79,70,229,.18);
     }
-    .pay-hero h1 { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
-    .pay-hero p { margin: 0.25rem 0 0; font-size: 0.85rem; opacity: 0.92; }
-    #greeting { font-weight: 700; }
-
-    /* ── Period selector ── */
-    .period-bar {
-      display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-      background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
-      border-radius: 14px; padding: 0.8rem 1.1rem; margin-bottom: 1.1rem;
-      box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06));
-    }
-    .period-bar label { font-size: 0.78rem; font-weight: 700; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.03em; }
-    .period-bar select, .period-bar input[type=number] {
-      background: #fff; border: 1px solid var(--border, #e2e8f0);
-      color: var(--text-primary, #0f172a); border-radius: 8px; padding: 0.4rem 0.7rem;
-      font-size: 0.85rem;
-    }
-    .period-bar select:focus, .period-bar input:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 3px var(--accent-ring, rgba(13,148,136,0.15)); }
-    #periodLabel {
-      font-size: 0.86rem; font-weight: 700; color: var(--accent-dark, #0f766e); margin-left: auto;
-      background: var(--accent-light, #ccfbf1); padding: 0.35rem 0.8rem; border-radius: 999px;
-    }
-
-    /* ── Tabs as a step flow ── */
-    .pay-tabs {
-      display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.1rem;
-    }
-    .pay-tab {
-      padding: 0.55rem 1.05rem; border-radius: 10px;
-      font-size: 0.82rem; font-weight: 700; cursor: pointer;
-      border: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #fff);
-      color: var(--text-secondary, #475569);
-      transition: all var(--transition-fast, 0.14s) ease;
-    }
-    .pay-tab:hover { color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); transform: translateY(-1px); }
-    .pay-tab.active {
-      color: #fff; background: var(--accent, #0d9488); border-color: var(--accent, #0d9488);
-      box-shadow: 0 2px 8px rgba(13,148,136,0.28);
-    }
-    .pay-panel { display: none; animation: fadeIn 0.2s ease; }
-    .pay-panel.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-    /* ── EE toolbar / buttons ── */
-    .ee-toolbar { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
-    .btn-sm {
-      padding: 0.42rem 0.95rem; border-radius: 8px; font-size: 0.78rem; font-weight: 700;
-      border: 1px solid var(--border, #e2e8f0); background: #fff;
-      color: var(--text-secondary, #475569); cursor: pointer; transition: all var(--transition-fast, 0.14s) ease;
-    }
-    .btn-sm:hover { background: var(--accent-light, #ccfbf1); color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); }
-    .btn-sm.primary { background: var(--accent, #0d9488); color: #fff; border-color: var(--accent, #0d9488); }
-    .btn-sm.primary:hover { background: var(--accent-dark, #0f766e); }
-    .btn-sm.danger { background: #fff; color: #ef4444; border-color: #fecaca; }
-    .btn-sm.danger:hover { background: rgba(239,68,68,0.08); }
-
-    /* ── Generic card ── */
-    .pay-card {
-      background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
-      border-radius: 14px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; overflow-x: auto;
-      box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06));
-    }
-    .pay-card h3 {
-      font-size: 0.92rem; font-weight: 700; color: var(--text-primary, #0f172a); margin: 0 0 0.8rem;
-    }
-    /* per-cutoff summary strip the JS can fill (read-only) */
-    .pay-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.9rem; }
-    .pay-summary .tile { border: 1px solid var(--border, #e2e8f0); border-radius: 12px; padding: 0.6rem 0.8rem; background: var(--bg-inset, #f8fafc); min-width: 0; }
-    .pay-summary .tile .l { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #64748b); font-weight: 700; }
-    .pay-summary .tile .v { font-size: clamp(0.9rem, 1.5vw, 1.15rem); font-weight: 800; color: var(--text-primary, #0f172a); font-variant-numeric: tabular-nums; margin-top: 0.15rem; overflow-wrap: anywhere; }
-
-    /* ── Payroll tables ── */
-    .pay-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    .pay-table th {
-      padding: 0.55rem 0.6rem; text-align: left; font-size: 0.66rem; font-weight: 700;
-      color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.04em;
-      border-bottom: 1px solid var(--border, #e2e8f0); white-space: nowrap;
-      background: var(--bg-inset, #f8fafc); position: sticky; top: 0;
-    }
-    .pay-table th.num, .pay-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .pay-table td {
-      padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border, #e2e8f0);
-      color: var(--text-primary, #0f172a); white-space: nowrap;
-    }
-    .pay-table tr:last-child td { border-bottom: none; }
-    .pay-table tbody tr:hover td { background: var(--accent-light, #ccfbf1); }
-    .pay-table tr.total-row td, .pay-table tr.total td {
-      font-weight: 800; border-top: 2px solid var(--accent, #0d9488);
-      color: var(--accent-dark, #0f766e); border-bottom: none; background: var(--bg-inset, #f8fafc);
-    }
-    .pay-table input[type=text], .pay-table input[type=time], .pay-table input[type=number] {
-      background: #fff; border: 1px solid var(--border, #e2e8f0);
-      color: var(--text-primary, #0f172a); border-radius: 6px; padding: 0.28rem 0.42rem;
-      font-size: 0.78rem; width: 100%; box-sizing: border-box; min-width: 60px;
-    }
-    .pay-table input:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 2px var(--accent-ring, rgba(13,148,136,0.15)); }
-    .pay-table select {
-      background: #fff; border: 1px solid var(--border, #e2e8f0);
-      color: var(--text-primary, #0f172a); border-radius: 6px; padding: 0.28rem 0.42rem;
-      font-size: 0.78rem;
-    }
-    .pay-table td.computed { color: var(--text-muted, #64748b); }
-    .pay-table td.highlight { color: var(--accent-dark, #0f766e); font-weight: 700; }
-    .pay-table td.sticky, .pay-table th.sticky { position: sticky; left: 0; z-index: 2; background: var(--bg-card, #fff); }
-
-    /* save / submit bar */
-    .save-bar {
-      display: flex; align-items: center; gap: 0.75rem; margin-top: 0.9rem; flex-wrap: wrap;
-      padding-top: 0.8rem; border-top: 1px dashed var(--border, #e2e8f0);
-    }
-    .save-msg { font-size: 0.78rem; color: var(--accent-dark, #0f766e); font-weight: 700; }
-    .employer-field { display: flex; align-items: center; gap: 0.45rem; margin-right: auto; }
-    .employer-field label { font-size: 0.74rem; font-weight: 700; color: var(--text-secondary, #475569); }
-    .employer-field input { background: #fff; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.82rem; width: 150px; font-variant-numeric: tabular-nums; }
-    .employer-field input:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 2px var(--accent-ring, rgba(13,148,136,0.15)); }
-    .employer-field .hint { font-size: 0.68rem; color: var(--text-muted, #64748b); }
-
-    /* ── EE modal ── */
-    .ee-overlay {
-      position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 1000;
-      display: none; align-items: center; justify-content: center;
-      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
-    }
-    .ee-overlay.open { display: flex; }
-    .ee-modal {
-      background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
-      border-radius: 16px; padding: 1.6rem; width: min(480px, 95vw); max-height: 90vh;
-      overflow-y: auto; box-shadow: var(--shadow-lg, 0 18px 50px rgba(15,23,42,0.25));
-    }
-    .ee-modal h3 { font-size: 1.05rem; font-weight: 800; color: var(--text-primary, #0f172a); margin: 0 0 1rem; }
-    .form-row { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
-    .form-row label { font-size: 0.74rem; font-weight: 700; color: var(--text-secondary, #475569); }
-    .form-row input, .form-row select {
-      background: #fff; border: 1px solid var(--border, #e2e8f0);
-      color: var(--text-primary, #0f172a); border-radius: 8px; padding: 0.55rem 0.75rem;
-      font-size: 0.85rem;
-    }
-    .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: 0 0 0 3px var(--accent-ring, rgba(13,148,136,0.15)); }
-    .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+    body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:radial-gradient(1100px 560px at 12% -8%,#eef1f5,#e6e9ee 60%) !important;}
+    .main-content{max-width:1400px;margin:0 auto;padding:104px 24px 40px !important;}
+    /* header band */
+    .pay-headband{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+    .pay-headband .left{display:flex;align-items:center;gap:16px;}
+    .pay-datepill{display:inline-flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:999px;padding:8px 18px 8px 8px;background:#fff;}
+    .pay-datepill .d{width:40px;height:40px;border-radius:50%;background:var(--tile2);color:var(--ink);display:flex;align-items:center;justify-content:center;font:800 18px 'Inter',sans-serif;}
+    .pay-datepill .m{font:600 12px/1.2 'Inter',sans-serif;color:var(--ink);}
+    .pay-headband h1{font:800 26px/1 'Inter',sans-serif;letter-spacing:-.02em;color:var(--ink);margin:0;}
+    .pay-headband p{font:400 13.5px 'Inter',sans-serif;color:var(--ink2);margin:7px 0 0;}
+    /* spotlight + kpi */
+    .pay-top{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+    .pay-spot{flex:1.4;min-width:280px;background:#141414;border-radius:20px;padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;}
+    .pay-spot .cap{display:flex;align-items:center;justify-content:space-between;}
+    .pay-spot .cap span{font:600 12px 'Inter',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#9a9a9a;}
+    .pay-spot .cap .tag{background:rgba(255,255,255,.12);border-radius:999px;padding:6px 11px;font:600 11px 'Inter',sans-serif;color:#fff;text-transform:none;letter-spacing:0;}
+    .pay-spot .big{font:800 34px/1 'Inter',sans-serif;margin:14px 0 4px;}
+    .pay-spot .sub{font:500 12px 'Inter',sans-serif;color:#9a9a9a;}
+    .pay-spot .mini{display:flex;gap:8px;margin-top:14px;}
+    .pay-spot .mini > div{flex:1;background:#232323;border-radius:11px;padding:10px 12px;}
+    .pay-spot .mini .l{font:500 10px 'Inter',sans-serif;color:#9a9a9a;}
+    .pay-spot .mini .v{font:800 15px 'Inter',sans-serif;margin-top:2px;}
+    .pay-kpis{flex:2;min-width:340px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+    .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px 17px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+    .kpi .l{font:600 11px 'Inter',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);}
+    .kpi .v{font:800 24px 'Inter',sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:6px;}
+    /* period bar */
+    .period-bar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:.8rem 1.1rem;margin-bottom:1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+    .period-bar label{font:700 .78rem 'Inter',sans-serif;color:var(--ink2);text-transform:uppercase;letter-spacing:.03em;}
+    .period-bar select,.period-bar input[type=number]{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:.45rem .7rem;font-size:.85rem;}
+    .period-bar select:focus,.period-bar input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--accent-ring);}
+    #periodLabel{font:700 .86rem 'Inter',sans-serif;color:var(--acd);margin-left:auto;background:var(--soft);padding:.4rem .85rem;border-radius:999px;}
+    /* tabs */
+    .pay-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+    .pay-tab{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;font:600 12.5px 'Inter',sans-serif;color:#475569;background:#fff;border:1px solid var(--line);cursor:pointer;transition:all .18s cubic-bezier(.4,0,.2,1);}
+    .pay-tab:hover{border-color:#a5b4fc;color:var(--acd);transform:translateY(-1px);}
+    .pay-tab.active{background:linear-gradient(180deg,#6a63ea,#4f46e5);color:#fff;border-color:#4f46e5;box-shadow:0 6px 16px -8px rgba(79,70,229,.7);}
+    .pay-panel{display:none;animation:fadeIn .2s ease;}
+    .pay-panel.active{display:block;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+    /* cards */
+    .pay-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:1rem;overflow-x:auto;box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35);}
+    .pay-card h3{font:700 15px 'Inter',sans-serif;color:var(--ink);margin:0 0 .8rem;}
+    .ee-toolbar{display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap;justify-content:space-between;}
+    /* buttons */
+    .btn-sm{padding:.55rem 1.1rem;border-radius:999px;font:600 .8rem 'Inter',sans-serif;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;transition:all .18s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:6px;}
+    .btn-sm:hover{background:#f1f5f9;transform:translateY(-1px);}
+    .btn-sm.primary{background:linear-gradient(180deg,#6a63ea,#4f46e5);color:#fff;border:none;box-shadow:0 6px 16px -8px rgba(79,70,229,.7);}
+    .btn-sm.primary:hover{filter:brightness(1.06);}
+    .btn-sm.danger{background:#fff;color:#ef4444;border-color:#fecaca;}
+    /* tables */
+    .pay-table{width:100%;border-collapse:collapse;font:400 12.5px 'Inter',sans-serif;}
+    .pay-table th{padding:11px 13px;text-align:left;font:700 10px 'Inter',sans-serif;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e9ef;white-space:nowrap;background:#f4f6f9;position:sticky;top:0;}
+    .pay-table th.num,.pay-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
+    .pay-table td{padding:11px 13px;border-bottom:1px solid #eef1f5;color:var(--ink);white-space:nowrap;}
+    .pay-table tr:last-child td{border-bottom:none;}
+    .pay-table tbody tr:hover td{background:#f5f7fb;}
+    .pay-table tr.total-row td,.pay-table tr.total td{font-weight:800;border-top:2px solid var(--ac);color:var(--acd);border-bottom:none;background:#f4f6f9;}
+    .pay-table input[type=text],.pay-table input[type=time],.pay-table input[type=number]{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:.3rem .45rem;font-size:.78rem;width:100%;box-sizing:border-box;min-width:60px;}
+    .pay-table input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px var(--accent-ring);}
+    .pay-table select{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:.3rem .45rem;font-size:.78rem;}
+    .pay-table td.computed{color:var(--ink2);}
+    .pay-table td.highlight{color:var(--acd);font-weight:700;}
+    .pay-table td.sticky,.pay-table th.sticky{position:sticky;left:0;z-index:2;background:#fff;}
+    .pay-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem;margin-bottom:.9rem;}
+    .pay-summary .tile{border:1px solid var(--line);border-radius:12px;padding:.6rem .8rem;background:var(--tile2);min-width:0;}
+    .pay-summary .tile .l{font:700 .62rem 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);}
+    .pay-summary .tile .v{font:800 clamp(.9rem,1.5vw,1.15rem) 'Inter',sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:.15rem;overflow-wrap:anywhere;}
+    /* save bar */
+    .save-bar{display:flex;align-items:center;gap:.75rem;margin-top:.9rem;flex-wrap:wrap;padding-top:.8rem;border-top:1px dashed var(--line);}
+    .save-msg{font:700 .78rem 'Inter',sans-serif;color:var(--acd);}
+    .employer-field{display:flex;align-items:center;gap:.45rem;margin-right:auto;}
+    .employer-field label{font:700 .74rem 'Inter',sans-serif;color:#475569;}
+    .employer-field input{background:#fff;border:1px solid var(--line);border-radius:9px;padding:.4rem .6rem;font-size:.82rem;width:150px;font-variant-numeric:tabular-nums;}
+    .employer-field input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px var(--accent-ring);}
+    .employer-field .hint{font:400 .68rem 'Inter',sans-serif;color:var(--ink2);}
+    /* modal */
+    .ee-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}
+    .ee-overlay.open{display:flex;}
+    .ee-modal{background:#fff;border:1px solid var(--line);border-radius:20px;padding:1.6rem;width:min(480px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 18px 50px rgba(15,23,42,.25);}
+    .ee-modal h3{font:800 1.05rem 'Inter',sans-serif;color:var(--ink);margin:0 0 1rem;}
+    .form-row{display:flex;flex-direction:column;gap:.3rem;margin-bottom:.8rem;}
+    .form-row label{font:700 .74rem 'Inter',sans-serif;color:#475569;}
+    .form-row input,.form-row select{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:.55rem .75rem;font-size:.85rem;}
+    .form-row input:focus,.form-row select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--accent-ring);}
+    .modal-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem;}
   </style>
 </head>
 <body>
   <header class="navbar" id="navbar"></header>
 
   <div class="main-content">
-    <div class="pay-hero">
-      <h1>Payroll Dashboard</h1>
-      <p id="greeting">Manage employees, timesheets and payroll registers, then submit each cutoff to Management for approval.</p>
+    <!-- HEADER BAND -->
+    <div class="pay-headband">
+      <div class="left">
+        <div class="pay-datepill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div>
+          <h1>Payroll Dashboard</h1>
+          <p id="greeting">Manage employees, timesheets and payroll registers, then submit each cutoff to Management for approval.</p>
+        </div>
+      </div>
     </div>
 
-    <section id="flowApprovalStrip" style="display:none;margin:0.75rem 0 1.25rem;"></section>
+    <section id="flowApprovalStrip" style="display:none;margin:0 0 1.1rem;"></section>
 
-    <!-- Period bar -->
+    <!-- SPOTLIGHT + KPI -->
+    <div class="pay-top">
+      <div class="pay-spot">
+        <div class="cap"><span>Total Payroll Cost</span><span class="tag">Current cutoff</span></div>
+        <div><div class="big" id="spotTotal">₱—</div><div class="sub">Net pay + employer share</div></div>
+        <div class="mini">
+          <div><div class="l">Gross</div><div class="v" id="spotGross">₱—</div></div>
+          <div><div class="l">Deductions</div><div class="v" id="spotDed">₱—</div></div>
+        </div>
+      </div>
+      <div class="pay-kpis">
+        <div class="kpi"><div class="l">Active Employees</div><div class="v" id="kpiActive">—</div></div>
+        <div class="kpi"><div class="l">Net Pay (Cutoff)</div><div class="v" id="kpiNet">₱—</div></div>
+        <div class="kpi"><div class="l">Employer Share</div><div class="v" id="kpiShare">₱—</div></div>
+        <div class="kpi"><div class="l">13th Month Accrual</div><div class="v" style="color:var(--ac)" id="kpi13">₱—</div></div>
+      </div>
+    </div>
+
+    <!-- PERIOD BAR -->
     <div class="period-bar">
       <label>Month</label>
       <select id="payMonth">
@@ -186,14 +154,14 @@
       <span id="periodLabel">Select a period and click Load</span>
     </div>
 
-    <!-- Tabs -->
+    <!-- TABS (SVG icons, real handlers/ids) -->
     <div class="pay-tabs">
-      <button class="pay-tab active" onclick="switchPayTab('ee')" id="tabEE">👥 EE (Employees)</button>
-      <button class="pay-tab" onclick="switchPayTab('hoursA')" id="tabHoursA">📋 HOURS A (1st Cutoff)</button>
-      <button class="pay-tab" onclick="switchPayTab('payA')" id="tabPayA">💰 PAY A (1st Cutoff)</button>
-      <button class="pay-tab" onclick="switchPayTab('hoursB')" id="tabHoursB">📋 HOURS B (2nd Cutoff)</button>
-      <button class="pay-tab" onclick="switchPayTab('payB')" id="tabPayB">💰 PAY B (2nd Cutoff)</button>
-      <button class="pay-tab" onclick="switchPayTab('thirteenth')" id="tabThirteenth">🎁 13TH MONTH</button>
+      <button class="pay-tab active" onclick="switchPayTab('ee')" id="tabEE"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Employees</button>
+      <button class="pay-tab" onclick="switchPayTab('hoursA')" id="tabHoursA"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours A · 1st Cutoff</button>
+      <button class="pay-tab" onclick="switchPayTab('payA')" id="tabPayA"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay A · 1st Cutoff</button>
+      <button class="pay-tab" onclick="switchPayTab('hoursB')" id="tabHoursB"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours B · 2nd Cutoff</button>
+      <button class="pay-tab" onclick="switchPayTab('payB')" id="tabPayB"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay B · 2nd Cutoff</button>
+      <button class="pay-tab" onclick="switchPayTab('thirteenth')" id="tabThirteenth"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>13th Month</button>
     </div>
 
     <!-- EE Panel -->
@@ -205,166 +173,98 @@
         </div>
         <table class="pay-table" id="eeTable">
           <thead>
-            <tr>
-              <th>#</th>
-              <th>Last Name</th>
-              <th>First Name</th>
-              <th class="num">Daily Rate (₱)</th>
-              <th class="num">Hourly Rate (₱)</th>
-              <th class="num">Other Income (₱)</th>
-              <th class="num">HDMF Amt</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
+            <tr><th>#</th><th>Last Name</th><th>First Name</th><th class="num">Daily Rate (₱)</th><th class="num">Hourly Rate (₱)</th><th class="num">Other Income (₱)</th><th class="num">HDMF Amt</th><th>Status</th><th>Actions</th></tr>
           </thead>
-          <tbody id="eeBody">
-            <tr><td colspan="9" style="text-align:center;color:var(--text-muted);">Loading employees...</td></tr>
-          </tbody>
+          <tbody id="eeBody"><tr><td colspan="9" style="text-align:center;color:var(--ink2);">Loading employees...</td></tr></tbody>
         </table>
       </div>
     </div>
 
-    <!-- HOURS A Panel -->
+    <!-- HOURS A -->
     <div class="pay-panel" id="panelHoursA">
-      <div class="pay-card" style="overflow-x:auto;">
+      <div class="pay-card">
         <h3 id="hoursATitle">1st Cutoff Timesheet — 26th prev month – 10th this month</h3>
-        <div id="hoursAGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
-        <div class="save-bar">
-          <button class="btn-sm primary" onclick="saveHours('A')">Save Hours A</button>
-          <button class="btn-sm" onclick="exportCutoff('A')">⬇ Export PDF</button>
-          <span id="saveHoursAMsg" class="save-msg" style="display:none;">Saved!</span>
-        </div>
+        <div id="hoursAGrid"><div style="text-align:center;color:var(--ink2);padding:1rem;">Load a period first.</div></div>
+        <div class="save-bar"><button class="btn-sm primary" onclick="saveHours('A')">Save Hours A</button><button class="btn-sm" onclick="exportCutoff('A')">Export PDF</button><span id="saveHoursAMsg" class="save-msg" style="display:none;">Saved!</span></div>
       </div>
     </div>
 
-    <!-- PAY A Panel -->
+    <!-- PAY A -->
     <div class="pay-panel" id="panelPayA">
-      <div class="pay-card" style="overflow-x:auto;">
+      <div class="pay-card">
         <h3>1st Cutoff Payroll Register</h3>
-        <div id="payAGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
+        <div id="payAGrid"><div style="text-align:center;color:var(--ink2);padding:1rem;">Load a period first.</div></div>
         <div class="save-bar">
-          <div class="employer-field">
-            <label for="employerShareA">Employer Share (₱)</label>
-            <input type="number" id="employerShareA" min="0" step="0.01" placeholder="0.00">
-            <span class="hint">SSS / PhilHealth / Pag-IBIG — added to the expense as total payroll cost</span>
-          </div>
+          <div class="employer-field"><label for="employerShareA">Employer Share (₱)</label><input type="number" id="employerShareA" min="0" step="0.01" placeholder="0.00"><span class="hint">SSS / PhilHealth / Pag-IBIG — total payroll cost</span></div>
           <button class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
-          <button class="btn-sm" onclick="exportCutoff('A')">⬇ Export PDF</button>
-          <button class="btn-sm" onclick="downloadAllPayslips('A')">⬇ Payslips (all)</button>
+          <button class="btn-sm" onclick="exportCutoff('A')">Export PDF</button>
+          <button class="btn-sm" onclick="downloadAllPayslips('A')">Payslips (all)</button>
           <button class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
           <span id="savePayAMsg" class="save-msg" style="display:none;">Saved!</span>
         </div>
       </div>
     </div>
 
-    <!-- HOURS B Panel -->
+    <!-- HOURS B -->
     <div class="pay-panel" id="panelHoursB">
-      <div class="pay-card" style="overflow-x:auto;">
+      <div class="pay-card">
         <h3 id="hoursBTitle">2nd Cutoff Timesheet — Days 16–end of month</h3>
-        <div id="hoursBGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
-        <div class="save-bar">
-          <button class="btn-sm primary" onclick="saveHours('B')">Save Hours B</button>
-          <button class="btn-sm" onclick="exportCutoff('B')">⬇ Export PDF</button>
-          <span id="saveHoursBMsg" class="save-msg" style="display:none;">Saved!</span>
-        </div>
+        <div id="hoursBGrid"><div style="text-align:center;color:var(--ink2);padding:1rem;">Load a period first.</div></div>
+        <div class="save-bar"><button class="btn-sm primary" onclick="saveHours('B')">Save Hours B</button><button class="btn-sm" onclick="exportCutoff('B')">Export PDF</button><span id="saveHoursBMsg" class="save-msg" style="display:none;">Saved!</span></div>
       </div>
     </div>
 
-    <!-- PAY B Panel -->
+    <!-- PAY B -->
     <div class="pay-panel" id="panelPayB">
-      <div class="pay-card" style="overflow-x:auto;">
+      <div class="pay-card">
         <h3>2nd Cutoff Payroll Register</h3>
-        <div id="payBGrid"><div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div></div>
+        <div id="payBGrid"><div style="text-align:center;color:var(--ink2);padding:1rem;">Load a period first.</div></div>
         <div class="save-bar">
-          <div class="employer-field">
-            <label for="employerShareB">Employer Share (₱)</label>
-            <input type="number" id="employerShareB" min="0" step="0.01" placeholder="0.00">
-            <span class="hint">SSS / PhilHealth / Pag-IBIG — added to the expense as total payroll cost</span>
-          </div>
+          <div class="employer-field"><label for="employerShareB">Employer Share (₱)</label><input type="number" id="employerShareB" min="0" step="0.01" placeholder="0.00"><span class="hint">SSS / PhilHealth / Pag-IBIG — total payroll cost</span></div>
           <button class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
-          <button class="btn-sm" onclick="exportCutoff('B')">⬇ Export PDF</button>
-          <button class="btn-sm" onclick="downloadAllPayslips('B')">⬇ Payslips (all)</button>
+          <button class="btn-sm" onclick="exportCutoff('B')">Export PDF</button>
+          <button class="btn-sm" onclick="downloadAllPayslips('B')">Payslips (all)</button>
           <button class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>
           <span id="savePayBMsg" class="save-msg" style="display:none;">Saved!</span>
         </div>
       </div>
     </div>
-    <!-- 13TH MONTH Panel -->
+
+    <!-- 13TH MONTH -->
     <div class="pay-panel" id="panelThirteenth">
-      <div class="pay-card" style="overflow-x:auto;">
-        <div class="ee-toolbar" style="flex-wrap:wrap;gap:0.5rem;">
-          <h3 style="margin:0;">13th Month Pay — Auto-computed from Payroll Register</h3>
-          <div style="display:flex;gap:0.5rem;align-items:center;">
-            <label style="font-size:0.82rem;color:var(--text-muted);">Year</label>
-            <select id="thirteenthYear" onchange="load13thMonth()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:6px;"></select>
-            <button class="btn-sm" onclick="load13thMonth()">🔄 Refresh</button>
-            <button class="btn-sm" onclick="export13thMonthExcel()">⬇ Export Excel</button>
-            <button class="btn-sm" onclick="print13thMonth()">🖨 Print / PDF</button>
+      <div class="pay-card">
+        <div class="ee-toolbar" style="flex-wrap:wrap;gap:.5rem;">
+          <h3 style="margin:0;">13th Month Pay — auto-computed from Payroll Register</h3>
+          <div style="display:flex;gap:.5rem;align-items:center;">
+            <label style="font:600 .82rem 'Inter',sans-serif;color:var(--ink2);">Year</label>
+            <select id="thirteenthYear" onchange="load13thMonth()" style="padding:.4rem .6rem;border:1px solid var(--line);border-radius:9px;"></select>
+            <button class="btn-sm" onclick="load13thMonth()">Refresh</button>
+            <button class="btn-sm" onclick="export13thMonthExcel()">Export Excel</button>
+            <button class="btn-sm" onclick="print13thMonth()">Print / PDF</button>
           </div>
         </div>
-        <p style="font-size:0.78rem;color:var(--text-muted);margin:0.3rem 0 0.8rem;">
-          Formula: total Basic Pay earned in the selected year ÷ 12. Inactive/resigned employees
-          are prorated automatically since their basic pay reflects only the months actually worked.
-          Updates whenever Payroll Register entries change.
-        </p>
+        <p style="font:400 .78rem/1.5 'Inter',sans-serif;color:var(--ink2);margin:.3rem 0 .8rem;">Total Basic Pay earned in the selected year ÷ 12. Inactive/resigned employees are prorated automatically since their basic pay reflects only the months worked.</p>
         <table class="pay-table" id="thirteenthTable">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Last Name</th>
-              <th>First Name</th>
-              <th>Status</th>
-              <th class="num">Months Worked</th>
-              <th class="num">Cutoffs</th>
-              <th class="num">Total Basic Pay (₱)</th>
-              <th class="num">13th Month Pay (₱)</th>
-            </tr>
-          </thead>
-          <tbody id="thirteenthBody">
-            <tr><td colspan="8" style="text-align:center;color:var(--text-muted);">Select a year to load.</td></tr>
-          </tbody>
+          <thead><tr><th>#</th><th>Last Name</th><th>First Name</th><th>Status</th><th class="num">Months Worked</th><th class="num">Cutoffs</th><th class="num">Total Basic Pay (₱)</th><th class="num">13th Month Pay (₱)</th></tr></thead>
+          <tbody id="thirteenthBody"><tr><td colspan="8" style="text-align:center;color:var(--ink2);">Select a year to load.</td></tr></tbody>
           <tfoot id="thirteenthFoot"></tfoot>
         </table>
       </div>
     </div>
-  </div><!-- /.main-content -->
+  </div>
 
   <!-- EE Add/Edit Modal -->
   <div class="ee-overlay" id="eeOverlay">
     <div class="ee-modal">
       <h3 id="eeModalTitle">Add Employee</h3>
       <input type="hidden" id="eeEditId">
-      <div class="form-row">
-        <label>Last Name</label>
-        <input type="text" id="eeLastName" placeholder="e.g. ESTUR">
-      </div>
-      <div class="form-row">
-        <label>First Name</label>
-        <input type="text" id="eeFirstName" placeholder="e.g. NEIL MONDANO">
-      </div>
-      <div class="form-row">
-        <label>Daily Rate (₱)</label>
-        <input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="form-row">
-        <label>Other Income (₱) — e.g. allowances, per 2nd cutoff</label>
-        <input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="form-row">
-        <label>HDMF / Pag-IBIG Amount (₱)</label>
-        <input type="number" id="eeHdmf" min="0" step="0.01" placeholder="100.00">
-      </div>
-      <div class="form-row">
-        <label>Status</label>
-        <select id="eeStatus">
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
-        </select>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm" onclick="closeEEModal()">Cancel</button>
-        <button class="btn-sm primary" onclick="saveEE()">Save</button>
-      </div>
+      <div class="form-row"><label>Last Name</label><input type="text" id="eeLastName" placeholder="e.g. ESTUR"></div>
+      <div class="form-row"><label>First Name</label><input type="text" id="eeFirstName" placeholder="e.g. NEIL MONDANO"></div>
+      <div class="form-row"><label>Daily Rate (₱)</label><input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-row"><label>Other Income (₱) — e.g. allowances, per 2nd cutoff</label><input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-row"><label>HDMF / Pag-IBIG Amount (₱)</label><input type="number" id="eeHdmf" min="0" step="0.01" placeholder="100.00"></div>
+      <div class="form-row"><label>Status</label><select id="eeStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+      <div class="modal-actions"><button class="btn-sm" onclick="closeEEModal()">Cancel</button><button class="btn-sm primary" onclick="saveEE()">Save</button></div>
     </div>
   </div>
 
@@ -374,6 +274,12 @@
   <script src="js/flow-api.js"></script>
   <script src="js/director-home.js"></script>
   <script>
+    // Date pill in the header band
+    (function(){
+      var d=new Date();
+      var dd=document.getElementById('hbDay'); if(dd) dd.textContent=String(d.getDate()).padStart(2,'0');
+      var dm=document.getElementById('hbMon'); if(dm) dm.innerHTML=d.toLocaleDateString('en-US',{weekday:'short'})+',<br>'+d.toLocaleDateString('en-US',{month:'long'});
+    })();
     // Pending-approval strip (director is part of the final approver tier).
     (function () {
       if (typeof _flowConfigured !== 'function' || !_flowConfigured()) return;
@@ -385,15 +291,88 @@
         const pn = ((po && po.data) || []).filter(x => x.status === 'Pending Management').length;
         const el = document.getElementById('flowApprovalStrip');
         if (!el || (qn + pn === 0)) return;
-        const chip = (n, label, href) => `<a href="${href}" style="text-decoration:none;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.9rem;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:#fff;color:var(--text-primary,#0f172a);font-weight:600;font-size:0.85rem;"><span style="background:#b45309;color:#fff;border-radius:999px;padding:1px 9px;font-size:0.78rem;">${n}</span>${label}</a>`;
+        const chip = (n, label, href) => `<a href="${href}" style="text-decoration:none;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.9rem;border:1px solid var(--line,#d7dce3);border-radius:10px;background:#fff;color:var(--ink,#111827);font-weight:600;font-size:0.85rem;"><span style="background:#b45309;color:#fff;border-radius:999px;padding:1px 9px;font-size:0.78rem;">${n}</span>${label}</a>`;
         let chips = '';
         if (qn) chips += chip(qn, 'Quotations awaiting your approval', 'flow-quotations.html');
         if (pn) chips += chip(pn, 'Purchase Orders awaiting your approval', 'flow-purchase-orders.html');
-        el.innerHTML = `<div style="border:1px solid var(--border,#e2e8f0);border-radius:14px;background:linear-gradient(180deg,#fff,#f6faf9);padding:1rem 1.2rem;">
-          <div style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;color:var(--text-primary,#0f172a);">⚑ Pending my approval</div>
+        el.innerHTML = `<div style="border:1px solid var(--line,#d7dce3);border-radius:14px;background:linear-gradient(180deg,#fff,#f6f7fb);padding:1rem 1.2rem;">
+          <div style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;color:var(--ink,#111827);">Pending my approval</div>
           <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">${chips}</div></div>`;
         el.style.display = '';
       }).catch(() => {});
+    })();
+    // Spotlight + KPI mirror — reads ONLY figures the page actually renders (no invented numbers).
+    // Gross/Deductions/Net come from the register cells director-home.js keeps updated
+    // (netPay_<C>_* / totalDed_<C>_*), Active from the EE list, 13th from its total row.
+    // Everything stays "—" until real data is on screen.
+    (function payrollKpiMirror() {
+      var lastCutoff = null;
+      function num(t) { return parseFloat(String(t || '').replace(/[^0-9.\-]/g, '')) || 0; }
+      function peso(n) { return '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+      function sumCells(prefix) {
+        var els = document.querySelectorAll('[id^="' + prefix + '"]');
+        if (!els.length) return null;
+        var s = 0; els.forEach(function (el) { s += num(el.textContent); });
+        return s;
+      }
+      function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+      function update() {
+        // Active employees — count EE rows whose Status cell says Active
+        var eeRows = document.querySelectorAll('#eeBody tr');
+        var act = 0, sawData = false;
+        eeRows.forEach(function (tr) {
+          var tds = tr.querySelectorAll('td');
+          if (tds.length >= 8) { sawData = true; if (/^Active$/i.test((tds[7].textContent || '').trim())) act++; }
+        });
+        if (sawData) set('kpiActive', String(act));
+        // Register totals for the most recently rendered cutoff
+        var C = lastCutoff;
+        if (!C) { C = sumCells('netPay_B_') != null ? 'B' : (sumCells('netPay_A_') != null ? 'A' : null); }
+        if (C) {
+          var net = sumCells('netPay_' + C + '_');
+          var ded = sumCells('totalDed_' + C + '_');
+          if (net != null && ded != null) {
+            var gross = net + ded;
+            var shareEl = document.getElementById('employerShare' + C);
+            var share = shareEl ? num(shareEl.value) : 0;
+            set('spotGross', peso(gross));
+            set('spotDed', peso(ded));
+            set('spotTotal', peso(net + share));
+            set('kpiNet', peso(net));
+            set('kpiShare', peso(share));
+            var tag = document.querySelector('.pay-spot .tag');
+            if (tag) tag.textContent = C === 'A' ? '1st Cutoff' : '2nd Cutoff';
+          }
+        }
+        // 13th month accrual — the grand total of the 13th-month table, when loaded
+        var footCells = document.querySelectorAll('#thirteenthFoot td.num, #thirteenthFoot td');
+        if (footCells.length) {
+          var last = footCells[footCells.length - 1];
+          var v = num(last.textContent);
+          if (v > 0) set('kpi13', peso(v));
+        }
+      }
+      var obs = new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          var t = m.target;
+          var host = (t.nodeType === 1 ? t : t.parentElement);
+          if (host && host.closest) {
+            if (host.closest('#payAGrid')) lastCutoff = 'A';
+            else if (host.closest('#payBGrid')) lastCutoff = 'B';
+          }
+        });
+        update();
+      });
+      ['payAGrid', 'payBGrid', 'eeBody', 'thirteenthFoot'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) obs.observe(el, { childList: true, subtree: true, characterData: true });
+      });
+      ['employerShareA', 'employerShareB'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', update);
+      });
+      update();
+      var n = 0; var t = setInterval(function () { update(); if (++n > 20) clearInterval(t); }, 500);
     })();
   </script>
 </body>
