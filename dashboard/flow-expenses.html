@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
   <style>
     .report { max-width: 1280px; margin: 0 auto; }
     .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
@@ -54,15 +55,15 @@
     @media (max-width: 640px) { .ex-form { grid-template-columns: 1fr; } .ex-comp { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
     <div class="report">
       <div class="report-sheet">
-        <div class="report-head">
-          <div>
-            <h1>Expenses</h1>
-            <div class="meta" id="metaLine">Operating, General &amp; Administrative, and Other expenses — sorted by type with per-type subtotals and an overall total.</div>
+        <div class="hband">
+          <div class="left">
+            <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+            <div><div class="eyebrow">Ledger · Outflows</div><h1>Expenses</h1><div class="meta" id="metaLine">Operating, General &amp; Administrative, and Other expenses — sorted by type with per-type subtotals and an overall total.</div></div>
           </div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <a href="migrate-expenses.html" class="btn btn-sm btn-secondary" style="white-space:nowrap;">⤓ Import legacy Expenses</a>
@@ -72,11 +73,13 @@
           </div>
         </div>
         <div class="report-body">
-          <div class="ex-kpis" id="kpis">
-            <div class="ex-kpi tot"><div class="l">Total Operating Expenses (OpEx)</div><div class="v" id="kTotal">—</div></div>
-            <div class="ex-kpi"><div class="l"># Records</div><div class="v" id="kCount">—</div></div>
-            <div class="ex-kpi"><div class="l"># Categories</div><div class="v" id="kCats">—</div></div>
-          </div>
+
+      <div class="kpi-row" id="kpis">
+        <div class="kpi spot"><div class="top"><span class="l">Total Operating Expenses (OpEx)</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kTotal">—</div><div class="d">all recorded</div></div>
+        <div class="kpi"><div class="top"><span class="l">Expenses · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span></div><div class="v sm" id="exMonth">—</div><div class="d">this month</div></div>
+        <div class="kpi"><div class="top"><span class="l"># Records</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="kCount">—</div><div class="d">expense entries</div></div>
+        <div class="kpi"><div class="top"><span class="l"># Categories</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span></div><div class="v" id="kCats">—</div><div class="d">in use</div></div>
+      </div>
 
           <div class="ex-toolbar">
             <input type="text" id="search" placeholder="Search voucher / client / description…">
@@ -138,5 +141,28 @@
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-expenses.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // This month's expenses — the other three cards are filled by flow-expenses.js.
+    (async function () {
+      try {
+        var res = await fetchFlow('getExpenses'), list = (res && res.data) || [];
+        var ym = (typeof flowToday === 'function' ? flowToday() : new Date().toISOString()).slice(0, 7);
+        var m = 0;
+        list.forEach(function (x) {
+          if (String(flowDate(x.date) || '').slice(0, 7) === ym) m += flowNum(x.amount);
+        });
+        var e = document.getElementById('exMonth'); if (e) e.textContent = flowMoney(m, 'PHP');
+      } catch (e) { /* leave the em dash */ }
+    })();
+  </script>
 </body>
 </html>

@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
   <style>
     .sh-wrap { max-width: 1180px; margin: 0 auto; }
     .sh-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
@@ -57,11 +58,25 @@
     .dr-empty { padding:1.4rem; text-align:center; color:var(--text-muted); font-style:italic; font-size:0.86rem; }
   </style>
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
     <div class="sh-wrap">
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Logistics · Inbound</div><h1>Shipment Monitoring</h1><p>Auto-created per sales order; the 21 stages advance with the flow as the PO, payment and receiving happen.</p></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-secondary" onclick="loadShipments()">&#8635; Refresh</a></div>
+      </div>
       <div id="flowNav"></div>
+
+      <div class="kpi-row">
+        <div class="kpi spot"><div class="top"><span class="l">Active Shipments</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span></div><div class="v" id="shActive">—</div><div class="d">in transit</div></div>
+        <div class="kpi"><div class="top"><span class="l">Pending</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="v" id="shPending">—</div><div class="d">not yet moving</div></div>
+        <div class="kpi"><div class="top"><span class="l">Arrived / Delivered</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></span></div><div class="v" id="shArrived">—</div><div class="d">completed</div></div>
+        <div class="kpi"><div class="top"><span class="l">Total Shipments</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="shTotal">—</div><div class="d">all time</div></div>
+      </div>
       <div class="chart-card">
         <div class="flow-actions" style="justify-content:space-between;">
           <h3 style="font-size:0.95rem;font-weight:600;">Shipment Monitoring <span style="font-weight:400;color:var(--text-muted,#64748b);font-size:0.8rem;">— auto-created per sales order; stages auto-advance with the flow</span></h3>
@@ -99,5 +114,28 @@
   <script src="js/flow-api.js"></script>
   <script src="js/stage-meta.js"></script>
   <script src="js/flow-shipments.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — counts by the real shipment status values.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var res = await fetchFlow('getShipments'), list = (res && res.data) || [];
+        var st = function (s) { return String(s.status || 'Pending').toLowerCase(); };
+        set('shActive', list.filter(function (s) { return st(s) === 'in transit'; }).length);
+        set('shPending', list.filter(function (s) { return st(s) === 'pending'; }).length);
+        set('shArrived', list.filter(function (s) { return st(s) === 'arrived' || st(s) === 'delivered'; }).length);
+        set('shTotal', list.length);
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>

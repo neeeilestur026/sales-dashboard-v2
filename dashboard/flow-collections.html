@@ -7,14 +7,18 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Collections</h1>
-      <p>Every amount collected against a sales order's invoice. Filter by sales order, client, month or year.</p>
-    </div>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Receivables · Cash In</div><h1>Collections</h1><p>Every amount collected against a sales order's invoice. Filter by sales order, client, month or year.</p></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-secondary" onclick="loadCollections()">&#8635; Refresh</a></div>
+      </div>
     <div class="flow-nav" id="flowNav"></div>
 
     <div class="chart-card" style="margin-bottom:1.25rem;">
@@ -36,12 +40,13 @@
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.25rem;">
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiOut">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Outstanding (PHP)</div></div>
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiTotal">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Collected (PHP)</div></div>
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiPending">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Pending Invoices</div></div>
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiClients">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Distinct Clients</div></div>
-    </div>
+
+      <div class="kpi-row">
+        <div class="kpi spot"><div class="top"><span class="l">Collected (PHP)</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="v sm" id="kpiTotal">—</div><div class="d">posted receipts</div></div>
+        <div class="kpi"><div class="top"><span class="l">Outstanding (PHP)</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="v sm" id="kpiOut">—</div><div class="d">still to collect</div></div>
+        <div class="kpi"><div class="top"><span class="l">Pending Invoices</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="kpiPending">—</div><div class="d">not fully collected</div></div>
+        <div class="kpi"><div class="top"><span class="l">Distinct Clients</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span></div><div class="v" id="kpiClients">—</div><div class="d">in view</div></div>
+      </div>
 
     <div class="chart-card" style="margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.5rem;">Receivables — invoice status</h3>
@@ -58,5 +63,16 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-collections.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+  </script>
 </body>
 </html>

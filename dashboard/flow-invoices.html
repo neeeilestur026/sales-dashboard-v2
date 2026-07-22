@@ -7,15 +7,34 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Invoice / Materials Issuance</h1>
-      <p>Load a sales order; selling price comes from the order and COGS from inventory landed cost. Saving deducts inventory.</p>
-    </div>
-    <div class="flow-nav" id="flowNav"></div>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Process Flow · Step 6 of 6</div><h1>Invoice / Materials Issuance</h1><p>Load a sales order; selling price comes from the order and COGS from inventory landed cost. Saving deducts inventory.</p></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-primary" onclick="document.querySelector('.chart-card').scrollIntoView({behavior:'smooth',block:'center'});">New Invoice &rarr;</a></div>
+      </div>
+        <nav class="stepper">
+          <a class="step done" href="flow-inventory.html"><span class="n">1</span>Inventory</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-quotations.html"><span class="n">2</span>Quotation</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-sales-orders.html"><span class="n">3</span>Sales Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-purchase-orders.html"><span class="n">4</span>Purchase Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-receiving.html"><span class="n">5</span>Receiving</a><span class="step-sep">&rsaquo;</span>
+          <a class="step cur" href="flow-invoices.html"><span class="n">6</span>Invoice</a>
+        </nav>
+        <div class="flow-nav" id="flowNav" hidden></div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="top"><span class="l">Issued · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="invIssued">—</div><div class="d">this month</div></div>
+        <div class="kpi spot"><div class="top"><span class="l">Invoiced Value</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="invValue">—</div><div class="d">all time</div></div>
+        <div class="kpi"><div class="top"><span class="l">COGS Posted</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div><div class="v sm" id="invCogs">—</div><div class="d"><span id="invCogsSub">of sales</span></div></div>
+        <div class="kpi"><div class="top"><span class="l">Awaiting Invoice</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="v" id="invAwait">—</div><div class="d">sales orders</div></div>
+      </div>
 
     <div class="chart-card" style="margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">New Invoice</h3>
@@ -58,5 +77,37 @@
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-invoices.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — from the invoices this page lists, plus the sales orders with none yet.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var r1 = await fetchFlow('getInvoices'), list = (r1 && r1.data) || [];
+        var ym = (typeof flowToday === 'function' ? flowToday() : new Date().toISOString()).slice(0, 7);
+        var sales = 0, cogs = 0, month = 0;
+        list.forEach(function (i) {
+          sales += flowNum(i.totalSales); cogs += flowNum(i.totalCOGS);
+          if (String(flowDate(i.date) || '').slice(0, 7) === ym) month++;
+        });
+        set('invIssued', month);
+        set('invValue', flowMoney(sales, 'PHP'));
+        set('invCogs', flowMoney(cogs, 'PHP'));
+        var sub = document.getElementById('invCogsSub');
+        if (sub) sub.textContent = sales > 0 ? Math.round(cogs / sales * 100) + '% of sales' : 'no sales yet';
+        var r2 = await fetchFlow('getSalesOrders'), sos = (r2 && r2.data) || [];
+        var done = {}; list.forEach(function (i) { if (i.soNo) done[String(i.soNo)] = 1; });
+        set('invAwait', sos.filter(function (s) { return s.soNo && !done[String(s.soNo)]; }).length);
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>
