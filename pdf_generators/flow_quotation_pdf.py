@@ -17,6 +17,7 @@ dark/soft/border shades and every bar, chip, and border derive from it.
 
 import logging
 import os
+import re
 from io import BytesIO
 
 from reportlab.lib import colors
@@ -59,6 +60,10 @@ ACCENT_BORDER = _mix(ACCENT, colors.white, 0.72)
 # grand-total bar, footer band) uses one identical 135° fade dark blue → red.
 ACCENT_G1 = HexColor("#1F4E79")                         # gradient start (dark blue)
 ACCENT_G2 = ACCENT                                      # gradient end (red)
+# Navy tints, derived the same way as the red ones — used by the summary blocks
+# (Scope of Supply / Exclusions / Options) so their edges match the gradient navy.
+NAVY_SOFT = _mix(ACCENT_G1, colors.white, 0.92)
+NAVY_BORDER = _mix(ACCENT_G1, colors.white, 0.72)
 
 HEADING = HexColor("#1a1a1a")
 TEXT = HexColor("#333333")
@@ -147,8 +152,11 @@ def _hx(c):
 
 
 def _sp(text):
-    """Letter-spaced micro-label ('PREPARED FOR' → 'P R E P A R E D  F O R')."""
-    return " ".join(list(str(text).replace(" ", " ")))
+    """Letter-spaced micro-label ('PREPARED FOR' → 'P R E P A R E D  F O R').
+
+    Words keep a wider gap — letter-spacing every character with a single space ran
+    words together, which only became visible once labels got longer than two words."""
+    return "   ".join(" ".join(list(w)) for w in str(text).split(" ") if w)
 
 
 def _ps(name, size_px, color=TEXT, font=None, align=0, leading_mult=1.45, **kw):
@@ -419,8 +427,10 @@ def build_summary_table(total_ex_vat, vat_option, discount_pct=0):
             "total_ex_vat": net_ex, "vat": vat, "total": net_ex + vat, "vat_option": opt}
 
 
-def _card(content, width, fill, border=HAIR_E, left_accent=False, pad=(16, 8)):
-    """A rounded card table around a list of flowables."""
+def _card(content, width, fill, border=HAIR_E, left_accent=None, pad=(16, 8)):
+    """A rounded card table around a list of flowables.
+
+    `left_accent` is the color of a 3px left edge (True keeps the historical red)."""
     t = Table([[content]], colWidths=[width])
     style = [
         ("BACKGROUND", (0, 0), (-1, -1), fill),
@@ -433,14 +443,102 @@ def _card(content, width, fill, border=HAIR_E, left_accent=False, pad=(16, 8)):
         ("BOTTOMPADDING", (0, 0), (-1, -1), pad[1] * PX),
     ]
     if left_accent:
-        style.append(("LINEBEFORE", (0, 0), (0, -1), 3, ACCENT))
+        edge = ACCENT if left_accent is True else left_accent
+        style.append(("LINEBEFORE", (0, 0), (0, -1), 3, edge))
     t.setStyle(TableStyle(style))
     return t
 
 
+# ── Summary blocks: Scope of Supply / Exclusions / Options ────────────────────
+def _bullet_para(text, style):
+    """One '• text' line. **asterisks** become bold — applied AFTER escaping, so
+    user text can never inject markup."""
+    body = _esc(str(text or ""))
+    body = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", body)
+    return Paragraph("&bull;&nbsp;" + body, style)
+
+
+def _bullet_block(heading, bullets, edge, width, columns=1, size=11.5, leading=1.7):
+    """Uppercase heading + hairline rule, then a bordered card with a 3px left edge.
+
+    `bullets` is a list of {"text", "bold"} (or plain strings). `columns=2` splits the
+    list across two columns — ReportLab has no column-count, and a two-column table is
+    the faithful equivalent that also keeps every bullet unsplit. Returns a
+    KeepTogether so a block never straddles a page break."""
+    rows = [b if isinstance(b, dict) else {"text": b} for b in (bullets or [])]
+    rows = [r for r in rows if str(r.get("text") or "").strip()]
+    if not rows:
+        return None
+
+    st = _ps("blBul", size, BODY2, leading_mult=leading)
+    st_bold = _ps("blBulB", size, TEXT, LATO_B, leading_mult=leading)
+
+    def para(r):
+        return _bullet_para(r.get("text"), st_bold if r.get("bold") else st)
+
+    if columns == 2 and len(rows) > 1:
+        half = (len(rows) + 1) // 2
+        left, right = rows[:half], rows[half:]
+        gutter = 28 * PX
+        col_w = (width - 2 * 18 * PX - gutter) / 2.0
+        cells = [[para(r) for r in left], [para(r) for r in right]]
+        body = Table([[cells[0], "", cells[1]]], colWidths=[col_w, gutter, col_w])
+        body.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                  ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                  ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                  ("TOPPADDING", (0, 0), (-1, -1), 0),
+                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        content = [body]
+    else:
+        content = [para(r) for r in rows]
+
+    return KeepTogether([_SectionHead(heading, width), Spacer(1, 6 * PX),
+                         _card(content, width, CARD_B, border=HAIR_EC,
+                               left_accent=edge, pad=(18, 14))])
+
+
+def _options_block(label, options, width):
+    """Tinted card (no separate heading): uppercase label, then one row per option with
+    the description left and the price right-aligned on the same line."""
+    rows = [o for o in (options or []) if str((o or {}).get("text") or "").strip()]
+    if not rows:
+        return None
+
+    desc_st = _ps("optD", 11, BODY2, leading_mult=1.6)
+    price_st = _ps("optP", 11, HEADING, LATO_B, align=2, leading_mult=1.6)
+    inner_w = width - 2 * 18 * PX
+    price_w = 150 * PX
+
+    # Paragraphs collapse whitespace runs, so the word gaps _sp() adds need to be
+    # non-breaking here (canvas-drawn labels like _SectionHead keep the plain spaces).
+    label_html = _esc(_sp(label)).replace("   ", "&nbsp;&nbsp;&nbsp;")
+    content = [Paragraph(
+        f"<font name='{LATO_B}' size={10 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{label_html}</font>",
+        _ps("optLb", 10, ACCENT_DARK, LATO_B, leading_mult=1.5))]
+    content.append(Spacer(1, 5 * PX))
+    for o in rows:
+        row = Table([[_bullet_para(o.get("text"), desc_st),
+                      Paragraph(_esc(str(o.get("price") or "")), price_st)]],
+                    colWidths=[inner_w - price_w, price_w])
+        row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                 ("TOPPADDING", (0, 0), (-1, -1), 1 * PX),
+                                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * PX)]))
+        content.append(row)
+
+    return KeepTogether([_card(content, width, NAVY_SOFT, border=HAIR_EC,
+                               left_accent=ACCENT_G1, pad=(18, 11))])
+
+
 def build_quotation_pdf_bytes(items, images, client_details, terms_and_conditions,
-                              summary_table_data, desc_mode="short", note=""):
-    """Render the quotation PDF (v2 layout) and return its bytes. Same contract as before."""
+                              summary_table_data, desc_mode="short", note="",
+                              scope=None, exclusions=None, options=None):
+    """Render the quotation PDF (v2 layout) and return its bytes.
+
+    `scope` / `exclusions` are lists of {"text", "bold"}; `options` a list of
+    {"text", "price"}. Each renders only when non-empty, so callers that omit them
+    get byte-identical output to before."""
     cd = client_details or {}
     desc_mode = (desc_mode or "").strip().lower()          # "short" hides description sub-lines
     terms = terms_and_conditions or {}
@@ -670,6 +768,16 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                      ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(KeepTogether(totals_wrap))
     story.append(Spacer(1, 8 * PX))
+
+    # ── Scope of Supply / Exclusions / Options (each omitted when empty) ──
+    for blk in (_bullet_block("SCOPE OF SUPPLY — INCLUDED", scope, ACCENT_G1, CONTENT_W),
+                _bullet_block("EXCLUSIONS — UNLESS OTHERWISE STATED IN WRITING", exclusions,
+                              ACCENT, CONTENT_W, columns=2, size=11, leading=1.6),
+                _options_block("AVAILABLE AS OPTIONS — PRICED SEPARATELY UPON REQUEST",
+                               options, CONTENT_W)):
+        if blk is not None:
+            story.append(blk)
+            story.append(Spacer(1, 8 * PX))
 
     # ── Terms strip ──
     term_cells = []

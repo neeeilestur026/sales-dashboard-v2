@@ -766,10 +766,16 @@ function openPdfModal(no) {
   document.getElementById('pdfSubject').value = q.subject || '';
   // Discount % prefilled from the record (editable — lets a rejected quote be re-priced at regen time).
   const pd = document.getElementById('pdfDiscount'); if (pd) pd.value = flowNum(q.discountPct) || '';
-  // restore remembered defaults (terms, signatory)
+  // Summary blocks are cleared first: a blank means "omit the block", and the prefills below skip
+  // empty values — without this a previous quotation's scope would linger in the open modal.
+  ['Scope', 'Exclusions', 'Options'].forEach(f => {
+    const el = document.getElementById('pdf' + f); if (el) el.value = '';
+  });
+  // restore remembered defaults (terms, signatory, summary blocks)
   const d = flowLoadDefaults('quotation');
   ['Address', 'Attention', 'Designation', 'Email', 'Validity', 'Delivery', 'Payment', 'Warranty',
-   'SigName', 'SigDesignation', 'SigViber', 'SigMobile', 'SigEmail'].forEach(f => {
+   'SigName', 'SigDesignation', 'SigViber', 'SigMobile', 'SigEmail',
+   'Scope', 'Exclusions', 'Options'].forEach(f => {
     const el = document.getElementById('pdf' + f);
     if (el && d[f] !== undefined && d[f] !== '') el.value = d[f];
   });
@@ -781,7 +787,8 @@ function openPdfModal(no) {
      ['email', 'Email'], ['rfqNo', 'RfqNo'], ['note', 'Note'], ['validity', 'Validity'],
      ['delivery', 'Delivery'], ['payment', 'Payment'], ['warranty', 'Warranty'],
      ['sigName', 'SigName'], ['sigDesignation', 'SigDesignation'], ['sigViber', 'SigViber'],
-     ['sigMobile', 'SigMobile'], ['sigEmail', 'SigEmail']].forEach(([k, id]) => {
+     ['sigMobile', 'SigMobile'], ['sigEmail', 'SigEmail'],
+     ['scope', 'Scope'], ['exclusions', 'Exclusions'], ['options', 'Options']].forEach(([k, id]) => {
       const el = document.getElementById('pdf' + id);
       if (el && prev.doc[k]) el.value = prev.doc[k];
     });
@@ -871,13 +878,16 @@ async function submitPdf() {
     subject: g('Subject'), rfqNo: g('RfqNo'), note: g('Note'),
     validity: g('Validity'), delivery: g('Delivery'), payment: g('Payment'), warranty: g('Warranty'),
     sigName: g('SigName'), sigDesignation: g('SigDesignation'), sigViber: g('SigViber'),
-    sigMobile: g('SigMobile'), sigEmail: g('SigEmail'), descMode: document.getElementById('pdfDescMode').value
+    sigMobile: g('SigMobile'), sigEmail: g('SigEmail'), descMode: document.getElementById('pdfDescMode').value,
+    // Summary blocks — one bullet per line; the server splits and renders them (blank = block omitted)
+    scope: g('Scope'), exclusions: g('Exclusions'), options: g('Options')
   };
   flowSaveDefaults('quotation', {
     Address: doc.address, Attention: doc.attention, Designation: doc.designation, Email: doc.email,
     Validity: doc.validity, Delivery: doc.delivery, Payment: doc.payment, Warranty: doc.warranty,
     SigName: doc.sigName, SigDesignation: doc.sigDesignation, SigViber: doc.sigViber,
-    SigMobile: doc.sigMobile, SigEmail: doc.sigEmail
+    SigMobile: doc.sigMobile, SigEmail: doc.sigEmail,
+    Scope: doc.scope, Exclusions: doc.exclusions, Options: doc.options
   });
   // The number SHOWN on the PDF (title chip + filename) is editable in the dialog; the Drive-link
   // row write below stays keyed on the real record number so the quotation row still gets its link.

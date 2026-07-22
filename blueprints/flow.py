@@ -44,6 +44,57 @@ def _s(v):
     return "" if v is None else str(v)
 
 
+def _bullets(v):
+    """Parse Scope/Exclusions bullets into [{"text", "bold"}].
+
+    Accepts a textarea string (one bullet per line) or an already-split list, so the
+    payload works from the dialog and from a script. A leading bullet/dash the user
+    pasted is stripped; a line wrapped in **asterisks** is flagged bold."""
+    if not v:
+        return []
+    # A number-looking cell comes back from Sheets as a number, not a string — coerce
+    # anything that isn't a string or a sequence rather than crashing on list().
+    lines = (v.splitlines() if isinstance(v, str)
+             else list(v) if isinstance(v, (list, tuple)) else _s(v).splitlines())
+    out = []
+    for ln in lines:
+        if isinstance(ln, dict):
+            text, bold = _s(ln.get("text")).strip(), bool(ln.get("bold"))
+        else:
+            text, bold = _s(ln).strip(), False
+        # Detect **bold** FIRST — the bullet-stripper below eats '*', which would
+        # otherwise swallow the opening marker and leave a stray '**' at the end.
+        if not bold and text.startswith("**") and text.endswith("**") and len(text) > 4:
+            text, bold = text[2:-2].strip(), True
+        text = re.sub(r"^[•·\-\*–—]+\s*", "", text).strip()
+        if not text:
+            continue
+        out.append({"text": text, "bold": bold})
+    return out
+
+
+def _options(v):
+    """Parse Options into [{"text", "price"}] from 'description | price' lines.
+
+    Split on the LAST '|' so a description may contain one."""
+    if not v:
+        return []
+    lines = (v.splitlines() if isinstance(v, str)
+             else list(v) if isinstance(v, (list, tuple)) else _s(v).splitlines())
+    out = []
+    for ln in lines:
+        if isinstance(ln, dict):
+            text, price = _s(ln.get("text")).strip(), _s(ln.get("price")).strip()
+        else:
+            raw = _s(ln).strip()
+            text, price = (raw.rsplit("|", 1) + [""])[:2] if "|" in raw else (raw, "")
+            text, price = text.strip(), price.strip()
+        text = re.sub(r"^[•·\-\*–—]+\s*", "", text).strip()
+        if text:
+            out.append({"text": text, "price": price})
+    return out
+
+
 def _decode_data_url(s):
     """Decode a base64 data URL or bare base64 string into bytes (or None)."""
     if not s:
@@ -203,7 +254,10 @@ def quotation_pdf():
 
     try:
         pdf_bytes = build_quotation_pdf_bytes(items, images, client_details, terms,
-                                              summary, desc_mode=desc_mode, note=_s(doc.get("note")))
+                                              summary, desc_mode=desc_mode, note=_s(doc.get("note")),
+                                              scope=_bullets(doc.get("scope")),
+                                              exclusions=_bullets(doc.get("exclusions")),
+                                              options=_options(doc.get("options")))
         pdf_bytes = _merge_brochures(pdf_bytes, data.get("brochures"))
         pdf_bytes = _embed_quo_data(pdf_bytes, data)
     except Exception as e:

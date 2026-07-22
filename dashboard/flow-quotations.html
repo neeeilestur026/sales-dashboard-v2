@@ -117,6 +117,22 @@
         <div><label>Warranty</label><input type="text" id="pdfWarranty" value="1 year warranty against factory defect"></div>
       </div>
 
+      <div class="group-title">Scope, Exclusions &amp; Options</div>
+      <div class="flow-form">
+        <div class="full">
+          <label>Scope of Supply — Included <span style="font-weight:400;color:var(--text-muted);">(one per line · wrap a line in **asterisks** to bold it · leave blank to omit the block)</span></label>
+          <textarea id="pdfScope" rows="5" placeholder="3 units – 1500 kW open type diesel generator set as specified above, brand new&#10;SmartGen HGM9510 digital genset controller, one per unit"></textarea>
+        </div>
+        <div class="full">
+          <label>Exclusions <span style="font-weight:400;color:var(--text-muted);">(one per line · printed in two columns · **asterisks** to bold the catch-all)</span></label>
+          <textarea id="pdfExclusions" rows="5" placeholder="Fuel tank, day tank, bulk storage tank, fuel piping and accessories&#10;**Any item not expressly listed under Scope of Supply**"></textarea>
+        </div>
+        <div class="full">
+          <label>Available as Options <span style="font-weight:400;color:var(--text-muted);">(one per line as <code>description | price</code>)</span></label>
+          <textarea id="pdfOptions" rows="3" placeholder="Deep Sea DSE8610 controller in place of SmartGen HGM9510 | PHP 174,150.00 / unit"></textarea>
+        </div>
+      </div>
+
       <div class="group-title">Signatory</div>
       <div class="flow-form">
         <div><label>Name</label><input type="text" id="pdfSigName"></div>
