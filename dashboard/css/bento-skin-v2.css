@@ -1,0 +1,57 @@
+/* ══ Bento DESIGN skin v2 ══
+   Verbatim from the user's reference set (webapp/*.html, <style id="bento-skin">),
+   extracted to one shared stylesheet. Linked AFTER css/styles.css (and css/flow.css)
+   on the accounting-dashboard pages. Additive CSS only — no markup or JS changes. ══ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+:root{
+  --accent:#4f46e5; --accent-hover:#4338ca; --accent-dark:#3730a3; --accent-light:#e0e7ff;
+  --accent-ring:rgba(79,70,229,.18);
+  --radius:16px; --radius-lg:20px; --radius-sm:10px;
+}
+body{font-family:'Inter',system-ui,sans-serif !important;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(1100px 560px at 12% -8%,#eef1f5,#e6e9ee 60%) !important;color:var(--text-primary);}
+.main-content{max-width:1360px;}
+/* Header band — bolder hero */
+.hero,.page-header{background:#fff !important;border:1px solid var(--border) !important;border-radius:20px !important;
+  box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 30px -20px rgba(15,23,42,.4) !important;padding:22px 24px !important;}
+.hero h1,.page-header h1,.greeting{font:800 27px/1 'Inter',sans-serif !important;letter-spacing:-.02em !important;color:var(--text-primary) !important;}
+.hero p,.page-header p{font:400 13.5px 'Inter',sans-serif !important;color:var(--text-muted) !important;margin-top:7px !important;}
+/* Section eyebrow */
+.sect-head h2{font:700 11px 'Inter',sans-serif !important;letter-spacing:.09em !important;text-transform:uppercase;color:var(--text-muted) !important;}
+/* KPI stat cards → reference tiles with accent top-rule */
+.stat-card,.kpi-card{position:relative;background:#fff !important;border:1px solid var(--border) !important;border-radius:16px !important;
+  padding:16px 18px !important;box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35) !important;overflow:hidden;}
+.stat-card::before,.kpi-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#6a63ea,#4f46e5);opacity:.9;}
+.stat-card-label,.kpi-card .label,.stat-label{font:700 11px 'Inter',sans-serif !important;letter-spacing:.05em !important;text-transform:uppercase;color:var(--text-muted) !important;}
+.stat-card-value,.kpi-card .value,.stat-value{font:800 26px 'Inter',sans-serif !important;font-variant-numeric:tabular-nums;color:var(--text-primary) !important;margin-top:8px !important;}
+/* First KPI as dark spotlight — reference signature */
+#kpiGrid .stat-card:first-child,.kpi-grid .stat-card:first-child{background:#141414 !important;border-color:#141414 !important;}
+#kpiGrid .stat-card:first-child::before,.kpi-grid .stat-card:first-child::before{background:var(--accent);}
+#kpiGrid .stat-card:first-child .stat-card-label,.kpi-grid .stat-card:first-child .stat-card-label{color:#9a9a9a !important;}
+#kpiGrid .stat-card:first-child .stat-card-value,.kpi-grid .stat-card:first-child .stat-card-value{color:#fff !important;}
+/* Cards */
+.chart-card,.acard,.side-card,.app-card,.pnl-card,.sm-section,.report-sheet,.bs-card,.card{
+  border-radius:18px !important;border:1px solid var(--border) !important;
+  box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35) !important;}
+.acard:hover,.app-card:hover{transform:translateY(-3px);border-color:var(--accent) !important;}
+.acard-icon,.app-card-icon{border-radius:12px !important;}
+/* Buttons + pills */
+.btn,.btn-primary,.btn-secondary,.btn-sm,.acard-cta,.hero-pill,.pnl-controls select,.sm-filter-btn{
+  border-radius:999px !important;font-weight:600 !important;
+  transition:transform .18s cubic-bezier(.4,0,.2,1),filter .18s,background .2s !important;}
+.btn-primary,.acard-cta:not(.subtle),.hero-pill[style*="--accent"]{
+  background:linear-gradient(180deg,#6a63ea,#4f46e5) !important;color:#fff !important;border:none !important;
+  box-shadow:0 6px 16px -8px rgba(79,70,229,.7) !important;}
+.btn-primary:hover,.acard-cta:hover{filter:brightness(1.06);transform:translateY(-1px);}
+.btn-secondary,.acard-cta.subtle{background:#fff !important;color:var(--text-primary) !important;border:1px solid var(--border) !important;}
+.sm-filter-btn.active{background:var(--accent-light) !important;border-color:var(--accent) !important;color:var(--accent-dark) !important;}
+/* Tables + tiles */
+.pnl-tile,.pnl-mtable th,.tile{border-radius:12px;}
+.pnl-tile.accent{background:var(--accent-light) !important;border-color:var(--accent) !important;}
+.pnl-tile.accent .v{color:var(--accent-dark) !important;}
+/* Inputs */
+input,select,textarea{border-radius:9px !important;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent) !important;box-shadow:0 0 0 3px var(--accent-ring) !important;}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;}}
