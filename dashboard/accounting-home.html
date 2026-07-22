@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
   <style>
     .hero {
       position: relative;
@@ -262,23 +263,19 @@
 
 
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
 
   <main class="main-content">
-    <section class="hero">
-      <div class="hero-row" style="position:relative;z-index:1;">
-        <div>
-          <h1 class="greeting" id="greeting">Good morning!</h1>
-          <p id="todayLabel">Accounting hub — process flow, financials &amp; monitoring.</p>
-        </div>
-        <div class="hero-meta">
-          <a href="flow-accounting.html" class="hero-pill" style="background:var(--accent);color:#fff;border-color:var(--accent);">Accounting Overview →</a>
-          <a href="flow-ledger.html" class="hero-pill" style="background:var(--action);color:#fff;border-color:var(--action);">General Ledger →</a>
-          <a href="accounting-billing.html" class="hero-pill">Billing →</a>
-        </div>
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div><div class="eyebrow">Accounting · Overview</div><h1 class="greeting" id="greeting">Good morning!</h1><p id="todayLabel">Accounting hub — process flow, financials &amp; monitoring.</p></div>
       </div>
-    </section>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a href="flow-accounting.html" class="hero-pill" style="background:var(--accent);color:#fff;border-color:var(--accent);">Accounting Overview →</a>
+          <a href="flow-ledger.html" class="hero-pill" style="background:var(--action);color:#fff;border-color:var(--action);">General Ledger →</a>
+          <a href="accounting-billing.html" class="hero-pill">Billing →</a></div>
+    </div>
 
     <!-- Revenue & Net Profit report (per Sales Order, Month/Year) -->
     <section class="pnl-card">
@@ -543,6 +540,17 @@
       if (!tl) return;
       const d = new Date();
       tl.textContent = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    })();
+  </script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
   </script>
 </body>

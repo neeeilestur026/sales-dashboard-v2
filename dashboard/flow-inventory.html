@@ -7,16 +7,35 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Inventory</h1>
-      <p>Item master with purchase price, shipping &amp; landed cost. Quantity may be zero.</p>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Process Flow · Step 1 of 6</div><h1>Inventory</h1><p>Item master with purchase price, shipping &amp; landed cost. Quantity may be zero.</p></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-primary" onclick="document.getElementById('formTitle').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('description').focus();">Add Item &rarr;</a></div>
+      </div>
       <p id="salesNote" class="flow-msg" style="display:none;background:rgba(13,148,136,0.10);color:var(--accent-dark,#115e59);margin-top:0.5rem;">You can add and edit items here. Items can only be removed by admin/accounting.</p>
-    </div>
-    <div class="flow-nav" id="flowNav"></div>
+        <nav class="stepper">
+          <a class="step cur" href="flow-inventory.html"><span class="n">1</span>Inventory</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-quotations.html"><span class="n">2</span>Quotation</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-sales-orders.html"><span class="n">3</span>Sales Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-purchase-orders.html"><span class="n">4</span>Purchase Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-receiving.html"><span class="n">5</span>Receiving</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-invoices.html"><span class="n">6</span>Invoice</a>
+        </nav>
+        <div class="flow-nav" id="flowNav" hidden></div>
+
+      <div class="kpi-row">
+        <div class="kpi spot"><div class="top"><span class="l">Total Items</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span></div><div class="v" id="kiTotal">—</div><div class="d">SKUs tracked</div></div>
+        <div class="kpi"><div class="top"><span class="l">Low Stock</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span></div><div class="v" id="kiLow">—</div><div class="d">under 10 on hand</div></div>
+        <div class="kpi"><div class="top"><span class="l">Catalog Items</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div><div class="v" id="kiCat">—</div><div class="d">zero-stock listed</div></div>
+        <div class="kpi"><div class="top"><span class="l">Stock Value</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kiVal">—</div><div class="d">at landed cost</div></div>
+      </div>
 
     <div class="chart-card" style="margin-bottom:1.25rem;" id="invFormCard">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">Add Item</h3>
@@ -55,5 +74,31 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-inventory.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — from the inventory list this page loads (A115 Stock vs Catalog Type).
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var res = await fetchFlow('getInventory'), list = (res && res.data) || [];
+        var typed = list.some(function (i) { return i.type === 'Stock' || i.type === 'Catalog'; });
+        var stock = typed ? list.filter(function (i) { return i.type !== 'Catalog'; }) : list;
+        var val = 0, low = 0;
+        stock.forEach(function (i) { val += flowNum(i.totalLanded); if (flowNum(i.balance) < 10) low++; });
+        set('kiTotal', list.length);
+        set('kiLow', low);
+        set('kiCat', typed ? list.filter(function (i) { return i.type === 'Catalog'; }).length : 0);
+        set('kiVal', flowMoney(val, 'PHP'));
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>

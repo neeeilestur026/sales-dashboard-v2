@@ -7,15 +7,34 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 </head>
-<body>
+<body class="flow-screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Quotations</h1>
-      <p>Load items from inventory and set quoted quantity &amp; price. Missing items can be added to inventory (even at zero stock).</p>
-    </div>
-    <div class="flow-nav" id="flowNav"></div>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Process Flow · Step 2 of 6</div><h1>Quotations</h1><p>Load items from inventory and set quoted quantity &amp; price. Missing items can be added to inventory (even at zero stock).</p></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-primary" onclick="document.getElementById('formTitle').scrollIntoView({behavior:'smooth',block:'center'});">New Quotation &rarr;</a></div>
+      </div>
+        <nav class="stepper">
+          <a class="step done" href="flow-inventory.html"><span class="n">1</span>Inventory</a><span class="step-sep">&rsaquo;</span>
+          <a class="step cur" href="flow-quotations.html"><span class="n">2</span>Quotation</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-sales-orders.html"><span class="n">3</span>Sales Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-purchase-orders.html"><span class="n">4</span>Purchase Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-receiving.html"><span class="n">5</span>Receiving</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-invoices.html"><span class="n">6</span>Invoice</a>
+        </nav>
+        <div class="flow-nav" id="flowNav" hidden></div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="top"><span class="l">Draft</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></div><div class="v" id="kqDraft">—</div><div class="d">not yet submitted</div></div>
+        <div class="kpi"><div class="top"><span class="l">Sent</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span></div><div class="v" id="kqSent">—</div><div class="d">with the client</div></div>
+        <div class="kpi"><div class="top"><span class="l">Approved</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span></div><div class="v" id="kqApproved">—</div><div class="d">ready to send</div></div>
+        <div class="kpi spot"><div class="top"><span class="l">Open Value</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kqValue">—</div><div class="d">draft + in-approval</div></div>
+      </div>
 
     <div class="chart-card" style="margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Quotation</h3>
@@ -177,5 +196,34 @@
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-quotations.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — quotation counts by status; scoped to the rep when the viewer is sales.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var s = {}; try { s = JSON.parse(localStorage.getItem('session') || '{}'); } catch (e) {}
+        var params = s.role === 'sales' ? { createdBy: s.name } : {};
+        var res = await fetchFlow('getQuotations', params), list = (res && res.data) || [];
+        var st = function (q) { return String(q.status || '').toLowerCase(); };
+        var open = list.filter(function (q) { return st(q) !== 'sent' && st(q) !== 'rejected'; });
+        var val = 0; open.forEach(function (q) {
+          var t = flowNum(q.total) * (1 - (flowNum(q.discountPct) || 0) / 100); val += t;
+        });
+        set('kqDraft', list.filter(function (q) { return st(q) === 'draft' || st(q) === 'rejected'; }).length);
+        set('kqSent', list.filter(function (q) { return st(q) === 'sent'; }).length);
+        set('kqApproved', list.filter(function (q) { return st(q) === 'approved'; }).length);
+        set('kqValue', flowMoney(val, 'PHP'));
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>
