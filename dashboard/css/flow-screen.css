@@ -10,61 +10,19 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* ── The framed screen ─────────────────────────────────────────────────────── */
+/* ── Page shell ────────────────────────────────────────────────────────────── */
+/* No frame: the page fills the window and the navbar stays the standard fixed bar
+   used everywhere else in the app. */
 body.flow-screen {
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   background: radial-gradient(1100px 560px at 14% -6%, #eef1f5, #e6e9ee 60%) !important;
-  padding: 40px 30px;
   min-height: 100vh;
 }
-body.flow-screen .screen {
-  width: 1360px;
-  max-width: 100%;
-  margin: 0 auto;
-  background: linear-gradient(180deg, #f3f5f7, #eef2f6);
-  border: 1px solid #cfd6de;
-  border-radius: 26px;
-  overflow: hidden;
-  box-shadow: 0 40px 90px -40px rgba(15, 23, 42, .55), 0 2px 6px rgba(15, 23, 42, .06);
-}
-
-/* Navbar sits INSIDE the frame — it is position:fixed globally (styles.css:159). */
-body.flow-screen .navbar {
-  position: static !important;
-  height: 64px;
-  padding: 0 24px;
-  background: rgba(255, 255, 255, .92) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  border-bottom: 1px solid #d7dce3;
-  box-shadow: 0 6px 18px -14px rgba(15, 23, 42, .5) !important;
-  border-radius: 0;
-}
-body.flow-screen .navbar-brand img { height: 34px; }
-body.flow-screen .navbar-nav a,
-body.flow-screen .nav-dropdown-btn {
-  padding: 7px 12px;
-  border-radius: 8px;
-  font: 500 13px 'Inter', sans-serif;
-  color: #64748b;
-  white-space: nowrap;
-}
-body.flow-screen .navbar-nav a.active,
-body.flow-screen .nav-dropdown-btn.active {
-  color: #3730a3 !important;
-  background: #e0e7ff;
-  font-weight: 600;
-}
-body.flow-screen .navbar-user-avatar {
-  background: linear-gradient(135deg, #818cf8, #4f46e5);
-  color: #fff;
-  font: 700 12px 'Inter', sans-serif;
-}
 body.flow-screen .main-content {
-  padding: 24px 28px 32px !important;
-  max-width: none !important;
-  margin: 0;
+  padding: 88px 28px 40px !important;   /* 88px clears the fixed navbar */
+  max-width: 1360px !important;         /* the comps' content width */
+  margin: 0 auto;
 }
 
 /* ── Header band ───────────────────────────────────────────────────────────── */
