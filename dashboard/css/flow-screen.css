@@ -1,0 +1,258 @@
+/* ══ Flow screen design ══
+   The user's 5 flow design comps (flow-receiving / flow-other-payables / flow-ap-aging /
+   flow-payment-requests / flow-purchase-orders), mapped onto the real markup: the comps'
+   mockup classes (.ptable, .fld .in, .btn, .nb) are expressed through the classes our pages
+   and JS already emit (.flow-table, .flow-form input, .btn-primary, .navbar).
+
+   Everything is scoped under body.flow-screen, so only those five pages are affected.
+   Loaded AFTER css/bento-skin-v2.css, which still supplies the shared indigo tokens the
+   injected navbar, dropdowns and modals use. No markup, id or JS dependency changes. ══ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── The framed screen ─────────────────────────────────────────────────────── */
+body.flow-screen {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: radial-gradient(1100px 560px at 14% -6%, #eef1f5, #e6e9ee 60%) !important;
+  padding: 40px 30px;
+  min-height: 100vh;
+}
+body.flow-screen .screen {
+  width: 1360px;
+  max-width: 100%;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #f3f5f7, #eef2f6);
+  border: 1px solid #cfd6de;
+  border-radius: 26px;
+  overflow: hidden;
+  box-shadow: 0 40px 90px -40px rgba(15, 23, 42, .55), 0 2px 6px rgba(15, 23, 42, .06);
+}
+
+/* Navbar sits INSIDE the frame — it is position:fixed globally (styles.css:159). */
+body.flow-screen .navbar {
+  position: static !important;
+  height: 64px;
+  padding: 0 24px;
+  background: rgba(255, 255, 255, .92) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom: 1px solid #d7dce3;
+  box-shadow: 0 6px 18px -14px rgba(15, 23, 42, .5) !important;
+  border-radius: 0;
+}
+body.flow-screen .navbar-brand img { height: 34px; }
+body.flow-screen .navbar-nav a,
+body.flow-screen .nav-dropdown-btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font: 500 13px 'Inter', sans-serif;
+  color: #64748b;
+  white-space: nowrap;
+}
+body.flow-screen .navbar-nav a.active,
+body.flow-screen .nav-dropdown-btn.active {
+  color: #3730a3 !important;
+  background: #e0e7ff;
+  font-weight: 600;
+}
+body.flow-screen .navbar-user-avatar {
+  background: linear-gradient(135deg, #818cf8, #4f46e5);
+  color: #fff;
+  font: 700 12px 'Inter', sans-serif;
+}
+body.flow-screen .main-content {
+  padding: 24px 28px 32px !important;
+  max-width: none !important;
+  margin: 0;
+}
+
+/* ── Header band ───────────────────────────────────────────────────────────── */
+body.flow-screen .hband {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+}
+body.flow-screen .hband .left { display: flex; align-items: center; gap: 16px; }
+body.flow-screen .dpill {
+  display: inline-flex; align-items: center; gap: 12px;
+  border: 1px solid #d7dce3; border-radius: 999px; padding: 8px 18px 8px 8px;
+  background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+body.flow-screen .dpill .d {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #3730a3;
+  display: flex; align-items: center; justify-content: center;
+  font: 800 18px 'Inter', sans-serif;
+}
+body.flow-screen .dpill .m { font: 600 12px/1.2 'Inter', sans-serif; color: #111827; }
+body.flow-screen .eyebrow {
+  font: 700 11px 'Inter', sans-serif; letter-spacing: .1em; text-transform: uppercase;
+  color: #6366f1; margin-bottom: 4px; display: flex; align-items: center; gap: 7px;
+}
+body.flow-screen .hband h1 {
+  font: 800 27px/1 'Inter', sans-serif; letter-spacing: -.02em; color: #111827; margin: 0;
+}
+body.flow-screen .hband p {
+  font: 400 13.5px 'Inter', sans-serif; color: #8b93a1; margin: 6px 0 0;
+  max-width: 560px; text-wrap: pretty;
+}
+
+/* ── Pipeline step strip (steps are links) ─────────────────────────────────── */
+body.flow-screen .stepper {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 18px;
+}
+body.flow-screen .step {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;
+  border-radius: 999px; font: 600 12px 'Inter', sans-serif;
+  background: #fff; border: 1px solid #e2e6ec; color: #8b93a1;
+  text-decoration: none; transition: transform .18s cubic-bezier(.4, 0, .2, 1), border-color .18s;
+}
+body.flow-screen .step:hover { transform: translateY(-1px); border-color: #c7d2fe; }
+body.flow-screen .step .n {
+  width: 20px; height: 20px; border-radius: 50%; background: #eef2f6; color: #8b93a1;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 10px 'Inter', sans-serif;
+}
+body.flow-screen .step.done { color: #3730a3; border-color: #c7d2fe; background: #eef2ff; }
+body.flow-screen .step.done .n { background: #4f46e5; color: #fff; }
+body.flow-screen .step.cur {
+  color: #fff; background: linear-gradient(180deg, #6a63ea, #4f46e5);
+  border-color: #4f46e5; box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .7);
+}
+body.flow-screen .step.cur .n { background: rgba(255, 255, 255, .25); color: #fff; }
+body.flow-screen .step-sep { color: #cbd5e1; }
+
+/* ── KPI cards ─────────────────────────────────────────────────────────────── */
+body.flow-screen .kpi-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;
+}
+body.flow-screen .kpi-row.five { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1100px) {
+  body.flow-screen .kpi-row,
+  body.flow-screen .kpi-row.five { grid-template-columns: repeat(2, 1fr); }
+}
+body.flow-screen .kpi {
+  position: relative; background: #fff; border: 1px solid #e2e6ec; border-radius: 16px;
+  padding: 16px 17px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 10px 26px -20px rgba(15, 23, 42, .4);
+  transition: transform .18s cubic-bezier(.4, 0, .2, 1), box-shadow .25s;
+}
+body.flow-screen .kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 18px 36px -20px rgba(15, 23, 42, .5);
+}
+body.flow-screen .kpi::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, #6a63ea, #4f46e5);
+}
+body.flow-screen .kpi .top { display: flex; align-items: center; justify-content: space-between; }
+body.flow-screen .kpi .l {
+  font: 700 10.5px 'Inter', sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #8b93a1;
+}
+body.flow-screen .kpi .chip {
+  width: 30px; height: 30px; border-radius: 9px; background: #eef2ff; color: #4f46e5;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+body.flow-screen .kpi .v {
+  font: 800 25px 'Inter', sans-serif; color: #111827;
+  font-variant-numeric: tabular-nums; margin-top: 11px; line-height: 1;
+}
+body.flow-screen .kpi .v.sm { font-size: 22px; }
+body.flow-screen .kpi .d {
+  font: 600 11.5px 'Inter', sans-serif; margin-top: 6px; color: #8b93a1;
+  display: flex; align-items: center; gap: 5px;
+}
+body.flow-screen .kpi .d.up { color: #15803d; }
+body.flow-screen .kpi .d.down { color: #b91c1c; }
+body.flow-screen .kpi.spot { background: #141414; border-color: #141414; }
+body.flow-screen .kpi.spot::before { background: #6366f1; }
+body.flow-screen .kpi.spot .l { color: #9a9a9a; }
+body.flow-screen .kpi.spot .v { color: #fff; }
+body.flow-screen .kpi.spot .d { color: #c7d2fe; }
+body.flow-screen .kpi.spot .chip { background: rgba(255, 255, 255, .1); color: #c7d2fe; }
+
+/* ── Cards (our .chart-card is the comps' .card) ───────────────────────────── */
+body.flow-screen .chart-card {
+  background: #fff !important; border: 1px solid #e2e6ec !important; border-radius: 18px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 12px 30px -20px rgba(15, 23, 42, .4) !important;
+  padding: 20px 22px;
+}
+body.flow-screen .chart-card h3 { font: 700 15px 'Inter', sans-serif !important; color: #111827; }
+
+/* ── Tables (our .flow-table is the comps' .ptable) ────────────────────────── */
+body.flow-screen .flow-table {
+  width: 100%; border-collapse: collapse; font: 400 12.5px 'Inter', sans-serif;
+}
+body.flow-screen .flow-table th {
+  text-align: left; padding: 11px 14px; font: 700 10px 'Inter', sans-serif;
+  text-transform: uppercase; letter-spacing: .05em; color: #8b93a1;
+  background: #f4f6f9; white-space: nowrap; border-bottom: 1px solid #e5e9ef;
+}
+body.flow-screen .flow-table th.num,
+body.flow-screen .flow-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+body.flow-screen .flow-table td {
+  padding: 12px 14px; border-bottom: 1px solid #eef1f5; color: #111827;
+}
+body.flow-screen .flow-table tbody tr { transition: background .14s; }
+body.flow-screen .flow-table tbody tr:nth-child(even) td { background: #fbfcfe; }
+body.flow-screen .flow-table tbody tr:hover td { background: #f0f2fb; }
+body.flow-screen .flow-table tr.tot td {
+  font-weight: 800; color: #3730a3; background: #eef2ff;
+  border-top: 2px solid #4f46e5; border-bottom: none;
+}
+
+/* ── Form fields (the comps' .fld) ─────────────────────────────────────────── */
+body.flow-screen .flow-form label {
+  font: 600 11px 'Inter', sans-serif; letter-spacing: .03em; text-transform: uppercase;
+  color: #8b93a1; display: block; margin-bottom: 6px;
+}
+body.flow-screen .flow-form input,
+body.flow-screen .flow-form select,
+body.flow-screen .flow-form textarea {
+  background: #f8fafc; border: 1px solid #d7dce3; border-radius: 9px; padding: 10px 12px;
+  font: 400 13px 'Inter', sans-serif; color: #475569;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, .04);
+}
+body.flow-screen .flow-form input:focus,
+body.flow-screen .flow-form select:focus,
+body.flow-screen .flow-form textarea:focus {
+  outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, .18);
+}
+
+/* ── Buttons + sub-nav pills + badges ──────────────────────────────────────── */
+body.flow-screen .btn,
+body.flow-screen .btn-primary,
+body.flow-screen .btn-secondary,
+body.flow-screen .btn-sm {
+  border-radius: 999px !important;
+  font: 600 12.5px 'Inter', sans-serif !important;
+  transition: transform .18s cubic-bezier(.4, 0, .2, 1), filter .18s !important;
+}
+body.flow-screen .btn-primary {
+  padding: 11px 19px;
+  background: linear-gradient(180deg, #6a63ea, #4f46e5) !important; color: #fff !important;
+  border: none !important;
+  box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .75), inset 0 1px 0 rgba(255, 255, 255, .25) !important;
+}
+body.flow-screen .btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+body.flow-screen .btn-secondary {
+  background: #fff !important; color: #111827 !important; border: 1px solid #d7dce3 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important;
+}
+body.flow-screen .flow-nav { border-bottom: none; gap: .4rem; }
+body.flow-screen .flow-nav a {
+  padding: 8px 14px; border-radius: 999px !important; font: 600 12px 'Inter', sans-serif;
+  background: #fff; border: 1px solid #e2e6ec; color: #8b93a1;
+}
+body.flow-screen .flow-nav a.active {
+  color: #fff; background: linear-gradient(180deg, #6a63ea, #4f46e5);
+  border-color: #4f46e5; box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .7);
+}
+body.flow-screen .flow-badge {
+  padding: 3px 10px; border-radius: 999px;
+  font: 700 10.5px 'Inter', sans-serif; display: inline-flex; align-items: center; gap: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.flow-screen * { transition: none !important; }
+}

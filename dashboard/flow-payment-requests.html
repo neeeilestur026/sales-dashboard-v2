@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
   <style>
     /* ══ Bento reference design — self-contained ══ */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -41,15 +42,26 @@
     @keyframes spin{to{transform:rotate(360deg);}}
   </style>
 </head>
-<body>
+<body class="flow-screen">
+  <div class="screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="pr-head" style="margin-bottom:16px;">
-      <h1>Payment Requests</h1>
-      <p>Load a purchase order to request its supplier payment · approval Director → Management.</p>
-    </div>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Payables · Approval Queue</div><h1>Payment Requests</h1><p>Load a purchase order to request its supplier payment · approval Director → Management.</p></div>
+        </div>
+        <a class="btn btn-primary" onclick="document.getElementById('formTitle').scrollIntoView({behavior:'smooth',block:'center'});">New Payment Request &rarr;</a>
+      </div>
 
     <div id="flowNav" class="flow-nav"></div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="top"><span class="l">Pending Director</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span></div><div class="v" id="kpiDir">—</div><div class="d">needs sign-off</div></div>
+        <div class="kpi"><div class="top"><span class="l">Pending Management</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></span></div><div class="v" id="kpiMgmt">—</div><div class="d">final approval</div></div>
+        <div class="kpi"><div class="top"><span class="l">Approved</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="v" id="kpiApproved">—</div><div class="d">cleared to pay</div></div>
+        <div class="kpi spot"><div class="top"><span class="l">Requested Value</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kpiOpenVal">—</div><div class="d"><span id="kpiOpenValSub">open requests</span></div></div>
+      </div>
 
     <div class="chart-card" id="formCard">
       <h3 id="formTitle">New Payment Request (Purchase Order)</h3>
@@ -85,11 +97,39 @@
       <div id="listContainer" style="overflow-x:auto;margin-top:12px;"><div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div></div>
     </div>
   </main>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-payment-requests.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — the real approval stages of the PO payment requests listed below.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var res = await fetchFlow('getPaymentRequests', { type: 'PO' }), list = (res && res.data) || [];
+        var st = function (r) { return String(r.status || '').toLowerCase(); };
+        var open = list.filter(function (r) { return st(r).indexOf('pending') === 0 || st(r) === 'draft'; });
+        var val = 0; open.forEach(function (r) { val += flowNum(r.amount); });
+        set('kpiDir', list.filter(function (r) { return st(r) === 'pending director'; }).length);
+        set('kpiMgmt', list.filter(function (r) { return st(r) === 'pending management'; }).length);
+        set('kpiApproved', list.filter(function (r) { return st(r) === 'approved'; }).length);
+        set('kpiOpenVal', flowMoney(val, 'PHP'));
+        var sub = document.getElementById('kpiOpenValSub');
+        if (sub) sub.textContent = open.length + ' open request(s)';
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>

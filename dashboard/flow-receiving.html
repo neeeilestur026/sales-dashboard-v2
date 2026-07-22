@@ -7,17 +7,37 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 
 
 </head>
-<body>
+<body class="flow-screen">
+  <div class="screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Materials Receiving</h1>
-      <p>Load a purchase order, enter total shipping cost, and the system pro-rates it into the landed cost per item, then updates inventory.</p>
-    </div>
-    <div class="flow-nav" id="flowNav"></div>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Process Flow · Step 5 of 6</div><h1>Materials Receiving</h1><p>Load a purchase order, enter total shipping cost, and the system pro-rates it into the landed cost per item, then updates inventory.</p></div>
+        </div>
+        <a class="btn btn-primary" onclick="document.querySelector('.chart-card').scrollIntoView({behavior:'smooth',block:'center'});">Receive Materials &rarr;</a>
+      </div>
+        <nav class="stepper">
+          <a class="step done" href="flow-inventory.html"><span class="n">1</span>Inventory</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-quotations.html"><span class="n">2</span>Quotation</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-sales-orders.html"><span class="n">3</span>Sales Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step done" href="flow-purchase-orders.html"><span class="n">4</span>Purchase Order</a><span class="step-sep">&rsaquo;</span>
+          <a class="step cur" href="flow-receiving.html"><span class="n">5</span>Receiving</a><span class="step-sep">&rsaquo;</span>
+          <a class="step" href="flow-invoices.html"><span class="n">6</span>Invoice</a>
+        </nav>
+        <div class="flow-nav" id="flowNav" hidden></div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="top"><span class="l">Receipts Recorded</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span></div><div class="v" id="kpiReceipts">—</div><div class="d">all time</div></div>
+        <div class="kpi"><div class="top"><span class="l">Received · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="v" id="kpiMonth">—</div><div class="d">this month</div></div>
+        <div class="kpi spot"><div class="top"><span class="l">Shipping Total</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kpiShip">—</div><div class="d">duties, delivery &amp; other</div></div>
+        <div class="kpi"><div class="top"><span class="l">Input VAT</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span></div><div class="v sm" id="kpiVat">—</div><div class="d">recoverable</div></div>
+      </div>
 
     <div class="chart-card" style="margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">New Receiving</h3>
@@ -58,6 +78,7 @@
       <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>
+  </div>
 
   <!-- Shipping costs mini-window -->
   <div class="flow-modal-overlay" id="shipModal">
@@ -83,5 +104,31 @@
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-receiving.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — straight from the receiving records this page lists.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var res = await fetchFlow('getReceiving'), list = (res && res.data) || [];
+        var ym = (typeof flowToday === 'function' ? flowToday() : new Date().toISOString()).slice(0, 7);
+        var month = list.filter(function (m) { return String(flowDate(m.date) || '').slice(0, 7) === ym; });
+        var ship = 0, vat = 0;
+        list.forEach(function (m) { ship += flowNum(m.totalShipping); vat += flowNum(m.vat); });
+        set('kpiReceipts', list.length);
+        set('kpiMonth', month.length);
+        set('kpiShip', flowMoney(ship, 'PHP'));
+        set('kpiVat', flowMoney(vat, 'PHP'));
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>

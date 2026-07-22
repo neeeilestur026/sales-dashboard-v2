@@ -7,23 +7,31 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 
 
 </head>
-<body>
+<body class="flow-screen">
+  <div class="screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Accounts Payable Aging</h1>
-      <p>Auto-generated from purchase orders. The PO amount arrives in its original currency — enter the PHP total and track payment here.</p>
-    </div>
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Payables · Aging</div><h1>Accounts Payable Aging</h1><p>Auto-generated from purchase orders. The PO amount arrives in its original currency — enter the PHP total and track payment here.</p></div>
+        </div>
+        <a class="btn btn-secondary" onclick="loadAP()">&#8635; Refresh</a>
+      </div>
     <div class="flow-nav" id="flowNav"></div>
 
-    <div class="inv-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.25rem;">
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiCount">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Unpaid Entries</div></div>
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiUnpaid">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Unpaid Total (PHP)</div></div>
-      <div class="chart-card" style="text-align:center;"><div style="font-size:1.4rem;font-weight:700;" id="kpiPaid">--</div><div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;">Paid Total (PHP)</div></div>
-    </div>
+      <div class="kpi-row five">
+        <div class="kpi spot"><div class="top"><span class="l">Unpaid Total (PHP)</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kpiUnpaid">—</div><div class="d" style="white-space:nowrap;"><span id="kpiCount">—</span>&nbsp;unpaid entries</div><div class="d" style="white-space:nowrap;margin-top:2px;">paid&nbsp;<span id="kpiPaid">—</span></div></div>
+        <div class="kpi"><div class="top"><span class="l">Current</span></div><div class="v sm" id="kpiCurrent">—</div><div class="d">not yet due</div></div>
+        <div class="kpi"><div class="top"><span class="l">1–30 Days</span></div><div class="v sm" id="kpiB30">—</div><div class="d">watch</div></div>
+        <div class="kpi"><div class="top"><span class="l">31–60 Days</span></div><div class="v sm" id="kpiB60">—</div><div class="d">follow up</div></div>
+        <div class="kpi"><div class="top"><span class="l">60+ Days</span></div><div class="v sm" id="kpiB60p">—</div><div class="d">overdue</div></div>
+      </div>
+
 
     <div class="chart-card">
       <div class="flow-actions" style="justify-content:space-between;">
@@ -34,11 +42,46 @@
       <div id="msg" class="flow-msg" style="display:none;"></div>
     </div>
   </main>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-ap-aging.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // Aging buckets — outstanding (amount less paid) placed by how far past its due date.
+    // The other three cards are filled by flow-ap-aging.js itself.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var res = await fetchFlow('getAPAging'), list = (res && res.data) || [];
+        var today = new Date(), b = { cur: 0, b30: 0, b60: 0, b60p: 0 }, total = 0;
+        list.forEach(function (r) {
+          if (String(r.status || '').toLowerCase() === 'paid') return;
+          var out = flowNum(r.amountPHP) - flowNum(r.paidPHP);
+          if (out <= 0) return;
+          total += out;
+          var due = r.dueDate ? new Date(flowDate(r.dueDate)) : null;
+          var days = due && !isNaN(due) ? Math.floor((today - due) / 86400000) : 0;
+          if (days <= 0) b.cur += out; else if (days <= 30) b.b30 += out;
+          else if (days <= 60) b.b60 += out; else b.b60p += out;
+        });
+        set('kpiCurrent', flowMoney(b.cur, 'PHP'));
+        set('kpiB30', flowMoney(b.b30, 'PHP'));
+        set('kpiB60', flowMoney(b.b60, 'PHP'));
+        set('kpiB60p', flowMoney(b.b60p, 'PHP'));
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>

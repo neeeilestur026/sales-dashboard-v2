@@ -7,13 +7,29 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
 
 
 </head>
-<body>
+<body class="flow-screen">
+  <div class="screen">
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Payables · Non-PO</div><h1>Other Payables</h1><p>For expenses and other payables that are not purchase orders. Approval: Accounting, then Management &amp; Director.</p></div>
+        </div>
+        <a class="btn btn-primary" onclick="document.getElementById('formTitle').scrollIntoView({behavior:'smooth',block:'center'});">+ Add Payable</a>
+      </div>
     <div id="flowNav" class="flow-nav"></div>
+
+      <div class="kpi-row">
+        <div class="kpi spot"><div class="top"><span class="l">Outstanding</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span></div><div class="v sm" id="kpiOutstanding">—</div><div class="d">open payables</div></div>
+        <div class="kpi"><div class="top"><span class="l">Due Within 7 Days</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="v" id="kpiDueWeek">—</div><div class="d">due soon</div></div>
+        <div class="kpi"><div class="top"><span class="l">Open Items</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="kpiOpenCount">—</div><div class="d">awaiting approval</div></div>
+        <div class="kpi"><div class="top"><span class="l">Approved · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="v" id="kpiApprovedMonth">—</div><div class="d">this month</div></div>
+      </div>
 
     <div class="chart-card" id="formCard">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.25rem;" id="formTitle">New Payment Request (Other Payables)</h3>
@@ -48,11 +64,45 @@
       <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-other-payables.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+    // KPI cards — outstanding + due-soon computed from the payables listed below.
+    (async function () {
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var res = await fetchFlow('getPaymentRequests', { type: 'Other' }), list = (res && res.data) || [];
+        var st = function (r) { return String(r.status || '').toLowerCase(); };
+        var open = list.filter(function (r) { return st(r) !== 'approved' && st(r) !== 'rejected'; });
+        var today = new Date(), week = 0, val = 0;
+        open.forEach(function (r) {
+          val += flowNum(r.amount);
+          var due = r.dueDate ? new Date(flowDate(r.dueDate)) : null;
+          if (due && !isNaN(due) && (due - today) / 86400000 <= 7) week++;
+        });
+        var ym = (typeof flowToday === 'function' ? flowToday() : new Date().toISOString()).slice(0, 7);
+        set('kpiOutstanding', flowMoney(val, 'PHP'));
+        set('kpiDueWeek', week);
+        set('kpiOpenCount', open.length);
+        set('kpiApprovedMonth', list.filter(function (r) {
+          return st(r) === 'approved' && String(flowDate(r.updatedAt || r.createdAt) || '').slice(0, 7) === ym;
+        }).length);
+      } catch (e) { /* leave the em dashes */ }
+    })();
+  </script>
 </body>
 </html>
