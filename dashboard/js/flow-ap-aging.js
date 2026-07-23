@@ -3,7 +3,7 @@ let apData = [];
 let apSession = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  apSession = requireAccountingOrAdmin();
+  apSession = requireOversight();
   if (!apSession) return;
   renderNavbar('flow-ap-aging');
   renderFlowNav('flow-ap-aging.html');

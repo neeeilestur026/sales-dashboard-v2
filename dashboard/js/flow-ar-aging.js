@@ -3,7 +3,7 @@ let arData = [];
 let arSession = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  arSession = requireAccountingOrAdmin();
+  arSession = requireOversight();
   if (!arSession) return;
   renderNavbar('flow-ar-aging');
   renderFlowNav('flow-ar-aging.html');

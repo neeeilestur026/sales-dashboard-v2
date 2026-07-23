@@ -502,7 +502,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'management') {
     const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave'];
-    const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders'];
+    const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging'];
     const mAcctPages = ['leave-request', 'change-password'];
     const mApprActive = mApprPages.includes(activePage) ? 'active' : '';
     const mFinActive = mFinPages.includes(activePage) ? 'active' : '';
@@ -536,6 +536,8 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
+          <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
+          <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="management-sales-orders.html" class="${activePage === 'management-sales-orders' ? 'active' : ''}">Sales Orders</a>
         </div>
