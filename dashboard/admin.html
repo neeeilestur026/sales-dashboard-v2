@@ -9,6 +9,8 @@
        (so-cost-editor.js) and the Docs modal (flow-docs.js) build their dialogs from — without it
        those modals render as unstyled blocks at the page bottom and appear not to open. -->
   <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
   <style>
     .hero {
       position: relative;
@@ -178,23 +180,25 @@
     }
   </style>
 </head>
-<body>
+<body class="flow-screen">
   <!-- Navigation -->
   <header class="navbar" id="navbar"></header>
 
   <!-- Main Content -->
   <main class="main-content">
-    <section class="hero">
-      <div class="hero-row">
+    <section class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
         <div>
+          <div class="eyebrow">Admin · Command Center</div>
           <h1 class="greeting" id="greeting">Good morning!</h1>
           <p id="todayLabel">Admin hub — manage orders and track your team.</p>
         </div>
-        <div class="hero-meta">
-          <a href="admin-summary.html" class="hero-pill" style="background:#14b8a6;color:#fff;border-color:#14b8a6;">Summary →</a>
-          <a href="admin-team.html" class="hero-pill">Team →</a>
-          <a href="admin-reports.html" class="hero-pill">Reports →</a>
-        </div>
+      </div>
+      <div class="hero-meta">
+        <a href="admin-summary.html" class="hero-pill accent">Summary →</a>
+        <a href="admin-team.html" class="hero-pill">Team →</a>
+        <a href="admin-reports.html" class="hero-pill">Reports →</a>
       </div>
     </section>
 
@@ -1560,6 +1564,17 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+  </script>
 
 </body>
 </html>
