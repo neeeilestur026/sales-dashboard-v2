@@ -34,7 +34,9 @@ function _docsModalEl() {
   return el;
 }
 
-function openDocsModal(module, refNo, title) {
+// presetType (optional): lock the Doc Type field to a controlled value (e.g. "Supplier Quotation")
+// so an upload from a required-attachment gate carries the exact docType the gate matches on.
+function openDocsModal(module, refNo, title, presetType) {
   if (!refNo) { return; }
   _docsCtx = { module: module || '', refNo: String(refNo) };
   const el = _docsModalEl();
@@ -43,9 +45,25 @@ function openDocsModal(module, refNo, title) {
     `${module ? module + ' · ' : ''}${title ? title : refNo}`;
   document.getElementById('flowDocsMsg').style.display = 'none';
   const f = document.getElementById('flowDocsFile'); if (f) f.value = '';
-  const t = document.getElementById('flowDocsType'); if (t) t.value = '';
+  const t = document.getElementById('flowDocsType');
+  if (t) {
+    if (presetType) { t.value = presetType; t.readOnly = true; t.style.background = 'var(--bg-inset,#eef2f6)'; }
+    else { t.value = ''; t.readOnly = false; t.style.background = ''; }
+  }
   el.classList.add('open');
   flowDocsRefresh();
+}
+
+// Reusable gate helper: does this record already carry a document (optionally of a given Doc Type,
+// case-insensitive)? Used by the required-attachment gates on PR sourcing / PO / payment requests.
+async function flowHasDoc(module, refNo, type) {
+  try {
+    const res = await fetchFlow('getDocuments', { module, refNo: String(refNo) });
+    const docs = (res && res.data) || [];
+    if (!type) return docs.length > 0;
+    const t = String(type).toLowerCase();
+    return docs.some(d => String(d.docType || '').toLowerCase() === t);
+  } catch (e) { return false; }
 }
 
 function closeDocsModal() {

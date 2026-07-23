@@ -369,7 +369,7 @@ function openPr(no) {
   if (canSource && (r.status === 'Requested' || r.status === 'Sourcing')) {
     body.innerHTML = sourcingTable(r);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
-      <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}')">📎 Supplier Quotation (PDF)</button>
+      <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','Supplier Quotation')">📎 Supplier Quotation (PDF)</button>
       <button class="btn btn-secondary" onclick="saveSourcing(false)">Save Draft</button>
       <button class="btn btn-primary" onclick="saveSourcing(true)">Forward to Management</button>`;
   } else if (canPrice && r.status === 'For Mgmt Pricing') {
@@ -437,11 +437,13 @@ function closePr() { document.getElementById('prModal').classList.remove('open')
 
 function readonlyTable(r, priced) {
   return `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th>UOM</th>
-    <th>Supplier</th><th>Principal</th>${priced ? '<th class="num">Final Price</th>' : ''}<th>Incl?</th></tr></thead><tbody>${r.items.map(i =>
+    <th>Supplier</th><th>Principal</th><th class="num">Price (FC)</th><th>VAT</th>${priced ? '<th class="num">Final Price</th>' : ''}<th>Incl?</th></tr></thead><tbody>${r.items.map(i =>
     `<tr><td>${flowEsc(i.itemNo)} — ${flowEsc(i.itemName)}</td><td class="num">${flowNum(i.qty)}</td><td>${flowEsc(i.uom)}</td>
       <td>${flowEsc(i.supplier || '—')}</td><td>${flowEsc(i.principal || '—')}</td>
+      <td class="num">${i.supplierPrice ? flowNum(i.supplierPrice) : '—'}</td><td>${flowEsc(i.vat || '—')}</td>
       ${priced ? `<td class="num">${i.finalPrice ? flowMoney(i.finalPrice, 'PHP') : '—'}</td>` : ''}
       <td>${i.included ? '✓' : '—'}</td></tr>`).join('')}</tbody></table></div>
+    ${r.plantSite ? `<p class="pr-meta" style="margin-top:0.5rem;">Plant Site: <b>${flowEsc(r.plantSite)}</b></p>` : ''}
     ${r.clientLocation ? `<p class="pr-meta" style="margin-top:0.5rem;">Client Location: <b>${flowEsc(r.clientLocation)}</b></p>` : ''}
     ${r.notes ? `<p class="pr-meta" style="margin-top:0.5rem;">Notes: <b>${flowEsc(r.notes)}</b></p>` : ''}`;
 }
@@ -456,16 +458,29 @@ function currencySelect(sel) {
   return FLOW_CURRENCIES.map(c => `<option value="${c}"${c === cur ? ' selected' : ''}>${c}</option>`).join('');
 }
 
+function svatSelect(v) {
+  const cur = String(v || '');
+  return `<option value=""${cur === '' ? ' selected' : ''}>—</option>` +
+    `<option value="Exclusive"${cur === 'Exclusive' ? ' selected' : ''}>Ex</option>` +
+    `<option value="Inclusive"${cur === 'Inclusive' ? ' selected' : ''}>Incl</option>`;
+}
+
 function sourcingTable(r) {
-  return `<div style="margin-bottom:0.75rem;">
-      <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Client Location</label>
-      <input type="text" id="srcLocation" value="${flowEsc(r.clientLocation || '')}" placeholder="e.g. Cebu City, Cebu"
-        style="width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+  const inp = 'width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;';
+  return `<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+      <div style="flex:1;min-width:220px;">
+        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Client Location</label>
+        <input type="text" id="srcLocation" value="${flowEsc(r.clientLocation || '')}" placeholder="e.g. Cebu City, Cebu" style="${inp}">
+      </div>
+      <div style="flex:1;min-width:220px;">
+        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Plant Site / Delivery Destination <span style="color:#dc2626;">*</span></label>
+        <input type="text" id="srcPlantSite" value="${flowEsc(r.plantSite || '')}" placeholder="e.g. Ambuklao Plant, Bokod" style="${inp}">
+      </div>
     </div>
-    <p class="pr-meta">Set the supplier, principal, currency, supplier price (FC) and CBM per item. You can replace the <b>item code</b> and <b>product description</b> with the supplier's own — the updated code/description carries through management pricing and into the quotation. (Leave the code as-is to keep yours.) Untick items that won't be quoted.</p>
-    <div style="overflow-x:auto;"><table class="flow-table" id="srcTable" style="min-width:860px;"><thead><tr>
+    <p class="pr-meta">Set the supplier, principal, currency, supplier price (FC), CBM and whether the supplier price is <b>VAT&nbsp;Inclusive/Exclusive</b> per item. You can replace the <b>item code</b> and <b>product description</b> with the supplier's own — the updated code/description carries through management pricing and into the quotation. (Leave the code as-is to keep yours.) Untick items that won't be quoted.</p>
+    <div style="overflow-x:auto;"><table class="flow-table" id="srcTable" style="min-width:960px;"><thead><tr>
       <th>Item No</th><th>Product Description</th><th class="num">Qty</th><th>Supplier</th><th>Principal</th><th>Cur</th>
-      <th class="num">Price (FC)</th><th class="num">CBM</th><th>Incl</th></tr></thead><tbody>${r.items.map(i =>
+      <th class="num">Price (FC)</th><th>VAT</th><th class="num">CBM</th><th>Incl</th></tr></thead><tbody>${r.items.map(i =>
       `<tr data-line="${i.line}">
         <td><input type="text" class="s-no" value="${flowEsc(i.itemNo)}" style="min-width:110px;"></td>
         <td><input type="text" class="s-name" value="${flowEsc(i.itemName || '')}" style="min-width:200px;"></td>
@@ -474,8 +489,12 @@ function sourcingTable(r) {
         <td><select class="s-prin">${principalSelect(i.principal)}</select></td>
         <td><select class="s-cur">${currencySelect(i.currency)}</select></td>
         <td class="num"><input type="number" step="any" min="0" class="s-price" value="${i.supplierPrice || 0}"></td>
+        <td><select class="s-vat" title="Is the supplier price VAT Inclusive or Exclusive?">${svatSelect(i.vat)}</select></td>
         <td class="num"><input type="number" step="any" min="0" class="s-cbm" value="${i.cbm || 0}"></td>
-        <td><input type="checkbox" class="s-incl"${i.included ? ' checked' : ''}></td></tr>`).join('')}</tbody></table></div>`;
+        <td><input type="checkbox" class="s-incl"${i.included ? ' checked' : ''}></td></tr>`).join('')}</tbody></table></div>
+    <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;font-size:0.85rem;">
+      <input type="checkbox" id="srcVerified"> I have <b>verified the supplier prices are correct</b> before forwarding to management.
+    </label>`;
 }
 
 function collectSourcing() {
@@ -490,6 +509,7 @@ function collectSourcing() {
       principal: tr.querySelector('.s-prin').value,
       currency: tr.querySelector('.s-cur').value,
       supplierPrice: flowNum(tr.querySelector('.s-price').value),
+      vat: tr.querySelector('.s-vat').value,               // Inclusive|Exclusive note (display only)
       cbm: flowNum(tr.querySelector('.s-cbm').value)
     });
   });
@@ -500,15 +520,35 @@ async function saveSourcing(forward) {
   const prNo = document.getElementById('modalPrNo').value;
   const locEl = document.getElementById('srcLocation');
   const clientLocation = locEl ? locEl.value.trim() : '';
+  const psEl = document.getElementById('srcPlantSite');
+  const plantSite = psEl ? psEl.value.trim() : '';
+  const items = collectSourcing();
+  // A144 Forward-to-Management gates (client-side; the backend backstops each one):
+  if (forward) {
+    if (!plantSite) { flowMsg('modalMsg', 'Enter a plant-site destination before forwarding.', false); if (psEl) psEl.focus(); return; }
+    const included = items.filter(i => i.included);
+    const bad = included.find(i => !(i.supplierPrice > 0) || !i.principal || !i.currency);
+    if (bad) { flowMsg('modalMsg', 'Every included item needs a supplier price, principal and currency.', false); return; }
+    const verEl = document.getElementById('srcVerified');
+    if (verEl && !verEl.checked) { flowMsg('modalMsg', 'Tick the box to confirm you have verified the supplier prices.', false); return; }
+    // Require the supplier's quotation attached (Doc Type "Supplier Quotation"). Save the sourcing
+    // first so the plant site / VAT flags persist even if the attachment is still missing.
+    await postFlow('updatePRSourcing', { prNo, clientLocation, plantSite, items: JSON.stringify(items) });
+    const hasQuote = await flowHasDoc('Pricing Request', prNo, 'Supplier Quotation');
+    if (!hasQuote) {
+      flowMsg('modalMsg', "Attach the supplier's quotation first (📎 Supplier Quotation button) — it must be tagged “Supplier Quotation”.", false);
+      return;
+    }
+  }
   try {
-    const res = await postFlow('updatePRSourcing', { prNo, clientLocation, items: JSON.stringify(collectSourcing()) });
-    if (!res.success) throw new Error(res.message);
-    if (forward) {
+    if (!forward) {
+      const res = await postFlow('updatePRSourcing', { prNo, clientLocation, plantSite, items: JSON.stringify(items) });
+      if (!res.success) throw new Error(res.message);
+      flowMsg('modalMsg', 'Sourcing saved.', true);
+    } else {
       const f = await postFlow('submitForPricing', { prNo });
       if (!f.success) throw new Error(f.message);
       flowMsg('modalMsg', 'Forwarded to management.', true);
-    } else {
-      flowMsg('modalMsg', 'Sourcing saved.', true);
     }
     await loadRequests();
     if (forward) setTimeout(closePr, 800);

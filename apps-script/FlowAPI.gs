@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 84;   // A128 revisePaymentRequest + PR edit gate (83: quotation PDF stamp + approve guard · 82: reviseQuotation)
+var FLOW_VERSION = 85;   // A144 payment-integrity guardrails: Plant Site + Supplier Price VAT + submit-stage backstops (84: revisePaymentRequest · 83: quotation PDF stamp)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -88,12 +88,15 @@ var SCHEMA = {
                  'Reviewed By', 'Reviewed At', 'Review Note'],
 
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
+  //    A144: 'Plant Site' (required delivery/plant destination captured at sourcing, distinct from the
+  //    freight 'Destination'). Appended at END — positional writes elsewhere must not shift.
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
-                    'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref'],
+                    'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref', 'Plant Site'],
+  //    A144: 'Supplier Price VAT' (Inclusive|Exclusive note — display only, no costing-math effect).
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price',
-                        'Orig Item No', 'Orig Item Name'],
+                        'Orig Item No', 'Orig Item Name', 'Supplier Price VAT'],
 
   // ── Generic per-record document attachments (any process step) ──
   Documents: ['Doc ID', 'Module', 'Ref No', 'Doc Type', 'File Name', 'Drive Link', 'File ID',
@@ -843,6 +846,11 @@ function createPurchaseOrder(p) {
   }
   var no = p.poNo || _nextNumber('PurchaseOrders', 1, 'PO');
   var currency = p.currency || 'PHP';
+  // A144: a foreign-currency PO with no exchange rate produces a ₱0 payable (poFxRate → 0), which then
+  // pays the FC number as if it were pesos downstream. Require a PHP total on non-PHP POs.
+  if (currency !== 'PHP' && !(_num(p.totalPHP) > 0)) {
+    return { success: false, message: 'A ' + currency + ' purchase order needs an exchange rate so the PHP payable is set (Amount (PHP) cannot be blank).' };
+  }
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
   _append('PurchaseOrders', [no, p.soNo || '', p.date || _now(), p.supplier, currency, total,
@@ -1633,6 +1641,14 @@ function createPaymentRequest(p) {
     if (!poNo) return { success: false, message: 'A purchase order is required for a PO payment request.' };
     var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
     if (po) { supplier = supplier || po['Supplier']; currency = 'PHP'; soNo = soNo || po['SO No']; }
+    // A144 duplicate-AP hard stop: _poPayablePHP SUMS Amount (PHP) across all AP rows for the PO, so a
+    // stale second AP row doubles the amount (the PRF-2026-63 incident). Refuse until it is resolved.
+    var apAmountRows = _rows('APAging').filter(function (r) {
+      return String(r['PO No']) === String(poNo) && _num(r['Amount (PHP)']) > 0;
+    }).length;
+    if (apAmountRows > 1) {
+      return { success: false, message: 'This PO has ' + apAmountRows + ' AP entries with an amount — the payable would be their sum. Remove the stale duplicate in AP Aging before creating the payment request.' };
+    }
     if (amount <= 0) amount = _poPayablePHP(poNo);
   } else {
     if (!p.payee) return { success: false, message: 'Payee is required.' };
@@ -1691,6 +1707,11 @@ function submitPaymentRequest(p) {
   if (!r) return { success: false, message: 'Payment Request not found.' };
   var st = String(r['Status']);
   if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Already submitted.' };
+  // A144: a payment request must carry a supporting document before it moves to approval.
+  var hasDoc = _rows('Documents').some(function (d) {
+    return String(d['Module']) === 'Payment Request' && String(d['Ref No']) === String(p.prNo);
+  });
+  if (!hasDoc) return { success: false, message: 'Attach at least one supporting document (via Docs) before submitting for approval.' };
   var next = String(r['Type']) === 'Other' ? 'Pending Accounting' : 'Pending Director';
   _prSet(p.prNo, { 'Status': next, 'Approval Note': '' });
   return { success: true, prNo: p.prNo, status: next, message: 'Submitted for approval (' + next + ').' };
@@ -2416,6 +2437,11 @@ function submitPOApproval(p) {
   if (st !== 'Draft' && st !== 'Rejected' && st !== 'Open') {
     return { success: false, message: 'Only a Draft or Rejected PO can be submitted (now: ' + st + ').' };
   }
+  // A144: a PO must carry a supporting document before it advances to approval.
+  var hasDoc = _rows('Documents').some(function (d) {
+    return String(d['Module']) === 'Purchase Order' && String(d['Ref No']) === String(p.poNo);
+  });
+  if (!hasDoc) return { success: false, message: 'Attach at least one supporting document (via Docs) before submitting the PO for approval.' };
   _setPOCells(p.poNo, { 'Status': 'Pending Management', 'Approval Note': '' });
   return { success: true, poNo: p.poNo, status: 'Pending Management', message: 'PO submitted for management approval.' };
 }
@@ -2831,6 +2857,7 @@ function getPricingRequests(p) {
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
       clientLocation: h['Client Location'] || '', docJson: h['Doc JSON'] || '',
+      plantSite: h['Plant Site'] || '',
       legacyId: h['Legacy ID'] || '', legacyItemsJson: h['Legacy Items JSON'] || '',
       pricedItemsJson: h['Priced Items JSON'] || '',
       items: its.map(function (r) {
@@ -2839,7 +2866,8 @@ function getPricingRequests(p) {
           uom: r['UOM'], remarks: r['Remarks'], included: (r['Included'] === true || String(r['Included']) === 'true'),
           supplier: r['Supplier'], principal: r['Principal'], currency: r['Currency'] || 'PHP',
           supplierPrice: _num(r['Supplier Price (FC)']), cbm: _num(r['CBM']), finalPrice: _num(r['Final Price']),
-          origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || ''
+          origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
+          vat: r['Supplier Price VAT'] || ''
         };
       })
     };
@@ -2887,12 +2915,12 @@ function createPricingRequest(p) {
   var no = p.prNo || _nextNumber('PricingRequests', 1, 'PR');
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
     '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '',
-    p.docJson || '', p.clientRef || '']);
-    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref
+    p.docJson || '', p.clientRef || '', p.plantSite || '']);
+    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref / Plant Site
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
-      true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0, '', '']);   // trailing: Orig Item No/Name
+      true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0, '', '', '']);   // trailing: Orig Item No/Name / Supplier Price VAT
   });
   // Record clientRef → PR No so a retried submission returns THIS number without re-writing, even if
   // the sheet write hasn't propagated to a subsequent read.
@@ -2928,21 +2956,53 @@ function updatePRSourcing(p) {
       }
       sh.getRange(row.rowIndex, 4, 1, 1).setValues([[newName]]);
     }
+    // col 17: Supplier Price VAT (Inclusive|Exclusive) — a DISPLAY note only (no costing effect).
+    // Targeted write so the positional cols-8-13 range above is never widened.
+    if (u.vat !== undefined) {
+      var vatCol = SCHEMA.PricingRequestItems.indexOf('Supplier Price VAT') + 1;
+      sh.getRange(row.rowIndex, vatCol, 1, 1).setValues([[u.vat || '']]);
+    }
   });
-  // Header-level Client Location (one per request) — set during sourcing when provided.
+  // Header-level Client Location + Plant Site (one each per request) — set during sourcing when provided.
+  var hsh = _sheet('PricingRequests');
+  var hdrRows = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(p.prNo); });
   if (p.clientLocation !== undefined) {
     var locCol = SCHEMA.PricingRequests.indexOf('Client Location') + 1;
-    var hsh = _sheet('PricingRequests');
-    _rows('PricingRequests').forEach(function (h) {
-      if (String(h['PR No']) === String(p.prNo)) hsh.getRange(h.rowIndex, locCol, 1, 1).setValues([[p.clientLocation || '']]);
-    });
+    hdrRows.forEach(function (h) { hsh.getRange(h.rowIndex, locCol, 1, 1).setValues([[p.clientLocation || '']]); });
+  }
+  if (p.plantSite !== undefined) {
+    var psCol = SCHEMA.PricingRequests.indexOf('Plant Site') + 1;
+    hdrRows.forEach(function (h) { hsh.getRange(h.rowIndex, psCol, 1, 1).setValues([[p.plantSite || '']]); });
   }
   _setPRStatus(p.prNo, 'Sourcing');
   return { success: true, prNo: p.prNo, message: 'Sourcing saved.' };
 }
 
+// A144 backstop: Forward-to-Management must not proceed unless the sourcing is complete —
+// a Supplier Quotation attached, a Plant Site recorded, and every INCLUDED item priced (supplier
+// price + principal + currency). Mirrors the client-side gates so the API can't be skipped.
+function _sourcingGaps(prNo) {
+  var gaps = [];
+  var hdr = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(prNo); })[0];
+  if (!hdr) return ['Pricing request not found.'];
+  if (!String(hdr['Plant Site'] || '').trim()) gaps.push('a plant-site destination');
+  var hasQuote = _rows('Documents').some(function (d) {
+    return String(d['Module']) === 'Pricing Request' && String(d['Ref No']) === String(prNo) &&
+           String(d['Doc Type'] || '').toLowerCase() === 'supplier quotation';
+  });
+  if (!hasQuote) gaps.push("the supplier's quotation attached (Doc Type “Supplier Quotation”)");
+  var incomplete = _rows('PricingRequestItems').some(function (r) {
+    return String(r['PR No']) === String(prNo) && r['Included'] === true &&
+      (!(_num(r['Supplier Price (FC)']) > 0) || !String(r['Principal'] || '').trim() || !String(r['Currency'] || '').trim());
+  });
+  if (incomplete) gaps.push('a supplier price, principal and currency on every included item');
+  return gaps;
+}
+
 function submitForPricing(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
+  var gaps = _sourcingGaps(p.prNo);
+  if (gaps.length) return { success: false, message: 'Cannot forward to management — still needs ' + gaps.join(', ') + '.' };
   _setPRStatus(p.prNo, 'For Mgmt Pricing');
   return { success: true, prNo: p.prNo, message: 'Forwarded to management for pricing.' };
 }

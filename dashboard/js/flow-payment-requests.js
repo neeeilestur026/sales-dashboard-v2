@@ -62,6 +62,12 @@ async function savePR() {
   const amount = flowNum(document.getElementById('amount').value);
   if (!(amount > 0)) { flowMsg('formMsg', 'Enter an amount greater than zero.', false); return; }
   const editing = document.getElementById('prNo').value;
+  // A144 duplicate-AP hard stop (was a soft warning): the amount is the SUM of every amount-bearing AP
+  // row for this PO — a stale second row doubles it. Refuse to create until AP Aging is cleaned up.
+  if (!editing && (prAPCount[String(poNo)] || 0) > 1) {
+    flowMsg('formMsg', `This PO has ${prAPCount[String(poNo)]} AP entries with an amount — the payable would be their sum. Remove the stale duplicate in AP Aging first.`, false);
+    return;
+  }
   const payload = {
     prNo: editing || (document.getElementById('prNoInput').value || '').trim(),
     type: 'PO', poNo, payee: document.getElementById('payee').value.trim(), amount,
@@ -134,7 +140,15 @@ async function _prAct(action, no, extra) {
   try { const res = await postFlow(action, Object.assign({ prNo: no }, extra || {})); if (!res.success) throw new Error(res.message); await loadPRs(); }
   catch (e) { alert(e.message); }
 }
-function prSubmit(no) { if (confirm('Submit ' + no + ' for approval (Director → Management)?')) _prAct('submitPaymentRequest', no); }
+async function prSubmit(no) {
+  // A144: require a supporting document before the payment request advances to approval.
+  if (typeof flowHasDoc === 'function' && !(await flowHasDoc('Payment Request', no))) {
+    alert('Attach a supporting document before submitting ' + no + '. Opening the Docs window…');
+    openDocsModal('Payment Request', no, 'Supporting documents · ' + no);
+    return;
+  }
+  if (confirm('Submit ' + no + ' for approval (Director → Management)?')) _prAct('submitPaymentRequest', no);
+}
 function prApprove(no) { _prAct('approvePaymentRequest', no); }
 function prReject(no) { const reason = prompt('Reason for rejecting ' + no + ' (optional):', ''); if (reason === null) return; _prAct('rejectPaymentRequest', no, { reason }); }
 function prDelete(no) { if (confirm('Delete payment request ' + no + '?')) _prAct('deletePaymentRequest', no); }

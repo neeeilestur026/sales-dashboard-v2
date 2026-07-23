@@ -148,6 +148,13 @@ async function savePO() {
   const supplier = document.getElementById('supplier').value.trim();
   if (!supplier) { flowMsg('formMsg', 'Supplier is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
+  // A144: a foreign-currency PO with no exchange rate produces a ₱0 payable downstream. Require a rate.
+  const cur = document.getElementById('currency').value;
+  if (cur !== 'PHP' && !(poFxRate() > 0)) {
+    flowMsg('formMsg', `Enter the exchange rate for ${cur} — the PHP payable can't be ₱0.`, false);
+    const fx = document.getElementById('fxRate'); if (fx) fx.focus();
+    return;
+  }
   const btn = document.getElementById('saveBtn');
   const editingNo = document.getElementById('poNo').value;                        // hidden = edit key
   const typedNo = (document.getElementById('poNoInput').value || '').trim();       // user-chosen PO No (create)
@@ -228,7 +235,16 @@ async function _poAction(action, no, extra) {
     await loadPOs();
   } catch (e) { alert(e.message); }
 }
-function submitPOAction(no) {
+async function submitPOAction(no) {
+  // A144: require a supporting document before the PO advances to approval.
+  if (typeof flowHasDoc === 'function') {
+    const ok = await flowHasDoc('Purchase Order', no);
+    if (!ok) {
+      alert('Attach a supporting document before submitting ' + no + ' for approval. Opening the Docs window…');
+      openDocsModal('Purchase Order', no, 'Supporting documents · ' + no);
+      return;
+    }
+  }
   if (!confirm('Submit purchase order ' + no + ' for management approval?')) return;
   _poAction('submitPOApproval', no);
 }
