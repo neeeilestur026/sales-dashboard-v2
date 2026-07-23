@@ -20,13 +20,27 @@ async function loadAR() {
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
 }
 
+// Migrated (legacy) AR records carry a Notes value starting with "Migrated (legacy)".
+function arIsMigrated(r) { return String(r.notes || '').trim().toLowerCase().indexOf('migrated (legacy)') === 0; }
+// Newest-created first; fall back to AR No (AR-YYYYMM-NNN) when Created At is missing/equal.
+function arNewestFirst(a, b) {
+  const t = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  return t || String(b.arNo || '').localeCompare(String(a.arNo || ''));
+}
+
 function render() {
   const c = document.getElementById('container');
   if (!arData.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No receivables yet. Issue an invoice to generate one.</p>'; updateKpis(); return; }
+  // Latest-created records on top; migrated (legacy) records grouped below the list.
+  const active = arData.filter(r => !arIsMigrated(r)).sort(arNewestFirst);
+  const migrated = arData.filter(arIsMigrated).sort(arNewestFirst);
+  const sep = migrated.length
+    ? `<tr><td colspan="11" style="background:var(--bg-inset,#eef2f6);font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted,#64748b);padding:0.6rem 0.9rem;border-top:2px solid var(--border,#e2e8f0);">Migrated (legacy) records · ${migrated.length}</td></tr>`
+    : '';
   c.innerHTML = `<table class="flow-table flow-items" style="min-width:880px;"><thead><tr>
     <th>AR No</th><th>INV</th><th>SO</th><th>Customer</th><th class="num">Amount</th><th class="num">Collected</th>
     <th class="num">Outstanding</th><th>Status</th><th style="width:140px;">Due Date</th><th style="width:150px;">Notes</th><th></th></tr></thead>
-    <tbody>${arData.map(rowHtml).join('')}</tbody></table>`;
+    <tbody>${active.map(rowHtml).join('')}${sep}${migrated.map(rowHtml).join('')}</tbody></table>`;
   updateKpis();
 }
 
