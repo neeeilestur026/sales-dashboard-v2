@@ -140,25 +140,6 @@ function render() {
       <td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
       <td class="num">${e.amount ? _money(e.amount) : ''}</td>
     </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No recorded activity for this day.</td></tr>';
-
-  // ── Per-module sections ──
-  const byMod = {};
-  rows.forEach(e => { (byMod[e.module] = byMod[e.module] || []).push(e); });
-  const mods = MODULE_ORDER.filter(m => byMod[m]).concat(Object.keys(byMod).filter(m => !MODULE_ORDER.includes(m)));
-  document.getElementById('moduleSections').innerHTML = mods.map(m => {
-    const list = byMod[m];
-    return `<div class="dr-sect">
-      <div class="dr-sect-title"><span class="mod-badge ${_modClass(m)}">${_esc(m)}</span> <span class="pill">${list.length}</span></div>
-      <div style="overflow-x:auto;"><table class="flow-table">
-        <thead><tr><th>Time</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
-        <tbody>${list.map(e => `<tr>
-          <td>${_esc(_time(e.timestamp))}</td>
-          <td><span class="act-chip">${_esc(e.action)}</span></td>
-          <td>${_esc(e.refNo)}</td><td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
-          <td class="num">${e.amount ? _money(e.amount) : ''}</td></tr>`).join('')}</tbody>
-      </table></div>
-    </div>`;
-  }).join('');
 }
 
 // ── Sent Emails (the admin's own mailbox, date-aware) ──

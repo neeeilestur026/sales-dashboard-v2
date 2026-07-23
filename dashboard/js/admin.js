@@ -16,24 +16,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('admin-home');
   document.getElementById('greeting').innerHTML = getGreeting(session.name);
 
-  // Fetch team aggregate for monthly summary
-  try {
-    const teamResult = await apiGetTeamSummary();
-    if (teamResult && teamResult.success && teamResult.data) {
-      let totalQ = 0, totalP = 0, totalO = 0;
-      teamResult.data.forEach(agent => {
-        totalQ += agent.quotations || 0;
-        totalP += agent.prs || 0;
-        totalO += agent.pos || 0;
-      });
-      document.getElementById('monthQuotations').textContent = totalQ;
-      document.getElementById('monthPRs').textContent = totalP;
-      document.getElementById('monthPOs').textContent = totalO;
-    }
-  } catch (err) {
-    console.error('Failed to load team summary:', err);
-  }
-
   // Load recent activity feed from the Process Flow movement log (today)
   try {
     const today = flowToday();   // Manila-local (toISOString is UTC → shows yesterday before 8 AM PH)
@@ -47,10 +29,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       feedEl.innerHTML = entries.slice(0, 20).map(e => {
         const t = (() => { const d = new Date(e.timestamp); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); })();
         const who = e.user ? `<strong>${esc(e.user)}</strong> ` : '';
-        return `<div style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0;border-bottom:1px solid #e2e8f0;font-size:0.82rem;">
-          <div style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--accent-light,#ccfbf1);color:var(--accent,#0f766e);flex-shrink:0;">${icon}</div>
-          <div style="flex:1;color:var(--text-secondary,#475569);">${who}${esc(e.action)} <strong>${esc(e.module)}</strong>${e.refNo ? ' · ' + esc(e.refNo) : ''}</div>
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);white-space:nowrap;">${t}</div>
+        return `<div class="feedrow">
+          <span class="fi">${icon}</span>
+          <div style="flex:1;font:500 12px 'Inter',sans-serif;color:#475569;">${who}${esc(e.action)} <strong>${esc(e.module)}</strong>${e.refNo ? ' · ' + esc(e.refNo) : ''}</div>
+          <span style="font:600 11px 'Inter',sans-serif;color:#8b93a1;white-space:nowrap;">${t}</span>
         </div>`;
       }).join('');
     }
@@ -192,37 +174,35 @@ async function _loadTaskPanel(tab) {
 function _setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 
 async function loadTaskOverview() {
-  // KPI snapshot from the Process Flow backend (counts/amounts per module).
+  // 4 comp KPI cards + per-tab count badges, computed from the Process Flow backend.
   try {
-    const [qt, so, po, ap, iv] = await Promise.allSettled([
+    const [qt, so, po, ap, rc, iv, pr] = await Promise.allSettled([
       fetchFlow('getQuotations'), fetchFlow('getSalesOrders'), fetchFlow('getPurchaseOrders'),
-      fetchFlow('getAPAging'), fetchFlow('getInvoices'),
+      fetchFlow('getAPAging'), fetchFlow('getReceiving'), fetchFlow('getInvoices'), fetchFlow('getPricingRequests'),
     ]);
     const data = (r) => (r.status === 'fulfilled' && r.value && r.value.data) ? r.value.data : [];
+    const qRows = data(qt), sRows = data(so), pRows = data(po), aRows = data(ap),
+          rRows = data(rc), vRows = data(iv), prRows = data(pr);
 
-    const qRows = data(qt);
-    _setText('kQtTotal', qRows.length);
-    _setText('kQtOpen', qRows.filter(q => _isOpenStatus(q.status)).length);
+    // Tab count badges (.ct)
+    _setText('tcQt', qRows.length);
+    _setText('tcSo', sRows.length);
+    _setText('tcPo', pRows.length);
+    _setText('tcAp', aRows.filter(a => (a.status || '').toLowerCase() !== 'paid').length);
+    _setText('tcRc', rRows.length);
+    _setText('tcIv', vRows.length);
+    _setText('tcPr', prRows.length);
 
-    const sRows = data(so);
-    _setText('kSoTotal', sRows.length);
-    _setText('kSoOpen', sRows.filter(s => _isOpenStatus(s.status)).length);
-
-    const pRows = data(po);
-    _setText('kPoTotal', pRows.length);
-    _setText('kPoPending', pRows.filter(p => _isOpenStatus(p.status)).length);
-
-    const aRows = data(ap);
-    const unpaid = aRows.filter(a => (a.status || '').toLowerCase() !== 'paid');
-    const apOut = unpaid.reduce((s, a) => s + (flowNum(a.amountPHP) - flowNum(a.paidPHP)), 0);
-    _setText('kApAmt', flowMoney(apOut, 'PHP'));
-    _setText('kApOpen', unpaid.length);
-
-    const vRows = data(iv);
-    const sales = vRows.reduce((s, v) => s + flowNum(v.totalSales), 0);
-    const cogs  = vRows.reduce((s, v) => s + flowNum(v.totalCOGS), 0);
-    _setText('kIvSales', flowMoney(sales, 'PHP'));
-    _setText('kIvGp', flowMoney(sales - cogs, 'PHP'));
+    // 4 KPI cards — this-month volume + pending approvals
+    const ym = String(flowToday()).slice(0, 7);
+    const inMonth = (d) => String(flowDate(d) || '').slice(0, 7) === ym;
+    _setText('kpiQt', qRows.filter(q => inMonth(q.date)).length);
+    _setText('kpiPr', prRows.filter(p => inMonth(p.date)).length);
+    _setText('kpiPo', pRows.filter(p => inMonth(p.date)).length);
+    _setText('kpiPoOpen', pRows.filter(p => _isOpenStatus(p.status)).length);
+    const pendingQ  = qRows.filter(q => String(q.status) === 'Pending Admin').length;
+    const pendingPr = prRows.filter(p => ['Requested', 'Sourcing'].includes(String(p.status))).length;
+    _setText('kpiPending', pendingQ + pendingPr);
   } catch (err) {
     console.error('loadTaskOverview (flow) stats error:', err);
   }
@@ -231,16 +211,9 @@ async function loadTaskOverview() {
   _taskLoaded['qt'] = true;
   _loadTaskPanel('qt');
 
-  // Shipment stats (production subsystem, retained) — non-blocking
+  // Shipments tab count (production subsystem, retained) — non-blocking
   apiGetShipments().then(r => {
-    if (r && r.success && r.data) {
-      const rows = r.data;
-      const inTransit = rows.filter(s => (s.status || '').toLowerCase() === 'in transit').length;
-      const arrived   = rows.filter(s => ['arrived','delivered'].includes((s.status || '').toLowerCase())).length;
-      _setText('smvTotal', rows.length);
-      _setText('smvInTransit', inTransit);
-      _setText('smvArrived', arrived);
-    }
+    if (r && r.success && r.data) _setText('tcSm', r.data.length);
   }).catch(() => {});
 }
 

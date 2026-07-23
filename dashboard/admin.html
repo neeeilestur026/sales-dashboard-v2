@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard — Home</title>
   <link rel="stylesheet" href="css/styles.css">
-  <!-- flow.css supplies the .flow-modal-overlay/.flow-modal component styles the SO cost editor
-       (so-cost-editor.js) and the Docs modal (flow-docs.js) build their dialogs from — without it
-       those modals render as unstyled blocks at the page bottom and appear not to open. -->
+  <!-- flow.css supplies the .flow-modal-overlay/.flow-modal component styles the Docs modal
+       (flow-docs.js) builds its dialog from — without it that modal renders as an unstyled
+       block at the page bottom and appears not to open. -->
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
   <link rel="stylesheet" href="css/flow-screen.css">
@@ -190,7 +190,7 @@
       <div class="left">
         <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
         <div>
-          <div class="eyebrow">Admin · Command Center</div>
+          <div class="eyebrow">Admin · Operations Hub</div>
           <h1 class="greeting" id="greeting">Good morning!</h1>
           <p id="todayLabel">Admin hub — manage orders and track your team.</p>
         </div>
@@ -202,214 +202,34 @@
       </div>
     </section>
 
-    <section id="flowApprovalStrip" style="display:none;margin:0 0 1.5rem;"></section>
-
-    <!-- ── Process Flow (new accounting system) ───────────── -->
-    <div style="margin-bottom:2rem;">
-      <h2 class="section-head">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-        Process Flow
-        <span id="afkpiState" class="sh-meta">Loading…</span>
-      </h2>
-
-      <div class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1.25rem;">
-        <div class="chart-card fkpi spot"><div class="fkpi-l">Sales Invoiced</div><div class="fkpi-v" id="afkpiSales">—</div></div>
-        <div class="chart-card fkpi"><div class="fkpi-l">Total COGS</div><div class="fkpi-v" id="afkpiCogs">—</div></div>
-        <div class="chart-card fkpi"><div class="fkpi-l">Gross Profit</div><div class="fkpi-v" id="afkpiGp">—</div></div>
-        <div class="chart-card fkpi"><div class="fkpi-l">AP Outstanding</div><div class="fkpi-v" id="afkpiAp">—</div></div>
-        <div class="chart-card fkpi"><div class="fkpi-l">Inventory Value</div><div class="fkpi-v" id="afkpiInv">—</div></div>
-        <div class="chart-card fkpi"><div class="fkpi-l">Sales Orders</div><div class="fkpi-v" id="afkpiSo">—</div></div>
-      </div>
-
-      <div class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
-        <a href="flow-accounting.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Accounting</strong><div class="afsub">Per-SO consolidated view</div></a>
-        <a href="flow-inventory.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Inventory</strong><div class="afsub">Costed stock &amp; landed cost</div></a>
-        <a href="flow-quotations.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Quotations</strong><div class="afsub">Quote items from inventory</div></a>
-        <a href="flow-sales-orders.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Sales Orders</strong><div class="afsub">Load &amp; edit quotations</div></a>
-        <a href="flow-purchase-orders.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Purchase Orders</strong><div class="afsub">From SO; auto AP entry</div></a>
-        <a href="flow-ap-aging.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>AP Aging</strong><div class="afsub">Payables &amp; payments</div></a>
-        <a href="flow-receiving.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Receiving</strong><div class="afsub">Landed cost → inventory</div></a>
-        <a href="flow-invoices.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>Invoices</strong><div class="afsub">Issue &amp; record COGS</div></a>
-        <a href="flow-ledger.html" class="chart-card afmod" style="padding:0.9rem 1rem;"><strong>General Ledger</strong><div class="afsub">Journals &amp; trial balance</div></a>
-      </div>
+    <!-- ── KPI cards (4, comp) ─────────────────────────── -->
+    <div class="kpi-row kpi4">
+      <div class="kpi spot"><div class="top"><span class="l">Team Quotations · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="kpiQt">—</div><div class="d">this month</div></div>
+      <div class="kpi"><div class="top"><span class="l">PRs · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span></div><div class="v" id="kpiPr">—</div><div class="d">this month</div></div>
+      <div class="kpi"><div class="top"><span class="l">POs · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span></div><div class="v" id="kpiPo">—</div><div class="d"><span id="kpiPoOpen">—</span> open</div></div>
+      <div class="kpi"><div class="top"><span class="l">Pending Approvals</span><span class="chip" style="background:#fffbeb;color:#d97706"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="v" id="kpiPending" style="color:#b45309">—</div><div class="d">need action</div></div>
     </div>
-    <style>
-      a.afmod {
-        text-decoration:none; color:var(--text-primary,#0f172a); display:block;
-        position:relative; transition: var(--transition-fast, all 0.14s ease);
-      }
-      a.afmod::before {
-        content:''; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:3px 0 0 3px;
-        background:var(--accent,#0f766e); opacity:0; transition:opacity 0.14s ease;
-      }
-      a.afmod strong { font-size:0.92rem; font-weight:700; }
-      a.afmod .afsub { font-size:0.76rem; color:var(--text-muted,#94a3b8); margin-top:0.25rem; }
-      a.afmod:hover { border-color:var(--accent,#0f766e); transform:translateY(-2px); box-shadow:var(--shadow-md); }
-      a.afmod:hover::before { opacity:1; }
-    </style>
 
-    <!-- ── Revenue & Net Profit Report (monthly P&L, per Sales Order) ── -->
-    <style>
-    /* Revenue & Net Profit report */
-    .pnl-card { background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:1.2rem 1.3rem; margin-bottom:1.5rem; box-shadow:var(--shadow-sm); }
-    .pnl-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem; }
-    .pnl-head h2 { font-size:1.05rem; font-weight:700; color:var(--text-primary); margin:0; letter-spacing:-0.01em; }
-    .pnl-controls { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
-    .pnl-controls select { padding:0.4rem 0.7rem; border:1px solid var(--border); border-radius:8px; font-size:0.84rem; background:#fff; color:var(--text-primary); cursor:pointer; }
-    .pnl-state { font-size:0.74rem; color:var(--text-muted); }
-    .pnl-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.7rem; margin-bottom:1.1rem; }
-    .pnl-tile { background:var(--bg-inset); border:1px solid var(--border); border-radius:12px; padding:0.7rem 0.85rem; }
-    .pnl-tile .l { font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.3rem; }
-    .pnl-tile .v { font-size:clamp(0.95rem,2.4vw,1.3rem); font-weight:800; color:var(--text-primary); font-variant-numeric:tabular-nums; line-height:1.1; }
-    .pnl-tile.accent { background:var(--accent-light); border-color:var(--accent); }
-    .pnl-tile.accent .v { color:var(--accent-dark); }
-    .pnl-tile.pos .v { color:#16a34a; }
-    .pnl-tile.neg .v { color:#ef4444; }
-    /* Monthly P&L table */
-    .pnl-mtable { width:100%; border-collapse:collapse; font-size:0.84rem; min-width:660px; }
-    .pnl-mtable th { text-align:left; padding:0.5rem 0.7rem; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); font-weight:700; border-bottom:2px solid var(--border); background:var(--bg-inset); white-space:nowrap; }
-    .pnl-mtable th.num, .pnl-mtable td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    .pnl-mtable td { padding:0.5rem 0.7rem; border-bottom:1px solid var(--border); color:var(--text-primary); }
-    .pnl-mrow { cursor:pointer; transition:background var(--transition,0.15s); }
-    .pnl-mrow:hover td { background:var(--bg-inset); }
-    .pnl-mname { font-weight:700; color:var(--text-primary); }
-    .pnl-sub { font-size:0.68rem; font-weight:400; color:var(--text-muted); margin-left:0.35rem; }
-    .pnl-sub2 { display:block; font-size:0.67rem; font-weight:400; color:var(--text-muted); }
-    .pnl-warn { display:inline-block; font-size:0.62rem; font-weight:700; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:0.05rem 0.4rem; margin-left:0.35rem; }
-    .pnl-edited { display:inline-block; font-size:0.62rem; font-weight:700; color:#0f766e; background:#ccfbf1; border:1px solid #99f6e4; border-radius:999px; padding:0.05rem 0.4rem; margin-left:0.35rem; }
-    .pnl-editcost { font-size:0.72rem; font-weight:600; color:var(--accent,#0f766e); background:transparent; border:1px solid var(--border,#e2e8f0); border-radius:6px; padding:0.15rem 0.5rem; cursor:pointer; }
-    .pnl-editcost:hover { background:var(--bg-inset,#eef2f6); }
-    .pnl-expand { background:none; border:1px solid var(--border); color:var(--text-muted); border-radius:5px; padding:0.1rem 0.45rem; font-size:0.72rem; cursor:pointer; line-height:1.2; }
-    .pnl-expand:hover { border-color:var(--accent); color:var(--accent-dark); }
-    .pnl-grand td { font-weight:700; background:var(--bg-inset); border-top:2px solid var(--border); border-bottom:none; text-transform:uppercase; font-size:0.72rem; letter-spacing:0.03em; }
-    .pnl-grand td.num { font-size:0.84rem; }
-    /* Expanded month detail */
-    .pnl-detailrow td { padding:0; background:#f8fafc; border-bottom:2px solid var(--border); }
-    .pnl-detail { padding:0.85rem 0.95rem; display:grid; gap:0.85rem; }
-    .pnl-detail-h { font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.4rem; }
-    .pnl-subtable { width:100%; border-collapse:collapse; font-size:0.78rem; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
-    .pnl-subtable th { text-align:left; padding:0.4rem 0.6rem; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border); background:var(--bg-inset); }
-    .pnl-subtable th.num, .pnl-subtable td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    .pnl-subtable td { padding:0.38rem 0.6rem; border-bottom:1px solid var(--border); }
-    .pnl-subtable tbody tr:last-child td { border-bottom:none; }
-    .pnl-subtotal td { font-weight:700; background:var(--bg-inset); }
-    .pnl-netfoot { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.6rem 0.8rem; border-radius:10px; border:1px solid var(--border); }
-    .pnl-netfoot.pos { border-color:rgba(22,163,74,0.3); background:rgba(22,163,74,0.06); }
-    .pnl-netfoot.neg { border-color:rgba(239,68,68,0.3); background:rgba(239,68,68,0.06); }
-    .pnl-netfoot .l { font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); }
-    .pnl-netfoot .s { font-size:0.7rem; color:var(--text-muted); }
-    .pnl-netfoot .v { font-size:1.05rem; font-weight:800; line-height:1.1; }
-    .pnl-muted { color:var(--text-muted); font-style:italic; }
-    .pnl-empty { padding:1.4rem; text-align:center; color:var(--text-muted); font-size:0.86rem; font-style:italic; }
-    .pnl-note { font-size:0.72rem; color:var(--text-muted); margin:0.7rem 0 0; line-height:1.5; }
-    </style>
-    <section class="pnl-card">
-      <div class="pnl-head">
-        <div>
-          <h2>Revenue &amp; Net Profit Report</h2>
-          <div class="pnl-state" id="pnlState">Loading…</div>
-        </div>
-        <div class="pnl-controls">
-          <label style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Year</label>
-          <select id="pnlYear"></select>
-        </div>
-      </div>
-      <div class="pnl-tiles" id="pnlTotals"></div>
-      <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
-    </section>
 
-    <!-- ── Task Overview ─────────────────────────────────── -->
+
+    <!-- ── Task Overview (comp: ctitle + tab pills + card>ptable | sidebar) ── -->
     <div style="margin-bottom:2rem;">
-      <h2 class="section-head">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Task Overview
-        <span class="sh-meta">Click a card to filter</span>
-      </h2>
-
-      <!-- Summary Stat Cards (Process Flow modules + retained Shipments) -->
-      <div id="taskStatCards" class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;margin-bottom:1.5rem;">
-        <div class="chart-card kpi-active" data-tab="qt" onclick="_kpiSwitch('qt')" style="padding:1rem;text-align:center;">
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Quotations</div>
-          <div style="font-size:1.6rem;font-weight:700;color:#0f766e;" id="kQtTotal">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kQtOpen" style="color:#f59e0b;">—</span> open</div>
-        </div>
-        <div class="chart-card" data-tab="so" onclick="_kpiSwitch('so')" style="padding:1rem;text-align:center;">
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Sales Orders</div>
-          <div style="font-size:1.6rem;font-weight:700;color:#14b8a6;" id="kSoTotal">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kSoOpen" style="color:#f59e0b;">—</span> open</div>
-        </div>
-        <div class="chart-card" data-tab="po" onclick="_kpiSwitch('po')" style="padding:1rem;text-align:center;">
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Purchase Orders</div>
-          <div style="font-size:1.6rem;font-weight:700;color:#6366f1;" id="kPoTotal">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kPoPending" style="color:#f59e0b;">—</span> pending</div>
-        </div>
-        <div class="chart-card" data-tab="ap" onclick="_kpiSwitch('ap')" style="padding:1rem;text-align:center;">
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">AP Outstanding</div>
-          <div style="font-size:1.6rem;font-weight:700;color:#ef4444;" id="kApAmt">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="kApOpen" style="color:#f59e0b;">—</span> unpaid</div>
-        </div>
-        <div class="chart-card" data-tab="iv" onclick="_kpiSwitch('iv')" style="padding:1rem;text-align:center;">
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Invoiced Sales</div>
-          <div style="font-size:1.6rem;font-weight:700;color:#22c55e;" id="kIvSales">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;">GP <span id="kIvGp" style="color:#22c55e;">—</span></div>
-        </div>
-        <div class="chart-card" data-tab="sm" onclick="_kpiSwitch('sm')" style="padding:1rem;text-align:center;">
-          <div style="font-size:0.72rem;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Shipments</div>
-          <div style="font-size:1.6rem;font-weight:700;color:#f59e0b;" id="smvTotal">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.2rem;"><span id="smvInTransit" style="color:#3b82f6;">—</span> in transit · <span id="smvArrived" style="color:#22c55e;">—</span> arrived</div>
-        </div>
-      </div>
-
-      <!-- Sub-toolbar -->
-      <div class="task-toolbar" id="taskToolbar">
-        <div class="ttb-left">
-          <div class="ttb-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="taskSearchInput" type="text" placeholder="Search current tab… (ref, client, item)" oninput="_filterTaskTable()">
-          </div>
-          <div class="ttb-dates">
-            <input type="date" id="taskDateFrom" oninput="_filterTaskTable()" title="From date">
-            <span class="ttb-dash">—</span>
-            <input type="date" id="taskDateTo" oninput="_filterTaskTable()" title="To date">
-            <button class="ttb-mini" onclick="_clearTaskFilters()" title="Clear filters">Clear</button>
-          </div>
-        </div>
-        <div class="ttb-right">
-          <button class="ttb-mini" onclick="_toggleDensity()" title="Toggle row density" id="densityBtn">⇕ Density</button>
-          <button class="ttb-mini" onclick="_refreshTasks()" title="Refresh data">↻ Refresh</button>
-          <span class="ttb-updated" id="taskUpdatedAt">just now</span>
-        </div>
-      </div>
-
-      <!-- 2-col: main task panels + sidebar (Inventory + Activity) -->
       <div class="admin-2col">
         <div class="admin-main">
-      <!-- Tab Bar -->
-      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.75rem;">
-        <button class="task-tab" onclick="switchTaskTab('inbox')" id="tabTaskInbox">📥 Inbox <span id="inboxCount" style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:0.7rem;font-weight:700;margin-left:4px;display:none;"></span></button>
-        <button class="task-tab active" onclick="switchTaskTab('qt')" id="tabTaskQt">Quotations</button>
-        <button class="task-tab" onclick="switchTaskTab('so')" id="tabTaskSo">Sales Orders</button>
-        <button class="task-tab" onclick="switchTaskTab('po')" id="tabTaskPo">Purchase Orders</button>
-        <button class="task-tab" onclick="switchTaskTab('ap')" id="tabTaskAp">AP Aging</button>
-        <button class="task-tab" onclick="switchTaskTab('rc')" id="tabTaskRc">Receiving</button>
-        <button class="task-tab" onclick="switchTaskTab('iv')" id="tabTaskIv">Invoices</button>
-        <button class="task-tab" onclick="switchTaskTab('pr')" id="tabTaskPr">Purchase Requests</button>
-        <button class="task-tab" onclick="switchTaskTab('sm')" id="tabTaskSm">🚢 Shipments</button>
-      </div>
+          <div class="ctitle" style="margin-bottom:12px;"><span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Task Overview</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;">
+            <button class="tab active" onclick="switchTaskTab('qt')" id="tabTaskQt">Quotations <span class="ct" id="tcQt"></span></button>
+            <button class="tab" onclick="switchTaskTab('so')" id="tabTaskSo">Sales Orders <span class="ct" id="tcSo"></span></button>
+            <button class="tab" onclick="switchTaskTab('po')" id="tabTaskPo">Purchase Orders <span class="ct" id="tcPo"></span></button>
+            <button class="tab" onclick="switchTaskTab('ap')" id="tabTaskAp">AP Aging <span class="ct" id="tcAp"></span></button>
+            <button class="tab" onclick="switchTaskTab('rc')" id="tabTaskRc">Receiving <span class="ct" id="tcRc"></span></button>
+            <button class="tab" onclick="switchTaskTab('iv')" id="tabTaskIv">Invoices <span class="ct" id="tcIv"></span></button>
+            <button class="tab" onclick="switchTaskTab('pr')" id="tabTaskPr">PR <span class="ct" id="tcPr"></span></button>
+            <button class="tab" onclick="switchTaskTab('sm')" id="tabTaskSm">Shipments <span class="ct" id="tcSm"></span></button>
+          </div>
 
       <!-- Tab Panels -->
       <div class="chart-card" style="padding:0;overflow:hidden;">
-
-        <!-- Unified Inbox Panel (aggregates pending rows from all 6 panels) -->
-        <div id="taskPanelInbox" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Pending items across all task types · auto-merged</span>
-            <button class="ttb-mini" onclick="_buildInbox()" style="font-size:0.74rem;padding:0.3rem 0.6rem;">↻ Rebuild</button>
-          </div>
-          <div style="overflow-x:auto;" id="inboxTableWrap">
-            <div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">Inbox will populate once task panels load…</div>
-          </div>
-        </div>
 
         <!-- Quotations Panel (flow) -->
         <div id="taskPanelQt">
@@ -516,6 +336,19 @@
         </div><!-- /admin-main -->
 
         <aside class="admin-side">
+          <!-- Recent Activity -->
+          <div class="chart-card" style="padding:0;overflow:hidden;">
+            <div class="side-panel-head">
+              <h3>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Recent Activity
+              </h3>
+            </div>
+            <div id="activityFeed" class="side-scroll" style="padding:0.5rem 0.75rem;">
+              <div class="loading-overlay" style="padding:1.5rem;"><div class="spinner"></div></div>
+            </div>
+          </div>
+
           <!-- Inventory Snapshot -->
           <div class="chart-card" style="padding:0;overflow:hidden;">
             <div class="side-panel-head">
@@ -529,38 +362,10 @@
               <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
             </div>
           </div>
-
-          <!-- Recent Activity -->
-          <div class="chart-card" style="padding:0;overflow:hidden;">
-            <div class="side-panel-head">
-              <h3>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Recent Activity
-              </h3>
-            </div>
-            <div id="activityFeed" class="side-scroll" style="padding:0.5rem 0.75rem;">
-              <div class="loading-overlay" style="padding:1.5rem;"><div class="spinner"></div></div>
-            </div>
-          </div>
         </aside>
       </div><!-- /admin-2col -->
     </div>
     <!-- ── End Task Overview ──────────────────────────────── -->
-
-    <!-- Team Monthly Summary Row -->
-    <div class="summary-row" id="summaryRow">
-      <div class="summary-item">
-        Team This Month: <strong id="monthQuotations">—</strong> Quotations
-      </div>
-      <div class="summary-divider"></div>
-      <div class="summary-item">
-        <strong id="monthPRs">—</strong> PRs
-      </div>
-      <div class="summary-divider"></div>
-      <div class="summary-item">
-        <strong id="monthPOs">—</strong> POs
-      </div>
-    </div>
 
   </main>
 
@@ -570,67 +375,6 @@
   <script src="js/flow-docs.js"></script>
   <script src="js/stage-meta.js"></script>
   <script src="js/admin.js"></script>
-  <script src="js/so-cost-editor.js"></script>
-  <script src="js/accounting-profit.js"></script>
-  <script>
-    // ── Process Flow KPI snapshot (read-only, from the flow backend) ──
-    (function loadAdminFlowKpis() {
-      const st = document.getElementById('afkpiState');
-      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-      if (typeof _flowConfigured !== 'function' || !_flowConfigured()) {
-        if (st) st.textContent = 'Flow backend not configured';
-        return;
-      }
-      Promise.all([
-        fetchFlow('getInvoices').catch(() => ({ data: [] })),
-        fetchFlow('getAPAging').catch(() => ({ data: [] })),
-        fetchFlow('getInventory').catch(() => ({ data: [] })),
-        fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
-      ]).then(([inv, ap, stock, so]) => {
-        const invoices = (inv && inv.data) || [], aps = (ap && ap.data) || [];
-        const items = (stock && stock.data) || [], sos = (so && so.data) || [];
-        const sales = invoices.reduce((s, v) => s + flowNum(v.totalSales), 0);
-        const cogs = invoices.reduce((s, v) => s + flowNum(v.totalCOGS), 0);
-        const apOut = aps.filter(a => (a.status || '').toLowerCase() !== 'paid')
-          .reduce((s, a) => s + (flowNum(a.amountPHP) - flowNum(a.paidPHP)), 0);
-        const invVal = flowStockItems(items).reduce((s, i) => s + flowNum(i.totalLanded), 0);   // real stocks only
-        set('afkpiSales', flowMoney(sales, 'PHP'));
-        set('afkpiCogs', flowMoney(cogs, 'PHP'));
-        set('afkpiGp', flowMoney(sales - cogs, 'PHP'));
-        set('afkpiAp', flowMoney(apOut, 'PHP'));
-        set('afkpiInv', flowMoney(invVal, 'PHP'));
-        set('afkpiSo', String(sos.length));
-        if (st) st.textContent = 'Live · from Process Flow';
-      }).catch(() => { if (st) st.textContent = 'Unavailable'; });
-    })();
-
-    // Pending-approval + supplier-pricing strip for admin.
-    (function loadAdminApprovalStrip() {
-      if (typeof _flowConfigured !== 'function' || !_flowConfigured()) return;
-      Promise.all([
-        fetchFlow('getQuotations').catch(() => ({ data: [] })),
-        fetchFlow('getPricingRequests').catch(() => ({ data: [] })),
-      ]).then(([q, pr]) => {
-        const quotes = ((q && q.data) || []).filter(x => x.status === 'Pending Admin');
-        const sourcing = ((pr && pr.data) || []).filter(x => x.status === 'Requested' || x.status === 'Sourcing').length;
-        const el = document.getElementById('flowApprovalStrip');
-        if (!el || (quotes.length + sourcing === 0)) return;
-        const _esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
-        const _money = (typeof flowMoney === 'function') ? (v => flowMoney(v, 'PHP')) : (v => '₱' + Number(v || 0).toFixed(2));
-        const _num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
-        const _qtot = x => _num(x.total) || (x.items || []).reduce((s, it) => s + _num(it.qty) * _num(it.price), 0);
-        const chip = (n, label, href, color) => `<a href="${href}" style="text-decoration:none;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.9rem;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:#fff;color:var(--text-primary,#0f172a);font-weight:600;font-size:0.85rem;"><span style="background:${color};color:#fff;border-radius:999px;padding:1px 9px;font-size:0.78rem;">${n}</span>${label}</a>`;
-        let chips = '';
-        if (quotes.length) chips += `<div style="width:100%;"><div style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-bottom:0.4rem;">${quotes.length} quotation(s) awaiting your approval — click to review &amp; approve</div>` + quotes.slice(0, 8).map(x => `<a href="flow-quotations.html?review=${encodeURIComponent(x.quotationNo)}" style="text-decoration:none;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.5rem 0.8rem;border:1px solid var(--border,#e2e8f0);border-radius:9px;background:#fff;color:var(--text-primary,#0f172a);font-size:0.84rem;margin-bottom:0.35rem;"><span><strong>${_esc(x.quotationNo)}</strong> &middot; ${_esc(x.customer)} &middot; ${_money(_qtot(x))}</span><span style="color:#b45309;font-weight:700;white-space:nowrap;">Review &amp; approve &rarr;</span></a>`).join('') + `</div>`;
-        if (sourcing) chips += chip(sourcing, 'Purchase Requests awaiting supplier pricing', 'flow-pricing-request.html', '#0f766e');
-        el.innerHTML = `<div style="border:1px solid var(--border,#e2e8f0);border-radius:14px;background:linear-gradient(180deg,#fff,#f6faf9);padding:1rem 1.2rem;">
-          <div style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;color:var(--text-primary,#0f172a);">⚑ Needs my attention</div>
-          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">${chips}</div></div>`;
-        el.style.display = '';
-      }).catch(() => {});
-    })();
-  </script>
-
   <!-- Shipment Edit Modal -->
   <div id="smEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;overflow-y:auto;padding:2rem 1rem;">
     <div style="max-width:720px;margin:0 auto;background:var(--surface,#1e293b);border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
@@ -1283,236 +1027,8 @@
   </script>
 
   <script>
-    // Sticky toolbar handlers — operate on the currently-visible task panel
+    // Shipment edit-modal tab switcher: adds the Payment sub-tab on top of admin.js's base.
     (function () {
-      const ACTIVE_PANEL_IDS = ['taskPanelQt','taskPanelSo','taskPanelPo','taskPanelAp','taskPanelRc','taskPanelIv','taskPanelPr','taskPanelSm'];
-      function activePanel() {
-        for (const id of ACTIVE_PANEL_IDS) {
-          const el = document.getElementById(id);
-          if (el && el.style.display !== 'none' && el.offsetParent !== null) return el;
-        }
-        return null;
-      }
-      function rowDateMs(row) {
-        // Try common date attrs first
-        const ds = row.getAttribute('data-date') || row.getAttribute('data-iso');
-        if (ds) { const t = Date.parse(ds); if (!isNaN(t)) return t; }
-        // Scan cells for a parseable date
-        for (const td of row.cells || []) {
-          const txt = (td.textContent || '').trim();
-          if (!txt) continue;
-          const t = Date.parse(txt);
-          if (!isNaN(t) && txt.length >= 8) return t;
-        }
-        return null;
-      }
-      window._filterTaskTable = function () {
-        const panel = activePanel();
-        if (!panel) return;
-        const q = (document.getElementById('taskSearchInput')?.value || '').trim().toLowerCase();
-        const fromV = document.getElementById('taskDateFrom')?.value;
-        const toV = document.getElementById('taskDateTo')?.value;
-        const fromMs = fromV ? Date.parse(fromV) : null;
-        const toMs = toV ? Date.parse(toV) + 86399999 : null;
-        panel.querySelectorAll('table tbody tr').forEach(tr => {
-          let visible = true;
-          if (q && !(tr.textContent || '').toLowerCase().includes(q)) visible = false;
-          if (visible && (fromMs || toMs)) {
-            const t = rowDateMs(tr);
-            if (t == null) {
-              if (fromMs || toMs) visible = false;
-            } else {
-              if (fromMs && t < fromMs) visible = false;
-              if (toMs && t > toMs) visible = false;
-            }
-          }
-          tr.style.display = visible ? '' : 'none';
-        });
-      };
-      window._clearTaskFilters = function () {
-        const s = document.getElementById('taskSearchInput'); if (s) s.value = '';
-        const f = document.getElementById('taskDateFrom'); if (f) f.value = '';
-        const t = document.getElementById('taskDateTo'); if (t) t.value = '';
-        window._filterTaskTable();
-      };
-      window._toggleDensity = function () {
-        const on = document.body.classList.toggle('density-compact');
-        try { localStorage.setItem('admin_density_compact', on ? '1' : '0'); } catch (e) {}
-        const btn = document.getElementById('densityBtn');
-        if (btn) btn.textContent = on ? '⇕ Comfort' : '⇕ Density';
-      };
-      window._refreshTasks = function () {
-        const u = document.getElementById('taskUpdatedAt');
-        if (u) u.textContent = 'refreshing…';
-        // Prefer existing fetcher if exposed; otherwise reload
-        if (typeof window.refreshAdminTasks === 'function') {
-          try { window.refreshAdminTasks(); _markUpdated(); return; } catch(e) {}
-        }
-        location.reload();
-      };
-      let _lastUpdated = Date.now();
-      function _markUpdated() { _lastUpdated = Date.now(); _tickUpdated(); }
-      function _tickUpdated() {
-        const el = document.getElementById('taskUpdatedAt');
-        if (!el) return;
-        const s = Math.max(0, Math.round((Date.now() - _lastUpdated) / 1000));
-        if (s < 5) el.textContent = 'just now';
-        else if (s < 60) el.textContent = s + 's ago';
-        else if (s < 3600) el.textContent = Math.round(s/60) + 'm ago';
-        else el.textContent = Math.round(s/3600) + 'h ago';
-      }
-      // Restore density preference
-      try {
-        if (localStorage.getItem('admin_density_compact') === '1') {
-          document.body.classList.add('density-compact');
-          const btn = document.getElementById('densityBtn');
-          if (btn) btn.textContent = '⇕ Comfort';
-        }
-      } catch (e) {}
-      _markUpdated();
-      setInterval(_tickUpdated, 30000);
-      // Re-filter when user switches tabs
-      const _origSwitch = window.switchTaskTab;
-      if (typeof _origSwitch === 'function') {
-        window.switchTaskTab = function (k) {
-          // Handle Inbox tab locally (admin.js doesn't know about it)
-          if (k === 'inbox') {
-            ['Qt','So','Po','Ap','Rc','Iv','Pr','Sm'].forEach(s => {
-              const p = document.getElementById('taskPanel' + s); if (p) p.style.display = 'none';
-              const t = document.getElementById('tabTask' + s); if (t) t.classList.remove('active');
-            });
-            const ip = document.getElementById('taskPanelInbox'); if (ip) ip.style.display = '';
-            const it = document.getElementById('tabTaskInbox'); if (it) it.classList.add('active');
-            _buildInbox();
-            return;
-          }
-          // Hide inbox when switching to a regular tab
-          const ip = document.getElementById('taskPanelInbox'); if (ip) ip.style.display = 'none';
-          const it = document.getElementById('tabTaskInbox'); if (it) it.classList.remove('active');
-          const r = _origSwitch.apply(this, arguments);
-          setTimeout(window._filterTaskTable, 50);
-          _kpiSyncActive(k);
-          return r;
-        };
-      }
-
-      // KPI cards as filters (Admin item 1)
-      function _kpiSyncActive(tab) {
-        document.querySelectorAll('#taskStatCards [data-tab]').forEach(el => {
-          el.classList.toggle('kpi-active', el.getAttribute('data-tab') === tab);
-        });
-      }
-      window._kpiSwitch = function (tab) {
-        if (typeof window.switchTaskTab === 'function') {
-          window.switchTaskTab(tab);
-        } else {
-          _kpiSyncActive(tab);
-        }
-      };
-
-      // === Unified Tasks Inbox (Admin item 2) ===
-      // Aggregate pending rows from all 6 task panels into one merged table.
-      const PANEL_SOURCES = [
-        { panel: 'taskPanelQt', wrap: 'qtTableWrap', type: 'QT',  color: '#0f766e', label: 'Quotation' },
-        { panel: 'taskPanelSo', wrap: 'soTableWrap', type: 'SO',  color: '#14b8a6', label: 'Sales Order' },
-        { panel: 'taskPanelPo', wrap: 'poTableWrap', type: 'PO',  color: '#6366f1', label: 'Purchase Order' },
-        { panel: 'taskPanelAp', wrap: 'apTableWrap', type: 'AP',  color: '#ef4444', label: 'AP Aging' },
-        { panel: 'taskPanelRc', wrap: 'rcTableWrap', type: 'RCV', color: '#0e7490', label: 'Receiving' },
-        { panel: 'taskPanelIv', wrap: 'ivTableWrap', type: 'INV', color: '#22c55e', label: 'Invoice' },
-        { panel: 'taskPanelPr', wrap: 'prTableWrap', type: 'PR',  color: '#3b82f6', label: 'Purchase Req' },
-        { panel: 'taskPanelSm', wrap: 'smTableWrap', type: 'SHP', color: '#f59e0b', label: 'Shipment' }
-      ];
-      function _isPendingRow(rowText) {
-        const t = (rowText || '').toLowerCase();
-        // Exclude obviously completed/closed states
-        if (/\b(delivered|paid|approved|completed|closed|done|sent|arrived)\b/.test(t)) return false;
-        // Include pending-ish keywords or when no status is mentioned (assume pending)
-        if (/\b(pending|awaiting|review|in transit|processing|booked|hold|overdue|follow)/.test(t)) return true;
-        return true; // default: include
-      }
-      function _firstHeaderRow(table) {
-        return table.querySelector('thead tr') || table.querySelector('tr');
-      }
-      window._buildInbox = function () {
-        const wrap = document.getElementById('inboxTableWrap');
-        if (!wrap) return;
-        const merged = []; // {type, color, label, html, dateMs}
-        PANEL_SOURCES.forEach(src => {
-          const w = document.getElementById(src.wrap); if (!w) return;
-          const tbl = w.querySelector('table'); if (!tbl) return;
-          const rows = tbl.querySelectorAll('tbody tr');
-          rows.forEach(tr => {
-            const txt = tr.textContent || '';
-            if (!_isPendingRow(txt)) return;
-            // Try to extract a date for sorting
-            let dateMs = 0;
-            for (const td of tr.cells || []) {
-              const t = (td.textContent || '').trim();
-              if (t.length >= 8) {
-                const ts = Date.parse(t);
-                if (!isNaN(ts)) { dateMs = ts; break; }
-              }
-            }
-            // Build row HTML: prepend type badge
-            const cellsHtml = Array.from(tr.cells || []).slice(0, 6)
-              .map(c => '<td style="padding:0.45rem 0.6rem;border-bottom:1px solid #f1f5f9;font-size:0.8rem;">' + (c.innerHTML || '') + '</td>')
-              .join('');
-            merged.push({
-              type: src.type, color: src.color, label: src.label, dateMs: dateMs,
-              html: '<tr data-type="' + src.type + '">' +
-                    '<td style="padding:0.45rem 0.6rem;border-bottom:1px solid #f1f5f9;">' +
-                      '<span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:999px;background:' + src.color + ';color:#fff;font-size:0.68rem;font-weight:700;">' + src.type + '</span>' +
-                    '</td>' + cellsHtml + '</tr>'
-            });
-          });
-        });
-        // Sort by recency (most recent first), unknown dates last
-        merged.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
-        // Update count badge
-        const cntEl = document.getElementById('inboxCount');
-        if (cntEl) {
-          if (merged.length) { cntEl.textContent = merged.length; cntEl.style.display = ''; }
-          else cntEl.style.display = 'none';
-        }
-        if (!merged.length) {
-          wrap.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">No pending items across any task type. 🎉</div>';
-          return;
-        }
-        wrap.innerHTML =
-          '<table style="width:100%;border-collapse:collapse;">' +
-          '<thead><tr style="background:var(--bg-inset);">' +
-          '<th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Type</th>' +
-          '<th colspan="6" style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Item</th>' +
-          '</tr></thead><tbody>' + merged.map(m => m.html).join('') + '</tbody></table>';
-      };
-      // Rebuild Inbox when task panels load (MutationObserver on the panels container)
-      const inboxObserver = new MutationObserver(() => {
-        // Always update count + rebuild silently if visible
-        const ip = document.getElementById('taskPanelInbox');
-        if (ip && ip.style.display !== 'none') _buildInbox();
-        else {
-          // Just update the count
-          let total = 0;
-          PANEL_SOURCES.forEach(src => {
-            const w = document.getElementById(src.wrap); if (!w) return;
-            const tbl = w.querySelector('table'); if (!tbl) return;
-            tbl.querySelectorAll('tbody tr').forEach(tr => {
-              if (_isPendingRow(tr.textContent || '')) total++;
-            });
-          });
-          const cntEl = document.getElementById('inboxCount');
-          if (cntEl) {
-            if (total) { cntEl.textContent = total; cntEl.style.display = ''; }
-            else cntEl.style.display = 'none';
-          }
-        }
-      });
-      PANEL_SOURCES.forEach(src => {
-        const w = document.getElementById(src.wrap);
-        if (w) inboxObserver.observe(w, { childList: true, subtree: true });
-      });
-
-      // Extend shipment modal tab switcher to handle Payment sub-tab
       const _origModalSwitch = window._smModalSwitchTab;
       window._smModalSwitchTab = function (tab) {
         const ship = document.getElementById('smShipmentBlock');
@@ -1521,7 +1037,6 @@
         const btnP = document.getElementById('smEditTabBtnPayment');
         const btnH = document.getElementById('smEditTabBtnHistory');
         if (tab === 'payment') {
-          // Stay on Details panel container, but show only payment block
           if (typeof _origModalSwitch === 'function') _origModalSwitch('details');
           if (ship) ship.style.display = 'none';
           if (pay) pay.style.display = '';
@@ -1565,69 +1080,51 @@
     </div>
   </div>
 
-  <!-- ══ Comp design map: express the real admin components in the flow-screen comp's
-       visual system (kpi spotlight, .ctitle icon-headers, .tab pills, .ptable, .badge).
-       Loaded last so it wins the cascade; no JS/id/handler change. ══ -->
+  <!-- ══ Comp component classes (this page uses the comps' exact markup) ══ -->
   <style>
-    /* ── Process-Flow KPI strip → comp .kpi cards (spotlight on the first) ── */
-    body.flow-screen .fkpi { position: relative; overflow: hidden; padding: 16px 17px !important; }
-    body.flow-screen .fkpi::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      background: linear-gradient(90deg, #6a63ea, #4f46e5); }
-    body.flow-screen .fkpi .fkpi-l { font: 700 10.5px 'Inter', sans-serif; letter-spacing: .05em;
-      text-transform: uppercase; color: #8b93a1; }
-    body.flow-screen .fkpi .fkpi-v { font: 800 25px 'Inter', sans-serif; color: #111827;
-      font-variant-numeric: tabular-nums; margin-top: 11px; }
-    body.flow-screen .fkpi.spot { background: #141414 !important; border-color: #141414 !important; }
-    body.flow-screen .fkpi.spot::before { background: #6366f1; }
-    body.flow-screen .fkpi.spot .fkpi-l { color: #9a9a9a; }
-    body.flow-screen .fkpi.spot .fkpi-v { color: #fff; }
-
-    /* ── Section heads → comp .ctitle (icon in an indigo chip + 15px bold) ── */
-    body.flow-screen .section-head { font: 700 15px 'Inter', sans-serif !important; color: #111827; gap: 9px; }
-    body.flow-screen .section-head svg,
-    body.flow-screen .side-panel-head h3 svg { width: 30px !important; height: 30px !important; padding: 7px;
-      box-sizing: border-box; border-radius: 9px; background: #eef2ff; color: #4f46e5 !important; }
-    body.flow-screen .side-panel-head h3 svg { width: 26px !important; height: 26px !important; padding: 6px; }
-    body.flow-screen .section-head .sh-meta { font: 500 12px 'Inter', sans-serif; color: #8b93a1; }
-    body.flow-screen .side-panel-head { background: #fff !important; border-bottom: 1px solid #eef1f5 !important; }
-    body.flow-screen .side-panel-head h3 { font: 700 14px 'Inter', sans-serif !important; color: #111827; gap: 9px; }
-
-    /* ── Task Overview tabs → comp .tab pills ── */
-    body.flow-screen .task-tab { border-radius: 999px !important; padding: 8px 14px !important;
-      font: 600 12px 'Inter', sans-serif !important; background: #fff !important;
-      border: 1px solid #e2e6ec !important; color: #8b93a1 !important; box-shadow: none !important; }
-    body.flow-screen .task-tab:hover { border-color: #c7d2fe !important; transform: translateY(-1px); }
-    body.flow-screen .task-tab.active { color: #fff !important;
-      background: linear-gradient(180deg, #6a63ea, #4f46e5) !important; border-color: #4f46e5 !important;
-      box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .7) !important; }
-
-    /* ── Clickable KPI filter cards → comp .kpi look (top-rule, dark values) ── */
-    body.flow-screen #taskStatCards .chart-card { text-align: left !important; padding: 16px 17px !important;
-      position: relative; overflow: hidden; }
-    body.flow-screen #taskStatCards .chart-card::before { content: ""; position: absolute; top: 0; left: 0;
-      right: 0; height: 3px; background: linear-gradient(90deg, #6a63ea, #4f46e5); opacity: .5; }
-    body.flow-screen #taskStatCards .chart-card.kpi-active { background: #fff !important;
-      border-color: #4f46e5 !important; box-shadow: 0 0 0 2px rgba(79, 70, 229, .18) !important; }
-    body.flow-screen #taskStatCards .chart-card.kpi-active::before { opacity: 1; }
-    body.flow-screen #taskStatCards .chart-card > div:nth-child(1) { color: #8b93a1 !important;
-      font: 700 10.5px 'Inter', sans-serif !important; letter-spacing: .05em; }
-    body.flow-screen #taskStatCards .chart-card > div:nth-child(2) { color: #111827 !important;
-      font: 800 25px 'Inter', sans-serif !important; }
-
-    /* ── Task tables → comp .ptable ── */
-    body.flow-screen .task-tbl { width: 100%; border-collapse: collapse; font: 400 12.5px 'Inter', sans-serif; }
-    body.flow-screen .task-tbl th { text-align: left; padding: 11px 14px; font: 700 10px 'Inter', sans-serif;
-      text-transform: uppercase; letter-spacing: .05em; color: #8b93a1; background: #f4f6f9;
-      white-space: nowrap; border-bottom: 1px solid #e5e9ef; }
-    body.flow-screen .task-tbl td { padding: 12px 14px; border-bottom: 1px solid #eef1f5; color: #111827; }
-    body.flow-screen .task-tbl tbody tr:nth-child(even) td { background: #fbfcfe; }
-    body.flow-screen .task-tbl tbody tr:hover td { background: #f0f2fb; }
-
-    /* ── Status pills → comp .badge shape ── */
-    body.flow-screen .sbadge { border-radius: 999px !important; padding: 3px 10px !important;
-      font: 700 10.5px 'Inter', sans-serif !important; }
-
-    /* Module cards + section wrappers keep flow-screen's .chart-card treatment */
+    body.flow-screen .kpi-row.kpi4 { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 1000px){ body.flow-screen .kpi-row.kpi4 { grid-template-columns: repeat(2,1fr); } }
+    body.flow-screen .card { background:#fff; border:1px solid #e2e6ec; border-radius:18px;
+      box-shadow:0 1px 2px rgba(15,23,42,.05),0 12px 30px -20px rgba(15,23,42,.4); }
+    body.flow-screen .ctitle { font:700 15px 'Inter',sans-serif; color:#111827; display:flex; align-items:center; gap:9px; }
+    body.flow-screen .ctitle .ci { width:30px; height:30px; border-radius:9px; background:#eef2ff; color:#4f46e5;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    /* Task Overview tab pills (switchTaskTab toggles .active) with count badges */
+    body.flow-screen .tab { padding:8px 14px; border-radius:999px; font:600 12px 'Inter',sans-serif;
+      background:#fff; border:1px solid #e2e6ec; color:#8b93a1; display:inline-flex; align-items:center; gap:7px;
+      cursor:pointer; transition:transform .18s cubic-bezier(.4,0,.2,1), border-color .18s; }
+    body.flow-screen .tab:hover { transform:translateY(-1px); border-color:#c7d2fe; }
+    body.flow-screen .tab.active { color:#fff; background:linear-gradient(180deg,#6a63ea,#4f46e5);
+      border-color:#4f46e5; box-shadow:0 8px 18px -8px rgba(79,70,229,.7); }
+    body.flow-screen .tab .ct { background:#eef2ff; color:#4f46e5; border-radius:999px; padding:0 7px;
+      font:700 10px 'Inter',sans-serif; }
+    body.flow-screen .tab.active .ct { background:rgba(255,255,255,.25); color:#fff; }
+    body.flow-screen .tab .ct:empty { display:none; }
+    /* Recent-activity feed rows */
+    body.flow-screen .feedrow { display:flex; align-items:center; gap:11px; padding:10px 0; border-bottom:1px solid #eef1f5; }
+    body.flow-screen .feedrow:last-child { border-bottom:none; }
+    body.flow-screen .feedrow .fi { width:30px; height:30px; border-radius:9px; background:#e0e7ff; color:#4f46e5;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    /* JS-built task tables → comp .ptable */
+    body.flow-screen .task-tbl { width:100%; border-collapse:collapse; font:400 12.5px 'Inter',sans-serif; }
+    body.flow-screen .task-tbl th { text-align:left; padding:11px 14px; font:700 10px 'Inter',sans-serif;
+      text-transform:uppercase; letter-spacing:.05em; color:#8b93a1; background:#f4f6f9; white-space:nowrap;
+      border-bottom:1px solid #e5e9ef; }
+    body.flow-screen .task-tbl td { padding:12px 14px; border-bottom:1px solid #eef1f5; color:#111827; }
+    body.flow-screen .task-tbl tbody tr:nth-child(even) td { background:#fbfcfe; }
+    body.flow-screen .task-tbl tbody tr:hover td { background:#f0f2fb; }
+    /* status pills → comp .badge shape */
+    body.flow-screen .sbadge { border-radius:999px !important; padding:3px 10px !important;
+      font:700 10.5px 'Inter',sans-serif !important; }
+    /* sidebar card head → ctitle look */
+    body.flow-screen .side-panel-head { background:#fff !important; border-bottom:1px solid #eef1f5 !important;
+      padding:15px 20px 10px !important; }
+    body.flow-screen .side-panel-head h3 { font:700 14px 'Inter',sans-serif !important; color:#111827; gap:9px; }
+    body.flow-screen .side-panel-head h3 svg { width:26px !important; height:26px !important; padding:6px;
+      box-sizing:border-box; border-radius:9px; background:#eef2ff; color:#4f46e5 !important; }
+    /* 2-col task layout → comp 1.5fr / 1fr */
+    body.flow-screen .admin-2col { grid-template-columns: 1.5fr 1fr !important; }
+    @media (max-width:1100px){ body.flow-screen .admin-2col { grid-template-columns:1fr !important; } }
   </style>
 
   <script>
