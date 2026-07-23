@@ -1122,8 +1122,15 @@
     body.flow-screen .side-panel-head h3 { font:700 14px 'Inter',sans-serif !important; color:#111827; gap:9px; }
     body.flow-screen .side-panel-head h3 svg { width:26px !important; height:26px !important; padding:6px;
       box-sizing:border-box; border-radius:9px; background:#eef2ff; color:#4f46e5 !important; }
-    /* 2-col task layout → comp 1.5fr / 1fr */
-    body.flow-screen .admin-2col { grid-template-columns: 1.5fr 1fr !important; }
+    /* 2-col task layout → comp 1.5fr / 1fr.
+       minmax(0,…) + min-width:0 let each track shrink below its content's min-size, so a
+       wide table (esp. the 5-col Inventory Snapshot once loaded) scrolls inside its card
+       instead of ballooning the sidebar track and overlapping the main column. */
+    body.flow-screen .admin-2col { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) !important;
+      align-items: start; }
+    body.flow-screen .admin-main, body.flow-screen .admin-side { min-width: 0; }
+    body.flow-screen .admin-side .chart-card { min-width: 0; }
+    body.flow-screen #invSnapshotWrap, body.flow-screen #activityFeed { overflow: auto; }
     @media (max-width:1100px){ body.flow-screen .admin-2col { grid-template-columns:1fr !important; } }
   </style>
 
