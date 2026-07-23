@@ -188,15 +188,20 @@ async function saveRequest() {
     // Auto-generate the branded PR PDF and save it to Drive + the PDF Link column (best-effort,
     // never blocks creation). No tab pops open (background) — it's an automatic archive on creation.
     let extra = '', savedLink = '';
-    try {
-      btn.textContent = 'Saving PDF...';
-      const { link } = await generateFlowPdf('/flow/pr-pdf',
-        { prNo: res.prNo, customer, date, requestedBy: prSession.name, doc,
-          items: items.map(i => ({ itemNo: i.itemNo, itemName: i.itemName, qty: i.qty, uom: i.uom, remarks: i.remarks })) },
-        'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
-      savedLink = link || '';
-      extra = link ? ' · PDF saved to Drive' : ' · PDF pending (generate later if needed)';
-    } catch (e) { extra = ' · PDF could not be generated (you can generate it later)'; }
+    btn.textContent = 'Saving PDF...';
+    const pdfPayload = { prNo: res.prNo, customer, date, requestedBy: prSession.name, doc,
+      items: items.map(i => ({ itemNo: i.itemNo, itemName: i.itemName, qty: i.qty, uom: i.uom, remarks: i.remarks })) };
+    // Best-effort, never blocks creation — but retry once, since a single transient Drive/upload blip
+    // otherwise strands the PR with no PDF (the Generate PR PDF button on the row is the manual backstop).
+    for (let attempt = 0; attempt < 2 && !savedLink; attempt++) {
+      try {
+        if (attempt) await new Promise(r => setTimeout(r, 800));
+        const { link } = await generateFlowPdf('/flow/pr-pdf', pdfPayload,
+          'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
+        savedLink = link || '';
+      } catch (e) { /* best-effort; retry once, then leave it for manual regeneration */ }
+    }
+    extra = savedLink ? ' · PDF saved to Drive' : ' · PDF pending (use “Generate PR PDF” on the row)';
     if (droppedDupes) extra += ` · ${droppedDupes} duplicate line(s) removed`;
     flowMsg('formMsg', `${res.message} (${res.prNo})${extra}`, true);
     await loadRequests();
@@ -336,6 +341,11 @@ function rowActions(r) {
   // (sales "My Requests" and the admin/oversight lists alike).
   const view = r.pdfLink
     ? ` <a class="link-btn" href="${flowEsc(r.pdfLink)}" target="_blank" style="margin-left:0.5rem;">View PDF</a>` : '';
+  // Recovery: if the auto-save on creation missed (no pdfLink), let the owner / admin regenerate it
+  // from any status — otherwise a transient Drive blip strands the PR without a PDF until it returns.
+  const canRegen = canSource || (prRole === 'sales' && String(r.requestedBy) === String(prSession.name));
+  if (!r.pdfLink && canRegen)
+    return open + docs + ` <button class="link-btn" onclick='openPdf("${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">Generate PR PDF</button>`;
   if (prRole === 'sales' && r.status === 'Returned to Sales')
     return open + docs + ` <button class="link-btn" onclick='openPdf("${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">PR PDF</button>` + view;
   return open + docs + view;
@@ -384,8 +394,12 @@ function openPr(no) {
       <button class="btn btn-primary" onclick="makeQuotation('${flowEsc(no)}')">Create Quotation</button>`;
   } else {
     body.innerHTML = readonlyTable(r, false);
+    // Same recovery affordance as the list: regenerate a missing PDF from any status.
+    const canRegen = canSource || (prRole === 'sales' && String(r.requestedBy) === String(prSession.name));
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
-      ${canSource ? srcEditBtn(no) : ''}`;
+      ${canSource ? srcEditBtn(no) : ''}
+      ${!r.pdfLink && canRegen ? `<button class="btn btn-secondary" onclick="openPdf('${flowEsc(no)}')">Generate PR PDF</button>` : ''}
+      ${r.pdfLink ? `<a class="btn btn-secondary" href="${flowEsc(r.pdfLink)}" target="_blank">View PDF</a>` : ''}`;
   }
   document.getElementById('prModal').classList.add('open');
 }
