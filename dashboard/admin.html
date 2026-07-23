@@ -213,7 +213,7 @@
       </h2>
 
       <div class="stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1.25rem;">
-        <div class="chart-card fkpi"><div class="fkpi-l">Sales Invoiced</div><div class="fkpi-v" id="afkpiSales">—</div></div>
+        <div class="chart-card fkpi spot"><div class="fkpi-l">Sales Invoiced</div><div class="fkpi-v" id="afkpiSales">—</div></div>
         <div class="chart-card fkpi"><div class="fkpi-l">Total COGS</div><div class="fkpi-v" id="afkpiCogs">—</div></div>
         <div class="chart-card fkpi"><div class="fkpi-l">Gross Profit</div><div class="fkpi-v" id="afkpiGp">—</div></div>
         <div class="chart-card fkpi"><div class="fkpi-l">AP Outstanding</div><div class="fkpi-v" id="afkpiAp">—</div></div>
@@ -1564,6 +1564,71 @@
       </div>
     </div>
   </div>
+
+  <!-- ══ Comp design map: express the real admin components in the flow-screen comp's
+       visual system (kpi spotlight, .ctitle icon-headers, .tab pills, .ptable, .badge).
+       Loaded last so it wins the cascade; no JS/id/handler change. ══ -->
+  <style>
+    /* ── Process-Flow KPI strip → comp .kpi cards (spotlight on the first) ── */
+    body.flow-screen .fkpi { position: relative; overflow: hidden; padding: 16px 17px !important; }
+    body.flow-screen .fkpi::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, #6a63ea, #4f46e5); }
+    body.flow-screen .fkpi .fkpi-l { font: 700 10.5px 'Inter', sans-serif; letter-spacing: .05em;
+      text-transform: uppercase; color: #8b93a1; }
+    body.flow-screen .fkpi .fkpi-v { font: 800 25px 'Inter', sans-serif; color: #111827;
+      font-variant-numeric: tabular-nums; margin-top: 11px; }
+    body.flow-screen .fkpi.spot { background: #141414 !important; border-color: #141414 !important; }
+    body.flow-screen .fkpi.spot::before { background: #6366f1; }
+    body.flow-screen .fkpi.spot .fkpi-l { color: #9a9a9a; }
+    body.flow-screen .fkpi.spot .fkpi-v { color: #fff; }
+
+    /* ── Section heads → comp .ctitle (icon in an indigo chip + 15px bold) ── */
+    body.flow-screen .section-head { font: 700 15px 'Inter', sans-serif !important; color: #111827; gap: 9px; }
+    body.flow-screen .section-head svg,
+    body.flow-screen .side-panel-head h3 svg { width: 30px !important; height: 30px !important; padding: 7px;
+      box-sizing: border-box; border-radius: 9px; background: #eef2ff; color: #4f46e5 !important; }
+    body.flow-screen .side-panel-head h3 svg { width: 26px !important; height: 26px !important; padding: 6px; }
+    body.flow-screen .section-head .sh-meta { font: 500 12px 'Inter', sans-serif; color: #8b93a1; }
+    body.flow-screen .side-panel-head { background: #fff !important; border-bottom: 1px solid #eef1f5 !important; }
+    body.flow-screen .side-panel-head h3 { font: 700 14px 'Inter', sans-serif !important; color: #111827; gap: 9px; }
+
+    /* ── Task Overview tabs → comp .tab pills ── */
+    body.flow-screen .task-tab { border-radius: 999px !important; padding: 8px 14px !important;
+      font: 600 12px 'Inter', sans-serif !important; background: #fff !important;
+      border: 1px solid #e2e6ec !important; color: #8b93a1 !important; box-shadow: none !important; }
+    body.flow-screen .task-tab:hover { border-color: #c7d2fe !important; transform: translateY(-1px); }
+    body.flow-screen .task-tab.active { color: #fff !important;
+      background: linear-gradient(180deg, #6a63ea, #4f46e5) !important; border-color: #4f46e5 !important;
+      box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .7) !important; }
+
+    /* ── Clickable KPI filter cards → comp .kpi look (top-rule, dark values) ── */
+    body.flow-screen #taskStatCards .chart-card { text-align: left !important; padding: 16px 17px !important;
+      position: relative; overflow: hidden; }
+    body.flow-screen #taskStatCards .chart-card::before { content: ""; position: absolute; top: 0; left: 0;
+      right: 0; height: 3px; background: linear-gradient(90deg, #6a63ea, #4f46e5); opacity: .5; }
+    body.flow-screen #taskStatCards .chart-card.kpi-active { background: #fff !important;
+      border-color: #4f46e5 !important; box-shadow: 0 0 0 2px rgba(79, 70, 229, .18) !important; }
+    body.flow-screen #taskStatCards .chart-card.kpi-active::before { opacity: 1; }
+    body.flow-screen #taskStatCards .chart-card > div:nth-child(1) { color: #8b93a1 !important;
+      font: 700 10.5px 'Inter', sans-serif !important; letter-spacing: .05em; }
+    body.flow-screen #taskStatCards .chart-card > div:nth-child(2) { color: #111827 !important;
+      font: 800 25px 'Inter', sans-serif !important; }
+
+    /* ── Task tables → comp .ptable ── */
+    body.flow-screen .task-tbl { width: 100%; border-collapse: collapse; font: 400 12.5px 'Inter', sans-serif; }
+    body.flow-screen .task-tbl th { text-align: left; padding: 11px 14px; font: 700 10px 'Inter', sans-serif;
+      text-transform: uppercase; letter-spacing: .05em; color: #8b93a1; background: #f4f6f9;
+      white-space: nowrap; border-bottom: 1px solid #e5e9ef; }
+    body.flow-screen .task-tbl td { padding: 12px 14px; border-bottom: 1px solid #eef1f5; color: #111827; }
+    body.flow-screen .task-tbl tbody tr:nth-child(even) td { background: #fbfcfe; }
+    body.flow-screen .task-tbl tbody tr:hover td { background: #f0f2fb; }
+
+    /* ── Status pills → comp .badge shape ── */
+    body.flow-screen .sbadge { border-radius: 999px !important; padding: 3px 10px !important;
+      font: 700 10.5px 'Inter', sans-serif !important; }
+
+    /* Module cards + section wrappers keep flow-screen's .chart-card treatment */
+  </style>
 
   <script>
     // Header date pill
