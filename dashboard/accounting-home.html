@@ -259,6 +259,26 @@
       .sm-tl-ribbon { gap:3px; }
       .sm-tl-ribbon-label { display:none; }
     }
+    /* ══ Comp component classes (accounting-home comp) ══ */
+    body.flow-screen .card{background:#fff;border:1px solid #e2e6ec;border-radius:18px;box-shadow:0 1px 2px rgba(15,23,42,.05),0 12px 30px -20px rgba(15,23,42,.4);}
+    body.flow-screen .ctitle{font:700 15px 'Inter',sans-serif;color:#111827;display:flex;align-items:center;gap:9px;}
+    body.flow-screen .ctitle .ci{width:30px;height:30px;border-radius:9px;background:#eef2ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    body.flow-screen .ptable{width:100%;border-collapse:collapse;font:400 12.5px 'Inter',sans-serif;}
+    body.flow-screen .ptable th{text-align:left;padding:11px 14px;font:700 10px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#8b93a1;background:#f4f6f9;white-space:nowrap;border-bottom:1px solid #e5e9ef;}
+    body.flow-screen .ptable th.n,body.flow-screen .ptable td.n{text-align:right;font-variant-numeric:tabular-nums;}
+    body.flow-screen .ptable td{padding:12px 14px;border-bottom:1px solid #eef1f5;color:#111827;white-space:nowrap;}
+    body.flow-screen .ptable tbody tr:nth-child(even) td{background:#fbfcfe;}
+    body.flow-screen .ptable tbody tr:hover td{background:#f0f2fb;}
+    body.flow-screen .ptable tr.tot td{font-weight:800;color:#3730a3;background:#eef2ff;border-top:2px solid #4f46e5;border-bottom:none;}
+    body.flow-screen .badge{padding:3px 10px;border-radius:999px;font:700 10.5px 'Inter',sans-serif;display:inline-flex;align-items:center;gap:5px;}
+    body.flow-screen .acct-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;}
+    @media(max-width:1100px){body.flow-screen .acct-kpis{grid-template-columns:repeat(3,1fr);}}
+    @media(max-width:640px){body.flow-screen .acct-kpis{grid-template-columns:repeat(2,1fr);}}
+    body.flow-screen .acct-kpis .kpi .v{font-size:20px;}
+    body.flow-screen .acct-2col{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;align-items:start;margin-bottom:16px;}
+    @media(max-width:900px){body.flow-screen .acct-2col{grid-template-columns:1fr;}}
+    body.flow-screen .sm-mini{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #eef1f5;}
+    body.flow-screen .sm-mini:last-child{border-bottom:none;}
   </style>
 
 
@@ -277,31 +297,31 @@
           <a href="accounting-billing.html" class="hero-pill">Billing →</a></div>
     </div>
 
-    <!-- Revenue & Net Profit report (per Sales Order, Month/Year) -->
-    <section class="pnl-card">
-      <div class="pnl-head">
-        <div>
-          <h2>Revenue &amp; Net Profit Report</h2>
-          <div class="pnl-state" id="pnlState">Loading…</div>
-        </div>
-        <div class="pnl-controls">
-          <label style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Year</label>
-          <select id="pnlYear"></select>
-        </div>
-      </div>
-      <div class="pnl-tiles" id="pnlTotals"></div>
-      <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
-    </section>
 
-    <!-- KPI summary (read-only, from the flow backend) -->
-    <div class="sect-head"><h2>Financial Snapshot</h2><span id="kpiState" style="font-size:0.74rem;color:var(--text-muted);">Loading…</span></div>
-    <div class="stat-grid kpi-grid" id="kpiGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.85rem;margin-bottom:1.5rem;">
-      <div class="stat-card"><div class="stat-card-label">Total Sales</div><div class="stat-card-value" id="kpiSales">—</div></div>
-      <div class="stat-card"><div class="stat-card-label">Total COGS</div><div class="stat-card-value" id="kpiCogs">—</div></div>
-      <div class="stat-card"><div class="stat-card-label">Gross Profit</div><div class="stat-card-value" id="kpiGp">—</div></div>
-      <div class="stat-card"><div class="stat-card-label">AP Outstanding</div><div class="stat-card-value" id="kpiAp">—</div></div>
-      <div class="stat-card"><div class="stat-card-label">Inventory Value</div><div class="stat-card-value" id="kpiInv">—</div></div>
-      <div class="stat-card"><div class="stat-card-label">Sales Orders</div><div class="stat-card-value" id="kpiSo">—</div></div>
+    <!-- KPI row (comp) -->
+    <div class="acct-kpis">
+      <div class="kpi"><div class="l">Total Sales</div><div class="v" id="kpiSales">—</div></div>
+      <div class="kpi"><div class="l">Total COGS</div><div class="v" id="kpiCogs">—</div></div>
+      <div class="kpi spot"><div class="top"><span class="l">Gross Profit</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v" id="kpiGp">—</div><div class="d up" id="kpiGpMargin">—</div></div>
+      <div class="kpi"><div class="l">AP Outstanding</div><div class="v" id="kpiAp">—</div></div>
+      <div class="kpi"><div class="l">Inventory</div><div class="v" id="kpiInv">—</div></div>
+      <div class="kpi"><div class="l">Net Profit</div><div class="v" id="kpiNet" style="color:#15803d">—</div></div>
+    </div>
+    <div style="font:600 11px 'Inter',sans-serif;color:#8b93a1;margin:-6px 0 16px 4px;"><span id="kpiState">Loading…</span></div>
+
+    <!-- 2-col summary: monthly revenue | recent shipments -->
+    <div class="acct-2col">
+      <div class="card" style="overflow:hidden;">
+        <div style="padding:15px 20px 10px"><span class="ctitle"><span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>Revenue &amp; Net Profit · <span id="acctRevYear">FY</span></span></div>
+        <div style="overflow-x:auto;"><table class="ptable">
+          <thead><tr><th>Month</th><th class="n">Revenue</th><th class="n">COGS</th><th class="n">Net</th></tr></thead>
+          <tbody id="acctRevBody"><tr><td colspan="4" style="text-align:center;color:#8b93a1;padding:1rem;">Loading…</td></tr></tbody>
+        </table></div>
+      </div>
+      <div class="card" style="padding:18px 20px;">
+        <span class="ctitle" style="margin-bottom:14px"><span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>Shipment Monitoring</span>
+        <div id="acctSmRecent"><div style="color:#8b93a1;font:400 12px 'Inter',sans-serif;">Loading shipments…</div></div>
+      </div>
     </div>
 
     <div class="sect-head">
@@ -411,6 +431,25 @@
       </a>
     </div>
 
+
+    <div class="ctitle" style="margin:26px 0 12px"><span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>Detailed reports</div>
+
+    <!-- Revenue & Net Profit report (per Sales Order, Month/Year) -->
+    <section class="pnl-card">
+      <div class="pnl-head">
+        <div>
+          <h2>Revenue &amp; Net Profit Report</h2>
+          <div class="pnl-state" id="pnlState">Loading…</div>
+        </div>
+        <div class="pnl-controls">
+          <label style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Year</label>
+          <select id="pnlYear"></select>
+        </div>
+      </div>
+      <div class="pnl-tiles" id="pnlTotals"></div>
+      <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
+    </section>
+
     <!-- Shipment Monitoring -->
     <div class="sm-section" style="margin-top:1.5rem;">
       <div class="sm-section-hdr" onclick="acctSmToggleSection(this)">
@@ -488,21 +527,25 @@
         fetchFlow('getInvoices').catch(() => ({ data: [] })),
         fetchFlow('getAPAging').catch(() => ({ data: [] })),
         fetchFlow('getInventory').catch(() => ({ data: [] })),
-        fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
-      ]).then(([inv, ap, stock, so]) => {
+        fetchFlow('getExpenses').catch(() => ({ data: [] })),
+      ]).then(([inv, ap, stock, exp]) => {
         const invoices = (inv && inv.data) || [], aps = (ap && ap.data) || [];
-        const items = (stock && stock.data) || [], sos = (so && so.data) || [];
+        const items = (stock && stock.data) || [], exps = (exp && exp.data) || [];
         const sales = invoices.reduce((s, v) => s + flowNum(v.totalSales), 0);
         const cogs = invoices.reduce((s, v) => s + flowNum(v.totalCOGS), 0);
+        const gp = sales - cogs;
         const apOut = aps.filter(a => (a.status || '').toLowerCase() !== 'paid')
           .reduce((s, a) => s + (flowNum(a.amountPHP) - flowNum(a.paidPHP)), 0);
         const invVal = flowStockItems(items).reduce((s, i) => s + flowNum(i.totalLanded), 0);   // real stocks only
+        const expTot = exps.reduce((s, e) => s + flowNum(e.amount), 0);
+        const netProfit = gp - expTot;
         set('kpiSales', flowMoney(sales, 'PHP'));
         set('kpiCogs', flowMoney(cogs, 'PHP'));
-        set('kpiGp', flowMoney(sales - cogs, 'PHP'));
+        set('kpiGp', flowMoney(gp, 'PHP'));
+        set('kpiGpMargin', sales > 0 ? (gp / sales * 100).toFixed(0) + '% margin' : '—');
         set('kpiAp', flowMoney(apOut, 'PHP'));
         set('kpiInv', flowMoney(invVal, 'PHP'));
-        set('kpiSo', String(sos.length));
+        set('kpiNet', flowMoney(netProfit, 'PHP'));
         if (state) state.textContent = 'Live · from Process Flow';
       }).catch(() => { if (state) state.textContent = 'Unavailable'; });
     })();

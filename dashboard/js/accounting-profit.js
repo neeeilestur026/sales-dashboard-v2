@@ -185,6 +185,30 @@ function pnlBuildMonths(year) {
   });
 }
 
+// Fill the comp summary Revenue table (#acctRevBody) — Month | Revenue | COGS | Net + Total.
+function pnlRenderSimple(months, year) {
+  const yl = document.getElementById('acctRevYear');
+  if (yl) yl.textContent = year ? ('FY ' + year) : 'All years';
+  const body = document.getElementById('acctRevBody');
+  if (!body) return;
+  if (!months || !months.length) {
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#8b93a1;padding:1rem;">No data for this period.</td></tr>';
+    return;
+  }
+  const asc = months.slice().sort((a, b) => String(a.ym).localeCompare(String(b.ym)));   // Jan → Dec
+  let tR = 0, tC = 0, tN = 0;
+  const rows = asc.map(m => {
+    const net = (m.net != null) ? m.net : (m.grossProfit - (m.expTotal || 0));
+    tR += m.revenue; tC += m.cogs; tN += net;
+    return `<tr><td style="font-weight:700">${_pnlFmtMonth(m.ym)}</td>` +
+      `<td class="n">${_pm(m.revenue)}</td>` +
+      `<td class="n" style="color:#8b93a1">${_pm(m.cogs)}</td>` +
+      `<td class="n" style="color:${net >= 0 ? '#15803d' : '#b91c1c'};font-weight:700">${_pm(net)}</td></tr>`;
+  }).join('');
+  body.innerHTML = rows +
+    `<tr class="tot"><td>Total</td><td class="n">${_pm(tR)}</td><td class="n">${_pm(tC)}</td><td class="n">${_pm(tN)}</td></tr>`;
+}
+
 function pnlRender() {
   const state = document.getElementById('pnlState');
   const year = document.getElementById('pnlYear').value;     // '' = all years
@@ -200,6 +224,9 @@ function pnlRender() {
   const totExp = months.reduce((s, m) => s + m.expTotal, 0);
   const totNet = totGP - totExp;
   const margin = totRev > 0 ? (totGP / totRev * 100).toFixed(1) + '%' : '—';
+
+  // Comp summary card: a simple Month | Revenue | COGS | Net table (same year as this report).
+  pnlRenderSimple(months, year);
 
   // KPI strip (scope totals)
   const totals = document.getElementById('pnlTotals');

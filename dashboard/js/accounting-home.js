@@ -59,6 +59,28 @@ function _acctSmRenderList(result) {
     total + ' shipments · ' + inTransit + ' in transit · ' + arrived + ' arrived';
 
   _acctSmRender('All');
+  _acctSmRenderRecent();
+}
+
+// Comp summary card: the most-recent few shipments, display-only (the full interactive
+// list with the timeline lives in the section below).
+function _acctSmRenderRecent() {
+  const el = document.getElementById('acctSmRecent');
+  if (!el) return;
+  const statusColor = { Pending: '#f59e0b', 'In Transit': '#3b82f6', Arrived: '#22c55e', Delivered: '#8b5cf6', Cancelled: '#ef4444' };
+  const rows = _acctSmAll.slice(0, 4);
+  if (!rows.length) { el.innerHTML = '<div style="color:#8b93a1;font:400 12px \'Inter\',sans-serif;padding:6px 0;">No shipments yet.</div>'; return; }
+  el.innerHTML = rows.map(s => {
+    const color = statusColor[s.status] || '#64748b';
+    const sub = [s.principal, s.mode, (s.eta ? 'ETA ' + s.eta : '')].filter(Boolean).join(' · ');
+    return `<div class="sm-mini">
+      <div style="min-width:0;">
+        <div style="font:700 12.5px 'Inter',sans-serif;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_acctEsc(s.poNo || '—')}</div>
+        <div style="font:500 11px 'Inter',sans-serif;color:#8b93a1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_acctEsc(sub)}</div>
+      </div>
+      <span class="badge" style="background:${color}22;color:${color};flex-shrink:0;">${_acctEsc(s.status)}</span>
+    </div>`;
+  }).join('');
 }
 
 function acctSmFilter(status, btn) {
