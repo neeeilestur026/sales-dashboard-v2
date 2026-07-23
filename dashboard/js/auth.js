@@ -412,6 +412,8 @@ function renderNavbar(activePage) {
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
+          <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
+          <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
@@ -467,6 +469,8 @@ function renderNavbar(activePage) {
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
+          <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
+          <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
         </div>

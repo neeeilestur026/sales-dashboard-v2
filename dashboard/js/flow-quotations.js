@@ -1,6 +1,7 @@
 /* flow-quotations.js — quotations that load items from inventory */
 let qInventory = [];
 let qList = [];
+let qHasSO = {};   // A145: quotationNo → true when a sales order references it (Sent-with-no-SO nudge)
 let qSession = null;
 
 let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
@@ -452,8 +453,13 @@ async function loadQuotations() {
   try {
     // Sales see only their own; oversight roles (admin/accounting/management/director) see all.
     const params = qIsOversight ? {} : { createdBy: qSession.name };
-    const res = await fetchFlow('getQuotations', params);
+    const [res, soRes] = await Promise.all([
+      fetchFlow('getQuotations', params),
+      fetchFlow('getSalesOrders').catch(() => ({ data: [] })),   // A145: which quotations became SOs
+    ]);
     qList = (res && res.data) || [];
+    qHasSO = {};
+    ((soRes && soRes.data) || []).forEach(s => { if (s.quotationNo) qHasSO[String(s.quotationNo)] = true; });
     if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
     qBuildMonthOptions();
     renderQuotationList();
@@ -534,7 +540,10 @@ function quotationActions(q) {
   if ((isSales || isAdmin) && editable) a += B(`editQuotation("${no}")`, 'Edit') + B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
   // Client came back asking for a different price? Reopen it — creator, sales or admin.
   if (reopenable && (isCreator || isSales || isAdmin)) a += B(`reviseQuotationAction("${no}")`, 'Revise');
-  if (isSales && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
+  // A145: Send-to-Client is offered to the CREATOR and to admin/management/director — not sales-only —
+  // so an admin- or management-created quotation doesn't strand at Approved with no one able to send it.
+  const canSend = isCreator || isSales || isAdmin || role === 'management' || role === 'director';
+  if (canSend && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
   return a;
 }
 
@@ -553,7 +562,10 @@ function quotationRow(q) {
   const st = q.status || 'Draft';
   const noteTip = (st === 'Rejected' && q.approvalNote) ? ` title="Reason: ${flowEsc(q.approvalNote)}"` : '';
   const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
-  return `<tr><td>${flowEsc(q.quotationNo)}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
+  // A145: a Sent quotation with no sales order yet — nudge to create the SO.
+  const soNudge = (st === 'Sent' && !qHasSO[String(q.quotationNo)])
+    ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="Sent to the client but no sales order created yet">no SO</span>` : '';
+  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn"${qPdfState(q) === 'fresh'
@@ -796,6 +808,10 @@ function openPdfModal(no) {
     const vs = document.getElementById('pdfVat'); if (vs && prev.vatOption) vs.value = prev.vatOption;
     const dm = document.getElementById('pdfDescMode'); if (dm && prev.descMode) dm.value = prev.descMode;
   }
+  // A145: prefill the RFQ line from the client's own RFQ number carried from the pricing request
+  // (only when nothing more specific was restored above) so it isn't re-typed and prints on the PDF.
+  const rfqEl = document.getElementById('pdfRfqNo');
+  if (rfqEl && !rfqEl.value && q.clientRefNo) rfqEl.value = q.clientRefNo;
   // A regenerated document must re-attach any product photo — it was never stored.
   const imgWarn = document.getElementById('pdfImgWarn');
   if (imgWarn) {
@@ -876,6 +892,7 @@ async function submitPdf() {
   const doc = {
     address: g('Address'), attention: g('Attention'), designation: g('Designation'), email: g('Email'),
     subject: g('Subject'), rfqNo: g('RfqNo'), note: g('Note'),
+    plantSite: (pdfQuote && pdfQuote.plantSite) || '',   // A145: plant-site destination carried from the PR
     validity: g('Validity'), delivery: g('Delivery'), payment: g('Payment'), warranty: g('Warranty'),
     sigName: g('SigName'), sigDesignation: g('SigDesignation'), sigViber: g('SigViber'),
     sigMobile: g('SigMobile'), sigEmail: g('SigEmail'), descMode: document.getElementById('pdfDescMode').value,

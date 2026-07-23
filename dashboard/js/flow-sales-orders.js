@@ -2,6 +2,7 @@
 let soQuotations = [];
 let soList = [];
 let soCds = {};        // soNo → SOCostDetails record (for the COGS column + Costs editor prefill)
+let soHasPO = {};      // A145: soNo → true when a purchase order references it (no-PO nudge)
 let soSession = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -20,9 +21,12 @@ async function loadQuotationOptions() {
     const r = await fetchFlow('getQuotations');
     soQuotations = (r && r.data) || [];
   } catch (e) { soQuotations = []; }
+  // A145: only a quotation that cleared approval (Approved/Sent) should become a sales order —
+  // loading a Draft/Pending/Rejected quote would bypass the entire approval workflow.
+  const ready = soQuotations.filter(q => { const s = String(q.status || ''); return s === 'Approved' || s === 'Sent'; });
   document.getElementById('loadQuotation').innerHTML =
-    '<option value="">— select a quotation —</option>' + soQuotations.map(q =>
-      `<option value="${flowEsc(q.quotationNo)}">${flowEsc(q.quotationNo)} — ${flowEsc(q.customer)} (${flowMoney(q.total, 'PHP')})</option>`).join('');
+    '<option value="">— select an approved quotation —</option>' + ready.map(q =>
+      `<option value="${flowEsc(q.quotationNo)}">${flowEsc(q.quotationNo)} — ${flowEsc(q.customer)} · ${flowEsc(q.status)} (${flowMoney(q.total, 'PHP')})</option>`).join('');
 }
 
 function loadFromQuotation() {
@@ -67,11 +71,14 @@ function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach(tr => {
     const itemNo = tr.querySelector('.itemNo').value.trim();
-    if (!itemNo) return;
-    items.push({
-      itemNo, itemName: tr.querySelector('.itemName').value.trim(),
-      qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value)
-    });
+    const itemName = tr.querySelector('.itemName').value.trim();
+    const qty = flowNum(tr.querySelector('.qty').value);
+    const price = flowNum(tr.querySelector('.price').value);
+    // A145: keep any line that carries a description or a quantity — DON'T silently drop a real line
+    // just because its item code is blank (that undershot the SO total vs the quotation). Blank code
+    // falls back to the shared 'N/A' key, consistent with the rest of the flow.
+    if (!itemNo && !itemName && !(qty > 0)) return;   // skip only fully-empty rows
+    items.push({ itemNo: itemNo || 'N/A', itemName: itemName || itemNo, qty, price });
   });
   return items;
 }
@@ -137,13 +144,16 @@ async function loadSOs() {
   const c = document.getElementById('listContainer');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const [res, cdRes] = await Promise.all([
+    const [res, cdRes, poRes] = await Promise.all([
       fetchFlow('getSalesOrders'),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),   // A145: which SOs have a PO
     ]);
     soList = (res && res.data) || [];
     soCds = {};
     ((cdRes && cdRes.data) || []).forEach(cd => { soCds[String(cd.soNo)] = cd; });
+    soHasPO = {};
+    ((poRes && poRes.data) || []).forEach(po => { if (po.soNo) soHasPO[String(po.soNo)] = true; });
     // Most recent sales order first (by date, then SO number).
     soList.sort((a, b) =>
       (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
@@ -208,7 +218,7 @@ function renderSOs() {
   if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
-    <tr><td>${flowEsc(s.soNo)}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
+    <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
     <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
     <td style="white-space:nowrap;"><button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>Costs</button>
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>

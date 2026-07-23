@@ -39,7 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRoleUI();
   if (prRole === 'sales' || prRole === 'admin') {
     document.getElementById('date').value = flowToday();
-    await loadInventory();
+    await Promise.all([loadInventory(), loadClients()]);
+    const cust = document.getElementById('customer');
+    if (cust) cust.addEventListener('change', prFillContacts);   // A145: client-master prefill
     addRow();
   }
   await loadRequests();
@@ -101,6 +103,24 @@ function setFilter(btn) {
 async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); prInventory = (r && r.data) || []; }
   catch (e) { prInventory = []; }
+}
+
+// A145: client master → prefill the PR contact block when the customer is chosen (blank fields only).
+let prClients = {};
+async function loadClients() {
+  prClients = {};
+  try {
+    const r = await fetchFlow('getClients');
+    ((r && r.data) || []).forEach(c => { prClients[String(c.customer).toLowerCase()] = c; });
+  } catch (e) { /* prefill is best-effort */ }
+}
+function prFillContacts() {
+  const custEl = document.getElementById('customer');
+  const c = prClients[String((custEl && custEl.value) || '').trim().toLowerCase()];
+  if (!c) return;
+  const fill = (id, v) => { const el = document.getElementById(id); if (el && !el.value && v) el.value = v; };
+  fill('prAddress', c.address); fill('prContact', c.contactPerson); fill('prDesignation', c.designation);
+  fill('prEmail', c.email); fill('prPhone', c.phone); fill('prClientNo', c.rfqRef);
 }
 
 // ─── Sales: request form ─────────────────────────
@@ -184,6 +204,18 @@ async function saveRequest() {
   try {
     const res = await postFlow('createPricingRequest', payload);
     if (!res.success) throw new Error(res.message);
+    // A145: self-populate the client master with any newly-typed contact details (best-effort).
+    if (customer && (doc.companyAddress || doc.contactPerson || doc.contactEmail || doc.contactPhone)) {
+      const prev = prClients[String(customer).toLowerCase()] || {};
+      postFlow('saveClient', {
+        customer, address: doc.companyAddress || prev.address || '',
+        contactPerson: doc.contactPerson || prev.contactPerson || '',
+        designation: doc.designation || prev.designation || '',
+        email: doc.contactEmail || prev.email || '',
+        phone: doc.contactPhone || prev.phone || '',
+        rfqRef: doc.prNumberClient || prev.rfqRef || ''
+      }).catch(() => {});
+    }
     resetForm();
     // Auto-generate the branded PR PDF and save it to Drive + the PDF Link column (best-effort,
     // never blocks creation). No tab pops open (background) — it's an automatic archive on creation.

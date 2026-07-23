@@ -3,6 +3,9 @@ let poSOs = [];
 let poInventory = [];
 let poList = [];
 let poSession = null;
+// A145: quotation No → { _supplier, _currency, <itemNoLower>: supplierPrice } from the originating
+// pricing request's sourcing, so loading an SO can prefill the PO's supplier + FC prices instead of 0.
+let poPricingByQuote = {};
 
 let poCanCreate = false;   // admin/accounting create POs; management/director are approvers only
 
@@ -21,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('date').value = flowToday();
     document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
     document.getElementById('currency').addEventListener('change', recalc);
-    await Promise.all([loadSOOptions(), loadInventory()]);
+    await Promise.all([loadSOOptions(), loadInventory(), loadPricingSourcing()]);
     addRow();
   }
   await loadPOs();
@@ -49,15 +52,44 @@ async function loadInventory() {
     `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
 }
 
+// A145: build quotation-No → sourced-price map from the pricing requests. A quoted PR stores
+// "Quotation <no>" in its Notes (set by createQuotationFromPR), so we can link an SO's quotation back
+// to the supplier prices captured during sourcing.
+async function loadPricingSourcing() {
+  poPricingByQuote = {};
+  try {
+    const r = await fetchFlow('getPricingRequests');
+    ((r && r.data) || []).forEach(pr => {
+      const m = String(pr.notes || '').match(/Quotation\s+(\S+)/i);
+      if (!m) return;
+      const key = m[1].toLowerCase();
+      const map = poPricingByQuote[key] || {};
+      (pr.items || []).forEach(it => {
+        if (it.supplierPrice > 0) {
+          map[String(it.itemNo).toLowerCase()] = flowNum(it.supplierPrice);
+          if (!map._supplier && it.supplier) map._supplier = it.supplier;
+          if (!map._currency && it.currency) map._currency = it.currency;
+        }
+      });
+      poPricingByQuote[key] = map;
+    });
+  } catch (e) { /* prefill is best-effort; falls back to price 0 */ }
+}
+
 function loadFromSO() {
   const no = document.getElementById('loadSO').value;
   const s = poSOs.find(x => String(x.soNo) === String(no));   // migrated SOs may have numeric ids
   if (!s) return;
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('itemRows').innerHTML = '';
+  // A145: prefill supplier + currency + per-item FC price from the originating pricing request's sourcing
+  // (matched via the SO's quotation number), so the buyer isn't re-typing every price from 0.
+  const src = poPricingByQuote[String(s.quotationNo || '').toLowerCase()] || {};
+  if (src._supplier && !document.getElementById('supplier').value) document.getElementById('supplier').value = src._supplier;
+  if (src._currency) { const cs = document.getElementById('currency'); if (cs) { cs.value = src._currency; recalc(); } }
   (s.items || []).forEach(it => {
-    // Carry the full Sales Order qty into the PO (editable — reduce manually if only ordering a shortfall).
-    addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: 0 });
+    const p = src[String(it.itemNo).toLowerCase()] || 0;   // sourced FC price, else 0 (editable)
+    addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: p });
   });
   if (!s.items || !s.items.length) addRow();
   recalc();
@@ -197,15 +229,23 @@ async function loadPOs() {
   const c = document.getElementById('listContainer');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const res = await fetchFlow('getPurchaseOrders');
+    const [res, rcRes] = await Promise.all([
+      fetchFlow('getPurchaseOrders'),
+      fetchFlow('getReceiving').catch(() => ({ data: [] })),   // A145: which POs have been received
+    ]);
     poList = (res && res.data) || [];
+    const poReceived = {};
+    ((rcRes && rcRes.data) || []).forEach(m => { if (m.poNo) poReceived[String(m.poNo)] = true; });
     if (!poList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No purchase orders yet.</p>'; return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>PO No</th><th>SO</th><th>Date</th><th>Supplier</th><th>Cur</th><th class="num">Total (FC)</th><th>Status</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${poList.map(p => {
       const st = p.status || 'Draft';
       const noteTip = (st === 'Rejected' && p.approvalNote) ? ` title="Reason: ${flowEsc(p.approvalNote)}"` : '';
       const noteLine = (st === 'Rejected' && p.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(p.approvalNote)}</div>` : '';
       const soCell = p.soNo ? flowEsc(p.soNo) : '<span class="flow-badge b-pending" title="Purchase order without a sales order — for restocking stock">Restock</span>';
-      return `<tr><td>${flowEsc(p.poNo)}</td><td>${soCell}</td><td>${flowDate(p.date)}</td><td>${flowEsc(p.supplier)}</td>
+      // A145: an approved/sent PO with no receiving yet — nudge to receive the goods.
+      const rcBadge = (!poReceived[String(p.poNo)] && (st === 'Approved' || st === 'Sent'))
+        ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="Approved but no materials receiving recorded yet">not received</span>` : '';
+      return `<tr><td>${flowEsc(p.poNo)}${rcBadge}</td><td>${soCell}</td><td>${flowDate(p.date)}</td><td>${flowEsc(p.supplier)}</td>
       <td>${flowEsc(p.currency)}</td><td class="num">${flowMoney(p.total, p.currency)}</td>
       <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td><td>${p.items.length}</td>
       <td>${p.pdfLink ? `<a href="${flowEsc(p.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
@@ -263,11 +303,14 @@ function editPO(no) {
   document.getElementById('soNo').value = p.soNo || '';
   document.getElementById('supplier').value = p.supplier;
   document.getElementById('currency').value = p.currency || 'PHP';
+  // A145: restore the persisted exchange rate (was dropped before, forcing re-entry on every edit).
+  const fx = document.getElementById('fxRate'); if (fx) fx.value = p.exchangeRate > 0 ? p.exchangeRate : '';
   document.getElementById('date').value = flowDate(p.date);
   document.getElementById('formTitle').textContent = 'Edit ' + p.poNo;
   document.getElementById('itemRows').innerHTML = '';
   (p.items || []).forEach(addRow);
   if (!p.items || !p.items.length) addRow();
+  recalc();   // reflect the restored currency/rate (show FX field + PHP totals)
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 85;   // A144 payment-integrity guardrails: Plant Site + Supplier Price VAT + submit-stage backstops (84: revisePaymentRequest · 83: quotation PDF stamp)
+var FLOW_VERSION = 86;   // A145 flow hardening: money-correctness guards + handoff carry-through + Supplier/Client masters (85: A144 payment guardrails · 84: revisePaymentRequest)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -34,17 +34,20 @@ var SCHEMA = {
   Inventory: ['Item No', 'Description', 'Available Balance', 'Purchase Price/Unit',
               'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated', 'Type'],
 
+  //    A145: 'Plant Site' + 'Client Ref No' carry PR context onto the quotation (appended at END).
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %',
-                   'PDF Data JSON'],
+                   'PDF Data JSON', 'Plant Site', 'Client Ref No'],
+  //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
-                   'Orig Item No', 'Orig Item Name'],
+                   'Orig Item No', 'Orig Item Name', 'Supplier VAT'],
 
   SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price'],
 
+  //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
   PurchaseOrders:     ['PO No', 'SO No', 'Date', 'Supplier', 'Currency', 'Total Purchase (FC)', 'Status', 'Created By', 'Created At', 'PDF Link',
-                       'Created By Role', 'Approval Note', 'Approved By', 'Approved At'],
+                       'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Exchange Rate'],
   PurchaseOrderItems: ['PO No', 'Item No', 'Item Name', 'Qty', 'Purchase Price/Unit (FC)', 'Total (FC)'],
 
   APAging: ['AP No', 'PO No', 'Supplier', 'Currency', 'Amount (FC)', 'Amount (PHP)', 'Status',
@@ -101,6 +104,12 @@ var SCHEMA = {
   // ── Generic per-record document attachments (any process step) ──
   Documents: ['Doc ID', 'Module', 'Ref No', 'Doc Type', 'File Name', 'Drive Link', 'File ID',
               'Uploaded By', 'Uploaded At'],
+
+  // ── A145 masters: prefill the fields re-typed on every payment request / purchase request ──
+  Suppliers: ['Supplier', 'Bank Name', 'Account Name', 'Account Number', 'Payment Method', 'Currency',
+              'TIN', 'Address', 'Notes', 'Updated By', 'Updated At'],
+  Clients:   ['Customer', 'Address', 'Contact Person', 'Designation', 'Email', 'Phone', 'RFQ Ref',
+              'Payment Terms', 'Notes', 'Updated By', 'Updated At'],
 
   // ── Marketing workspace (B2B industrial marketing) ──
   MktgLeads:      ['Lead No', 'Date', 'Company', 'Contact', 'Email', 'Phone', 'Industry', 'Source',
@@ -374,10 +383,28 @@ function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, c
   var sh = _sheet('Inventory');
   var existing = _findInventory(itemNo);
   if (existing) {
-    var balance = _num(existing['Available Balance']) + _num(deltaQty);
+    var oldQty = _num(existing['Available Balance']);
+    var addQty = _num(deltaQty);
+    var balance = oldQty + addQty;
     if (balance < 0) balance = 0;
-    var purchase = (newPurchase === null || newPurchase === undefined) ? _num(existing['Purchase Price/Unit']) : _num(newPurchase);
-    var shipping = (newShipping === null || newShipping === undefined) ? _num(existing['Shipping Cost/Unit']) : _num(newShipping);
+    var oldPurchase = _num(existing['Purchase Price/Unit']);
+    var oldShipping = _num(existing['Shipping Cost/Unit']);
+    // A145: on a receiving (positive delta with a supplied unit cost) blend the incoming cost with the
+    // existing on-hand value — WEIGHTED AVERAGE — instead of overwriting (which silently revalued all
+    // prior stock to the newest price). Issuance (negative/no-cost delta) preserves the running average.
+    var purchase, shipping;
+    if (addQty > 0 && newPurchase !== null && newPurchase !== undefined) {
+      var denomP = oldQty + addQty;
+      purchase = denomP > 0 ? (oldQty * oldPurchase + addQty * _num(newPurchase)) / denomP : _num(newPurchase);
+    } else {
+      purchase = (newPurchase === null || newPurchase === undefined) ? oldPurchase : _num(newPurchase);
+    }
+    if (addQty > 0 && newShipping !== null && newShipping !== undefined) {
+      var denomS = oldQty + addQty;
+      shipping = denomS > 0 ? (oldQty * oldShipping + addQty * _num(newShipping)) / denomS : _num(newShipping);
+    } else {
+      shipping = (newShipping === null || newShipping === undefined) ? oldShipping : _num(newShipping);
+    }
     var c = _invComputed(balance, purchase, shipping);
     sh.getRange(existing.rowIndex, 3, 1, 7).setValues([[balance, purchase, shipping, c.landed, c.total,
       currency || existing['Currency'] || 'PHP', _now()]]);
@@ -497,11 +524,13 @@ function getQuotations(p) {
       approvalNote: q['Approval Note'] || '', approvedBy: q['Approved By'] || '', approvedAt: q['Approved At'] || '',
       subject: q['Subject'] || '', discountPct: _num(q['Discount %']) || 0,
       pdfData: q['PDF Data JSON'] || '',
+      plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '',
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
-        origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '' }; })
+        origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
+        vat: r['Supplier VAT'] || '' }; })
     };
   }) };
 }
@@ -538,10 +567,11 @@ function createQuotation(p) {
   var initialStatus = p.status ||
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
-    creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0]);
+    creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
+    '', p.plantSite || '', p.clientRefNo || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.origItemNo || '', it.origItemName || ''];
+            it.origItemNo || '', it.origItemName || '', it.vat || ''];   // trailing: A145 Supplier VAT
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -651,6 +681,11 @@ function createSalesOrder(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var dup = _refSeen('createSalesOrder', p.clientRef);
   if (dup) return { success: true, soNo: dup, duplicate: true, message: 'Sales Order created.' };
+  // A145: the SO number is the client's PO number, typed by the rep. Reject a duplicate (mirrors the
+  // createQuotation/createPurchaseOrder checks) so a re-submit can't mint two SOs + two shipments.
+  if (p.soNo && _rows('SalesOrders').some(function (r) { return String(r['SO No']) === String(p.soNo); })) {
+    return { success: false, message: 'SO No already exists — open it with Edit instead.' };
+  }
   var no = p.soNo || _nextNumber('SalesOrders', 1, 'SO');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
@@ -826,6 +861,7 @@ function getPurchaseOrders() {
       createdBy: po['Created By'], createdAt: po['Created At'], pdfLink: po['PDF Link'] || '',
       createdByRole: po['Created By Role'] || '', approvalNote: po['Approval Note'] || '',
       approvedBy: po['Approved By'] || '', approvedAt: po['Approved At'] || '', rowIndex: po.rowIndex,
+      exchangeRate: _num(po['Exchange Rate']),
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Purchase Price/Unit (FC)']), total: _num(r['Total (FC)']) }; })
@@ -855,7 +891,8 @@ function createPurchaseOrder(p) {
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
   _append('PurchaseOrders', [no, p.soNo || '', p.date || _now(), p.supplier, currency, total,
     p.status || 'Draft', p.createdBy || '', _now(), '',
-    p.actorRole || p.createdByRole || '', '', '', '']);
+    p.actorRole || p.createdByRole || '', '', '', '',
+    _num(p.exchangeRate) > 0 ? _num(p.exchangeRate) : (currency === 'PHP' ? 1 : '')]);   // A145: Exchange Rate
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
@@ -883,10 +920,14 @@ function updatePurchaseOrder(p) {
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
   var sh = _sheet('PurchaseOrders');
+  var poRateCol = SCHEMA.PurchaseOrders.indexOf('Exchange Rate') + 1;
   _rows('PurchaseOrders').forEach(function (r) {
     if (String(r['PO No']) === String(no)) {
       sh.getRange(r.rowIndex, 1, 1, 9).setValues([[no, p.soNo || r['SO No'],
         p.date || r['Date'], p.supplier, currency, total, p.status || r['Status'], r['Created By'], r['Created At']]]);
+      if (p.exchangeRate !== undefined && _num(p.exchangeRate) > 0) {   // A145: persist the FX rate (col appended at END)
+        sh.getRange(r.rowIndex, poRateCol, 1, 1).setValues([[_num(p.exchangeRate)]]);
+      }
     }
   });
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
@@ -961,6 +1002,12 @@ function updateAPAging(p) {
   setText(7, p.dueDate);                                             // Due Date (clearable)
   set(8, p.paidPHP !== undefined ? _num(p.paidPHP) : undefined);     // Paid (PHP)
   setText(9, p.notes);                                               // Notes (clearable)
+  // A145: once the row is marked Paid with an actual Paid (PHP), the ACTUAL disbursed pesos become the
+  // payable so downstream (payment request amount, receiving landed cost) use the real figure, not the
+  // stale PO-time estimate. (The AP form always sends Amount (PHP), so this is the effective reconcile.)
+  if (String(cur[6]).toLowerCase() === 'paid' && _num(cur[8]) > 0) {
+    cur[5] = _num(cur[8]);
+  }
   cur[11] = _now();                                                  // Updated At
   sh.getRange(ri, 1, 1, headers.length).setValues([cur]);
   // GL: payment of A/P — Dr Accounts Payable / Cr Cash (PHP). Amount = paid, or full PHP if marked Paid.
@@ -1295,6 +1342,12 @@ function createReceiving(p) {
     var t = 0; items.forEach(function (it) { t += _num(it.price) * _num(it.qty); }); return t;
   })();
   var paidPHP = _apPaidPHP(p.poNo);
+  // A145: receiving costs inventory from AP Paid (PHP). If nothing is paid yet, every unit lands at ₱0 —
+  // a silent zero cost basis that then books COGS 0 on the invoice. Refuse unless explicitly confirmed.
+  if (p.poNo && !(paidPHP > 0) && !p.confirmUnpaid) {
+    return { success: false, unpaid: true,
+      message: 'No AP payment recorded for ' + p.poNo + ' yet — receiving now would set a ₱0 landed cost. Record the payment in AP Aging first, or confirm to proceed with a ₱0 cost basis.' };
+  }
 
   var no = p.mrNo || _nextNumber('MaterialsReceiving', 1, 'MR');
   // SO No (13th col) comes from the PO so receiving joins back to its sales order.
@@ -1320,7 +1373,8 @@ function createReceiving(p) {
     var landed = purchasePHP + shipPerUnit;
     sh.appendRow([no, it.itemNo, it.itemName, qty, unitPriceFC, purchasePHP, shipPerUnit, landed, landed * qty]);
     // Final inventory cost = landed (PHP); add the received quantity.
-    _applyInventory(it.itemNo, it.itemName, qty, purchasePHP, shipPerUnit, 'PHP');
+    // A145: normalize the key so N/A-ish codes hit the same row _ensureInventoryStock/_findInventory use.
+    _applyInventory(_normItemNo(it.itemNo), it.itemName, qty, purchasePHP, shipPerUnit, 'PHP');
     purchaseTot += purchasePHP * qty;
     shipTot += shipPerUnit * qty;
     receivedFC += unitPriceFC * qty;
@@ -1366,20 +1420,21 @@ function createInvoice(p) {
   var dup = _refSeen('createInvoice', p.clientRef);
   if (dup) return { success: true, invNo: dup, duplicate: true, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
-  var totalSales = 0, totalCOGS = 0;
+  var totalSales = 0, totalCOGS = 0, zeroCogsLines = 0;
   var sh = _sheet('InvoiceItems');
   var lines = items.map(function (it) {
-    var inv = _findInventory(it.itemNo);
+    var inv = _findInventory(_normItemNo(it.itemNo));   // A145: consistent key with the deduction below
     var landed = inv ? _num(inv['Landed Cost/Unit']) : 0;
     var qty = _num(it.qty), price = _num(it.price);
     var lineSales = qty * price, lineCOGS = qty * landed;
+    if (qty > 0 && !(landed > 0)) zeroCogsLines++;   // A145: line issued with no cost basis → COGS 0
     totalSales += lineSales; totalCOGS += lineCOGS;
     return [no, it.itemNo, it.itemName, qty, price, lineSales, landed, lineCOGS];
   });
   _append('Invoices', [no, p.soNo || '', p.date || _now(), p.customer, totalSales, totalCOGS, p.createdBy || '', _now()]);
   items.forEach(function (it, i) {
     sh.appendRow(lines[i]);
-    _applyInventory(it.itemNo, it.itemName, -_num(it.qty), null, null, null); // deduct stock
+    _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null); // deduct stock (A145: normalized key)
   });
   // GL entry 1: Dr Accounts Receivable / Cr Sales.  Entry 2: Dr COGS / Cr Inventory.
   _postJournal('INV', no, p.date || _now(), 'PHP', [
@@ -1392,7 +1447,9 @@ function createInvoice(p) {
   var arNo = _nextNumber('ARAging', 1, 'AR');
   _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales, 0, 'Unpaid', '', '', _now(), _now()]);
   _refStore('createInvoice', p.clientRef, no);
-  return { success: true, invNo: no, arNo: arNo, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
+  return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines,
+    message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' +
+      (zeroCogsLines > 0 ? ' ⚠ ' + zeroCogsLines + ' line(s) had no landed cost (COGS 0).' : '') };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1633,6 +1690,10 @@ function _linkPrToAp(poNo, prNo) {
 
 function createPaymentRequest(p) {
   var type = (p.type === 'Other') ? 'Other' : 'PO';
+  // A145: idempotent create — a retried submission (network bounce) carrying the same clientRef returns
+  // the already-created PR instead of minting a second one (the only leg-create that lacked this guard).
+  var dupPr = _refSeen('createPaymentRequest', p.clientRef);
+  if (dupPr) return { success: true, prNo: dupPr, type: type, duplicate: true, message: 'Payment Request ' + dupPr + ' created (Draft).' };
   var no = p.prNo || _nextNumber('PaymentRequests', 1, 'PR');
   if (_prRow(no)) return { success: false, message: 'Payment Request ' + no + ' already exists.' };
   var supplier = p.supplier || '', currency = p.currency || 'PHP', amount = _num(p.amount),
@@ -1659,6 +1720,7 @@ function createPaymentRequest(p) {
     p.paymentMethod || '', p.dueDate || '', p.remarks || '', 'Draft', p.createdBy || p.actorName || '',
     p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now()]);
   if (type === 'PO') _linkPrToAp(poNo, no);   // connect the PR to this PO's AP Aging entry
+  _refStore('createPaymentRequest', p.clientRef, no);   // A145: remember for idempotent retry
   return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
 }
 
@@ -2617,6 +2679,8 @@ function deleteSalesCall(p) {
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
 var _MODULE_MAP = {
+  saveSupplier: ['Supplier', 'Saved'], deleteSupplier: ['Supplier', 'Removed'],
+  saveClient: ['Client', 'Saved'], deleteClient: ['Client', 'Removed'],
   addInventoryItem: ['Inventory', 'Added'], updateInventoryItem: ['Inventory', 'Updated'], deleteInventoryItem: ['Inventory', 'Deleted'],
   importInventory: ['Inventory', 'Imported'], classifyInventory: ['Inventory', 'Classified'],
   createQuotation: ['Quotation', 'Created'], updateQuotation: ['Quotation', 'Updated'], deleteQuotation: ['Quotation', 'Deleted'],
@@ -3050,13 +3114,21 @@ function createQuotationFromPR(p) {
       && (r['Included'] === true || String(r['Included']) === 'true') && _num(r['Final Price']) > 0;
   }).map(function (r) {
     return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']),
-             origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '' };
+             origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
+             vat: r['Supplier Price VAT'] || '' };   // A145: carry the VAT-Incl/Excl note to the quotation
   });
   if (!qItems.length) return { success: false, message: 'No included, priced items to quote.' };
+  // A145: carry the PR context that used to die at the PR — plant site + the client's own RFQ/PR number
+  // (from Doc JSON) — onto the quotation so it prints and isn't re-typed.
+  var clientRefNo = '';
+  try { var dj = JSON.parse(hdr['Doc JSON'] || '{}'); clientRefNo = dj.prNumberClient || dj.rfqNo || ''; } catch (e) {}
   // New quotation starts as Draft (creator = the requesting sales user) → enters the approval workflow.
   // The sales rep types their own quotation code + subject on the form; both carry through here.
+  // A clientRef makes a retry-after-success return the SAME quotation instead of a false "already exists".
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
     quotationNo: p.quotationNo || '', subject: p.subject || '', discountPct: _num(p.discountPct) || 0,
+    plantSite: hdr['Plant Site'] || '', clientRefNo: clientRefNo,
+    clientRef: p.clientRef || ('qfp_' + p.prNo),
     createdBy: p.actorName || hdr['Requested By'] || '', actorRole: 'sales', items: JSON.stringify(qItems) });
   if (!qres.success) return qres;
   _setPRStatus(p.prNo, 'Quoted', 'Quotation ' + qres.quotationNo);
@@ -3081,8 +3153,64 @@ function savePRPDF(p) {
 }
 
 // ── Action registry ──────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  A145 — Supplier & Client masters (prefill the fields re-typed on every PR / payment request)
+// ════════════════════════════════════════════════════════════════════════════
+function getSuppliers() {
+  return { success: true, data: _rows('Suppliers').map(function (r) {
+    return { supplier: r['Supplier'], bankName: r['Bank Name'] || '', accountName: r['Account Name'] || '',
+      accountNumber: r['Account Number'] || '', paymentMethod: r['Payment Method'] || '',
+      currency: r['Currency'] || '', tin: r['TIN'] || '', address: r['Address'] || '', notes: r['Notes'] || '',
+      updatedBy: r['Updated By'] || '', updatedAt: r['Updated At'] || '', rowIndex: r.rowIndex };
+  }) };
+}
+function saveSupplier(p) {
+  var name = String(p.supplier || '').trim();
+  if (!name) return { success: false, message: 'Supplier name is required.' };
+  var sh = _sheet('Suppliers'), n = SCHEMA.Suppliers.length;
+  var row = [name, p.bankName || '', p.accountName || '', p.accountNumber || '', p.paymentMethod || '',
+    p.currency || '', p.tin || '', p.address || '', p.notes || '', p.actorName || '', _now()];
+  var existing = _rows('Suppliers').filter(function (r) { return String(r['Supplier']).toLowerCase() === name.toLowerCase(); })[0];
+  if (existing) sh.getRange(existing.rowIndex, 1, 1, n).setValues([row]);
+  else _append('Suppliers', row);
+  return { success: true, supplier: name, message: 'Supplier saved.' };
+}
+function deleteSupplier(p) {
+  var r = _rows('Suppliers').filter(function (x) { return String(x['Supplier']).toLowerCase() === String(p.supplier || '').toLowerCase(); })[0];
+  if (!r) return { success: false, message: 'Supplier not found.' };
+  _sheet('Suppliers').deleteRow(r.rowIndex);
+  return { success: true, message: 'Supplier removed.' };
+}
+function getClients() {
+  return { success: true, data: _rows('Clients').map(function (r) {
+    return { customer: r['Customer'], address: r['Address'] || '', contactPerson: r['Contact Person'] || '',
+      designation: r['Designation'] || '', email: r['Email'] || '', phone: r['Phone'] || '',
+      rfqRef: r['RFQ Ref'] || '', paymentTerms: r['Payment Terms'] || '', notes: r['Notes'] || '',
+      updatedBy: r['Updated By'] || '', updatedAt: r['Updated At'] || '', rowIndex: r.rowIndex };
+  }) };
+}
+function saveClient(p) {
+  var name = String(p.customer || '').trim();
+  if (!name) return { success: false, message: 'Customer name is required.' };
+  var sh = _sheet('Clients'), n = SCHEMA.Clients.length;
+  var row = [name, p.address || '', p.contactPerson || '', p.designation || '', p.email || '', p.phone || '',
+    p.rfqRef || '', p.paymentTerms || '', p.notes || '', p.actorName || '', _now()];
+  var existing = _rows('Clients').filter(function (r) { return String(r['Customer']).toLowerCase() === name.toLowerCase(); })[0];
+  if (existing) sh.getRange(existing.rowIndex, 1, 1, n).setValues([row]);
+  else _append('Clients', row);
+  return { success: true, customer: name, message: 'Client saved.' };
+}
+function deleteClient(p) {
+  var r = _rows('Clients').filter(function (x) { return String(x['Customer']).toLowerCase() === String(p.customer || '').toLowerCase(); })[0];
+  if (!r) return { success: false, message: 'Client not found.' };
+  _sheet('Clients').deleteRow(r.rowIndex);
+  return { success: true, message: 'Client removed.' };
+}
+
 var HANDLERS = {
   getVersion: getVersion,
+  getSuppliers: getSuppliers, saveSupplier: saveSupplier, deleteSupplier: deleteSupplier,
+  getClients: getClients, saveClient: saveClient, deleteClient: deleteClient,
   getInventory: getInventory, addInventoryItem: addInventoryItem,
   updateInventoryItem: updateInventoryItem, deleteInventoryItem: deleteInventoryItem,
   importInventory: importInventory, classifyInventory: classifyInventory,
@@ -3149,5 +3277,6 @@ var MUTATIONS = {
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1, revisePaymentRequest: 1,
   importSOCostDetails: 1, saveSOCostDetails: 1, importPricingSubmissions: 1, backfillMigratedRecords: 1,
-  deleteMigratedRecords: 1, resetSequenceCounters: 1
+  deleteMigratedRecords: 1, resetSequenceCounters: 1,
+  saveSupplier: 1, deleteSupplier: 1, saveClient: 1, deleteClient: 1
 };

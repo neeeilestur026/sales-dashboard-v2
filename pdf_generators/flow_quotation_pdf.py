@@ -568,9 +568,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         + f"<br/><font name='{LATO_B}' color='{_hx(ACCENT_DARK)}'>{COMPANY_WEBSITE}</font>",
         _ps("seller", 13, BODY3, leading_mult=1.6))
     meta_rows = []
-    for label, value in [("Date", cd.get("quotation_date")),
-                         ("RFQ No.", cd.get("reference_rfq_no") or "—"),
-                         ("Sales Person", sig_name)]:
+    _meta = [("Date", cd.get("quotation_date")),
+             ("RFQ No.", cd.get("reference_rfq_no") or "—")]
+    if str(cd.get("plant_site") or "").strip():   # A145: plant-site destination (only when provided)
+        _meta.append(("Plant Site", cd.get("plant_site")))
+    _meta.append(("Sales Person", sig_name))
+    for label, value in _meta:
         meta_rows.append([Paragraph(_esc(label), _ps("mLb", 13, LABEL9)),
                           Paragraph(_esc(value), _ps("mVal", 13, TEXT, LATO_B, align=2))])
     meta_inner = Table(meta_rows, colWidths=[105 * PX, (300 - 32 - 105) * PX])

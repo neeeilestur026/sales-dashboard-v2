@@ -45,15 +45,24 @@ function loadFromPO() {
   rcPaidPHP = _paidForPO(p.poNo);
   document.getElementById('supplier').value = p.supplier;
   document.getElementById('currency').value = p.currency || 'PHP';
+  // A145: landed cost comes from the AP Paid (PHP). Warn up front if nothing is paid yet (→ ₱0 cost).
+  if (!(rcPaidPHP > 0)) {
+    flowMsg('formMsg', `⚠ No AP payment recorded for ${p.poNo} yet — receiving now would set a ₱0 landed cost. Record the payment in AP Aging first.`, false);
+  } else {
+    const m = document.getElementById('formMsg'); if (m) m.style.display = 'none';
+  }
   renderItems();
 }
+
+// A145: does this item code resolve to the shared 'N/A' inventory row? (blank / n/a / na / dash)
+function _rcIsNA(no) { const s = String(no || '').trim().toLowerCase(); return s === '' || s === 'n/a' || s === 'na' || /^[-–—]+$/.test(s); }
 
 function renderItems() {
   const tb = document.getElementById('itemRows');
   if (!rcCurrent) { tb.innerHTML = ''; return; }
   tb.innerHTML = (rcCurrent.items || []).map((it, i) => `
     <tr data-i="${i}">
-      <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}</td>
+      <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}${_rcIsNA(it.itemNo) ? ' <span style="color:#b45309;font-size:0.72rem;" title="No part number — all N/A items share one inventory cost row">⚠ N/A</span>' : ''}</td>
       <td class="num"><input type="number" step="any" min="0" class="qty" value="${flowNum(it.qty)}" oninput="recalc()"></td>
       <td class="num"><input type="number" step="any" min="0" class="price" value="${flowNum(it.price)}" oninput="recalc()"></td>
       <td class="num purchasePHP">0.00</td><td class="num shipUnit">0.00</td><td class="num landed">0.00</td><td class="num totLanded">0.00</td>
@@ -136,7 +145,13 @@ async function saveReceiving() {
   };
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
-    const res = await postFlow('createReceiving', payload);
+    let res = await postFlow('createReceiving', payload);
+    // A145: the backend blocks receiving with no AP payment (a ₱0 cost basis). Offer an explicit override.
+    if (!res.success && res.unpaid) {
+      if (confirm(res.message + '\n\nProceed anyway with a ₱0 landed cost?')) {
+        res = await postFlow('createReceiving', Object.assign({}, payload, { confirmUnpaid: true }));
+      } else { flowMsg('formMsg', 'Receiving cancelled — record the AP payment first.', false); return; }
+    }
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message} (${res.mrNo})`, true);
     resetForm();

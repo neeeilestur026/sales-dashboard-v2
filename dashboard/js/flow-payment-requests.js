@@ -3,6 +3,7 @@
    Reuses the legacy PRF PDF via /flow/payment-request-pdf. */
 
 let prSession = null, prCanCreate = false, prPOs = [], prList = [], prAP = {}, prAPCount = {};
+let prSuppliers = {};   // A145: supplier name (lower) → master record, for bank-detail prefill
 
 document.addEventListener('DOMContentLoaded', async () => {
   prSession = requireOversight();           // admin/accounting/management/director
@@ -11,9 +12,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-payment-requests');
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-payment-requests.html');
   if (!prCanCreate) document.getElementById('formCard').style.display = 'none';
-  else { document.getElementById('dueDate').value = ''; await loadPOOptions(); }
+  else { document.getElementById('dueDate').value = ''; await Promise.all([loadPOOptions(), loadSuppliers()]); }
   await loadPRs();
 });
+
+// A145: supplier master → auto-fill bank details on the payment request.
+async function loadSuppliers() {
+  prSuppliers = {};
+  try {
+    const r = await fetchFlow('getSuppliers');
+    ((r && r.data) || []).forEach(s => { prSuppliers[String(s.supplier).toLowerCase()] = s; });
+  } catch (e) { /* prefill is best-effort */ }
+}
 
 async function loadPOOptions() {
   try {
@@ -44,6 +54,13 @@ function loadFromPO() {
   const php = prAP[String(no)] || 0;
   document.getElementById('amount').value = php > 0 ? php : '';
   document.getElementById('purpose').value = `Supplier payment for ${p.poNo}` + (p.soNo ? ` (SO ${p.soNo})` : '');
+  // A145: prefill bank details from the supplier master (only into blank fields — never clobber a typed value).
+  const sup = prSuppliers[String(p.supplier || '').toLowerCase()];
+  if (sup) {
+    const fill = (id, v) => { const el = document.getElementById(id); if (el && !el.value && v) el.value = v; };
+    fill('bankName', sup.bankName); fill('accountName', sup.accountName);
+    fill('accountNumber', sup.accountNumber); fill('paymentMethod', sup.paymentMethod);
+  }
   // Duplicate-AP guard (the PRF-2026-63 incident): the amount is the SUM of every AP entry for this
   // PO — if more than one carries an amount, say so loudly instead of silently doubling.
   const warn = document.getElementById('apDupWarn');
@@ -81,13 +98,26 @@ async function savePR() {
     remarks: document.getElementById('remarks').value.trim(),
     createdBy: prSession.name,
   };
+  if (!editing) payload.clientRef = flowClientRef();   // A145: idempotent create (safe retry)
   const btn = document.getElementById('saveBtn'); btn.disabled = true; btn.textContent = 'Saving…';
   try {
     const res = await postFlow(editing ? 'updatePaymentRequest' : 'createPaymentRequest', payload);
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message}`, true);
+    // A145: self-populate the supplier master with any newly-typed bank details (best-effort, non-blocking).
+    if (payload.payee && (payload.bankName || payload.accountNumber || payload.accountName || payload.paymentMethod)) {
+      const prev = prSuppliers[String(payload.payee).toLowerCase()] || {};
+      postFlow('saveSupplier', {
+        supplier: payload.payee,
+        bankName: payload.bankName || prev.bankName || '',
+        accountName: payload.accountName || prev.accountName || '',
+        accountNumber: payload.accountNumber || prev.accountNumber || '',
+        paymentMethod: payload.paymentMethod || prev.paymentMethod || '',
+        currency: payload.currency || prev.currency || ''
+      }).catch(() => {});
+    }
     resetForm();
-    await loadPRs();
+    await Promise.all([loadPRs(), loadSuppliers()]);
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Save Payment Request'; }
 }

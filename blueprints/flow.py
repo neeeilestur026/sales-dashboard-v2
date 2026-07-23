@@ -236,6 +236,7 @@ def quotation_pdf():
         "subject": _s(doc.get("subject")),
         "reference_no": _s(data.get("quotationNo")),
         "reference_rfq_no": _s(doc.get("rfqNo")),
+        "plant_site": _s(doc.get("plantSite")),   # A145: plant-site destination carried from the PR
         "quotation_date": _s(data.get("date")),
         "signature_name": _s(doc.get("sigName")),
         "signature_designation": _s(doc.get("sigDesignation")),

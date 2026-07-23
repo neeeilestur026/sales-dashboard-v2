@@ -1,10 +1,12 @@
 /* flow-ap-aging.js — edit PHP amount / status / payment on PO-generated payables */
 let apData = [];
 let apSession = null;
+let apCanDelete = false;   // A145: only admin/accounting may remove a stale AP row
 
 document.addEventListener('DOMContentLoaded', async () => {
   apSession = requireOversight();
   if (!apSession) return;
+  apCanDelete = apSession.role === 'admin' || apSession.role === 'accounting';
   renderNavbar('flow-ap-aging');
   renderFlowNav('flow-ap-aging.html');
   await loadAP();
@@ -49,7 +51,8 @@ function rowHtml(r) {
     <td><input type="text" class="f-notes" value="${flowEsc(r.notes)}"></td>
     <td>${r.prNo ? `<a class="link-btn" href="flow-payment-requests.html" title="Open Payment Requests">${flowEsc(r.prNo)}</a>${r.prStatus ? ' ' + (typeof flowStatusBadge === 'function' ? flowStatusBadge(r.prStatus) : flowEsc(r.prStatus)) : ''}` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;"><button class="link-btn" onclick="saveRow(${r.rowIndex}, this)">Save</button>
-    <button class="link-btn" onclick='openDocsModal("AP Aging","${flowEsc(r.apNo)}")' style="margin-left:0.4rem;">Docs</button></td></tr>`;
+    <button class="link-btn" onclick='openDocsModal("AP Aging","${flowEsc(r.apNo)}")' style="margin-left:0.4rem;">Docs</button>
+    ${apCanDelete ? `<button class="link-btn del-btn" onclick='deleteAP("${flowEsc(r.apNo)}")' style="margin-left:0.4rem;">Delete</button>` : ''}</td></tr>`;
 }
 
 function updateKpis() {
@@ -80,4 +83,16 @@ async function saveRow(rowIndex, btn) {
     flowMsg('msg', `AP entry saved.`, true);
     await loadAP();
   } catch (e) { flowMsg('msg', e.message, false); btn.disabled = false; btn.textContent = 'Save'; }
+}
+
+// A145: remove a stale/duplicate AP row (the A114 cleanup, now reachable). The backend refuses when a
+// payment has been recorded, so a genuine payable can't be deleted out from under a payment request.
+async function deleteAP(apNo) {
+  if (!confirm('Delete AP entry ' + apNo + '? Use this only to clear a stale duplicate — a payable with a recorded payment cannot be deleted.')) return;
+  try {
+    const res = await postFlow('deleteAPEntry', { apNo });
+    if (!res.success) throw new Error(res.message);
+    flowMsg('msg', 'AP entry removed.', true);
+    await loadAP();
+  } catch (e) { flowMsg('msg', e.message, false); }
 }

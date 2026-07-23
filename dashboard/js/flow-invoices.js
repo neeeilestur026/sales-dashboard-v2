@@ -55,8 +55,11 @@ function renderItems() {
   tb.innerHTML = (ivCurrent.items || []).map((it, i) => {
     const stock = onHand(it.itemNo);
     const warn = flowNum(it.qty) > stock ? ` <span class="flow-badge b-unpaid" title="On hand: ${stock}">low stock</span>` : '';
+    // A145: a line with no landed cost books COGS 0 (usually not yet received / AP not paid) — flag it.
+    const noCost = flowNum(it.qty) > 0 && !(landedFor(it.itemNo) > 0)
+      ? ` <span class="flow-badge b-unpaid" title="No landed cost recorded — COGS will be ₱0. Receive this item (after paying its AP) first.">no cost</span>` : '';
     return `<tr data-i="${i}">
-      <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}${warn}</td>
+      <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}${warn}${noCost}</td>
       <td class="num"><input type="number" step="any" min="0" class="qty" value="${flowNum(it.qty)}" oninput="recalc()"></td>
       <td class="num"><input type="number" step="any" min="0" class="price" value="${flowNum(it.price)}" oninput="recalc()"></td>
       <td class="num lineSales">0.00</td>
@@ -99,6 +102,12 @@ async function saveInvoice() {
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Nothing to invoice.', false); return; }
+  // A145: warn before issuing lines with no landed cost — they book COGS 0 (100% gross profit).
+  const noCostLines = items.filter(it => flowNum(it.qty) > 0 && !(landedFor(it.itemNo) > 0)).length;
+  if (noCostLines > 0 &&
+      !confirm(`${noCostLines} item(s) have no landed cost — their COGS will be ₱0 (full gross profit). This usually means the goods aren't received yet. Issue the invoice anyway?`)) {
+    return;
+  }
   const btn = document.getElementById('saveBtn');
   const payload = {
     soNo: ivCurrent.soNo, customer, date: document.getElementById('date').value,
