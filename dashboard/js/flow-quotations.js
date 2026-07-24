@@ -280,7 +280,8 @@ async function saveQuotation() {
     btn.disabled = true; btn.textContent = 'Creating...';
     try {
       const res = await postFlow('createQuotationFromPR',
-        { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject, discountPct: qDiscountVal('discountInput') });
+        { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject, discountPct: qDiscountVal('discountInput'),
+          clientRef: flowClientRef() });   // A145: per-submission idempotency key (safe retry; not a permanent PR key)
       if (!res.success) throw new Error(res.message);
       window.location.href = 'flow-quotations.html?review=' + encodeURIComponent(res.quotationNo || '');
       return;

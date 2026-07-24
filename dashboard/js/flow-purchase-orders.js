@@ -60,9 +60,11 @@ async function loadPricingSourcing() {
   try {
     const r = await fetchFlow('getPricingRequests');
     ((r && r.data) || []).forEach(pr => {
-      const m = String(pr.notes || '').match(/Quotation\s+(\S+)/i);
+      // Capture the quotation code only (letters/digits/-/_/), so trailing punctuation in the note
+      // ("Quotation QTN-2026-5.") doesn't get baked into the key and miss the SO's quotationNo.
+      const m = String(pr.notes || '').match(/Quotation\s+([A-Za-z0-9._/\-]+)/i);
       if (!m) return;
-      const key = m[1].toLowerCase();
+      const key = m[1].replace(/[.\s]+$/, '').toLowerCase();
       const map = poPricingByQuote[key] || {};
       (pr.items || []).forEach(it => {
         if (it.supplierPrice > 0) {

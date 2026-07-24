@@ -564,8 +564,12 @@ async function saveSourcing(forward) {
     const verEl = document.getElementById('srcVerified');
     if (verEl && !verEl.checked) { flowMsg('modalMsg', 'Tick the box to confirm you have verified the supplier prices.', false); return; }
     // Require the supplier's quotation attached (Doc Type "Supplier Quotation"). Save the sourcing
-    // first so the plant site / VAT flags persist even if the attachment is still missing.
-    await postFlow('updatePRSourcing', { prNo, clientLocation, plantSite, items: JSON.stringify(items) });
+    // first so the plant site / VAT flags persist even if the attachment is still missing — and
+    // surface any failure instead of forwarding on top of a save that didn't stick.
+    try {
+      const sv = await postFlow('updatePRSourcing', { prNo, clientLocation, plantSite, items: JSON.stringify(items) });
+      if (!sv.success) throw new Error(sv.message);
+    } catch (e) { flowMsg('modalMsg', 'Could not save the sourcing: ' + e.message, false); return; }
     const hasQuote = await flowHasDoc('Pricing Request', prNo, 'Supplier Quotation');
     if (!hasQuote) {
       flowMsg('modalMsg', "Attach the supplier's quotation first (📎 Supplier Quotation button) — it must be tagged “Supplier Quotation”.", false);
