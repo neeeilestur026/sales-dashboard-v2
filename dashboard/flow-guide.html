@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Process Guide</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <style>
+    .fg-step { border:1px solid var(--border,#e2e8f0); border-radius:14px; padding:1rem 1.2rem; margin-bottom:0.85rem; background:var(--surface,#fff); }
+    .fg-step h3 { margin:0 0 0.35rem; font-size:1rem; display:flex; align-items:center; gap:0.55rem; }
+    .fg-num { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:var(--accent,#4f46e5); color:#fff; font-size:0.8rem; font-weight:700; flex:0 0 auto; }
+    .fg-who { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent,#4f46e5); background:var(--accent-light,#e0e7ff); padding:0.12rem 0.5rem; border-radius:999px; }
+    .fg-step p { margin:0.3rem 0; font-size:0.88rem; color:var(--text-secondary,#475569); line-height:1.55; }
+    .fg-step ul { margin:0.35rem 0 0.2rem 1.1rem; font-size:0.85rem; color:var(--text-secondary,#475569); line-height:1.5; }
+    .fg-gate { font-size:0.8rem; color:#b45309; background:#fffbeb; border-left:3px solid #f59e0b; padding:0.4rem 0.7rem; border-radius:0 8px 8px 0; margin-top:0.5rem; }
+    .fg-status { font-size:0.8rem; margin-top:0.4rem; }
+    .fg-status code { background:var(--bg-inset,#f1f5f9); padding:0.1rem 0.4rem; border-radius:5px; font-size:0.78rem; }
+    .fg-sec { margin:1.6rem 0 0.7rem; font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted,#64748b); }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Process Guide</h1>
+      <p>The end-to-end flow, who does each step, what each status means, and the checks that keep money correct. The single source of truth for the procure-to-cash process.</p>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+    <div id="fgBody"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-guide.js"></script>
+</body>
+</html>

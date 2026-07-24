@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 86;   // A145 flow hardening: money-correctness guards + handoff carry-through + Supplier/Client masters (85: A144 payment guardrails · 84: revisePaymentRequest)
+var FLOW_VERSION = 87;   // A146 AR due-date from client payment terms (86: A145 flow hardening · 85: A144 payment guardrails)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1413,6 +1413,25 @@ function getInvoices() {
   }) };
 }
 
+// A146: the client's stored payment terms (for auto-setting the AR due date).
+function _clientTerms(customer) {
+  if (!customer) return '';
+  var c = _rows('Clients').filter(function (r) {
+    return String(r['Customer']).toLowerCase() === String(customer).toLowerCase(); })[0];
+  return c ? String(c['Payment Terms'] || '') : '';
+}
+// A146: invoice date + N days, where N is the first integer in the terms ("30 days"/"Net 30" → 30).
+// Blank / no number / "COD" / unparseable → '' (leaves the due date blank, exactly today's behaviour).
+function _addTermDays(date, terms) {
+  var m = String(terms || '').match(/\d+/);
+  var n = m ? parseInt(m[0], 10) : 0;
+  if (!(n > 0)) return '';
+  var d = (date instanceof Date) ? new Date(date.getTime()) : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
 function createInvoice(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
@@ -1444,8 +1463,11 @@ function createInvoice(p) {
     { account: ACC.INV, credit: totalCOGS, memo: 'Inventory issued ' + no }
   ]);
   // Auto-create the Accounts Receivable entry (client owes the invoiced sales amount, in PHP).
+  // A146: set the AR Due Date = invoice date + the client's payment terms (from the Client master),
+  // so accounting doesn't hand-type it. Blank/unparseable terms → blank due date (today's behaviour).
+  var arDue = _addTermDays(p.date || _now(), _clientTerms(p.customer));
   var arNo = _nextNumber('ARAging', 1, 'AR');
-  _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales, 0, 'Unpaid', '', '', _now(), _now()]);
+  _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales, 0, 'Unpaid', arDue, '', _now(), _now()]);
   _refStore('createInvoice', p.clientRef, no);
   return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines,
     message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' +

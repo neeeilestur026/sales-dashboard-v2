@@ -71,6 +71,13 @@ async function loadFromPR(prNo) {
   included.forEach(addPrRow);
   if (!included.length) addRow();
   qFromPr = String(pr.prNo);
+  // A146: default a Subject from customer + first item description(s) when the field is empty (still
+  // editable, still required by qRequireManualFields).
+  const subjEl = document.getElementById('subjectInput');
+  if (subjEl && !subjEl.value.trim()) {
+    const firstDesc = (included[0] && (included[0].itemName || included[0].itemNo)) || '';
+    subjEl.value = firstDesc ? `${pr.customer || ''} — ${firstDesc}`.trim().replace(/^—\s*/, '') : (pr.customer || '');
+  }
   const sel = document.getElementById('fromPrSelect'); if (sel) sel.value = qFromPr;
   const banner = document.getElementById('fromPrBanner');
   banner.style.display = 'block';

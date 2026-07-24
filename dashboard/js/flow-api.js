@@ -233,6 +233,7 @@ function renderFlowNav(active) {
     ['flow-suppliers.html', 'Suppliers'],
     ['flow-clients.html', 'Clients'],
     ['flow-ledger.html', 'Ledger'],
+    ['flow-guide.html', 'Guide'],
   ];
   const el = document.getElementById('flowNav');
   if (!el) return;

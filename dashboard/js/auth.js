@@ -416,6 +416,7 @@ function renderNavbar(activePage) {
           <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
+          <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
           <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">All Daily Reports</a>
@@ -473,6 +474,7 @@ function renderNavbar(activePage) {
           <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
+          <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -714,6 +716,7 @@ function renderNavbar(activePage) {
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -848,6 +851,159 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ── A146: Unified per-role Action Center ────────────────────────────────────
+// One live-computed worklist ("what needs YOU right now"), derived from the same FlowAPI getters the
+// homes already call. Feeds BOTH the navbar bell (loadNotifications) and the home strip (flowActionsStrip).
+// Items are NAVIGATIONAL (link to the page where you act) — no approve wiring duplicated here. Nothing
+// persists: an item disappears the moment its underlying status changes. Returns [{icon,color,text,link}].
+async function flowComputeActions(session) {
+  const items = [];
+  if (!session || typeof fetchFlow !== 'function') return items;
+  const role = String(session.role || '').toLowerCase();
+  const add = (icon, color, text, link) => items.push({ icon, color, text, link });
+  const isMgmt = role === 'management', isDir = role === 'director';
+  const isAdmin = role === 'admin', isAcct = role === 'accounting', isSales = role === 'sales';
+  // "Past due" only when a due date is set and is before today (precise, low-noise).
+  const _pastDue = (d) => {
+    if (!d) return false;
+    try { const s = (typeof flowDate === 'function') ? flowDate(d) : String(d).slice(0, 10);
+      const t = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+      return s && s < t; } catch (e) { return false; }
+  };
+  const jobs = [];
+
+  // Low stock — oversight roles (existing behaviour). Real stocks only; "low" = 0 < balance < 10.
+  if (isAdmin || isAcct || isMgmt || isDir) {
+    jobs.push(fetchFlow('getInventory').then(r => {
+      const stockOnly = (typeof flowStockItems === 'function') ? flowStockItems((r && r.data) || []) : ((r && r.data) || []);
+      const low = stockOnly.filter(i => { const b = parseFloat(i.balance) || 0; return b > 0 && b < 10; });
+      if (low.length) add('inventory', '#ef4444', low.length + ' item(s) running low on stock', 'flow-inventory.html');
+    }).catch(() => {}));
+  }
+
+  // Quotations awaiting MY approval.
+  if (isAdmin || isMgmt || isDir) {
+    const stage = isAdmin ? 'Pending Admin' : 'Pending Management';
+    jobs.push(fetchFlow('getQuotations').then(r => {
+      const n = ((r && r.data) || []).filter(q => q.status === stage).length;
+      if (n) add('report', '#f97316', n + ' quotation(s) awaiting your approval', 'flow-quotations.html');
+    }).catch(() => {}));
+  }
+  // Purchase orders awaiting management/director approval.
+  if (isMgmt || isDir) {
+    jobs.push(fetchFlow('getPurchaseOrders').then(r => {
+      const n = ((r && r.data) || []).filter(p => p.status === 'Pending Management').length;
+      if (n) add('report', '#f97316', n + ' purchase order(s) awaiting your approval', 'flow-purchase-orders.html');
+    }).catch(() => {}));
+  }
+  // Management: pricing requests waiting for final prices (previously unsurfaced on any home).
+  if (isMgmt || isDir) {
+    jobs.push(fetchFlow('getPricingRequests').then(r => {
+      const n = ((r && r.data) || []).filter(p => p.status === 'For Mgmt Pricing').length;
+      if (n) add('report', '#6366f1', n + ' pricing request(s) waiting for your final pricing', 'flow-pricing-request.html');
+    }).catch(() => {}));
+  }
+  // Admin: pricing requests waiting to be sourced.
+  if (isAdmin) {
+    jobs.push(fetchFlow('getPricingRequests').then(r => {
+      const n = ((r && r.data) || []).filter(p => p.status === 'Requested' || p.status === 'Sourcing').length;
+      if (n) add('report', '#6366f1', n + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
+    }).catch(() => {}));
+  }
+  // Payment requests awaiting MY approval (director → Management; Other-type → Accounting → both).
+  if (isMgmt || isDir || isAcct) {
+    jobs.push(fetchFlow('getPaymentRequests').then(r => {
+      const prs = (r && r.data) || [];
+      let n = 0;
+      prs.forEach(p => {
+        const t = p.type, s = p.status;
+        if (isDir && ((t === 'PO' && s === 'Pending Director') || (t === 'Other' && s === 'Pending Final' && !p.dirApprovedBy))) n++;
+        else if (isMgmt && ((t === 'PO' && s === 'Pending Management') || (t === 'Other' && s === 'Pending Final' && !p.mgmtApprovedBy))) n++;
+        else if (isAcct && (t === 'Other' && s === 'Pending Accounting')) n++;
+      });
+      if (n) add('report', '#f97316', n + ' payment request(s) awaiting your approval', 'flow-payment-requests.html');
+    }).catch(() => {}));
+  }
+  // Accounting: payables past due + receivables past due.
+  if (isAcct || isAdmin) {
+    jobs.push(fetchFlow('getAPAging').then(r => {
+      const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
+      if (n) add('urgent', '#ef4444', n + ' payable(s) past due', 'flow-ap-aging.html');
+    }).catch(() => {}));
+    jobs.push(fetchFlow('getARAging').then(r => {
+      const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
+      if (n) add('urgent', '#ef4444', n + ' receivable(s) past due — collect', 'flow-ar-aging.html');
+    }).catch(() => {}));
+  }
+  // Admin/Accounting procurement follow-ups: sales orders with no PO, POs not yet received.
+  if (isAdmin || isAcct) {
+    jobs.push(Promise.all([
+      fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
+      fetchFlow('getReceiving').catch(() => ({ data: [] })),
+    ]).then(([so, po, rc]) => {
+      const hasPO = {}; ((po && po.data) || []).forEach(p => { if (p.soNo) hasPO[String(p.soNo)] = true; });
+      const received = {}; ((rc && rc.data) || []).forEach(m => { if (m.poNo) received[String(m.poNo)] = true; });
+      const noPO = ((so && so.data) || []).filter(s => !hasPO[String(s.soNo)]).length;
+      if (noPO) add('report', '#b45309', noPO + ' sales order(s) with no purchase order yet', 'flow-purchase-orders.html');
+      const notRc = ((po && po.data) || []).filter(p => (p.status === 'Approved' || p.status === 'Sent') && !received[String(p.poNo)]).length;
+      if (notRc) add('report', '#b45309', notRc + ' purchase order(s) not received yet', 'flow-receiving.html');
+    }).catch(() => {}));
+  }
+  // Sales: my returned pricing requests, my approved/rejected quotations, my sent quotes with no SO.
+  if (isSales) {
+    jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
+      const n = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales').length;
+      if (n) add('report', '#22c55e', n + ' pricing request(s) ready to quote (final prices set)', 'flow-pricing-request.html');
+    }).catch(() => {}));
+    jobs.push(Promise.all([
+      fetchFlow('getQuotations', { createdBy: session.name }).catch(() => ({ data: [] })),
+      fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+    ]).then(([q, so]) => {
+      const mine = (q && q.data) || [];
+      const approved = mine.filter(x => x.status === 'Approved').length;
+      const rejected = mine.filter(x => x.status === 'Rejected');
+      if (approved) add('report', '#22c55e', approved + ' quotation(s) approved — ready to send', 'flow-quotations.html');
+      if (rejected.length) add('urgent', '#ef4444', rejected.length + ' quotation(s) rejected — fix & resubmit' + (rejected[0].approvalNote ? ' (' + rejected[0].approvalNote + ')' : ''), 'flow-quotations.html');
+      const hasSO = {}; ((so && so.data) || []).forEach(s => { if (s.quotationNo) hasSO[String(s.quotationNo)] = true; });
+      const sentNoSO = mine.filter(x => x.status === 'Sent' && !hasSO[String(x.quotationNo)]).length;
+      if (sentNoSO) add('report', '#b45309', sentNoSO + ' sent quotation(s) with no sales order yet', 'flow-sales-orders.html');
+    }).catch(() => {}));
+  }
+
+  await Promise.all(jobs);
+  return items;
+}
+
+function _flowActionIconSvg(icon) {
+  return icon === 'urgent'
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    : icon === 'inventory'
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+}
+
+// A146: the home-page "What needs you" strip. Include auth.js (already global) + call this after load.
+async function flowActionsStrip(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const session = getSession();
+  if (!session) { el.style.display = 'none'; return; }
+  el.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.82rem;padding:0.4rem 0;">Loading your action items…</div>';
+  let items = [];
+  try { items = await flowComputeActions(session); } catch (e) { items = []; }
+  if (!items.length) {
+    el.innerHTML = '<div style="display:flex;align-items:center;gap:0.5rem;color:#16a34a;font-size:0.86rem;font-weight:600;"><span>✓</span> You\'re all caught up — nothing needs your action right now.</div>';
+    return;
+  }
+  el.innerHTML = `<div style="display:grid;gap:0.5rem;">${items.map(n => `
+    <a href="${n.link}" style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.8rem;text-decoration:none;color:var(--text-primary,#1e293b);border:1px solid var(--border,#e2e8f0);border-radius:10px;background:var(--bg-card,#fff);transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow='none'">
+      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:${n.color}18;color:${n.color};flex-shrink:0;">${_flowActionIconSvg(n.icon)}</div>
+      <span style="font-size:0.86rem;flex:1;">${n.text}</span>
+      <span style="color:var(--text-muted,#94a3b8);font-size:0.9rem;">→</span>
+    </a>`).join('')}</div>`;
+}
+
 async function loadNotifications() {
   const list = document.getElementById('notifList');
   if (!list) return;
@@ -855,102 +1011,10 @@ async function loadNotifications() {
 
   const session = getSession();
   if (!session) return;
-  const notifications = [];
-
-  // Flow-backed notifications. The old bell called production Code.gs GET actions (getDailyReports /
-  // getInventory / getClientTracker / getTodayCounts / getMyNotifications) — that deployment 404s ALL
-  // GET requests, so every call errored and the bell was dead for every role. Rebuilt on FlowAPI.
-  // Pages without flow-api.js (legacy) simply show "No notifications" — no failing network calls.
-  const role = String(session.role || '').toLowerCase();
-  try {
-    if (typeof fetchFlow === 'function') {
-      const jobs = [];
-
-      // Low stock — oversight roles. Flow inventory keys stock on `balance`; items deliberately sit
-      // at 0 (product-master entries from imports), so "low" means running low: 0 < balance < 10.
-      if (['admin', 'accounting', 'management', 'director'].includes(role)) {
-        jobs.push(fetchFlow('getInventory').then(r => {
-          // Real stocks only — quotation Catalog items are never "low stock".
-          const stockOnly = (typeof flowStockItems === 'function') ? flowStockItems((r && r.data) || []) : ((r && r.data) || []);
-          const low = stockOnly.filter(i => { const b = parseFloat(i.balance) || 0; return b > 0 && b < 10; });
-          if (low.length > 0) {
-            notifications.push({
-              icon: 'inventory', color: '#ef4444',
-              text: low.length + ' item(s) with low stock',
-              link: 'flow-inventory.html'
-            });
-          }
-        }).catch(() => {}));
-      }
-
-      // Quotations awaiting MY approval (admin → Pending Admin; management/director → Pending Management).
-      if (role === 'admin' || role === 'management' || role === 'director') {
-        const stage = role === 'admin' ? 'Pending Admin' : 'Pending Management';
-        jobs.push(fetchFlow('getQuotations').then(r => {
-          const pending = ((r && r.data) || []).filter(q => q.status === stage);
-          if (pending.length > 0) {
-            notifications.push({
-              icon: 'report', color: '#f97316',
-              text: pending.length + ' quotation(s) awaiting your approval',
-              link: 'flow-quotations.html'
-            });
-          }
-        }).catch(() => {}));
-      }
-
-      // Purchase orders awaiting management approval.
-      if (role === 'management' || role === 'director') {
-        jobs.push(fetchFlow('getPurchaseOrders').then(r => {
-          const pending = ((r && r.data) || []).filter(p => p.status === 'Pending Management');
-          if (pending.length > 0) {
-            notifications.push({
-              icon: 'report', color: '#f97316',
-              text: pending.length + ' purchase order(s) awaiting your approval',
-              link: 'flow-purchase-orders.html'
-            });
-          }
-        }).catch(() => {}));
-      }
-
-      // Sales: my quotations that came back — Approved (ready to send) or Rejected (fix + resubmit).
-      if (role === 'sales') {
-        jobs.push(fetchFlow('getQuotations', { createdBy: session.name }).then(r => {
-          const mine = (r && r.data) || [];
-          const approved = mine.filter(q => q.status === 'Approved');
-          const rejected = mine.filter(q => q.status === 'Rejected');
-          if (approved.length > 0) {
-            notifications.push({
-              icon: 'report', color: '#22c55e',
-              text: approved.length + ' quotation(s) approved — ready to send to the client',
-              link: 'flow-quotations.html'
-            });
-          }
-          if (rejected.length > 0) {
-            const reason = rejected[0].approvalNote ? ' — ' + rejected[0].approvalNote : '';
-            notifications.push({
-              icon: 'urgent', color: '#ef4444',
-              text: rejected.length + ' quotation(s) rejected' + reason,
-              link: 'flow-quotations.html'
-            });
-          }
-        }).catch(() => {}));
-
-        // Pricing requests returned to me with management final prices.
-        jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
-          const returned = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales');
-          if (returned.length > 0) {
-            notifications.push({
-              icon: 'report', color: '#22c55e',
-              text: returned.length + ' pricing request(s) ready for quotation (final prices set)',
-              link: 'flow-pricing-request.html'
-            });
-          }
-        }).catch(() => {}));
-      }
-
-      await Promise.all(jobs);
-    }
-  } catch (e) { /* best-effort — an empty bell beats an error entry */ }
+  // Rebuilt on FlowAPI (the old production Code.gs GET bell 404'd for every role). Pages without
+  // flow-api.js show "No notifications" — no failing network calls. Shared with the home strip.
+  let notifications = [];
+  try { notifications = await flowComputeActions(session); } catch (e) { notifications = []; }
 
   // Update badge
   const badge = document.getElementById('notifBadge');

@@ -151,10 +151,12 @@
         <div><label>PR No. from Client</label><input type="text" id="prClientNo"></div>
       </div>
 
+      <datalist id="prInvList"></datalist>
       <table class="flow-table flow-items" style="margin-top:0.5rem;">
-        <thead><tr><th style="width:40%;">Item</th><th class="num" style="width:14%;">Qty</th><th style="width:14%;">UOM</th><th style="width:26%;">Remarks</th><th></th></tr></thead>
+        <thead><tr><th style="width:20%;">Item No</th><th style="width:28%;">Description</th><th class="num" style="width:10%;">Qty</th><th style="width:12%;">UOM</th><th style="width:22%;">Remarks</th><th></th></tr></thead>
         <tbody id="itemRows"></tbody>
       </table>
+      <p class="pr-meta" style="margin-top:0.35rem;">Type or pick an item. A brand-new item is added to inventory (Catalog, balance 0) when you submit — no need to add it separately first.</p>
       <div class="flow-actions">
         <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
         <span style="margin-left:auto;font-weight:700;">Lines: <span id="lineCount">0</span></span>

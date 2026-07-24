@@ -103,6 +103,7 @@ function setFilter(btn) {
 async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); prInventory = (r && r.data) || []; }
   catch (e) { prInventory = []; }
+  if (typeof fillPrDatalist === 'function') fillPrDatalist();   // A146: autocomplete suggestions
 }
 
 // A145: client master → prefill the PR contact block when the customer is chosen (blank fields only).
@@ -124,21 +125,30 @@ function prFillContacts() {
 }
 
 // ─── Sales: request form ─────────────────────────
-// Option value = the inventory rowIndex (UNIQUE), NOT the itemNo — many items share itemNo "N/A", so
-// keying on itemNo made every N/A pick resolve to the first N/A row (the "grease gun" phantom).
-function itemOptions(selectedRowIndex) {
-  return '<option value="">— select item —</option>' + prInventory.map(i =>
-    `<option value="${flowEsc(i.rowIndex)}"${String(i.rowIndex) === String(selectedRowIndex) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+// A146: free-type item entry with an inventory autocomplete (datalist), mirroring the admin quotation
+// (A63). A brand-new item is added to inventory (Catalog, balance 0) on submit — no separate step. The
+// datalist is keyed on Item No; picking one auto-fills the description from the first matching inventory
+// row (an exact code is unique; the shared "N/A" is a rare edge the user can override).
+function fillPrDatalist() {
+  const dl = document.getElementById('prInvList');
+  if (dl) dl.innerHTML = prInventory.map(i => `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+}
+function prFillDesc(inp) {
+  const tr = inp.closest('tr');
+  const desc = tr.querySelector('.pr-desc');
+  const inv = prInventory.find(i => String(i.itemNo).toLowerCase() === String(inp.value).trim().toLowerCase());
+  if (inv && desc && !desc.value) desc.value = inv.description || '';
 }
 
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><select>${itemOptions(item && item.rowIndex)}</select></td>
-    <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 1}"></td>
-    <td><input type="text" value="${item ? flowEsc(item.uom || '') : ''}" placeholder="pc"></td>
-    <td><input type="text" value="${item ? flowEsc(item.remarks || '') : ''}" placeholder="optional"></td>
+    <td><input type="text" class="pr-itemno" list="prInvList" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" oninput="prFillDesc(this)" style="width:100%;"></td>
+    <td><input type="text" class="pr-desc" value="${item ? flowEsc(item.itemName || item.description || '') : ''}" placeholder="Description" style="width:100%;"></td>
+    <td class="num"><input type="number" step="any" min="0" class="pr-qty" value="${item ? flowNum(item.qty) : 1}"></td>
+    <td><input type="text" class="pr-uom" value="${item ? flowEsc(item.uom || '') : ''}" placeholder="pc"></td>
+    <td><input type="text" class="pr-remarks" value="${item ? flowEsc(item.remarks || '') : ''}" placeholder="optional"></td>
     <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();countLines();">✕</button></td>`;
   tb.appendChild(tr);
   countLines();
@@ -150,15 +160,16 @@ function countLines() {
 function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach(tr => {
-    const key = tr.children[0].querySelector('select').value;   // rowIndex of the picked inventory row
-    if (!key) return;
-    const inv = prInventory.find(i => String(i.rowIndex) === String(key));
-    if (!inv) return;
+    const itemNo = (tr.querySelector('.pr-itemno').value || '').trim();
+    const desc = (tr.querySelector('.pr-desc').value || '').trim();
+    const qty = flowNum(tr.querySelector('.pr-qty').value);
+    // Keep any line with a code, a description or a quantity; blank code → shared 'N/A' key (flow convention).
+    if (!itemNo && !desc && !(qty > 0)) return;
     items.push({
-      itemNo: inv.itemNo, itemName: inv.description,
-      qty: flowNum(tr.children[1].querySelector('input').value),
-      uom: tr.children[2].querySelector('input').value.trim(),
-      remarks: tr.children[3].querySelector('input').value.trim()
+      itemNo: itemNo || 'N/A', itemName: desc || itemNo,
+      qty: qty,
+      uom: tr.querySelector('.pr-uom').value.trim(),
+      remarks: tr.querySelector('.pr-remarks').value.trim()
     });
   });
   return items;
@@ -216,6 +227,18 @@ async function saveRequest() {
         rfqRef: doc.prNumberClient || prev.rfqRef || ''
       }).catch(() => {});
     }
+    // A146: free-typed items not yet in inventory → add them as Catalog products (balance 0), so the
+    // request's items become real inventory records (mirrors the admin A63 quotation auto-add).
+    const known = new Set(prInventory.map(i => String(i.itemNo).toLowerCase()));
+    for (const it of items) {
+      const code = String(it.itemNo || '').trim();
+      if (!code || code.toUpperCase() === 'N/A' || known.has(code.toLowerCase())) continue;
+      known.add(code.toLowerCase());
+      try {
+        await postFlow('addInventoryItem', { itemNo: code, description: it.itemName || code, balance: 0, currency: 'PHP', type: 'Catalog' });
+      } catch (e) { /* ignore "already exists" and transient errors */ }
+    }
+    await loadInventory();
     resetForm();
     // Auto-generate the branded PR PDF and save it to Drive + the PDF Link column (best-effort,
     // never blocks creation). No tab pops open (background) — it's an automatic archive on creation.

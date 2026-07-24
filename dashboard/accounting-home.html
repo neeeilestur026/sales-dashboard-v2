@@ -297,6 +297,12 @@
           <a href="accounting-billing.html" class="hero-pill">Billing →</a></div>
     </div>
 
+    <!-- A146: What needs you (unified action center) -->
+    <div class="chart-card" id="flowActionCenterCard" style="margin-bottom:1rem;">
+      <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;">⚑ What needs you</h3>
+      <div id="flowActionCenter"></div>
+    </div>
+    <script>document.addEventListener('DOMContentLoaded', function () { if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300); });</script>
 
     <!-- KPI row (comp) -->
     <div class="acct-kpis">

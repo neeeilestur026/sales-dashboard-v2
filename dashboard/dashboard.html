@@ -85,6 +85,12 @@
       </div>
     </div>
 
+    <!-- A146: What needs you (unified action center) -->
+    <div class="b-card" id="flowActionCenterCard" style="padding:18px 20px;margin-bottom:16px">
+      <div style="font:700 15px 'Inter',sans-serif;color:var(--ink);margin-bottom:10px">⚑ What needs you</div>
+      <div id="flowActionCenter"></div>
+    </div>
+
     <!-- ROW A: anchor pipeline · KPI tiles · target donut · mini stack -->
     <div class="b-row">
       <!-- Anchor "Sales Pipeline" card -->
@@ -245,9 +251,11 @@
   </main>
 
   <script src="js/api.js"></script>
+  <script src="js/flow-api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/training-mode.js"></script>
+  <script>document.addEventListener('DOMContentLoaded', function () { if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300); });</script>
   <script>
     // Mirror the canonical values dashboard.js writes into the bento layout's duplicate slots.
     (function mirrorStats() {
