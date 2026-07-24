@@ -289,17 +289,22 @@ async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileN
   const blob = await res.blob();
   // opts.background: save to Drive silently (no tab) — used for auto-save on record creation.
   if (!opts.background) { try { window.open(URL.createObjectURL(blob), '_blank'); } catch (e) {} }
-  let link = '';
-  if (_flowConfigured()) {
+  // A147: distinguish "backend not configured" (configured=false) from a REAL Drive-save failure
+  // (saveError set). Callers previously read an empty link as "not configured" and showed a green
+  // success toast while the record was stranded with no PDF Link.
+  let link = '', saveError = '';
+  const configured = _flowConfigured();
+  if (configured) {
     try {
       const b64 = await blobToBase64(blob);
       const params = Object.assign({ pdfBase64: b64, fileName: fileName || 'document.pdf' }, opts.extra || {});
       params[idKey] = idValue;
       const save = await postFlow(saveAction, params);
       if (save && save.success) link = save.link || '';
-    } catch (e) { /* Drive save is best-effort */ }
+      else saveError = (save && save.message) || 'The Drive save did not complete.';
+    } catch (e) { saveError = (e && e.message) || 'The Drive save failed.'; }
   }
-  return { link };
+  return { link, saveError, configured };
 }
 
 /** Remember / restore PDF document-field defaults in localStorage. */

@@ -931,6 +931,7 @@ async function submitPdf() {
       const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
       return {
         itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
+        uom: it.uom || '',   // A147: carry the real unit onto the PDF (else it forces "pc(s)")
         origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',  // requested vs offered
         description: (inv && inv.description) || it.itemName || '',  // multi-line desc from inventory
         imageDataUrl: pdfImages[i] || ''
@@ -946,13 +947,20 @@ async function submitPdf() {
     stamp: qPdfStamp(Object.assign({}, pdfQuote, { discountPct: payload.discountPct }), payload.vatOption)
   });
   try {
-    const { link } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
+    const { link, saveError, configured } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
       'quotationNo', pdfQuote.quotationNo, `Quotation_${displayNo}.pdf`, { extra: { pdfData } });
-    flowMsg('pdfModalMsg', link ? 'PDF generated and saved to Drive.' : 'PDF generated (Drive save skipped — backend not configured).', true);
+    if (link) {
+      flowMsg('pdfModalMsg', 'PDF generated and saved to Drive.', true);
+    } else if (!configured) {
+      flowMsg('pdfModalMsg', 'PDF generated (Drive save skipped — backend not configured).', true);
+    } else {
+      // A147: real save failure — say so honestly instead of the misleading "not configured".
+      flowMsg('pdfModalMsg', 'PDF generated, but the Drive save failed' + (saveError ? ' (' + saveError + ')' : '') + ' — reopen and Generate again to retry.', false);
+    }
     await loadQuotations();
-    // The list refetch can lag the write (Sheets read-after-write) — patch what we know.
-    if (link) qPatchLocal(pdfQuote.quotationNo, { pdfLink: link, pdfData, discountPct: payload.discountPct });
-    if (link) setTimeout(closePdfModal, 900);
+    // The list refetch can lag the write (Sheets read-after-write) — patch what we know when the save
+    // actually produced a Drive link. On a failed save there is no saved PDF, so nothing to patch.
+    if (link) { qPatchLocal(pdfQuote.quotationNo, { pdfLink: link, pdfData, discountPct: payload.discountPct }); setTimeout(closePdfModal, 900); }
   } catch (e) {
     flowMsg('pdfModalMsg', e.message, false);
   } finally { btn.disabled = false; btn.textContent = 'Generate & Save'; }

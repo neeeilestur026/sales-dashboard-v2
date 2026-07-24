@@ -375,9 +375,11 @@ async function submitPdf() {
   };
   btn.disabled = true; btn.textContent = 'Generating...';
   try {
-    const { link } = await generateFlowPdf('/flow/po-pdf', payload, 'savePOPDF',
+    const { link, saveError, configured } = await generateFlowPdf('/flow/po-pdf', payload, 'savePOPDF',
       'poNo', pdfPO.poNo, `Purchase_Order_${pdfPO.poNo}.pdf`);
-    flowMsg('pdfModalMsg', link ? 'PDF generated and saved to Drive.' : 'PDF generated (Drive save skipped — backend not configured).', true);
+    if (link) flowMsg('pdfModalMsg', 'PDF generated and saved to Drive.', true);
+    else if (!configured) flowMsg('pdfModalMsg', 'PDF generated (Drive save skipped — backend not configured).', true);
+    else flowMsg('pdfModalMsg', 'PDF generated, but the Drive save failed' + (saveError ? ' (' + saveError + ')' : '') + ' — reopen and Generate again to retry.', false);
     await loadPOs();
     if (link) setTimeout(closePdfModal, 900);
   } catch (e) {

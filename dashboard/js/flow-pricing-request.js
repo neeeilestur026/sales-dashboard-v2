@@ -1125,8 +1125,10 @@ async function submitPrPdf() {
   };
   btn.disabled = true; btn.textContent = 'Generating...';
   try {
-    const { link } = await generateFlowPdf('/flow/pr-pdf', payload, 'savePRPDF', 'prNo', r.prNo, `Purchase_Request_${r.prNo}.pdf`);
-    flowMsg('pdfModalMsg', link ? 'PDF generated and saved to Drive.' : 'PDF generated (Drive save skipped — backend not configured).', true);
+    const { link, saveError, configured } = await generateFlowPdf('/flow/pr-pdf', payload, 'savePRPDF', 'prNo', r.prNo, `Purchase_Request_${r.prNo}.pdf`);
+    if (link) flowMsg('pdfModalMsg', 'PDF generated and saved to Drive.', true);
+    else if (!configured) flowMsg('pdfModalMsg', 'PDF generated (Drive save skipped — backend not configured).', true);
+    else flowMsg('pdfModalMsg', 'PDF generated, but the Drive save failed' + (saveError ? ' (' + saveError + ')' : '') + ' — try Generate again to retry.', false);
     await loadRequests();
     if (link) setTimeout(closePdfModal, 900);
   } catch (e) { flowMsg('pdfModalMsg', e.message, false); }

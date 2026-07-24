@@ -155,6 +155,10 @@ def _embed_quo_data(pdf_bytes, payload):
                 "qty": it.get("qty"),
                 "price": it.get("price"),
                 "description": it.get("description"),
+                # A147: preserve the requested-vs-offered pairing (A86) + unit across a re-import.
+                "origItemNo": it.get("origItemNo"),
+                "origItemName": it.get("origItemName"),
+                "uom": it.get("uom"),
             })
         data = {
             "customer": payload.get("customer"),
@@ -218,6 +222,7 @@ def quotation_pdf():
             "total_amount": price,
             "total_unit_price": qty * price,
             "description": _s(it.get("description")),
+            "uom": _s(it.get("uom")),   # A147: carry the real unit (from the PR) so it isn't forced to "pc(s)"
             # requested-vs-offered (A86): the client's ORIGINAL code/description when admin
             # replaced them with the supplier's own during sourcing
             "orig_code": _s(it.get("origItemNo")),
@@ -294,11 +299,10 @@ def po_pdf():
             "total_amount": qty * price,
         })
 
+    # A147: pass the raw YYYY-MM-DD through so po_pdf does the single, correct formatting. The old code
+    # pre-formatted to "January 15, 2026", then po_pdf re-parsed it with strict "%Y-%m-%d" → ValueError →
+    # datetime.now(), which printed TODAY's date on every back-dated / later-regenerated PO.
     raw_date = _s(data.get("date"))
-    try:
-        po_date_display = datetime.strptime(raw_date, "%Y-%m-%d").strftime("%B %d, %Y")
-    except (ValueError, TypeError):
-        po_date_display = raw_date
 
     client_details = {
         "vendor_name": _s(data.get("supplier")),
@@ -309,7 +313,7 @@ def po_pdf():
         "payment_terms": _s(doc.get("paymentTerms")),
         "date_needed": _s(doc.get("dateNeeded")),
         "po_number": _s(data.get("poNo")),
-        "po_date": po_date_display,
+        "po_date": raw_date,
         "invoice_contact_person": _s(doc.get("invoiceContact")),
         "invoice_email": _s(doc.get("invoiceEmail")),
         "reference_no": _s(doc.get("referenceNo")) or _s(data.get("soNo")),

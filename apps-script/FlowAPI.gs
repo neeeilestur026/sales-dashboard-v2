@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 87;   // A146 AR due-date from client payment terms (86: A145 flow hardening · 85: A144 payment guardrails)
+var FLOW_VERSION = 88;   // A147 bug-scan fixes: freebie carry, VAT/UOM edit, sourcing/stage gates (87: A146 AR due-date · 86: A145 flow hardening · 85: A144 payment guardrails)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -40,7 +40,7 @@ var SCHEMA = {
                    'PDF Data JSON', 'Plant Site', 'Client Ref No'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
-                   'Orig Item No', 'Orig Item Name', 'Supplier VAT'],
+                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM'],
 
   SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price'],
@@ -530,7 +530,7 @@ function getQuotations(p) {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
         origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
-        vat: r['Supplier VAT'] || '' }; })
+        vat: r['Supplier VAT'] || '', uom: r['UOM'] || '' }; })
     };
   }) };
 }
@@ -571,7 +571,7 @@ function createQuotation(p) {
     '', p.plantSite || '', p.clientRefNo || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.origItemNo || '', it.origItemName || '', it.vat || ''];   // trailing: A145 Supplier VAT
+            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || ''];   // trailing: A145 Supplier VAT, A147 UOM
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -626,9 +626,10 @@ function updateQuotation(p) {
   if (p.discountPct !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Discount %', _num(p.discountPct) || 0);
   // Items: delete rows keyed on the OLD number, re-append keyed on the new one.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
-    // keep the requested-vs-offered pairing across edits (same 8 columns as createQuotation)
+    // A147: write all 10 columns like createQuotation — the old 8-col write silently blanked
+    // Supplier VAT (and would blank UOM) on every edit, since _writeItems delete+re-appends.
     return [newNo, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.origItemNo || '', it.origItemName || ''];
+            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || ''];
   });
   if (newNo !== String(no)) {
     // Sales orders built from this quotation keep their link.
@@ -805,7 +806,8 @@ function importCollections(p) {
       if (recv > 0) {
         var colNo = _nextNumber('Collections', 1, 'COL');
         _append('Collections', [colNo, arNo, invNo, c.soNo || '', customer,
-          c.dateCollected || c.date || _dateStr(_now()), recv, '', '', 'Migrated (legacy)', _now()]);
+          c.dateCollected || c.date || _dateStr(_now()), recv, '', '', 'Migrated (legacy)', _now(),
+          _num(c.ewt) || '']);   // A147: 12th col EWT (PHP) — was omitted (trailing blank); explicit now
         createdPayments++;
       }
       if (invNo) existing[invNo] = true;
@@ -2431,6 +2433,12 @@ function _quotationPdfMismatch(q) {
     });
     var now = { n: its.length, qty: 0, amt: 0 };
     its.forEach(function (r) { now.qty += _num(r['Quoted Qty']); now.amt += _num(r['Quoted Qty']) * _num(r['Quoted Price']); });
+    // A147: also compare the header fields the client stamp covers (customer/date/subject) so a changed
+    // header can't be approved with a stale PDF. Only compare a stamp field when it was recorded (older
+    // stamps predate these keys) so no false alarm on legacy stamps. Date is normalized both sides.
+    if (stamp.customer !== undefined && String(stamp.customer) !== String(q['Customer'] || '')) return true;
+    if (stamp.subject !== undefined && String(stamp.subject) !== String(q['Subject'] || '')) return true;
+    if (stamp.date !== undefined && String(stamp.date) && String(stamp.date) !== _dateStr(q['Date'])) return true;
     return was.n !== now.n || Math.abs(was.qty - now.qty) > 0.001 || Math.abs(was.amt - now.amt) > 0.01
       || _num(stamp.discountPct) !== _num(q['Discount %']);
   } catch (e) { return false; }
@@ -2960,6 +2968,12 @@ function getPricingRequests(p) {
   }) };
 }
 
+// A147: current status of a PR (''; if not found), used by the stage gates below.
+function _prStatus(prNo) {
+  var h = _rows('PricingRequests').filter(function (r) { return String(r['PR No']) === String(prNo); })[0];
+  return h ? String(h['Status'] || '') : '';
+}
+
 function _setPRStatus(prNo, status, notes) {
   var sh = _sheet('PricingRequests');
   _rows('PricingRequests').forEach(function (h) {
@@ -3035,9 +3049,11 @@ function updatePRSourcing(p) {
       sh.getRange(row.rowIndex, 3, 1, 1).setValues([[newNo]]);
     }
     // col 4: Item Name — admin can correct the product description; it flows to the quotation.
-    if (u.itemName !== undefined) {
-      var newName = u.itemName || '';
-      if (newName && String(row['Item Name']) !== newName && !String(row['Orig Item Name'] || '').trim()) {
+    // A147: blank = keep the original (guarded like Item No above), so an accidental clear can't wipe
+    // the description and push a blank through pricing into the quotation.
+    if (u.itemName !== undefined && String(u.itemName).trim() !== '') {
+      var newName = String(u.itemName).trim();
+      if (String(row['Item Name']) !== newName && !String(row['Orig Item Name'] || '').trim()) {
         sh.getRange(row.rowIndex, 16, 1, 1).setValues([[row['Item Name']]]);
       }
       sh.getRange(row.rowIndex, 4, 1, 1).setValues([[newName]]);
@@ -3078,7 +3094,8 @@ function _sourcingGaps(prNo) {
   });
   if (!hasQuote) gaps.push("the supplier's quotation attached (Doc Type “Supplier Quotation”)");
   var incomplete = _rows('PricingRequestItems').some(function (r) {
-    return String(r['PR No']) === String(prNo) && r['Included'] === true &&
+    return String(r['PR No']) === String(prNo) &&
+      (r['Included'] === true || String(r['Included']) === 'true') &&   // A147: accept a stringified checkbox
       (!(_num(r['Supplier Price (FC)']) > 0) || !String(r['Principal'] || '').trim() || !String(r['Currency'] || '').trim());
   });
   if (incomplete) gaps.push('a supplier price, principal and currency on every included item');
@@ -3087,6 +3104,11 @@ function _sourcingGaps(prNo) {
 
 function submitForPricing(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
+  // A147 stage gate: only a request still being sourced can be forwarded.
+  var st = _prStatus(p.prNo);
+  if (st && st !== 'Requested' && st !== 'Sourcing') {
+    return { success: false, message: 'This request is "' + st + '" — only a Requested/Sourcing request can be forwarded to management.' };
+  }
   var gaps = _sourcingGaps(p.prNo);
   if (gaps.length) return { success: false, message: 'Cannot forward to management — still needs ' + gaps.join(', ') + '.' };
   _setPRStatus(p.prNo, 'For Mgmt Pricing');
@@ -3112,8 +3134,10 @@ function setMgmtPricing(p) {
     if (u.included !== undefined) ish.getRange(row.rowIndex, 8, 1, 1).setValues([[!!u.included]]);
     // Persist management's edits to the priced inputs (backward compatible — only when provided).
     if (u.qty !== undefined) ish.getRange(row.rowIndex, 5, 1, 1).setValues([[_num(u.qty)]]);             // Qty (col 5)
-    if (u.principal !== undefined) ish.getRange(row.rowIndex, 10, 1, 1).setValues([[u.principal || '']]); // Principal (col 10)
-    if (u.currency !== undefined) ish.getRange(row.rowIndex, 11, 1, 1).setValues([[u.currency || 'PHP']]);// Currency (col 11)
+    // A147: do NOT overwrite per-item Principal (col 10) / Currency (col 11). The pricing engine is a
+    // single GLOBAL principal, so writing it onto every line clobbered the per-item sourcing (a
+    // multi-principal PR lost item B's real principal/currency). The engine's full per-item breakdown is
+    // preserved in Priced Items JSON (col 15); the quotation is PHP-based, so output is unaffected.
     if (u.supplierPrice !== undefined) ish.getRange(row.rowIndex, 12, 1, 1).setValues([[_num(u.supplierPrice)]]); // Supplier Price (FC) (col 12)
     if (u.cbm !== undefined) ish.getRange(row.rowIndex, 13, 1, 1).setValues([[_num(u.cbm)]]);             // CBM (col 13)
   });
@@ -3123,6 +3147,11 @@ function setMgmtPricing(p) {
 
 function verifyReturnToSales(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
+  // A147 stage gate: only a management-priced request can be verified back to sales.
+  var vst = _prStatus(p.prNo);
+  if (vst && vst !== 'Mgmt Priced') {
+    return { success: false, message: 'This request is "' + vst + '" — only a Mgmt Priced request can be verified and returned to sales.' };
+  }
   _setPRStatus(p.prNo, 'Returned to Sales', p.notes);
   return { success: true, prNo: p.prNo, message: 'Verified; returned to sales.' };
 }
@@ -3131,15 +3160,31 @@ function createQuotationFromPR(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
   var hdr = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(p.prNo); })[0];
   if (!hdr) return { success: false, message: 'PR not found.' };
+  // A147: stage gate + one-quotation-per-PR. Already quoted → return the existing quotation (idempotent,
+  // parsed from Notes). Otherwise the PR must be "Returned to Sales" before it can be quoted.
+  var prStatus = String(hdr['Status'] || '');
+  if (prStatus === 'Quoted') {
+    var qm = String(hdr['Notes'] || '').match(/Quotation\s+(\S+)/i);
+    var existingNo = qm ? qm[1].replace(/[.\s]+$/, '') : '';
+    return { success: true, prNo: p.prNo, quotationNo: existingNo, duplicate: true,
+      message: existingNo ? ('Already quoted as ' + existingNo + '.') : 'This request is already quoted.' };
+  }
+  if (prStatus !== 'Returned to Sales') {
+    return { success: false, message: 'This request is "' + prStatus + '" — it must be Returned to Sales before it can be quoted.' };
+  }
+  // A147: carry EVERY included item — including ₱0 freebies/accessories. Every included line is priced by
+  // the engine before the PR reaches "Returned to Sales", so a 0 is a legitimate quoted price. (Filtering
+  // on Final Price > 0 silently dropped freebies the sales rep saw on screen.)
   var qItems = _rows('PricingRequestItems').filter(function (r) {
     return String(r['PR No']) === String(p.prNo)
-      && (r['Included'] === true || String(r['Included']) === 'true') && _num(r['Final Price']) > 0;
+      && (r['Included'] === true || String(r['Included']) === 'true');
   }).map(function (r) {
     return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']),
+             uom: r['UOM'] || '',
              origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
              vat: r['Supplier Price VAT'] || '' };   // A145: carry the VAT-Incl/Excl note to the quotation
   });
-  if (!qItems.length) return { success: false, message: 'No included, priced items to quote.' };
+  if (!qItems.length) return { success: false, message: 'No included items to quote.' };
   // A145: carry the PR context that used to die at the PR — plant site + the client's own RFQ/PR number
   // (from Doc JSON) — onto the quotation so it prints and isn't re-typed.
   var clientRefNo = '';
@@ -3150,7 +3195,7 @@ function createQuotationFromPR(p) {
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
     quotationNo: p.quotationNo || '', subject: p.subject || '', discountPct: _num(p.discountPct) || 0,
     plantSite: hdr['Plant Site'] || '', clientRefNo: clientRefNo,
-    clientRef: p.clientRef || ('qfp_' + p.prNo),
+    clientRef: 'qfp_' + p.prNo,   // A147: force per-PR key so two saves from one PR can't create two quotations
     createdBy: p.actorName || hdr['Requested By'] || '', actorRole: 'sales', items: JSON.stringify(qItems) });
   if (!qres.success) return qres;
   _setPRStatus(p.prNo, 'Quoted', 'Quotation ' + qres.quotationNo);
