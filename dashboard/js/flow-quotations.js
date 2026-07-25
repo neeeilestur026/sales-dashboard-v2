@@ -562,9 +562,10 @@ function quotationActions(q) {
   // A152: close a quotation the client never pursued (soft) — or reopen a closed one.
   const closed = Q_CLOSED.indexOf(st) !== -1;
   const canClose = isCreator || isSales || isAdmin || role === 'management' || role === 'director';
+  const wonHasSO = qHasSO[String(q.quotationNo)];   // pursued into an SO → can't be "not pursued"
   if (qCanClose && canClose) {
     if (closed) a += B(`reopenQuotationAction("${no}")`, 'Reopen', 'reopen-btn');
-    else a += B(`openCloseModal("${no}")`, 'Close', 'del-btn');
+    else if (!wonHasSO) a += B(`openCloseModal("${no}")`, 'Close', 'del-btn');
   }
   return a;
 }

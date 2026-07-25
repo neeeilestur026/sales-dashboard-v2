@@ -300,7 +300,7 @@ function _acctSmTlRenderNextUp(apiMap, nextKey) {
       <div class="sm-tl-next-up-icon">🎉</div>
       <div class="sm-tl-next-up-body">
         <div class="sm-tl-next-up-kicker">All complete</div>
-        <div class="sm-tl-next-up-stage"><strong>All 21 stages done!</strong></div>
+        <div class="sm-tl-next-up-stage"><strong>All ${_SM_LIFECYCLE_STAGES.length} stages done!</strong></div>
         <div class="sm-tl-next-up-sub">This shipment has completed all lifecycle stages.</div>
       </div>
     </div>`;

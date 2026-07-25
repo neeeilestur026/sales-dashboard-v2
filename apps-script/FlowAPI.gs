@@ -1504,7 +1504,12 @@ function backfillMissingAR(p) {
     var amt = _num(v['Total Sales']);
     var recv = 0;
     _rows('Collections').forEach(function (c) {
-      if (String(c['INV No']) === invNo || (v['SO No'] && String(c['SO No']) === String(v['SO No']))) recv += _num(c['Amount (PHP)']);
+      // Credit a collection to THIS invoice only by its INV No. The SO-No fallback is used solely for
+      // collections that carry no invoice ref, so a payment on invoice A on a multi-invoice SO is never
+      // also credited to invoice B (every recordCollection row carries both INV No and SO No).
+      var byInv = String(c['INV No']) === invNo;
+      var bySo = !c['INV No'] && v['SO No'] && String(c['SO No']) === String(v['SO No']);
+      if (byInv || bySo) recv += _num(c['Amount (PHP)']);
     });
     var status = recv <= 0 ? 'Unpaid' : (recv >= amt && amt > 0 ? 'Paid' : 'Partial');
     var due = _addTermDays(v['Date'], _clientTerms(v['Customer']));
@@ -2376,12 +2381,23 @@ function _driveIdFromUrl(url) {
 function _registerDocument(module, refNo, fileName, url, fileId, actorName) {
   try {
     if (!module || !refNo || !url) return;
-    var dup = _rows('Documents').some(function (r) {
-      return String(r['Drive Link']) === String(url) ||
-        (String(r['Module']) === String(module) && String(r['Ref No']) === String(refNo) &&
-         String(r['Doc Type']) === 'Generated PDF');
-    });
-    if (dup) return;
+    var rows = _rows('Documents');
+    // Exact same file already registered → nothing to do.
+    if (rows.some(function (r) { return String(r['Drive Link']) === String(url); })) return;
+    // A regenerated PDF for the same record (revise → new file): UPDATE the existing Generated-PDF row in
+    // place so the registry points at the CURRENT file, not the first one (else getSOLifecycle serves a stale PDF).
+    var existing = rows.filter(function (r) {
+      return String(r['Module']) === String(module) && String(r['Ref No']) === String(refNo) &&
+        String(r['Doc Type']) === 'Generated PDF';
+    })[0];
+    if (existing) {
+      var sh = _sheet('Documents');
+      sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('Drive Link') + 1, 1, 1).setValues([[url]]);
+      sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('File ID') + 1, 1, 1).setValues([[fileId || _driveIdFromUrl(url)]]);
+      if (fileName) sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('File Name') + 1, 1, 1).setValues([[fileName]]);
+      sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('Uploaded At') + 1, 1, 1).setValues([[_now()]]);
+      return;
+    }
     _append('Documents', [_nextNumber('Documents', 1, 'DOC'), module, refNo, 'Generated PDF',
       fileName || '', url, fileId || _driveIdFromUrl(url), actorName || 'System', _now()]);
   } catch (e) { /* never block the PDF save */ }
@@ -2698,8 +2714,11 @@ function closeQuotation(p) {
   if (_QUOTE_CLOSED.indexOf(st) !== -1) return { success: false, message: 'Quotation is already closed (' + st + ').' };
   var role = p.actorRole || '';
   var allowed = String(q['Created By']) === String(p.actorName) ||
-    ['sales', 'admin', 'management', 'director'].indexOf(role) !== -1;
+    ['admin', 'management', 'director'].indexOf(role) !== -1;   // a sales rep can close only their OWN
   if (!allowed) return { success: false, message: 'You cannot close this quotation.' };
+  // A quotation the client DID pursue (a Sales Order references it) is won, not lost — don't let it be closed.
+  if (_rows('SalesOrders').some(function (s) { return String(s['Quotation No']) === String(p.quotationNo); }))
+    return { success: false, message: 'This quotation already has a Sales Order — it can\'t be closed as not-pursued.' };
   var who = p.actorName || '';
   var note = 'Closed as ' + outcome + (who ? ' by ' + who : '') + (p.reason ? ' — ' + p.reason : '');
   _setQuotationCells(p.quotationNo, { 'Status': outcome, 'Approval Note': note });
@@ -2716,7 +2735,7 @@ function reopenQuotation(p) {
   if (_QUOTE_CLOSED.indexOf(st) === -1) return { success: false, message: 'Only a closed quotation can be reopened (now: ' + (st || 'Draft') + ').' };
   var role = p.actorRole || '';
   var allowed = String(q['Created By']) === String(p.actorName) ||
-    ['sales', 'admin', 'management', 'director'].indexOf(role) !== -1;
+    ['admin', 'management', 'director'].indexOf(role) !== -1;   // a sales rep can reopen only their OWN
   if (!allowed) return { success: false, message: 'You cannot reopen this quotation.' };
   _setQuotationCells(p.quotationNo, { 'Status': 'Draft', 'Approval Note': 'Reopened from ' + st + (p.actorName ? ' by ' + p.actorName : '') });
   return { success: true, quotationNo: p.quotationNo, status: 'Draft', previousStatus: st,
