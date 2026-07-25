@@ -8,6 +8,8 @@ let qIsOversight = false;   // admin/accounting/management/director see ALL reps
 let qReturnedPRs = [];      // sales: PRs Returned to Sales, loadable into a quotation
 let qFromPr = '';           // when set, Save creates the quotation from this PR (carries mgmt final prices)
 let qAdmin = false;         // admin: free-typed item rows (incl. new items) auto-added to inventory on save
+let qCanClose = false;      // A152: the Close/Reopen actions need FlowAPI v91
+const Q_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];   // A152 soft-close outcomes
 
 document.addEventListener('DOMContentLoaded', async () => {
   qSession = requireQuotationAccess();
@@ -468,6 +470,7 @@ async function loadQuotations() {
     qList = (res && res.data) || [];
     qHasSO = {};
     ((soRes && soRes.data) || []).forEach(s => { if (s.quotationNo) qHasSO[String(s.quotationNo)] = true; });
+    try { qCanClose = await flowVersionAtLeast(91); } catch (e) { qCanClose = false; }  // A152: Close/Reopen need v91
     if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
     qBuildMonthOptions();
     renderQuotationList();
@@ -504,7 +507,11 @@ function renderQuotationList() {
   if (!c) return;
   const month = (document.getElementById('qMonthFilter') || {}).value || '';
   const term = ((document.getElementById('qSearch') || {}).value || '').trim().toLowerCase();
+  // A152: status filter — Active (default, hides closed), Closed (win/loss review), or All.
+  const sview = (document.getElementById('qStatusFilter') || {}).value || 'active';
   let rows = qList;
+  if (sview === 'active') rows = rows.filter(q => Q_CLOSED.indexOf(String(q.status)) === -1);
+  else if (sview === 'closed') rows = rows.filter(q => Q_CLOSED.indexOf(String(q.status)) !== -1);
   if (month) rows = rows.filter(q => qMonthKey(q) === month);
   if (term) {
     rows = rows.filter(q => [q.quotationNo, q.customer, q.subject, q.createdBy]
@@ -552,6 +559,13 @@ function quotationActions(q) {
   // so an admin- or management-created quotation doesn't strand at Approved with no one able to send it.
   const canSend = isCreator || isSales || isAdmin || role === 'management' || role === 'director';
   if (canSend && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
+  // A152: close a quotation the client never pursued (soft) — or reopen a closed one.
+  const closed = Q_CLOSED.indexOf(st) !== -1;
+  const canClose = isCreator || isSales || isAdmin || role === 'management' || role === 'director';
+  if (qCanClose && canClose) {
+    if (closed) a += B(`reopenQuotationAction("${no}")`, 'Reopen', 'reopen-btn');
+    else a += B(`openCloseModal("${no}")`, 'Close', 'del-btn');
+  }
   return a;
 }
 
@@ -606,6 +620,35 @@ function rejectQuotationAction(no) {
 function sendQuotationAction(no) {
   if (!confirm('Mark quotation ' + no + ' as sent to the client?')) return;
   _qAction('sendQuotation', no);
+}
+
+// A152: close a not-pursued quotation (soft). A small modal lets the user pick the outcome + a reason.
+function openCloseModal(no) {
+  document.getElementById('qCloseNo').textContent = no;
+  document.getElementById('qCloseModal').dataset.no = no;
+  document.getElementById('qCloseOutcome').value = 'Not Pursued';
+  document.getElementById('qCloseReason').value = '';
+  document.getElementById('qCloseModal').style.display = 'flex';
+}
+function closeCloseModal() { document.getElementById('qCloseModal').style.display = 'none'; }
+async function confirmCloseQuotation() {
+  const modal = document.getElementById('qCloseModal');
+  const no = modal.dataset.no;
+  const outcome = document.getElementById('qCloseOutcome').value;
+  const reason = document.getElementById('qCloseReason').value.trim();
+  const btn = document.getElementById('qCloseConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Closing…';
+  try {
+    const res = await postFlow('closeQuotation', { quotationNo: no, outcome, reason });
+    if (!res.success) throw new Error(res.message);
+    closeCloseModal();
+    await loadQuotations();
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Close quotation'; }
+}
+function reopenQuotationAction(no) {
+  if (!confirm(`Reopen ${no}?\n\nIt returns to Draft so you can revise and re-send it (the client came back).`)) return;
+  _qAction('reopenQuotation', no);
 }
 
 /** Reopen an Approved/Sent quotation and drop the user straight into the edit form, so revising is

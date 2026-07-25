@@ -208,6 +208,7 @@ function flowStatusBadge(status) {
   if (k.indexOf('pending') === 0 || k === 'open') cls = 'b-pending';
   else if (k === 'approved') cls = 'b-approved';
   else if (k === 'rejected') cls = 'b-rejected';
+  else if (k === 'not pursued' || k === 'lost' || k === 'cancelled') cls = 'b-lost';   // A152 soft-close outcomes
   else if (k === 'sent' || k === 'closed' || k === 'quoted') cls = 'b-sent';
   return `<span class="flow-badge ${cls}">${flowEsc(s)}</span>`;
 }

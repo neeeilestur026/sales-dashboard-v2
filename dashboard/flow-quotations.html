@@ -96,6 +96,13 @@
                 style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;min-width:150px;">
           <option value="">All months</option>
         </select>
+        <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#475569);">Show</label>
+        <select id="qStatusFilter" onchange="renderQuotationList()"
+                style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;">
+          <option value="active">Active</option>
+          <option value="closed">Closed (Not Pursued / Lost / Cancelled)</option>
+          <option value="all">All</option>
+        </select>
         <input type="text" id="qSearch" placeholder="Search quotation no, customer or subject..." oninput="renderQuotationList()"
                style="flex:1;min-width:220px;padding:0.4rem 0.65rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;">
         <span id="qListCount" style="font-size:0.78rem;color:var(--text-muted,#64748b);font-variant-numeric:tabular-nums;"></span>
@@ -188,6 +195,26 @@
       <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Document</div>
       <div id="qrPdf" style="margin-bottom:1rem;"></div>
       <div class="flow-modal-foot" id="qrFoot"></div>
+    </div>
+  </div>
+
+  <!-- A152: close a not-pursued quotation (soft) -->
+  <div class="flow-modal-overlay" id="qCloseModal" style="display:none;align-items:center;justify-content:center;">
+    <div class="flow-modal" style="max-width:460px;">
+      <div class="flow-modal-head"><h3 style="margin:0;">Close quotation <span id="qCloseNo" style="color:var(--accent,#4f46e5);"></span></h3></div>
+      <div style="padding:0 0.2rem;">
+        <p style="font-size:0.82rem;color:var(--text-secondary,#475569);margin:0.2rem 0 0.8rem;">The client didn't pursue this quotation. It will be hidden from the active list and stop the "no sales order" reminder, but kept for win/loss reporting — you can Reopen it if the client comes back.</p>
+        <label style="font-size:0.78rem;font-weight:700;">Outcome</label>
+        <select id="qCloseOutcome" style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);margin:0.25rem 0 0.7rem;">
+          <option>Not Pursued</option><option>Lost</option><option>Cancelled</option>
+        </select>
+        <label style="font-size:0.78rem;font-weight:700;">Reason (optional)</label>
+        <textarea id="qCloseReason" rows="2" placeholder="e.g. client chose another supplier / project shelved" style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);margin-top:0.25rem;"></textarea>
+      </div>
+      <div class="flow-modal-foot" style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.8rem;">
+        <button class="btn btn-secondary btn-sm" onclick="closeCloseModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="qCloseConfirmBtn" onclick="confirmCloseQuotation()">Close quotation</button>
+      </div>
     </div>
   </div>
 

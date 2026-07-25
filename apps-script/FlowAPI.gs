@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 90;   // A151 SO lifecycle spine + doc registry unify + drive folder + AR backfill (89: A149 names · 88: A147 bug-scan · 87: A146 AR due-date)
+var FLOW_VERSION = 91;   // A152 close/reopen not-pursued quotation (90: A151 lifecycle spine + doc registry · 89: A149 names · 88: A147 bug-scan)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2683,6 +2683,46 @@ function reviseQuotation(p) {
     message: 'Quotation reopened for revision — it will need approval again before it can be sent.' };
 }
 
+// A152: the three terminal "the client didn't pursue this" outcomes. Soft-close only — the record stays
+// for win/loss reporting and can be reopened. Setting one of these overwrites Sent/Approved/etc., so every
+// status-based nudge/badge/queue that keyed on the old status goes quiet automatically.
+var _QUOTE_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];
+
+/** Close a quotation the client never pursued into a Sales Order (soft). Outcome is one of _QUOTE_CLOSED. */
+function closeQuotation(p) {
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  var q = _quotationRow(p.quotationNo);
+  if (!q) return { success: false, message: 'Quotation not found.' };
+  var outcome = _QUOTE_CLOSED.indexOf(String(p.outcome)) !== -1 ? String(p.outcome) : 'Not Pursued';
+  var st = String(q['Status'] || '');
+  if (_QUOTE_CLOSED.indexOf(st) !== -1) return { success: false, message: 'Quotation is already closed (' + st + ').' };
+  var role = p.actorRole || '';
+  var allowed = String(q['Created By']) === String(p.actorName) ||
+    ['sales', 'admin', 'management', 'director'].indexOf(role) !== -1;
+  if (!allowed) return { success: false, message: 'You cannot close this quotation.' };
+  var who = p.actorName || '';
+  var note = 'Closed as ' + outcome + (who ? ' by ' + who : '') + (p.reason ? ' — ' + p.reason : '');
+  _setQuotationCells(p.quotationNo, { 'Status': outcome, 'Approval Note': note });
+  return { success: true, quotationNo: p.quotationNo, status: outcome, previousStatus: st,
+    message: 'Quotation closed as ' + outcome + '.' };
+}
+
+/** Reopen a closed (Not Pursued/Lost/Cancelled) quotation back to Draft — the client came back. */
+function reopenQuotation(p) {
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  var q = _quotationRow(p.quotationNo);
+  if (!q) return { success: false, message: 'Quotation not found.' };
+  var st = String(q['Status'] || '');
+  if (_QUOTE_CLOSED.indexOf(st) === -1) return { success: false, message: 'Only a closed quotation can be reopened (now: ' + (st || 'Draft') + ').' };
+  var role = p.actorRole || '';
+  var allowed = String(q['Created By']) === String(p.actorName) ||
+    ['sales', 'admin', 'management', 'director'].indexOf(role) !== -1;
+  if (!allowed) return { success: false, message: 'You cannot reopen this quotation.' };
+  _setQuotationCells(p.quotationNo, { 'Status': 'Draft', 'Approval Note': 'Reopened from ' + st + (p.actorName ? ' by ' + p.actorName : '') });
+  return { success: true, quotationNo: p.quotationNo, status: 'Draft', previousStatus: st,
+    message: 'Quotation reopened to Draft.' };
+}
+
 // ── Purchase Order approval (admin creates → management/director approves) ──
 function _poRow(no) {
   return _rows('PurchaseOrders').filter(function (po) { return String(po['PO No']) === String(no); })[0];
@@ -2910,6 +2950,7 @@ var _MODULE_MAP = {
   submitQuotationApproval: ['Quotation', 'Submitted'], approveQuotation: ['Quotation', 'Approved'],
   rejectQuotation: ['Quotation', 'Rejected'], sendQuotation: ['Quotation', 'Sent'],
   reviseQuotation: ['Quotation', 'Revised'],
+  closeQuotation: ['Quotation', 'Closed'], reopenQuotation: ['Quotation', 'Reopened'],
   submitPOApproval: ['Purchase Order', 'Submitted'], approvePO: ['Purchase Order', 'Approved'],
   rejectPO: ['Purchase Order', 'Rejected'],
   saveMarketingRecord: ['Marketing', 'Saved'], deleteMarketingRecord: ['Marketing', 'Removed'],
@@ -3505,6 +3546,7 @@ var HANDLERS = {
   addDocument: addDocument, getDocuments: getDocuments, deleteDocument: deleteDocument,
   submitQuotationApproval: submitQuotationApproval, approveQuotation: approveQuotation,
   rejectQuotation: rejectQuotation, sendQuotation: sendQuotation, reviseQuotation: reviseQuotation,
+  closeQuotation: closeQuotation, reopenQuotation: reopenQuotation,
   submitPOApproval: submitPOApproval, approvePO: approvePO, rejectPO: rejectPO,
   // A151: lifecycle spine + document safety
   backfillShipments: backfillShipments, backfillPdfDocuments: backfillPdfDocuments,
@@ -3528,6 +3570,7 @@ var MUTATIONS = {
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
   addDocument: 1, deleteDocument: 1,
   submitQuotationApproval: 1, approveQuotation: 1, rejectQuotation: 1, sendQuotation: 1, reviseQuotation: 1,
+  closeQuotation: 1, reopenQuotation: 1,
   submitPOApproval: 1, approvePO: 1, rejectPO: 1,
   setOpeningBalance: 1,
   advanceShipmentStage: 1, updateShipment: 1,

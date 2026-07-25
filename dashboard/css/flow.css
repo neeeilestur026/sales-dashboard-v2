@@ -33,6 +33,7 @@
 .b-approved { background: rgba(13,148,136,0.14); color: #0f766e; }
 .b-rejected { background: rgba(239,68,68,0.14); color: #dc2626; }
 .b-sent { background: rgba(59,130,246,0.14); color: #2563eb; }
+.b-lost { background: rgba(100,116,139,0.16); color: #475569; }   /* A152: Not Pursued / Lost / Cancelled */
 
 .flow-hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
 .flow-hub a { display: block; background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 1.1rem; text-decoration: none; }
