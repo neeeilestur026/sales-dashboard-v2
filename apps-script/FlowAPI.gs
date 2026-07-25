@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 88;   // A147 bug-scan fixes: freebie carry, VAT/UOM edit, sourcing/stage gates (87: A146 AR due-date · 86: A145 flow hardening · 85: A144 payment guardrails)
+var FLOW_VERSION = 89;   // A149 name client/supplier in activity log (88: A147 bug-scan fixes · 87: A146 AR due-date · 86: A145 flow hardening)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2781,7 +2781,10 @@ function _logActivity(action, params, result) {
       ? (result.arNo || params.arNo || result.collectionNo || '')
       : (result.quotationNo || result.soNo || result.poNo || result.mrNo || result.invNo
          || result.prNo || result.apNo || result.expNo || result.refNo || params.refNo || params.prNo || params.poNo
-         || params.soNo || params.quotationNo || params.expNo || params.itemNo || '');
+         || params.soNo || params.quotationNo || params.expNo || params.itemNo
+         // A149: name-keyed records (client/supplier) have no doc number — fall through to the name so the
+         // activity card shows WHICH client/supplier, and repeat saves of the same one collapse into one task.
+         || result.customer || result.supplier || params.customer || params.supplier || '');
     var user = params.actorName || params.createdBy || params.receivedBy || '';
     var now = _now();
     _sheet('ActivityLog').appendRow([now, _dateStr(now), user, map[0], map[1], refNo,
@@ -3240,13 +3243,13 @@ function saveSupplier(p) {
   var existing = _rows('Suppliers').filter(function (r) { return String(r['Supplier']).toLowerCase() === name.toLowerCase(); })[0];
   if (existing) sh.getRange(existing.rowIndex, 1, 1, n).setValues([row]);
   else _append('Suppliers', row);
-  return { success: true, supplier: name, message: 'Supplier saved.' };
+  return { success: true, supplier: name, message: 'Supplier "' + name + '" ' + (existing ? 'updated.' : 'added.') };
 }
 function deleteSupplier(p) {
   var r = _rows('Suppliers').filter(function (x) { return String(x['Supplier']).toLowerCase() === String(p.supplier || '').toLowerCase(); })[0];
   if (!r) return { success: false, message: 'Supplier not found.' };
   _sheet('Suppliers').deleteRow(r.rowIndex);
-  return { success: true, message: 'Supplier removed.' };
+  return { success: true, supplier: String(p.supplier || ''), message: 'Supplier "' + String(p.supplier || '') + '" removed.' };
 }
 function getClients() {
   return { success: true, data: _rows('Clients').map(function (r) {
@@ -3265,13 +3268,13 @@ function saveClient(p) {
   var existing = _rows('Clients').filter(function (r) { return String(r['Customer']).toLowerCase() === name.toLowerCase(); })[0];
   if (existing) sh.getRange(existing.rowIndex, 1, 1, n).setValues([row]);
   else _append('Clients', row);
-  return { success: true, customer: name, message: 'Client saved.' };
+  return { success: true, customer: name, message: 'Client "' + name + '" ' + (existing ? 'updated.' : 'added.') };
 }
 function deleteClient(p) {
   var r = _rows('Clients').filter(function (x) { return String(x['Customer']).toLowerCase() === String(p.customer || '').toLowerCase(); })[0];
   if (!r) return { success: false, message: 'Client not found.' };
   _sheet('Clients').deleteRow(r.rowIndex);
-  return { success: true, message: 'Client removed.' };
+  return { success: true, customer: String(p.customer || ''), message: 'Client "' + String(p.customer || '') + '" removed.' };
 }
 
 var HANDLERS = {

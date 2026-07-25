@@ -257,6 +257,7 @@ function mfTogglePricing(i) {
 
 // ── Auto Daily Reports (ported from all-daily-reports.js) ──
 let mfDrEntries = [], mfDrNotes = {}, mfDrSubs = {};
+let mfDrEmails = {}, mfDrRosterError = '', mfDrEmailsLoading = false, mfDrEmailSeq = 0;
 const MF_MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 function _mfModClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _mfTime(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
@@ -284,7 +285,62 @@ async function mfLoadDailyReports() {
     const sr = await fetchFlow('getDailyReports', { date });
     if (sr && sr.success) (sr.data || []).forEach(x => { mfDrSubs[String(x.user).trim()] = x; });
   } catch (e) { /* pre-v81 backend — the day simply shows as unsubmitted */ }
+  // Each user's sent emails — fetched after activity so the cards paint immediately, then fill in.
+  mfDrEmails = {}; mfDrEmailsLoading = true;
   mfRenderDailyReports();
+  await mfLoadAllEmails(++mfDrEmailSeq);
+  mfDrEmailsLoading = false;
+  mfRenderDailyReports();
+}
+
+// Per-user sent emails for the team report — mirrors all-daily-reports.js: roster → own-first warmup →
+// batches of 3 (GoDaddy throttles concurrent IMAP logins from one IP), repainting after each batch.
+async function mfLoadAllEmails(seq) {
+  mfDrEmails = {}; mfDrRosterError = '';
+  if (typeof apiFetchEmailUsers !== 'function' || typeof apiFetchEmailLogToday !== 'function') return;
+  let list = [];
+  try {
+    const r = await apiFetchEmailUsers();
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not load the user list.');
+    list = r.users || [];
+  } catch (e) { mfDrRosterError = e.message || 'Could not load the user list.'; return; }
+  const targets = list.filter(u => String(u.role || '').toLowerCase() !== 'director');
+  const date = document.getElementById('mgmtDrDate').value;
+  const fetchOne = (u) => {
+    const uname = u.username || u.fullName || u.name;                 // creds keyed by login username
+    const disp = u.fullName || u.name || u.username;                  // cards keyed by display name
+    if (!uname) return Promise.resolve();
+    return apiFetchEmailLogToday(uname, date).then(r => {
+      if (r && r.success) mfDrEmails[disp] = { emails: r.emails || [], needsSetup: !!r.needsSetup, reconnect: !!r.reconnect };
+      else mfDrEmails[disp] = { emails: [], needsSetup: !!(r && r.needsSetup), error: (r && r.message) || 'load failed' };
+    }).catch(e => { mfDrEmails[disp] = { emails: [], needsSetup: false, error: e.message || 'load failed' }; });
+  };
+  try { await apiFetchEmailLogToday(undefined, date); } catch (e) { /* warm-up only */ }
+  for (let i = 0; i < targets.length; i += 3) {
+    await Promise.all(targets.slice(i, i + 3).map(fetchOne));
+    if (seq !== undefined && seq !== mfDrEmailSeq) return;   // superseded by a newer load (date change)
+    mfRenderDailyReports();
+  }
+}
+
+function mfEmailHtml(name) {
+  const date = document.getElementById('mgmtDrDate').value;
+  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_mfe(date)}</div>`;
+  const rec = mfDrEmails[name];
+  if (!rec) {
+    if (mfDrRosterError) return head + `<div class="mf-empty" style="font-size:0.8rem;color:#b45309;">Sent emails unavailable — ${_mfe(mfDrRosterError)}</div>`;
+    if (mfDrEmailsLoading) return head + `<div class="mf-empty" style="font-size:0.8rem;">Loading sent emails…</div>`;
+    return head + `<div class="mf-empty" style="font-size:0.8rem;">—</div>`;
+  }
+  if (rec.needsSetup) {
+    const why = rec.reconnect ? `${_mfe(name)} needs to reconnect their mailbox.` : `${_mfe(name)} hasn't connected their mailbox.`;
+    return head + `<div class="mf-empty" style="font-size:0.8rem;">${why}</div>`;
+  }
+  if (rec.error) return head + `<div class="mf-empty" style="font-size:0.8rem;color:#b45309;">Couldn't load (${_mfe(rec.error)}) — retrying on the next refresh.</div>`;
+  const emails = rec.emails || [];
+  if (!emails.length) return head + `<div class="mf-empty" style="font-size:0.8rem;">No emails sent on ${_mfe(date)}.</div>`;
+  return head + `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>
+    <tbody>${emails.map(m => `<tr><td>${_mfe(m.sentAt || m.time || '')}</td><td>${_mfe(m.recipient || '')}</td><td>${_mfe(m.subject || '')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function mfRenderDailyReports() {
@@ -310,6 +366,7 @@ function mfRenderDailyReports() {
   let names = Object.keys(byUser).sort((a, b) => a.localeCompare(b));
   Object.keys(mfDrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
   Object.keys(mfDrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  Object.keys(mfDrEmails).forEach(u => { if (!byUser[u] && (mfDrEmails[u].emails || []).length) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
   names = Array.from(new Set(names));
   if (q) names = names.filter(n => n.toLowerCase().includes(q));
 
@@ -320,15 +377,17 @@ function mfRenderDailyReports() {
   const prodRows = names.map(function (n) {
     const c = userTasks[n].counts;
     const top = Object.keys(c.byModule).sort(function (a, b) { return c.byModule[b] - c.byModule[a]; }).slice(0, 3).map(function (m) { return _mfe(m) + ' ' + c.byModule[m]; }).join(' · ');
-    return { name: n, tasks: c.tasks, top: top, submitted: !!mfDrSubs[String(n).trim()] };
+    const em = (mfDrEmails[n] && (mfDrEmails[n].emails || []).length) || 0;
+    return { name: n, tasks: c.tasks, top: top, emails: em, submitted: !!mfDrSubs[String(n).trim()] };
   }).sort(function (a, b) { return b.tasks - a.tasks || a.name.localeCompare(b.name); });
   const max = Math.max(1, prodRows[0] ? prodRows[0].tasks : 1);
   const prodHtml = '<div class="dr-sect-title" style="margin-bottom:0.5rem;">Team Productivity — Today</div>'
-    + '<div style="overflow-x:auto;margin-bottom:1rem;"><table class="flow-table"><thead><tr><th>User</th><th class="num">Tasks</th><th>Output</th><th style="width:28%;"></th><th>Submitted</th></tr></thead><tbody>'
+    + '<div style="overflow-x:auto;margin-bottom:1rem;"><table class="flow-table"><thead><tr><th>User</th><th class="num">Tasks</th><th>Output</th><th style="width:26%;"></th><th class="num">Emails</th><th>Submitted</th></tr></thead><tbody>'
     + prodRows.map(function (r) {
       return '<tr><td style="font-weight:600;">' + _mfe(r.name) + '</td><td class="num" style="font-weight:700;">' + r.tasks + '</td>'
         + '<td style="font-size:0.78rem;color:var(--text-secondary,#475569);">' + (r.top || '—') + '</td>'
         + '<td><div style="height:8px;border-radius:999px;background:var(--bg-inset,#f1f5f9);overflow:hidden;"><div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--accent,#4f46e5);"></div></div></td>'
+        + '<td class="num">' + (r.emails || '') + '</td>'
         + '<td>' + (r.submitted ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#b45309;">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
 
@@ -338,15 +397,18 @@ function mfRenderDailyReports() {
     const modChips = Object.keys(c.byModule).sort((a, b) => (MF_MODULE_ORDER.indexOf(a) + 1 || 99) - (MF_MODULE_ORDER.indexOf(b) + 1 || 99))
       .map(m => `<span class="mod-badge ${_mfModClass(m)}">${_mfe(m)} ${c.byModule[m]}</span>`).join('');
     const sub = mfDrSubs[String(name).trim()];
+    const emCount = (mfDrEmails[name] && (mfDrEmails[name].emails || []).length) || 0;
+    const emChip = emCount ? ` · ✉️ ${emCount} sent` : '';
     const subChip = sub
       ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted ${_mfe(_mfTime(sub.submittedAt))}${sub.status === 'Reviewed' ? ' · reviewed' : ''}</span>`
       : ' · <span style="color:#b45309;">not submitted</span>';
     return `<details class="urep"${i === 0 ? ' open' : ''}>
       <summary><span class="uname">${_mfe(name)}</span>
-        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${note ? ' · 📝 note' : ''}${subChip}</span></summary>
+        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${emChip}${note ? ' · 📝 note' : ''}${subChip}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
         ${flowRenderTaskCards(tasks, { moduleOrder: MF_MODULE_ORDER, emptyText: 'No movements (note only).' })}
+        ${mfEmailHtml(name)}
         ${mfSubmissionHtml(sub)}
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_mfe(note)}</div>` : ''}
       </div>
