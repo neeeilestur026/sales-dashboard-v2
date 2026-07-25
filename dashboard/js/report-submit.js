@@ -31,18 +31,21 @@ function _rsNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 function _rsVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
 function _rsSet(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
 
-/** Derive the frozen counters from the page's raw state — one implementation, not three. */
+/** Derive the frozen counters from the page's raw state — one implementation, not three.
+ *  A148: freeze DISTINCT tasks (one per record), not raw action rows, so the submitted numbers
+ *  match the deduped on-screen figures and management's view. */
 function _rsSnapshot() {
   const raw = (_rsOpts && typeof _rsOpts.getSnapshot === 'function') ? (_rsOpts.getSnapshot() || {}) : {};
   const entries = raw.entries || [];
-  const counts = {};
-  entries.forEach(e => { const m = e.module || 'Other'; counts[m] = (counts[m] || 0) + 1; });
+  const tasks = (typeof flowRollupActivity === 'function') ? flowRollupActivity(entries) : entries;
+  const c = (typeof flowActivityCounts === 'function') ? flowActivityCounts(tasks) : null;
+  const counts = c ? c.byModule : (function () { const o = {}; entries.forEach(e => { const m = e.module || 'Other'; o[m] = (o[m] || 0) + 1; }); return o; })();
   return {
-    movements: entries.length,
+    movements: c ? c.tasks : entries.length,
     calls: _rsNum(raw.calls),
     emails: _rsNum(raw.emails),
-    docs: entries.filter(e => RS_DOC_ACTIONS.indexOf(e.action) >= 0).length,
-    pdfs: entries.filter(e => e.action === 'PDF Saved').length,
+    docs: c ? c.docs : entries.filter(e => RS_DOC_ACTIONS.indexOf(e.action) >= 0).length,
+    pdfs: c ? c.pdfs : entries.filter(e => e.action === 'PDF Saved').length,
     amount: _rsNum(raw.amount),
     counts: counts,
     metrics: raw.metrics || {},

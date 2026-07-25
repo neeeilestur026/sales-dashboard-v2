@@ -119,16 +119,18 @@ async function _rwRender() {
   subs.forEach(s => { subByDate[s.date] = s; });
 
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const totalMoves = acts.reduce((s, a) => s + a.length, 0);
+  // A148: collapse each day's raw actions into DISTINCT tasks (one per record) before counting.
+  const dayTasks = acts.map(a => (typeof flowRollupActivity === 'function') ? flowRollupActivity(a) : a);
+  const totalMoves = dayTasks.reduce((s, ts) => s + ts.length, 0);
   const totalEmails = emailCounts.reduce((s, n) => s + n, 0);
   const totalCalls = calls.reduce((s, c) => s + c.length, 0);
   const byMod = {};
-  acts.forEach(a => a.forEach(e => { byMod[e.module] = (byMod[e.module] || 0) + 1; }));
+  dayTasks.forEach(ts => ts.forEach(t => { byMod[t.module] = (byMod[t.module] || 0) + 1; }));
   const top = Object.entries(byMod).sort((a, b) => b[1] - a[1])[0];
 
-  // Role-relevant weekly count tiles: Movements · [Calls] · Emails · one per opts.modules entry.
+  // Role-relevant weekly count tiles: Tasks · [Calls] · Emails · one per opts.modules entry.
   const tiles = [
-    `<div class="dr-tile"><div class="l">Movements This Week</div><div class="v">${totalMoves}</div></div>`,
+    `<div class="dr-tile"><div class="l">Tasks This Week</div><div class="v">${totalMoves}</div></div>`,
     withCalls ? `<div class="dr-tile"><div class="l">Calls Made</div><div class="v">${totalCalls}</div></div>` : '',
     `<div class="dr-tile"><div class="l">Emails Sent</div><div class="v">${totalEmails}</div></div>`,
     ...modList.map(m =>
@@ -142,13 +144,13 @@ async function _rwRender() {
   const rows = days.map((d, i) => {
     const isSel = d === date && _rwOffset === 0, isToday = d === today, isFuture = d > today;
     const dayMods = {};
-    acts[i].forEach(e => { dayMods[e.module] = (dayMods[e.module] || 0) + 1; });
+    dayTasks[i].forEach(t => { dayMods[t.module] = (dayMods[t.module] || 0) + 1; });
     const mix = Object.entries(dayMods).sort((a, b) => b[1] - a[1]).slice(0, 3)
       .map(([m, n]) => `${_rwEsc(m)} ×${n}`).join(' · ');
     return `<tr style="${isSel ? 'background:var(--accent-light,#e6f4f1);font-weight:600;' : ''}">
       <td>${dayNames[i]}${isToday ? ' <span class="act-chip">today</span>' : ''}</td>
       <td>${_rwEsc(d)}</td>
-      <td class="num">${isFuture ? '—' : acts[i].length}</td>
+      <td class="num">${isFuture ? '—' : dayTasks[i].length}</td>
       ${withCalls ? `<td class="num">${isFuture ? '—' : calls[i].length}</td>` : ''}
       <td class="num">${isFuture ? '—' : emailCounts[i]}</td>
       <td>${isFuture ? '' : (subByDate[d] ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#cbd5e1;">—</span>')}</td>

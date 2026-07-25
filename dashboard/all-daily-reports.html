@@ -76,12 +76,15 @@
         <div class="report-body">
           <div class="dr-summary" id="summaryRow">
             <div class="dr-tile"><div class="l">Active Users</div><div class="v" id="sumUsers">—</div></div>
-            <div class="dr-tile"><div class="l">Total Movements</div><div class="v" id="sumMovements">—</div></div>
+            <div class="dr-tile"><div class="l">Tasks</div><div class="v" id="sumMovements">—</div></div>
             <div class="dr-tile"><div class="l">Documents Created</div><div class="v" id="sumDocs">—</div></div>
             <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="sumSales">—</div></div>
             <div class="dr-tile"><div class="l">AP Paid</div><div class="v" id="sumPaid">—</div></div>
             <div class="dr-tile"><div class="l">PDFs Generated</div><div class="v" id="sumPdfs">—</div></div>
           </div>
+
+          <div class="dr-sect-title">Team Productivity — Today <span class="mod-badge" style="margin-left:auto;">distinct tasks per user</span></div>
+          <div id="prodCompare" style="margin-bottom:1.5rem;"></div>
 
           <div class="dr-sect-title">Reports by user <span class="mod-badge" id="userCount" style="margin-left:auto;">0</span></div>
           <div id="userReports"><div class="dr-empty">Loading…</div></div>
@@ -93,6 +96,7 @@
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
+  <script src="js/report-render.js"></script>
   <script src="js/all-daily-reports.js"></script>
 </body>
 </html>

@@ -130,19 +130,30 @@ async function adrLoadAllEmails(seq) {
 function _isDoc(a) { return ['Created', 'Issued', 'Received', 'Added'].includes(a); }
 
 function render() {
+  if (typeof flowRenderInjectCss === 'function') flowRenderInjectCss();
   const q = (document.getElementById('userSearch').value || '').trim().toLowerCase();
 
-  // ── Org summary ──
-  const allUsers = Array.from(new Set(adrEntries.map(e => e.user).filter(Boolean)));
-  const sumAmt = pred => adrEntries.filter(pred).reduce((s, e) => s + _n(e.amount), 0);
-  document.getElementById('sumUsers').textContent = allUsers.length;
-  document.getElementById('sumMovements').textContent = adrEntries.length;
-  document.getElementById('sumDocs').textContent = adrEntries.filter(e => _isDoc(e.action)).length;
-  document.getElementById('sumSales').textContent = _m(sumAmt(e => e.module === 'Invoice' && e.action === 'Issued'));
-  document.getElementById('sumPaid').textContent = _m(sumAmt(e => e.module === 'AP Aging'));
-  document.getElementById('sumPdfs').textContent = adrEntries.filter(e => e.action === 'PDF Saved').length;
-  // total sent emails across all users (appended to the report meta line; re-computed on every
-  // progressive repaint so the count grows as batches land instead of freezing at the first paint)
+  // Group by user, then collapse EACH user's raw actions into DISTINCT tasks (one per record) — so a
+  // record a user touched several times counts once, and a record two users worked credits each of them.
+  const byUser = {};
+  adrEntries.forEach(e => { const u = e.user || 'Unknown'; (byUser[u] = byUser[u] || []).push(e); });
+  const userTasks = {};   // name -> { tasks:[...], counts:{...} }
+  Object.keys(byUser).forEach(u => { const t = flowRollupActivity(byUser[u]); userTasks[u] = { tasks: t, counts: flowActivityCounts(t) }; });
+
+  // ── Org summary — distinct tasks summed across users ──
+  let orgTasks = 0, orgDocs = 0, orgPdfs = 0, orgSales = 0, orgPaid = 0;
+  Object.keys(userTasks).forEach(u => {
+    const ut = userTasks[u];
+    orgTasks += ut.counts.tasks; orgDocs += ut.counts.docs; orgPdfs += ut.counts.pdfs;
+    orgSales += flowTaskAmount(ut.tasks, 'Invoice'); orgPaid += flowTaskAmount(ut.tasks, 'AP Aging');
+  });
+  const activeUsers = Object.keys(byUser).filter(u => u && u !== 'Unknown');
+  document.getElementById('sumUsers').textContent = activeUsers.length;
+  document.getElementById('sumMovements').textContent = orgTasks;
+  document.getElementById('sumDocs').textContent = orgDocs;
+  document.getElementById('sumSales').textContent = _m(orgSales);
+  document.getElementById('sumPaid').textContent = _m(orgPaid);
+  document.getElementById('sumPdfs').textContent = orgPdfs;
   const totalEmails = Object.values(adrEmails).reduce((s, v) => s + ((v.emails || []).length), 0);
   const meta = document.getElementById('reportMeta');
   if (meta) {
@@ -150,55 +161,67 @@ function render() {
     meta.textContent = base + (adrEmailsLoading ? ` · ${totalEmails} sent email(s) (loading…)` : ` · ${totalEmails} sent email(s)`);
   }
 
-  // ── Group by user ──
-  const byUser = {};
-  adrEntries.forEach(e => { const u = e.user || 'Unknown'; (byUser[u] = byUser[u] || []).push(e); });
+  // ── Full user list (include note-only / submission-only / email-only users) ──
   let names = Object.keys(byUser).sort((a, b) => a.localeCompare(b));
-  // include users with only a note (no activity)
-  Object.keys(adrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
-  Object.keys(adrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
-  // include users who sent emails today but had no flow activity
-  Object.keys(adrEmails).forEach(u => { if (!byUser[u] && (adrEmails[u].emails || []).length) { byUser[u] = []; names.push(u); } });
+  Object.keys(adrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  Object.keys(adrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  Object.keys(adrEmails).forEach(u => { if (!byUser[u] && (adrEmails[u].emails || []).length) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
   names = Array.from(new Set(names));
   if (q) names = names.filter(n => n.toLowerCase().includes(q));
   document.getElementById('userCount').textContent = names.length;
+
+  // ── Team Productivity comparison — per user, sorted by distinct tasks (real output at a glance) ──
+  renderProductivity(names, userTasks);
 
   const cont = document.getElementById('userReports');
   if (!names.length) { cont.innerHTML = '<div class="dr-empty">No activity recorded for this day.</div>'; return; }
 
   cont.innerHTML = names.map((name, i) => {
-    const rows = byUser[name] || [];
-    const docs = rows.filter(e => _isDoc(e.action)).length;
+    const ut = userTasks[name] || { tasks: [], counts: flowActivityCounts([]) };
+    const tasks = ut.tasks, c = ut.counts;
     const note = adrNotes[name];
-    // module breakdown chips
-    const byMod = {};
-    rows.forEach(e => { byMod[e.module] = (byMod[e.module] || 0) + 1; });
-    const modChips = MODULE_ORDER.filter(m => byMod[m]).concat(Object.keys(byMod).filter(m => !MODULE_ORDER.includes(m)))
-      .map(m => `<span class="mod-badge ${_modClass(m)}">${_e(m)} ${byMod[m]}</span>`).join('');
-    // timeline rows
-    const tl = rows.length ? rows.map(e => `<tr>
-        <td>${_e(_time(e.timestamp))}</td>
-        <td><span class="mod-badge ${_modClass(e.module)}">${_e(e.module)}</span></td>
-        <td><span class="act-chip">${_e(e.action)}</span></td>
-        <td>${_e(e.refNo)}</td>
-        <td style="color:var(--text-secondary);">${_e(e.summary)}</td>
-        <td class="num">${e.amount ? _m(e.amount) : ''}</td>
-      </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No movements (note only).</td></tr>';
+    const modChips = Object.keys(c.byModule).sort((a, b) => (MODULE_ORDER.indexOf(a) + 1 || 99) - (MODULE_ORDER.indexOf(b) + 1 || 99))
+      .map(m => `<span class="mod-badge ${_modClass(m)}">${_e(m)} ${c.byModule[m]}</span>`).join('');
+    const sub = adrSubs[String(name).trim()];
     return `<details class="urep"${i === 0 ? ' open' : ''} data-user="${_e(name)}">
       <summary><span class="uname">${_e(name)}</span>
-        <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}${adrSubs[String(name).trim()] ? ` · <span style="color:${adrSubs[String(name).trim()].status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted</span>` : ' · <span style="color:#b45309;">not submitted</span>'}</span></summary>
+        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}${sub ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted</span>` : ' · <span style="color:#b45309;">not submitted</span>'}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
-        <div style="overflow-x:auto;"><table class="flow-table">
-          <thead><tr><th>Time</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
-          <tbody>${tl}</tbody>
-        </table></div>
+        ${flowRenderTaskCards(tasks, { moduleOrder: MODULE_ORDER, emptyText: 'No movements (note only).' })}
         ${adrEmailHtml(name)}
-        ${adrSubmissionHtml(adrSubs[String(name).trim()])}
+        ${adrSubmissionHtml(sub)}
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_e(note)}</div>` : ''}
       </div>
     </details>`;
   }).join('');
+}
+
+/** Compact per-user productivity comparison (distinct tasks today), sorted high→low. */
+function renderProductivity(names, userTasks) {
+  const el = document.getElementById('prodCompare');
+  if (!el) return;
+  const rows = names.map(function (n) {
+    const c = (userTasks[n] || {}).counts || flowActivityCounts([]);
+    const top = Object.keys(c.byModule).sort(function (a, b) { return c.byModule[b] - c.byModule[a]; })
+      .slice(0, 3).map(function (m) { return _e(m) + ' ' + c.byModule[m]; }).join(' · ');
+    const sub = adrSubs[String(n).trim()];
+    const em = (adrEmails[n] && (adrEmails[n].emails || []).length) || 0;
+    return { name: n, tasks: c.tasks, docs: c.docs, top: top, emails: em, submitted: !!sub };
+  }).sort(function (a, b) { return b.tasks - a.tasks || a.name.localeCompare(b.name); });
+  const max = Math.max(1, rows[0] ? rows[0].tasks : 1);
+  el.innerHTML = '<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>'
+    + '<th>User</th><th class="num">Tasks</th><th>Output</th><th style="width:30%;"></th>'
+    + '<th class="num">Emails</th><th>Submitted</th></tr></thead><tbody>'
+    + rows.map(function (r) {
+      return '<tr><td style="font-weight:600;">' + _e(r.name) + '</td>'
+        + '<td class="num" style="font-weight:700;">' + r.tasks + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-secondary,#475569);">' + (r.top || '—') + '</td>'
+        + '<td><div style="height:8px;border-radius:999px;background:var(--bg-inset,#f1f5f9);overflow:hidden;">'
+        + '<div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--accent,#4f46e5);"></div></div></td>'
+        + '<td class="num">' + (r.emails || '') + '</td>'
+        + '<td>' + (r.submitted ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#b45309;">—</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
 }
 
 // The user's per-day sent emails (auto-loaded up front in adrLoadAllEmails), rendered inline.

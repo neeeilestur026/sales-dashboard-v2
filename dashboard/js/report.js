@@ -73,8 +73,8 @@ async function load() {
     drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
   } catch (e) {
     drEntries = [];
-    document.getElementById('timelineBody').innerHTML =
-      `<tr><td colspan="6" class="dr-empty">${_esc(e.message)}</td></tr>`;
+    const tc = document.getElementById('taskCards');
+    if (tc) tc.innerHTML = `<div class="dr-empty">${_esc(e.message)}</div>`;
   }
   render();
   loadEmails();
@@ -96,18 +96,21 @@ async function load() {
 /** This rep's day as a PDF — the same document management/HR see for them. */
 function _drDayPdf() {
   const date = _date();
+  // Deduped: one row per record (matches the on-screen task cards), not one per raw action.
+  const tasks = flowRollupActivity(drEntries);
+  const counts = flowActivityCounts(tasks);
   const byMod = {};
-  drEntries.forEach(e => {
-    const m = e.module || 'Other';
-    (byMod[m] = byMod[m] || []).push({ time: _time(e.timestamp), action: e.action, refNo: e.refNo, summary: e.summary, amount: e.amount });
+  tasks.forEach(t => {
+    const m = t.module || 'Other';
+    const verbs = t.verbs.join(' → ') + (t.touches > 1 ? ` (×${t.touches})` : '');
+    (byMod[m] = byMod[m] || []).push({ time: (t.touches > 1 ? _time(t.firstTs) + '–' + _time(t.lastTs) : _time(t.lastTs)), action: verbs, refNo: t.refNo, summary: t.latestSummary, amount: t.amount });
   });
   const order = MODULE_ORDER.concat(Object.keys(byMod).filter(m => MODULE_ORDER.indexOf(m) < 0));
   const model = {
     name: drSession.name, role: 'sales', date, generatedAt: flowToday(),
     totals: {
-      moves: drEntries.length, calls: drCalls.length, emails: drEmailCount,
-      docs: drEntries.filter(e => ['Created', 'Issued', 'Received', 'Added'].indexOf(e.action) >= 0).length,
-      pdfs: drEntries.filter(e => e.action === 'PDF Saved').length, amount: 0,
+      moves: tasks.length, calls: drCalls.length, emails: drEmailCount,
+      docs: counts.docs, pdfs: counts.pdfs, amount: 0,
     },
     modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
     calls: drCalls.map(c => ({ time: _time(c.createdAt), contact: c.contact, company: c.company, outcome: c.outcome, notes: c.notes })),
@@ -121,48 +124,23 @@ function _drDayPdf() {
 }
 
 function render() {
-  const rows = drEntries;
+  if (typeof flowRenderInjectCss === 'function') flowRenderInjectCss();
+  // Collapse repeat touches of the same record into ONE task (Pricing Request PR-1 sourced then priced
+  // = one task, not four) so every count reflects DISTINCT work, not raw actions.
+  const tasks = (typeof flowRollupActivity === 'function') ? flowRollupActivity(drEntries) : drEntries;
 
-  // ── Summary tiles ──
-  document.getElementById('sumMovements').textContent = rows.length;
-  document.getElementById('sumPRs').textContent = rows.filter(e => e.module === 'Pricing Request' && e.action === 'Created').length;
-  document.getElementById('sumQuotes').textContent = rows.filter(e => e.module === 'Quotation' && e.action === 'Created').length;
-  document.getElementById('sumInv').textContent = rows.filter(e => e.module === 'Inventory' && e.action === 'Added').length;
-  document.getElementById('sumPdfs').textContent = rows.filter(e => e.action === 'PDF Saved').length;
+  // ── Summary tiles — distinct tasks ──
+  document.getElementById('sumMovements').textContent = tasks.length;
+  document.getElementById('sumPRs').textContent = flowTasksIn(tasks, 'Pricing Request', 'Created');
+  document.getElementById('sumQuotes').textContent = flowTasksIn(tasks, 'Quotation', 'Created');
+  document.getElementById('sumInv').textContent = flowTasksIn(tasks, 'Inventory', 'Added');
+  document.getElementById('sumPdfs').textContent = tasks.filter(t => t.verbs && t.verbs.indexOf('PDF Saved') >= 0).length;
   document.getElementById('sumEmails').textContent = drEmailCount;
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
 
-  // ── Timeline (chronological, newest first as returned) ──
-  document.getElementById('tlCount').textContent = rows.length;
-  const tb = document.getElementById('timelineBody');
-  tb.innerHTML = rows.length ? rows.map(e => `
-    <tr>
-      <td>${_esc(_time(e.timestamp))}</td>
-      <td><span class="mod-badge ${_modClass(e.module)}">${_esc(e.module)}</span></td>
-      <td><span class="act-chip">${_esc(e.action)}</span></td>
-      <td>${_esc(e.refNo)}</td>
-      <td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
-      <td class="num">${e.amount ? _money(e.amount) : ''}</td>
-    </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No recorded activity for this day.</td></tr>';
-
-  // ── Per-module sections ──
-  const byMod = {};
-  rows.forEach(e => { (byMod[e.module] = byMod[e.module] || []).push(e); });
-  const mods = MODULE_ORDER.filter(m => byMod[m]).concat(Object.keys(byMod).filter(m => !MODULE_ORDER.includes(m)));
-  document.getElementById('moduleSections').innerHTML = mods.map(m => {
-    const list = byMod[m];
-    return `<div class="dr-sect">
-      <div class="dr-sect-title"><span class="mod-badge ${_modClass(m)}">${_esc(m)}</span> <span class="pill">${list.length}</span></div>
-      <div style="overflow-x:auto;"><table class="flow-table">
-        <thead><tr><th>Time</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
-        <tbody>${list.map(e => `<tr>
-          <td>${_esc(_time(e.timestamp))}</td>
-          <td><span class="act-chip">${_esc(e.action)}</span></td>
-          <td>${_esc(e.refNo)}</td><td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
-          <td class="num">${e.amount ? _money(e.amount) : ''}</td></tr>`).join('')}</tbody>
-      </table></div>
-    </div>`;
-  }).join('');
+  // ── Today's Work — one card per record (expandable touch history) ──
+  document.getElementById('tlCount').textContent = tasks.length;
+  document.getElementById('taskCards').innerHTML = flowRenderTaskCards(tasks, { moduleOrder: MODULE_ORDER });
 }
 
 // ── Sent Emails (production backend, read-only) — the rep's emails today ──

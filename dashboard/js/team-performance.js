@@ -148,14 +148,20 @@ async function tpLoad() {
   const U = name => users[name] = users[name] || { moves: 0, calls: 0, emails: 0, docs: 0, pdfs: 0,
     amount: 0, perDay: new Array(7).fill(0), perDayCalls: new Array(7).fill(0), mods: {} };
   days.forEach((d, i) => {
-    acts[i].forEach(e => {
-      if (e.module === 'Call') return;               // calls are counted from their own log
-      const u = U(_tpKey(e.user) || '(unknown)');
-      u.moves++; u.perDay[i]++;
-      u.mods[e.module] = (u.mods[e.module] || 0) + 1;
-      if (_TP_DOC_ACTIONS.indexOf(e.action) >= 0) u.docs++;
-      if (e.action === 'PDF Saved') u.pdfs++;
-      if (e.module === 'Invoice' && e.action === 'Issued') u.amount += _tpn(e.amount);
+    // A148: dedup within (user, day) — collapse each user's raw actions on day i into DISTINCT tasks,
+    // so a record touched several times counts once (true productivity, not raw action volume).
+    const dayByUser = {};
+    acts[i].forEach(e => { if (e.module === 'Call') return; const k = _tpKey(e.user) || '(unknown)'; (dayByUser[k] = dayByUser[k] || []).push(e); });
+    Object.keys(dayByUser).forEach(name => {
+      const tasks = (typeof flowRollupActivity === 'function') ? flowRollupActivity(dayByUser[name]) : dayByUser[name];
+      const u = U(name);
+      u.moves += tasks.length; u.perDay[i] += tasks.length;
+      tasks.forEach(t => {
+        u.mods[t.module] = (u.mods[t.module] || 0) + 1;
+        if (t.verbs && t.verbs.some(v => _TP_DOC_ACTIONS.indexOf(v) >= 0)) u.docs++;
+        if (t.verbs && t.verbs.indexOf('PDF Saved') >= 0) u.pdfs++;
+        if (t.module === 'Invoice') u.amount += _tpn(t.amount);
+      });
     });
     calls[i].forEach(c => { const u = U(_tpKey(c.user) || '(unknown)'); u.calls++; u.perDayCalls[i]++; });
   });

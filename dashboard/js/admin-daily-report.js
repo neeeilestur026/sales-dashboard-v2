@@ -70,8 +70,8 @@ async function load() {
     drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
   } catch (e) {
     drEntries = [];
-    document.getElementById('timelineBody').innerHTML =
-      `<tr><td colspan="6" class="dr-empty">${_esc(e.message)}</td></tr>`;
+    const tc = document.getElementById('taskCards');
+    if (tc) tc.innerHTML = `<div class="dr-empty">${_esc(e.message)}</div>`;
   }
   render();
   loadEmails();
@@ -92,18 +92,21 @@ async function load() {
 /** This admin's day as a PDF. */
 function _drDayPdf() {
   const date = _date();
+  // Deduped: one row per record (matches the on-screen task cards).
+  const tasks = flowRollupActivity(drEntries);
+  const counts = flowActivityCounts(tasks);
   const byMod = {};
-  drEntries.forEach(e => {
-    const m = e.module || 'Other';
-    (byMod[m] = byMod[m] || []).push({ time: _time(e.timestamp), action: e.action, refNo: e.refNo, summary: e.summary, amount: e.amount });
+  tasks.forEach(t => {
+    const m = t.module || 'Other';
+    const verbs = t.verbs.join(' → ') + (t.touches > 1 ? ` (×${t.touches})` : '');
+    (byMod[m] = byMod[m] || []).push({ time: (t.touches > 1 ? _time(t.firstTs) + '–' + _time(t.lastTs) : _time(t.lastTs)), action: verbs, refNo: t.refNo, summary: t.latestSummary, amount: t.amount });
   });
   const order = MODULE_ORDER.concat(Object.keys(byMod).filter(m => MODULE_ORDER.indexOf(m) < 0));
   const model = {
     name: drSession.name, role: 'admin', date, generatedAt: flowToday(),
     totals: {
-      moves: drEntries.length, calls: 0, emails: drEmailCount,
-      docs: drEntries.filter(e => ['Created', 'Issued', 'Received', 'Added'].indexOf(e.action) >= 0).length,
-      pdfs: drEntries.filter(e => e.action === 'PDF Saved').length, amount: 0,
+      moves: tasks.length, calls: 0, emails: drEmailCount,
+      docs: counts.docs, pdfs: counts.pdfs, amount: 0,
     },
     modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
     notes: (document.getElementById('notesField') || {}).value || '',
@@ -116,30 +119,23 @@ function _drDayPdf() {
 }
 
 function render() {
-  const rows = drEntries;
+  if (typeof flowRenderInjectCss === 'function') flowRenderInjectCss();
+  // Collapse repeat touches of the same record into ONE task so counts are DISTINCT work.
+  const tasks = (typeof flowRollupActivity === 'function') ? flowRollupActivity(drEntries) : drEntries;
 
-  // ── Summary tiles ──
-  document.getElementById('sumMovements').textContent = rows.length;
-  document.getElementById('sumPOs').textContent = rows.filter(e => e.module === 'Purchase Order').length;
-  document.getElementById('sumSOs').textContent = rows.filter(e => e.module === 'Sales Order').length;
-  document.getElementById('sumShip').textContent = rows.filter(e => e.module === 'Shipment').length;
-  document.getElementById('sumPay').textContent = rows.filter(e => e.module === 'Payment Request').length;
-  document.getElementById('sumPricing').textContent = rows.filter(e => e.module === 'Pricing Request').length;
+  // ── Summary tiles — distinct tasks per module ──
+  document.getElementById('sumMovements').textContent = tasks.length;
+  document.getElementById('sumPOs').textContent = flowTasksIn(tasks, 'Purchase Order');
+  document.getElementById('sumSOs').textContent = flowTasksIn(tasks, 'Sales Order');
+  document.getElementById('sumShip').textContent = flowTasksIn(tasks, 'Shipment');
+  document.getElementById('sumPay').textContent = flowTasksIn(tasks, 'Payment Request');
+  document.getElementById('sumPricing').textContent = flowTasksIn(tasks, 'Pricing Request');
   document.getElementById('sumEmails').textContent = drEmailCount;
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
 
-  // ── Timeline ──
-  document.getElementById('tlCount').textContent = rows.length;
-  const tb = document.getElementById('timelineBody');
-  tb.innerHTML = rows.length ? rows.map(e => `
-    <tr>
-      <td>${_esc(_time(e.timestamp))}</td>
-      <td><span class="mod-badge ${_modClass(e.module)}">${_esc(e.module)}</span></td>
-      <td><span class="act-chip">${_esc(e.action)}</span></td>
-      <td>${_esc(e.refNo)}</td>
-      <td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
-      <td class="num">${e.amount ? _money(e.amount) : ''}</td>
-    </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No recorded activity for this day.</td></tr>';
+  // ── Today's Work — one card per record ──
+  document.getElementById('tlCount').textContent = tasks.length;
+  document.getElementById('taskCards').innerHTML = flowRenderTaskCards(tasks, { moduleOrder: MODULE_ORDER });
 }
 
 // ── Sent Emails (the admin's own mailbox, date-aware) ──

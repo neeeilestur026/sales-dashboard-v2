@@ -288,54 +288,65 @@ async function mfLoadDailyReports() {
 }
 
 function mfRenderDailyReports() {
+  if (typeof flowRenderInjectCss === 'function') flowRenderInjectCss();
   const sEl = document.getElementById('mgmtDrSearch');
   const q = (sEl ? sEl.value : '').trim().toLowerCase();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  const allUsers = Array.from(new Set(mfDrEntries.map(e => e.user).filter(Boolean)));
-  const sumAmt = pred => mfDrEntries.filter(pred).reduce((s, e) => s + _mfn(e.amount), 0);
-  set('mgmtDrUsers', allUsers.length);
-  set('mgmtDrMovements', mfDrEntries.length);
-  set('mgmtDrDocs', mfDrEntries.filter(e => _mfIsDoc(e.action)).length);
-  set('mgmtDrSales', _mfm(sumAmt(e => e.module === 'Invoice' && e.action === 'Issued')));
-  set('mgmtDrPdfs', mfDrEntries.filter(e => e.action === 'PDF Saved').length);
 
+  // Group by user, then collapse EACH user's raw actions into DISTINCT tasks (one per record).
   const byUser = {};
   mfDrEntries.forEach(e => { const u = e.user || 'Unknown'; (byUser[u] = byUser[u] || []).push(e); });
+  const userTasks = {};
+  Object.keys(byUser).forEach(u => { const t = flowRollupActivity(byUser[u]); userTasks[u] = { tasks: t, counts: flowActivityCounts(t) }; });
+
+  let orgTasks = 0, orgDocs = 0, orgPdfs = 0, orgSales = 0;
+  Object.keys(userTasks).forEach(u => { const c = userTasks[u].counts; orgTasks += c.tasks; orgDocs += c.docs; orgPdfs += c.pdfs; orgSales += flowTaskAmount(userTasks[u].tasks, 'Invoice'); });
+  set('mgmtDrUsers', Object.keys(byUser).filter(u => u && u !== 'Unknown').length);
+  set('mgmtDrMovements', orgTasks);
+  set('mgmtDrDocs', orgDocs);
+  set('mgmtDrSales', _mfm(orgSales));
+  set('mgmtDrPdfs', orgPdfs);
+
   let names = Object.keys(byUser).sort((a, b) => a.localeCompare(b));
-  Object.keys(mfDrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
-  Object.keys(mfDrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; names.push(u); } });
+  Object.keys(mfDrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  Object.keys(mfDrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  names = Array.from(new Set(names));
   if (q) names = names.filter(n => n.toLowerCase().includes(q));
 
   const cont = document.getElementById('mgmtDrBody');
   if (!names.length) { cont.innerHTML = '<div class="mf-empty">No activity recorded for this day.</div>'; return; }
-  cont.innerHTML = names.map((name, i) => {
-    const rows = byUser[name] || [];
-    const docs = rows.filter(e => _mfIsDoc(e.action)).length;
+
+  // Team productivity comparison (distinct tasks per user, sorted high→low).
+  const prodRows = names.map(function (n) {
+    const c = userTasks[n].counts;
+    const top = Object.keys(c.byModule).sort(function (a, b) { return c.byModule[b] - c.byModule[a]; }).slice(0, 3).map(function (m) { return _mfe(m) + ' ' + c.byModule[m]; }).join(' · ');
+    return { name: n, tasks: c.tasks, top: top, submitted: !!mfDrSubs[String(n).trim()] };
+  }).sort(function (a, b) { return b.tasks - a.tasks || a.name.localeCompare(b.name); });
+  const max = Math.max(1, prodRows[0] ? prodRows[0].tasks : 1);
+  const prodHtml = '<div class="dr-sect-title" style="margin-bottom:0.5rem;">Team Productivity — Today</div>'
+    + '<div style="overflow-x:auto;margin-bottom:1rem;"><table class="flow-table"><thead><tr><th>User</th><th class="num">Tasks</th><th>Output</th><th style="width:28%;"></th><th>Submitted</th></tr></thead><tbody>'
+    + prodRows.map(function (r) {
+      return '<tr><td style="font-weight:600;">' + _mfe(r.name) + '</td><td class="num" style="font-weight:700;">' + r.tasks + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-secondary,#475569);">' + (r.top || '—') + '</td>'
+        + '<td><div style="height:8px;border-radius:999px;background:var(--bg-inset,#f1f5f9);overflow:hidden;"><div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--accent,#4f46e5);"></div></div></td>'
+        + '<td>' + (r.submitted ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#b45309;">—</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+
+  cont.innerHTML = prodHtml + names.map((name, i) => {
+    const ut = userTasks[name], tasks = ut.tasks, c = ut.counts;
     const note = mfDrNotes[name];
-    const byMod = {};
-    rows.forEach(e => { byMod[e.module] = (byMod[e.module] || 0) + 1; });
-    const modChips = MF_MODULE_ORDER.filter(m => byMod[m]).concat(Object.keys(byMod).filter(m => !MF_MODULE_ORDER.includes(m)))
-      .map(m => `<span class="mod-badge ${_mfModClass(m)}">${_mfe(m)} ${byMod[m]}</span>`).join('');
-    const tl = rows.length ? rows.map(e => `<tr>
-        <td>${_mfe(_mfTime(e.timestamp))}</td>
-        <td><span class="mod-badge ${_mfModClass(e.module)}">${_mfe(e.module)}</span></td>
-        <td><span class="act-chip">${_mfe(e.action)}</span></td>
-        <td>${_mfe(e.refNo)}</td>
-        <td style="color:var(--text-secondary);">${_mfe(e.summary)}</td>
-        <td class="num">${e.amount ? _mfm(e.amount) : ''}</td>
-      </tr>`).join('') : '<tr><td colspan="6" class="mf-empty">No movements (note only).</td></tr>';
+    const modChips = Object.keys(c.byModule).sort((a, b) => (MF_MODULE_ORDER.indexOf(a) + 1 || 99) - (MF_MODULE_ORDER.indexOf(b) + 1 || 99))
+      .map(m => `<span class="mod-badge ${_mfModClass(m)}">${_mfe(m)} ${c.byModule[m]}</span>`).join('');
     const sub = mfDrSubs[String(name).trim()];
     const subChip = sub
       ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted ${_mfe(_mfTime(sub.submittedAt))}${sub.status === 'Reviewed' ? ' · reviewed' : ''}</span>`
       : ' · <span style="color:#b45309;">not submitted</span>';
     return `<details class="urep"${i === 0 ? ' open' : ''}>
       <summary><span class="uname">${_mfe(name)}</span>
-        <span class="ustat">${rows.length} movement(s) · ${docs} doc(s)${note ? ' · 📝 note' : ''}${subChip}</span></summary>
+        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${note ? ' · 📝 note' : ''}${subChip}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
-        <div style="overflow-x:auto;"><table class="flow-table">
-          <thead><tr><th>Time</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
-          <tbody>${tl}</tbody></table></div>
+        ${flowRenderTaskCards(tasks, { moduleOrder: MF_MODULE_ORDER, emptyText: 'No movements (note only).' })}
         ${mfSubmissionHtml(sub)}
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_mfe(note)}</div>` : ''}
       </div>

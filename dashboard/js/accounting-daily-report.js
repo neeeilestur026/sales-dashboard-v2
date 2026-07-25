@@ -61,8 +61,8 @@ async function load() {
     drEntries = (res && res.data) || [];
   } catch (e) {
     drEntries = [];
-    document.getElementById('timelineBody').innerHTML =
-      `<tr><td colspan="7" class="dr-empty">${_esc(e.message)}</td></tr>`;
+    const tc = document.getElementById('taskCards');
+    if (tc) tc.innerHTML = `<div class="dr-empty">${_esc(e.message)}</div>`;
   }
   render();
   loadEmails();
@@ -90,20 +90,22 @@ async function load() {
 /** This accountant's day as a PDF. */
 function _drDayPdf() {
   const date = _date();
+  // Deduped: one row per record (matches the on-screen task cards).
+  const tasks = flowRollupActivity(drEntries);
+  const counts = flowActivityCounts(tasks);
   const byMod = {};
-  drEntries.forEach(e => {
-    const m = e.module || 'Other';
-    (byMod[m] = byMod[m] || []).push({ time: _time(e.timestamp), action: e.action, refNo: e.refNo, summary: e.summary, amount: e.amount });
+  tasks.forEach(t => {
+    const m = t.module || 'Other';
+    const verbs = t.verbs.join(' → ') + (t.touches > 1 ? ` (×${t.touches})` : '');
+    (byMod[m] = byMod[m] || []).push({ time: (t.touches > 1 ? _time(t.firstTs) + '–' + _time(t.lastTs) : _time(t.lastTs)), action: verbs, refNo: t.refNo, summary: t.latestSummary, amount: t.amount });
   });
   const order = MODULE_ORDER.concat(Object.keys(byMod).filter(m => MODULE_ORDER.indexOf(m) < 0));
-  const sum = (pred) => drEntries.filter(pred).reduce((s, e) => s + _num(e.amount), 0);
   const model = {
     name: drSession.name, role: 'accounting', date, generatedAt: flowToday(),
     totals: {
-      moves: drEntries.length, calls: 0, emails: drEmailCount,
-      docs: drEntries.filter(e => ['Created', 'Issued', 'Received', 'Added'].indexOf(e.action) >= 0).length,
-      pdfs: drEntries.filter(e => e.action === 'PDF Saved').length,
-      amount: sum(e => e.module === 'Invoice' && e.action === 'Issued'), amountLabel: 'Invoiced',
+      moves: tasks.length, calls: 0, emails: drEmailCount,
+      docs: counts.docs, pdfs: counts.pdfs,
+      amount: flowTaskAmount(tasks, 'Invoice'), amountLabel: 'Invoiced',
     },
     modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
     notes: (document.getElementById('notesField') || {}).value || '',
@@ -115,54 +117,24 @@ function _drDayPdf() {
   }).catch(err => alert('PDF failed: ' + err.message));
 }
 
-function _filtered() { return drEntries; }
-
 function render() {
-  const rows = _filtered();
+  if (typeof flowRenderInjectCss === 'function') flowRenderInjectCss();
+  // Collapse repeat touches of the same record into ONE task so counts are DISTINCT work.
+  const tasks = (typeof flowRollupActivity === 'function') ? flowRollupActivity(drEntries) : drEntries;
+  const counts = flowActivityCounts(tasks);
 
-  // ── Summary tiles ──
-  const isDoc = a => ['Created', 'Issued', 'Received', 'Added', 'PDF Saved'].includes(a);
-  const sum = (pred) => rows.filter(pred).reduce((s, e) => s + _num(e.amount), 0);
-  document.getElementById('sumMovements').textContent = rows.length;
-  document.getElementById('sumDocs').textContent = rows.filter(e => isDoc(e.action) && e.action !== 'PDF Saved').length;
-  document.getElementById('sumSales').textContent = _money(sum(e => e.module === 'Invoice' && e.action === 'Issued'));
-  document.getElementById('sumPaid').textContent = _money(sum(e => e.module === 'AP Aging'));
-  document.getElementById('sumReceived').textContent = _money(sum(e => e.module === 'Receiving'));
-  document.getElementById('sumPdfs').textContent = rows.filter(e => e.action === 'PDF Saved').length;
+  // ── Summary tiles — distinct tasks; peso tiles sum distinct records (no double-count from repeat saves) ──
+  document.getElementById('sumMovements').textContent = tasks.length;
+  document.getElementById('sumDocs').textContent = counts.docs;
+  document.getElementById('sumSales').textContent = _money(flowTaskAmount(tasks, 'Invoice'));
+  document.getElementById('sumPaid').textContent = _money(flowTaskAmount(tasks, 'AP Aging'));
+  document.getElementById('sumReceived').textContent = _money(flowTaskAmount(tasks, 'Receiving'));
+  document.getElementById('sumPdfs').textContent = counts.pdfs;
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
 
-  // ── Timeline (chronological, newest first as returned) ──
-  document.getElementById('tlCount').textContent = rows.length;
-  const tb = document.getElementById('timelineBody');
-  tb.innerHTML = rows.length ? rows.map(e => `
-    <tr>
-      <td>${_esc(_time(e.timestamp))}</td>
-      <td>${_esc(e.user) || '<span style="color:var(--text-muted);">—</span>'}</td>
-      <td><span class="mod-badge ${_modClass(e.module)}">${_esc(e.module)}</span></td>
-      <td><span class="act-chip">${_esc(e.action)}</span></td>
-      <td>${_esc(e.refNo)}</td>
-      <td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
-      <td class="num">${e.amount ? _money(e.amount) : ''}</td>
-    </tr>`).join('') : '<tr><td colspan="7" class="dr-empty">No recorded activity for this day.</td></tr>';
-
-  // ── Per-module sections ──
-  const byMod = {};
-  rows.forEach(e => { (byMod[e.module] = byMod[e.module] || []).push(e); });
-  const mods = MODULE_ORDER.filter(m => byMod[m]).concat(Object.keys(byMod).filter(m => !MODULE_ORDER.includes(m)));
-  document.getElementById('moduleSections').innerHTML = mods.map(m => {
-    const list = byMod[m];
-    return `<div class="dr-sect">
-      <div class="dr-sect-title"><span class="mod-badge ${_modClass(m)}">${_esc(m)}</span> <span class="pill">${list.length}</span></div>
-      <div style="overflow-x:auto;"><table class="flow-table">
-        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Reference</th><th>Detail</th><th class="num">Amount</th></tr></thead>
-        <tbody>${list.map(e => `<tr>
-          <td>${_esc(_time(e.timestamp))}</td><td>${_esc(e.user)}</td>
-          <td><span class="act-chip">${_esc(e.action)}</span></td>
-          <td>${_esc(e.refNo)}</td><td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
-          <td class="num">${e.amount ? _money(e.amount) : ''}</td></tr>`).join('')}</tbody>
-      </table></div>
-    </div>`;
-  }).join('');
+  // ── Today's Work — one card per record ──
+  document.getElementById('tlCount').textContent = tasks.length;
+  document.getElementById('taskCards').innerHTML = flowRenderTaskCards(tasks, { moduleOrder: MODULE_ORDER });
 }
 
 // ── Sent Emails (production backend, read-only) ──
