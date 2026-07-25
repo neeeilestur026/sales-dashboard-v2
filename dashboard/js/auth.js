@@ -397,6 +397,7 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="flow-home.html" class="${activePage === 'flow-home' ? 'active' : ''}">Overview</a>
+          <a href="flow-lifecycle.html" class="${activePage === 'flow-lifecycle' ? 'active' : ''}">SO Lifecycle Tracker</a>
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
@@ -456,6 +457,7 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
+          <a href="flow-lifecycle.html" class="${activePage === 'flow-lifecycle' ? 'active' : ''}">SO Lifecycle Tracker</a>
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
@@ -508,7 +510,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'management') {
     const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave'];
-    const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging'];
+    const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle'];
     const mAcctPages = ['leave-request', 'change-password'];
     const mApprActive = mApprPages.includes(activePage) ? 'active' : '';
     const mFinActive = mFinPages.includes(activePage) ? 'active' : '';
@@ -540,6 +542,7 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
+          <a href="flow-lifecycle.html" class="${activePage === 'flow-lifecycle' ? 'active' : ''}">SO Lifecycle Tracker</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
@@ -941,13 +944,19 @@ async function flowComputeActions(session) {
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getReceiving').catch(() => ({ data: [] })),
-    ]).then(([so, po, rc]) => {
+      fetchFlow('getInvoices').catch(() => ({ data: [] })),
+    ]).then(([so, po, rc, iv]) => {
       const hasPO = {}; ((po && po.data) || []).forEach(p => { if (p.soNo) hasPO[String(p.soNo)] = true; });
       const received = {}; ((rc && rc.data) || []).forEach(m => { if (m.poNo) received[String(m.poNo)] = true; });
+      const rcSO = {}; ((rc && rc.data) || []).forEach(m => { if (m.soNo) rcSO[String(m.soNo)] = true; });
+      const invSO = {}; ((iv && iv.data) || []).forEach(v => { if (v.soNo) invSO[String(v.soNo)] = true; });
       const noPO = ((so && so.data) || []).filter(s => !hasPO[String(s.soNo)]).length;
       if (noPO) add('report', '#b45309', noPO + ' sales order(s) with no purchase order yet', 'flow-purchase-orders.html');
       const notRc = ((po && po.data) || []).filter(p => (p.status === 'Approved' || p.status === 'Sent') && !received[String(p.poNo)]).length;
       if (notRc) add('report', '#b45309', notRc + ' purchase order(s) not received yet', 'flow-receiving.html');
+      // A151: received but not yet invoiced — the SO is sitting between delivery and billing.
+      const delNotInv = ((so && so.data) || []).filter(s => rcSO[String(s.soNo)] && !invSO[String(s.soNo)]).length;
+      if (delNotInv) add('report', '#b45309', delNotInv + ' received order(s) not yet invoiced', 'flow-lifecycle.html');
     }).catch(() => {}));
   }
   // Sales: my returned pricing requests, my approved/rejected quotations, my sent quotes with no SO.

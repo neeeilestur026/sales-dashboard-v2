@@ -14,6 +14,7 @@ function _mfn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof _flowConfigured === 'function' && !_flowConfigured()) return;
   if (document.getElementById('mgmtKpiGrid')) mfLoadKpis();
+  if (document.getElementById('mgmtLifecycleHealth')) mfLoadLifecycleHealth();
   if (document.getElementById('mgmtApprovals')) mfLoadApprovals();
   if (document.getElementById('mgmtInvBody')) mfLoadInventory();
   if (document.getElementById('mgmtPrBody')) {
@@ -56,6 +57,47 @@ async function mfLoadKpis() {
     set('mgmtKpiInv', _mfm(invVal));
     set('mgmtKpiSo', String(sos.length));
   } catch (e) { /* leave dashes */ }
+}
+
+// ── A151: Lifecycle Health — where every Sales Order sits in its end-to-end journey ──
+async function mfLoadLifecycleHealth() {
+  const c = document.getElementById('mgmtLifecycleHealth');
+  if (!c) return;
+  c.innerHTML = '<div class="mf-empty">Loading lifecycle health…</div>';
+  try {
+    const [so, po, rc, iv, ar] = await Promise.all([
+      fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
+      fetchFlow('getReceiving').catch(() => ({ data: [] })),
+      fetchFlow('getInvoices').catch(() => ({ data: [] })),
+      fetchFlow('getARAging').catch(() => ({ data: [] })),
+    ]);
+    const sos = (so && so.data) || [];
+    const S = v => String(v == null ? '' : v);
+    const hasPO = {}; ((po && po.data) || []).forEach(p => { if (p.soNo) hasPO[S(p.soNo)] = true; });
+    const rcSO = {}; ((rc && rc.data) || []).forEach(m => { if (m.soNo) rcSO[S(m.soNo)] = true; });
+    const invSO = {}; ((iv && iv.data) || []).forEach(v => { if (v.soNo) invSO[S(v.soNo)] = true; });
+    const arBySO = {}; ((ar && ar.data) || []).forEach(a => { if (a.soNo) (arBySO[S(a.soNo)] = arBySO[S(a.soNo)] || []).push(a); });
+    let noPO = 0, recvNotInv = 0, notCollected = 0, closed = 0;
+    sos.forEach(s => {
+      const id = S(s.soNo);
+      if (!hasPO[id]) noPO++;
+      if (rcSO[id] && !invSO[id]) recvNotInv++;
+      const ars = arBySO[id] || [];
+      if (invSO[id] && ars.length) {
+        const out = ars.reduce((t, a) => t + (a.outstanding != null ? _mfn(a.outstanding) : _mfn(a.amountPHP) - _mfn(a.collectedPHP)), 0);
+        if (out > 0.5) notCollected++; else closed++;
+      }
+    });
+    const tile = (v, l, col) => `<div class="mf-lh-tile"><div class="mf-lh-v" style="color:${col || 'inherit'}">${v}</div><div class="mf-lh-l">${l}</div></div>`;
+    c.innerHTML = `<div class="mf-lh">
+      ${tile(sos.length, 'Sales Orders')}
+      ${tile(noPO, 'No PO yet', noPO ? '#b45309' : '')}
+      ${tile(recvNotInv, 'Received, not invoiced', recvNotInv ? '#b45309' : '')}
+      ${tile(notCollected, 'Invoiced, uncollected', notCollected ? '#ef4444' : '')}
+      ${tile(closed, 'Closed (collected)', '#16a34a')}
+    </div><div style="margin-top:.4rem;"><a href="flow-lifecycle.html" style="color:var(--accent,#4f46e5);font-weight:600;">Open the SO Lifecycle Tracker →</a></div>`;
+  } catch (e) { c.innerHTML = '<div class="mf-empty">Could not load lifecycle health.</div>'; }
 }
 
 // ── Approvals strip (pending Quotations + POs) ──

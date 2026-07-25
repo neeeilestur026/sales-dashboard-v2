@@ -242,7 +242,7 @@ async function saveRequest() {
     resetForm();
     // Auto-generate the branded PR PDF and save it to Drive + the PDF Link column (best-effort,
     // never blocks creation). No tab pops open (background) — it's an automatic archive on creation.
-    let extra = '', savedLink = '';
+    let extra = '', savedLink = '', lastErr = '';
     btn.textContent = 'Saving PDF...';
     const pdfPayload = { prNo: res.prNo, customer, date, requestedBy: prSession.name, doc,
       items: items.map(i => ({ itemNo: i.itemNo, itemName: i.itemName, qty: i.qty, uom: i.uom, remarks: i.remarks })) };
@@ -251,12 +251,14 @@ async function saveRequest() {
     for (let attempt = 0; attempt < 2 && !savedLink; attempt++) {
       try {
         if (attempt) await new Promise(r => setTimeout(r, 800));
-        const { link } = await generateFlowPdf('/flow/pr-pdf', pdfPayload,
+        const { link, saveError } = await generateFlowPdf('/flow/pr-pdf', pdfPayload,
           'savePRPDF', 'prNo', res.prNo, `Purchase_Request_${res.prNo}.pdf`, { background: true });
         savedLink = link || '';
-      } catch (e) { /* best-effort; retry once, then leave it for manual regeneration */ }
+        if (saveError) lastErr = saveError;
+      } catch (e) { lastErr = (e && e.message) || 'render failed'; }
     }
-    extra = savedLink ? ' · PDF saved to Drive' : ' · PDF pending (use “Generate PR PDF” on the row)';
+    extra = savedLink ? ' · PDF saved to Drive'
+      : ' · ⚠ PDF not saved' + (lastErr ? ' (' + lastErr + ')' : '') + ' — use “Generate PR PDF” on the row';
     if (droppedDupes) extra += ` · ${droppedDupes} duplicate line(s) removed`;
     flowMsg('formMsg', `${res.message} (${res.prNo})${extra}`, true);
     await loadRequests();

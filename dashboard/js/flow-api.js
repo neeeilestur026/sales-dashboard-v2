@@ -216,6 +216,7 @@ function flowStatusBadge(status) {
 function renderFlowNav(active) {
   const links = [
     ['flow-home.html', 'Home'],
+    ['flow-lifecycle.html', 'Lifecycle'],
     ['flow-accounting.html', 'Accounting'],
     ['flow-inventory.html', 'Inventory'],
     ['flow-quotations.html', 'Quotations'],

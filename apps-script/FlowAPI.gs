@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 89;   // A149 name client/supplier in activity log (88: A147 bug-scan fixes · 87: A146 AR due-date · 86: A145 flow hardening)
+var FLOW_VERSION = 90;   // A151 SO lifecycle spine + doc registry unify + drive folder + AR backfill (89: A149 names · 88: A147 bug-scan · 87: A146 AR due-date)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -35,9 +35,11 @@ var SCHEMA = {
               'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated', 'Type'],
 
   //    A145: 'Plant Site' + 'Client Ref No' carry PR context onto the quotation (appended at END).
+  //    A151: 'PR No' links a quotation back to the pricing request it came from (populated by
+  //    createQuotationFromPR; blank for direct/legacy quotations). Appended at END.
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %',
-                   'PDF Data JSON', 'Plant Site', 'Client Ref No'],
+                   'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
                    'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM'],
@@ -524,7 +526,7 @@ function getQuotations(p) {
       approvalNote: q['Approval Note'] || '', approvedBy: q['Approved By'] || '', approvedAt: q['Approved At'] || '',
       subject: q['Subject'] || '', discountPct: _num(q['Discount %']) || 0,
       pdfData: q['PDF Data JSON'] || '',
-      plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '',
+      plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '', prNo: q['PR No'] || '',
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
@@ -568,7 +570,7 @@ function createQuotation(p) {
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
     creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
-    '', p.plantSite || '', p.clientRefNo || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No
+    '', p.plantSite || '', p.clientRefNo || '', p.prNo || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || ''];   // trailing: A145 Supplier VAT, A147 UOM
@@ -695,13 +697,10 @@ function createSalesOrder(p) {
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
   });
-  // Auto-create the shipment-monitoring timeline for this order (flow-native).
-  // Skipped for BACK-DATED orders (date in a prior year): historical SOs recorded by
-  // accounting shouldn't spawn live shipment-tracking rows.
-  var soYear = parseInt(_dateStr(p.date || _now()).slice(0, 4), 10) || 0;
-  if (soYear >= new Date().getFullYear()) {
-    _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
-  }
+  // A151: create the SO Lifecycle (shipment) timeline for EVERY order — including back-dated ones —
+  // so every SO has a single end-to-end lifecycle record (track + nudge; the auto-derived stages are
+  // recomputed live on read, so an old SO simply shows its true progress).
+  _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
   _refStore('createSalesOrder', p.clientRef, no);
   return { success: true, soNo: no, message: 'Sales Order created.' };
 }
@@ -715,6 +714,22 @@ function _flowAutoCreateShipment(soNo, customer, item, createdBy) {
     _append('Shipments', [id, soNo, '', customer || '', '', item || '', '', '', '', '',
       'Pending', '{}', '', createdBy || '', _now(), _now()]);
   } catch (e) { /* never block the SO write */ }
+}
+
+// A151: create a lifecycle (Shipments) row for every Sales Order that lacks one — incl. migrated /
+// back-dated SOs, which never got one. Idempotent (keyed by SO No). Auto-derived stages compute live.
+function backfillShipments(p) {
+  var existing = {};
+  _rows('Shipments').forEach(function (r) { existing[String(r['SO No'])] = true; });
+  var created = 0, skipped = 0;
+  _rows('SalesOrders').forEach(function (so) {
+    var soNo = String(so['SO No'] || '');
+    if (!soNo || existing[soNo]) { skipped++; return; }
+    _flowAutoCreateShipment(soNo, so['Customer'], '', 'Backfill (lifecycle)');
+    existing[soNo] = true; created++;
+  });
+  return { success: true, created: created, skipped: skipped,
+    message: 'Created ' + created + ' lifecycle row(s); ' + skipped + ' already present.' };
 }
 
 // Set a Sales Order's Supplier Type label (International/Local) from a cost type. Best-effort.
@@ -1476,6 +1491,31 @@ function createInvoice(p) {
       (zeroCogsLines > 0 ? ' ⚠ ' + zeroCogsLines + ' line(s) had no landed cost (COGS 0).' : '') };
 }
 
+// A151: create an AR row for every Invoice that has none (migrated backfill invoices never got one).
+// Reconciles any existing Collections already pointing at the INV/SO into the collected total + status.
+// Idempotent (keyed on INV No). Feeds the new ar_open / collected lifecycle stages.
+function backfillMissingAR(p) {
+  var hasAR = {};
+  _rows('ARAging').forEach(function (r) { if (r['INV No'] != null && r['INV No'] !== '') hasAR[String(r['INV No'])] = true; });
+  var created = 0, skipped = 0;
+  _rows('Invoices').forEach(function (v) {
+    var invNo = String(v['INV No'] || '');
+    if (!invNo || hasAR[invNo]) { skipped++; return; }
+    var amt = _num(v['Total Sales']);
+    var recv = 0;
+    _rows('Collections').forEach(function (c) {
+      if (String(c['INV No']) === invNo || (v['SO No'] && String(c['SO No']) === String(v['SO No']))) recv += _num(c['Amount (PHP)']);
+    });
+    var status = recv <= 0 ? 'Unpaid' : (recv >= amt && amt > 0 ? 'Paid' : 'Partial');
+    var due = _addTermDays(v['Date'], _clientTerms(v['Customer']));
+    _append('ARAging', [_nextNumber('ARAging', 1, 'AR'), invNo, v['SO No'] || '', v['Customer'],
+      amt, recv, status, due, 'Backfilled (missing AR)', _now(), _now()]);
+    hasAR[invNo] = true; created++;
+  });
+  return { success: true, created: created, skipped: skipped,
+    message: 'Created ' + created + ' AR row(s); ' + skipped + ' already present.' };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  GENERAL LEDGER  (double-entry journal auto-posted from each step)
 // ════════════════════════════════════════════════════════════════════════════
@@ -1551,7 +1591,9 @@ function getTrialBalance() {
 var _SHIP_STAGES = ['so_received', 'po_created', 'po_approved', 'po_sent', 'proforma_received',
   'prf_created', 'prf_approved', 'tt_sent', 'tt_forwarded', 'shipping_docs_received', 'forwarder_quotes',
   'forwarder_approved', 'booked', 'pickup', 'in_transit', 'customs_clearance', 'fan_sad_tan',
-  'debit_memo', 'forwarder_final_invoice', 'local_charges', 'delivered'];
+  'debit_memo', 'forwarder_final_invoice', 'local_charges', 'delivered',
+  // A151: downstream lifecycle spine — the sales/receivables close after inbound delivery.
+  'invoiced', 'ar_open', 'collected'];
 
 function _shipParse(json) { try { return JSON.parse(json || '{}') || {}; } catch (e) { return {}; } }
 
@@ -1573,6 +1615,16 @@ function _shipAutoDerive(soNo) {
     if (aps.some(function (a) { return _num(a['Paid (PHP)']) > 0; })) d.tt_sent = true;
     var mrs = _rows('MaterialsReceiving').filter(function (r) { return poNos[String(r['PO No'])]; });
     if (mrs.length) d.delivered = true;
+  }
+  // A151: downstream stages join on soNo DIRECTLY (not nested under the PO block), so a migrated SO with
+  // an invoice/AR but no PO still derives them. invoiced = any Invoice for the SO; ar_open = any AR row;
+  // collected = AR rows exist AND every one is Paid.
+  var invs = _rows('Invoices').filter(function (r) { return String(r['SO No']) === String(soNo); });
+  if (invs.length) d.invoiced = true;
+  var ars = _rows('ARAging').filter(function (r) { return String(r['SO No']) === String(soNo); });
+  if (ars.length) {
+    d.ar_open = true;
+    if (ars.every(function (a) { return String(a['Status']) === 'Paid'; })) d.collected = true;
   }
   return d;
 }
@@ -1882,8 +1934,10 @@ function rejectPaymentRequest(p) {
 
 function savePaymentRequestPDF(p) {
   if (!p.prNo || !p.pdfBase64) return { success: false, message: 'prNo and pdfBase64 required.' };
-  var link = _savePdfToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'));
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'), 'application/pdf');
+  var link = saved.url;
   _setCellByKey('PaymentRequests', 'PR No', p.prNo, 'PDF Link', link);
+  _registerDocument('Payment Request', p.prNo, p.fileName, link, saved.id, p.actorName);
   return { success: true, prNo: p.prNo, link: link, message: 'Payment Request PDF saved.' };
 }
 
@@ -2276,20 +2330,61 @@ function setOpeningBalance(p) {
 // ════════════════════════════════════════════════════════════════════════════
 //  PDF → DRIVE  (store generated quotation / PO PDFs and link them on the record)
 // ════════════════════════════════════════════════════════════════════════════
-function _flowFolder() {
-  if (FLOW_DRIVE_FOLDER_ID) return DriveApp.getFolderById(FLOW_DRIVE_FOLDER_ID);
+/** A151: the ONE company-owned root folder every generated PDF / attachment lands in. Resolve the
+ *  FLOW_DRIVE_FOLDER_ID constant, else a ScriptProperty the user sets once from the UI, else
+ *  find/create "Flow Documents". Set the property so files never depend on the script account's My Drive. */
+function _rootFolder() {
+  var id = FLOW_DRIVE_FOLDER_ID ||
+    (PropertiesService.getScriptProperties().getProperty('FLOW_DRIVE_FOLDER_ID') || '');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* fall through to default */ } }
   var it = DriveApp.getFoldersByName('Flow Documents');
   return it.hasNext() ? it.next() : DriveApp.createFolder('Flow Documents');
 }
 
+function _flowFolder() { return _rootFolder(); }
+
 /** Purchase-request PDFs live in "Purchase Request/<requester name>/" — one subfolder per user
- *  (sales or admin, whoever created the request). Find-or-create both levels. */
+ *  (sales or admin, whoever created the request). Nested UNDER the company root folder. */
 function _prUserFolder(userName) {
-  var rootIt = DriveApp.getFoldersByName('Purchase Request');
-  var root = rootIt.hasNext() ? rootIt.next() : DriveApp.createFolder('Purchase Request');
+  var root = _rootFolder();
+  var prIt = root.getFoldersByName('Purchase Request');
+  var pr = prIt.hasNext() ? prIt.next() : root.createFolder('Purchase Request');
   var name = String(userName || 'Unknown').trim() || 'Unknown';
-  var subIt = root.getFoldersByName(name);
-  return subIt.hasNext() ? subIt.next() : root.createFolder(name);
+  var subIt = pr.getFoldersByName(name);
+  return subIt.hasNext() ? subIt.next() : pr.createFolder(name);
+}
+
+/** Let the user pin the company-owned Drive folder once from the UI (writes a ScriptProperty). */
+function setFlowDriveFolder(p) {
+  var id = String(p.folderId || '').trim();
+  if (!id) return { success: false, message: 'folderId required.' };
+  try { DriveApp.getFolderById(id).getName(); }
+  catch (e) { return { success: false, message: 'Folder not found or not shared with this account.' }; }
+  PropertiesService.getScriptProperties().setProperty('FLOW_DRIVE_FOLDER_ID', id);
+  return { success: true, folderId: id, message: 'Flow documents folder set. New PDFs/attachments will save here.' };
+}
+
+/** Parse a Drive file id from a share URL (…/d/<id>/… or ?id=<id>). '' if none. */
+function _driveIdFromUrl(url) {
+  var s = String(url || '');
+  var m = s.match(/\/d\/([A-Za-z0-9_-]+)/) || s.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+/** A151: register a generated PDF in the Documents registry so getDocuments / the lifecycle tracker
+ *  can see it (auto-PDFs used to live only in the parent record's PDF Link column). Idempotent. */
+function _registerDocument(module, refNo, fileName, url, fileId, actorName) {
+  try {
+    if (!module || !refNo || !url) return;
+    var dup = _rows('Documents').some(function (r) {
+      return String(r['Drive Link']) === String(url) ||
+        (String(r['Module']) === String(module) && String(r['Ref No']) === String(refNo) &&
+         String(r['Doc Type']) === 'Generated PDF');
+    });
+    if (dup) return;
+    _append('Documents', [_nextNumber('Documents', 1, 'DOC'), module, refNo, 'Generated PDF',
+      fileName || '', url, fileId || _driveIdFromUrl(url), actorName || 'System', _now()]);
+  } catch (e) { /* never block the PDF save */ }
 }
 
 /** Save any base64 file to Drive (default: the Flow Documents folder); returns { url, id }. */
@@ -2321,20 +2416,26 @@ function _setCellByKey(sheetName, keyCol, keyVal, header, value) {
 
 function saveQuotationPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
-  var link = _savePdfToDrive(p.pdfBase64, p.fileName);
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'quotation.pdf', 'application/pdf');
+  var link = saved.url;
   if (p.quotationNo) {
     _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Link', link);
     // What this PDF was rendered from (doc fields + a stamp of the figures it shows), so the UI can
     // tell later whether the saved document still matches the record.
     if (p.pdfData) _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Data JSON', p.pdfData);
+    _registerDocument('Quotation', p.quotationNo, p.fileName, link, saved.id, p.actorName);
   }
   return { success: true, link: link, message: 'Quotation PDF saved to Drive.' };
 }
 
 function savePOPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
-  var link = _savePdfToDrive(p.pdfBase64, p.fileName);
-  if (p.poNo) _setCellByKey('PurchaseOrders', 'PO No', p.poNo, 'PDF Link', link);
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'purchase-order.pdf', 'application/pdf');
+  var link = saved.url;
+  if (p.poNo) {
+    _setCellByKey('PurchaseOrders', 'PO No', p.poNo, 'PDF Link', link);
+    _registerDocument('Purchase Order', p.poNo, p.fileName, link, saved.id, p.actorName);
+  }
   return { success: true, link: link, message: 'Purchase Order PDF saved to Drive.' };
 }
 
@@ -2378,6 +2479,81 @@ function deleteDocument(p) {
     }
   }
   return { success: false, message: 'Document not found.' };
+}
+
+// A151: one-time — register every generated PDF that lives only in a parent record's "PDF Link" column
+// into the Documents registry, so getDocuments / the lifecycle tracker can see it. Idempotent on Drive Link.
+function backfillPdfDocuments(p) {
+  var seen = {};
+  _rows('Documents').forEach(function (r) { if (r['Drive Link']) seen[String(r['Drive Link'])] = true; });
+  var created = 0;
+  var scan = [
+    ['Quotations', 'Quotation No', 'Quotation'],
+    ['PurchaseOrders', 'PO No', 'Purchase Order'],
+    ['PricingRequests', 'PR No', 'Pricing Request'],
+    ['PaymentRequests', 'PR No', 'Payment Request']
+  ];
+  scan.forEach(function (s) {
+    _rows(s[0]).forEach(function (r) {
+      var link = String(r['PDF Link'] || '').trim();
+      if (!link || seen[link]) return;
+      _append('Documents', [_nextNumber('Documents', 1, 'DOC'), s[2], r[s[1]], 'Generated PDF',
+        (r[s[1]] + '.pdf'), link, _driveIdFromUrl(link), 'Backfill', _now()]);
+      seen[link] = true; created++;
+    });
+  });
+  return { success: true, created: created, message: 'Registered ' + created + ' existing PDF(s).' };
+}
+
+// A151: build the set of (module, refNo) pairs across an SO's whole lifecycle chain, for the aggregate
+// document view. Uses the new Quotations.PR No to reach the originating pricing request.
+function _soDocChain(soNo) {
+  var so = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === String(soNo); })[0];
+  var refs = [['Sales Order', soNo]];
+  var quoteNo = so && so['Quotation No'];
+  if (quoteNo) {
+    refs.push(['Quotation', quoteNo]);
+    var q = _rows('Quotations').filter(function (r) { return String(r['Quotation No']) === String(quoteNo); })[0];
+    if (q && q['PR No']) refs.push(['Pricing Request', q['PR No']]);
+  }
+  var poSet = {};
+  _rows('PurchaseOrders').forEach(function (po) {
+    if (String(po['SO No']) === String(soNo)) { refs.push(['Purchase Order', po['PO No']]); poSet[String(po['PO No'])] = true; }
+  });
+  _rows('PaymentRequests').forEach(function (r) {
+    if (String(r['SO No']) === String(soNo) || poSet[String(r['PO No'])]) refs.push(['Payment Request', r['PR No']]);
+  });
+  _rows('APAging').forEach(function (r) { if (poSet[String(r['PO No'])]) refs.push(['AP Aging', r['AP No']]); });
+  _rows('MaterialsReceiving').forEach(function (r) {
+    if (String(r['SO No']) === String(soNo) || poSet[String(r['PO No'])]) refs.push(['Receiving', r['MR No']]);
+  });
+  _rows('Invoices').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['Invoice', r['INV No']]); });
+  _rows('ARAging').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['AR Aging', r['AR No']]); });
+  _rows('Shipments').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['Shipment', r['Shipment ID']]); });
+  return refs;
+}
+
+// A151: aggregate a whole SO's documents + its lifecycle timeline in ONE server round-trip.
+function getSOLifecycle(p) {
+  if (!p.soNo) return { success: false, message: 'soNo required.' };
+  var refs = _soDocChain(p.soNo);
+  var key = {}; refs.forEach(function (x) { key[String(x[0]) + '|' + String(x[1])] = true; });
+  var docs = _rows('Documents').filter(function (r) {
+    return key[String(r['Module']) + '|' + String(r['Ref No'])];
+  }).map(function (r) {
+    return { docId: r['Doc ID'], module: r['Module'], refNo: r['Ref No'], docType: r['Doc Type'],
+      fileName: r['File Name'], link: r['Drive Link'], uploadedBy: r['Uploaded By'], uploadedAt: r['Uploaded At'] };
+  });
+  var ship = _rows('Shipments').filter(function (r) { return String(r['SO No']) === String(p.soNo); })[0];
+  var timeline = ship ? _shipTimeline(_shipMap(ship)) : [];
+  return { success: true, soNo: p.soNo, chain: refs, documents: docs, timeline: timeline,
+    shipmentId: ship ? ship['Shipment ID'] : '' };
+}
+
+// Thin wrapper for callers that only want an SO's aggregated document list.
+function getDocumentsForSO(p) {
+  var r = getSOLifecycle(p);
+  return { success: r.success, data: r.documents || [], message: r.message };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2748,7 +2924,10 @@ var _MODULE_MAP = {
   backfillMigratedRecords: ['Sales Order', 'Records Backfilled'],
   deleteMigratedRecords: ['Sales Order', 'Migrated Cleared'],
   matchSupplierTypes: ['Sales Order', 'Type Matched'],
-  importPricingSubmissions: ['Pricing Request', 'Imported']
+  importPricingSubmissions: ['Pricing Request', 'Imported'],
+  // A151
+  backfillShipments: ['Sales Order', 'Lifecycle Backfilled'], backfillPdfDocuments: ['Document', 'PDFs Backfilled'],
+  backfillMissingAR: ['AR Aging', 'Backfilled'], setFlowDriveFolder: ['Balance Sheet', 'Config Updated']
 };
 
 function _dateStr(v) {
@@ -3197,7 +3376,7 @@ function createQuotationFromPR(p) {
   // A clientRef makes a retry-after-success return the SAME quotation instead of a false "already exists".
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
     quotationNo: p.quotationNo || '', subject: p.subject || '', discountPct: _num(p.discountPct) || 0,
-    plantSite: hdr['Plant Site'] || '', clientRefNo: clientRefNo,
+    plantSite: hdr['Plant Site'] || '', clientRefNo: clientRefNo, prNo: p.prNo,   // A151: link quotation → its pricing request
     clientRef: 'qfp_' + p.prNo,   // A147: force per-PR key so two saves from one PR can't create two quotations
     createdBy: p.actorName || hdr['Requested By'] || '', actorRole: 'sales', items: JSON.stringify(qItems) });
   if (!qres.success) return qres;
@@ -3217,8 +3396,12 @@ function savePRPDF(p) {
     if (row) requester = String(row['Requested By'] || '');
   }
   var folder = _prUserFolder(requester || p.actorName || 'Unknown');
-  var link = _saveFileToDrive(p.pdfBase64, p.fileName || ((p.prNo || 'PR') + '.pdf'), 'application/pdf', folder).url;
-  if (p.prNo) _setCellByKey('PricingRequests', 'PR No', p.prNo, 'PDF Link', link);
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || ((p.prNo || 'PR') + '.pdf'), 'application/pdf', folder);
+  var link = saved.url;
+  if (p.prNo) {
+    _setCellByKey('PricingRequests', 'PR No', p.prNo, 'PDF Link', link);
+    _registerDocument('Pricing Request', p.prNo, p.fileName, link, saved.id, p.actorName);
+  }
   return { success: true, link: link, prNo: p.prNo, message: 'PR PDF saved to Drive.' };
 }
 
@@ -3322,7 +3505,11 @@ var HANDLERS = {
   addDocument: addDocument, getDocuments: getDocuments, deleteDocument: deleteDocument,
   submitQuotationApproval: submitQuotationApproval, approveQuotation: approveQuotation,
   rejectQuotation: rejectQuotation, sendQuotation: sendQuotation, reviseQuotation: reviseQuotation,
-  submitPOApproval: submitPOApproval, approvePO: approvePO, rejectPO: rejectPO
+  submitPOApproval: submitPOApproval, approvePO: approvePO, rejectPO: rejectPO,
+  // A151: lifecycle spine + document safety
+  backfillShipments: backfillShipments, backfillPdfDocuments: backfillPdfDocuments,
+  getSOLifecycle: getSOLifecycle, getDocumentsForSO: getDocumentsForSO,
+  backfillMissingAR: backfillMissingAR, setFlowDriveFolder: setFlowDriveFolder
 };
 
 // Actions that mutate the sheets (run under a script lock).
@@ -3348,5 +3535,7 @@ var MUTATIONS = {
   approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1, revisePaymentRequest: 1,
   importSOCostDetails: 1, saveSOCostDetails: 1, importPricingSubmissions: 1, backfillMigratedRecords: 1,
   deleteMigratedRecords: 1, resetSequenceCounters: 1,
-  saveSupplier: 1, deleteSupplier: 1, saveClient: 1, deleteClient: 1
+  saveSupplier: 1, deleteSupplier: 1, saveClient: 1, deleteClient: 1,
+  // A151: lifecycle spine + document safety (getSOLifecycle/getDocumentsForSO are read-only → HANDLERS only)
+  backfillShipments: 1, backfillPdfDocuments: 1, backfillMissingAR: 1, setFlowDriveFolder: 1
 };

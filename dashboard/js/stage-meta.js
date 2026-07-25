@@ -5,10 +5,11 @@
    Loaded before admin.js AND management-home.js
    ═══════════════════════════════════════════════ */
 
-// ── 21-stage lifecycle definition ────────────────
-// STATUS MODEL: (b) — Status is fully independent.
-// Stages 15 (in_transit) and 21 (delivered) are NOT auto-derived from Status.
-// Only 'booked' (13) auto-derives from the AWB field.
+// ── 24-stage lifecycle definition (A151: + downstream Billing & Collection) ─────
+// The authoritative auto/manual flag comes from the SERVER (_shipAutoDerive → t.autoderived);
+// the `autoDerive` flags below are display metadata, aligned to what the server actually derives:
+// AUTO = so_received, po_created/approved/sent, prf_created, tt_sent, delivered, invoiced, ar_open,
+// collected. ('booked' is MANUAL — the old "auto from AWB" note was never implemented.)
 const _SM_LIFECYCLE_STAGES = [
   { key: 'so_received',             label: 'Sales Order Received',              owner: 'Sales',      autoDerive: true,  docLabel: 'Sales Order document' },
   { key: 'po_created',              label: 'Purchase Order Created',            owner: 'Admin',      autoDerive: true,  docLabel: null },
@@ -17,12 +18,12 @@ const _SM_LIFECYCLE_STAGES = [
   { key: 'proforma_received',       label: 'Proforma / Order Confirmation',     owner: 'Supplier',   autoDerive: false, docLabel: 'Proforma Invoice or Order Confirmation' },
   { key: 'prf_created',             label: 'Payment Request (PRF) Created',     owner: 'Accounting', autoDerive: true,  docLabel: null },
   { key: 'prf_approved',            label: 'PRF Approved (Management)',         owner: 'Sir Larry',  autoDerive: true,  docLabel: null },
-  { key: 'tt_sent',                 label: 'Telegraphic Transfer (TT) Sent',    owner: 'Accounting', autoDerive: false, docLabel: 'TT Form / Bank remittance slip' },
+  { key: 'tt_sent',                 label: 'Telegraphic Transfer (TT) Sent',    owner: 'Accounting', autoDerive: true,  docLabel: 'TT Form / Bank remittance slip' },
   { key: 'tt_forwarded',            label: 'TT Forwarded to Supplier',          owner: 'Admin',      autoDerive: false, docLabel: null },
   { key: 'shipping_docs_received',  label: 'Packing List & Commercial Invoice', owner: 'Supplier',   autoDerive: false, docLabel: 'Packing List and Commercial Invoice' },
   { key: 'forwarder_quotes',        label: 'Forwarder Quotations',              owner: 'Admin',      autoDerive: false, docLabel: 'Forwarder quotation docs (up to 5)' },
   { key: 'forwarder_approved',      label: 'Forwarder Approved (Management)',   owner: 'Sir Larry',  autoDerive: false, docLabel: null },
-  { key: 'booked',                  label: 'Booked — Waybill / AWB',            owner: 'Admin',      autoDerive: true,  docLabel: 'Waybill or Airway Bill' },
+  { key: 'booked',                  label: 'Booked — Waybill / AWB',            owner: 'Admin',      autoDerive: false, docLabel: 'Waybill or Airway Bill' },
   { key: 'pickup',                  label: 'Picked Up by Forwarder',            owner: 'Forwarder',  autoDerive: false, docLabel: null },
   { key: 'in_transit',              label: 'In Transit',                        owner: 'Admin',      autoDerive: false, docLabel: null },
   { key: 'customs_clearance',       label: 'Customs Clearance',                 owner: 'Broker',     autoDerive: false, docLabel: 'Estimated duties & taxes document' },
@@ -30,7 +31,11 @@ const _SM_LIFECYCLE_STAGES = [
   { key: 'debit_memo',              label: 'Bank Debit Memo',                   owner: 'Bank',       autoDerive: false, docLabel: 'Bank debit memo' },
   { key: 'forwarder_final_invoice', label: 'Forwarder Final Invoice',           owner: 'Forwarder',  autoDerive: false, docLabel: 'Final forwarder invoice' },
   { key: 'local_charges',           label: 'Local Charges',                     owner: 'Forwarder',  autoDerive: false, docLabel: 'Local charges document' },
-  { key: 'delivered',               label: 'Delivered to Office',               owner: 'Admin',      autoDerive: false, docLabel: 'Delivery photo or receipt' },
+  { key: 'delivered',               label: 'Delivered to Office',               owner: 'Admin',      autoDerive: true,  docLabel: 'Delivery photo or receipt' },
+  // A151: downstream sales/receivables close (auto-derived from Invoices / ARAging).
+  { key: 'invoiced',                label: 'Customer Invoiced',                 owner: 'Accounting', autoDerive: true,  docLabel: 'Customer Sales Invoice' },
+  { key: 'ar_open',                 label: 'Receivable Booked (AR)',            owner: 'Accounting', autoDerive: true,  docLabel: null },
+  { key: 'collected',               label: 'Collected — Paid in Full',          owner: 'Accounting', autoDerive: true,  docLabel: 'Official Receipt / proof of collection' },
 ];
 
 // ── 5-phase grouping ──────────────────────────────
@@ -40,6 +45,7 @@ const _SM_PHASES = [
   { name: 'Documents',          stages: ['shipping_docs_received','forwarder_quotes','forwarder_approved'] },
   { name: 'Logistics',          stages: ['booked','pickup','in_transit','customs_clearance','fan_sad_tan'] },
   { name: 'Delivery & Closing', stages: ['debit_memo','forwarder_final_invoice','local_charges','delivered'] },
+  { name: 'Billing & Collection', stages: ['invoiced','ar_open','collected'] },
 ];
 
 // ── Owner → roles that act without a warning ──────
@@ -69,7 +75,7 @@ const _SM_OWNER_BADGE_CLASS = {
 };
 
 // ── Phase ribbon icons ────────────────────────────
-const _SM_PHASE_ICONS = ['📋','💳','📄','🚚','📦'];
+const _SM_PHASE_ICONS = ['📋','💳','📄','🚚','📦','💰'];
 
 // ─────────────────────────────────────────────────
 
@@ -274,12 +280,35 @@ const _SM_STAGE_META = {
   },
 
   delivered: {
-    description: 'The goods have been delivered to the office. This is the final stage — the shipment is closed.',
+    description: 'The goods have been delivered to the office / received into inventory. The downstream sales side (invoice → receivable → collection) follows.',
     fields: [
       { label: 'Date Arrived',      field: 'dateArrived',    format: 'date' },
       { label: 'Delivery Receipt #', field: 'deliveryReceipt' },
     ],
     requires: ['local_charges'],
+    unlocks:  ['invoiced'],
+  },
+
+  invoiced: {
+    description: 'A customer Sales Invoice has been issued for this order. Auto-derived when an Invoice exists for the SO.',
+    fields: [
+      { label: 'Customer', field: 'client' },
+    ],
+    requires: ['delivered'],
+    unlocks:  ['ar_open'],
+  },
+
+  ar_open: {
+    description: 'The receivable has been booked in AR Aging — the client owes the invoiced amount. Auto-derived when an AR row exists for the SO.',
+    fields: [],
+    requires: ['invoiced'],
+    unlocks:  ['collected'],
+  },
+
+  collected: {
+    description: 'Payment has been collected in full — every receivable for this order is marked Paid. This closes the lifecycle.',
+    fields: [],
+    requires: ['ar_open'],
     unlocks:  [],
   },
 
