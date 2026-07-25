@@ -74,41 +74,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('management-home');
   document.getElementById('greeting').innerHTML = getGreeting(session.name);
 
-  // Set today's date for daily reports
-  var now = new Date();
-  var todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
-  document.getElementById('drReportDate').value = todayStr;
-
-  // Initialize Financial Overview month filter to current month
-  var currentMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  document.getElementById('financialMonthFilter').value = currentMonth;
-
-  // Show loading skeletons
-  showLoading('financialKPIs', 'stats');
-
-  // Fire all API calls in parallel
-  const [acctResult, teamResult, inventoryResult, paymentResult, loginResult, dailyReportsResult, hrSummaryResult, soStatsResult, soDataResult, mroResult, miResult, collectionsResult, expensesResult, profitReportsResult, shipmentsResult, hrRecruitmentResult, hrEmployeesResult, hrLeaveResult, hrReviewsResult, hrTrainingResult, hrTasksResult, hrMemosResult, hrGrievancesResult, hrCampaignsResult, hrContentResult, hrAccredResult, hrBirthdayResult] = await Promise.allSettled([
-    fetchFromAPI({ action: 'getAccountingDashboard', range: 'month' }),
-    fetchFromAPI({ action: 'getTeamSummary' }),
-    // Inventory Snapshot reads the NEW flow inventory (Stock items only — the real stocks), mapped
-    // to the legacy shape renderInventorySnapshot expects (modelNo/qty/lastUpdated).
-    fetchFlow('getInventory').then(function (r) {
-      return { success: true, data: flowStockItems((r && r.data) || []).map(function (i) {
-        return { modelNo: i.itemNo, description: i.description, qty: i.balance,
-                 lastUpdated: i.lastUpdated ? flowDate(i.lastUpdated) : '' };
-      }) };
-    }),
-    fetchFromAPI({ action: 'getPaymentRequests' }),
-    fetchFromAPI({ action: 'getLoginLog', limit: 20 }),
-    fetchFromAPI({ action: 'getAllDailyReports', date: todayStr }),
+  // A154: the 12 superseded legacy sections were deleted from management-home.html (their topics are
+  // covered by the flow sections above them and by dedicated flow pages). Only the sections with NO
+  // flow replacement still load here: HR Insights, HR-Marketing Summary, Payroll Approvals, Shipment
+  // Monitoring. That drops this boot from 27 API calls to 14.
+  // NOTE: the old `drReportDate` / `financialMonthFilter` initialisers were UNGUARDED getElementById
+  // calls into markup this change removes — leaving them would have thrown here and killed the whole
+  // boot (including HR/Payroll/Shipments). They are gone with their sections.
+  const [hrSummaryResult, shipmentsResult, hrRecruitmentResult, hrEmployeesResult, hrLeaveResult, hrReviewsResult, hrTrainingResult, hrTasksResult, hrMemosResult, hrGrievancesResult, hrCampaignsResult, hrContentResult, hrAccredResult, hrBirthdayResult] = await Promise.allSettled([
     apiGetHRSummary(),
-    fetchFromAPI({ action: 'getSOStats' }),
-    fetchFromAPI({ action: 'getSalesOrders' }),
-    fetchFromAPI({ action: 'getAllMROs' }),
-    fetchFromAPI({ action: 'getAllMIs' }),
-    apiGetCollections(),
-    apiGetExpenses(''),
-    apiGetProfitReports(),
     fetchFromAPI({ action: 'getShipments' }, { noCache: true }),
     apiGetRecruitmentPipeline(),
     apiGetEmployees(),
@@ -124,21 +98,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiGetBirthdayAnniversary()
   ]);
 
-  _storedCollectionsResult = collectionsResult;
-  _storedExpensesResult = expensesResult;
-  _storedProfitReportsResult = profitReportsResult;
-  _storedSoDataResult = soDataResult;
-  renderFinancialOverview(acctResult, collectionsResult, soDataResult);
-  renderCollectionsFinancials(collectionsResult);
-  renderArAgingMgmt(collectionsResult);
-  renderIncomeStatement(profitReportsResult);
-  renderMonthlyPL(profitReportsResult, expensesResult);
-  renderSalesPerformance(teamResult);
-  renderInventorySnapshot(inventoryResult);
-  renderPaymentRequests(paymentResult);
-  renderSalesOrders(soStatsResult, soDataResult);
-  renderLoginActivity(loginResult);
-  renderDailyReports(dailyReportsResult);
   renderHRSummary(hrSummaryResult);
   renderHRModules({
     recruitment: hrRecruitmentResult,
@@ -154,9 +113,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     accred: hrAccredResult,
     birthdays: hrBirthdayResult
   });
-  renderMRORecords(mroResult);
-  renderMIRecords(miResult);
-  renderMgmtExpenses(expensesResult);
   renderMgmtShipments(shipmentsResult);
   renderPayrollApprovals('For Approval');
 });

@@ -767,9 +767,8 @@
     .mgmt-shell { display:block !important; }
     .mgmt-content { width:100% !important; max-width:none !important; }
     .section.ws-hidden { display:block !important; }   /* neutralize workspace hide for retained sections */
-    #section-financial,#section-aging,#section-sales,#section-queues,#section-backlog,
-    #section-payments,#section-sales-orders,#section-sessions,#section-activity,
-    #section-daily-reports,#section-inventory,#section-audit-log { display:none !important; }
+    /* A154: the 12 superseded legacy sections were deleted outright, so the id-hiding list
+       that used to sit here went with them. */
 
     /* ── New flow sections ── */
     .mgmt-newsec { background:var(--bg-card,#fff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.2rem 1.4rem; margin-bottom:1.25rem; box-shadow:var(--shadow-sm,0 1px 3px rgba(15,23,42,0.06)); }
@@ -893,28 +892,11 @@
     <div class="mgmt-shell">
       <aside class="mgmt-nav" id="mgmtNav">
         <h4>Workspaces</h4>
-        <button class="mgmt-ws-btn active" data-ws="financial" onclick="_mgmtSwitchWs('financial')">💰 Financial <span class="ws-count" id="wsCntFinancial"></span></button>
-        <ul class="mgmt-sub open" id="wsSubFinancial">
-          <li><a href="#section-financial">Overview</a></li>
-          <li><a href="#section-aging">Aging Receivables</a></li>
-          <li><a href="#section-payments">Recent Payments</a></li>
-        </ul>
-
-        <button class="mgmt-ws-btn" data-ws="sales" onclick="_mgmtSwitchWs('sales')">📈 Sales <span class="ws-count" id="wsCntSales"></span></button>
-        <ul class="mgmt-sub" id="wsSubSales">
-          <li><a href="#section-sales">Sales Performance</a></li>
-          <li><a href="#section-sales-orders">Sales Orders</a></li>
-          <li><a href="#section-backlog">Backlog</a></li>
-          <li><a href="#section-queues">Queues</a></li>
-          <li><a href="#section-daily-reports">Team Daily Reports</a></li>
-        </ul>
-
-        <button class="mgmt-ws-btn" data-ws="ops" onclick="_mgmtSwitchWs('ops')">🚚 Operations <span class="ws-count" id="wsCntOps"></span></button>
-        <ul class="mgmt-sub" id="wsSubOps">
+        <!-- A154: the Financial / Sales / Audit workspaces and the Inventory-Sessions-Activity
+             entries pointed at the 12 deleted legacy sections; only the survivors remain. -->
+        <button class="mgmt-ws-btn active" data-ws="ops" onclick="_mgmtSwitchWs('ops')">🚚 Operations <span class="ws-count" id="wsCntOps"></span></button>
+        <ul class="mgmt-sub open" id="wsSubOps">
           <li><a href="#section-shipments">Shipment Monitoring</a></li>
-          <li><a href="#section-inventory">Inventory</a></li>
-          <li><a href="#section-sessions">Active Sessions</a></li>
-          <li><a href="#section-activity">Activity Feed</a></li>
         </ul>
 
         <button class="mgmt-ws-btn" data-ws="hr" onclick="_mgmtSwitchWs('hr')">👥 HR <span class="ws-count" id="wsCntHr"></span></button>
@@ -923,8 +905,6 @@
           <li><a href="#section-hr-summary">HR Summary</a></li>
           <li><a href="#section-payroll-approvals">Payroll Approvals</a></li>
         </ul>
-
-        <button class="mgmt-ws-btn" data-ws="audit" onclick="_mgmtSwitchWs('audit')">🔍 Audit Log</button>
 
         <h4>Quick</h4>
         <button class="mgmt-ws-btn" onclick="_mgmtSwitchWs('all')" style="font-size:0.78rem;">📋 Show All Sections</button>
@@ -1029,329 +1009,26 @@
     </div>
 
     <!-- Section 1: Financial Overview -->
-    <div class="section" id="section-financial">
-      <div class="section-header" onclick="toggleSection('section-financial')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          Financial Overview
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-financial">P&amp;L trend · income statement · collections</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-          <input type="month" id="financialMonthFilter" oninput="applyFinancialFilter()"
-            style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);color:var(--text-primary,#f1f5f9);border-radius:8px;padding:0.35rem 0.6rem;font-size:0.82rem;">
-          <button id="financialAllTimeBtn" onclick="toggleFinancialAllTime()"
-            style="padding:0.4rem 0.9rem;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text-muted,#64748b);">All Time</button>
-        </div>
-        <div id="financialKPIs" class="kpi-grid"></div>
-        <div class="grid-2">
-          <div class="chart-box"><h3>6-Month P&amp;L Trend</h3><canvas id="plChart"></canvas></div>
-          <div class="chart-box" style="overflow:hidden;"><h3>Income Statement</h3><div id="incomeStatementContainer"><div class="loading-overlay"><div class="spinner"></div></div></div></div>
-        </div>
-        <!-- Monthly P&L Summary -->
-        <h3 style="margin:1.5rem 0 0.6rem;font-size:0.9rem;font-weight:600;color:var(--text-muted,#94a3b8);letter-spacing:0.04em;text-transform:uppercase;">Monthly P&amp;L Summary</h3>
-        <div id="monthlyPLContainer" style="overflow-x:auto;"><div class="loading-overlay" style="position:static;background:none;"><div class="spinner"></div></div></div>
-        <!-- Collections (AR) summary -->
-        <h3 style="margin:1.25rem 0 0.6rem;font-size:0.9rem;font-weight:600;color:var(--text-muted,#94a3b8);letter-spacing:0.04em;text-transform:uppercase;">Collections (Accounts Receivable)</h3>
-        <div id="collectionsFinancials" class="kpi-grid"><div class="loading-overlay" style="position:static;background:none;"><div class="spinner"></div></div></div>
-      </div>
-    </div>
 
     <!-- Section 1b: Accounts Aging & Expenses -->
-    <div class="section" id="section-aging">
-      <div class="section-header" onclick="toggleSection('section-aging')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          Accounts Aging &amp; Expenses
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-aging">AR/AP aging · expense categories</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div class="grid-2">
-          <div class="chart-box">
-            <h3>Receivables Aging (AR)</h3>
-            <div id="arAgingContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-          <div class="chart-box">
-            <h3>Payables Aging (AP)</h3>
-            <div id="apAgingContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-        </div>
-        <div class="grid-2">
-          <div class="chart-box">
-            <h3>Expense Categories</h3>
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-              <input type="month" id="mgmtExpMonthFilter" oninput="mgmtApplyExpenseFilters()" style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);color:var(--text-primary,#f1f5f9);border-radius:8px;padding:0.35rem 0.6rem;font-size:0.82rem;">
-              <button id="mgmtExpAllTimeBtn" onclick="toggleMgmtExpAllTime()" style="padding:0.4rem 0.9rem;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text-muted,#64748b);">All Time</button>
-              <select id="mgmtExpCatFilter" onchange="mgmtApplyExpenseFilters()" style="min-width:160px;background:var(--surface,#1e293b);border:1px solid var(--border,#334155);color:var(--text-primary,#f1f5f9);border-radius:8px;padding:0.35rem 0.6rem;font-size:0.82rem;">
-                <option value="">All Categories</option>
-                <option value="Advertising">Advertising</option>
-                <option value="Bank service charge">Bank service charge</option>
-                <option value="Commission">Commission</option>
-                <option value="Depreciation expense">Depreciation expense</option>
-                <option value="Janitorial">Janitorial</option>
-                <option value="Legal fees">Legal fees</option>
-                <option value="Miscellaneous">Miscellaneous</option>
-                <option value="Permits and licenses">Permits and licenses</option>
-                <option value="Postage and communication">Postage and communication</option>
-                <option value="Professional fees">Professional fees</option>
-                <option value="Rent expense">Rent expense</option>
-                <option value="Repairs and maintenance">Repairs and maintenance</option>
-                <option value="Representation">Representation</option>
-                <option value="Salaries and wages">Salaries and wages</option>
-                <option value="Supplies expense">Supplies expense</option>
-                <option value="Transportation and travel">Transportation and travel</option>
-                <option value="Utilities">Utilities</option>
-                <option value="Revolving fund">Revolving fund</option>
-                <option value="Employee benefits">Employee benefits</option>
-                <option value="Delivery Expense">Delivery Expense</option>
-                <option value="Cost of Goods Sold">Cost of Goods Sold</option>
-                <option value="Interest income">Interest income</option>
-                <option value="Interest expense">Interest expense</option>
-              </select>
-            </div>
-            <div id="expenseSummaryKPIs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1rem;"></div>
-            <div id="expenseCatContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-            <div id="expensesTableContainer" style="margin-top:1.25rem;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Section 2: Sales Performance -->
-    <div class="section" id="section-sales">
-      <div class="section-header" onclick="toggleSection('section-sales')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Sales Performance
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-sales">Rep leaderboard · quotations · conversions</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div class="chart-box" style="margin-bottom:1rem;">
-          <div id="leaderboardContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div></div>
-        </div>
-        <div class="summary-row" id="teamTotals">
-          <div class="summary-item">Team Quotations: <strong id="totalQ">--</strong></div>
-          <div class="summary-item">PRs: <strong id="totalPR">--</strong></div>
-          <div class="summary-item">POs: <strong id="totalPO">--</strong></div>
-        </div>
-      </div>
-    </div>
 
     <!-- Section 2b: Approval Queues -->
-    <div class="section" id="section-queues">
-      <div class="section-header" onclick="toggleSection('section-queues')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Approval Queues
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-queues">Quotation · PO · payment request approvals</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div class="grid-3">
-          <div class="chart-box" id="quotationQueueBox">
-            <h3>Quotation Approvals</h3>
-            <div id="quotationQueueContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-          <div class="chart-box" id="poQueueBox">
-            <h3>PO Approvals</h3>
-            <div id="poQueueContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-          <div class="chart-box" id="paymentAgeBox">
-            <h3>Payment Requests by Age</h3>
-            <div id="paymentAgeContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Section 3: Inventory Snapshot -->
-    <div class="section" id="section-inventory">
-      <div class="section-header" onclick="toggleSection('section-inventory')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-          Inventory Snapshot
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-inventory">Stock levels · low stock alerts</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div id="inventoryKPIs" class="stat-grid"></div>
-        <div class="chart-box" id="lowStockList"><div class="loading-overlay"><div class="spinner"></div></div></div>
-      </div>
-    </div>
 
     <!-- Section 3b: Operations Backlog -->
-    <div class="section" id="section-backlog">
-      <div class="section-header" onclick="toggleSection('section-backlog')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Operations Backlog
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-backlog">MRO · MI queue · aged PRs</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div style="display:flex;flex-direction:column;gap:1.25rem;">
-          <div class="chart-box" style="overflow-x:auto;">
-            <h3>Materials Received (MRO) — up to 30 records</h3>
-            <div id="mroQueueContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-          <div class="chart-box" style="overflow-x:auto;">
-            <h3>Materials Issued (MI) — up to 30 records</h3>
-            <div id="miQueueContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-          <div class="chart-box">
-            <h3>Aged PRs (&gt;7 Days Without Follow-up)</h3>
-            <div id="agedPRContainer"><div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading...</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Section 4: Payment Requests -->
-    <div class="section" id="section-payments">
-      <div class="section-header" onclick="toggleSection('section-payments')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          Payment Requests
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-payments">Recent payment requests · pending approvals</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div id="paymentKPIs" class="stat-grid"></div>
-        <div class="chart-box" id="recentPayments"><div class="loading-overlay"><div class="spinner"></div></div></div>
-      </div>
-    </div>
 
     <!-- Section 4b: Sales Orders -->
-    <div class="section" id="section-sales-orders">
-      <div class="section-header" onclick="toggleSection('section-sales-orders')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-          Sales Orders
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-sales-orders">Recent sales orders · status overview</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div id="soKPIs" class="stat-grid"></div>
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin:0.75rem 0;">
-          <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
-          <input type="month" id="soMonthFilter" onchange="applySoFilter()" style="padding:0.4rem 0.55rem;border:1px solid var(--border,#334155);border-radius:6px;background:var(--surface,#0f172a);color:var(--text-primary,#e2e8f0);">
-          <label style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;">Year</label>
-          <select id="soYearFilter" onchange="applySoFilter()" style="padding:0.4rem 0.55rem;border:1px solid var(--border,#334155);border-radius:6px;background:var(--surface,#0f172a);color:var(--text-primary,#e2e8f0);">
-            <option value="">All</option>
-          </select>
-          <button class="btn" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="document.getElementById('soMonthFilter').value='';document.getElementById('soYearFilter').value='';applySoFilter();">Clear</button>
-        </div>
-        <div class="chart-box" id="recentSalesOrders"><div class="loading-overlay"><div class="spinner"></div></div></div>
-      </div>
-    </div>
 
     <!-- Section 5c: Active Sessions -->
-    <div class="section" id="section-sessions">
-      <div class="section-header" onclick="toggleSection('section-sessions')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          User Sessions
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-sessions">Active user sessions</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div id="activeSessionsKPI" class="stat-grid">
-          <div class="stat-item"><div class="stat-val">-</div><div class="stat-lbl">Active Sessions</div></div>
-        </div>
-      </div>
-    </div>
 
     <!-- Section 6: Recent Activity -->
-    <div class="section" id="section-activity">
-      <div class="section-header" onclick="toggleSection('section-activity')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Recent Activity
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-activity">Login log · recent system activity</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <div class="chart-box" id="loginLogContainer"><div class="loading-overlay"><div class="spinner"></div></div></div>
-      </div>
-    </div>
 
     <!-- Section 7: Team Daily Reports -->
-    <div class="section" id="section-daily-reports">
-      <div class="section-header" onclick="toggleSection('section-daily-reports')">
-        <h2 class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          Team Daily Reports
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-daily-reports">Sales · admin · accounting · HR reports</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <!-- Today's submission counts (merged from former Daily Reports Overview) -->
-        <div class="kpi-grid" id="dailyReportsGrid" style="margin-bottom:1rem;">
-          <div class="kpi-card"><div class="kpi-label">Sales Agents</div><div class="kpi-value" id="drSalesCount">-</div><div class="kpi-sub kpi-neutral" id="drSalesSub"></div></div>
-          <div class="kpi-card"><div class="kpi-label">Admin</div><div class="kpi-value" id="drAdminCount">-</div><div class="kpi-sub kpi-neutral" id="drAdminSub"></div></div>
-          <div class="kpi-card"><div class="kpi-label">Accounting</div><div class="kpi-value" id="drAcctCount">-</div><div class="kpi-sub kpi-neutral" id="drAcctSub"></div></div>
-          <div class="kpi-card"><div class="kpi-label">HR-Marketing</div><div class="kpi-value" id="drHRCount">-</div><div class="kpi-sub kpi-neutral" id="drHRSub"></div></div>
-        </div>
-        <div id="dailyReportsDetails" class="chart-box" style="display:none;"></div>
-        <div class="chart-box">
-          <div class="dr-filter-bar">
-            <label>Date:</label>
-            <input type="date" id="drReportDate" onchange="loadManagementReports()">
-            <button class="btn" onclick="setDrToday()">Today</button>
-            <button class="btn" onclick="exportDailyReportsExcel()" style="margin-left:auto;font-size:0.75rem;padding:0.4rem 0.75rem;">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Excel
-            </button>
-          </div>
-          <div id="drDateLabel" class="dr-date-label"></div>
-          <div class="dr-tabs" style="display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid var(--border);">
-            <button class="dr-tab active" id="drTabSales" onclick="switchDrTab('sales')" style="padding:0.5rem 1.25rem;font-size:0.8rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--accent);">Sales Agents</button>
-            <button class="dr-tab" id="drTabAdmin" onclick="switchDrTab('admin')" style="padding:0.5rem 1.25rem;font-size:0.8rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted);">Admin</button>
-            <button class="dr-tab" id="drTabAccounting" onclick="switchDrTab('accounting')" style="padding:0.5rem 1.25rem;font-size:0.8rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted);">Accounting</button>
-            <button class="dr-tab" id="drTabHR" onclick="switchDrTab('hr')" style="padding:0.5rem 1.25rem;font-size:0.8rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted);">HR/Marketing</button>
-          </div>
-          <div id="drReportsContainer" style="overflow-x:auto;">
-            <div class="loading-overlay"><div class="spinner"></div></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Section 7b: HR Insights -->
     <div class="section" id="section-hr-insights">
@@ -1532,72 +1209,6 @@
     </div>
 
     <!-- Audit Log Section -->
-    <div class="section" id="section-audit-log">
-      <div class="section-header" onclick="toggleSection('section-audit-log')">
-        <h2 class="section-title">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Audit Log
-        </h2>
-        <div class="section-header-right">
-          <span class="section-summary" id="summary-audit-log">Global shipment history</span>
-          <span class="section-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </div>
-      </div>
-      <div class="section-body">
-        <!-- Filter Bar -->
-        <div class="audit-filter-bar" id="auditLogFilters">
-          <input type="date" id="auditDateFrom" class="audit-filter-input" title="From date">
-          <input type="date" id="auditDateTo"   class="audit-filter-input" title="To date">
-          <select id="auditClient" class="audit-filter-input audit-filter-select">
-            <option value="">All clients</option>
-          </select>
-          <select id="auditEventType" class="audit-filter-input audit-filter-select">
-            <option value="">All event types</option>
-            <option value="FIELD_CHANGE">Field changes</option>
-            <option value="STAGE_DONE">Stage done</option>
-            <option value="STAGE_SKIPPED">Stage skipped</option>
-            <option value="STAGE_RESET">Stage reset</option>
-            <option value="DOC_UPLOAD">Doc uploaded</option>
-            <option value="DOC_DELETE">Doc deleted</option>
-            <option value="DOC_RESTORE">Doc restored</option>
-            <option value="SHIPMENT_CREATED">Shipment created</option>
-            <option value="AUTO_DERIVATION">Auto-derived</option>
-            <option value="CORRECTION">Manual correction</option>
-          </select>
-          <select id="auditActor" class="audit-filter-input audit-filter-select">
-            <option value="">All actors</option>
-          </select>
-          <input type="text" id="auditShipmentId" class="audit-filter-input" placeholder="Shipment ID…" style="width:120px;">
-          <button class="audit-filter-btn" onclick="loadMgmtAuditLog(true)">Search</button>
-          <button class="audit-filter-btn" onclick="_mgmtAuditClearFilters()" style="background:transparent;color:var(--text-muted,#64748b);border-color:#e2e8f0;">Clear</button>
-          <button class="audit-export-btn" onclick="mgmtAuditLogExportCsv()">Export CSV</button>
-        </div>
-        <!-- Table -->
-        <div style="overflow-x:auto;">
-          <table class="audit-tbl" id="auditLogTable">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Shipment</th>
-                <th>Client</th>
-                <th>Actor</th>
-                <th>Event</th>
-                <th>What changed</th>
-              </tr>
-            </thead>
-            <tbody id="auditLogBody">
-              <tr><td colspan="6" style="text-align:center;color:var(--text-muted,#64748b);padding:1.5rem;">Set a date range and click Search.</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- Pager -->
-        <div id="auditLogPager" style="display:none;" class="audit-pager">
-          <button class="audit-pager-btn" id="auditPrevBtn" onclick="loadMgmtAuditLog(false, _mgmtAuditPage - 1)" disabled>← Prev</button>
-          <span id="auditPageInfo"></span>
-          <button class="audit-pager-btn" id="auditNextBtn" onclick="loadMgmtAuditLog(false, _mgmtAuditPage + 1)" disabled>Next →</button>
-        </div>
-      </div>
-    </div>
 
       </div><!-- /mgmt-content -->
     </div><!-- /mgmt-shell -->
@@ -1661,12 +1272,6 @@
   </div>
 
   <!-- COGS Detail Modal -->
-  <div id="cogsDetailModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;" onclick="if(event.target===this)closeSOCOGSDetail()">
-    <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:14px;padding:1.5rem;width:min(520px,95vw);max-height:85vh;overflow-y:auto;position:relative;">
-      <button onclick="closeSOCOGSDetail()" style="position:absolute;top:0.9rem;right:1rem;background:none;border:none;color:var(--text-muted,#64748b);font-size:1.3rem;cursor:pointer;line-height:1;">&times;</button>
-      <div id="cogsDetailContent"></div>
-    </div>
-  </div>
 
   <script>
     var _SECTION_STORAGE_KEY = 'mgmt_sections_v1';
@@ -1913,12 +1518,10 @@
 
     // === Workspace switching (sidebar nav) ===
     (function _initWorkspaces() {
+      // A154: only sections that still exist. financial/sales/audit mapped entirely to deleted markup.
       const WS_MAP = {
-        financial: ['section-financial', 'section-aging', 'section-payments'],
-        sales:     ['section-sales', 'section-sales-orders', 'section-backlog', 'section-queues', 'section-daily-reports'],
-        ops:       ['section-shipments', 'section-inventory', 'section-sessions', 'section-activity'],
-        hr:        ['section-hr-insights', 'section-hr-summary', 'section-payroll-approvals'],
-        audit:     ['section-audit-log']
+        ops:       ['section-shipments'],
+        hr:        ['section-hr-insights', 'section-hr-summary', 'section-payroll-approvals']
       };
       const ALL_IDS = [].concat.apply([], Object.values(WS_MAP));
       const STORAGE_KEY = 'mgmt_active_workspace_v1';
@@ -1936,7 +1539,7 @@
           b.classList.toggle('active', b.getAttribute('data-ws') === ws);
         });
         // Show/hide sub-link lists
-        ['financial','sales','ops','hr'].forEach(k => {
+        ['ops','hr'].forEach(k => {
           const sub = document.getElementById('wsSub' + k.charAt(0).toUpperCase() + k.slice(1));
           if (sub) sub.classList.toggle('open', ws === k);
         });
@@ -1959,10 +1562,12 @@
         });
       });
 
-      // Initial state: restore last workspace, default to financial
-      let initial = 'financial';
+      // Initial state: restore last workspace, default to showing everything.
+      // A154: the old default 'financial' no longer exists — it would mark every surviving section
+      // ws-hidden (only the .ws-hidden override masked it). Stale saved values fall back to 'all'.
+      let initial = 'all';
       try { initial = localStorage.getItem(STORAGE_KEY) || initial; } catch (e) {}
-      if (!WS_MAP[initial] && initial !== 'all') initial = 'financial';
+      if (!WS_MAP[initial] && initial !== 'all') initial = 'all';
       window._mgmtSwitchWs(initial);
     })();
 
@@ -1970,28 +1575,13 @@
     (function _initCmdK() {
       const COMMANDS = [
         // Workspace switches
-        { group: 'Workspace', label: 'Financial workspace', keywords: 'financial money revenue', run: () => _mgmtSwitchWs('financial') },
-        { group: 'Workspace', label: 'Sales workspace', keywords: 'sales orders pipeline', run: () => _mgmtSwitchWs('sales') },
         { group: 'Workspace', label: 'Operations workspace', keywords: 'ops shipments inventory', run: () => _mgmtSwitchWs('ops') },
         { group: 'Workspace', label: 'HR workspace', keywords: 'hr people sessions', run: () => _mgmtSwitchWs('hr') },
-        { group: 'Workspace', label: 'Audit Log', keywords: 'audit history shipment trail', run: () => _mgmtSwitchWs('audit') },
         { group: 'Workspace', label: 'Show all sections', keywords: 'all everything', run: () => _mgmtSwitchWs('all') },
         // Sections
-        { group: 'Section', label: 'Financial Overview', keywords: 'pnl profit revenue', run: () => _jumpToSection('section-financial', 'financial') },
-        { group: 'Section', label: 'Aging Receivables', keywords: 'aging ar receivables overdue', run: () => _jumpToSection('section-aging', 'financial') },
-        { group: 'Section', label: 'Recent Payments', keywords: 'payments cash', run: () => _jumpToSection('section-payments', 'financial') },
-        { group: 'Section', label: 'Sales Performance', keywords: 'sales leaderboard agent', run: () => _jumpToSection('section-sales', 'sales') },
-        { group: 'Section', label: 'Sales Orders', keywords: 'so orders', run: () => _jumpToSection('section-sales-orders', 'sales') },
-        { group: 'Section', label: 'Backlog', keywords: 'backlog pending', run: () => _jumpToSection('section-backlog', 'sales') },
-        { group: 'Section', label: 'Queues', keywords: 'queue review', run: () => _jumpToSection('section-queues', 'sales') },
-        { group: 'Section', label: 'Team Daily Reports', keywords: 'daily reports dr team', run: () => _jumpToSection('section-daily-reports', 'sales') },
         { group: 'Section', label: 'Shipment Monitoring', keywords: 'shipment shipping', run: () => _jumpToSection('section-shipments', 'ops') },
-        { group: 'Section', label: 'Inventory', keywords: 'inventory stock', run: () => _jumpToSection('section-inventory', 'ops') },
-        { group: 'Section', label: 'Active Sessions', keywords: 'sessions logged in', run: () => _jumpToSection('section-sessions', 'ops') },
-        { group: 'Section', label: 'Activity Feed', keywords: 'activity feed', run: () => _jumpToSection('section-activity', 'ops') },
         { group: 'Section', label: 'HR Insights', keywords: 'hr insights people', run: () => _jumpToSection('section-hr-insights', 'hr') },
         { group: 'Section', label: 'HR Summary', keywords: 'hr summary', run: () => _jumpToSection('section-hr-summary', 'hr') },
-        { group: 'Section', label: 'Audit Log', keywords: 'audit history', run: () => _jumpToSection('section-audit-log', 'audit') },
         // Toggles
         { group: 'Action', label: 'Toggle density (compact rows)', keywords: 'compact density', run: () => _mgmtToggleDensity() },
         { group: 'Action', label: 'Expand all sections', keywords: 'expand', run: () => expandAll() },
