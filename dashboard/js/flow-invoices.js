@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderFlowNav('flow-invoices.html');
   document.getElementById('date').value = flowToday();
   await Promise.all([loadSOOptions(), loadInventory()]);
-  await loadInvoices();
+  await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
 });
 
 async function loadSOOptions() {
@@ -122,7 +122,7 @@ async function saveInvoice() {
     flowMsg('formMsg', `${res.message} (${res.invNo})`, true);
     resetForm();
     await loadInventory();
-    await loadInvoices();
+    await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Issue Invoice & Deduct Inventory'; }
 }

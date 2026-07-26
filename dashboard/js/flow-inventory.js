@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
   // Admin/accounting classify items (Stock vs Catalog); sales adds are always Catalog (quoting items).
   if (invCanDelete) document.getElementById('invTypeWrap').style.display = '';
-  await loadInventory();
+  await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
 });
 
 async function loadInventory() {
@@ -157,7 +157,7 @@ async function submitItem(e) {
     if (!res.success) throw new Error(res.message || 'Failed.');
     flowMsg('formMsg', res.message, true);
     resetForm();
-    await loadInventory();
+    await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (err) {
     flowMsg('formMsg', err.message, false);
   } finally {
@@ -170,6 +170,6 @@ async function deleteItem(rowIndex) {
   try {
     const res = await postFlow('deleteInventoryItem', { rowIndex });
     if (!res.success) throw new Error(res.message || 'Failed.');
-    await loadInventory();
+    await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (err) { alert(err.message); }
 }

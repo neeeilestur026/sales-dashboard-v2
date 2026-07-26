@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([loadSOOptions(), loadInventory(), loadPricingSourcing()]);
     addRow();
   }
-  await loadPOs();
+  await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
 });
 
 // Most recent sales order first (by date, then SO number).
@@ -208,7 +208,7 @@ async function savePO() {
     if (res.apNo) msg += ` · AP entry ${res.apNo} created`;
     flowMsg('formMsg', msg, true);
     resetForm();
-    await loadPOs();
+    await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Save Purchase Order'; }
 }
@@ -274,7 +274,7 @@ async function _poAction(action, no, extra) {
   try {
     const res = await postFlow(action, Object.assign({ poNo: no }, extra || {}));
     if (!res.success) throw new Error(res.message);
-    await loadPOs();
+    await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
 }
 async function submitPOAction(no) {
@@ -321,7 +321,7 @@ async function deletePO(no) {
   try {
     const res = await postFlow('deletePurchaseOrder', { poNo: no });
     if (!res.success) throw new Error(res.message);
-    await loadPOs();
+    await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
 }
 
@@ -380,7 +380,7 @@ async function submitPdf() {
     if (link) flowMsg('pdfModalMsg', 'PDF generated and saved to Drive.', true);
     else if (!configured) flowMsg('pdfModalMsg', 'PDF generated (Drive save skipped — backend not configured).', true);
     else flowMsg('pdfModalMsg', 'PDF generated, but the Drive save failed' + (saveError ? ' (' + saveError + ')' : '') + ' — reopen and Generate again to retry.', false);
-    await loadPOs();
+    await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
     if (link) setTimeout(closePdfModal, 900);
   } catch (e) {
     flowMsg('pdfModalMsg', e.message, false);

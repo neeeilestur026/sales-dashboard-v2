@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 92;   // A156 PR chain Admin→Mgmt→Director + Paid w/ proof (91: A152 close/reopen quotation · 90: A151 lifecycle spine + doc registry · 89: A149 names · 88: A147 bug-scan)
+var FLOW_VERSION = 93;   // A157 correctCollection (EWT re-split) · A156 PR chain Admin→Mgmt→Director + Paid w/ proof (91: A152 close/reopen quotation · 90: A151 lifecycle spine + doc registry · 89: A149 names · 88: A147 bug-scan)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -807,6 +807,14 @@ function importCollections(p) {
       var invNo = c.invoiceNo != null ? String(c.invoiceNo) : '';
       if (invNo && existing[invNo]) { skipped++; return; }
       var due = _num(c.totalAmountDue), recv = _num(c.amountReceived);
+      // A157: some legacy rows record Amount Received as the GROSS invoice value while the receivable is
+      // booked net of the customer's withholding tax. Imported verbatim that leaves the receivable looking
+      // over-collected (negative Outstanding, and the AR total stops matching its own column). When the
+      // excess is exactly the withholding tax, split it here — BEFORE the AR row is written — so the
+      // receivable, its Collected figure and the collection all agree. The tax goes to the EWT column,
+      // where the balance sheet reads it as Creditable Tax (2307).
+      var colEwt = _num(c.ewt);
+      if (colEwt > 0 && due > 0 && recv > due + 0.005 && Math.abs((recv - due) - colEwt) < 0.02) recv = due;
       var status = recv <= 0 ? 'Unpaid' : (recv >= due && due > 0 ? 'Paid' : 'Partial');
       // Preserve the old breakdown in Notes (blanks omitted).
       var parts = ['Migrated (legacy)'];
@@ -824,9 +832,14 @@ function importCollections(p) {
         c.dueDate || '', notes, _now(), _now()]);
       if (recv > 0) {
         var colNo = _nextNumber('Collections', 1, 'COL');
+        // A157: some legacy rows record Amount Received as the GROSS invoice value while the receivable
+        // is booked net of the customer's withholding tax. Importing that verbatim makes the receivable
+        // look over-collected (negative Outstanding, and the AR total stops matching its own column).
+        // When the excess is exactly the withholding tax, split it: cash is what actually arrived and the
+        // tax goes to the EWT column, where the Balance Sheet reads it as Creditable Tax (2307).
         _append('Collections', [colNo, arNo, invNo, c.soNo || '', customer,
           c.dateCollected || c.date || _dateStr(_now()), recv, '', '', 'Migrated (legacy)', _now(),
-          _num(c.ewt) || '']);   // A147: 12th col EWT (PHP) — was omitted (trailing blank); explicit now
+          colEwt || '']);   // A147: 12th col EWT (PHP) — was omitted (trailing blank); explicit now
         createdPayments++;
       }
       if (invNo) existing[invNo] = true;
@@ -1111,23 +1124,75 @@ function recordCollection(p) {
   var colNo = _nextNumber('Collections', 1, 'COL');
   _append('Collections', [colNo, p.arNo, ar['INV No'], ar['SO No'], ar['Customer'], p.date || _dateStr(_now()),
     amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt]);
-  // Recompute collected total + EWT total + status on the AR row (collected settles the full receivable).
-  var colRows = _rows('Collections').filter(function (r) { return String(r['AR No']) === String(p.arNo); });
+  var rec = _arRecomputeFromCollections(p.arNo, ar);
+  _refStore('recordCollection', p.clientRef, colNo);
+  return { success: true, collectionNo: colNo, arNo: p.arNo, collected: rec.collected, status: rec.status,
+    message: 'Collection ' + colNo + ' recorded.' };
+}
+
+/* A157: the single recompute for a receivable — collected, EWT and status all derive from the sum of its
+   collections, and the settlement journal is re-posted (ARCOLL is idempotent per source, so it replaces
+   the prior lines rather than stacking). Shared by recordCollection and correctCollection so a correction
+   can never fall out of step with a fresh collection. */
+function _arRecomputeFromCollections(arNo, arRow) {
+  var ar = arRow || _arRow(arNo);
+  if (!ar) return { collected: 0, ewt: 0, status: 'Unpaid' };
+  var colRows = _rows('Collections').filter(function (r) { return String(r['AR No']) === String(arNo); });
   var collected = colRows.reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
   var ewtTotal = colRows.reduce(function (s, r) { return s + _num(r['EWT (PHP)']); }, 0);
   var amt = _num(ar['Amount (PHP)']);
   var status = collected <= 0 ? 'Unpaid' : (collected >= amt ? 'Paid' : 'Partial');
-  _setCellByKey('ARAging', 'AR No', p.arNo, 'Collected (PHP)', collected);
-  _setCellByKey('ARAging', 'AR No', p.arNo, 'Status', status);
-  _setCellByKey('ARAging', 'AR No', p.arNo, 'Updated At', _now());
+  _setCellByKey('ARAging', 'AR No', arNo, 'Collected (PHP)', collected);
+  _setCellByKey('ARAging', 'AR No', arNo, 'Status', status);
+  _setCellByKey('ARAging', 'AR No', arNo, 'Updated At', _now());
   // GL: receivable settled by cash + creditable tax — Dr Cash (net) / Dr Creditable Tax (EWT) / Cr A/R (gross).
-  var lines = [{ account: ACC.CASH, debit: collected - ewtTotal, memo: 'Collection of ' + p.arNo }];
-  if (ewtTotal > 0) lines.push({ account: ACC.CWT, debit: ewtTotal, memo: 'EWT 2307 — ' + p.arNo });
-  lines.push({ account: ACC.AR, credit: collected, memo: 'Collection of ' + p.arNo });
-  _postJournal('ARCOLL', p.arNo, _now(), 'PHP', lines);
-  _refStore('recordCollection', p.clientRef, colNo);
-  return { success: true, collectionNo: colNo, arNo: p.arNo, collected: collected, status: status,
-    message: 'Collection ' + colNo + ' recorded.' };
+  var lines = [{ account: ACC.CASH, debit: collected - ewtTotal, memo: 'Collection of ' + arNo }];
+  if (ewtTotal > 0) lines.push({ account: ACC.CWT, debit: ewtTotal, memo: 'EWT 2307 — ' + arNo });
+  lines.push({ account: ACC.AR, credit: collected, memo: 'Collection of ' + arNo });
+  _postJournal('ARCOLL', arNo, _now(), 'PHP', lines);
+  return { collected: collected, ewt: ewtTotal, status: status };
+}
+
+/* A157: re-split an already-recorded collection between cash and creditable withholding tax.
+   The migrated legacy collections were imported at the GROSS invoice value with EWT left at 0, so a
+   receivable booked net of withholding looked over-collected (its Outstanding went negative and the
+   headline total stopped matching the column). Nothing is written off here — the tax simply moves to the
+   Creditable Withholding Tax (2307) asset, where it belonged. */
+function correctCollection(p) {
+  if (!p.collectionNo) return { success: false, message: 'collectionNo required.' };
+  var rows = _rows('Collections');
+  var col = rows.filter(function (r) { return String(r['Collection No']) === String(p.collectionNo); })[0];
+  if (!col) return { success: false, message: 'Collection ' + p.collectionNo + ' not found.' };
+
+  var amount = p.amount !== undefined ? _num(p.amount) : _num(col['Amount (PHP)']);
+  var ewt = p.ewt !== undefined ? _num(p.ewt) : _num(col['EWT (PHP)']);
+  if (amount <= 0) return { success: false, message: 'Collection amount must be greater than zero.' };
+  if (ewt < 0) return { success: false, message: 'EWT cannot be negative.' };
+  if (ewt > amount) return { success: false, message: 'EWT cannot exceed the collection amount.' };
+
+  var arNo = String(col['AR No'] || '');
+  var ar = _arRow(arNo);
+  if (!ar) return { success: false, message: 'Parent AR entry not found for ' + p.collectionNo + '.' };
+
+  // Guard: the corrected split must not leave the receivable over-collected again.
+  var others = rows.filter(function (r) {
+    return String(r['AR No']) === arNo && String(r['Collection No']) !== String(p.collectionNo);
+  }).reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
+  var amt = _num(ar['Amount (PHP)']);
+  if (amt > 0 && others + amount > amt + 0.005) {
+    return { success: false, message: 'That would collect ' + (others + amount).toFixed(2) +
+      ' against an amount due of ' + amt.toFixed(2) + ' — check the split before applying.' };
+  }
+
+  _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Amount (PHP)', amount);
+  _setCellByKey('Collections', 'Collection No', p.collectionNo, 'EWT (PHP)', ewt);
+  if (p.notes !== undefined) _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Notes', p.notes);
+
+  var rec = _arRecomputeFromCollections(arNo, ar);
+  return { success: true, collectionNo: p.collectionNo, arNo: arNo, amount: amount, ewt: ewt,
+    collected: rec.collected, outstanding: amt - rec.collected, status: rec.status,
+    message: 'Collection ' + p.collectionNo + ' corrected — cash ' + amount.toFixed(2) +
+             ', EWT ' + ewt.toFixed(2) + '; ' + arNo + ' is now ' + rec.status + '.' };
 }
 
 function updateARAging(p) {
@@ -1807,7 +1872,8 @@ function createPaymentRequest(p) {
   _append('PaymentRequests', [no, type, poNo, soNo, supplier, p.payee || supplier, currency, amount,
     p.purpose || '', p.department || '', p.bankName || '', p.accountName || '', p.accountNumber || '',
     p.paymentMethod || '', p.dueDate || '', p.remarks || '', 'Draft', p.createdBy || p.actorName || '',
-    p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now()]);
+    p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now(),
+    '', '', '', '', '']);   // A156 trailing: Admin Approved By/At · Paid By/At · Payment Ref
   if (type === 'PO') _linkPrToAp(poNo, no);   // connect the PR to this PO's AP Aging entry
   _refStore('createPaymentRequest', p.clientRef, no);   // A145: remember for idempotent retry
   return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
@@ -3032,6 +3098,7 @@ var _MODULE_MAP = {
   createPurchaseOrder: ['Purchase Order', 'Created'], updatePurchaseOrder: ['Purchase Order', 'Updated'], deletePurchaseOrder: ['Purchase Order', 'Deleted'],
   updateAPAging: ['AP Aging', 'Updated'], deleteAPEntry: ['AP Aging', 'Deleted'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
+  correctCollection: ['Collection', 'Corrected'],
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
@@ -3614,6 +3681,7 @@ var HANDLERS = {
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
   getAPAging: getAPAging, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
+  correctCollection: correctCollection,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
   deleteExpense: deleteExpense, importExpenses: importExpenses, reclassifyExpenses: reclassifyExpenses,
@@ -3660,7 +3728,7 @@ var MUTATIONS = {
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1,
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
-  updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
+  updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, correctCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,

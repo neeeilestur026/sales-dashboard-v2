@@ -31,13 +31,56 @@ function badgeClass(s) {
 
 function render() {
   const c = document.getElementById('container');
-  if (!apData.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payables yet. Create a Purchase Order to generate one.</p>'; updateKpis(); return; }
-  c.innerHTML = `<table class="flow-table flow-items"><thead><tr>
+  flowLedgerInjectCss();
+  if (!apData.length) {
+    c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payables yet. Create a Purchase Order to generate one.</p>';
+    updateKpis([]); return;
+  }
+  flowLedgerBuildPeriod(apData, 'createdAt', 'apYear', 'apMonth');
+  // A157: the period filter runs on Created At — AP due dates are mostly blank, so filtering on them
+  // would silently hide most of the ledger.
+  const rows = flowLedgerFilterPeriod(apData, 'createdAt', 'apYear', 'apMonth');
+  const { open, history } = flowLedgerSplit(rows, apIsOpen);
+
+  const openTable = open.length
+    ? `<table class="flow-table flow-items">${apHead()}<tbody>${open.map(rowHtml).join('')}${apFoot(open)}</tbody></table>`
+    : '<p style="color:var(--text-muted,#64748b);">No open payables in this period.</p>';
+  const histTable = history.length
+    ? `<table class="flow-table flow-items">${apHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';
+
+  c.innerHTML =
+    `<div class="lv-sec-title">Open payables <span class="lv-sub">· ${open.length} listed · the totals above cover exactly these</span></div>`
+    + openTable
+    + flowLedgerHistoryBlock({
+        title: 'Settled payables',
+        count: history.length,
+        subtotalLabel: 'paid',
+        subtotal: history.reduce((t, r) => t + flowNum(r.amountPHP), 0),
+        tableHtml: histTable
+      });
+  updateKpis(open);
+}
+
+/** Still in play: anything not fully settled. */
+function apIsOpen(r) { return String(r.status || '').toLowerCase() !== 'paid'; }
+function apOutstanding(r) { return flowNum(r.amountPHP) - flowNum(r.paidPHP); }
+
+function apHead() {
+  return `<thead><tr>
     <th>AP No</th><th>PO</th><th>Supplier</th><th>Cur</th><th class="num">Amount (FC)</th>
     <th class="num" style="width:130px;">Amount (PHP)</th><th style="width:110px;">Status</th>
     <th style="width:140px;">Due Date</th><th class="num" style="width:120px;">Paid (PHP)</th>
-    <th style="width:160px;">Notes</th><th style="width:150px;">Payment Request</th><th></th></tr></thead><tbody>${apData.map(rowHtml).join('')}</tbody></table>`;
-  updateKpis();
+    <th style="width:160px;">Notes</th><th style="width:150px;">Payment Request</th><th></th></tr></thead>`;
+}
+
+/** The on-screen proof that the Unpaid KPI is the sum of the Outstanding actually listed. */
+function apFoot(open) {
+  const amt = open.reduce((t, r) => t + flowNum(r.amountPHP), 0);
+  const paid = open.reduce((t, r) => t + flowNum(r.paidPHP), 0);
+  return flowLedgerFootRow([
+    { at: 5, value: flowMoney(amt, 'PHP') },
+    { at: 8, value: flowMoney(paid, 'PHP') }
+  ], 12);
 }
 
 function rowHtml(r) {
@@ -55,16 +98,33 @@ function rowHtml(r) {
     ${apCanDelete ? `<button class="link-btn del-btn" onclick='deleteAP("${flowEsc(r.apNo)}")' style="margin-left:0.4rem;">Delete</button>` : ''}</td></tr>`;
 }
 
-function updateKpis() {
-  let unpaidCount = 0, unpaid = 0, paid = 0;
-  apData.forEach(r => {
-    if ((r.status || '').toLowerCase() === 'paid') paid += flowNum(r.amountPHP);
-    else { unpaidCount++; unpaid += flowNum(r.amountPHP) - flowNum(r.paidPHP); }
+/* A157: every card is computed from the SAME open rows the table just rendered — one fetch, one rule.
+   The aging buckets used to live in a one-shot inline script with their own fetch that never re-ran
+   after a save, so they could disagree with the list underneath them. */
+function updateKpis(open) {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  let unpaid = 0;
+  const today = new Date();
+  const b = { cur: 0, b30: 0, b60: 0, b60p: 0 };
+  (open || []).forEach(r => {
+    const out = apOutstanding(r);
+    unpaid += out;
+    // Same rule as the headline (no `out <= 0` skip), so the four buckets always add back to it.
+    const due = r.dueDate ? new Date(flowDate(r.dueDate)) : null;
+    const days = due && !isNaN(due) ? Math.floor((today - due) / 86400000) : 0;
+    if (days <= 0) b.cur += out; else if (days <= 30) b.b30 += out;
+    else if (days <= 60) b.b60 += out; else b.b60p += out;
   });
-  document.getElementById('kpiCount').textContent = unpaidCount;
-  document.getElementById('kpiUnpaid').textContent = flowMoney(unpaid, 'PHP');
-  document.getElementById('kpiPaid').textContent = flowMoney(paid, 'PHP');
+  set('kpiCount', (open || []).length);
+  set('kpiUnpaid', flowMoney(unpaid, 'PHP'));
+  set('kpiPaid', flowMoney(apData.filter(r => !apIsOpen(r)).reduce((t, r) => t + flowNum(r.amountPHP), 0), 'PHP'));
+  set('kpiCurrent', flowMoney(b.cur, 'PHP'));
+  set('kpiB30', flowMoney(b.b30, 'PHP'));
+  set('kpiB60', flowMoney(b.b60, 'PHP'));
+  set('kpiB60p', flowMoney(b.b60p, 'PHP'));
 }
+
+function apApplyFilter() { render(); }
 
 async function saveRow(rowIndex, btn) {
   const tr = btn.closest('tr');

@@ -88,7 +88,7 @@
       if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
     // KPI cards — from the invoices this page lists, plus the sales orders with none yet.
-    (async function () {
+    window.flowRefreshKpis = async function () {
       function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
       try {
         var r1 = await fetchFlow('getInvoices'), list = (r1 && r1.data) || [];
@@ -107,7 +107,8 @@
         var done = {}; list.forEach(function (i) { if (i.soNo) done[String(i.soNo)] = 1; });
         set('invAwait', sos.filter(function (s) { return s.soNo && !done[String(s.soNo)]; }).length);
       } catch (e) { /* leave the em dashes */ }
-    })();
+    };
+    flowRefreshKpis();   // A157: named so a save can re-run it — it used to fire once and go stale
   </script>
 </body>
 </html>

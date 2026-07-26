@@ -125,7 +125,7 @@
       if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
     // KPI cards — counts by the real shipment status values.
-    (async function () {
+    window.flowRefreshKpis = async function () {
       function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
       try {
         var res = await fetchFlow('getShipments'), list = (res && res.data) || [];
@@ -135,7 +135,8 @@
         set('shArrived', list.filter(function (s) { return st(s) === 'arrived' || st(s) === 'delivered'; }).length);
         set('shTotal', list.length);
       } catch (e) { /* leave the em dashes */ }
-    })();
+    };
+    flowRefreshKpis();   // A157: named so a save can re-run it — it used to fire once and go stale
   </script>
 </body>
 </html>

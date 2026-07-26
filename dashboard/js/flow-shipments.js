@@ -149,6 +149,7 @@ async function shStage(stageKey, stageStatus) {
     if (!r.success) throw new Error(r.message);
     await shOpen(shCurrent.shipment.shipmentId);
     loadShipments();
+    if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
 }
 
@@ -167,6 +168,7 @@ async function shSaveHeader() {
     if (!r.success) throw new Error(r.message);
     msg.textContent = 'Saved.';
     loadShipments();
+    if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { msg.textContent = e.message; }
 }
 

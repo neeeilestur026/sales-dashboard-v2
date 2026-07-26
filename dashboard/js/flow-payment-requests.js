@@ -139,9 +139,64 @@ async function loadPRs() {
   try {
     const res = await fetchFlow('getPaymentRequests', { type: 'PO' });
     prList = (res && res.data) || [];
-    if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; return; }
-    c.innerHTML = `<table class="flow-table"><thead><tr><th>PR No</th><th>PO</th><th>Payee</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead><tbody>${prList.map(prRow).join('')}</tbody></table>`;
+    renderPRs();
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+/** Still in play: everything before it is paid or rejected. */
+function prIsOpen(r) {
+  const st = String(r.status || 'Draft');
+  return st !== 'Paid' && st !== 'Rejected';
+}
+function prHead() {
+  return `<thead><tr><th>PR No</th><th>PO</th><th>Payee</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead>`;
+}
+function prApplyFilter() { renderPRs(); }
+
+/* A157: open requests up top with a totals footer, settled/rejected ones collapsed below — and every
+   KPI computed from the open rows this very render just listed. The cards used to come from a separate
+   one-shot fetch that never re-ran, so approving or paying a request left them stale. */
+function renderPRs() {
+  const c = document.getElementById('listContainer');
+  if (!c) return;
+  flowLedgerInjectCss();
+  if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
+  flowLedgerBuildPeriod(prList, 'createdAt', 'prYear', 'prMonth');
+  const rows = flowLedgerFilterPeriod(prList, 'createdAt', 'prYear', 'prMonth');
+  const { open, history } = flowLedgerSplit(rows, prIsOpen);
+
+  const openTable = open.length
+    ? `<table class="flow-table">${prHead()}<tbody>${open.map(prRow).join('')}${flowLedgerFootRow([{ at: 3, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amount), 0), 'PHP') }], 8)}</tbody></table>`
+    : '<p style="color:var(--text-muted,#64748b);">No open payment requests in this period.</p>';
+  const histTable = history.length
+    ? `<table class="flow-table">${prHead()}<tbody>${history.map(prRow).join('')}</tbody></table>` : '';
+
+  c.innerHTML =
+    `<div class="lv-sec-title">Open requests <span class="lv-sub">· ${open.length} listed · the totals above cover exactly these</span></div>`
+    + openTable
+    + flowLedgerHistoryBlock({
+        title: 'Paid & rejected requests',
+        count: history.length,
+        subtotalLabel: 'paid',
+        subtotal: history.filter(r => String(r.status) === 'Paid').reduce((t, r) => t + flowNum(r.amount), 0),
+        tableHtml: histTable
+      });
+  prUpdateKpis(open);
+}
+
+function prUpdateKpis(open) {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  const st = r => String(r.status || '').toLowerCase();
+  // A156 put both types on Admin → Management → Director; the old tiles only covered two of the three,
+  // so anything sitting at Pending Admin was counted nowhere.
+  set('kpiAdmin', (open || []).filter(r => st(r) === 'pending admin' || st(r) === 'pending accounting').length);
+  set('kpiMgmt', (open || []).filter(r => st(r) === 'pending management' || st(r) === 'pending final').length);
+  set('kpiDir', (open || []).filter(r => st(r) === 'pending director').length);
+  set('kpiApproved', (open || []).filter(r => st(r) === 'approved').length);
+  set('kpiOpenVal', flowMoney((open || []).reduce((t, r) => t + flowNum(r.amount), 0), 'PHP'));
+  const sub = document.getElementById('kpiOpenValSub');
+  if (sub) sub.textContent = (open || []).length + ' open request(s)';
+  set('kpiPaidCount', prList.filter(r => String(r.status) === 'Paid').length);
 }
 
 function prRow(r) {

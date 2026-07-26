@@ -85,12 +85,59 @@ async function loadPRs() {
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
 }
 
-/** Paint the list from prList (no refetch) — so a local patch can repaint immediately. */
+/** Still in play: everything before it is paid or rejected. */
+function prIsOpen(r) {
+  const st = String(r.status || 'Draft');
+  return st !== 'Paid' && st !== 'Rejected';
+}
+function prHead() {
+  return `<thead><tr><th>PR No</th><th>Payee</th><th>Purpose</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead>`;
+}
+function prApplyFilter() { renderPRs(); }
+
+/* Paint from prList (no refetch) so a local patch repaints immediately.
+   A157: open requests with a totals footer, settled ones collapsed below, and every KPI computed from
+   the open rows this render just listed — the cards used to come from a separate one-shot fetch that
+   never re-ran, so they could disagree with the list underneath. */
 function renderPRs() {
   const c = document.getElementById('listContainer');
   if (!c) return;
-  if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; return; }
-  c.innerHTML = `<table class="flow-table"><thead><tr><th>PR No</th><th>Payee</th><th>Purpose</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead><tbody>${prList.map(prRow).join('')}</tbody></table>`;
+  flowLedgerInjectCss();
+  if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
+  flowLedgerBuildPeriod(prList, 'createdAt', 'opYear', 'opMonth');
+  const rows = flowLedgerFilterPeriod(prList, 'createdAt', 'opYear', 'opMonth');
+  const { open, history } = flowLedgerSplit(rows, prIsOpen);
+
+  const openTable = open.length
+    ? `<table class="flow-table">${prHead()}<tbody>${open.map(prRow).join('')}${flowLedgerFootRow([{ at: 3, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amount), 0), 'PHP') }], 8)}</tbody></table>`
+    : '<p style="color:var(--text-muted,#64748b);">No open payables in this period.</p>';
+  const histTable = history.length
+    ? `<table class="flow-table">${prHead()}<tbody>${history.map(prRow).join('')}</tbody></table>` : '';
+
+  c.innerHTML =
+    `<div class="lv-sec-title">Open payables <span class="lv-sub">· ${open.length} listed · the totals above cover exactly these</span></div>`
+    + openTable
+    + flowLedgerHistoryBlock({
+        title: 'Paid & rejected payables',
+        count: history.length,
+        subtotalLabel: 'paid',
+        subtotal: history.filter(r => String(r.status) === 'Paid').reduce((t, r) => t + flowNum(r.amount), 0),
+        tableHtml: histTable
+      });
+  prUpdateKpis(open);
+}
+
+function prUpdateKpis(open) {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  const today = flowToday();
+  const wk = new Date(today + 'T00:00:00'); wk.setDate(wk.getDate() + 7);
+  const weekEnd = `${wk.getFullYear()}-${String(wk.getMonth() + 1).padStart(2, '0')}-${String(wk.getDate()).padStart(2, '0')}`;
+  set('kpiOutstanding', flowMoney((open || []).reduce((t, r) => t + flowNum(r.amount), 0), 'PHP'));
+  set('kpiDueWeek', (open || []).filter(r => {
+    const d = flowDate(r.dueDate); return d && d >= today && d <= weekEnd;
+  }).length);
+  set('kpiOpenCount', (open || []).length);
+  set('kpiApprovedMonth', prList.filter(r => String(r.status) === 'Paid').length);
 }
 
 function prRow(r) {

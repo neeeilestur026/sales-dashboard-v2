@@ -85,7 +85,7 @@
       if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
     // KPI cards — from the inventory list this page loads (A115 Stock vs Catalog Type).
-    (async function () {
+    window.flowRefreshKpis = async function () {
       function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
       try {
         var res = await fetchFlow('getInventory'), list = (res && res.data) || [];
@@ -98,7 +98,8 @@
         set('kiCat', typed ? list.filter(function (i) { return i.type === 'Catalog'; }).length : 0);
         set('kiVal', flowMoney(val, 'PHP'));
       } catch (e) { /* leave the em dashes */ }
-    })();
+    };
+    flowRefreshKpis();   // A157: named so a save can re-run it — it used to fire once and go stale
   </script>
 </body>
 </html>

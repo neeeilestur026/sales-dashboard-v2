@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById(id).addEventListener('input', render));
   // populate category datalist
   document.getElementById('catList').innerHTML = EXP_CATEGORIES.map(c => `<option value="${flowEsc(c)}">`).join('');
-  await loadExpenses();
+  await loadExpenses(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
 });
 
 async function loadExpenses() {
@@ -226,7 +226,7 @@ async function submitExpense() {
     if (!res || !res.success) throw new Error((res && res.message) || 'Save failed.');
     closeExpModal();
     flash(res.message || 'Saved.', true);
-    await loadExpenses();
+    await loadExpenses(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) {
     formErr(e.message);
   } finally {
@@ -243,7 +243,7 @@ async function reclassSalaries() {
     const r = await postFlow('reclassifyExpenses', { type: 'Operating' });   // no category → all rows
     if (!r || !r.success) throw new Error((r && r.message) || 'Reclassify failed.');
     flash(r.message || 'Folded into OpEx.', true);
-    await loadExpenses();
+    await loadExpenses(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) {
     flash(e.message, false);
   } finally {
@@ -259,7 +259,7 @@ async function delExpense(rowIndex) {
     const res = await postFlow('deleteExpense', { rowIndex });
     if (!res || !res.success) throw new Error((res && res.message) || 'Delete failed.');
     flash('Expense deleted.', true);
-    await loadExpenses();
+    await loadExpenses(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { flash(e.message, false); }
 }
 

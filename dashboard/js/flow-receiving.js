@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderFlowNav('flow-receiving.html');
   document.getElementById('date').value = flowToday();
   await Promise.all([loadPOOptions(), loadAP()]);
-  await loadReceiving();
+  await loadReceiving(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
 });
 
 async function loadPOOptions() {

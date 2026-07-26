@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('date').value = flowToday();
   await loadInventory();
   addRow();
-  await loadQuotations();
+  await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   // Sales: offer to load a Returned-to-Sales PR (with its management final prices) into the form.
   if (qSession.role === 'sales') await loadReturnedPRs();
   const params = new URLSearchParams(location.search);
@@ -357,7 +357,7 @@ async function saveQuotation() {
     }
     flowMsg('formMsg', `${res.message} (${res.quotationNo || payload.quotationNo})${extra}`, true);
     resetForm();
-    await loadQuotations();
+    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
     // The refetch right after a write can return the PRE-save record (Sheets read-after-write
     // staleness) — and that stale copy then sits in the 60s client cache, so a PDF generated now
     // would carry the OLD price/discount. Overwrite the list entry with what we KNOW we saved.
@@ -605,7 +605,7 @@ async function _qAction(action, no, extra) {
   try {
     const res = await postFlow(action, Object.assign({ quotationNo: no }, extra || {}));
     if (!res.success) throw new Error(res.message);
-    await loadQuotations();
+    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
 }
 function submitQuotationAction(no) {
@@ -643,7 +643,7 @@ async function confirmCloseQuotation() {
     const res = await postFlow('closeQuotation', { quotationNo: no, outcome, reason });
     if (!res.success) throw new Error(res.message);
     closeCloseModal();
-    await loadQuotations();
+    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
   finally { btn.disabled = false; btn.textContent = 'Close quotation'; }
 }
@@ -662,7 +662,7 @@ async function reviseQuotationAction(no) {
   try {
     const r = await postFlow('reviseQuotation', { quotationNo: no, reason });
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not reopen this quotation.');
-    await loadQuotations();
+    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
     editQuotation(no);            // land in the form, prefilled and ready to re-price
   } catch (e) { alert(e.message); }
 }
@@ -776,7 +776,7 @@ async function deleteQuotation(no) {
   try {
     const res = await postFlow('deleteQuotation', { quotationNo: no });
     if (!res.success) throw new Error(res.message);
-    await loadQuotations();
+    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
 }
 
@@ -1001,7 +1001,7 @@ async function submitPdf() {
       // A147: real save failure — say so honestly instead of the misleading "not configured".
       flowMsg('pdfModalMsg', 'PDF generated, but the Drive save failed' + (saveError ? ' (' + saveError + ')' : '') + ' — reopen and Generate again to retry.', false);
     }
-    await loadQuotations();
+    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
     // The list refetch can lag the write (Sheets read-after-write) — patch what we know when the save
     // actually produced a Drive link. On a failed save there is no saved PDF, so nothing to patch.
     if (link) { qPatchLocal(pdfQuote.quotationNo, { pdfLink: link, pdfData, discountPct: payload.discountPct }); setTimeout(closePdfModal, 900); }

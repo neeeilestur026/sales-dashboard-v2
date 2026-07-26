@@ -30,26 +30,68 @@ function arNewestFirst(a, b) {
 
 function render() {
   const c = document.getElementById('container');
-  if (!arData.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No receivables yet. Issue an invoice to generate one.</p>'; updateKpis(); return; }
-  // Latest-created records on top; migrated (legacy) records grouped below the list.
-  const active = arData.filter(r => !arIsMigrated(r)).sort(arNewestFirst);
-  const migrated = arData.filter(arIsMigrated).sort(arNewestFirst);
-  const sep = migrated.length
-    ? `<tr><td colspan="11" style="background:var(--bg-inset,#eef2f6);font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted,#64748b);padding:0.6rem 0.9rem;border-top:2px solid var(--border,#e2e8f0);">Migrated (legacy) records · ${migrated.length}</td></tr>`
-    : '';
-  c.innerHTML = `<table class="flow-table flow-items" style="min-width:880px;"><thead><tr>
+  flowLedgerInjectCss();
+  if (!arData.length) {
+    c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No receivables yet. Issue an invoice to generate one.</p>';
+    updateKpis([]); return;
+  }
+  // A157: filter on Due Date — every AR carries one and it spreads across the real business months,
+  // whereas Created At is only the import stamp (the 52 migrated rows all share it).
+  flowLedgerBuildPeriod(arData, 'dueDate', 'arYear', 'arMonth');
+  const rows = flowLedgerFilterPeriod(arData, 'dueDate', 'arYear', 'arMonth');
+  // Open = still owed. History = settled receivables AND the migrated legacy ledger.
+  const { open, history } = flowLedgerSplit(rows, arIsOpen);
+  open.sort(arNewestFirst); history.sort(arNewestFirst);
+
+  const openTable = open.length
+    ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${open.map(rowHtml).join('')}${arFoot(open)}</tbody></table>`
+    : '<p style="color:var(--text-muted,#64748b);">No open receivables in this period.</p>';
+  const histTable = history.length
+    ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';
+
+  c.innerHTML =
+    `<div class="lv-sec-title">Open receivables <span class="lv-sub">· ${open.length} listed · the totals above cover exactly these</span></div>`
+    + openTable
+    + flowLedgerHistoryBlock({
+        title: 'Settled & migrated (legacy) receivables',
+        count: history.length,
+        subtotalLabel: 'collected',
+        subtotal: history.reduce((t, r) => t + flowNum(r.collectedPHP), 0),
+        tableHtml: histTable
+      });
+  updateKpis(open);
+}
+
+/** Still owed: anything not fully collected. */
+function arIsOpen(r) { return String(r.status || '').toLowerCase() !== 'paid'; }
+/** Collected more than the amount due — always worth explaining rather than quietly excluding. */
+function arOverCollected(r) { return Math.max(0, flowNum(r.collectedPHP) - flowNum(r.amountPHP)); }
+
+function arHead() {
+  return `<thead><tr>
     <th>AR No</th><th>INV</th><th>SO</th><th>Customer</th><th class="num">Amount</th><th class="num">Collected</th>
-    <th class="num">Outstanding</th><th>Status</th><th style="width:140px;">Due Date</th><th style="width:150px;">Notes</th><th></th></tr></thead>
-    <tbody>${active.map(rowHtml).join('')}${sep}${migrated.map(rowHtml).join('')}</tbody></table>`;
-  updateKpis();
+    <th class="num">Outstanding</th><th>Status</th><th style="width:140px;">Due Date</th><th style="width:150px;">Notes</th><th></th></tr></thead>`;
+}
+
+/** Totals footer — the Outstanding column visibly adds to the Outstanding KPI. */
+function arFoot(open) {
+  return flowLedgerFootRow([
+    { at: 4, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amountPHP), 0), 'PHP') },
+    { at: 5, value: flowMoney(open.reduce((t, r) => t + flowNum(r.collectedPHP), 0), 'PHP') },
+    { at: 6, value: flowMoney(open.reduce((t, r) => t + flowNum(r.outstanding), 0), 'PHP') }
+  ], 11);
 }
 
 function rowHtml(r) {
   const done = r.status === 'Paid';
+  // A157: an over-collected row is why a total can stop matching its column — say so on the row.
+  const over = arOverCollected(r);
+  const warn = over > 0.005
+    ? ` <span class="lv-warn" title="Collected ${flowMoney(over, 'PHP')} more than the amount due — usually withholding tax recorded as cash. Correct the collection split.">⚠ over ${flowMoney(over, 'PHP')}</span>` : '';
   return `<tr data-ar="${flowEsc(r.arNo)}">
     <td>${flowEsc(r.arNo)}</td><td>${flowEsc(r.invNo)}</td><td>${flowEsc(r.soNo)}</td><td>${flowEsc(r.customer)}</td>
     <td class="num">${flowMoney(r.amountPHP, 'PHP')}</td>
-    <td class="num">${flowMoney(r.collectedPHP, 'PHP')}</td>
+    <td class="num">${flowMoney(r.collectedPHP, 'PHP')}${warn}</td>
     <td class="num">${flowMoney(r.outstanding, 'PHP')}</td>
     <td>${flowStatusBadge(r.status)}</td>
     <td><input type="date" class="f-due" value="${flowDate(r.dueDate)}"></td>
@@ -61,16 +103,43 @@ function rowHtml(r) {
     </td></tr>`;
 }
 
-function updateKpis() {
-  let count = 0, out = 0, collected = 0;
-  arData.forEach(r => {
-    collected += flowNum(r.collectedPHP);
-    if ((r.status || '').toLowerCase() !== 'paid') { count++; out += flowNum(r.outstanding); }
+/* A157: computed from the SAME open rows the table lists, so the Outstanding KPI is by construction
+   the sum of the Outstanding column — the discrepancy that started this was a Paid row carrying a
+   negative outstanding, counted by the column but skipped by the headline. Over-collection is now
+   surfaced as its own figure instead of silently vanishing. */
+function updateKpis(open) {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  const today = new Date();
+  const b = { cur: 0, b30: 0, b60: 0, b60p: 0 };
+  let out = 0;
+  (open || []).forEach(r => {
+    const o = flowNum(r.outstanding);
+    out += o;
+    const due = r.dueDate ? new Date(flowDate(r.dueDate)) : null;
+    const days = due && !isNaN(due) ? Math.floor((today - due) / 86400000) : 0;
+    if (days <= 0) b.cur += o; else if (days <= 30) b.b30 += o;
+    else if (days <= 60) b.b60 += o; else b.b60p += o;
   });
-  document.getElementById('kpiCount').textContent = count;
-  document.getElementById('kpiOut').textContent = flowMoney(out, 'PHP');
-  document.getElementById('kpiCollected').textContent = flowMoney(collected, 'PHP');
+  set('kpiCount', (open || []).length);
+  set('kpiOut', flowMoney(out, 'PHP'));
+  set('kpiCollected', flowMoney((open || []).reduce((t, r) => t + flowNum(r.collectedPHP), 0), 'PHP'));
+  set('arCur', flowMoney(b.cur, 'PHP'));
+  set('arB30', flowMoney(b.b30, 'PHP'));
+  set('arB60', flowMoney(b.b60, 'PHP'));
+  set('arB60p', flowMoney(b.b60p, 'PHP'));
+
+  // Over-collected across the WHOLE ledger, not just the open rows: it is a credit owed back /
+  // unrecorded withholding tax, and it must be explainable wherever it sits.
+  const over = arData.reduce((t, r) => t + arOverCollected(r), 0);
+  const el = document.getElementById('arOverWrap');
+  if (el) {
+    el.style.display = over > 0.005 ? '' : 'none';
+    const v = document.getElementById('arOver');
+    if (v) v.textContent = flowMoney(over, 'PHP');
+  }
 }
+
+function arApplyFilter() { render(); }
 
 async function saveRow(arNo, btn) {
   const tr = btn.closest('tr');

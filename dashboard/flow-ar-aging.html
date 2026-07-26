@@ -23,7 +23,7 @@
 
 
       <div class="kpi-row five">
-        <div class="kpi spot"><div class="top"><span class="l">Outstanding (PHP)</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kpiOut">—</div><div class="d" style="white-space:nowrap;"><span id="kpiCount">—</span>&nbsp;open receivables</div><div class="d" style="white-space:nowrap;margin-top:2px;">collected&nbsp;<span id="kpiCollected">—</span></div></div>
+        <div class="kpi spot"><div class="top"><span class="l">Outstanding (PHP)</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kpiOut">—</div><div class="d" style="white-space:nowrap;"><span id="kpiCount">—</span>&nbsp;open receivables</div><div class="d" style="white-space:nowrap;margin-top:2px;">collected&nbsp;<span id="kpiCollected">—</span></div><div class="d" id="arOverWrap" style="display:none;white-space:nowrap;margin-top:2px;color:#fca5a5;">over-collected&nbsp;<span id="arOver">—</span></div></div>
         <div class="kpi"><div class="top"><span class="l">Current</span></div><div class="v sm" id="arCur">—</div><div class="d">not yet due</div></div>
         <div class="kpi"><div class="top"><span class="l">1–30 Days</span></div><div class="v sm" id="arB30">—</div><div class="d">watch</div></div>
         <div class="kpi"><div class="top"><span class="l">31–60 Days</span></div><div class="v sm" id="arB60">—</div><div class="d">follow up</div></div>
@@ -34,6 +34,12 @@
       <div class="flow-actions" style="justify-content:space-between;">
         <h3 style="font-size:0.95rem;font-weight:600;">Receivables</h3>
         <button class="btn btn-sm btn-secondary" onclick="loadAR()">Refresh</button>
+        <div class="lv-filter" style="margin-left:auto;margin-bottom:0;">
+          <label for="arYear">Period</label>
+          <select id="arYear" onchange="arApplyFilter()"></select>
+          <select id="arMonth" onchange="arApplyFilter()"></select>
+          <span class="lv-basis">by due date</span>
+        </div>
       </div>
       <div id="container" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
       <div id="msg" class="flow-msg" style="display:none;"></div>
@@ -67,6 +73,7 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
+  <script src="js/flow-ledger-view.js"></script>
   <script src="js/flow-ar-aging.js"></script>
 
   <script>
@@ -78,28 +85,9 @@
       if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
       if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
-    // Aging buckets — outstanding placed by how far past its due date. The spotlight card's
-    // three figures are filled by flow-ar-aging.js itself.
-    (async function () {
-      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
-      try {
-        var res = await fetchFlow('getARAging'), list = (res && res.data) || [];
-        var today = new Date(), b = { cur: 0, b30: 0, b60: 0, b60p: 0 };
-        list.forEach(function (r) {
-          if (String(r.status || '').toLowerCase() === 'paid') return;
-          var out = flowNum(r.outstanding) || (flowNum(r.amountPHP) - flowNum(r.collectedPHP));
-          if (out <= 0) return;
-          var due = r.dueDate ? new Date(flowDate(r.dueDate)) : null;
-          var days = due && !isNaN(due) ? Math.floor((today - due) / 86400000) : 0;
-          if (days <= 0) b.cur += out; else if (days <= 30) b.b30 += out;
-          else if (days <= 60) b.b60 += out; else b.b60p += out;
-        });
-        set('arCur', flowMoney(b.cur, 'PHP'));
-        set('arB30', flowMoney(b.b30, 'PHP'));
-        set('arB60', flowMoney(b.b60, 'PHP'));
-        set('arB60p', flowMoney(b.b60p, 'PHP'));
-      } catch (e) { /* leave the em dashes */ }
-    })();
+    // A157: the aging buckets are computed in flow-ar-aging.js from the rows it renders, so they
+    // can never drift from the list (or sit stale after a collection is recorded).
+
   </script>
 </body>
 </html>

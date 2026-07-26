@@ -36,6 +36,12 @@
       <div class="flow-actions" style="justify-content:space-between;">
         <h3 style="font-size:0.95rem;font-weight:600;">Payables</h3>
         <button class="btn btn-sm btn-secondary" onclick="loadAP()">Refresh</button>
+        <div class="lv-filter" style="margin-left:auto;margin-bottom:0;">
+          <label for="apYear">Period</label>
+          <select id="apYear" onchange="apApplyFilter()"></select>
+          <select id="apMonth" onchange="apApplyFilter()"></select>
+          <span class="lv-basis">by date created</span>
+        </div>
       </div>
       <div id="container" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
       <div id="msg" class="flow-msg" style="display:none;"></div>
@@ -46,6 +52,7 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
+  <script src="js/flow-ledger-view.js"></script>
   <script src="js/flow-ap-aging.js"></script>
 
   <script>
@@ -57,29 +64,9 @@
       if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
       if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
-    // Aging buckets — outstanding (amount less paid) placed by how far past its due date.
-    // The other three cards are filled by flow-ap-aging.js itself.
-    (async function () {
-      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
-      try {
-        var res = await fetchFlow('getAPAging'), list = (res && res.data) || [];
-        var today = new Date(), b = { cur: 0, b30: 0, b60: 0, b60p: 0 }, total = 0;
-        list.forEach(function (r) {
-          if (String(r.status || '').toLowerCase() === 'paid') return;
-          var out = flowNum(r.amountPHP) - flowNum(r.paidPHP);
-          if (out <= 0) return;
-          total += out;
-          var due = r.dueDate ? new Date(flowDate(r.dueDate)) : null;
-          var days = due && !isNaN(due) ? Math.floor((today - due) / 86400000) : 0;
-          if (days <= 0) b.cur += out; else if (days <= 30) b.b30 += out;
-          else if (days <= 60) b.b60 += out; else b.b60p += out;
-        });
-        set('kpiCurrent', flowMoney(b.cur, 'PHP'));
-        set('kpiB30', flowMoney(b.b30, 'PHP'));
-        set('kpiB60', flowMoney(b.b60, 'PHP'));
-        set('kpiB60p', flowMoney(b.b60p, 'PHP'));
-      } catch (e) { /* leave the em dashes */ }
-    })();
+    // A157: the aging buckets are computed in flow-ap-aging.js from the rows it renders —
+    // a second fetch here could (and did) leave the cards stale after a save.
+
   </script>
 </body>
 </html>
