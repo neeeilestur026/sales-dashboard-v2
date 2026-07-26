@@ -186,14 +186,21 @@ async function submitCollection() {
   const btn = document.getElementById('collectBtn');
   btn.disabled = true; btn.textContent = 'Recording...';
   try {
-    const res = await postFlow('recordCollection', {
+    const payload = {
       arNo, amount, ewt: flowNum(document.getElementById('collectEwt').value),
       date: document.getElementById('collectDate').value,
       method: document.getElementById('collectMethod').value,
       ref: document.getElementById('collectRef').value.trim(),
       notes: document.getElementById('collectNotes').value.trim(),
       clientRef: flowClientRef()                            // idempotent create (safe retry)
-    });
+    };
+    let res = await postFlow('recordCollection', payload);
+    // A158: this would collect more than the receivable is due — a real overpayment happens, but it
+    // should be a decision rather than a silent entry that only gets flagged afterwards.
+    if (!res.success && res.needsConfirm === 'overCollect') {
+      if (!confirm(res.message)) { flowMsg('collectMsg', 'Not recorded — check the amount.', false); return; }
+      res = await postFlow('recordCollection', Object.assign({}, payload, { confirmOver: true }));
+    }
     if (!res.success) throw new Error(res.message);
     flowMsg('collectMsg', `${res.message} (status: ${res.status})`, true);
     await loadAR();

@@ -3,12 +3,16 @@ let ivSOs = [];
 let ivInventory = [];
 let ivCurrent = null;
 let ivSession = null;
+let ivCanVoid = false;   // A158: the void action needs FlowAPI v94
 
 document.addEventListener('DOMContentLoaded', async () => {
   ivSession = requireAccountingOrAdmin();
   if (!ivSession) return;
   renderNavbar('flow-invoices');
   renderFlowNav('flow-invoices.html');
+  // A158: voiding an invoice needs the v94 backend — gate it so it can't fail with 'Unknown action'.
+  try { ivCanVoid = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(94) : false; }
+  catch (e) { ivCanVoid = false; }
   document.getElementById('date').value = flowToday();
   await Promise.all([loadSOOptions(), loadInventory()]);
   await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
@@ -117,7 +121,20 @@ async function saveInvoice() {
   };
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
-    const res = await postFlow('createInvoice', payload);
+    let res = await postFlow('createInvoice', payload);
+    const extra = {};
+    // A158: issuing more than is on hand — stock clamps at zero and the shortfall is untracked.
+    if (!res.success && res.needsConfirm === 'shortStock') {
+      if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled — check the stock first.', false); return; }
+      extra.confirmShort = true;
+      res = await postFlow('createInvoice', Object.assign({}, payload, extra));
+    }
+    // A158: the sales order already carries an invoice — a second one bills the customer twice.
+    if (!res.success && res.needsConfirm === 'alreadyInvoiced') {
+      if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled.', false); return; }
+      extra.confirmReinvoice = true;
+      res = await postFlow('createInvoice', Object.assign({}, payload, extra));
+    }
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message} (${res.invNo})`, true);
     resetForm();
@@ -150,6 +167,24 @@ async function loadInvoices() {
       <tr><td>${flowEsc(v.invNo)}</td><td>${flowEsc(v.soNo)}</td><td>${flowDate(v.date)}</td><td>${flowEsc(v.customer)}</td>
       <td class="num">${flowMoney(v.totalSales, 'PHP')}</td><td class="num">${flowMoney(v.totalCOGS, 'PHP')}</td>
       <td class="num">${flowMoney(v.totalSales - v.totalCOGS, 'PHP')}</td><td>${v.items.length}</td>
-      <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Invoice","${flowEsc(v.invNo)}")'>Docs</button></td></tr>`).join('')}</tbody></table>`;
+      <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Invoice","${flowEsc(v.invNo)}")'>Docs</button>${
+        ivCanVoid ? `<button class="link-btn del-btn" style="margin-left:0.4rem;" onclick='voidInvoiceAction(${JSON.stringify(String(v.invNo))})'>Void</button>` : ''
+      }</td></tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+/* A158 — reverse an invoice issued in error. Refused once anything has been collected against it,
+   because that payment has to be dealt with first. Puts the stock back, removes the receivable it
+   raised and clears its journal, so the sale stops counting in revenue and COGS. */
+async function voidInvoiceAction(invNo) {
+  const reason = prompt(`Void invoice ${invNo}?\n\nStock is restored, the receivable is removed and the journal is cleared. The invoice is kept, marked voided.\n\nReason:`, '');
+  if (reason === null) return;
+  if (!reason.trim()) { alert('A reason is required to void an invoice.'); return; }
+  try {
+    const res = await postFlow('voidInvoice', { invNo, reason: reason.trim() });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not void this invoice.');
+    alert(res.message);
+    await loadInventory();
+    await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  } catch (e) { alert(e.message); }
 }

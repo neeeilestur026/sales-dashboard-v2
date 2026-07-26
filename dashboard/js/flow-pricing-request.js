@@ -492,13 +492,22 @@ function openSourcingEdit(no) {
 }
 function closePr() { document.getElementById('prModal').classList.remove('open'); }
 
+/* A158: an included line priced at 0 used to render as "—", which reads as "not priced yet" — so a
+   line that will print on the client's quotation as FREE looked like missing data. Say what it is. */
+function _prFinalCell(i) {
+  if (!i.included) return flowNum(i.finalPrice) ? flowMoney(i.finalPrice, 'PHP') : '—';
+  return flowNum(i.finalPrice) > 0
+    ? flowMoney(i.finalPrice, 'PHP')
+    : '<span style="color:#b45309;font-weight:700;" title="This item will print on the quotation at zero — a freebie.">₱0.00 (free)</span>';
+}
+
 function readonlyTable(r, priced) {
   return `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th>UOM</th>
     <th>Supplier</th><th>Principal</th><th class="num">Price (FC)</th><th>VAT</th>${priced ? '<th class="num">Final Price</th>' : ''}<th>Incl?</th></tr></thead><tbody>${r.items.map(i =>
     `<tr><td>${flowEsc(i.itemNo)} — ${flowEsc(i.itemName)}</td><td class="num">${flowNum(i.qty)}</td><td>${flowEsc(i.uom)}</td>
       <td>${flowEsc(i.supplier || '—')}</td><td>${flowEsc(i.principal || '—')}</td>
       <td class="num">${i.supplierPrice ? flowNum(i.supplierPrice) : '—'}</td><td>${flowEsc(i.vat || '—')}</td>
-      ${priced ? `<td class="num">${i.finalPrice ? flowMoney(i.finalPrice, 'PHP') : '—'}</td>` : ''}
+      ${priced ? `<td class="num">${_prFinalCell(i)}</td>` : ''}
       <td>${i.included ? '✓' : '—'}</td></tr>`).join('')}</tbody></table></div>
     ${r.plantSite ? `<p class="pr-meta" style="margin-top:0.5rem;">Plant Site: <b>${flowEsc(r.plantSite)}</b></p>` : ''}
     ${r.clientLocation ? `<p class="pr-meta" style="margin-top:0.5rem;">Client Location: <b>${flowEsc(r.clientLocation)}</b></p>` : ''}
@@ -942,6 +951,19 @@ async function savePricing() {
   const destObj = flowDestinationByName(dest);
   const comm = flowNum(document.getElementById('mComm').value);
   const marg = flowNum(document.getElementById('mMarg').value);
+  /* A158: the engine divides by (1 − commission − margin − 2% local tax). At 100% that denominator hits
+     zero and every price silently came out ₱0; just under it (say 48 + 49) it explodes to ~100× cost.
+     Neither was caught anywhere — the HTML max="99" is per-field and unenforced. */
+  if (comm + marg + 2 >= 100) {
+    flowMsg(msgEl, `Commission ${comm}% + margin ${marg}% + 2% local tax = ${(comm + marg + 2).toFixed(1)}%. ` +
+      'At 100% or more the selling price cannot be computed — lower the commission or margin.', false);
+    return;
+  }
+  if (comm + marg + 2 >= 90 &&
+      !confirm(`Commission ${comm}% + margin ${marg}% + 2% local tax = ${(comm + marg + 2).toFixed(1)}%.\n\n` +
+               'That multiplies the cost by roughly ' + (1 / (1 - (comm + marg + 2) / 100)).toFixed(1) + '×. Continue?')) {
+    return;
+  }
   const round2 = n => Math.round((flowNum(n)) * 100) / 100;   // match the old engine's 2-decimal rounding
   const prinName = (document.getElementById('mPrincipal') || {}).value || '';
   const principal = flowPrincipalByName(prinName);
@@ -977,9 +999,23 @@ async function savePricing() {
     });
   });
   try {
+    /* A158: lines the user removed from the engine. Deleting a row left the item still flagged Included
+       with a Final Price of 0, so it printed on the client's quotation at ₱0.00 — un-include them
+       explicitly instead. */
+    const kept = {};
+    items.forEach(i => { kept[String(i.line)] = 1; });
+    const src = (prList || []).find(r => String(r.prNo) === String(prNo));
+    const excluded = ((src && src.items) || [])
+      .filter(i => i.included && !kept[String(i.line)])
+      .map(i => flowNum(i.line));
+
     const res = await postFlow('setMgmtPricing', {
       prNo, destination: dest, commission: comm, margin: marg,
-      items: JSON.stringify(items), pricedItemsJson: JSON.stringify(breakdown)
+      items: JSON.stringify(items), pricedItemsJson: JSON.stringify(breakdown),
+      excludedLines: JSON.stringify(excluded),
+      // A158: re-pricing something already priced/quoted is a deliberate act, and the server refuses it
+      // outright when the client already holds an approved or sent quotation for it.
+      reprice: !!(src && src.status && src.status !== 'For Mgmt Pricing')
     });
     if (!res.success) throw new Error(res.message);
     flowMsg(msgEl, 'Priced and returned to admin.', true);

@@ -21,8 +21,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadPOOptions() {
   try { const r = await fetchFlow('getPurchaseOrders'); rcPOs = (r && r.data) || []; }
   catch (e) { rcPOs = []; }
+  // A158: mark POs that already have a receiving, so a second receipt is a deliberate choice rather
+  // than an easy mis-click that doubles the stock and its cost.
+  let received = {};
+  try {
+    const mr = await fetchFlow('getReceiving');
+    ((mr && mr.data) || []).forEach(m => { if (m.poNo) received[String(m.poNo)] = true; });
+  } catch (e) { /* labelling only */ }
   document.getElementById('loadPO').innerHTML = '<option value="">— select a purchase order —</option>' +
-    rcPOs.map(p => `<option value="${flowEsc(p.poNo)}">${flowEsc(p.poNo)} — ${flowEsc(p.supplier)} (${flowMoney(p.total, p.currency)})</option>`).join('');
+    rcPOs.map(p => `<option value="${flowEsc(p.poNo)}">${flowEsc(p.poNo)} — ${flowEsc(p.supplier)} (${flowMoney(p.total, p.currency)})${received[String(p.poNo)] ? ' · already received' : ''}</option>`).join('');
 }
 
 async function loadAP() {
@@ -146,10 +153,28 @@ async function saveReceiving() {
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     let res = await postFlow('createReceiving', payload);
+    const extra = {};
+    // A158: the PO was already received — confirm only if this is a genuine additional delivery.
+    if (!res.success && res.alreadyReceived) {
+      if (!confirm(res.message + '\n\nRecord this as an ADDITIONAL delivery?')) {
+        flowMsg('formMsg', 'Receiving cancelled.', false); return;
+      }
+      extra.additional = true;
+      res = await postFlow('createReceiving', Object.assign({}, payload, extra));
+    }
+    // A158: only part of the payable is paid, so every unit would be costed at that fraction.
+    if (!res.success && res.partialPay) {
+      if (!confirm(res.message + '\n\nProceed with the reduced cost basis?')) {
+        flowMsg('formMsg', 'Receiving cancelled — record the balance in AP Aging first.', false); return;
+      }
+      extra.confirmPartialPay = true;
+      res = await postFlow('createReceiving', Object.assign({}, payload, extra));
+    }
     // A145: the backend blocks receiving with no AP payment (a ₱0 cost basis). Offer an explicit override.
     if (!res.success && res.unpaid) {
       if (confirm(res.message + '\n\nProceed anyway with a ₱0 landed cost?')) {
-        res = await postFlow('createReceiving', Object.assign({}, payload, { confirmUnpaid: true }));
+        extra.confirmUnpaid = true;
+        res = await postFlow('createReceiving', Object.assign({}, payload, extra));
       } else { flowMsg('formMsg', 'Receiving cancelled — record the AP payment first.', false); return; }
     }
     if (!res.success) throw new Error(res.message);

@@ -83,7 +83,11 @@ async function loadFromPR(prNo) {
   const sel = document.getElementById('fromPrSelect'); if (sel) sel.value = qFromPr;
   const banner = document.getElementById('fromPrBanner');
   banner.style.display = 'block';
-  banner.innerHTML = `Loaded from <b>${flowEsc(pr.prNo)}</b> — management final prices shown below. Review, then <b>Save Quotation</b> to create it.`;
+  banner.innerHTML = `Loaded from <b>${flowEsc(pr.prNo)}</b> — management final prices shown below. Review, then <b>Save Quotation</b> to create it.` +
+    `<br><span style="font-weight:500;">The quotation is built server-side from the approved prices, so edits here would not be saved — the items are read-only. Create it first, then edit the Draft if something needs to change.</span>`;
+  // A158: these rows used to look editable — you could change a qty, watch the total update, save, and
+  // get the ORIGINAL qty, because the save path rebuilds the items from the PR server-side.
+  qLockPrRows();
   document.getElementById('formTitle').textContent = 'Quotation from ' + pr.prNo;
   recalc();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -94,6 +98,21 @@ function addPrRow(it) {
   // addRow keys inventory rows by rowIndex and injects a raw option for non-inventory items (like PR lines).
   addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: flowNum(it.finalPrice),
            origItemNo: it.origItemNo || '', origItemName: it.origItemName || '' });
+}
+
+/** A158: make the loaded PR rows read-only. createQuotationFromPR rebuilds the items from the pricing
+ *  request on the server, so anything typed here is discarded — better to say so than to accept edits
+ *  that silently don't take. Cleared by resetForm via qUnlockPrRows. */
+function qLockPrRows() {
+  document.querySelectorAll('#itemRows input, #itemRows select').forEach(el => {
+    el.disabled = true;
+    el.title = 'Set by management on the pricing request — create the quotation, then edit the Draft.';
+  });
+  document.querySelectorAll('#itemRows .rm-btn, #itemRows button').forEach(b => { b.style.display = 'none'; });
+  const add = document.getElementById('addRowBtn'); if (add) add.style.display = 'none';
+}
+function qUnlockPrRows() {
+  const add = document.getElementById('addRowBtn'); if (add) add.style.display = '';
 }
 
 async function loadInventory() {
@@ -288,10 +307,21 @@ async function saveQuotation() {
     const btn = document.getElementById('saveBtn');
     btn.disabled = true; btn.textContent = 'Creating...';
     try {
-      const res = await postFlow('createQuotationFromPR',
-        { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject, discountPct: qDiscountVal('discountInput'),
-          clientRef: flowClientRef() });   // A145: per-submission idempotency key (safe retry; not a permanent PR key)
+      const ref = flowClientRef();   // A145: per-submission idempotency key (safe retry; not a permanent PR key)
+      const base = { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject,
+                     discountPct: qDiscountVal('discountInput'), clientRef: ref };
+      let res = await postFlow('createQuotationFromPR', base);
+      // A158: lines priced at ₱0.00 print on the client's quotation as free — a deliberate freebie or a
+      // line management meant to drop. The rep confirms which, rather than discovering it afterwards.
+      if (!res.success && res.needsConfirm === 'zeroPrice') {
+        if (!confirm(res.message + '\n\nCreate the quotation with these items as free?')) {
+          btn.disabled = false; btn.textContent = 'Save Quotation';
+          return;
+        }
+        res = await postFlow('createQuotationFromPR', Object.assign({}, base, { confirmZero: true }));
+      }
       if (!res.success) throw new Error(res.message);
+      if (res.duplicate) { alert(res.message); }
       window.location.href = 'flow-quotations.html?review=' + encodeURIComponent(res.quotationNo || '');
       return;
     } catch (e) {
@@ -454,6 +484,7 @@ function resetForm() {
   qFromPr = '';
   const b = document.getElementById('fromPrBanner'); if (b) b.style.display = 'none';
   const s = document.getElementById('fromPrSelect'); if (s) s.value = '';
+  qUnlockPrRows();          // A158: restore the Add-item control after a from-PR load
   addRow();
 }
 
@@ -603,7 +634,14 @@ function quotationRow(q) {
 // ─── Approval actions ─────────────────────────────
 async function _qAction(action, no, extra) {
   try {
-    const res = await postFlow(action, Object.assign({ quotationNo: no }, extra || {}));
+    let res = await postFlow(action, Object.assign({ quotationNo: no }, extra || {}));
+    /* A158: the quotation's prices differ from what management set on the pricing request. Discounting
+       to win a deal is legitimate, so this is surfaced for an explicit decision rather than blocked —
+       the point is that an approver can no longer sign it off without being told. */
+    if (!res.success && res.needsConfirm === 'prDeviation') {
+      if (!confirm(res.message)) return;
+      res = await postFlow(action, Object.assign({ quotationNo: no, acknowledgeDeviation: true }, extra || {}));
+    }
     if (!res.success) throw new Error(res.message);
     await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }

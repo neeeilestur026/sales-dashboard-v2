@@ -96,7 +96,7 @@ function rowHtml(r) {
   // Read-only (management/director): no action buttons.
   const actions = invReadOnly ? '<td></td>' : `<td style="white-space:nowrap;">
       <button class="link-btn" onclick='editItem(${r.rowIndex})'>Edit</button>
-      ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex})' style="margin-left:0.5rem;">Delete</button>` : ''}
+      ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex}, ${JSON.stringify(String(r.itemNo || ''))})' style="margin-left:0.5rem;">Delete</button>` : ''}
     </td>`;
   if (invSession.role === 'sales') {
     return `<tr><td>${flowEsc(r.itemNo)}</td><td>${flowEsc(r.description)}</td>${actions}</tr>`;
@@ -123,6 +123,11 @@ function editItem(rowIndex) {
   document.getElementById('shippingCost').value = r.shippingCost;
   document.getElementById('currency').value = r.currency || 'PHP';
   document.getElementById('invType').value = (r.type === 'Catalog') ? 'Catalog' : 'Stock';
+  // A158: editing — offer the explicit stock-adjustment opt-in (hidden when adding a new item).
+  const adjWrap = document.getElementById('adjustBalanceWrap');
+  const adj = document.getElementById('adjustBalance');
+  if (adjWrap) adjWrap.style.display = '';
+  if (adj) adj.checked = false;
   document.getElementById('formTitle').textContent = 'Edit Item ' + r.itemNo;
   document.getElementById('submitBtn').textContent = 'Save Changes';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -131,6 +136,8 @@ function editItem(rowIndex) {
 function resetForm() {
   document.getElementById('invForm').reset();
   document.getElementById('rowIndex').value = '';
+  const adjWrap = document.getElementById('adjustBalanceWrap');
+  if (adjWrap) adjWrap.style.display = 'none';    // A158: adding, not adjusting
   document.getElementById('formTitle').textContent = 'Add Item';
   document.getElementById('submitBtn').textContent = 'Add Item';
   document.getElementById('formMsg').style.display = 'none';
@@ -151,6 +158,13 @@ async function submitItem(e) {
   };
   // Only admin/accounting see the Type control; sales adds fall to the backend Catalog default.
   if (invCanDelete) payload.type = document.getElementById('invType').value;
+  /* A158: on an EDIT the stored balance wins unless the user is deliberately adjusting stock — the form
+     value is whatever was on screen when it loaded, so writing it back absolutely could roll back a
+     receiving that landed in between. */
+  if (rowIndex) {
+    const adj = document.getElementById('adjustBalance');
+    payload.adjustBalance = !!(adj && adj.checked);
+  }
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const res = await postFlow(rowIndex ? 'updateInventoryItem' : 'addInventoryItem', payload);
@@ -165,10 +179,12 @@ async function submitItem(e) {
   }
 }
 
-async function deleteItem(rowIndex) {
+async function deleteItem(rowIndex, itemNo) {
   if (!confirm('Delete this item?')) return;
   try {
-    const res = await postFlow('deleteInventoryItem', { rowIndex });
+    // A158: send the item number too — deleting by row position alone removes whatever has since
+    // shifted into that slot if another user changed the list.
+    const res = await postFlow('deleteInventoryItem', { rowIndex, itemNo: itemNo || '' });
     if (!res.success) throw new Error(res.message || 'Failed.');
     await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (err) { alert(err.message); }

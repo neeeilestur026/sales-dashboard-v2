@@ -3,12 +3,15 @@
 let colData = [];   // collection ledger rows
 let arData = [];    // AR (per-invoice receivable) rows
 let colSession = null;
+let colCanVoid = false;   // A158: voiding needs the v94 backend (gated so it can't 'Unknown action')
 
 document.addEventListener('DOMContentLoaded', async () => {
   colSession = requireAccountingOrAdmin();
   if (!colSession) return;
   renderNavbar('flow-collections');
   renderFlowNav('flow-collections.html');
+  try { colCanVoid = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(94) : false; }
+  catch (e) { colCanVoid = false; }
   ['fSO', 'fClient', 'fYear', 'fMonth'].forEach(id => document.getElementById(id).addEventListener('change', render));
   await loadCollections();
 });
@@ -104,11 +107,28 @@ function render() {
   if (!cols.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No collections match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table" style="min-width:880px;"><thead><tr>
     <th>Collection No</th><th>Date</th><th>AR / INV</th><th>SO</th><th>Customer</th>
-    <th class="num">Amount</th><th>Method</th><th>Reference</th><th>Notes</th></tr></thead><tbody>${cols.map(r => `
+    <th class="num">Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th></th></tr></thead><tbody>${cols.map(r => `
     <tr><td>${flowEsc(r.collectionNo)}</td><td>${flowDate(r.date)}</td><td>${flowEsc(r.arNo)} · ${flowEsc(r.invNo)}</td>
     <td>${flowEsc(r.soNo)}</td><td>${flowEsc(r.customer)}</td>
     <td class="num">${flowMoney(r.amount, 'PHP')}</td><td>${flowEsc(r.method)}</td><td>${flowEsc(r.reference)}</td>
-    <td>${flowEsc(r.notes)}</td></tr>`).join('')}
-    <tr style="font-weight:700;"><td colspan="5">Total (${cols.length})</td><td class="num">${flowMoney(collected, 'PHP')}</td><td colspan="3"></td></tr>
+    <td>${flowEsc(r.notes)}</td>
+    <td class="num">${colCanVoid ? `<button class="link-btn del-btn" onclick='voidCollectionAction(${JSON.stringify(String(r.collectionNo))})'>Void</button>` : ''}</td></tr>`).join('')}
+    <tr style="font-weight:700;"><td colspan="5">Total (${cols.length})</td><td class="num">${flowMoney(collected, 'PHP')}</td><td colspan="4"></td></tr>
     </tbody></table>`;
+}
+
+/* A158 — reverse a collection entered in error (wrong receivable, wrong amount, duplicate).
+   There was no way to undo one: correctCollection can re-split a payment between cash and withholding
+   tax, but not un-record it, so the only remedy was editing the sheet by hand. The row is kept and
+   marked, and the parent receivable's collected total and status are recomputed. */
+async function voidCollectionAction(collectionNo) {
+  const reason = prompt(`Void collection ${collectionNo}?\n\nThe row is kept for the audit trail and the receivable is recalculated.\n\nReason:`, '');
+  if (reason === null) return;
+  if (!reason.trim()) { alert('A reason is required to void a collection.'); return; }
+  try {
+    const res = await postFlow('voidCollection', { collectionNo, reason: reason.trim() });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not void this collection.');
+    alert(res.message);
+    await loadCollections();
+  } catch (e) { alert(e.message); }
 }

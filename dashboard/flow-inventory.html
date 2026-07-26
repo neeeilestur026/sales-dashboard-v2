@@ -44,7 +44,12 @@
         <div class="flow-form">
           <div><label>Item No. <span style="font-weight:400;color:var(--text-muted,#64748b);">(type N/A or leave blank if none)</span></label><input type="text" id="itemNo" placeholder="e.g. WLD-500A or N/A"></div>
           <div class="full"><label>Description *</label><input type="text" id="description" required placeholder="e.g. Welding Rod 500A"></div>
-          <div><label>Available Balance</label><input type="number" id="balance" step="any" min="0" value="0"></div>
+          <div><label>Available Balance</label><input type="number" id="balance" step="any" min="0" value="0">
+            <!-- A158: receiving and issuance move this by deltas. On an edit the stored balance is kept
+                 unless this is ticked, so a description fix can't roll back stock that arrived meanwhile. -->
+            <label id="adjustBalanceWrap" style="display:none;font-weight:500;font-size:0.75rem;margin-top:0.25rem;">
+              <input type="checkbox" id="adjustBalance"> Adjust stock to this figure
+            </label></div>
           <div><label>Purchase Price / Unit</label><input type="number" id="purchasePrice" step="any" min="0" value="0"></div>
           <div><label>Shipping Cost / Unit</label><input type="number" id="shippingCost" step="any" min="0" value="0"></div>
           <div><label>Currency</label><select id="currency"></select></div>

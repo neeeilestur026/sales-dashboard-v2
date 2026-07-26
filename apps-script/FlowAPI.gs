@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 93;   // A157 correctCollection (EWT re-split) · A156 PR chain Admin→Mgmt→Director + Paid w/ proof (91: A152 close/reopen quotation · 90: A151 lifecycle spine + doc registry · 89: A149 names · 88: A147 bug-scan)
+var FLOW_VERSION = 94;   // A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine · 89: A149 names · 88: A147 bug-scan)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -61,14 +61,19 @@ var SCHEMA = {
   ReceivingItems:     ['MR No', 'Item No', 'Item Name', 'Qty Received', 'Purchase Price/Unit (FC)',
                        'Purchase Price/Unit (PHP)', 'Shipping/Unit (PHP)', 'Landed Cost/Unit', 'Total Landed Cost'],
 
-  Invoices:     ['INV No', 'SO No', 'Date', 'Customer', 'Total Sales', 'Total COGS', 'Created By', 'Created At'],
+  // A158: 'Voided'/'Void Reason' appended at the END — a mis-issued invoice had no reversal at all,
+  // so the only fix was editing the sheet by hand. Voided rows are excluded from getInvoices by default.
+  Invoices:     ['INV No', 'SO No', 'Date', 'Customer', 'Total Sales', 'Total COGS', 'Created By', 'Created At',
+                 'Voided', 'Void Reason'],
   InvoiceItems: ['INV No', 'Item No', 'Item Name', 'Qty', 'Selling Price', 'Line Sales', 'Landed Cost/Unit', 'Line COGS'],
 
   // ── Accounts Receivable (after Invoices: client pays the sales-order amount) + Collections ──
   ARAging:     ['AR No', 'INV No', 'SO No', 'Customer', 'Amount (PHP)', 'Collected (PHP)', 'Status',
                 'Due Date', 'Notes', 'Created At', 'Updated At'],
+  // A158: 'Voided'/'Void Reason' appended — correctCollection can re-split a payment but nothing could
+  // reverse one entered against the wrong receivable. Voided rows drop out of the AR recompute.
   Collections: ['Collection No', 'AR No', 'INV No', 'SO No', 'Customer', 'Date', 'Amount (PHP)',
-                'Method', 'Reference No', 'Notes', 'Created At', 'EWT (PHP)'],
+                'Method', 'Reference No', 'Notes', 'Created At', 'EWT (PHP)', 'Voided', 'Void Reason'],
 
   // ── Expenses ledger (OpEx / G&A / Other) — pure record, no GL journals ──
   Expenses: ['Exp No', 'Date', 'Type', 'Category', 'Voucher No', 'Client', 'Description', 'Toll',
@@ -395,9 +400,21 @@ function updateInventoryItem(p) {
   var sh = _sheet('Inventory');
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
-  var c = _invComputed(p.balance, p.purchasePrice, p.shippingCost);
+  var curRow = sh.getRange(ri, 1, 1, 10).getValues()[0];
+  // A158: same stale-row protection as updateAPAging — a deleted row above shifts everything up.
+  if (p.itemNo && _normItemNo(curRow[0]) !== _normItemNo(p.itemNo)) {
+    return { success: false, staleRow: true,
+      message: 'This list has changed since it was loaded — refresh before saving (row ' + ri +
+        ' is no longer ' + p.itemNo + ').' };
+  }
+  /* A158 — the balance is a LIVE figure that receiving and issuance move by deltas. Writing the form's
+     value back absolutely meant that editing a description on a screen loaded before a receiving
+     silently rolled the stock back to the old number, with no journal offset. So the stored balance
+     wins unless the caller explicitly says it is adjusting stock. */
+  var newBalance = p.adjustBalance ? _num(p.balance) : _num(curRow[2]);
+  var c = _invComputed(newBalance, p.purchasePrice, p.shippingCost);
   sh.getRange(ri, 1, 1, 9).setValues([[_normItemNo(p.itemNo),
-    String(p.description).trim(), _num(p.balance), _num(p.purchasePrice), _num(p.shippingCost),
+    String(p.description).trim(), newBalance, _num(p.purchasePrice), _num(p.shippingCost),
     c.landed, c.total, p.currency || 'PHP', _now()]]);
   // Type is written only when explicitly supplied, so a plain edit never reclassifies the item.
   if (p.type === 'Stock' || p.type === 'Catalog') sh.getRange(ri, 10, 1, 1).setValues([[p.type]]);
@@ -407,7 +424,18 @@ function updateInventoryItem(p) {
 function deleteInventoryItem(p) {
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
-  _sheet('Inventory').deleteRow(ri);
+  var sh = _sheet('Inventory');
+  // A158: verify the row is still the item the caller means — deleting by position alone removes
+  // whatever has since shifted into that slot.
+  if (p.itemNo) {
+    var atRow = sh.getRange(ri, 1, 1, 1).getValues()[0][0];
+    if (_normItemNo(atRow) !== _normItemNo(p.itemNo)) {
+      return { success: false, staleRow: true,
+        message: 'This list has changed since it was loaded — refresh before deleting (row ' + ri +
+          ' is no longer ' + p.itemNo + ').' };
+    }
+  }
+  sh.deleteRow(ri);
   return { success: true, message: 'Item deleted.' };
 }
 
@@ -620,6 +648,35 @@ function _quotationEditable(status) {
   return st === 'Draft' || st === 'Rejected' || st === 'Open' || st === '';
 }
 
+/* A158 — compare a from-PR quotation's line prices against the Final Prices management set on the
+   pricing request. Returns { prNo, lines:[{item, was, now}] } for anything that moved, or null when
+   the quotation didn't come from a PR (nothing to compare against). Matching is by item number, then
+   by name, so a description edit alone doesn't read as a price change. */
+function _quotationPrDeviation(q) {
+  var prNo = String(q['PR No'] || '');
+  if (!prNo) return null;
+  var prItems = _rows('PricingRequestItems').filter(function (r) {
+    return String(r['PR No']) === prNo && (r['Included'] === true || String(r['Included']) === 'true');
+  });
+  if (!prItems.length) return null;
+  var qItems = _rows('QuotationItems').filter(function (r) {
+    return String(r['Quotation No']) === String(q['Quotation No']);
+  });
+  var lines = [];
+  qItems.forEach(function (qi) {
+    var key = String(qi['Item No'] || '').trim().toLowerCase();
+    var name = String(qi['Item Name'] || '').trim().toLowerCase();
+    var src = prItems.filter(function (r) { return String(r['Item No'] || '').trim().toLowerCase() === key; })[0]
+           || prItems.filter(function (r) { return String(r['Item Name'] || '').trim().toLowerCase() === name; })[0];
+    if (!src) return;
+    var was = _num(src['Final Price']), now = _num(qi['Quoted Price']);
+    if (Math.abs(was - now) > 0.005) {
+      lines.push({ item: String(qi['Item No'] || qi['Item Name'] || ''), was: was, now: now });
+    }
+  });
+  return { prNo: prNo, lines: lines };
+}
+
 function updateQuotation(p) {
   var no = p.quotationNo;
   if (!no) return { success: false, message: 'quotationNo required.' };
@@ -649,8 +706,11 @@ function updateQuotation(p) {
   var rows = _rows('Quotations');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i]['Quotation No']) === String(no)) {
+      // A158: the status is NOT editable here. It used to take `p.status`, so a Draft could be POSTed
+      // straight to Approved — skipping both approver tiers and the stale-PDF guard. Status changes
+      // belong to the workflow actions (submit / approve / reject / revise / send / close).
       sh.getRange(rows[i].rowIndex, 1, 1, 7).setValues([[newNo, p.date || rows[i]['Date'],
-        p.customer, p.status || rows[i]['Status'], total, rows[i]['Created By'], rows[i]['Created At']]]);
+        p.customer, rows[i]['Status'], total, rows[i]['Created By'], rows[i]['Created At']]]);
       break;
     }
   }
@@ -685,6 +745,17 @@ function updateQuotation(p) {
 
 function deleteQuotation(p) {
   var no = p.quotationNo;
+  /* A158: deleting had no status check at all — only the button was hidden, so an Approved or Sent
+     quotation could be removed outright, taking its line items with it. A quotation that has been
+     issued is a record; Close (A152) retires it without destroying the history. */
+  var qrow = _quotationRow(no);
+  if (!qrow) return { success: false, message: 'Quotation not found.' };
+  if (!_quotationEditable(String(qrow['Status'] || ''))) {
+    return { success: false, message: 'Only a Draft or Rejected quotation can be deleted (this one is ' +
+      String(qrow['Status']) + '). Use Close to retire it and keep the record.' };
+  }
+  var so = _rows('SalesOrders').filter(function (s) { return String(s['Quotation No'] || '') === String(no); })[0];
+  if (so) return { success: false, message: 'Sales order ' + so['SO No'] + ' was raised from this quotation — it cannot be deleted.' };
   var sh = _sheet('Quotations');
   _rows('Quotations').filter(function (r) { return String(r['Quotation No']) === String(no); })
     .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { sh.deleteRow(r.rowIndex); });
@@ -867,7 +938,7 @@ function importCollections(p) {
         // tax goes to the EWT column, where the Balance Sheet reads it as Creditable Tax (2307).
         _append('Collections', [colNo, arNo, invNo, c.soNo || '', customer,
           c.dateCollected || c.date || _dateStr(_now()), recv, '', '', 'Migrated (legacy)', _now(),
-          colEwt || '']);   // A147: 12th col EWT (PHP) — was omitted (trailing blank); explicit now
+          colEwt || '', '', '']);   // A147: EWT (PHP) explicit · A158 trailing: Voided / Void Reason
         createdPayments++;
       }
       if (invNo) existing[invNo] = true;
@@ -903,6 +974,17 @@ function updateSalesOrder(p) {
 
 function deleteSalesOrder(p) {
   var no = p.soNo;
+  /* A158 — this deleted the SO and its items and nothing else, leaving the PO, AP, invoice, AR,
+     cost details, lifecycle row and documents all pointing at a sales order that no longer exists. */
+  var deps = [];
+  if (_rows('PurchaseOrders').some(function (r) { return String(r['SO No'] || '') === String(no); })) deps.push('a purchase order');
+  if (_rows('Invoices').some(function (r) { return String(r['SO No'] || '') === String(no); })) deps.push('an invoice');
+  if (_rows('ARAging').some(function (r) { return String(r['SO No'] || '') === String(no); })) deps.push('a receivable');
+  if (_rows('MaterialsReceiving').some(function (r) { return String(r['SO No'] || '') === String(no); })) deps.push('a receiving record');
+  if (deps.length) {
+    return { success: false, message: 'Sales order ' + no + ' already has ' + deps.join(', ') +
+      ' — it cannot be deleted. Cancel the downstream records first if this order really is void.' };
+  }
   var sh = _sheet('SalesOrders');
   _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === String(no); })
     .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { sh.deleteRow(r.rowIndex); });
@@ -965,11 +1047,17 @@ function createPurchaseOrder(p) {
   var apNo = _nextNumber('APAging', 1, 'AP');
   var amountPHP = _num(p.totalPHP) > 0 ? _num(p.totalPHP) : '';
   _append('APAging', [apNo, no, p.supplier, currency, total, amountPHP, 'Unpaid', '', 0, '', _now(), _now(), '']);
-  // GL: Dr Purchases Clearing / Cr Accounts Payable (Total Purchase Order).
-  _postJournal('PO', no, p.date || _now(), currency, [
-    { account: ACC.CLEARING, debit: total, memo: 'PO ' + no + ' — ' + p.supplier },
-    { account: ACC.AP, credit: total, memo: 'AP ' + apNo + ' — ' + p.supplier }
-  ]);
+  // GL: Dr Purchases Clearing / Cr Accounts Payable, in PESOS.
+  // A158: this used to post the FOREIGN-currency total into a peso trial balance — a USD 20,000 PO
+  // debited 20,000 as if pesos, while receiving later credited Purchases Clearing with the real peso
+  // amount, leaving permanent residue and an AP control account that never matched AP Aging.
+  var poPHP = _poJournalPHP(total, currency, p.exchangeRate, amountPHP);
+  if (poPHP > 0) {
+    _postJournal('PO', no, p.date || _now(), 'PHP', [
+      { account: ACC.CLEARING, debit: poPHP, memo: 'PO ' + no + ' — ' + p.supplier },
+      { account: ACC.AP, credit: poPHP, memo: 'AP ' + apNo + ' — ' + p.supplier }
+    ]);
+  }
   _refStore('createPurchaseOrder', p.clientRef, no);
   return { success: true, poNo: no, apNo: apNo, message: 'Purchase Order created, AP entry and journal posted.' };
 }
@@ -977,6 +1065,33 @@ function createPurchaseOrder(p) {
 function updatePurchaseOrder(p) {
   var no = p.poNo;
   if (!no) return { success: false, message: 'poNo required.' };
+  /* A158 — this had no status check, so an APPROVED PO's items and total could be rewritten with the
+     approval left standing, the AP re-synced even when already paid, and the journal re-posted at the
+     new total. Because the PO total is the denominator for receiving's landed cost, editing after the
+     AP was seeded also silently re-scaled every future cost. */
+  var poRow = _poRow(no);
+  if (poRow) {
+    var poSt = String(poRow['Status'] || 'Draft');
+    var editableSt = (poSt === 'Draft' || poSt === 'Rejected' || poSt === 'Open' || poSt === '');
+    if (!editableSt && !p.revise) {
+      return { success: false, message: 'This PO is ' + poSt +
+        ' — reopen it with Revise before editing, so it goes back through approval.' };
+    }
+    if (!editableSt && p.revise) {
+      var paid = _apPaidPHP(no);
+      if (paid > 0) {
+        return { success: false, message: 'PO ' + no + ' already has ' + paid.toFixed(2) +
+          ' paid against it — it cannot be revised. Correct the payable on AP Aging instead.' };
+      }
+      var received = _rows('MaterialsReceiving').filter(function (m) { return String(m['PO No'] || '') === String(no); });
+      if (received.length) {
+        return { success: false, message: 'PO ' + no + ' was already received on ' +
+          String(received[0]['MR No']) + ' — revising it now would re-scale the landed cost of stock already on hand.' };
+      }
+      _setPOCells(no, { 'Status': 'Draft', 'Approved By': '', 'Approved At': '',
+                        'Approval Note': 'Reopened for revision by ' + (p.actorName || 'someone') });
+    }
+  }
   var items = JSON.parse(p.items || '[]');
   var currency = p.currency || 'PHP';
   var total = 0;
@@ -1009,16 +1124,38 @@ function updatePurchaseOrder(p) {
       apSh.getRange(r.rowIndex, 12, 1, 1).setValues([[_now()]]);
     }
   });
-  // Re-post the PO journal with the updated total.
-  _postJournal('PO', no, p.date || _now(), currency, [
-    { account: ACC.CLEARING, debit: total, memo: 'PO ' + no + ' — ' + p.supplier },
-    { account: ACC.AP, credit: total, memo: 'PO ' + no + ' — ' + p.supplier }
-  ]);
+  // Re-post the PO journal with the updated total, in pesos (A158 — see createPurchaseOrder).
+  var upPHP = _poJournalPHP(total, currency, p.exchangeRate, _num(p.totalPHP));
+  if (upPHP > 0) {
+    _postJournal('PO', no, p.date || _now(), 'PHP', [
+      { account: ACC.CLEARING, debit: upPHP, memo: 'PO ' + no + ' — ' + p.supplier },
+      { account: ACC.AP, credit: upPHP, memo: 'PO ' + no + ' — ' + p.supplier }
+    ]);
+  }
   return { success: true, poNo: no, message: 'Purchase Order updated.' };
 }
 
 function deletePurchaseOrder(p) {
   var no = p.poNo;
+  /* A158 — deleting used to take the AP rows with it INCLUDING paid ones (which deleteAPEntry itself
+     refuses to touch), orphaning the payment requests, receivings and the stock they added. */
+  var paidOnPo = _apPaidPHP(no);
+  if (paidOnPo > 0) {
+    return { success: false, message: 'PO ' + no + ' has ' + paidOnPo.toFixed(2) +
+      ' recorded as paid — it cannot be deleted. Reverse the payment first if it was an error.' };
+  }
+  var mrs = _rows('MaterialsReceiving').filter(function (m) { return String(m['PO No'] || '') === String(no); });
+  if (mrs.length) {
+    return { success: false, message: 'Goods were received against ' + no + ' on ' +
+      mrs.map(function (m) { return m['MR No']; }).join(', ') + ' — delete would orphan that stock.' };
+  }
+  var prs = _rows('PaymentRequests').filter(function (r) {
+    return String(r['PO No'] || '') === String(no) && String(r['Status']) !== 'Rejected';
+  });
+  if (prs.length) {
+    return { success: false, message: 'Payment request ' + prs.map(function (r) { return r['PR No']; }).join(', ') +
+      ' references ' + no + ' — cancel it before deleting the PO.' };
+  }
   var sh = _sheet('PurchaseOrders');
   _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(no); })
     .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { sh.deleteRow(r.rowIndex); });
@@ -1056,6 +1193,15 @@ function updateAPAging(p) {
   var sh = _sheet('APAging');
   var headers = SCHEMA.APAging;
   var cur = sh.getRange(ri, 1, 1, headers.length).getValues()[0];
+  /* A158 — a row number alone is not a safe key. Reads are cached for 60s, so if another user deletes
+     an AP row (or a PO, which deletes its AP rows) every row below shifts up and a Save from a stale
+     screen lands on a DIFFERENT supplier's payable — amount, status and the payment journal with it.
+     The client now sends the AP No it thinks it is editing; if the row disagrees, refuse. */
+  if (p.apNo && String(cur[headers.indexOf('AP No')] || '') !== String(p.apNo)) {
+    return { success: false, staleRow: true,
+      message: 'This list has changed since it was loaded — refresh before saving (row ' + ri +
+        ' is no longer ' + p.apNo + ').' };
+  }
   function set(col, val) { if (val !== undefined && val !== null && val !== '') cur[col] = val; }
   // Text fields must be CLEARABLE — write whenever supplied, including '' (matches updateARAging).
   function setText(col, val) { if (val !== undefined && val !== null) cur[col] = val; }
@@ -1119,6 +1265,8 @@ function getARAging(p) {
 
 function getCollections(p) {
   var rows = _rows('Collections');
+  // A158: voided collections drop out by default — they are reversed money, not received money.
+  if (!(p && p.includeVoided)) rows = rows.filter(function (r) { return String(r['Voided'] || '') !== 'true'; });
   if (p && p.soNo) rows = rows.filter(function (r) { return String(r['SO No']) === String(p.soNo); });
   if (p && p.customer) rows = rows.filter(function (r) { return String(r['Customer']) === String(p.customer); });
   if (p && p.arNo) rows = rows.filter(function (r) { return String(r['AR No']) === String(p.arNo); });
@@ -1146,12 +1294,28 @@ function recordCollection(p) {
   var ewt = _num(p.ewt);                                  // creditable withholding tax (2307) on this collection
   if (ewt < 0) ewt = 0;
   if (ewt > amount) ewt = amount;
+  /* A158 — correctCollection has always refused to leave a receivable over-collected; recording a
+     collection did not, so more than the amount due could be booked in the first place and only get
+     flagged afterwards. Overridable, because a genuine overpayment does happen. */
+  if (!p.confirmOver) {
+    var already = _rows('Collections').filter(function (r) {
+      return String(r['AR No']) === String(p.arNo) && String(r['Voided'] || '') !== 'true';
+    }).reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
+    var due = _num(ar['Amount (PHP)']);
+    if (due > 0 && already + amount > due + 0.005) {
+      return { success: false, needsConfirm: 'overCollect', due: due, already: already,
+        message: 'That would collect ' + (already + amount).toFixed(2) + ' against ' + p.arNo +
+          ', which is due ' + due.toFixed(2) + (already > 0 ? ' (already collected ' + already.toFixed(2) + ')' : '') +
+          '. Record it anyway?' };
+    }
+  }
   var dup = _refSeen('recordCollection', p.clientRef);
   if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
     status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
   var colNo = _nextNumber('Collections', 1, 'COL');
   _append('Collections', [colNo, p.arNo, ar['INV No'], ar['SO No'], ar['Customer'], p.date || _dateStr(_now()),
-    amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt]);
+    amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt,
+    '', '']);   // A158 trailing: Voided / Void Reason
   var rec = _arRecomputeFromCollections(p.arNo, ar);
   _refStore('recordCollection', p.clientRef, colNo);
   return { success: true, collectionNo: colNo, arNo: p.arNo, collected: rec.collected, status: rec.status,
@@ -1165,7 +1329,10 @@ function recordCollection(p) {
 function _arRecomputeFromCollections(arNo, arRow) {
   var ar = arRow || _arRow(arNo);
   if (!ar) return { collected: 0, ewt: 0, status: 'Unpaid' };
-  var colRows = _rows('Collections').filter(function (r) { return String(r['AR No']) === String(arNo); });
+  // A158: a voided collection is history, not money — it must not count toward what was collected.
+  var colRows = _rows('Collections').filter(function (r) {
+    return String(r['AR No']) === String(arNo) && String(r['Voided'] || '') !== 'true';
+  });
   var collected = colRows.reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
   var ewtTotal = colRows.reduce(function (s, r) { return s + _num(r['EWT (PHP)']); }, 0);
   var amt = _num(ar['Amount (PHP)']);
@@ -1223,12 +1390,90 @@ function correctCollection(p) {
              ', EWT ' + ewt.toFixed(2) + '; ' + arNo + ' is now ' + rec.status + '.' };
 }
 
+/* A158 — reverse a collection recorded in error (wrong receivable, wrong amount, duplicate entry).
+   Nothing could do this before: correctCollection can re-split a payment between cash and withholding
+   tax, but not un-record one, so the only remedy was editing the sheet by hand. The row is marked
+   rather than deleted, so the correction is auditable, and the parent AR + its journal are recomputed. */
+function voidCollection(p) {
+  if (!p.collectionNo) return { success: false, message: 'collectionNo required.' };
+  var col = _rows('Collections').filter(function (r) {
+    return String(r['Collection No']) === String(p.collectionNo);
+  })[0];
+  if (!col) return { success: false, message: 'Collection ' + p.collectionNo + ' not found.' };
+  if (String(col['Voided'] || '') === 'true') return { success: false, message: 'This collection is already voided.' };
+  if (!p.reason) return { success: false, message: 'A reason is required to void a collection.' };
+
+  _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Voided', 'true');
+  _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Void Reason',
+    String(p.reason) + ' — voided by ' + (p.actorName || 'unknown') + ' on ' + _dateStr(_now()));
+
+  var arNo = String(col['AR No'] || '');
+  var rec = arNo ? _arRecomputeFromCollections(arNo, null) : { collected: 0, status: '' };
+  return { success: true, collectionNo: p.collectionNo, arNo: arNo, collected: rec.collected, status: rec.status,
+    message: 'Collection ' + p.collectionNo + ' voided' + (arNo ? '; ' + arNo + ' is now ' + rec.status + '.' : '.') };
+}
+
+/* A158 — reverse an invoice issued in error. Refused once any money has been collected against it,
+   because that payment has to be dealt with first. Restores the stock it deducted, removes the
+   receivable it raised, and clears its journal so the GL doesn't keep the sale. */
+function voidInvoice(p) {
+  if (!p.invNo) return { success: false, message: 'invNo required.' };
+  var inv = _rows('Invoices').filter(function (v) { return String(v['INV No']) === String(p.invNo); })[0];
+  if (!inv) return { success: false, message: 'Invoice ' + p.invNo + ' not found.' };
+  if (String(inv['Voided'] || '') === 'true') return { success: false, message: 'This invoice is already voided.' };
+  if (!p.reason) return { success: false, message: 'A reason is required to void an invoice.' };
+
+  var ars = _rows('ARAging').filter(function (a) { return String(a['INV No']) === String(p.invNo); });
+  var collected = 0;
+  ars.forEach(function (a) {
+    collected += _rows('Collections').filter(function (c) {
+      return String(c['AR No']) === String(a['AR No']) && String(c['Voided'] || '') !== 'true';
+    }).reduce(function (s, c) { return s + _num(c['Amount (PHP)']); }, 0);
+  });
+  if (collected > 0) {
+    return { success: false, message: 'This invoice already has ' + collected.toFixed(2) +
+      ' collected against it — void or reassign those collections first.' };
+  }
+
+  // Put the stock back exactly as it was taken out.
+  _rows('InvoiceItems').filter(function (it) { return String(it['INV No']) === String(p.invNo); })
+    .forEach(function (it) {
+      _applyInventory(_normItemNo(it['Item No']), it['Item Name'], _num(it['Qty']), null, null, null);
+    });
+
+  var arSh = _sheet('ARAging');
+  ars.sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (a) {
+    _removeJournal('ARCOLL', a['AR No']);
+    arSh.deleteRow(a.rowIndex);
+  });
+  _removeJournal('INV', p.invNo);
+  _setCellByKey('Invoices', 'INV No', p.invNo, 'Voided', 'true');
+  _setCellByKey('Invoices', 'INV No', p.invNo, 'Void Reason',
+    String(p.reason) + ' — voided by ' + (p.actorName || 'unknown') + ' on ' + _dateStr(_now()));
+
+  return { success: true, invNo: p.invNo, arRemoved: ars.length,
+    message: 'Invoice ' + p.invNo + ' voided — stock restored, receivable removed and the journal cleared.' };
+}
+
 function updateARAging(p) {
   if (!p.arNo) return { success: false, message: 'arNo required.' };
   if (!_arRow(p.arNo)) return { success: false, message: 'AR entry not found.' };
   if (p.dueDate !== undefined) _setCellByKey('ARAging', 'AR No', p.arNo, 'Due Date', p.dueDate);
   if (p.notes !== undefined) _setCellByKey('ARAging', 'AR No', p.arNo, 'Notes', p.notes);
-  if (p.status !== undefined && p.status) _setCellByKey('ARAging', 'AR No', p.arNo, 'Status', p.status);
+  /* A158 — once a receivable has collections its status is DERIVED from them
+     (_arRecomputeFromCollections). Letting it be hand-set meant an unpaid receivable could be marked
+     "Paid" and disappear into the collapsed history with the money never received. A receivable with
+     no collections yet can still be annotated by hand. */
+  if (p.status !== undefined && p.status) {
+    var hasCols = _rows('Collections').some(function (c) {
+      return String(c['AR No']) === String(p.arNo) && String(c['Voided'] || '') !== 'true';
+    });
+    if (hasCols) {
+      return { success: false, message: 'This receivable has recorded collections, so its status follows them. ' +
+        'Record or void a collection to change it.' };
+    }
+    _setCellByKey('ARAging', 'AR No', p.arNo, 'Status', p.status);
+  }
   _setCellByKey('ARAging', 'AR No', p.arNo, 'Updated At', _now());
   return { success: true, arNo: p.arNo, message: 'AR entry updated.' };
 }
@@ -1462,6 +1707,30 @@ function createReceiving(p) {
     return { success: false, unpaid: true,
       message: 'No AP payment recorded for ' + p.poNo + ' yet — receiving now would set a ₱0 landed cost. Record the payment in AP Aging first, or confirm to proceed with a ₱0 cost basis.' };
   }
+  /* A158 — the same trap one step along: a PARTIAL payment costs every unit at that fraction. A 30%
+     deposit books the goods at 30% of their true cost, the invoice then books COGS at 30%, and the
+     gross margin reads ~70 points too high. Only the exactly-zero case warned before. */
+  if (p.poNo && paidPHP > 0 && !p.confirmPartialPay) {
+    var apAmt = _rows('APAging').filter(function (a) { return String(a['PO No'] || '') === String(p.poNo); })
+      .reduce(function (s, a) { return s + _num(a['Amount (PHP)']); }, 0);
+    if (apAmt > 0 && paidPHP < apAmt - 0.005) {
+      var pct = (paidPHP / apAmt) * 100;
+      return { success: false, partialPay: true, paidPHP: paidPHP, payablePHP: apAmt,
+        message: 'Only ' + pct.toFixed(0) + '% of ' + p.poNo + ' is paid (' + paidPHP.toFixed(2) + ' of ' +
+          apAmt.toFixed(2) + '), so the goods would be costed at ' + pct.toFixed(0) +
+          '% of their true value and the margin would read high. Record the balance first, or confirm to proceed.' };
+    }
+  }
+  /* A158 — receiving the same PO twice added the full quantity again at full cost: doubled stock, a
+     second Dr Inventory against one PO credit, and no way to reverse it (there is no deleteReceiving). */
+  if (p.poNo && !p.additional) {
+    var prior = _rows('MaterialsReceiving').filter(function (m) { return String(m['PO No'] || '') === String(p.poNo); });
+    if (prior.length) {
+      return { success: false, alreadyReceived: true, priorMrNo: String(prior[0]['MR No'] || ''),
+        message: p.poNo + ' was already received on ' + String(prior[0]['MR No'] || '') +
+          '. Confirm only if this is a genuine additional/partial delivery — otherwise the stock and its cost are counted twice.' };
+    }
+  }
 
   var no = p.mrNo || _nextNumber('MaterialsReceiving', 1, 'MR');
   // SO No (13th col) comes from the PO so receiving joins back to its sales order.
@@ -1511,14 +1780,20 @@ function createReceiving(p) {
 // ════════════════════════════════════════════════════════════════════════════
 //  INVOICE / MATERIALS ISSUANCE  (loads from a SO; deducts inventory; records COGS)
 // ════════════════════════════════════════════════════════════════════════════
-function getInvoices() {
+function getInvoices(p) {
   var items = _rows('InvoiceItems');
-  return { success: true, data: _rows('Invoices').map(function (v) {
+  // A158: a voided invoice is a reversed one — excluded unless explicitly asked for, so revenue,
+  // COGS and every report built on them stop counting a sale that was undone.
+  var invRows = _rows('Invoices').filter(function (v) {
+    return (p && p.includeVoided) || String(v['Voided'] || '') !== 'true';
+  });
+  return { success: true, data: invRows.map(function (v) {
     var its = items.filter(function (r) { return String(r['INV No']) === String(v['INV No']); });
     return {
       invNo: String(v['INV No']), soNo: String(v['SO No']), date: v['Date'], customer: v['Customer'],
       totalSales: _num(v['Total Sales']), totalCOGS: _num(v['Total COGS']), createdBy: v['Created By'],
       createdAt: v['Created At'], rowIndex: v.rowIndex,
+      voided: String(v['Voided'] || '') === 'true', voidReason: v['Void Reason'] || '',
       items: its.map(function (r) { return {
         itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
         sellingPrice: _num(r['Selling Price']), lineSales: _num(r['Line Sales']),
@@ -1552,6 +1827,37 @@ function createInvoice(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var dup = _refSeen('createInvoice', p.clientRef);
   if (dup) return { success: true, invNo: dup, duplicate: true, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
+
+  /* A158 — issuing more than is on hand booked full COGS while _applyInventory clamped the balance at
+     zero, so the shortfall simply disappeared and the Inventory ledger and sheet diverged for good. */
+  if (!p.confirmShort) {
+    var short = [];
+    items.forEach(function (it) {
+      var inv = _findInventory(_normItemNo(it.itemNo));
+      var have = inv ? _num(inv['Available Balance']) : 0;
+      var want = _num(it.qty);
+      if (want > have + 0.0001) short.push({ item: String(it.itemNo || it.itemName || ''), have: have, want: want });
+    });
+    if (short.length) {
+      return { success: false, needsConfirm: 'shortStock', shortLines: short,
+        message: short.map(function (s) { return s.item + ': issuing ' + s.want + ' with ' + s.have + ' on hand'; }).join('; ') +
+          '. Stock will go to zero and the shortfall will not be tracked — confirm to issue anyway.' };
+    }
+  }
+
+  /* A158 — an SO invoiced twice creates a second full AR row, so the customer appears to owe it twice. */
+  if (p.soNo && !p.confirmReinvoice) {
+    var prior = _rows('Invoices').filter(function (v) {
+      return String(v['SO No'] || '') === String(p.soNo) && String(v['Voided'] || '') !== 'true';
+    });
+    if (prior.length) {
+      var priorTotal = prior.reduce(function (s, v) { return s + _num(v['Total Sales']); }, 0);
+      return { success: false, needsConfirm: 'alreadyInvoiced', priorInvoices: prior.length, priorTotal: priorTotal,
+        message: p.soNo + ' already has ' + prior.length + ' invoice(s) totalling ' + priorTotal.toFixed(2) +
+          ' (' + prior.map(function (v) { return v['INV No']; }).join(', ') + '). Issue another?' };
+    }
+  }
+
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
   var totalSales = 0, totalCOGS = 0, zeroCogsLines = 0;
   var sh = _sheet('InvoiceItems');
@@ -1564,7 +1870,8 @@ function createInvoice(p) {
     totalSales += lineSales; totalCOGS += lineCOGS;
     return [no, it.itemNo, it.itemName, qty, price, lineSales, landed, lineCOGS];
   });
-  _append('Invoices', [no, p.soNo || '', p.date || _now(), p.customer, totalSales, totalCOGS, p.createdBy || '', _now()]);
+  _append('Invoices', [no, p.soNo || '', p.date || _now(), p.customer, totalSales, totalCOGS, p.createdBy || '', _now(),
+    '', '']);   // A158 trailing: Voided / Void Reason
   items.forEach(function (it, i) {
     sh.appendRow(lines[i]);
     _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null); // deduct stock (A145: normalized key)
@@ -1713,8 +2020,16 @@ function _shipAutoDerive(soNo) {
     if (anySent) d.po_sent = true;
     var poNos = {}; pos.forEach(function (p) { poNos[String(p['PO No'])] = true; });
     var aps = _rows('APAging').filter(function (r) { return poNos[String(r['PO No'])]; });
-    if (aps.length) d.prf_created = true;
-    if (aps.some(function (a) { return _num(a['Paid (PHP)']) > 0; })) d.tt_sent = true;
+    /* A158 — the PRF stages used to be derived from the AP row, which createPurchaseOrder creates
+       automatically: "payment request created" lit up the instant a PO existed, before anyone had
+       raised one, and prf_approved was never derived at all. Read the actual requests instead. */
+    var prsForPo = _rows('PaymentRequests').filter(function (r) {
+      return poNos[String(r['PO No'])] && String(r['Status']) !== 'Rejected';
+    });
+    if (prsForPo.length) d.prf_created = true;
+    if (prsForPo.some(function (r) { return ['Approved', 'Paid'].indexOf(String(r['Status'])) !== -1; })) d.prf_approved = true;
+    if (prsForPo.some(function (r) { return String(r['Status']) === 'Paid'; }) ||
+        aps.some(function (a) { return _num(a['Paid (PHP)']) > 0; })) d.tt_sent = true;
     var mrs = _rows('MaterialsReceiving').filter(function (r) { return poNos[String(r['PO No'])]; });
     if (mrs.length) d.delivered = true;
   }
@@ -1946,6 +2261,14 @@ function updatePaymentRequest(p) {
 function deletePaymentRequest(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
+  /* A158 — this deleted at ANY status, including Paid: the AP row kept its Paid amount and Paid status
+     with no request behind it, and the proof-of-payment document was orphaned. The UI only hid the
+     button, which a stale render or a direct call walks straight past. */
+  var prSt = String(r['Status'] || 'Draft');
+  if (!_prEditable(prSt)) {
+    return { success: false, message: 'Only a Draft or Rejected payment request can be deleted (this one is ' +
+      prSt + '). Use Revise to reopen it, or Reject to stop it.' };
+  }
   var poNo = r['PO No'];
   _sheet('PaymentRequests').deleteRow(r.rowIndex);
   // Clear the AP link if it pointed at this PR.
@@ -2323,7 +2646,7 @@ function _writeMigratedRecordsForSO(cd, force) {
     if (force) _deleteMigratedInvoiceForSO(soNo);
     if (!hasReal) {
       var invNo = _nextNumber('Invoices', 1, 'INV');
-      _sheet('Invoices').appendRow([invNo, soNo, date, customer, sales, cogs, 'Migrated (legacy)', _now()]);
+      _sheet('Invoices').appendRow([invNo, soNo, date, customer, sales, cogs, 'Migrated (legacy)', _now(), '', '']);
       _sheet('InvoiceItems').appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs]);
       wroteInv = true;
     }
@@ -2905,6 +3228,19 @@ function approveQuotation(p) {
   if (_quotationPdfMismatch(q)) {
     return { success: false, message: 'The saved PDF does not match this quotation — regenerate it before approving.' };
   }
+  /* A158 — a from-PR quotation lands as a Draft the rep can edit, and approval only ever looked at the
+     quotation itself. So management's final prices could be cut before the client saw them, with the
+     approvers reviewing the reduced figures and no trace of the original. The deviation is surfaced and
+     must be acknowledged; it is not silently blocked, because discounting IS sometimes the intent. */
+  if (!p.acknowledgeDeviation) {
+    var dev = _quotationPrDeviation(q);
+    if (dev && dev.lines.length) {
+      return { success: false, needsConfirm: 'prDeviation', prNo: dev.prNo, deviations: dev.lines,
+        message: 'This quotation differs from the prices management set on ' + dev.prNo + ': ' +
+          dev.lines.map(function (d) { return d.item + ' ' + d.was.toFixed(2) + ' → ' + d.now.toFixed(2); }).join('; ') +
+          '. Approve anyway?' };
+    }
+  }
   if (st === 'Pending Admin') {
     if (!_isAdminTier(role)) return { success: false, message: 'Only admin can approve at this stage.' };
     _setQuotationCells(p.quotationNo, { 'Status': 'Pending Management' });
@@ -3217,6 +3553,8 @@ var _MODULE_MAP = {
   updateAPAging: ['AP Aging', 'Updated'], deleteAPEntry: ['AP Aging', 'Deleted'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
   correctCollection: ['Collection', 'Corrected'],
+  voidCollection: ['Collection', 'Voided'],
+  voidInvoice: ['Invoice', 'Voided'],
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
@@ -3491,10 +3829,38 @@ function _setPRStatus(prNo, status, notes) {
   });
 }
 
+/* A158 — the peso value of a foreign-currency purchase order for the GL. The trial balance sums by
+   account and ignores the currency column, so posting an FC total there is simply wrong. Preference:
+   the PHP estimate entered on the form, else total × the persisted exchange rate; a non-PHP PO with
+   neither returns 0 and the journal is skipped rather than posted in the wrong unit (the A145 FX guard
+   should make that unreachable). */
+function _poJournalPHP(total, currency, exchangeRate, totalPHP) {
+  if (String(currency || 'PHP') === 'PHP') return _num(total);
+  if (_num(totalPHP) > 0) return _num(totalPHP);
+  var rate = _num(exchangeRate);
+  return rate > 0 ? _num(total) * rate : 0;
+}
+
 function _prItemRow(prNo, line) {
   return _rows('PricingRequestItems').filter(function (r) {
     return String(r['PR No']) === String(prNo) && _num(r['Line']) === _num(line);
   })[0];
+}
+
+function _prHeaderRow(prNo) {
+  return _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(prNo); })[0];
+}
+
+/* A158 — the quotation raised from a pricing request. The link lives in Quotations.'PR No' (A151);
+   before that it was fished out of the PR's free-text Notes with a regex, which broke the moment
+   anything else wrote to that column. The prose note is still read as a fallback for the rows that
+   predate the column. */
+function _quotationNoForPR(prNo) {
+  var byCol = _rows('Quotations').filter(function (q) { return String(q['PR No'] || '') === String(prNo); })[0];
+  if (byCol) return String(byCol['Quotation No']);
+  var hdr = _prHeaderRow(prNo);
+  var m = hdr ? String(hdr['Notes'] || '').match(/Quotation\s+(\S+)/i) : null;
+  return m ? m[1] : '';
 }
 
 function createPricingRequest(p) {
@@ -3582,8 +3948,15 @@ function updatePRSourcing(p) {
     var psCol = SCHEMA.PricingRequests.indexOf('Plant Site') + 1;
     hdrRows.forEach(function (h) { hsh.getRange(h.rowIndex, psCol, 1, 1).setValues([[p.plantSite || '']]); });
   }
-  _setPRStatus(p.prNo, 'Sourcing');
-  return { success: true, prNo: p.prNo, message: 'Sourcing saved.' };
+  /* A158 — this used to stamp 'Sourcing' unconditionally, so correcting a typo on a Returned-to-Sales
+     or Quoted request quietly demoted it: it vanished from the rep's quote list and createQuotationFromPR
+     then refused it, with nothing on screen explaining why. Saving item/header details is a pure edit at
+     any later stage — only a request still IN sourcing advances its status here. */
+  var curStatus = String((_prHeaderRow(p.prNo) || {})['Status'] || '');
+  if (curStatus === 'Requested' || curStatus === 'Sourcing' || curStatus === '') {
+    _setPRStatus(p.prNo, 'Sourcing');
+  }
+  return { success: true, prNo: p.prNo, status: curStatus || 'Sourcing', message: 'Sourcing saved.' };
 }
 
 // A144 backstop: Forward-to-Management must not proceed unless the sourcing is complete —
@@ -3623,6 +3996,37 @@ function submitForPricing(p) {
 
 function setMgmtPricing(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
+  var hdr = _prHeaderRow(p.prNo);
+  if (!hdr) return { success: false, message: 'Pricing request not found.' };
+  var prStatus = String(hdr['Status'] || '');
+
+  /* A158 — this was the one PR action with no stage gate, while the Pricing History table offered a
+     "Re-price" button on Quoted requests. Re-pricing one silently moved it back to Mgmt Priced and
+     left the quotation the client is already holding untouched and unflagged. */
+  if (prStatus !== 'For Mgmt Pricing') {
+    if (!p.reprice) {
+      return { success: false, message: 'This request is ' + prStatus +
+        ', not awaiting pricing. Use Re-price if you intend to change a price that has already been issued.' };
+    }
+    // Re-pricing something already quoted must not silently diverge from the client's document.
+    if (prStatus === 'Quoted') {
+      var qNo = _quotationNoForPR(p.prNo);
+      var q = qNo ? _quotationRow(qNo) : null;
+      var qSt = q ? String(q['Status'] || '') : '';
+      if (q && (qSt === 'Approved' || qSt === 'Sent')) {
+        return { success: false, message: 'Quotation ' + qNo + ' is ' + qSt +
+          ' — revise it first, then re-price. Otherwise the client keeps a document this pricing no longer matches.' };
+      }
+    }
+  }
+
+  // A158: an impossible margin silently produced ₱0 (or a 100× price) on every line.
+  var commTotal = _num(p.commission) + _num(p.margin) + 2;
+  if (commTotal >= 100) {
+    return { success: false, message: 'Commission + margin + 2% local tax comes to ' + commTotal.toFixed(1) +
+      '% — at 100% or more the selling price cannot be computed. Lower the commission or margin.' };
+  }
+
   var sh = _sheet('PricingRequests');
   // Ensure the appended history column has a header label (cosmetic; _rows maps by position).
   try { sh.getRange(1, 15, 1, 1).setValues([['Priced Items JSON']]); } catch (e) {}
@@ -3647,8 +4051,18 @@ function setMgmtPricing(p) {
     if (u.supplierPrice !== undefined) ish.getRange(row.rowIndex, 12, 1, 1).setValues([[_num(u.supplierPrice)]]); // Supplier Price (FC) (col 12)
     if (u.cbm !== undefined) ish.getRange(row.rowIndex, 13, 1, 1).setValues([[_num(u.cbm)]]);             // CBM (col 13)
   });
+
+  /* A158 — lines management removed from the engine. Deleting a row used to leave the item still
+     flagged Included with Final Price 0, so it printed on the client's quotation at ₱0.00 while the
+     verify screens rendered a blank "—" that read as "no data" rather than "free". */
+  JSON.parse(p.excludedLines || '[]').forEach(function (line) {
+    var row = _prItemRow(p.prNo, line);
+    if (row) ish.getRange(row.rowIndex, 8, 1, 1).setValues([[false]]);
+  });
+
   _setPRStatus(p.prNo, 'Mgmt Priced');
-  return { success: true, prNo: p.prNo, message: 'Final pricing saved; returned to admin.' };
+  return { success: true, prNo: p.prNo, repriced: prStatus !== 'For Mgmt Pricing',
+           message: 'Final pricing saved; returned to admin.' };
 }
 
 function verifyReturnToSales(p) {
@@ -3670,10 +4084,12 @@ function createQuotationFromPR(p) {
   // parsed from Notes). Otherwise the PR must be "Returned to Sales" before it can be quoted.
   var prStatus = String(hdr['Status'] || '');
   if (prStatus === 'Quoted') {
-    var qm = String(hdr['Notes'] || '').match(/Quotation\s+(\S+)/i);
-    var existingNo = qm ? qm[1].replace(/[.\s]+$/, '') : '';
+    // A158: read the link from the Quotations.'PR No' column rather than scraping the PR's free-text
+    // Notes, which other actions also write to.
+    var existingNo = _quotationNoForPR(p.prNo);
     return { success: true, prNo: p.prNo, quotationNo: existingNo, duplicate: true,
-      message: existingNo ? ('Already quoted as ' + existingNo + '.') : 'This request is already quoted.' };
+      message: existingNo ? ('Already quoted as ' + existingNo + ' — revise that quotation rather than creating another.')
+                          : 'This request is already quoted.' };
   }
   if (prStatus !== 'Returned to Sales') {
     return { success: false, message: 'This request is "' + prStatus + '" — it must be Returned to Sales before it can be quoted.' };
@@ -3691,6 +4107,16 @@ function createQuotationFromPR(p) {
              vat: r['Supplier Price VAT'] || '' };   // A145: carry the VAT-Incl/Excl note to the quotation
   });
   if (!qItems.length) return { success: false, message: 'No included items to quote.' };
+  /* A158 — a line that reaches here at 0 is either a deliberate freebie or a line management removed
+     from the engine without un-including it. Both print on the client's quotation at ₱0.00, so the
+     rep confirms which it is rather than finding out afterwards. */
+  var zeroLines = qItems.filter(function (it) { return !(it.price > 0); });
+  if (zeroLines.length && !p.confirmZero) {
+    return { success: false, needsConfirm: 'zeroPrice', zeroLines: zeroLines.length,
+      zeroItems: zeroLines.map(function (it) { return it.itemName || it.itemNo; }),
+      message: zeroLines.length + ' item(s) are priced at ₱0.00 and will print on the quotation as free: ' +
+        zeroLines.map(function (it) { return it.itemName || it.itemNo; }).join(', ') + '.' };
+  }
   // A145: carry the PR context that used to die at the PR — plant site + the client's own RFQ/PR number
   // (from Doc JSON) — onto the quotation so it prints and isn't re-typed.
   var clientRefNo = '';
@@ -3701,7 +4127,12 @@ function createQuotationFromPR(p) {
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
     quotationNo: p.quotationNo || '', subject: p.subject || '', discountPct: _num(p.discountPct) || 0,
     plantSite: hdr['Plant Site'] || '', clientRefNo: clientRefNo, prNo: p.prNo,   // A151: link quotation → its pricing request
-    clientRef: 'qfp_' + p.prNo,   // A147: force per-PR key so two saves from one PR can't create two quotations
+    /* A158: the client's per-SUBMISSION token, not a permanent per-PR key. The old 'qfp_'+prNo key
+       lived in ScriptProperties forever, so re-quoting a re-priced PR silently returned the ORIGINAL
+       quotation with the ORIGINAL prices and reported it as newly created — the corrected price
+       reached nobody. One-quotation-per-PR is enforced by the status guard above, which is the real
+       invariant; this token only protects against a transport retry of THIS submission. */
+    clientRef: p.clientRef || ('qfp1_' + p.prNo + '_' + _now().getTime()),
     createdBy: p.actorName || hdr['Requested By'] || '', actorRole: 'sales', items: JSON.stringify(qItems) });
   if (!qres.success) return qres;
   _setPRStatus(p.prNo, 'Quoted', 'Quotation ' + qres.quotationNo);
@@ -3799,6 +4230,7 @@ var HANDLERS = {
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
   getAPAging: getAPAging, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
+  voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
   correctCollection: correctCollection,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
@@ -3847,6 +4279,7 @@ var MUTATIONS = {
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, correctCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
+  voidCollection: 1, voidInvoice: 1,
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,

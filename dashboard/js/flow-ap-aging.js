@@ -84,7 +84,7 @@ function apFoot(open) {
 }
 
 function rowHtml(r) {
-  return `<tr data-row="${r.rowIndex}">
+  return `<tr data-row="${r.rowIndex}" data-apno="${flowEsc(r.apNo)}">
     <td>${flowEsc(r.apNo)}</td><td>${flowEsc(r.poNo)}</td><td>${flowEsc(r.supplier)}</td><td>${flowEsc(r.currency)}</td>
     <td class="num">${flowMoney(r.amountFC, r.currency)}</td>
     <td class="num"><input type="number" step="any" min="0" class="f-php" value="${r.amountPHP || ''}" placeholder="0.00"></td>
@@ -130,6 +130,9 @@ async function saveRow(rowIndex, btn) {
   const tr = btn.closest('tr');
   const payload = {
     rowIndex,
+    // A158: the row NUMBER alone isn't a safe key — a row deleted above shifts everything up and this
+    // save would land on another supplier's payable. The server refuses if they disagree.
+    apNo: tr.dataset.apno || '',
     amountPHP: tr.querySelector('.f-php').value || 0,
     status: tr.querySelector('.f-status').value,
     dueDate: tr.querySelector('.f-due').value,
