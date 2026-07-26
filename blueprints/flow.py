@@ -9,10 +9,12 @@ the flow already holds final prices; Drive-save is handled separately by FlowAPI
 import base64
 import json
 import logging
+import os
 import re
 from io import BytesIO
 from datetime import datetime
 
+import requests as http_requests
 from flask import Blueprint, request, jsonify, make_response
 from PyPDF2 import PdfReader, PdfWriter
 
@@ -21,10 +23,13 @@ from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
 from pdf_generators.utils import sanitize_filename
+from blueprints.session_auth import validate_session, display_name_for, INTERNAL_SHARED_SECRET
 
 logger = logging.getLogger(__name__)
 
 flow_bp = Blueprint("flow_bp", __name__)
+
+FLOW_APPS_SCRIPT_URL = os.environ.get("FLOW_APPS_SCRIPT_URL", "")
 
 CURRENCY_SYMBOLS = {
     "USD": "$", "PHP": "₱", "EUR": "€", "JPY": "¥", "GBP": "£",
@@ -426,6 +431,94 @@ def payment_request_pdf():
 
     fname = f"Payment_Request_{sanitize_filename(data.get('prNo', 'NoRef'))}.pdf"
     return _pdf_response(pdf_bytes, fname)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECURED MUTATIONS  (A158)
+# ══════════════════════════════════════════════════════════════════════════════
+# Approvals, payments, deletions and pricing used to be enforced by a role string the
+# browser supplied — anyone with the /exec URL could post actorRole:'director' and
+# approve or pay anything. Those actions now come through here instead: the session
+# token is validated against Code.gs, the caller's REAL role is read from the Users
+# sheet, and only then is the request forwarded to FlowAPI with a shared secret it
+# checks. The role and actor name the browser sent are discarded, not trusted.
+#
+# Reads are deliberately NOT routed here — they stay direct and cached. This pass
+# locks down writes.
+
+# Mirrors _SECURED in FlowAPI.gs. Kept as a list the client also fetches (/flow/secured-actions)
+# so the two can't silently drift apart.
+SECURED_ACTIONS = [
+    "approveQuotation", "rejectQuotation", "approvePO", "rejectPO",
+    "approvePaymentRequest", "rejectPaymentRequest", "markPaymentRequestPaid",
+    "setMgmtPricing", "verifyReturnToSales",
+    "deleteQuotation", "deleteSalesOrder", "deletePurchaseOrder", "deletePaymentRequest",
+    "deleteAPEntry", "updateAPAging", "recordCollection", "correctCollection",
+    "voidCollection", "voidInvoice",
+]
+
+
+@flow_bp.route("/flow/secured-actions", methods=["GET"])
+def secured_actions():
+    """The list of actions the client must route through /flow/secure."""
+    return jsonify({"success": True, "actions": SECURED_ACTIONS})
+
+
+@flow_bp.route("/flow/secure", methods=["POST"])
+def secure_mutation():
+    """Validate the caller, stamp their real identity, and forward to FlowAPI."""
+    if not FLOW_APPS_SCRIPT_URL:
+        return jsonify({"success": False, "message":
+                        "Secured actions are not configured on the server: FLOW_APPS_SCRIPT_URL "
+                        "is not set. Add it to the deployment's Environment."}), 503
+    if not INTERNAL_SHARED_SECRET:
+        return jsonify({"success": False, "message":
+                        "Secured actions are not configured on the server: INTERNAL_SHARED_SECRET "
+                        "is not set."}), 503
+
+    body = request.get_json(silent=True) or {}
+    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
+    session = validate_session(token)
+    if not session:
+        return jsonify({"success": False, "message": "Your session has expired — sign in again."}), 401
+
+    action = str(body.get("action") or "").strip()
+    if action not in SECURED_ACTIONS:
+        return jsonify({"success": False, "message": f"'{action}' is not a secured action."}), 400
+
+    params = body.get("params")
+    if not isinstance(params, dict):
+        params = {}
+
+    # The caller's claimed identity is replaced, never merged: whatever the browser said about
+    # who it is stops mattering here.
+    params = dict(params)
+    params.pop("flowSecret", None)
+    params["action"] = action
+    params["actorRole"] = str(session.get("role") or "").strip().lower()
+    params["actorName"] = display_name_for(session.get("username", ""))
+    params["actorUsername"] = session.get("username", "")
+    params["flowSecret"] = INTERNAL_SHARED_SECRET
+
+    try:
+        resp = http_requests.post(FLOW_APPS_SCRIPT_URL, json=params,
+                                  timeout=60, allow_redirects=False)
+        if resp.status_code in (301, 302, 303, 307, 308):
+            loc = resp.headers.get("Location")
+            if loc:
+                resp = http_requests.get(loc, timeout=60)
+        text = resp.text or ""
+        if text.lstrip().startswith("<"):
+            # The known Apps Script flake: an HTML error page returned with HTTP 200. Mutations
+            # are NOT retried here — the first attempt may well have committed.
+            logger.warning("secure_mutation: HTML response for %s", action)
+            return jsonify({"success": False, "message":
+                            "The backend returned an error page. Refresh and check the record "
+                            "before retrying — the action may have gone through."}), 502
+        return jsonify(json.loads(text))
+    except Exception as exc:
+        logger.exception("secure_mutation failed for %s", action)
+        return jsonify({"success": False, "message": str(exc)}), 502
 
 
 # ── Google Sheet CSV proxy (for the reconcile-2026-costs tool) ─────────────────

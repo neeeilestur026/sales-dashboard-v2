@@ -56,11 +56,18 @@ function openDocsModal(module, refNo, title, presetType) {
 
 // Reusable gate helper: does this record already carry a document (optionally of a given Doc Type,
 // case-insensitive)? Used by the required-attachment gates on PR sourcing / PO / payment requests.
+/** A158: a PDF the system generated FROM the record is not a supporting document — the submit gates
+ *  ask for evidence someone attached (a supplier invoice, a proforma), so those rows are excluded
+ *  from the untyped check. Mirrors _isGeneratedDoc in FlowAPI.gs. */
+function flowIsGeneratedDoc(d) {
+  return String((d && d.docType) || '').trim().toLowerCase().indexOf('generated pdf') === 0;
+}
+
 async function flowHasDoc(module, refNo, type) {
   try {
     const res = await fetchFlow('getDocuments', { module, refNo: String(refNo) });
     const docs = (res && res.data) || [];
-    if (!type) return docs.length > 0;
+    if (!type) return docs.some(d => !flowIsGeneratedDoc(d));
     const t = String(type).toLowerCase();
     return docs.some(d => String(d.docType || '').toLowerCase() === t);
   } catch (e) { return false; }

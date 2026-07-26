@@ -918,20 +918,28 @@ async function flowComputeActions(session) {
   if (isMgmt || isDir || isAcct || isAdmin) {
     jobs.push(fetchFlow('getPaymentRequests').then(r => {
       const prs = (r && r.data) || [];
-      let waiting = 0, toPay = 0;
+      // A158: counted per TYPE, because the two types live on different pages — a director sent to
+      // flow-payment-requests.html for an Other-type request lands on a page that filters it out.
+      const waiting = { PO: 0, Other: 0 }, toPay = { PO: 0, Other: 0 };
       prs.forEach(p => {
-        const s = p.status;
-        if (isAdmin && (s === 'Pending Admin' || s === 'Pending Accounting')) waiting++;
-        else if (isMgmt && (s === 'Pending Management' || (s === 'Pending Final' && !p.mgmtApprovedBy))) waiting++;
-        else if (isDir && (s === 'Pending Director' || (s === 'Pending Final' && !p.dirApprovedBy))) waiting++;
+        const s = p.status, t = (String(p.type) === 'Other') ? 'Other' : 'PO';
+        if (isAdmin && (s === 'Pending Admin' || s === 'Pending Accounting')) waiting[t]++;
+        else if (isMgmt && (s === 'Pending Management' || (s === 'Pending Final' && !p.mgmtApprovedBy))) waiting[t]++;
+        else if (isDir && (s === 'Pending Director' || (s === 'Pending Final' && !p.dirApprovedBy))) waiting[t]++;
         // Approved but not yet paid — owned by whoever executes that payment method.
         if (s === 'Approved') {
-          const bank = ['bank transfer', 'online'].indexOf(String(p.paymentMethod || '').trim().toLowerCase()) !== -1;
-          if ((bank && isDir) || (!bank && isAcct)) toPay++;
+          // A158: one shared owner rule (flow-api.js) instead of a third copy of the method list.
+          const owner = (typeof flowPayOwner === 'function') ? flowPayOwner(p.paymentMethod)
+            : (['bank transfer', 'online'].indexOf(String(p.paymentMethod || '').trim().toLowerCase()) !== -1 ? 'director' : 'accounting');
+          if ((owner === 'director' && isDir) || (owner === 'accounting' && isAcct)) toPay[t]++;
         }
       });
-      if (waiting) add('report', '#f97316', waiting + ' payment request(s) awaiting your approval', 'flow-payment-requests.html');
-      if (toPay) add('urgent', '#ef4444', toPay + ' approved payment(s) to pay + attach proof', 'flow-payment-requests.html');
+      const page = t => t === 'Other' ? 'flow-other-payables.html' : 'flow-payment-requests.html';
+      const label = t => t === 'Other' ? 'other payable' : 'payment request';
+      ['PO', 'Other'].forEach(t => {
+        if (waiting[t]) add('report', '#f97316', waiting[t] + ' ' + label(t) + '(s) awaiting your approval', page(t));
+        if (toPay[t]) add('urgent', '#ef4444', toPay[t] + ' approved ' + label(t) + '(s) to pay + attach proof', page(t));
+      });
     }).catch(() => {}));
   }
   // Accounting: payables past due + receivables past due.

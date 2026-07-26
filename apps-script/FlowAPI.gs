@@ -277,11 +277,39 @@ function _json(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/* A158 — actions that decide or move money. Every role check inside these used to rest on an
+   `actorRole` string the browser supplied, so anyone holding this /exec URL could approve or pay
+   anything. They now have to arrive through the Flask server, which validates the user's real login
+   session and attaches the shared secret below.
+
+   Enforcement is OFF until the FLOW_MUTATION_SECRET Script Property is set, so this version can be
+   pasted safely before the server side is confirmed live — set the property to switch it on. */
+var _SECURED = {
+  approveQuotation: 1, rejectQuotation: 1, approvePO: 1, rejectPO: 1,
+  approvePaymentRequest: 1, rejectPaymentRequest: 1, markPaymentRequestPaid: 1,
+  setMgmtPricing: 1, verifyReturnToSales: 1,
+  deleteQuotation: 1, deleteSalesOrder: 1, deletePurchaseOrder: 1, deletePaymentRequest: 1,
+  deleteAPEntry: 1, updateAPAging: 1, recordCollection: 1, correctCollection: 1,
+  voidCollection: 1, voidInvoice: 1
+};
+
+function _securedBlocked(action, params) {
+  if (!_SECURED[action]) return null;
+  var want;
+  try { want = PropertiesService.getScriptProperties().getProperty('FLOW_MUTATION_SECRET'); }
+  catch (e) { return null; }                       // property service unavailable → don't lock anyone out
+  if (!want) return null;                          // not configured yet → enforcement off (safe rollout)
+  if (String(params.flowSecret || '') === String(want)) return null;
+  return { success: false, message: 'This action must be performed through the app (signed in).' };
+}
+
 function _dispatch(params) {
   var action = params.action || '';
   try {
     var handler = HANDLERS[action];
     if (!handler) return _json({ success: false, message: 'Unknown action: ' + action });
+    var blocked = _securedBlocked(action, params);
+    if (blocked) return _json(blocked);
     // Serialize mutations to keep numbering + inventory math consistent.
     if (MUTATIONS[action]) {
       var lock = LockService.getScriptLock();
@@ -1864,7 +1892,18 @@ function createPaymentRequest(p) {
     if (apAmountRows > 1) {
       return { success: false, message: 'This PO has ' + apAmountRows + ' AP entries with an amount — the payable would be their sum. Remove the stale duplicate in AP Aging before creating the payment request.' };
     }
-    if (amount <= 0) amount = _poPayablePHP(poNo);
+    // A158: a PO is usually paid in full, but deposits happen — so a second request is allowed while
+    // what it may ask for is capped at what is genuinely still owed (payable − paid − other open
+    // requests). Without this, the natural deposit/balance flow defaults to paying the PO twice.
+    var rem = _poRemainingPayable(poNo, '');
+    if (amount <= 0) amount = rem ? Math.max(0, rem.remaining) : _poPayablePHP(poNo);
+    if (rem && amount > rem.remaining + 0.005) {
+      return { success: false, message: 'That exceeds what is still owed on ' + poNo + ': payable ' +
+        rem.amount.toFixed(2) + ' less paid ' + rem.paid.toFixed(2) +
+        (rem.openRequests > 0 ? ' less open requests ' + rem.openRequests.toFixed(2) : '') +
+        ' = ' + rem.remaining.toFixed(2) + ' remaining.' };
+    }
+    if (amount <= 0) return { success: false, message: 'Nothing is outstanding on ' + poNo + ' — it is already fully paid or requested.' };
   } else {
     if (!p.payee) return { success: false, message: 'Payee is required.' };
     if (amount <= 0) return { success: false, message: 'Amount must be greater than zero.' };
@@ -1925,10 +1964,13 @@ function submitPaymentRequest(p) {
   var st = String(r['Status']);
   if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Already submitted.' };
   // A144: a payment request must carry a supporting document before it moves to approval.
+  // A158: the record's OWN generated PDF doesn't count — clicking "PDF" then "Submit" used to satisfy
+  // this gate with no supplier invoice or proforma ever attached.
   var hasDoc = _rows('Documents').some(function (d) {
-    return String(d['Module']) === 'Payment Request' && String(d['Ref No']) === String(p.prNo);
+    return String(d['Module']) === 'Payment Request' && String(d['Ref No']) === String(p.prNo)
+      && !_isGeneratedDoc(d);
   });
-  if (!hasDoc) return { success: false, message: 'Attach at least one supporting document (via Docs) before submitting for approval.' };
+  if (!hasDoc) return { success: false, message: 'Attach a supporting document (the supplier invoice / proforma) before submitting — the request\'s own generated PDF does not count.' };
   // A156: one chain for both types — Admin → Management → Director.
   // Admin also CREATES most requests, so requiring a second admin would deadlock whenever only one is
   // on duty. When an admin created it their creation IS the admin sign-off and it starts at management;
@@ -2018,9 +2060,57 @@ function approvePaymentRequest(p) {
    Ownership follows the payment method: bank/online transfers are executed by the director, every
    other method (cheque, cash, telegraphic transfer) by accounting. */
 var _PR_DIRECTOR_METHODS = ['bank transfer', 'online'];
+var _PR_KNOWN_METHODS = ['bank transfer', 'online', 'cheque', 'cash', 'telegraphic transfer'];
 function _prPayOwner(method) {
   return _PR_DIRECTOR_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1 ? 'director' : 'accounting';
 }
+
+/* A158: find the AP row a PO-type request settles, and say clearly when that can't be done safely.
+   Returns { ap } | { error }. A blank PO No must never fall through to "the first AP row that also
+   has a blank PO No", and a PO carrying several amount-bearing AP rows is the A114 doubling shape —
+   pay against it and one of the two payables is silently lost. */
+function _prTargetAp(pr) {
+  var poNo = String(pr['PO No'] || '').trim();
+  var rows = _rows('APAging');
+  var linked = rows.filter(function (a) { return String(a['PR No'] || '') === String(pr['PR No']); });
+  if (linked.length === 1) return { ap: linked[0] };
+  if (linked.length > 1) {
+    return { error: 'This request is linked to ' + linked.length + ' AP entries (' +
+      linked.map(function (a) { return a['AP No']; }).join(', ') + ') — resolve the duplicates on AP Aging first.' };
+  }
+  if (!poNo) return { error: 'This PO-type request has no PO number, so the payable it settles is unknown.' };
+  var byPo = rows.filter(function (a) {
+    return String(a['PO No'] || '').trim() === poNo && _num(a['Amount (PHP)']) > 0;
+  });
+  if (!byPo.length) return { error: 'No payable found for ' + poNo + '.' };
+  if (byPo.length > 1) {
+    return { error: 'PO ' + poNo + ' has ' + byPo.length + ' payable entries (' +
+      byPo.map(function (a) { return a['AP No']; }).join(', ') +
+      ') — resolve the duplicates on AP Aging before paying.' };
+  }
+  return { ap: byPo[0] };
+}
+
+/* A158: what is still owed on a PO — the payable, less what has been paid, less what other open
+   requests have already claimed. This is what a new request may ask for, and what the second
+   payment of a deposit/balance pair should default to. */
+function _poRemainingPayable(poNo, excludePrNo) {
+  var po = String(poNo || '').trim();
+  if (!po) return null;
+  var aps = _rows('APAging').filter(function (a) { return String(a['PO No'] || '').trim() === po; });
+  if (!aps.length) return null;
+  var amount = aps.reduce(function (s, a) { return s + _num(a['Amount (PHP)']); }, 0);
+  var paid = aps.reduce(function (s, a) { return s + _num(a['Paid (PHP)']); }, 0);
+  var openReq = _rows('PaymentRequests').filter(function (r) {
+    var st = String(r['Status'] || '');
+    return String(r['PO No'] || '').trim() === po
+      && String(r['PR No']) !== String(excludePrNo || '')
+      && st !== 'Rejected' && st !== 'Paid';
+  }).reduce(function (s, r) { return s + _num(r['Amount']); }, 0);
+  return { amount: amount, paid: paid, openRequests: openReq,
+           remaining: amount - paid - openReq, count: aps.length };
+}
+
 function markPaymentRequestPaid(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
@@ -2028,44 +2118,65 @@ function markPaymentRequestPaid(p) {
   if (st === 'Paid') return { success: false, message: 'This payment request is already marked paid.' };
   if (st !== 'Approved') return { success: false, message: 'Only an approved payment request can be marked paid (it is ' + st + ').' };
 
-  var method = String(r['Payment Method'] || '');
+  var method = String(r['Payment Method'] || '').trim();
+  // A158: a blank or unrecognised method silently defaulted to accounting-owned. Ownership decides who
+  // may release money, so it has to be explicit.
+  if (!method) return { success: false, message: 'Set the payment method on this request before marking it paid.' };
+  if (_PR_KNOWN_METHODS.indexOf(method.toLowerCase()) === -1) {
+    return { success: false, message: 'Unrecognised payment method "' + method + '" — set a known method before marking this paid.' };
+  }
   var owner = _prPayOwner(method);
   if (String(p.actorRole || '') !== owner) {
     return { success: false, message: method + ' payments are marked paid by ' +
       (owner === 'director' ? 'the director' : 'accounting') + '.' };
   }
-  // Proof is the point of the step — no proof, no Paid.
+  // Proof is the point of the step — no proof, no Paid. The record's own generated PDF doesn't count.
   var hasProof = _rows('Documents').some(function (d) {
     return String(d['Module']) === 'Payment Request' && String(d['Ref No']) === String(p.prNo)
-      && String(d['Doc Type'] || '').toLowerCase() === 'proof of payment';
+      && String(d['Doc Type'] || '').trim().toLowerCase() === 'proof of payment';
   });
   if (!hasProof) return { success: false, message: 'Attach the proof of payment (Docs → Proof of Payment) before marking this paid.' };
+
+  var amt = _num(r['Amount']);
+  var apUpdated = '', apStatus = '';
+  // A PO-backed payment settles a real payable. Recording it on AP Aging is what lets Receiving value
+  // the stock in pesos (_apPaidPHP drives the landed cost) and closes the payable.
+  if (String(r['Type']) === 'PO') {
+    var found = _prTargetAp(r);
+    if (found.error) return { success: false, message: found.error };
+    var ap = found.ap;
+    if (amt > 0) {
+      var sh = _sheet('APAging'), headers = SCHEMA.APAging;
+      var cur = sh.getRange(ap.rowIndex, 1, 1, headers.length).getValues()[0];
+      var payable = _num(cur[headers.indexOf('Amount (PHP)')]);
+      // A158: ACCUMULATE. Overwriting turned a ₱300k deposit on a ₱1M payable into "₱300k, fully
+      // paid" — the remaining ₱700k vanished from the aging, the KPIs and the next request's prefill.
+      var paidNow = _num(cur[headers.indexOf('Paid (PHP)')]) + amt;
+      if (payable > 0 && paidNow > payable + 0.005) {
+        return { success: false, message: 'Paying ' + amt.toFixed(2) + ' would take the total paid to ' +
+          paidNow.toFixed(2) + ' against a payable of ' + payable.toFixed(2) + ' — check the amount first.' };
+      }
+      apStatus = (payable > 0 && paidNow >= payable - 0.005) ? 'Paid' : 'Partial';
+      cur[headers.indexOf('Paid (PHP)')] = paidNow;
+      cur[headers.indexOf('Status')] = apStatus;
+      cur[headers.indexOf('Updated At')] = _now();
+      sh.getRange(ap.rowIndex, 1, 1, headers.length).setValues([cur]);
+      apUpdated = String(ap['AP No'] || '');
+      // GL: the disbursement itself. Posted as the running total for this payable (ARCOLL-style
+      // aggregate) so it stays idempotent with updateAPAging's own APPAY entry rather than stacking.
+      _postJournal('APPAY', apUpdated, _now(), 'PHP', [
+        { account: ACC.AP, debit: paidNow, memo: 'Payment of ' + apUpdated },
+        { account: ACC.CASH, credit: paidNow, memo: 'Payment of ' + apUpdated }
+      ]);
+    }
+  }
 
   _prSet(p.prNo, { 'Status': 'Paid', 'Paid By': p.actorName || '', 'Paid At': _now(),
                    'Payment Ref': p.paymentRef || '' });
 
-  // A PO-backed payment settles a real payable. Recording it on AP Aging is what lets Receiving value
-  // the stock in pesos (_apPaidPHP drives the landed cost) and closes the payable.
-  var apUpdated = '';
-  if (String(r['Type']) === 'PO') {
-    var amt = _num(r['Amount']);
-    var rows = _rows('APAging');
-    var ap = rows.filter(function (a) { return String(a['PR No'] || '') === String(p.prNo); })[0]
-          || rows.filter(function (a) { return String(a['PO No'] || '') === String(r['PO No'] || ''); })[0];
-    if (ap && amt > 0) {
-      var sh = _sheet('APAging'), headers = SCHEMA.APAging;
-      var cur = sh.getRange(ap.rowIndex, 1, 1, headers.length).getValues()[0];
-      cur[headers.indexOf('Paid (PHP)')] = amt;
-      cur[headers.indexOf('Status')] = 'Paid';
-      // Mirrors the A145 reconcile in updateAPAging: the actual disbursed pesos become the payable.
-      cur[headers.indexOf('Amount (PHP)')] = amt;
-      cur[headers.indexOf('Updated At')] = _now();
-      sh.getRange(ap.rowIndex, 1, 1, headers.length).setValues([cur]);
-      apUpdated = String(ap['AP No'] || '');
-    }
-  }
-  return { success: true, prNo: p.prNo, status: 'Paid', apNo: apUpdated,
-           message: 'Payment Request marked paid' + (apUpdated ? ' and recorded on ' + apUpdated + '.' : '.') };
+  return { success: true, prNo: p.prNo, status: 'Paid', apNo: apUpdated, apStatus: apStatus,
+           message: 'Payment Request marked paid' +
+             (apUpdated ? ' and recorded on ' + apUpdated + (apStatus === 'Partial' ? ' (partially paid).' : '.') : '.') };
 }
 
 function rejectPaymentRequest(p) {
@@ -2522,27 +2633,32 @@ function _driveIdFromUrl(url) {
 
 /** A151: register a generated PDF in the Documents registry so getDocuments / the lifecycle tracker
  *  can see it (auto-PDFs used to live only in the parent record's PDF Link column). Idempotent. */
+/* A158: is this Documents row a PDF the system produced from the record itself, rather than a
+   document someone attached as evidence? The A144 "attach a supporting document" gates ask for the
+   latter, so they have to be able to tell them apart — otherwise clicking "PDF" satisfies the gate. */
+var _GENERATED_DOC_TYPE = 'Generated PDF';
+function _isGeneratedDoc(d) {
+  return String(d['Doc Type'] || '').trim().toLowerCase().indexOf('generated pdf') === 0;
+}
+
 function _registerDocument(module, refNo, fileName, url, fileId, actorName) {
   try {
     if (!module || !refNo || !url) return;
     var rows = _rows('Documents');
     // Exact same file already registered → nothing to do.
     if (rows.some(function (r) { return String(r['Drive Link']) === String(url); })) return;
-    // A regenerated PDF for the same record (revise → new file): UPDATE the existing Generated-PDF row in
-    // place so the registry points at the CURRENT file, not the first one (else getSOLifecycle serves a stale PDF).
-    var existing = rows.filter(function (r) {
+    // A regenerated PDF for the same record (revise → new file). A158: the previous row is marked
+    // superseded rather than overwritten, so the registry still points at exactly one CURRENT file
+    // while the earlier documents — the ones a client may already be holding — remain traceable.
+    var sh = _sheet('Documents');
+    rows.filter(function (r) {
       return String(r['Module']) === String(module) && String(r['Ref No']) === String(refNo) &&
-        String(r['Doc Type']) === 'Generated PDF';
-    })[0];
-    if (existing) {
-      var sh = _sheet('Documents');
-      sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('Drive Link') + 1, 1, 1).setValues([[url]]);
-      sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('File ID') + 1, 1, 1).setValues([[fileId || _driveIdFromUrl(url)]]);
-      if (fileName) sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('File Name') + 1, 1, 1).setValues([[fileName]]);
-      sh.getRange(existing.rowIndex, SCHEMA.Documents.indexOf('Uploaded At') + 1, 1, 1).setValues([[_now()]]);
-      return;
-    }
-    _append('Documents', [_nextNumber('Documents', 1, 'DOC'), module, refNo, 'Generated PDF',
+        String(r['Doc Type']) === _GENERATED_DOC_TYPE;
+    }).forEach(function (prev) {
+      sh.getRange(prev.rowIndex, SCHEMA.Documents.indexOf('Doc Type') + 1, 1, 1)
+        .setValues([[_GENERATED_DOC_TYPE + ' (superseded)']]);
+    });
+    _append('Documents', [_nextNumber('Documents', 1, 'DOC'), module, refNo, _GENERATED_DOC_TYPE,
       fileName || '', url, fileId || _driveIdFromUrl(url), actorName || 'System', _now()]);
   } catch (e) { /* never block the PDF save */ }
 }
@@ -2909,10 +3025,12 @@ function submitPOApproval(p) {
     return { success: false, message: 'Only a Draft or Rejected PO can be submitted (now: ' + st + ').' };
   }
   // A144: a PO must carry a supporting document before it advances to approval.
+  // A158: the PO's own generated PDF doesn't satisfy it — the point is the supplier's quotation.
   var hasDoc = _rows('Documents').some(function (d) {
-    return String(d['Module']) === 'Purchase Order' && String(d['Ref No']) === String(p.poNo);
+    return String(d['Module']) === 'Purchase Order' && String(d['Ref No']) === String(p.poNo)
+      && !_isGeneratedDoc(d);
   });
-  if (!hasDoc) return { success: false, message: 'Attach at least one supporting document (via Docs) before submitting the PO for approval.' };
+  if (!hasDoc) return { success: false, message: 'Attach a supporting document (the supplier quotation) before submitting — the PO\'s own generated PDF does not count.' };
   _setPOCells(p.poNo, { 'Status': 'Pending Management', 'Approval Note': '' });
   return { success: true, poNo: p.poNo, status: 'Pending Management', message: 'PO submitted for management approval.' };
 }

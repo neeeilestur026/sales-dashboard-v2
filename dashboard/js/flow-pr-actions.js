@@ -21,10 +21,11 @@
 
 let prCanPay = false;                 // set by prInitPayGate() once the backend is v92
 
-/** Bank/online transfers are executed by the director; everything else by accounting. */
+/** Bank/online transfers are executed by the director; everything else by accounting.
+ *  A158: delegates to the single shared list in flow-api.js so the three former copies can't drift. */
 function prPayOwner(method) {
-  return ['bank transfer', 'online'].indexOf(String(method || '').trim().toLowerCase()) !== -1
-    ? 'director' : 'accounting';
+  return (typeof flowPayOwner === 'function') ? flowPayOwner(method)
+    : (['bank transfer', 'online'].indexOf(String(method || '').trim().toLowerCase()) !== -1 ? 'director' : 'accounting');
 }
 
 async function prInitPayGate() {

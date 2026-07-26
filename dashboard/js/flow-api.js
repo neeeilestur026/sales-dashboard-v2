@@ -111,8 +111,55 @@ function _flowIdempotentAction(action) {
   return /^(update|delete|set|save|approve|reject|submit|verify|advance|reclassify|match|reset|backfill|fill|import|send)/.test(action);
 }
 
+/* A158 — actions that decide or move money go through the Flask server, which validates the login
+   session and stamps the caller's REAL role before forwarding. Sending actorRole from here was only
+   ever advisory: the browser could claim any role it liked. Keep this list in step with SECURED_ACTIONS
+   in blueprints/flow.py and _SECURED in FlowAPI.gs. */
+const FLOW_SECURED_ACTIONS = [
+  'approveQuotation', 'rejectQuotation', 'approvePO', 'rejectPO',
+  'approvePaymentRequest', 'rejectPaymentRequest', 'markPaymentRequestPaid',
+  'setMgmtPricing', 'verifyReturnToSales',
+  'deleteQuotation', 'deleteSalesOrder', 'deletePurchaseOrder', 'deletePaymentRequest',
+  'deleteAPEntry', 'updateAPAging', 'recordCollection', 'correctCollection',
+  'voidCollection', 'voidInvoice'
+];
+function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
+
+/* A158 — who releases the money for a given payment method. Bank/online transfers are executed by
+   the director, every other method by accounting. This lived in three separate copies (the payment
+   actions, the Action Center and FlowAPI); adding a method to the form would have silently routed it
+   to accounting in all of them. Mirrors _PR_DIRECTOR_METHODS / _prPayOwner in FlowAPI.gs. */
+const FLOW_DIRECTOR_PAY_METHODS = ['bank transfer', 'online'];
+function flowPayOwner(method) {
+  return FLOW_DIRECTOR_PAY_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1
+    ? 'director' : 'accounting';
+}
+
+function _flowSessionToken() {
+  try { const s = JSON.parse(localStorage.getItem('session') || '{}'); return (s && s.token) || ''; }
+  catch (e) { return ''; }
+}
+
+/** Route a secured mutation through Flask. Identity is resolved server-side, so actorName/actorRole
+ *  are not sent — anything this function passed would be discarded anyway. */
+async function _postFlowSecured(action, params) {
+  const token = _flowSessionToken();
+  const res = await fetch('/flow/secure', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Session-Token': token },
+    body: JSON.stringify({ sessionToken: token, action: action, params: params })
+  });
+  let data;
+  try { data = await res.json(); }
+  catch (e) { throw new Error('The server returned an unreadable response — refresh and check the record.'); }
+  if (!res.ok && data && data.message) throw new Error(data.message);
+  _flowCacheClear();
+  return data;
+}
+
 async function postFlow(action, params = {}) {
   if (!_flowConfigured()) throw new Error('Flow backend not configured. Set FLOW_API_URL in js/flow-api.js.');
+  if (_flowIsSecured(action)) return _postFlowSecured(action, params);
   const body = Object.assign({ actorName: _flowActor(), actorRole: _flowActorRole() }, params, { action });
   const payload = JSON.stringify(body);
   // A retried POST can double-write when the first attempt actually committed (post-commit response

@@ -112,10 +112,13 @@ async function mfLoadApprovals() {
     ]);
     const quotes = ((q && q.data) || []).filter(x => x.status === 'Pending Management');
     const pos = ((po && po.data) || []).filter(x => x.status === 'Pending Management');
-    // Payment requests awaiting management: PO type at Pending Management; Other type at Pending Final (Mgmt not yet signed).
+    // Payment requests awaiting management. A156 put BOTH types on the one Admin → Management →
+    // Director chain, so the type no longer decides the status — filtering PO-vs-Other separately
+    // (as this did) made every new Other-type request invisible here while the navbar bell counted
+    // it. `Pending Final` is the legacy status, still honoured for requests already in flight.
     const prs = ((pr && pr.data) || []).filter(x =>
-      (x.type === 'PO' && x.status === 'Pending Management') ||
-      (x.type === 'Other' && x.status === 'Pending Final' && !x.mgmtApprovedBy));
+      x.status === 'Pending Management' ||
+      (x.status === 'Pending Final' && !x.mgmtApprovedBy));
     if (!quotes.length && !pos.length && !prs.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
     const qTot = x => _mfn(x.total) || (x.items || []).reduce((s, it) => s + _mfn(it.qty) * _mfn(it.price), 0);
     const qRows = quotes.map(x => `<tr>

@@ -4,6 +4,7 @@
    Reuses the legacy PRF PDF via /flow/payment-request-pdf. */
 
 let prSession = null, prCanCreate = false, prPOs = [], prList = [], prAP = {}, prAPCount = {};
+let prAPPaid = {}, prOpenReq = {};   // A158: per-PO paid-to-date and open-request totals
 let prSuppliers = {};   // A145: supplier name (lower) → master record, for bank-detail prefill
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -29,18 +30,30 @@ async function loadSuppliers() {
 
 async function loadPOOptions() {
   try {
-    const [po, ap] = await Promise.all([
+    const [po, ap, reqs] = await Promise.all([
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getAPAging').catch(() => ({ data: [] })),
+      fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
     ]);
     prPOs = (po && po.data) || [];
     prAP = {};
     prAPCount = {};
+    prAPPaid = {};
+    prOpenReq = {};
     ((ap && ap.data) || []).forEach(a => {
       const k = String(a.poNo);
       prAP[k] = (prAP[k] || 0) + (flowNum(a.amountPHP) || 0) - 0;
+      prAPPaid[k] = (prAPPaid[k] || 0) + flowNum(a.paidPHP);
       // Count only entries carrying an amount — a zeroed/annotated stale row shouldn't warn.
       if (flowNum(a.amountPHP) > 0) prAPCount[k] = (prAPCount[k] || 0) + 1;
+    });
+    // A158: what other live requests have already claimed on each PO, so the deposit → balance flow
+    // defaults to the REMAINING amount instead of re-requesting the whole payable.
+    ((reqs && reqs.data) || []).forEach(r => {
+      const st = String(r.status || '');
+      if (String(r.type) !== 'PO' || st === 'Rejected' || st === 'Paid') return;
+      const k = String(r.poNo);
+      prOpenReq[k] = (prOpenReq[k] || 0) + flowNum(r.amount);
     });
     document.getElementById('loadPO').innerHTML = '<option value="">— select a purchase order —</option>' +
       prPOs.slice().sort((a, b) => (flowDate(b.date) || '').localeCompare(flowDate(a.date) || ''))
@@ -48,13 +61,31 @@ async function loadPOOptions() {
   } catch (e) { /* leave empty */ }
 }
 
+/** A158: payable − already paid − what other live requests have claimed. A PO is usually settled in
+ *  one payment, but when a deposit has gone out the balance request must default to what is LEFT. */
+function prRemaining(poNo) {
+  const k = String(poNo);
+  const amount = prAP[k] || 0, paid = prAPPaid[k] || 0, open = prOpenReq[k] || 0;
+  return { amount, paid, open, remaining: amount - paid - open };
+}
+
 function loadFromPO() {
   const no = document.getElementById('loadPO').value;
   const p = prPOs.find(x => String(x.poNo) === String(no));
   if (!p) return;
   document.getElementById('payee').value = p.supplier || '';
-  const php = prAP[String(no)] || 0;
-  document.getElementById('amount').value = php > 0 ? php : '';
+  const rem = prRemaining(no);
+  document.getElementById('amount').value = rem.remaining > 0 ? Math.round(rem.remaining * 100) / 100 : '';
+  const bd = document.getElementById('apBreakdown');
+  if (bd) {
+    bd.style.display = rem.amount > 0 ? '' : 'none';
+    bd.innerHTML = rem.amount > 0
+      ? `Payable ${flowMoney(rem.amount, 'PHP')}` +
+        (rem.paid > 0 ? ` · paid ${flowMoney(rem.paid, 'PHP')}` : '') +
+        (rem.open > 0 ? ` · open requests ${flowMoney(rem.open, 'PHP')}` : '') +
+        ` → <strong>remaining ${flowMoney(Math.max(0, rem.remaining), 'PHP')}</strong>`
+      : '';
+  }
   document.getElementById('purpose').value = `Supplier payment for ${p.poNo}` + (p.soNo ? ` (SO ${p.soNo})` : '');
   // A145: prefill bank details from the supplier master (only into blank fields — never clobber a typed value).
   const sup = prSuppliers[String(p.supplier || '').toLowerCase()];
@@ -68,10 +99,17 @@ function loadFromPO() {
   const warn = document.getElementById('apDupWarn');
   if (warn) {
     const n = prAPCount[String(no)] || 0;
-    warn.style.display = n > 1 ? '' : 'none';
-    warn.textContent = n > 1
-      ? `⚠ ${n} AP entries found for this PO — the amount above is their SUM. Check AP Aging for stale duplicates before submitting.`
-      : '';
+    const msgs = [];
+    if (n > 1) msgs.push(`⚠ ${n} AP entries found for this PO — the amount above is their SUM. Check AP Aging for stale duplicates before submitting.`);
+    // A158: a second request on the same PO is legitimate (deposit → balance) but worth flagging,
+    // since re-requesting the full payable is exactly how a PO gets paid twice.
+    if (rem.paid > 0 || rem.open > 0) {
+      msgs.push(`ℹ This PO already has ${rem.paid > 0 ? flowMoney(rem.paid, 'PHP') + ' paid' : ''}` +
+        `${rem.paid > 0 && rem.open > 0 ? ' and ' : ''}` +
+        `${rem.open > 0 ? flowMoney(rem.open, 'PHP') + ' requested' : ''} — this request covers the remainder.`);
+    }
+    warn.style.display = msgs.length ? '' : 'none';
+    warn.innerHTML = msgs.join('<br>');
   }
 }
 
@@ -86,6 +124,17 @@ async function savePR() {
   if (!editing && (prAPCount[String(poNo)] || 0) > 1) {
     flowMsg('formMsg', `This PO has ${prAPCount[String(poNo)]} AP entries with an amount — the payable would be their sum. Remove the stale duplicate in AP Aging first.`, false);
     return;
+  }
+  // A158: never let a request ask for more than is still owed — the server enforces the same cap.
+  if (!editing) {
+    const rem = prRemaining(poNo);
+    if (rem.amount > 0 && amount > rem.remaining + 0.005) {
+      flowMsg('formMsg', `That exceeds what is still owed on ${poNo}: payable ${flowMoney(rem.amount, 'PHP')}` +
+        (rem.paid > 0 ? ` less paid ${flowMoney(rem.paid, 'PHP')}` : '') +
+        (rem.open > 0 ? ` less open requests ${flowMoney(rem.open, 'PHP')}` : '') +
+        ` = ${flowMoney(Math.max(0, rem.remaining), 'PHP')} remaining.`, false);
+      return;
+    }
   }
   const payload = {
     prNo: editing || (document.getElementById('prNoInput').value || '').trim(),
@@ -220,9 +269,17 @@ function prActions(r) {
   let a = `<button class="link-btn" onclick='prGenPdf("${no}")'>PDF</button>` + B(`openDocsModal("Payment Request","${no}")`, 'Docs');
   const editable = st === 'Draft' || st === 'Rejected';
   if (prCanCreate) {
-    if (editable) a += B(`prSubmit("${no}")`, 'Submit');
-    a += B(`prEdit("${no}")`, 'Edit');                          // editable at any status
-    if (editable) a += B(`prDelete("${no}")`, 'Delete', 'del-btn');
+    if (editable) {
+      a += B(`prSubmit("${no}")`, 'Submit');
+      a += B(`prEdit("${no}")`, 'Edit');
+      a += B(`prDelete("${no}")`, 'Delete', 'del-btn');
+    } else if (st !== 'Paid') {
+      // A158: Edit used to render at every status but the server refuses it once the request is in
+      // flight — so a wrong bank account on an approved PRF had no way out short of a sheet edit.
+      // Revise is that way out: it reopens to Draft and clears the approvals, exactly as the
+      // Other-payables page has always done.
+      a += B(`prRevise("${no}")`, 'Revise');
+    }
   }
   a += prApprovalActions(r, B);
   a += prPayActions(r, B);
@@ -245,6 +302,21 @@ async function prSubmit(no) {
 function prApprove(no) { _prAct('approvePaymentRequest', no); }
 function prReject(no) { const reason = prompt('Reason for rejecting ' + no + ' (optional):', ''); if (reason === null) return; _prAct('rejectPaymentRequest', no, { reason }); }
 function prDelete(no) { if (confirm('Delete payment request ' + no + '?')) _prAct('deletePaymentRequest', no); }
+
+/* A158: the way back into a submitted or approved request. Editing one in flight is refused by the
+   server — deliberately, since silently rewriting an approved payment's bank account is exactly the
+   thing approvals exist to prevent — so correcting one means reopening it and re-approving. */
+async function prRevise(no) {
+  if (!confirm(`Reopen ${no} for revision?\n\nIt returns to Draft and ALL approvals (Admin, Management, Director) are cleared — it must be approved again before payment.`)) return;
+  const reason = prompt('Reason for the revision (optional — e.g. "wrong account number"):', '');
+  if (reason === null) return;
+  try {
+    const res = await postFlow('revisePaymentRequest', { prNo: no, reason });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not reopen this payment request.');
+    await loadPRs();
+    prEdit(no);                 // land in the form, prefilled and ready to correct
+  } catch (e) { alert(e.message); }
+}
 
 function prEdit(no) {
   const r = prList.find(x => x.prNo === no); if (!r) return;
