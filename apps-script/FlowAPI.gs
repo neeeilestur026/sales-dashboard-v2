@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 91;   // A152 close/reopen not-pursued quotation (90: A151 lifecycle spine + doc registry · 89: A149 names · 88: A147 bug-scan)
+var FLOW_VERSION = 92;   // A156 PR chain Admin→Mgmt→Director + Paid w/ proof (91: A152 close/reopen quotation · 90: A151 lifecycle spine + doc registry · 89: A149 names · 88: A147 bug-scan)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -143,7 +143,11 @@ var SCHEMA = {
                     'Purpose', 'Department', 'Bank Name', 'Account Name', 'Account Number', 'Payment Method',
                     'Due Date', 'Remarks', 'Status', 'Created By', 'Created By Role',
                     'Acct Approved By', 'Acct Approved At', 'Dir Approved By', 'Dir Approved At',
-                    'Mgmt Approved By', 'Mgmt Approved At', 'Approval Note', 'PDF Link', 'Created At', 'Updated At'],
+                    'Mgmt Approved By', 'Mgmt Approved At', 'Approval Note', 'PDF Link', 'Created At', 'Updated At',
+                    // A156: Admin is now the FIRST approval stage (Admin → Management → Director), and an
+                    // approved request is then marked Paid by whoever owns that payment method, with proof.
+                    // Appended at the END — 'Acct Approved *' stays, holding history for legacy rows.
+                    'Admin Approved By', 'Admin Approved At', 'Paid By', 'Paid At', 'Payment Ref'],
 
   // ── Per-SO cost breakdown migrated from the old Profit Report (revenue + COGS components) ──
   SOCostDetails: ['SO No', 'Customer', 'Date', 'Sales', 'COGS Type', 'Purchase of Goods',
@@ -1732,7 +1736,11 @@ function _prMap(r) {
     dirApprovedBy: r['Dir Approved By'], dirApprovedAt: r['Dir Approved At'],
     mgmtApprovedBy: r['Mgmt Approved By'], mgmtApprovedAt: r['Mgmt Approved At'],
     approvalNote: r['Approval Note'], pdfLink: r['PDF Link'] || '', createdAt: r['Created At'],
-    updatedAt: r['Updated At'], rowIndex: r.rowIndex
+    updatedAt: r['Updated At'],
+    // A156: admin is the first approval stage, and Paid closes the request out.
+    adminApprovedBy: r['Admin Approved By'] || '', adminApprovedAt: r['Admin Approved At'] || '',
+    paidBy: r['Paid By'] || '', paidAt: r['Paid At'] || '', paymentRef: r['Payment Ref'] || '',
+    rowIndex: r.rowIndex
   };
 }
 function _prSet(no, obj) {
@@ -1855,8 +1863,20 @@ function submitPaymentRequest(p) {
     return String(d['Module']) === 'Payment Request' && String(d['Ref No']) === String(p.prNo);
   });
   if (!hasDoc) return { success: false, message: 'Attach at least one supporting document (via Docs) before submitting for approval.' };
-  var next = String(r['Type']) === 'Other' ? 'Pending Accounting' : 'Pending Director';
-  _prSet(p.prNo, { 'Status': next, 'Approval Note': '' });
+  // A156: one chain for both types — Admin → Management → Director.
+  // Admin also CREATES most requests, so requiring a second admin would deadlock whenever only one is
+  // on duty. When an admin created it their creation IS the admin sign-off and it starts at management;
+  // when accounting created it a real admin must still approve, which is where the check has meaning.
+  var patch = { 'Approval Note': '' }, next;
+  if (String(r['Created By Role']) === 'admin') {
+    next = 'Pending Management';
+    patch['Admin Approved By'] = String(r['Created By'] || '') + ' (creator)';
+    patch['Admin Approved At'] = _now();
+  } else {
+    next = 'Pending Admin';
+  }
+  patch['Status'] = next;
+  _prSet(p.prNo, patch);
   return { success: true, prNo: p.prNo, status: next, message: 'Submitted for approval (' + next + ').' };
 }
 
@@ -1870,59 +1890,116 @@ function revisePaymentRequest(p) {
   if (_prEditable(st)) {
     return { success: false, message: 'This payment request is ' + st + ' — it is already editable.' };
   }
+  // A156: money has already left on a Paid request and the payable is settled — silently reopening it
+  // would drop the payment stamp while the AP row stays paid. Correcting a wrong payment is a
+  // deliberate accounting entry, not a reopen.
+  if (st === 'Paid') {
+    return { success: false, message: 'This payment request is already Paid — record a correction on AP Aging instead of reopening it.' };
+  }
   var note = 'Reopened for revision by ' + (p.actorName || 'a user') + (p.reason ? ' — ' + p.reason : '');
   _prSet(p.prNo, {
     'Status': 'Draft',
     'Acct Approved By': '', 'Acct Approved At': '',
     'Dir Approved By': '', 'Dir Approved At': '',
     'Mgmt Approved By': '', 'Mgmt Approved At': '',
+    // A156: the admin tick and any payment stamp must clear too, or a reopened request would carry a
+    // stale approval — and, worse, still look paid.
+    'Admin Approved By': '', 'Admin Approved At': '',
+    'Paid By': '', 'Paid At': '', 'Payment Ref': '',
     'Approval Note': note
   });
   return { success: true, prNo: p.prNo, status: 'Draft', previousStatus: st,
            message: 'Payment Request reopened for revision — all approvals cleared; it must be approved again.' };
 }
 
+/* A156: one sequential chain for BOTH types — Admin → Management → Director.
+   Accounting no longer approves (they still create, and pay the non-bank methods).
+   Legacy in-flight rows are mapped on, so nothing submitted under the old two-chain model dead-ends:
+   'Pending Accounting' behaves as 'Pending Admin', 'Pending Final' as 'Pending Management'. */
+var _PR_STAGES = [
+  { status: 'Pending Admin', legacy: 'Pending Accounting', role: 'admin',
+    by: 'Admin Approved By', at: 'Admin Approved At', next: 'Pending Management', who: 'admin' },
+  { status: 'Pending Management', legacy: 'Pending Final', role: 'management',
+    by: 'Mgmt Approved By', at: 'Mgmt Approved At', next: 'Pending Director', who: 'management' },
+  { status: 'Pending Director', legacy: null, role: 'director',
+    by: 'Dir Approved By', at: 'Dir Approved At', next: 'Approved', who: 'the director' }
+];
+function _prStage(status) {
+  var st = String(status || '');
+  for (var i = 0; i < _PR_STAGES.length; i++) {
+    if (_PR_STAGES[i].status === st || (_PR_STAGES[i].legacy && _PR_STAGES[i].legacy === st)) return _PR_STAGES[i];
+  }
+  return null;
+}
+
 function approvePaymentRequest(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
   var st = String(r['Status']), role = String(p.actorRole || ''), who = p.actorName || '', now = _now();
+  var stage = _prStage(st);
+  if (!stage) return { success: false, message: 'Not awaiting approval at this stage (' + st + ').' };
+  if (role !== stage.role) return { success: false, message: 'Only ' + stage.who + ' can approve at this stage.' };
+  var patch = { 'Status': stage.next };
+  patch[stage.by] = who;
+  patch[stage.at] = now;
+  _prSet(p.prNo, patch);
+  return { success: true, prNo: p.prNo, status: stage.next,
+           message: stage.next === 'Approved' ? 'Payment Request fully approved.'
+                                              : 'Approved; forwarded to ' + stage.next.replace('Pending ', '').toLowerCase() + '.' };
+}
+
+/* A156: mark an APPROVED request as actually paid, with the proof of payment on file.
+   Ownership follows the payment method: bank/online transfers are executed by the director, every
+   other method (cheque, cash, telegraphic transfer) by accounting. */
+var _PR_DIRECTOR_METHODS = ['bank transfer', 'online'];
+function _prPayOwner(method) {
+  return _PR_DIRECTOR_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1 ? 'director' : 'accounting';
+}
+function markPaymentRequestPaid(p) {
+  var r = _prRow(p.prNo);
+  if (!r) return { success: false, message: 'Payment Request not found.' };
+  var st = String(r['Status']);
+  if (st === 'Paid') return { success: false, message: 'This payment request is already marked paid.' };
+  if (st !== 'Approved') return { success: false, message: 'Only an approved payment request can be marked paid (it is ' + st + ').' };
+
+  var method = String(r['Payment Method'] || '');
+  var owner = _prPayOwner(method);
+  if (String(p.actorRole || '') !== owner) {
+    return { success: false, message: method + ' payments are marked paid by ' +
+      (owner === 'director' ? 'the director' : 'accounting') + '.' };
+  }
+  // Proof is the point of the step — no proof, no Paid.
+  var hasProof = _rows('Documents').some(function (d) {
+    return String(d['Module']) === 'Payment Request' && String(d['Ref No']) === String(p.prNo)
+      && String(d['Doc Type'] || '').toLowerCase() === 'proof of payment';
+  });
+  if (!hasProof) return { success: false, message: 'Attach the proof of payment (Docs → Proof of Payment) before marking this paid.' };
+
+  _prSet(p.prNo, { 'Status': 'Paid', 'Paid By': p.actorName || '', 'Paid At': _now(),
+                   'Payment Ref': p.paymentRef || '' });
+
+  // A PO-backed payment settles a real payable. Recording it on AP Aging is what lets Receiving value
+  // the stock in pesos (_apPaidPHP drives the landed cost) and closes the payable.
+  var apUpdated = '';
   if (String(r['Type']) === 'PO') {
-    if (st === 'Pending Director') {
-      if (role !== 'director') return { success: false, message: 'Only the director can approve at this stage.' };
-      _prSet(p.prNo, { 'Dir Approved By': who, 'Dir Approved At': now, 'Status': 'Pending Management' });
-      return { success: true, prNo: p.prNo, status: 'Pending Management', message: 'Director approved; forwarded to management.' };
+    var amt = _num(r['Amount']);
+    var rows = _rows('APAging');
+    var ap = rows.filter(function (a) { return String(a['PR No'] || '') === String(p.prNo); })[0]
+          || rows.filter(function (a) { return String(a['PO No'] || '') === String(r['PO No'] || ''); })[0];
+    if (ap && amt > 0) {
+      var sh = _sheet('APAging'), headers = SCHEMA.APAging;
+      var cur = sh.getRange(ap.rowIndex, 1, 1, headers.length).getValues()[0];
+      cur[headers.indexOf('Paid (PHP)')] = amt;
+      cur[headers.indexOf('Status')] = 'Paid';
+      // Mirrors the A145 reconcile in updateAPAging: the actual disbursed pesos become the payable.
+      cur[headers.indexOf('Amount (PHP)')] = amt;
+      cur[headers.indexOf('Updated At')] = _now();
+      sh.getRange(ap.rowIndex, 1, 1, headers.length).setValues([cur]);
+      apUpdated = String(ap['AP No'] || '');
     }
-    if (st === 'Pending Management') {
-      if (role !== 'management') return { success: false, message: 'Only management can give final approval.' };
-      _prSet(p.prNo, { 'Mgmt Approved By': who, 'Mgmt Approved At': now, 'Status': 'Approved' });
-      return { success: true, prNo: p.prNo, status: 'Approved', message: 'Payment Request approved.' };
-    }
-    return { success: false, message: 'Not awaiting approval at this stage.' };
   }
-  // Type 'Other': Accounting → then both Management and Director
-  if (st === 'Pending Accounting') {
-    if (role !== 'accounting') return { success: false, message: 'Only accounting can approve at this stage.' };
-    _prSet(p.prNo, { 'Acct Approved By': who, 'Acct Approved At': now, 'Status': 'Pending Final' });
-    return { success: true, prNo: p.prNo, status: 'Pending Final', message: 'Accounting approved; awaiting management and director.' };
-  }
-  if (st === 'Pending Final') {
-    if (role === 'management') {
-      if (r['Mgmt Approved By']) return { success: false, message: 'Management already approved.' };
-      _prSet(p.prNo, { 'Mgmt Approved By': who, 'Mgmt Approved At': now });
-    } else if (role === 'director') {
-      if (r['Dir Approved By']) return { success: false, message: 'Director already approved.' };
-      _prSet(p.prNo, { 'Dir Approved By': who, 'Dir Approved At': now });
-    } else {
-      return { success: false, message: 'Only management or director can approve at this stage.' };
-    }
-    var fresh = _prRow(p.prNo);
-    if (fresh['Mgmt Approved By'] && fresh['Dir Approved By']) {
-      _prSet(p.prNo, { 'Status': 'Approved' });
-      return { success: true, prNo: p.prNo, status: 'Approved', message: 'Payment Request fully approved.' };
-    }
-    return { success: true, prNo: p.prNo, status: 'Pending Final', message: 'Approval recorded; awaiting the other approver.' };
-  }
-  return { success: false, message: 'Not awaiting approval at this stage.' };
+  return { success: true, prNo: p.prNo, status: 'Paid', apNo: apUpdated,
+           message: 'Payment Request marked paid' + (apUpdated ? ' and recorded on ' + apUpdated + '.' : '.') };
 }
 
 function rejectPaymentRequest(p) {
@@ -1930,8 +2007,9 @@ function rejectPaymentRequest(p) {
   if (!r) return { success: false, message: 'Payment Request not found.' };
   var st = String(r['Status']), role = String(p.actorRole || '');
   if (st.indexOf('Pending') !== 0) return { success: false, message: 'Only a pending request can be rejected.' };
-  var ok = (String(r['Type']) === 'PO') ? (role === 'director' || role === 'management')
-    : (role === 'accounting' || role === 'management' || role === 'director');
+  // A156: any approver in the chain may reject at any pending stage — a wrong request should be
+  // stoppable by whoever spots it, not only by the stage that happens to hold it.
+  var ok = ['admin', 'management', 'director'].indexOf(role) !== -1;
   if (!ok) return { success: false, message: 'You are not an approver for this request.' };
   _prSet(p.prNo, { 'Status': 'Rejected', 'Approval Note': p.reason || '' });
   return { success: true, prNo: p.prNo, status: 'Rejected', message: 'Payment Request rejected.' };
@@ -2978,6 +3056,7 @@ var _MODULE_MAP = {
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
   approvePaymentRequest: ['Payment Request', 'Approved'], rejectPaymentRequest: ['Payment Request', 'Rejected'],
+  markPaymentRequestPaid: ['Payment Request', 'Paid'],
   savePaymentRequestPDF: ['Payment Request', 'PDF Saved'],
   revisePaymentRequest: ['Payment Request', 'Revised'],
   importSOCostDetails: ['Sales Order', 'Cost Imported'], saveSOCostDetails: ['Sales Order', 'Cost Edited'],
@@ -3549,6 +3628,7 @@ var HANDLERS = {
   getPaymentRequests: getPaymentRequests, createPaymentRequest: createPaymentRequest,
   updatePaymentRequest: updatePaymentRequest, deletePaymentRequest: deletePaymentRequest,
   submitPaymentRequest: submitPaymentRequest, approvePaymentRequest: approvePaymentRequest,
+  markPaymentRequestPaid: markPaymentRequestPaid,
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
   revisePaymentRequest: revisePaymentRequest,
   getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails, saveSOCostDetails: saveSOCostDetails,
@@ -3595,6 +3675,7 @@ var MUTATIONS = {
   advanceShipmentStage: 1, updateShipment: 1,
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1, revisePaymentRequest: 1,
+  markPaymentRequestPaid: 1,
   importSOCostDetails: 1, saveSOCostDetails: 1, importPricingSubmissions: 1, backfillMigratedRecords: 1,
   deleteMigratedRecords: 1, resetSequenceCounters: 1,
   saveSupplier: 1, deleteSupplier: 1, saveClient: 1, deleteClient: 1,

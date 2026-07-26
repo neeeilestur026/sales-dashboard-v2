@@ -79,6 +79,14 @@
     .pr-history-group > summary .rep-name { color:var(--text-muted,#64748b); }
     .pe-edit-banner { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.9rem; margin:0.6rem 0 0.2rem; background:#fffbeb; border:1px solid rgba(217,119,6,0.3); border-radius:9px; font-size:0.82rem; color:#92400e; }
     .pe-edit-banner .pe-edit-id { font-weight:700; }
+    /* A156: sourcing context (plant site / client location) shown beside the engine. */
+    .pe-context { display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem; margin:0.55rem 0 0.2rem; }
+    .pe-ctx { display:inline-flex; align-items:baseline; gap:0.4rem; padding:0.35rem 0.7rem; border-radius:999px;
+              background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); font-size:0.78rem; }
+    .pe-ctx .k { font-size:0.66rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted,#8b93a1); }
+    .pe-ctx .v { font-weight:700; color:var(--text-primary,#111827); }
+    .pe-ctx.site { background:#eef2ff; border-color:#c7d2fe; }
+    .pe-ctx-note { font-size:0.72rem; color:var(--text-muted,#8b93a1); }
   </style>
 </head>
 <body>
@@ -101,6 +109,10 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         Re-pricing <span class="pe-edit-id" id="peEditId"></span>
       </div>
+      <!-- A156: where the goods actually have to land. Admin captures this at sourcing, but management
+           never opened the request detail (openPr jumps straight into the engine), so it was invisible
+           exactly where the freight is priced. -->
+      <div id="peContext" class="pe-context" style="display:none;"></div>
       <div id="mgmtEngineBody" style="margin-top:0.5rem;"></div>
       <div class="flow-actions" style="margin-top:0.75rem;">
         <button type="button" class="btn btn-primary" id="peSaveBtn" onclick="savePricing()" disabled>Save Pricing (return to admin)</button>

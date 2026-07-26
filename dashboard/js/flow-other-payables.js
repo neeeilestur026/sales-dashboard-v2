@@ -1,5 +1,6 @@
 /* flow-other-payables.js — Type 'Other' payment requests for expenses / other payables.
-   Manual entry (no PO). Approval: Accounting → then both Management and Director.
+   Manual entry (no PO). Approval: Admin → Management → Director, then marked Paid with proof
+   by the director (bank/online transfers) or accounting (cheque, cash, telegraphic transfer).
    Reuses the legacy PRF PDF via /flow/payment-request-pdf. */
 
 let prSession = null, prCanCreate = false, prList = [];
@@ -11,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-other-payables');
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-other-payables.html');
   if (!prCanCreate) document.getElementById('formCard').style.display = 'none';
+  await prInitPayGate();   // A156: Mark Paid only once the backend is v92
   await loadPRs();
 });
 
@@ -94,7 +96,9 @@ function renderPRs() {
 function prRow(r) {
   const st = r.status || 'Draft';
   const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
-  const appr = [r.acctApprovedBy ? 'Acct ✓' : '', r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '']
+  const appr = [r.adminApprovedBy ? 'Admin ✓' : (r.acctApprovedBy ? 'Acct ✓' : ''),
+    r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '',
+    r.paidBy ? 'Paid ✓' : '']
     .filter(Boolean).join(' · ') || '<span style="color:var(--text-muted,#64748b);">—</span>';
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowEsc(r.payee)}</td><td>${flowEsc(r.purpose)}</td>
     <td class="num">${flowMoney(r.amount, 'PHP')}</td><td>${flowStatusBadge(st)}${note}</td>
@@ -131,12 +135,8 @@ function prActions(r) {
   // In flight or already approved? Correcting it means re-opening it — which drops every approval,
   // so an amended payee/amount/bank account can never inherit the old sign-offs.
   if (prCanCreate && !editable) a += B(`prRevise("${no}")`, 'Revise');
-  // Accounting approves first; then management and director each approve at Pending Final.
-  if (role === 'accounting' && st === 'Pending Accounting') a += B(`prApprove("${no}")`, 'Approve') + B(`prReject("${no}")`, 'Reject', 'del-btn');
-  if (st === 'Pending Final') {
-    if (role === 'management' && !r.mgmtApprovedBy) a += B(`prApprove("${no}")`, 'Approve (Mgmt)') + B(`prReject("${no}")`, 'Reject', 'del-btn');
-    if (role === 'director' && !r.dirApprovedBy) a += B(`prApprove("${no}")`, 'Approve (Dir)') + B(`prReject("${no}")`, 'Reject', 'del-btn');
-  }
+  a += prApprovalActions(r, B);
+  a += prPayActions(r, B);
   return a;
 }
 
@@ -151,7 +151,7 @@ async function prSubmit(no) {
     openDocsModal('Payment Request', no, 'Supporting documents · ' + no);
     return;
   }
-  if (confirm('Submit ' + no + ' for approval (Accounting → Management & Director)?')) _prAct('submitPaymentRequest', no);
+  if (confirm('Submit ' + no + ' for approval (Admin → Management → Director)?')) _prAct('submitPaymentRequest', no);
 }
 function prApprove(no) { _prAct('approvePaymentRequest', no); }
 function prReject(no) { const reason = prompt('Reason for rejecting ' + no + ' (optional):', ''); if (reason === null) return; _prAct('rejectPaymentRequest', no, { reason }); }

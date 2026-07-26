@@ -15,6 +15,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tpMeta').textContent =
     `Weekly performance per person · ${isHR ? 'activity and reporting only' : 'all recorded activity'} · viewing as ${tpPageSession.name}`;
 
+  // Header date pill (A156 comp).
+  const now = new Date();
+  const day = document.getElementById('tpDay'), mon = document.getElementById('tpMon');
+  if (day) day.textContent = String(now.getDate()).padStart(2, '0');
+  if (mon) mon.innerHTML = now.toLocaleDateString('en-US', { weekday: 'short' }) + ',<br>' +
+    now.toLocaleDateString('en-US', { month: 'long' });
+
   const mount = () => initTeamPerformance({
     mountId: 'tpBody', rangeId: 'tpRange', nextBtnId: 'tpNextBtn',
     resetBtnId: 'tpResetBtn', pdfBtnId: 'tpPdfBtn',

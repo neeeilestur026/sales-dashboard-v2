@@ -913,18 +913,25 @@ async function flowComputeActions(session) {
       if (n) add('report', '#6366f1', n + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
-  // Payment requests awaiting MY approval (director → Management; Other-type → Accounting → both).
-  if (isMgmt || isDir || isAcct) {
+  // A156: one chain for both types — Admin → Management → Director → Approved → Paid.
+  // The two legacy statuses are still matched so requests submitted before v92 keep surfacing.
+  if (isMgmt || isDir || isAcct || isAdmin) {
     jobs.push(fetchFlow('getPaymentRequests').then(r => {
       const prs = (r && r.data) || [];
-      let n = 0;
+      let waiting = 0, toPay = 0;
       prs.forEach(p => {
-        const t = p.type, s = p.status;
-        if (isDir && ((t === 'PO' && s === 'Pending Director') || (t === 'Other' && s === 'Pending Final' && !p.dirApprovedBy))) n++;
-        else if (isMgmt && ((t === 'PO' && s === 'Pending Management') || (t === 'Other' && s === 'Pending Final' && !p.mgmtApprovedBy))) n++;
-        else if (isAcct && (t === 'Other' && s === 'Pending Accounting')) n++;
+        const s = p.status;
+        if (isAdmin && (s === 'Pending Admin' || s === 'Pending Accounting')) waiting++;
+        else if (isMgmt && (s === 'Pending Management' || (s === 'Pending Final' && !p.mgmtApprovedBy))) waiting++;
+        else if (isDir && (s === 'Pending Director' || (s === 'Pending Final' && !p.dirApprovedBy))) waiting++;
+        // Approved but not yet paid — owned by whoever executes that payment method.
+        if (s === 'Approved') {
+          const bank = ['bank transfer', 'online'].indexOf(String(p.paymentMethod || '').trim().toLowerCase()) !== -1;
+          if ((bank && isDir) || (!bank && isAcct)) toPay++;
+        }
       });
-      if (n) add('report', '#f97316', n + ' payment request(s) awaiting your approval', 'flow-payment-requests.html');
+      if (waiting) add('report', '#f97316', waiting + ' payment request(s) awaiting your approval', 'flow-payment-requests.html');
+      if (toPay) add('urgent', '#ef4444', toPay + ' approved payment(s) to pay + attach proof', 'flow-payment-requests.html');
     }).catch(() => {}));
   }
   // Accounting: payables past due + receivables past due.

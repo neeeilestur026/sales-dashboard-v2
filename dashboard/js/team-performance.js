@@ -27,6 +27,7 @@ let _tpCharts = [], _tpChartImg = {};   // chart images keyed by NAME — never 
 let _tpOrder = [];                  // the single source of render order
 let _tpRoles = {}, _tpRoster = [];
 let _tpReports = {};                // name → { date → submission }
+let _tpPrevRate = null;             // A156: last week's submission rate — the ONE real delta on the ribbon
 
 /** One normalization for every name key. ActivityLog 'User', the roster's fullName and
  *  DailyReports 'User' all originate from session.name; any drift splits one person into two cards. */
@@ -141,6 +142,27 @@ async function tpLoad() {
       });
     } catch (e) { /* pre-v81 backend — compliance simply shows as none */ }
     if (seq !== _tpSeq) return;
+
+    // A156: last week's submission rate for the ribbon's only comparison. One extra call, so the
+    // figure is real; the comp's other "▲" deltas would each cost seven more fetches and are
+    // therefore not shown at all rather than invented.
+    _tpPrevRate = null;
+    if (_tpOpts.mode === 'full') {
+      try {
+        const prev = _tpWeekDates(_tpBaseDate(), _tpOffset - 1);
+        const pr = await fetchFlow('getDailyReports', { start: prev[0], end: prev[6] });
+        if (pr && pr.success) {
+          const seen = {};
+          (pr.data || []).forEach(s2 => { (seen[_tpKey(s2.user)] = seen[_tpKey(s2.user)] || {})[s2.date] = 1; });
+          const people = Object.keys(seen);
+          const elapsedPrev = prev.filter(d => d <= today).length;
+          const of = people.length * elapsedPrev;
+          const done = people.reduce((n, u) => n + Object.keys(seen[u]).length, 0);
+          if (of > 0) _tpPrevRate = Math.round((done / of) * 100);
+        }
+      } catch (e) { /* no prior data — the ribbon shows "vs last week —" */ }
+      if (seq !== _tpSeq) return;
+    }
   }
 
   // Per-user aggregation.
@@ -225,11 +247,33 @@ function _tpCompliance(name, days, today) {
   return { done: past.filter(d => recs[d]).length, of: past.length };
 }
 
+/** Names after the page's role/search filters, in the single render order. */
+function _tpVisibleNames() {
+  const { users } = _tpData;
+  _tpOrder = Object.keys(users).sort((a, b) => users[b].moves - users[a].moves || a.localeCompare(b));
+  let names = _tpOrder;
+  const roleSel = document.getElementById('tpRoleFilter');
+  const search = document.getElementById('tpSearch');
+  if (roleSel && roleSel.value) names = names.filter(n => _tpRoleOf(n) === roleSel.value);
+  if (search && search.value.trim()) {
+    const q = search.value.trim().toLowerCase();
+    names = names.filter(n => n.toLowerCase().indexOf(q) >= 0);
+  }
+  return names;
+}
+
 function tpRender() {
+  // The standalone page uses the comp layout; management-home's embedded block keeps the compact
+  // card list it has always had, so this refactor cannot disturb that page.
+  if (_tpOpts && _tpOpts.mode === 'full') return tpRenderFull();
+  return tpRenderCompact();
+}
+
+function tpRenderCompact() {
   const body = document.getElementById(_tpOpts && _tpOpts.mountId);
   if (!body || !_tpData) return;
   const { users, days, today } = _tpData;
-  const full = _tpOpts.mode === 'full';
+  const full = false;
   const hide = !!_tpOpts.hideAmounts;
 
   // ONE ordering, reused by the render, the charts and every PDF. (The predecessor re-derived this
@@ -340,6 +384,186 @@ function tpRender() {
     ${cards}
   </div>`;
   _tpDrawCharts(names);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   A156 — the standalone page's comp layout: KPI ribbon, person cards, roll-up table.
+   Every figure below is computed from data already on screen; nothing is estimated. The one
+   comparison shown is the submission rate vs last week, which costs a single extra
+   getDailyReports call. The comp's "avg activities ▲" delta is deliberately NOT reproduced:
+   it would need another seven activity fetches, and a made-up number is worse than none.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _TP_ROLE_LABEL = { sales: 'Sales', accounting: 'Accounting', admin: 'Admin',
+  marketing: 'Marketing', management: 'Management', director: 'Director', hr: 'HR' };
+
+function _tpInitials(name) {
+  return String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+}
+function _tpSet(id, v) { const el = document.getElementById(id); if (el) el.innerHTML = v; }
+
+function tpRenderFull() {
+  const body = document.getElementById(_tpOpts && _tpOpts.mountId);
+  if (!body || !_tpData) return;
+  const { users, days, today } = _tpData;
+  const names = _tpVisibleNames();
+
+  // ── KPI ribbon ────────────────────────────────────────────────────────────
+  const comp = names.reduce((a, n) => {
+    const c = _tpCompliance(n, days, today);
+    a.done += c.done; a.of += c.of; return a;
+  }, { done: 0, of: 0 });
+  const atRisk = names.filter(n => { const c = _tpCompliance(n, days, today); return c.of && c.done < c.of; }).length;
+  const moves = names.reduce((s, n) => s + _tpn(users[n].moves), 0);
+  const elapsed = days.filter(d => d <= today).length || 1;
+  const pct = comp.of ? Math.round((comp.done / comp.of) * 100) : 0;
+  const roles = new Set(names.map(n => _tpRoleOf(n)).filter(Boolean));
+
+  _tpSet('tpKpiRate', pct + '%');
+  const delta = document.getElementById('tpKpiRateDelta');
+  if (delta) {
+    if (_tpPrevRate === null) { delta.textContent = 'vs last week —'; delta.className = 'd'; }
+    else {
+      const diff = pct - _tpPrevRate;
+      delta.textContent = (diff > 0 ? '▲ ' : diff < 0 ? '▼ ' : '') + Math.abs(diff) + '% vs last week';
+      delta.className = 'd' + (diff > 0 ? ' up' : diff < 0 ? ' down' : '');
+    }
+  }
+  _tpSet('tpKpiPeople', String(names.length));
+  _tpSet('tpKpiPeopleSub', 'across ' + roles.size + ' role' + (roles.size === 1 ? '' : 's'));
+  _tpSet('tpKpiSubmitted', String(comp.done));
+  _tpSet('tpKpiSubmittedSub', 'of ' + comp.of + ' expected');
+  _tpSet('tpKpiMissed', String(Math.max(0, comp.of - comp.done)));
+  _tpSet('tpKpiMissedSub', atRisk + ' ' + (atRisk === 1 ? 'person' : 'people') + ' at risk');
+  _tpSet('tpKpiAvg', (moves / elapsed).toFixed(1));
+  _tpSet('tpKpiAvgSub', 'over ' + elapsed + ' day' + (elapsed === 1 ? '' : 's'));
+  const meta = document.getElementById('tpSheetMeta');
+  if (meta) meta.textContent = `${names.length} ${names.length === 1 ? 'person' : 'people'} · ${roles.size} role${roles.size === 1 ? '' : 's'} · week of ${days[0]} – ${days[6]}`;
+
+  if (!names.length) { body.innerHTML = '<div class="mf-empty dr-empty">No team activity in this week.</div>'; return; }
+
+  // ── Person cards ──────────────────────────────────────────────────────────
+  const cards = names.map(name => {
+    const u = users[name];
+    const c = _tpCompliance(name, days, today);
+    const taskDefs = _tpTasksFor(name);
+    const counts = _tpCounts(u, taskDefs);
+    const good = c.of && c.done >= c.of;
+    const bad = c.of && c.done <= c.of / 2;
+    const badge = `<span class="badge" style="background:${good ? '#dcfce7' : bad ? '#fee2e2' : '#fef3c7'};color:${good ? '#15803d' : bad ? '#b91c1c' : '#b45309'};">${c.done} / ${c.of}</span>`;
+    // The four tiles follow the person's ROLE, so a rep shows PRs/Quotes/Calls/Emails while
+    // accounting shows invoices/payments — the same mix the weekly chart uses.
+    const stats = taskDefs.slice(0, 4).map((t, j) =>
+      `<div class="pstat"><div class="n">${counts[j]}</div><div class="k">${_tpe(t[0])}</div></div>`).join('');
+    const recs = _tpReports[_tpKey(name)] || {};
+    const dayBoxes = days.map((d, j) => {
+      const future = d > today;
+      const done = !!recs[d];
+      return `<div class="pday"><div class="box" style="background:${future ? '#f1f5f9' : done ? '#dcfce7' : '#fee2e2'};color:${future ? '#94a3b8' : done ? '#15803d' : '#b91c1c'};">${future ? '·' : done ? '✓' : '—'}</div><div class="lab">${_TP_DAYS[j]}</div></div>`;
+    }).join('');
+    const safe = _tpe(name).replace(/'/g, '&#39;');
+    return `<div class="pcard" role="button" tabindex="0" title="Open ${_tpe(name)}'s full week"
+        onclick="tpOpenPerson('${safe}')" onkeypress="if(event.key==='Enter')tpOpenPerson('${safe}')">
+      <div class="pcard-head"><span class="pav">${_tpe(_tpInitials(name))}</span>
+        <div style="flex:1;min-width:0;"><div class="pname">${_tpe(name)}</div>
+          <div class="prole">${_tpe(_TP_ROLE_LABEL[_tpRoleOf(name)] || _tpRoleOf(name) || '—')}</div></div>
+        ${badge}</div>
+      <div class="pstats">${stats}</div>
+      <div class="pdays">${dayBoxes}</div>
+    </div>`;
+  }).join('');
+
+  // ── Roll-up table ─────────────────────────────────────────────────────────
+  const rows = names.map(n => {
+    const u = users[n], c = _tpCompliance(n, days, today);
+    const consistency = c.of ? Math.round((c.done / c.of) * 100) : 0;
+    const barColor = consistency >= 80 ? '' : consistency >= 60 ? 'background:#f59e0b;' : 'background:#dc2626;';
+    return `<tr><td style="font-weight:700;">${_tpe(n)}</td>
+      <td style="color:#8b93a1;">${_tpe(_TP_ROLE_LABEL[_tpRoleOf(n)] || _tpRoleOf(n) || '—')}</td>
+      <td class="n"${c.done < c.of ? ' style="color:#b91c1c;font-weight:700;"' : ''}>${c.done} / ${c.of}</td>
+      <td class="n">${u.moves}</td><td class="n">${(u.moves / elapsed).toFixed(1)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;"><div class="bar" style="flex:1;"><i style="width:${consistency}%;${barColor}"></i></div>
+        <span style="font-weight:700;font-size:11px;color:${consistency >= 60 ? '#8b93a1' : '#b91c1c'};">${consistency}%</span></div></td></tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="pgrid">${cards}</div>
+    <div style="border:1px solid #e2e6ec;border-radius:14px;overflow:hidden;overflow-x:auto;margin-top:16px;">
+      <table class="ptable">
+        <thead><tr><th>Person</th><th>Role</th><th class="n">Days Submitted</th><th class="n">Activities</th>
+          <th class="n">Avg / Day</th><th>Consistency</th></tr></thead>
+        <tbody>${rows}
+          <tr class="tot"><td colspan="2">Team Total</td><td class="n">${comp.done} / ${comp.of}</td>
+            <td class="n">${moves}</td><td class="n">${(moves / elapsed).toFixed(1)}</td><td>${pct}%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- Charts still render (off-screen) so the per-person and team PDFs keep their graph, and the
+         detail window can show it — the comp's card has no room for one. -->
+    <div id="tpChartFarm" aria-hidden="true" style="position:absolute;left:-99999px;top:0;width:420px;">
+      ${names.map(n => `<canvas id="${_tpPrefix()}${_tpOrder.indexOf(n)}" height="160" width="380"></canvas>`).join('')}
+    </div>`;
+  _tpDrawCharts(names);
+}
+
+/* ── Per-person detail: the full week behind a card ───────────────────────── */
+function tpOpenPerson(name) {
+  if (!_tpData || !_tpData.users[name]) return;
+  const m = _tpPersonModel(name);
+  const hide = !!_tpOpts.hideAmounts;
+  const chart = _tpChartImg[name]
+    ? `<img src="${_tpChartImg[name]}" alt="" style="width:100%;max-width:420px;border:1px solid #eef1f5;border-radius:10px;">`
+    : '<div class="mf-empty">Chart unavailable — the counts below carry the same data.</div>';
+
+  const tiles = [['Movements', m.totals.moves], ['Calls', m.totals.calls], ['Emails', m.totals.emails],
+    ['Documents', m.totals.docs], ['PDFs', m.totals.pdfs],
+    ['Reports', m.totals.submitted + ' / ' + m.totals.reportableDays]]
+    .concat(hide ? [] : [[m.totals.amountLabel, flowMoney(m.totals.amount, 'PHP')]])
+    .map(([k, v]) => `<div class="pstat"><div class="n">${_tpe(v)}</div><div class="k">${_tpe(k)}</div></div>`).join('');
+
+  const taskRows = m.tasks.map(([l, v]) => `<tr><td>${_tpe(l)}</td><td class="n">${v}</td></tr>`).join('');
+  const dayRows = m.days.map(d => `<tr><td>${_tpe(d.dayName)}</td><td>${_tpe(d.date)}</td>
+    <td class="n">${d.future ? '—' : d.moves}</td><td class="n">${d.future ? '—' : d.calls}</td>
+    <td>${d.future ? '<span style="color:#94a3b8;">upcoming</span>'
+      : d.submitted ? '<span style="color:#15803d;font-weight:700;">✓ submitted</span>'
+                    : '<span style="color:#b91c1c;font-weight:700;">— missed</span>'}</td></tr>`).join('');
+
+  const part = (l, t) => t ? `<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;color:#4f46e5;margin-top:0.4rem;">${l}</div><div style="font-size:0.82rem;white-space:pre-wrap;">${_tpe(t)}</div>` : '';
+  const subs = (m.submissions || []).length
+    ? m.submissions.map(r => `<div style="border-left:3px solid #4f46e5;background:#f8fafc;padding:0.55rem 0.75rem;border-radius:0 8px 8px 0;margin-bottom:0.5rem;">
+        <div style="font-size:0.78rem;font-weight:700;">${_tpe(r.date)}
+          ${r.status === 'Reviewed' ? `<span style="font-weight:600;color:#0d9488;"> · reviewed by ${_tpe(r.reviewedBy)}</span>` : ''}</div>
+        ${part('Highlights', r.highlights) + part('Blockers', r.blockers) + part('Plan', r.plan)
+          || '<div style="font-size:0.8rem;color:#94a3b8;font-style:italic;">Submitted with no written notes.</div>'}
+      </div>`).join('')
+    : '<div class="mf-empty">No daily reports submitted this week.</div>';
+
+  const safe = _tpe(name).replace(/'/g, '&#39;');
+  const ov = document.getElementById('tpPersonOverlay');
+  const bd = document.getElementById('tpPersonBody');
+  const ti = document.getElementById('tpPersonTitle');
+  if (!ov || !bd) return;
+  if (ti) ti.textContent = `${name} · ${m.weekStart} – ${m.weekEnd}`;
+  bd.innerHTML = `
+    <div class="pstats" style="border-radius:12px;overflow:hidden;">${tiles}</div>
+    <div class="tp-detail-grid">
+      <div>${chart}</div>
+      <div style="overflow-x:auto;"><table class="ptable"><thead><tr><th>Task</th><th class="n">This week</th></tr></thead>
+        <tbody>${taskRows}</tbody></table></div>
+    </div>
+    <h4 class="tp-detail-h">Day by day</h4>
+    <div style="overflow-x:auto;"><table class="ptable"><thead><tr><th>Day</th><th>Date</th><th class="n">Activities</th><th class="n">Calls</th><th>Daily report</th></tr></thead>
+      <tbody>${dayRows}</tbody></table></div>
+    <h4 class="tp-detail-h">What they reported</h4>
+    ${subs}
+    <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+      <button class="btn btn-sm btn-secondary no-print" onclick="tpPersonPdf('${safe}')">📄 Weekly PDF</button>
+      <button class="btn btn-sm btn-secondary no-print" onclick="tpClosePerson()">Close</button>
+    </div>`;
+  ov.classList.add('open');
+}
+function tpClosePerson() {
+  const ov = document.getElementById('tpPersonOverlay');
+  if (ov) ov.classList.remove('open');
 }
 
 async function _tpDrawCharts(names) {

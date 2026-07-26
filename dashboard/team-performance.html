@@ -5,70 +5,162 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Performance — HI-ESCORP</title>
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/bento-skin-director.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
   <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
   <style>
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
-                    padding: 1.5rem 1.75rem; box-shadow: var(--shadow-sm, 0 1px 2px rgba(15,23,42,0.05)); }
-    .report-head { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;
-                   border-bottom: 2px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.25rem; }
-    .report-head h1 { font-size: 1.3rem; font-weight: 800; margin: 0; }
-    .report-head .meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
-    .report-controls { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    .report-controls input, .report-controls select {
-      padding: 0.42rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
-    .tp-weeknav { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .tp-weeknav .rng { font-weight: 700; font-size: 0.9rem; }
-    .mf-empty { padding: 1.2rem; text-align: center; color: var(--text-muted); font-style: italic; font-size: 0.86rem; }
+    /* Comp components. Frameless per A137 — our real navbar, full width, no mock shell. */
+    .hband { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+    .hband .left { display:flex; align-items:center; gap:16px; }
+    .dpill { display:inline-flex; align-items:center; gap:12px; border:1px solid #d7dce3; border-radius:999px;
+             padding:8px 18px 8px 8px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+    .dpill .d { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#e0e7ff,#c7d2fe);
+                color:#3730a3; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; }
+    .dpill .m { font-weight:600; font-size:12px; line-height:1.2; color:#111827; }
+    .eyebrow { font-weight:700; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#6366f1; margin-bottom:4px; }
+    .hband h1 { font-weight:800; font-size:27px; line-height:1; letter-spacing:-.02em; color:#111827; margin:0; }
+    .hband p { font-size:13.5px; color:#8b93a1; margin-top:6px; max-width:600px; }
+
+    /* .kpi-row / .kpi come from flow-screen.css (the same design system the other redesigned
+       pages use); only the delta colours the comp adds are defined here. */
+    body.flow-screen .kpi .d.up { color:#15803d; }
+    body.flow-screen .kpi .d.down { color:#b91c1c; }
+
+    .sheet { background:#fff; border:1px solid #e2e6ec; border-radius:18px;
+             box-shadow:0 1px 2px rgba(15,23,42,.05),0 12px 30px -20px rgba(15,23,42,.4); overflow:hidden; margin-top:14px; }
+    .sheet-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:15px 20px; border-bottom:1px solid #eef1f5; }
+    .sheet-title { font-weight:700; font-size:14.5px; color:#111827; display:flex; align-items:center; gap:10px; }
+    .sheet-title .ci { width:30px; height:30px; border-radius:9px; background:#eef2ff; color:#4f46e5;
+                       display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .sheet-meta { font-weight:500; font-size:12px; color:#8b93a1; margin-top:3px; }
+    .sheet-body { padding:16px 20px 20px; }
+    .weeknav { display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:13px 20px; background:#f8fafc; border-bottom:1px solid #eef1f5; }
+    .weeknav .rng { font-weight:700; font-size:13px; color:#111827; margin-left:4px; }
+
+    .pgrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .pcard { border:1px solid #e2e6ec; border-radius:16px; background:#fff; overflow:hidden; cursor:pointer;
+             transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+    .pcard:hover, .pcard:focus-visible { transform:translateY(-2px); border-color:#c7d2fe;
+             box-shadow:0 10px 24px -16px rgba(79,70,229,.6); outline:none; }
+    .pcard-head { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid #eef1f5; }
+    .pav { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#e0e7ff,#c7d2fe); color:#3730a3;
+           display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0; }
+    .pname { font-weight:700; font-size:13.5px; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .prole { font-weight:500; font-size:11px; color:#8b93a1; margin-top:2px; }
+    .pstats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:#eef1f5; }
+    .pstat { background:#fff; padding:11px 12px; text-align:center; }
+    .pstat .n { font-weight:800; font-size:17px; color:#111827; font-variant-numeric:tabular-nums; }
+    .pstat .k { font-weight:600; font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; color:#8b93a1; margin-top:3px; }
+    .pdays { display:flex; gap:5px; padding:12px 16px; border-top:1px solid #eef1f5; }
+    .pday { flex:1; text-align:center; }
+    .pday .box { height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:10px; }
+    .pday .lab { font-weight:600; font-size:9.5px; color:#8b93a1; margin-top:4px; }
+    .badge { padding:3px 10px; border-radius:999px; font-weight:700; font-size:10.5px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+    .bar { height:6px; border-radius:3px; background:#eef2f6; overflow:hidden; }
+    .bar > i { display:block; height:100%; border-radius:3px; background:linear-gradient(90deg,#818cf8,#4f46e5); }
+
+    .ptable { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .ptable th { text-align:left; padding:9px 12px; font-weight:700; font-size:10px; text-transform:uppercase;
+                 letter-spacing:.05em; color:#8b93a1; background:#f4f6f9; white-space:nowrap; border-bottom:1px solid #e5e9ef; }
+    .ptable th.n, .ptable td.n { text-align:right; font-variant-numeric:tabular-nums; }
+    .ptable td { padding:10px 12px; border-bottom:1px solid #eef1f5; color:#111827; white-space:nowrap; }
+    .ptable tbody tr:nth-child(even) td { background:#fbfcfe; }
+    .ptable tr:last-child td { border-bottom:none; }
+    .ptable tr.tot td { font-weight:800; color:#3730a3; background:#eef2ff; border-top:2px solid #4f46e5; border-bottom:none; }
+
+    /* Per-person detail */
+    /* The tile count varies with the role (and HR loses the money tile), so let the row fill itself
+       rather than leave an empty cell in a fixed 4-up grid. */
+    #tpPersonBody .pstats { grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); }
+    .tp-detail-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; margin-top:14px; align-items:start; }
+    .tp-detail-h { font-weight:700; font-size:13px; color:#111827; margin:18px 0 8px; }
+    .mf-empty { padding:1.2rem; text-align:center; color:#8b93a1; font-style:italic; font-size:0.86rem; }
+
+    @media (max-width:1100px) { .pgrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:720px)  { .pgrid, .tp-detail-grid { grid-template-columns:minmax(0,1fr); } }
     @media print {
-      .navbar, .no-print { display: none !important; }
-      body { background: #fff; }
-      .main-content { padding: 0 !important; margin: 0 !important; }
-      .report-sheet { border: none; box-shadow: none; }
-      .mfTw-card { break-inside: avoid; }
-      details { display: block !important; }
-      details > summary { display: none !important; }
+      .navbar, .no-print, .weeknav { display:none !important; }
+      body { background:#fff; }
+      .main-content { padding:0 !important; margin:0 !important; }
+      .sheet, .kpi, .pcard { border:1px solid #ddd; box-shadow:none; }
+      .pcard { break-inside:avoid; }
     }
   </style>
 </head>
-<body>
+<body class="flow-screen">
   <nav class="navbar" id="navbar"></nav>
 
   <main class="main-content">
     <div class="container">
-      <div class="report-sheet">
-        <div class="report-head">
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="tpDay">--</span><span class="m" id="tpMon">—</span></div>
           <div>
+            <div class="eyebrow">Reports · Weekly Roll-up</div>
             <h1>Team Performance</h1>
-            <div class="meta" id="tpMeta">—</div>
-          </div>
-          <div class="report-controls no-print">
-            <select id="tpRoleFilter" title="Filter by role">
-              <option value="">All roles</option>
-              <option value="sales">Sales</option>
-              <option value="accounting">Accounting</option>
-              <option value="admin">Admin</option>
-              <option value="marketing">Marketing</option>
-            </select>
-            <input type="text" id="tpSearch" placeholder="Search a person...">
-            <button class="btn btn-sm btn-secondary" id="tpRefresh">Refresh</button>
-            <button class="btn btn-sm btn-secondary" id="tpPrint">Print</button>
-            <button class="btn btn-sm btn-primary" id="tpPdfBtn">📄 Team Weekly PDF</button>
+            <p class="meta" id="tpMeta">—</p>
           </div>
         </div>
+        <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="tpRoleFilter" class="form-input" title="Filter by role" style="max-width:150px;">
+            <option value="">All roles</option>
+            <option value="sales">Sales</option>
+            <option value="accounting">Accounting</option>
+            <option value="admin">Admin</option>
+            <option value="marketing">Marketing</option>
+          </select>
+          <input type="text" id="tpSearch" class="form-input" placeholder="Search a person…" style="max-width:180px;">
+          <button class="btn btn-sm btn-secondary" id="tpRefresh">Refresh</button>
+          <button class="btn btn-sm btn-secondary" id="tpPrint">Print</button>
+          <button class="btn btn-sm btn-primary" id="tpPdfBtn">📄 Team Weekly PDF</button>
+        </div>
+      </div>
 
-        <div class="tp-weeknav no-print">
+      <!-- Every figure here is computed from the week already on screen. The only comparison shown is
+           the submission rate vs last week, which costs one extra call — the comp's other deltas are
+           omitted rather than estimated. -->
+      <div class="kpi-row five">
+        <div class="kpi spot"><div class="l">Submission Rate</div><div class="v" id="tpKpiRate">—</div><div class="d" id="tpKpiRateDelta">vs last week —</div></div>
+        <div class="kpi"><div class="l">People Tracked</div><div class="v" id="tpKpiPeople">—</div><div class="d" id="tpKpiPeopleSub">—</div></div>
+        <div class="kpi"><div class="l">Reports Submitted</div><div class="v" id="tpKpiSubmitted">—</div><div class="d" id="tpKpiSubmittedSub">—</div></div>
+        <div class="kpi"><div class="l">Missed Days</div><div class="v" id="tpKpiMissed" style="color:#b91c1c;">—</div><div class="d down" id="tpKpiMissedSub">—</div></div>
+        <div class="kpi"><div class="l">Avg Activities / Day</div><div class="v" id="tpKpiAvg">—</div><div class="d" id="tpKpiAvgSub">—</div></div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <div style="flex:1;min-width:200px;">
+            <div class="sheet-title">
+              <span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              Weekly Breakdown
+            </div>
+            <div class="sheet-meta" id="tpSheetMeta">—</div>
+          </div>
+          <span class="sheet-meta">Click a person for their full week</span>
+        </div>
+
+        <div class="weeknav no-print">
           <button class="btn btn-sm btn-secondary" onclick="tpNavWeek(-1)" title="Previous week">◀</button>
           <button class="btn btn-sm btn-secondary" id="tpResetBtn" onclick="tpNavWeek(0)" style="display:none;" title="Back to this week">↺</button>
           <button class="btn btn-sm btn-secondary" id="tpNextBtn" onclick="tpNavWeek(1)" title="Next week">▶</button>
           <span class="rng" id="tpRange">—</span>
         </div>
 
-        <div id="tpBody"><div class="mf-empty">Loading team performance…</div></div>
+        <div class="sheet-body">
+          <div id="tpBody"><div class="mf-empty">Loading team performance…</div></div>
+        </div>
       </div>
     </div>
   </main>
+
+  <!-- Per-person weekly detail -->
+  <div class="flow-modal-overlay" id="tpPersonOverlay" onclick="if(event.target===this)tpClosePerson()">
+    <div class="flow-modal" style="width:min(920px,96vw);">
+      <h3>Weekly detail</h3>
+      <div class="sub" id="tpPersonTitle">—</div>
+      <div id="tpPersonBody"></div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>

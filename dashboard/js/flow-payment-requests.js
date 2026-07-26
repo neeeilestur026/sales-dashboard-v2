@@ -1,5 +1,6 @@
 /* flow-payment-requests.js — Type 'PO' supplier payment requests (PRF).
-   Load a PO → request supplier payment. Approval: Director → Management.
+   Load a PO → request supplier payment. Approval: Admin → Management → Director, then marked Paid
+   with proof by the director (bank/online transfers) or accounting (every other method).
    Reuses the legacy PRF PDF via /flow/payment-request-pdf. */
 
 let prSession = null, prCanCreate = false, prPOs = [], prList = [], prAP = {}, prAPCount = {};
@@ -13,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-payment-requests.html');
   if (!prCanCreate) document.getElementById('formCard').style.display = 'none';
   else { document.getElementById('dueDate').value = ''; await Promise.all([loadPOOptions(), loadSuppliers()]); }
+  await prInitPayGate();   // A156: Mark Paid only once the backend is v92
   await loadPRs();
 });
 
@@ -138,15 +140,21 @@ async function loadPRs() {
     const res = await fetchFlow('getPaymentRequests', { type: 'PO' });
     prList = (res && res.data) || [];
     if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; return; }
-    c.innerHTML = `<table class="flow-table"><thead><tr><th>PR No</th><th>PO</th><th>Payee</th><th class="num">Amount</th><th>Status</th><th>PDF</th><th></th></tr></thead><tbody>${prList.map(prRow).join('')}</tbody></table>`;
+    c.innerHTML = `<table class="flow-table"><thead><tr><th>PR No</th><th>PO</th><th>Payee</th><th class="num">Amount</th><th>Status</th><th>Approvals</th><th>PDF</th><th></th></tr></thead><tbody>${prList.map(prRow).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
 }
 
 function prRow(r) {
   const st = r.status || 'Draft';
   const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
+  // A156: three sign-offs then payment — show how far along it is, not just the status word.
+  const appr = [r.adminApprovedBy ? 'Admin ✓' : (r.acctApprovedBy ? 'Acct ✓' : ''),
+    r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '',
+    r.paidBy ? 'Paid ✓' : '']
+    .filter(Boolean).join(' · ') || '<span style="color:var(--text-muted,#64748b);">—</span>';
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowEsc(r.poNo)}</td><td>${flowEsc(r.payee)}</td>
     <td class="num">${flowMoney(r.amount, 'PHP')}</td><td>${flowStatusBadge(st)}${note}</td>
+    <td style="font-size:0.74rem;color:var(--text-secondary,#475569);">${appr}</td>
     <td>${r.pdfLink ? `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
     <td style="white-space:nowrap;">${prActions(r)}</td></tr>`;
 }
@@ -161,8 +169,8 @@ function prActions(r) {
     a += B(`prEdit("${no}")`, 'Edit');                          // editable at any status
     if (editable) a += B(`prDelete("${no}")`, 'Delete', 'del-btn');
   }
-  if (role === 'director' && st === 'Pending Director') a += B(`prApprove("${no}")`, 'Approve') + B(`prReject("${no}")`, 'Reject', 'del-btn');
-  if (role === 'management' && st === 'Pending Management') a += B(`prApprove("${no}")`, 'Approve') + B(`prReject("${no}")`, 'Reject', 'del-btn');
+  a += prApprovalActions(r, B);
+  a += prPayActions(r, B);
   return a;
 }
 
@@ -177,7 +185,7 @@ async function prSubmit(no) {
     openDocsModal('Payment Request', no, 'Supporting documents · ' + no);
     return;
   }
-  if (confirm('Submit ' + no + ' for approval (Director → Management)?')) _prAct('submitPaymentRequest', no);
+  if (confirm('Submit ' + no + ' for approval (Admin → Management → Director)?')) _prAct('submitPaymentRequest', no);
 }
 function prApprove(no) { _prAct('approvePaymentRequest', no); }
 function prReject(no) { const reason = prompt('Reason for rejecting ' + no + ' (optional):', ''); if (reason === null) return; _prAct('rejectPaymentRequest', no, { reason }); }

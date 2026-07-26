@@ -762,6 +762,7 @@ function clearFlowPricing() {
   pePrNo = null;
   renderMgmtEngineShell();
   const banner = document.getElementById('peEditBanner'); if (banner) banner.style.display = 'none';
+  const ctx = document.getElementById('peContext'); if (ctx) ctx.style.display = 'none';   // A156
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = true;
   const db = document.getElementById('peDocsBtn'); if (db) db.disabled = true;
   const msg = document.getElementById('peMsg'); if (msg) msg.style.display = 'none';
@@ -774,6 +775,31 @@ function peViewDocs() {
 }
 
 // Load a request's items + saved pricing into the calculator (to price, or re-price a past one).
+/* A156: management prices the freight but never saw where the goods have to land — openPr sends
+   management straight into the engine, so the request detail (the only place Plant Site appeared)
+   was never rendered for them. Show the sourcing context right above the Configuration grid.
+   Plant Site is the DELIVERY destination admin captured at sourcing; it is deliberately separate
+   from the engine's Destination, which drives CBM freight and the minimum charge. */
+function peRenderContext(r) {
+  const el = document.getElementById('peContext');
+  if (!el) return;
+  const chip = (k, v, cls) =>
+    `<span class="pe-ctx ${cls || ''}"><span class="k">${k}</span><span class="v">${flowEsc(v)}</span></span>`;
+  const bits = [];
+  if (r.plantSite) bits.push(chip('Plant site', r.plantSite, 'site'));
+  if (r.clientLocation) bits.push(chip('Client location', r.clientLocation));
+  if (!bits.length) {
+    // Say so rather than render an empty strip — a missing plant site is worth noticing, since
+    // A144 requires one before admin can forward a request for pricing.
+    el.innerHTML = '<span class="pe-ctx-note">No plant site recorded on this request.</span>';
+    el.style.display = 'flex';
+    return;
+  }
+  bits.push('<span class="pe-ctx-note">Delivery destination from sourcing — the freight Destination below is set separately.</span>');
+  el.innerHTML = bits.join('');
+  el.style.display = 'flex';
+}
+
 function loadFlowPricing(prNo) {
   const r = curPr(prNo) || _pricingHistory.find(x => String(x.prNo) === String(prNo));
   if (!r) return;
@@ -812,6 +838,7 @@ function loadFlowPricing(prNo) {
   if (rowsEl) rowsEl.innerHTML = rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1rem;">No included items to price.</td></tr>';
   const banner = document.getElementById('peEditBanner');
   if (banner) { banner.style.display = 'flex'; const id = document.getElementById('peEditId'); if (id) id.textContent = `${r.prNo} · ${r.customer || ''} · ${flowEsc(prStatusLabel(r.status || ''))}`; }
+  peRenderContext(r);
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = false;
   const db = document.getElementById('peDocsBtn'); if (db) db.disabled = false;
   recalcPricing();

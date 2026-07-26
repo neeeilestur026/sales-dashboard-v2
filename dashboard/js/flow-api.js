@@ -207,6 +207,7 @@ function flowStatusBadge(status) {
   let cls = 'b-draft';
   if (k.indexOf('pending') === 0 || k === 'open') cls = 'b-pending';
   else if (k === 'approved') cls = 'b-approved';
+  else if (k === 'paid') cls = 'b-paid';                                              // A156: payment settled, proof on file
   else if (k === 'rejected') cls = 'b-rejected';
   else if (k === 'not pursued' || k === 'lost' || k === 'cancelled') cls = 'b-lost';   // A152 soft-close outcomes
   else if (k === 'sent' || k === 'closed' || k === 'quoted') cls = 'b-sent';
