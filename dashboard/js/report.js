@@ -67,6 +67,9 @@ async function load() {
     `For ${date} · Prepared by ${drSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
 
   // Activity (flow backend) — scoped to THIS rep so reps never see each other's movements.
+  // A155: prime the request-number → client/supplier name map so legacy blank-ref
+  // "Client saved" rows can be titled with the client they belong to (idempotent).
+  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
   // Calls are shown in their own section, so keep the 'Call' module out of the generic timeline.
   try {
     const res = await fetchFlow('getActivityLog', { date, user: drSession.name });

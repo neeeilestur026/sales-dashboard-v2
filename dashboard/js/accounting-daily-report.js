@@ -55,6 +55,9 @@ async function load() {
   document.getElementById('reportMeta').textContent =
     `For ${date} · Prepared by ${drSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
 
+  // A155: prime the request-number → client/supplier name map so legacy blank-ref
+  // "Client saved" rows can be titled with the client they belong to (idempotent).
+  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
   // Activity (flow backend) — scoped to THIS accounting user only (personal report).
   try {
     const res = await fetchFlow('getActivityLog', { date, user: drSession.name });

@@ -51,6 +51,9 @@ async function load(fresh) {
   document.getElementById('reportMeta').textContent =
     `For ${date} · Oversight by ${adrSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
 
+  // A155: prime the request-number → client/supplier name map so legacy blank-ref
+  // "Client saved" rows can be titled with the client they belong to (idempotent).
+  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
   // 1) Activity → first paint right away.
   try {
     const res = await fetchFlow('getActivityLog', { date }, opts);   // ALL users

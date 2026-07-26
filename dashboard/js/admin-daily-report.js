@@ -65,6 +65,10 @@ async function load() {
   // Every flow mutation (PO/SO create-update, shipment stage updates, payment requests,
   // PR sourcing/verify, quotations, receiving, invoices, docs…) is auto-logged with the
   // acting user — this report reads the admin's own movements.
+
+  // A155: prime the request-number → client/supplier name map so legacy blank-ref
+  // "Client saved" rows can be titled with the client they belong to (idempotent).
+  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
   try {
     const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
     drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');

@@ -156,6 +156,10 @@ async function submitClient(e) {
 
     if (!result.success) throw new Error(result.message || 'Failed');
 
+    // A155: mirror into the flow so this shows up on the rep's daily report. Best-effort and
+    // deliberately not awaited — a flow hiccup must never fail a save that already succeeded.
+    _mirrorClientToFlow(data).catch(function () { });
+
     msg.style.display = 'block';
     msg.style.background = 'rgba(34,197,94,0.12)';
     msg.style.color = '#22c55e';
@@ -172,6 +176,43 @@ async function submitClient(e) {
   }
 
   btn.disabled = false;
+}
+
+// ─── A155: mirror a legacy client save into the flow ──────────────────────────
+// The legacy Code.gs handleAddClient/handleUpdateClient log NOTHING — not the flow ActivityLog,
+// not Code.gs's own daily-activity sheet — so a rep's client work never appeared in their daily
+// report. postFlow('saveClient') records it with the client NAME and "added."/"updated."
+// (FlowAPI v89+), which is what the report's task card renders.
+//
+// ⚠ saveClient rebuilds the WHOLE Clients row from what we send: any field omitted is blanked.
+// The legacy form has no Payment Terms or RFQ Ref, and Payment Terms drives the AR due-date
+// automation (_clientTerms → _addTermDays in createInvoice), so we read the current flow record
+// and pass those through untouched rather than wiping them.
+async function _mirrorClientToFlow(data) {
+  if (typeof postFlow !== 'function' || typeof fetchFlow !== 'function') return;
+  var name = String(data.companyName || '').trim();
+  if (!name) return;
+
+  var prev = {};
+  try {
+    var res = await fetchFlow('getClients');
+    prev = ((res && res.data) || []).filter(function (c) {
+      return String(c.customer || '').toLowerCase() === name.toLowerCase();
+    })[0] || {};
+  } catch (_) { /* no flow record yet, or backend unset — treat as a new client */ }
+
+  await postFlow('saveClient', {
+    customer: name,
+    address: data.siteAddress || data.headOffice || prev.address || '',
+    contactPerson: data.contactPerson || prev.contactPerson || '',
+    designation: data.position || prev.designation || '',
+    email: data.email || prev.email || '',
+    phone: data.mobile || data.tel || prev.phone || '',
+    notes: data.notes || prev.notes || '',
+    // Preserved, not owned by this form — omitting them would blank them (see note above).
+    rfqRef: prev.rfqRef || '',
+    paymentTerms: prev.paymentTerms || ''
+  });
 }
 
 // ─── Edit Client ──────────────────────────────────

@@ -309,6 +309,9 @@ async function mfLoadDailyReports() {
   const date = document.getElementById('mgmtDrDate').value;
   const meta = document.getElementById('mgmtDrMeta');
   if (meta) meta.textContent = `For ${date} · auto-collected from Process Flow activity`;
+  // A155: prime the request-number → client/supplier name map so legacy blank-ref
+  // "Client saved" rows can be titled with the client they belong to (idempotent).
+  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
   try {
     const res = await fetchFlow('getActivityLog', { date });
     mfDrEntries = (res && res.data) || [];
