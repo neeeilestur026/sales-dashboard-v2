@@ -488,6 +488,7 @@ function openPr(no) {
 
   if (canSource && (r.status === 'Requested' || r.status === 'Sourcing')) {
     body.innerHTML = sourcingTable(r);
+    sqDecorateSourcing();   // A161: fill in each row's past supplier prices (async, best-effort)
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','Supplier Quotation')">📎 Supplier Quotation (PDF)</button>
       <button class="btn btn-secondary" onclick="saveSourcing(false)">Save Draft</button>
@@ -546,6 +547,7 @@ function openSourcingEdit(no) {
       ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ This request is already queued for management pricing — the engine will pick up the updated supplier prices when management opens it.</p>`
       : '');
   body.innerHTML = hint + sourcingTable(r);
+  sqDecorateSourcing();   // A161: same history on the edit-anytime sourcing view
   // Post-pricing stages get a one-click "save + send back to management" so the final price
   // is recomputed from the corrected costs (submitForPricing just flips the status back).
   foot.innerHTML = `<button class="btn btn-secondary" onclick="openPr('${flowEsc(no)}')">← Back</button>
@@ -620,7 +622,22 @@ function sourcingTable(r) {
         <td class="num"><input type="number" step="any" min="0" class="s-price" value="${i.supplierPrice || 0}"></td>
         <td><select class="s-vat" title="Is the supplier price VAT Inclusive or Exclusive?">${svatSelect(i.vat)}</select></td>
         <td class="num"><input type="number" step="any" min="0" class="s-cbm" value="${i.cbm || 0}"></td>
-        <td><input type="checkbox" class="s-incl"${i.included ? ' checked' : ''}></td></tr>`).join('')}</tbody></table></div>
+        <td><input type="checkbox" class="s-incl"${i.included ? ' checked' : ''}></td></tr>
+      <tr data-sq-for="${i.line}"><td colspan="10" style="padding:0 0 0.5rem 0;border-top:none;">
+        <button type="button" class="link-btn" id="sqBtn_${i.line}" disabled
+          onclick="sqToggle(${i.line})" title="Previous supplier quotations recorded for this item">⟲ checking history…</button>
+        <div id="sqHist_${i.line}" style="display:none;margin:0.4rem 0 0.2rem;padding:0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;overflow-x:auto;">
+          <div data-sq-body></div>
+        </div>
+      </td></tr>`).join('')}</tbody></table></div>
+    <div style="margin-top:0.75rem;">
+      <button type="button" class="link-btn" onclick="sqToggleBrowse()">📚 Browse all saved supplier quotations</button>
+      <div id="sqBrowse" style="display:none;margin-top:0.5rem;padding:0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+        <input type="text" id="sqSearch" placeholder="Search supplier, item, reference or PR no..." oninput="sqRenderBrowse()"
+          style="width:100%;max-width:460px;padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;margin-bottom:0.5rem;">
+        <div id="sqBrowseBody" style="overflow-x:auto;"></div>
+      </div>
+    </div>
     <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;font-size:0.85rem;">
       <input type="checkbox" id="srcVerified"> I have <b>verified the supplier prices are correct</b> before forwarding to management.
     </label>`;
@@ -1273,4 +1290,152 @@ async function submitPrPdf() {
     if (link) setTimeout(closePdfModal, 900);
   } catch (e) { flowMsg('pdfModalMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Generate & Save'; }
+}
+
+/* ─── A161 · Supplier-quotation price history in the sourcing view ─────────────────────────
+   358 supplier quotations are recorded on the legacy Supplier Quotation page, but admin had no
+   way to see what a supplier previously charged while sourcing a request — the prices had to be
+   looked up on another page, in another tab. This surfaces the matching history inline on each
+   item row, plus a searchable browse panel for everything else.
+   Read-only, best-effort: the legacy backend occasionally returns a Google error page (A82), so a
+   failure degrades to a quiet "unavailable" note and never blocks sourcing.                     */
+
+let sqHistory = null;        // cached for the page lifetime; null = not loaded yet
+let sqHistoryErr = '';
+let sqLoading = null;        // in-flight promise, so concurrent opens share one fetch
+
+async function sqLoadHistory() {
+  if (sqHistory) return sqHistory;
+  if (sqLoading) return sqLoading;
+  sqLoading = (async () => {
+    try {
+      if (typeof apiGetSupplierQuotations !== 'function') throw new Error('Supplier quotations unavailable here.');
+      const r = await apiGetSupplierQuotations('');
+      sqHistory = ((r && (r.data || r.quotations)) || []).filter(Boolean);
+      sqHistoryErr = '';
+    } catch (e) {
+      sqHistory = [];
+      sqHistoryErr = e.message || 'Could not load supplier quotations.';
+    } finally { sqLoading = null; }
+    return sqHistory;
+  })();
+  return sqLoading;
+}
+
+/* Tokenise for matching: lowercase words of 3+ chars, minus boilerplate that appears in nearly
+   every description and would otherwise make everything "match" everything. */
+const SQ_STOP = new Set(['the','and','for','with','from','pcs','pcs.','set','sets','x','mm','inc','ltd','pte','corp',
+                         'inclusive','exclusive','total','lead','time','estimated','working','days','after','payment',
+                         'received','test','certificate','included','length','end','and2','php','sgd','usd']);
+function sqTokens(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')
+    .filter(t => t.length >= 3 && !SQ_STOP.has(t));
+}
+
+/* Score a history record against a sourcing line. Item CODE appearing anywhere is the strongest
+   signal; otherwise it's shared-token overlap against the supplier's description AND the original
+   PR item text (the latter is what usually matches, since it's the same request wording). */
+function sqScore(rec, itemNo, itemName) {
+  const hay = (String(rec.itemDescription || '') + ' ' + String(rec.prItemDescription || '')).toLowerCase();
+  const code = String(itemNo || '').trim().toLowerCase();
+  let score = 0;
+  if (code && code !== 'n/a' && code.length >= 4 && hay.indexOf(code) !== -1) score += 10;
+  const want = sqTokens(itemName);
+  if (!want.length) return score;
+  const have = new Set(sqTokens(hay));
+  const hits = want.filter(t => have.has(t)).length;
+  score += hits * 2;
+  if (hits / want.length >= 0.6) score += 3;      // most of the item's words are present
+  return score;
+}
+
+function sqMatches(itemNo, itemName, limit) {
+  const list = (sqHistory || []).map(r => ({ r, s: sqScore(r, itemNo, itemName) }))
+    .filter(x => x.s >= 4)                          // 2 shared words, or a code hit
+    .sort((a, b) => b.s - a.s || String(b.r.date || '').localeCompare(String(a.r.date || '')));
+  return (limit ? list.slice(0, limit) : list).map(x => x.r);
+}
+
+const sqMoney = (n, c) => (typeof flowMoney === 'function' && c ? flowMoney(n, c) : flowNum(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+function sqRowsHtml(recs, line) {
+  if (!recs.length) return '<p class="pr-meta" style="margin:0;">No earlier quotation recorded for this item.</p>';
+  return `<table class="flow-table" style="min-width:640px;margin:0;"><thead><tr>
+      <th>Date</th><th>Supplier</th><th>Item as quoted</th><th class="num">Qty</th>
+      <th class="num">Price/Unit</th><th>Cur</th><th>Ref / PR</th><th></th></tr></thead><tbody>
+    ${recs.map(r => `<tr>
+      <td style="white-space:nowrap;">${flowEsc(String(r.date || '').slice(0, 10))}</td>
+      <td><b>${flowEsc(r.supplierCompany || '')}</b>${r.contactPerson ? `<br><span class="pr-meta">${flowEsc(r.contactPerson)}</span>` : ''}</td>
+      <td style="max-width:280px;font-size:0.8rem;">${flowEsc(String(r.itemDescription || '').slice(0, 160))}</td>
+      <td class="num">${flowNum(r.qty)}</td>
+      <td class="num"><b>${sqMoney(r.pricePerUnit, r.currency)}</b></td>
+      <td>${flowEsc(r.currency || '')}</td>
+      <td class="pr-meta">${flowEsc(r.referenceNo || '')}${r.prNumber ? '<br>' + flowEsc(r.prNumber) : ''}</td>
+      <td>${line != null ? `<button type="button" class="link-btn" title="Copy this supplier and price into the row"
+        onclick="sqUse(${line}, ${JSON.stringify(String(r.supplierCompany || '')).replace(/"/g, '&quot;')}, ${flowNum(r.pricePerUnit)}, ${JSON.stringify(String(r.currency || '')).replace(/"/g, '&quot;')})">use</button>` : ''}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+/** Copy a past supplier + price (and currency, when it's one we offer) into the sourcing row. */
+function sqUse(line, supplier, price, currency) {
+  const tr = document.querySelector(`#srcTable tr[data-line="${line}"]`);
+  if (!tr) return;
+  const sup = tr.querySelector('.s-sup'), pr = tr.querySelector('.s-price'), cur = tr.querySelector('.s-cur');
+  if (sup) sup.value = supplier;
+  if (pr) pr.value = price;
+  if (cur && currency && Array.from(cur.options).some(o => o.value === currency)) cur.value = currency;
+  if (typeof flowMsg === 'function') flowMsg('modalMsg', `Copied ${supplier} @ ${sqMoney(price, currency)} into the row — adjust if this quotation is out of date.`, true);
+}
+
+function sqToggle(line) {
+  const box = document.getElementById('sqHist_' + line);
+  if (!box) return;
+  box.style.display = box.style.display === 'none' ? '' : 'none';
+}
+
+/** Fill in the per-row history after the sourcing table is in the DOM (the fetch is async). */
+async function sqDecorateSourcing() {
+  const table = document.getElementById('srcTable');
+  if (!table) return;
+  await sqLoadHistory();
+  table.querySelectorAll('tr[data-line]').forEach(tr => {
+    const line = tr.getAttribute('data-line');
+    const btn = document.getElementById('sqBtn_' + line);
+    const box = document.getElementById('sqHist_' + line);
+    if (!btn || !box) return;
+    if (sqHistoryErr) { btn.textContent = '— history unavailable'; btn.disabled = true; btn.title = sqHistoryErr; return; }
+    const itemNo = (tr.querySelector('.s-no') || {}).value || '';
+    const itemName = (tr.querySelector('.s-name') || {}).value || '';
+    const recs = sqMatches(itemNo, itemName, 8);
+    btn.textContent = recs.length ? `⟲ ${recs.length} past price${recs.length === 1 ? '' : 's'}` : '⟲ no history';
+    btn.disabled = false;
+    box.querySelector('[data-sq-body]').innerHTML = sqRowsHtml(recs, line);
+  });
+  sqRenderBrowse();
+}
+
+/* The browse-everything panel — for when the automatic match misses, or admin just wants to look
+   a supplier up. Searches supplier, item text, reference and PR number. */
+function sqRenderBrowse() {
+  const box = document.getElementById('sqBrowseBody');
+  if (!box) return;
+  if (sqHistoryErr) { box.innerHTML = `<p class="pr-meta" style="color:#b45309;">${flowEsc(sqHistoryErr)} — the Supplier Quotation page has the full list.</p>`; return; }
+  const q = ((document.getElementById('sqSearch') || {}).value || '').trim().toLowerCase();
+  let recs = sqHistory || [];
+  if (q) {
+    recs = recs.filter(r => [r.supplierCompany, r.itemDescription, r.prItemDescription, r.referenceNo, r.prNumber, r.contactPerson]
+      .some(v => String(v || '').toLowerCase().indexOf(q) !== -1));
+  }
+  recs = recs.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const shown = recs.slice(0, 40);
+  box.innerHTML = `<p class="pr-meta" style="margin:0 0 0.4rem;">${recs.length} record${recs.length === 1 ? '' : 's'}${
+    recs.length > shown.length ? ` · showing the ${shown.length} most recent — narrow the search to see others` : ''}</p>`
+    + sqRowsHtml(shown, null);
+}
+
+function sqToggleBrowse() {
+  const b = document.getElementById('sqBrowse');
+  if (!b) return;
+  b.style.display = b.style.display === 'none' ? '' : 'none';
+  if (b.style.display === '') sqRenderBrowse();
 }
