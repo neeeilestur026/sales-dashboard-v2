@@ -647,7 +647,11 @@ function sourcingTable(r) {
 
 function collectSourcing() {
   const updates = [];
-  document.querySelectorAll('#srcTable tbody tr').forEach(tr => {
+  // Item rows carry data-line; the A161 supplier-price history rows (data-sq-for) sit between them and
+  // hold no inputs. Key on data-line, and skip anything without the expected fields, so injecting a
+  // row into this table can never silently break saving again.
+  document.querySelectorAll('#srcTable tbody tr[data-line]').forEach(tr => {
+    if (!tr.querySelector('.s-no')) return;
     updates.push({
       line: flowNum(tr.getAttribute('data-line')),
       itemNo: tr.querySelector('.s-no').value.trim(),      // supplier's own code (blank = keep original)
@@ -670,7 +674,14 @@ async function saveSourcing(forward) {
   const clientLocation = locEl ? locEl.value.trim() : '';
   const psEl = document.getElementById('srcPlantSite');
   const plantSite = psEl ? psEl.value.trim() : '';
-  const items = collectSourcing();
+  // Reading the form runs before any try below, so an exception here used to escape as an unhandled
+  // promise rejection — no message, both buttons apparently dead. Surface it instead.
+  let items;
+  try { items = collectSourcing(); }
+  catch (e) {
+    flowMsg('modalMsg', 'Could not read the sourcing table: ' + e.message + ' — reload the page and try again.', false);
+    return;
+  }
   // A144 Forward-to-Management gates (client-side; the backend backstops each one):
   if (forward) {
     if (!plantSite) { flowMsg('modalMsg', 'Enter a plant-site destination before forwarding.', false); if (psEl) psEl.focus(); return; }
