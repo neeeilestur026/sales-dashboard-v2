@@ -65,6 +65,7 @@ function setupRoleUI() {
     blurb.textContent = 'Create a purchase request from inventory items. Admin sources suppliers and management prices it; when it returns you can build the quotation.';
     seg.innerHTML = segBtns(['', 'Returned to Sales', 'Quoted'], ['All', 'For Quotation', 'Quoted']);
   } else if (prOversight) {
+    const sqc = document.getElementById('sqSummaryCard'); if (sqc) sqc.style.display = '';   // A161b
     listTitle.textContent = 'All Purchase Requests (by sales rep)';
     blurb.textContent = 'Full oversight of every rep’s pricing requests across all stages. Open any request to review or act on its current stage.';
     seg.innerHTML = segBtns(['', 'Requested,Sourcing', 'For Mgmt Pricing', 'Mgmt Priced', 'Returned to Sales,Quoted'],
@@ -73,6 +74,7 @@ function setupRoleUI() {
   } else if (prRole === 'admin') {
     document.getElementById('salesFormCard').style.display = '';   // admin can also start a purchase request
     const rb = document.getElementById('resyncBtn'); if (rb) rb.style.display = '';   // numbering maintenance (admin only)
+    const sqc = document.getElementById('sqSummaryCard'); if (sqc) sqc.style.display = '';   // A161b: saved supplier quotations
     listTitle.textContent = 'Sourcing & Verification Queue';
     blurb.textContent = 'Create a purchase request below, or source suppliers and prices for each item then forward to management. After management prices it, verify and return to sales.';
     seg.innerHTML = segBtns(['Requested,Sourcing', 'Mgmt Priced', ''], ['To Source', 'To Verify', 'All']);
@@ -1438,4 +1440,79 @@ function sqToggleBrowse() {
   if (!b) return;
   b.style.display = b.style.display === 'none' ? '' : 'none';
   if (b.style.display === '') sqRenderBrowse();
+}
+
+/* ─── A161b · Page-level Supplier Quotations summary (admin + oversight) ───────────────────
+   The per-item history lives inside the sourcing modal, which means opening a request first.
+   This is the standalone summary: the whole saved list, searchable, on the sourcing page. */
+
+function sqToggleSummary() {
+  const c = document.getElementById('sqSummaryContent');
+  const ic = document.getElementById('sqToggleIcon');
+  if (!c) return;
+  const open = c.style.display === 'none';
+  c.style.display = open ? '' : 'none';
+  if (ic) ic.style.transform = open ? 'rotate(180deg)' : '';
+  if (open) sqLoadSummary();
+}
+
+async function sqLoadSummary() {
+  const body = document.getElementById('sqSummaryBody');
+  if (!body) return;
+  if (!sqHistory) body.innerHTML = '<p class="pr-meta">Loading…</p>';
+  await sqLoadHistory();
+  // Supplier filter options, most-quoted first (matches how admin actually looks things up).
+  const sel = document.getElementById('sqSumSupplier');
+  if (sel && sel.options.length <= 1 && (sqHistory || []).length) {
+    const counts = {};
+    sqHistory.forEach(r => { const k = String(r.supplierCompany || '').trim(); if (k) counts[k] = (counts[k] || 0) + 1; });
+    sel.innerHTML = '<option value="">All suppliers</option>' + Object.keys(counts)
+      .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
+      .map(k => `<option value="${flowEsc(k)}">${flowEsc(k)} (${counts[k]})</option>`).join('');
+  }
+  sqRenderSummary();
+}
+
+function sqReloadSummary() { sqHistory = null; sqHistoryErr = ''; sqLoadSummary(); }
+
+function sqClearSummary() {
+  const a = document.getElementById('sqSumSearch'), b = document.getElementById('sqSumSupplier');
+  if (a) a.value = ''; if (b) b.value = '';
+  sqRenderSummary();
+}
+
+function sqRenderSummary() {
+  const body = document.getElementById('sqSummaryBody');
+  const kpis = document.getElementById('sqSummaryKpis');
+  const cnt = document.getElementById('sqSummaryCount');
+  if (!body) return;
+  if (sqHistoryErr) {
+    body.innerHTML = `<p class="pr-meta" style="color:#b45309;">${flowEsc(sqHistoryErr)} — the Supplier Quotation page has the full list.</p>`;
+    if (kpis) kpis.innerHTML = '';
+    return;
+  }
+  const all = sqHistory || [];
+  const q = ((document.getElementById('sqSumSearch') || {}).value || '').trim().toLowerCase();
+  const sup = ((document.getElementById('sqSumSupplier') || {}).value || '').trim();
+
+  let recs = all;
+  if (sup) recs = recs.filter(r => String(r.supplierCompany || '').trim() === sup);
+  if (q) recs = recs.filter(r => [r.supplierCompany, r.itemDescription, r.prItemDescription, r.referenceNo, r.prNumber, r.contactPerson]
+    .some(v => String(v || '').toLowerCase().indexOf(q) !== -1));
+  recs = recs.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  if (cnt) cnt.textContent = all.length ? `· ${all.length} recorded` : '';
+  if (kpis) {
+    const suppliers = new Set(all.map(r => String(r.supplierCompany || '').trim()).filter(Boolean));
+    const latest = all.map(r => String(r.date || '').slice(0, 10)).filter(Boolean).sort().pop() || '—';
+    const tile = (label, val) => `<div style="flex:1;min-width:130px;padding:0.5rem 0.7rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+      <div class="pr-meta" style="margin:0;">${label}</div><div style="font-weight:700;font-size:1.05rem;">${val}</div></div>`;
+    kpis.innerHTML = tile('Quotations', all.length) + tile('Suppliers', suppliers.size)
+      + tile('Most recent', latest) + tile('Showing', recs.length);
+  }
+
+  const shown = recs.slice(0, 60);
+  body.innerHTML = (recs.length > shown.length
+      ? `<p class="pr-meta" style="margin:0 0 0.4rem;">Showing the ${shown.length} most recent of ${recs.length} — narrow the search to see others.</p>` : '')
+    + sqRowsHtml(shown, null);
 }

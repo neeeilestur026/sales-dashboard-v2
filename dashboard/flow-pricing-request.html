@@ -142,6 +142,28 @@
       </div>
     </div>
 
+    <!-- Admin/oversight: saved supplier quotations — review what suppliers charged before -->
+    <div class="chart-card" id="sqSummaryCard" style="display:none;margin-bottom:1.25rem;">
+      <div class="flow-actions" style="justify-content:space-between;align-items:center;cursor:pointer;" onclick="sqToggleSummary()">
+        <h3 style="font-size:0.95rem;font-weight:600;">Supplier Quotations <span id="sqSummaryCount" style="font-weight:400;color:var(--text-muted,#64748b);font-size:0.82rem;"></span></h3>
+        <svg id="sqToggleIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="sqSummaryContent" style="display:none;margin-top:0.75rem;">
+        <p class="pr-meta" style="margin:0 0 0.6rem;">Every quotation recorded on the Supplier Quotation page — the prices suppliers gave before. Search here, or open a request and use the per-item <b>&#8634; past prices</b> toggle to see the matches for that item.</p>
+        <div id="sqSummaryKpis" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;"></div>
+        <div class="flow-actions" style="gap:0.5rem;flex-wrap:wrap;">
+          <input type="text" id="sqSumSearch" placeholder="Search supplier, item, reference or PR no&hellip;" oninput="sqRenderSummary()"
+            style="flex:1;min-width:240px;padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+          <select id="sqSumSupplier" onchange="sqRenderSummary()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+            <option value="">All suppliers</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="sqClearSummary()">Clear</button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="sqReloadSummary()">Refresh</button>
+        </div>
+        <div id="sqSummaryBody" style="margin-top:0.75rem;overflow-x:auto;"><p class="pr-meta">Loading&hellip;</p></div>
+      </div>
+    </div>
+
     <!-- Sales: new request form -->
     <div class="chart-card" id="salesFormCard" style="display:none;margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Purchase Request</h3>
