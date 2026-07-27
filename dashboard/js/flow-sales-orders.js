@@ -44,6 +44,7 @@ function loadFromQuotation() {
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
+  if (item && item.itemId) tr.dataset.itemId = item.itemId;   // A159: carry the identity from the quotation
   tr.innerHTML = `
     <td><input type="text" class="itemNo" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" style="width:38%;display:inline-block;">
         <input type="text" class="itemName" value="${item ? flowEsc(item.itemName) : ''}" placeholder="Description" style="width:60%;display:inline-block;"></td>
@@ -78,7 +79,7 @@ function collectItems() {
     // just because its item code is blank (that undershot the SO total vs the quotation). Blank code
     // falls back to the shared 'N/A' key, consistent with the rest of the flow.
     if (!itemNo && !itemName && !(qty > 0)) return;   // skip only fully-empty rows
-    items.push({ itemNo: itemNo || 'N/A', itemName: itemName || itemNo, qty, price });
+    items.push({ itemId: tr.dataset.itemId || '', itemNo: itemNo || 'N/A', itemName: itemName || itemNo, qty, price });
   });
   return items;
 }

@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 94;   // A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine · 89: A149 names · 88: A147 bug-scan)
+var FLOW_VERSION = 95;   // A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine · 89: A149 names · 88: A147 bug-scan)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -31,8 +31,13 @@ function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 var SCHEMA = {
   // Type: 'Stock' = real inventory (migrated old-system stocks, received goods, or anything that
   // reached a Purchase Order — even at 0 qty) · 'Catalog' = quotation/PR working items not yet bought.
+  // A159: 'Item ID' appended — a permanent, internal identity for each item. Item numbers are NOT
+  // unique (items with no manufacturer part number all normalise to 'N/A', deliberately), so anything
+  // that identified an item by its number resolved to whichever row came first. The id is never shown
+  // to a customer; documents still print the item number exactly as before.
   Inventory: ['Item No', 'Description', 'Available Balance', 'Purchase Price/Unit',
-              'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated', 'Type'],
+              'Shipping Cost/Unit', 'Landed Cost/Unit', 'Total Landed Cost', 'Currency', 'Last Updated', 'Type',
+              'Item ID'],
 
   //    A145: 'Plant Site' + 'Client Ref No' carry PR context onto the quotation (appended at END).
   //    A151: 'PR No' links a quotation back to the pricing request it came from (populated by
@@ -42,15 +47,15 @@ var SCHEMA = {
                    'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
-                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM'],
+                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID'],
 
   SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
-  SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price'],
+  SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID'],
 
   //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
   PurchaseOrders:     ['PO No', 'SO No', 'Date', 'Supplier', 'Currency', 'Total Purchase (FC)', 'Status', 'Created By', 'Created At', 'PDF Link',
                        'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Exchange Rate'],
-  PurchaseOrderItems: ['PO No', 'Item No', 'Item Name', 'Qty', 'Purchase Price/Unit (FC)', 'Total (FC)'],
+  PurchaseOrderItems: ['PO No', 'Item No', 'Item Name', 'Qty', 'Purchase Price/Unit (FC)', 'Total (FC)', 'Item ID'],
 
   APAging: ['AP No', 'PO No', 'Supplier', 'Currency', 'Amount (FC)', 'Amount (PHP)', 'Status',
             'Due Date', 'Paid (PHP)', 'Notes', 'Created At', 'Updated At', 'PR No'],
@@ -59,13 +64,15 @@ var SCHEMA = {
                        'VAT (PHP)', 'Delivery Charges (PHP)', 'Other Charges (PHP)',
                        'Total Shipping Cost (PHP)', 'Received By', 'Created At', 'SO No'],
   ReceivingItems:     ['MR No', 'Item No', 'Item Name', 'Qty Received', 'Purchase Price/Unit (FC)',
-                       'Purchase Price/Unit (PHP)', 'Shipping/Unit (PHP)', 'Landed Cost/Unit', 'Total Landed Cost'],
+                       'Purchase Price/Unit (PHP)', 'Shipping/Unit (PHP)', 'Landed Cost/Unit', 'Total Landed Cost',
+                       'Item ID'],
 
   // A158: 'Voided'/'Void Reason' appended at the END — a mis-issued invoice had no reversal at all,
   // so the only fix was editing the sheet by hand. Voided rows are excluded from getInvoices by default.
   Invoices:     ['INV No', 'SO No', 'Date', 'Customer', 'Total Sales', 'Total COGS', 'Created By', 'Created At',
                  'Voided', 'Void Reason'],
-  InvoiceItems: ['INV No', 'Item No', 'Item Name', 'Qty', 'Selling Price', 'Line Sales', 'Landed Cost/Unit', 'Line COGS'],
+  InvoiceItems: ['INV No', 'Item No', 'Item Name', 'Qty', 'Selling Price', 'Line Sales', 'Landed Cost/Unit', 'Line COGS',
+                 'Item ID'],
 
   // ── Accounts Receivable (after Invoices: client pays the sales-order amount) + Collections ──
   ARAging:     ['AR No', 'INV No', 'SO No', 'Customer', 'Amount (PHP)', 'Collected (PHP)', 'Status',
@@ -106,7 +113,8 @@ var SCHEMA = {
   //    A144: 'Supplier Price VAT' (Inclusive|Exclusive note — display only, no costing-math effect).
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price',
-                        'Orig Item No', 'Orig Item Name', 'Supplier Price VAT'],
+                        'Orig Item No', 'Orig Item Name', 'Supplier Price VAT',
+                        'Item ID'],   // A159: which catalogue item this line actually is
 
   // ── Generic per-record document attachments (any process step) ──
   Documents: ['Doc ID', 'Module', 'Ref No', 'Doc Type', 'File Name', 'Drive Link', 'File ID',
@@ -346,17 +354,121 @@ function getInventory() {
       purchasePrice: _num(r['Purchase Price/Unit']), shippingCost: _num(r['Shipping Cost/Unit']),
       landedCost: _num(r['Landed Cost/Unit']), totalLanded: _num(r['Total Landed Cost']),
       currency: r['Currency'] || 'PHP', lastUpdated: r['Last Updated'],
-      type: r['Type'] || '', rowIndex: r.rowIndex
+      type: r['Type'] || '', rowIndex: r.rowIndex,
+      itemId: r['Item ID'] || ''            // A159: what the pickers key on — never the item number
     };
   }) };
 }
 
-function _findInventory(itemNo) {
+/* A159 — resolve an inventory item without ever guessing.
+
+   Item numbers are not unique: every item with no manufacturer part number normalises to 'N/A'
+   (92 of them live today), so the old first-match scan returned the same row for all of them —
+   the wrong product on screen, and one shared cost basis underneath.
+
+   Resolution order:
+     1. Item ID          — exact and permanent, the only truly unambiguous key
+     2. item number      — when exactly one row carries it (the ordinary case)
+     3. number + description — rescues documents saved before ids existed, since every line
+                               already stores both
+     4. first match      — as before, but the row is returned with `_ambiguous` set so callers
+                           can report it rather than silently costing the wrong item
+
+   `opts` accepts { itemId, description }; passing a bare string keeps the old call signature working. */
+function _findInventory(itemNo, opts) {
   var rows = _rows('Inventory');
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i]['Item No']).trim() === String(itemNo).trim()) return rows[i];
+  var o = (typeof opts === 'string') ? { description: opts } : (opts || {});
+
+  if (o.itemId) {
+    var byId = rows.filter(function (r) { return String(r['Item ID'] || '') === String(o.itemId); })[0];
+    if (byId) return byId;                      // exact — nothing else to consider
   }
-  return null;
+
+  var want = _normItemNo(itemNo);
+  // Normalise BOTH sides: a legacy row storing a bare '-' must match a query of 'N/A', or
+  // _applyInventory would append a duplicate row instead of updating the existing one.
+  var byNo = rows.filter(function (r) { return _normItemNo(r['Item No']) === want; });
+  if (!byNo.length) return null;
+  if (byNo.length === 1) return byNo[0];
+
+  if (o.description) {
+    var d = String(o.description).trim().toLowerCase();
+    var byDesc = byNo.filter(function (r) { return String(r['Description'] || '').trim().toLowerCase() === d; });
+    if (byDesc.length === 1) return byDesc[0];
+  }
+
+  var first = byNo[0];
+  first._ambiguous = byNo.length;               // caller decides whether to warn or refuse
+  return first;
+}
+
+/** The items sharing a given (normalised) item number — used by the pickers and the duplicate report. */
+function _inventoryByNumber(itemNo) {
+  var want = _normItemNo(itemNo);
+  return _rows('Inventory').filter(function (r) { return _normItemNo(r['Item No']) === want; });
+}
+
+/* Item ids are plain running numbers — ITM-00001 — not month-scoped like document numbers, because an
+   item isn't a monthly document. Deliberately NOT routed through _nextNumber: that writes a Script
+   Property per call and rescans the sheet each time, which a 361-row backfill would turn into 361
+   property writes on a project already at the properties limit. */
+function _highestItemIdNum(rows) {
+  var max = 0;
+  (rows || _rows('Inventory')).forEach(function (r) {
+    var m = String(r['Item ID'] || '').match(/^ITM-(\d+)$/);
+    if (m) { var n = parseInt(m[1], 10); if (n > max) max = n; }
+  });
+  return max;
+}
+function _fmtItemId(n) { return 'ITM-' + ('00000' + n).slice(-5); }
+
+/** Issue the next item id. Monotonic and never reused, so an id always means exactly one product. */
+function _nextItemId(rows) {
+  return _fmtItemId(_highestItemIdNum(rows) + 1);
+}
+
+/* A159 — give every existing item an id. Idempotent (rows that already have one are untouched) and
+   written as ONE range write, so it finishes well inside the execution limit and is safe to re-run
+   while people are working. */
+function backfillItemIds() {
+  var sh = _sheet('Inventory');
+  var col = SCHEMA.Inventory.indexOf('Item ID') + 1;
+  var rows = _rows('Inventory');
+  if (!rows.length) return { success: true, assigned: 0, already: 0, total: 0, message: 'Inventory is empty.' };
+
+  var n = _highestItemIdNum(rows);
+  var assigned = 0, already = 0;
+  var first = rows[0].rowIndex, last = rows[rows.length - 1].rowIndex;
+  var col_ = sh.getRange(first, col, last - first + 1, 1).getValues();
+  rows.forEach(function (r) {
+    var i = r.rowIndex - first;
+    if (String(col_[i][0] || '').trim()) { already++; return; }
+    col_[i][0] = _fmtItemId(++n);
+    assigned++;
+  });
+  if (assigned) sh.getRange(first, col, col_.length, 1).setValues(col_);
+  return { success: true, assigned: assigned, already: already, total: rows.length,
+    message: 'Assigned ' + assigned + ' item id(s); ' + already + ' already had one.' };
+}
+
+/* A159 — likely duplicate catalogue entries, grouped by description. Report only: merging moves stock
+   balances and cost history, so it stays a human decision. */
+function findDuplicateInventory() {
+  var groups = {};
+  _rows('Inventory').forEach(function (r) {
+    var key = String(r['Description'] || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!key) return;
+    (groups[key] = groups[key] || []).push({
+      itemId: r['Item ID'] || '', itemNo: r['Item No'], description: r['Description'],
+      balance: _num(r['Available Balance']), landedCost: _num(r['Landed Cost/Unit']),
+      type: r['Type'] || '', rowIndex: r.rowIndex
+    });
+  });
+  var dups = [];
+  Object.keys(groups).forEach(function (k) { if (groups[k].length > 1) dups.push({ description: groups[k][0].description, count: groups[k].length, items: groups[k] }); });
+  dups.sort(function (a, b) { return b.count - a.count; });
+  return { success: true, groups: dups.length,
+    items: dups.reduce(function (s, g) { return s + g.count; }, 0), data: dups };
 }
 
 /** Normalize an Item No: a blank, "n/a" (any case), or dash-only string becomes the literal 'N/A'
@@ -391,18 +503,32 @@ function addInventoryItem(p) {
   var c = _invComputed(p.balance, p.purchasePrice, p.shippingCost);
   // Nothing becomes real stock unless deliberate: adds default to Catalog (quotation working items).
   var type = (p.type === 'Stock') ? 'Stock' : 'Catalog';
+  var itemId = _nextItemId();                      // A159: identity that doesn't depend on the number
   _append('Inventory', [itemNo, String(p.description).trim(), _num(p.balance),
-    _num(p.purchasePrice), _num(p.shippingCost), c.landed, c.total, p.currency || 'PHP', _now(), type]);
-  return { success: true, message: 'Item added.' };
+    _num(p.purchasePrice), _num(p.shippingCost), c.landed, c.total, p.currency || 'PHP', _now(), type,
+    itemId]);
+  // A159: 'N/A' items legitimately repeat, but a repeated REAL part number is worth surfacing so the
+  // catalogue doesn't quietly accumulate near-duplicates.
+  var dupe = itemNo === 'N/A' && _inventoryByNumber(itemNo).length > 1;
+  return { success: true, itemId: itemId, itemNo: itemNo, duplicateNumber: dupe,
+    message: 'Item added.' };
 }
 
 function updateInventoryItem(p) {
   var sh = _sheet('Inventory');
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
-  var curRow = sh.getRange(ri, 1, 1, 10).getValues()[0];
-  // A158: same stale-row protection as updateAPAging — a deleted row above shifts everything up.
-  if (p.itemNo && _normItemNo(curRow[0]) !== _normItemNo(p.itemNo)) {
+  var curRow = sh.getRange(ri, 1, 1, SCHEMA.Inventory.length).getValues()[0];
+  var idCol = SCHEMA.Inventory.indexOf('Item ID');
+  /* A158 stale-row protection — a deleted row above shifts everything up. A159: compare the Item ID,
+     because comparing the NUMBER was vacuous for the 92 items all numbered 'N/A' (every one of them
+     passed the check for every other), i.e. the guard didn't protect the rows that most needed it. */
+  if (p.itemId && String(curRow[idCol] || '') && String(curRow[idCol]) !== String(p.itemId)) {
+    return { success: false, staleRow: true,
+      message: 'This list has changed since it was loaded — refresh before saving (row ' + ri +
+        ' is no longer that item).' };
+  }
+  if (!p.itemId && p.itemNo && _normItemNo(curRow[0]) !== _normItemNo(p.itemNo)) {
     return { success: false, staleRow: true,
       message: 'This list has changed since it was loaded — refresh before saving (row ' + ri +
         ' is no longer ' + p.itemNo + ').' };
@@ -427,13 +553,18 @@ function deleteInventoryItem(p) {
   var sh = _sheet('Inventory');
   // A158: verify the row is still the item the caller means — deleting by position alone removes
   // whatever has since shifted into that slot.
-  if (p.itemNo) {
-    var atRow = sh.getRange(ri, 1, 1, 1).getValues()[0][0];
-    if (_normItemNo(atRow) !== _normItemNo(p.itemNo)) {
-      return { success: false, staleRow: true,
-        message: 'This list has changed since it was loaded — refresh before deleting (row ' + ri +
-          ' is no longer ' + p.itemNo + ').' };
-    }
+  // A159: verify by Item ID where we have one — the item-number compare can't tell two 'N/A' rows apart.
+  var dRow = sh.getRange(ri, 1, 1, SCHEMA.Inventory.length).getValues()[0];
+  var dIdCol = SCHEMA.Inventory.indexOf('Item ID');
+  if (p.itemId && String(dRow[dIdCol] || '') && String(dRow[dIdCol]) !== String(p.itemId)) {
+    return { success: false, staleRow: true,
+      message: 'This list has changed since it was loaded — refresh before deleting (row ' + ri +
+        ' is no longer that item).' };
+  }
+  if (!p.itemId && p.itemNo && _normItemNo(dRow[0]) !== _normItemNo(p.itemNo)) {
+    return { success: false, staleRow: true,
+      message: 'This list has changed since it was loaded — refresh before deleting (row ' + ri +
+        ' is no longer ' + p.itemNo + ').' };
   }
   sh.deleteRow(ri);
   return { success: true, message: 'Item deleted.' };
@@ -441,9 +572,12 @@ function deleteInventoryItem(p) {
 
 /** Adjust an inventory item by delta qty and (optionally) set new cost basis. Creates if missing.
  *  Goods that move through Receiving/Issuance are by definition real inventory → Type 'Stock'. */
-function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, currency) {
+/* A159: `itemId` (and the description as a fallback) let this land on the RIGHT row. Without them a
+   receipt of any no-code item blended its cost into whichever 'N/A' row happened to be first, while
+   the other 91 could never receive stock at all. */
+function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, currency, itemId) {
   var sh = _sheet('Inventory');
-  var existing = _findInventory(itemNo);
+  var existing = _findInventory(itemNo, { itemId: itemId, description: itemName });
   if (existing) {
     var oldQty = _num(existing['Available Balance']);
     var addQty = _num(deltaQty);
@@ -474,8 +608,9 @@ function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, c
   } else {
     var bal = Math.max(0, _num(deltaQty));
     var c2 = _invComputed(bal, newPurchase, newShipping);
-    _append('Inventory', [String(itemNo).trim(), String(itemName || itemNo).trim(), bal,
-      _num(newPurchase), _num(newShipping), c2.landed, c2.total, currency || 'PHP', _now(), 'Stock']);
+    _append('Inventory', [_normItemNo(itemNo), String(itemName || itemNo).trim(), bal,
+      _num(newPurchase), _num(newShipping), c2.landed, c2.total, currency || 'PHP', _now(), 'Stock',
+      _nextItemId()]);
   }
 }
 
@@ -483,16 +618,21 @@ function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, c
  *  Catalog rows are promoted to Stock; unknown item codes get a Stock row at balance 0. 'N/A'
  *  placeholder codes are skipped — misc PO charges (fuel, freight lines) aren't inventory and can't
  *  be identified among the many N/A rows. */
-function _ensureInventoryStock(itemNo, itemName) {
+function _ensureInventoryStock(itemNo, itemName, itemId) {
   var no = _normItemNo(itemNo);
-  if (no === 'N/A') return;
+  // A159: no-code items can now be identified, so they no longer have to be skipped wholesale — but a
+  // PO line with neither an id nor a description is still just a misc charge (freight, fuel), not stock.
+  if (no === 'N/A' && !itemId && !String(itemName || '').trim()) return;
   var sh = _sheet('Inventory');
-  var existing = _findInventory(no);
-  if (existing) {
+  var existing = _findInventory(no, { itemId: itemId, description: itemName });
+  if (existing && !existing._ambiguous) {
     if (existing['Type'] !== 'Stock') sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
-  } else {
-    _append('Inventory', [no, String(itemName || no).trim(), 0, 0, 0, 0, 0, 'PHP', _now(), 'Stock']);
+  } else if (!existing) {
+    _append('Inventory', [no, String(itemName || no).trim(), 0, 0, 0, 0, 0, 'PHP', _now(), 'Stock',
+      _nextItemId()]);
   }
+  // An ambiguous match is left alone deliberately: promoting a guessed row to Stock would be worse
+  // than doing nothing.
 }
 
 /** Bulk import of the OLD system's stock list (Model No · Description · Qty). Idempotent upsert by
@@ -508,12 +648,12 @@ function importInventory(p) {
     var no = _normItemNo(it.itemNo);
     var desc = String(it.description || no).trim();
     var qty = _num(it.qty);
-    // N/A rows are never merged by code — but match by description so a re-run stays idempotent.
-    var existing = (no === 'N/A')
-      ? _rows('Inventory').filter(function (r) {
-          return _normItemNo(r['Item No']) === 'N/A' && String(r['Description']).trim() === desc;
-        })[0] || null
-      : _findInventory(no);
+    // A159: this used to carry its own private description-matching workaround for 'N/A' rows.
+    // _findInventory does that now — number first, description to disambiguate — so the workaround
+    // is gone and one resolver serves every caller. An ambiguous hit is treated as "not found" here
+    // rather than merged into a guessed row.
+    var existing = _findInventory(no, { description: desc });
+    if (existing && existing._ambiguous) existing = null;
     if (existing) {
       var bal = _num(existing['Available Balance']);
       if (bal === 0) {
@@ -526,7 +666,7 @@ function importInventory(p) {
       sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
       updated++;
     } else {
-      _append('Inventory', [no, desc, qty, 0, 0, 0, 0, 'PHP', _now(), 'Stock']);
+      _append('Inventory', [no, desc, qty, 0, 0, 0, 0, 'PHP', _now(), 'Stock', _nextItemId()]);
       created++;
     }
   });
@@ -589,7 +729,7 @@ function getQuotations(p) {
       plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '', prNo: q['PR No'] || '',
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
-        itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
+        itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
         origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
         vat: r['Supplier VAT'] || '', uom: r['UOM'] || '' }; })
@@ -633,7 +773,8 @@ function createQuotation(p) {
     '', p.plantSite || '', p.clientRefNo || '', p.prNo || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || ''];   // trailing: A145 Supplier VAT, A147 UOM
+            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
+            it.itemId || ''];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -723,7 +864,7 @@ function updateQuotation(p) {
     // A147: write all 10 columns like createQuotation — the old 8-col write silently blanked
     // Supplier VAT (and would blank UOM) on every edit, since _writeItems delete+re-appends.
     return [newNo, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || ''];
+            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '', it.itemId || ''];
   });
   if (newNo !== String(no)) {
     // Sales orders built from this quotation keep their link.
@@ -775,7 +916,7 @@ function getSalesOrders() {
       status: s['Status'], total: _num(s['Total']), createdBy: s['Created By'], createdAt: s['Created At'],
       supplierType: s['Supplier Type'] || '', rowIndex: s.rowIndex,
       items: its.map(function (r) { return {
-        itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
+        itemId: r['Item ID'] || '', itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Price/Unit']), total: _num(r['Total Price']) }; })
     };
   }) };
@@ -798,7 +939,8 @@ function createSalesOrder(p) {
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
     total, p.createdBy || '', _now(), p.supplierType || '']);
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
+    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+            it.itemId || ''];   // A159 Item ID
   });
   // A151: create the SO Lifecycle (shipment) timeline for EVERY order — including back-dated ones —
   // so every SO has a single end-to-end lifecycle record (track + nudge; the auto-derived stages are
@@ -967,7 +1109,8 @@ function updateSalesOrder(p) {
     }
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
+    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+            it.itemId || ''];   // A159 Item ID
   });
   return { success: true, soNo: no, message: 'Sales Order updated.' };
 }
@@ -1007,7 +1150,7 @@ function getPurchaseOrders() {
       approvedBy: po['Approved By'] || '', approvedAt: po['Approved At'] || '', rowIndex: po.rowIndex,
       exchangeRate: _num(po['Exchange Rate']),
       items: its.map(function (r) { return {
-        itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
+        itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Purchase Price/Unit (FC)']), total: _num(r['Total (FC)']) }; })
     };
   }) };
@@ -1038,10 +1181,11 @@ function createPurchaseOrder(p) {
     p.actorRole || p.createdByRole || '', '', '', '',
     _num(p.exchangeRate) > 0 ? _num(p.exchangeRate) : (currency === 'PHP' ? 1 : '')]);   // A145: Exchange Rate
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
+    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+            it.itemId || ''];   // A159 Item ID
   });
   // An item processed into a PO is inventory (0 qty or not): promote Catalog rows / create missing ones.
-  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName); });
+  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); });
   // Auto-create the Accounts Payable entry. FC amount flows in; the PHP estimate (Total × exchange
   // rate, entered on the PO form) pre-fills Amount (PHP) so AP aging + the balance sheet populate.
   var apNo = _nextNumber('APAging', 1, 'AP');
@@ -1108,9 +1252,10 @@ function updatePurchaseOrder(p) {
     }
   });
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
-    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price)];
+    return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
+            it.itemId || ''];   // A159 Item ID
   });
-  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName); });
+  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); });
   // Keep the linked AP entry's FC amount + currency in sync. Refresh the PHP estimate too when a new
   // one is supplied and the AP is still untouched (Unpaid, nothing paid) — don't clobber manual edits.
   var apSh = _sheet('APAging');
@@ -1438,7 +1583,8 @@ function voidInvoice(p) {
   // Put the stock back exactly as it was taken out.
   _rows('InvoiceItems').filter(function (it) { return String(it['INV No']) === String(p.invNo); })
     .forEach(function (it) {
-      _applyInventory(_normItemNo(it['Item No']), it['Item Name'], _num(it['Qty']), null, null, null);
+      _applyInventory(_normItemNo(it['Item No']), it['Item Name'], _num(it['Qty']), null, null, null,
+        it['Item ID']);
     });
 
   var arSh = _sheet('ARAging');
@@ -1660,7 +1806,7 @@ function getReceiving() {
       totalShipping: _num(m['Total Shipping Cost (PHP)']),
       receivedBy: m['Received By'], createdAt: m['Created At'], rowIndex: m.rowIndex,
       items: its.map(function (r) { return {
-        itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty Received']),
+        itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty Received']),
         purchasePrice: _num(r['Purchase Price/Unit (FC)']), purchasePHP: _num(r['Purchase Price/Unit (PHP)']),
         shippingPerUnit: _num(r['Shipping/Unit (PHP)']),
         landedCost: _num(r['Landed Cost/Unit']), totalLanded: _num(r['Total Landed Cost']) }; })
@@ -1754,10 +1900,12 @@ function createReceiving(p) {
     // Shipping/Unit (PHP) = inventoriable shipping (excl VAT) × Unit Price (FC) / PO Total (FC)
     var shipPerUnit = (poTotalFC > 0) ? (invShipping * unitPriceFC / poTotalFC) : 0;
     var landed = purchasePHP + shipPerUnit;
-    sh.appendRow([no, it.itemNo, it.itemName, qty, unitPriceFC, purchasePHP, shipPerUnit, landed, landed * qty]);
+    sh.appendRow([no, it.itemNo, it.itemName, qty, unitPriceFC, purchasePHP, shipPerUnit, landed, landed * qty,
+                  it.itemId || '']);   // A159 Item ID
     // Final inventory cost = landed (PHP); add the received quantity.
     // A145: normalize the key so N/A-ish codes hit the same row _ensureInventoryStock/_findInventory use.
-    _applyInventory(_normItemNo(it.itemNo), it.itemName, qty, purchasePHP, shipPerUnit, 'PHP');
+    // A159: itemId (description as fallback) — without it every no-code receipt blended into one row.
+    _applyInventory(_normItemNo(it.itemNo), it.itemName, qty, purchasePHP, shipPerUnit, 'PHP', it.itemId);
     purchaseTot += purchasePHP * qty;
     shipTot += shipPerUnit * qty;
     receivedFC += unitPriceFC * qty;
@@ -1795,7 +1943,7 @@ function getInvoices(p) {
       createdAt: v['Created At'], rowIndex: v.rowIndex,
       voided: String(v['Voided'] || '') === 'true', voidReason: v['Void Reason'] || '',
       items: its.map(function (r) { return {
-        itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
+        itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
         sellingPrice: _num(r['Selling Price']), lineSales: _num(r['Line Sales']),
         landedCost: _num(r['Landed Cost/Unit']), lineCOGS: _num(r['Line COGS']) }; })
     };
@@ -1833,7 +1981,7 @@ function createInvoice(p) {
   if (!p.confirmShort) {
     var short = [];
     items.forEach(function (it) {
-      var inv = _findInventory(_normItemNo(it.itemNo));
+      var inv = _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
       var have = inv ? _num(inv['Available Balance']) : 0;
       var want = _num(it.qty);
       if (want > have + 0.0001) short.push({ item: String(it.itemNo || it.itemName || ''), have: have, want: want });
@@ -1859,22 +2007,25 @@ function createInvoice(p) {
   }
 
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
-  var totalSales = 0, totalCOGS = 0, zeroCogsLines = 0;
+  var totalSales = 0, totalCOGS = 0, zeroCogsLines = 0, ambiguousLines = 0;
   var sh = _sheet('InvoiceItems');
   var lines = items.map(function (it) {
-    var inv = _findInventory(_normItemNo(it.itemNo));   // A145: consistent key with the deduction below
+    // A159: resolve by id (then description) so each product costs from ITS OWN landed cost.
+    var inv = _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
+    if (inv && inv._ambiguous) ambiguousLines++;
     var landed = inv ? _num(inv['Landed Cost/Unit']) : 0;
     var qty = _num(it.qty), price = _num(it.price);
     var lineSales = qty * price, lineCOGS = qty * landed;
     if (qty > 0 && !(landed > 0)) zeroCogsLines++;   // A145: line issued with no cost basis → COGS 0
     totalSales += lineSales; totalCOGS += lineCOGS;
-    return [no, it.itemNo, it.itemName, qty, price, lineSales, landed, lineCOGS];
+    return [no, it.itemNo, it.itemName, qty, price, lineSales, landed, lineCOGS,
+            (inv && inv['Item ID']) || it.itemId || ''];   // A159: the id we actually costed from
   });
   _append('Invoices', [no, p.soNo || '', p.date || _now(), p.customer, totalSales, totalCOGS, p.createdBy || '', _now(),
     '', '']);   // A158 trailing: Voided / Void Reason
   items.forEach(function (it, i) {
     sh.appendRow(lines[i]);
-    _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null); // deduct stock (A145: normalized key)
+    _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null, it.itemId); // deduct stock
   });
   // GL entry 1: Dr Accounts Receivable / Cr Sales.  Entry 2: Dr COGS / Cr Inventory.
   _postJournal('INV', no, p.date || _now(), 'PHP', [
@@ -1891,8 +2042,12 @@ function createInvoice(p) {
   _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales, 0, 'Unpaid', arDue, '', _now(), _now()]);
   _refStore('createInvoice', p.clientRef, no);
   return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines,
+    ambiguousLines: ambiguousLines,
     message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' +
-      (zeroCogsLines > 0 ? ' ⚠ ' + zeroCogsLines + ' line(s) had no landed cost (COGS 0).' : '') };
+      (zeroCogsLines > 0 ? ' ⚠ ' + zeroCogsLines + ' line(s) had no landed cost (COGS 0).' : '') +
+      // A159: say so rather than quietly costing from whichever row happened to match first.
+      (ambiguousLines > 0 ? ' ⚠ ' + ambiguousLines + ' line(s) matched more than one catalogue item — ' +
+        'their cost was taken from the first match. Re-pick the item to record it exactly.' : '') };
 }
 
 // A151: create an AR row for every Invoice that has none (migrated backfill invoices never got one).
@@ -2647,7 +2802,7 @@ function _writeMigratedRecordsForSO(cd, force) {
     if (!hasReal) {
       var invNo = _nextNumber('Invoices', 1, 'INV');
       _sheet('Invoices').appendRow([invNo, soNo, date, customer, sales, cogs, 'Migrated (legacy)', _now(), '', '']);
-      _sheet('InvoiceItems').appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs]);
+      _sheet('InvoiceItems').appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs, '']);
       wroteInv = true;
     }
   }
@@ -2660,7 +2815,7 @@ function _writeMigratedRecordsForSO(cd, force) {
     var purchase = _num(cd['Purchase of Goods']);
     var mrNo = _nextNumber('MaterialsReceiving', 1, 'MR');
     _sheet('MaterialsReceiving').appendRow([mrNo, '', date, '(migrated)', 'PHP', duties, 0, delivery, other, totalShip, 'Migrated (legacy)', _now(), soNo]);
-    _sheet('ReceivingItems').appendRow([mrNo, '(migrated)', 'Migrated legacy goods', 1, 0, purchase, 0, purchase, purchase]);
+    _sheet('ReceivingItems').appendRow([mrNo, '(migrated)', 'Migrated legacy goods', 1, 0, purchase, 0, purchase, purchase, '']);
     wroteRcv = true;
   }
   return { invoice: wroteInv, receiving: wroteRcv };
@@ -2695,7 +2850,7 @@ function backfillMigratedRecords(p) {
     if (!invBySo[soNo]) {
       var invNo = _nextNumber('Invoices', 1, 'INV');
       invSh.appendRow([invNo, soNo, date, customer, sales, cogs, 'Migrated (legacy)', _now()]);
-      invItemSh.appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs]);
+      invItemSh.appendRow([invNo, '(migrated)', 'Migrated legacy sales', 1, sales, sales, cogs, cogs, '']);
       invBySo[soNo] = true;
       invoicesCreated++;
     }
@@ -2708,7 +2863,7 @@ function backfillMigratedRecords(p) {
       var purchase = _num(c['Purchase of Goods']);
       var mrNo = _nextNumber('MaterialsReceiving', 1, 'MR');
       mrSh.appendRow([mrNo, '', date, '(migrated)', 'PHP', duties, 0, delivery, other, totalShip, 'Migrated (legacy)', _now(), soNo]);
-      rcvItemSh.appendRow([mrNo, '(migrated)', 'Migrated legacy goods', 1, 0, purchase, 0, purchase, purchase]);
+      rcvItemSh.appendRow([mrNo, '(migrated)', 'Migrated legacy goods', 1, 0, purchase, 0, purchase, purchase, '']);
       migRcv[soNo] = true;
       receivingsCreated++;
     }
@@ -3553,6 +3708,7 @@ var _MODULE_MAP = {
   updateAPAging: ['AP Aging', 'Updated'], deleteAPEntry: ['AP Aging', 'Deleted'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
   correctCollection: ['Collection', 'Corrected'],
+  backfillItemIds: ['Inventory', 'Item IDs Assigned'],
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   importCollections: ['Collection', 'Imported'],
@@ -3800,7 +3956,7 @@ function getPricingRequests(p) {
       pricedItemsJson: h['Priced Items JSON'] || '',
       items: its.map(function (r) {
         return {
-          line: _num(r['Line']), itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
+          line: _num(r['Line']), itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
           uom: r['UOM'], remarks: r['Remarks'], included: (r['Included'] === true || String(r['Included']) === 'true'),
           supplier: r['Supplier'], principal: r['Principal'], currency: r['Currency'] || 'PHP',
           supplierPrice: _num(r['Supplier Price (FC)']), cbm: _num(r['CBM']), finalPrice: _num(r['Final Price']),
@@ -3892,7 +4048,8 @@ function createPricingRequest(p) {
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
-      true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0, '', '', '']);   // trailing: Orig Item No/Name / Supplier Price VAT
+      true, '', '', it.currency || 'PHP', 0, _num(it.cbm), 0, '', '', '',
+      it.itemId || '']);   // trailing: Orig Item No/Name / Supplier Price VAT / A159 Item ID
   });
   // Record clientRef → PR No so a retried submission returns THIS number without re-writing, even if
   // the sheet write hasn't propagated to a subsequent read.
@@ -4101,7 +4258,7 @@ function createQuotationFromPR(p) {
     return String(r['PR No']) === String(p.prNo)
       && (r['Included'] === true || String(r['Included']) === 'true');
   }).map(function (r) {
-    return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']),
+    return { itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']), price: _num(r['Final Price']),
              uom: r['UOM'] || '',
              origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
              vat: r['Supplier Price VAT'] || '' };   // A145: carry the VAT-Incl/Excl note to the quotation
@@ -4222,6 +4379,7 @@ var HANDLERS = {
   getInventory: getInventory, addInventoryItem: addInventoryItem,
   updateInventoryItem: updateInventoryItem, deleteInventoryItem: deleteInventoryItem,
   importInventory: importInventory, classifyInventory: classifyInventory,
+  backfillItemIds: backfillItemIds, findDuplicateInventory: findDuplicateInventory,   // A159
   getQuotations: getQuotations, createQuotation: createQuotation,
   updateQuotation: updateQuotation, deleteQuotation: deleteQuotation,
   getSalesOrders: getSalesOrders, createSalesOrder: createSalesOrder,
@@ -4280,6 +4438,7 @@ var MUTATIONS = {
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, correctCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   voidCollection: 1, voidInvoice: 1,
+  backfillItemIds: 1,                                   // A159 (findDuplicateInventory is read-only)
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,

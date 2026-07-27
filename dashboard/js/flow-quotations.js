@@ -121,35 +121,69 @@ async function loadInventory() {
   qFillDatalist();
 }
 
-// Admin: populate the item-no autocomplete from inventory (Item No — Description).
+// Admin: populate the item-no autocomplete from inventory.
+// A159: keyed on a UNIQUE label, not the item number — 92 items share the number 'N/A', so a
+// number-keyed datalist resolved all of them to the first match.
+let qInvByLabel = {};
+
 function qFillDatalist() {
   const dl = document.getElementById('qInvList');
   if (!dl || !qAdmin) return;
-  dl.innerHTML = qInventory.map(i =>
-    `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+  const seen = {};
+  qInvByLabel = {};
+  dl.innerHTML = qInventory.map(i => {
+    let label = `${i.itemNo} — ${i.description || ''}`.trim();
+    if (seen[label]) { seen[label]++; label += ` (${seen[label]})`; } else seen[label] = 1;
+    qInvByLabel[label] = i;
+    return `<option value="${flowEsc(label)}"></option>`;
+  }).join('');
 }
 
-// Admin: when the typed item-no matches an inventory item, auto-fill its description.
+// Admin free-type: an exact pick stamps the item's permanent id; editing by hand clears it.
 function onItemNoType(inp) {
-  const inv = qInventory.find(i => String(i.itemNo).toLowerCase() === String(inp.value).trim().toLowerCase());
-  if (inv) {
-    const desc = inp.closest('tr').querySelector('.i-desc');
-    if (desc && !desc.value.trim()) desc.value = inv.description || '';
+  const tr = inp.closest('tr');
+  const desc = tr.querySelector('.i-desc');
+  const typed = String(inp.value || '').trim();
+
+  const picked = qInvByLabel[typed];
+  if (picked) {
+    tr.dataset.itemId = picked.itemId || '';
+    inp.value = picked.itemNo || '';
+    if (desc) desc.value = picked.description || '';
+    return;
+  }
+  delete tr.dataset.itemId;                       // free-typed → the stamp no longer matches the box
+  const hits = qInventory.filter(i => String(i.itemNo).toLowerCase() === typed.toLowerCase());
+  if (hits.length === 1) {                        // a number only ONE product uses is unambiguous
+    tr.dataset.itemId = hits[0].itemId || '';
+    if (desc && !desc.value.trim()) desc.value = hits[0].description || '';
   }
 }
 
-// Option value = inventory rowIndex (UNIQUE). Keying on itemNo was broken because many items share
-// itemNo "N/A" — every N/A pick resolved to the first N/A row (a phantom item).
-function itemOptions(selectedRowIndex) {
-  return '<option value="">— select item —</option>' + qInventory.map(i =>
-    `<option value="${flowEsc(i.rowIndex)}"${String(i.rowIndex) === String(selectedRowIndex) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+// Editing the description invalidates a stamped id.
+function onItemDescType(inp) {
+  const tr = inp.closest('tr');
+  if (tr && tr.dataset.itemId) delete tr.dataset.itemId;
 }
-// The inventory rowIndex whose itemNo AND description match a saved/loaded item (for pre-selection); '' if none.
+
+// Option value = the item's permanent Item ID. Keying on itemNo was broken because many items share
+// itemNo "N/A" (every N/A pick resolved to the first N/A row — a phantom item); A159 moves off
+// rowIndex too, because a row number shifts the moment anyone deletes an item above it.
+function itemOptions(selectedItemId) {
+  return '<option value="">— select item —</option>' + qInventory.map(i =>
+    `<option value="${flowEsc(i.itemId || '')}"${i.itemId && String(i.itemId) === String(selectedItemId) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+}
+// The Item ID of a saved/loaded line (for pre-selection): its stored id when it has one, else the
+// item matching BOTH number and description — which is what rescues every pre-A159 line.
 function invRowKey(item) {
   if (!item) return '';
+  if (item.itemId) {
+    const byId = qInventory.find(i => String(i.itemId) === String(item.itemId));
+    if (byId) return String(byId.itemId);
+  }
   const m = qInventory.find(i => String(i.itemNo) === String(item.itemNo || '') &&
     String(i.description) === String(item.itemName || item.description || ''));
-  return m ? String(m.rowIndex) : '';
+  return m ? String(m.itemId || '') : '';
 }
 
 function addRow(item) {
@@ -161,11 +195,12 @@ function addRow(item) {
     tr.dataset.origNo = item.origItemNo || '';
     tr.dataset.origName = item.origItemName || '';
   }
+  if (item && item.itemId) tr.dataset.itemId = item.itemId;   // A159: keep the identity on edit/reload
   if (qAdmin) {
     // Free-typed row: Item No (with inventory autocomplete) · Description · Qty · Price · Line Total.
     tr.innerHTML = `
       <td><input type="text" class="i-no" list="qInvList" value="${item ? flowEsc(item.itemNo) : ''}" oninput="onItemNoType(this)" placeholder="Item No"></td>
-      <td><input type="text" class="i-desc" value="${item ? flowEsc(item.itemName || item.description) : ''}" placeholder="Description"></td>
+      <td><input type="text" class="i-desc" value="${item ? flowEsc(item.itemName || item.description) : ''}" placeholder="Description" oninput="onItemDescType(this)"></td>
       <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
       <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
       <td class="num lineTotal">0.00</td>
@@ -185,6 +220,7 @@ function addRow(item) {
       opt.value = 'raw';
       opt.dataset.no = item.itemNo || '';
       opt.dataset.name = item.itemName || item.description || '';
+      opt.dataset.itemId = item.itemId || '';
       opt.textContent = (item.itemNo ? item.itemNo + ' — ' : '') + (item.itemName || item.description || '');
       opt.selected = true;
       sel.appendChild(opt);
@@ -221,22 +257,22 @@ function collectItems() {
       const itemNo = (tr.querySelector('.i-no').value || '').trim();
       const desc = (tr.querySelector('.i-desc').value || '').trim();
       if (!itemNo && !desc) return;                        // skip empty row
-      items.push({ itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price, ...orig });
+      items.push({ itemId: tr.dataset.itemId || '', itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price, ...orig });
     } else {
       const sel = tr.children[0].querySelector('select');
-      const key = sel.value;                                 // rowIndex of the picked inventory row, or "raw"
+      const key = sel.value;                                 // Item ID of the picked inventory row, or "raw"
       if (!key) return;
       if (key === 'raw') {                                   // non-inventory line (PR item / since-deleted)
         const opt = sel.options[sel.selectedIndex];
         const no = (opt && opt.dataset.no) || '';
         const nm = (opt && opt.dataset.name) || '';
         if (!no && !nm) return;
-        items.push({ itemNo: no || 'N/A', itemName: nm || no || 'N/A', qty, price, ...orig });
+        items.push({ itemId: (opt && opt.dataset.itemId) || '', itemNo: no || 'N/A', itemName: nm || no || 'N/A', qty, price, ...orig });
         return;
       }
-      const inv = qInventory.find(i => String(i.rowIndex) === String(key));
+      const inv = qInventory.find(i => String(i.itemId) === String(key));
       if (!inv) return;
-      items.push({ itemNo: inv.itemNo, itemName: inv.description, qty, price, ...orig });
+      items.push({ itemId: inv.itemId || '', itemNo: inv.itemNo, itemName: inv.description, qty, price, ...orig });
     }
   });
   return items;

@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
   // Admin/accounting classify items (Stock vs Catalog); sales adds are always Catalog (quoting items).
   if (invCanDelete) document.getElementById('invTypeWrap').style.display = '';
+  // A159: the duplicate report needs the v95 backend — hide the button until it's live.
+  if (invCanDelete) {
+    (typeof flowVersionAtLeast === 'function' ? flowVersionAtLeast(95) : Promise.resolve(false))
+      .then(ok => { const b = document.getElementById('dupBtn'); if (b && ok) b.style.display = ''; })
+      .catch(() => {});
+  }
   await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
 });
 
@@ -188,4 +194,47 @@ async function deleteItem(rowIndex, itemNo) {
     if (!res.success) throw new Error(res.message || 'Failed.');
     await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (err) { alert(err.message); }
+}
+
+
+/* A159 — items are auto-added when someone quotes an unlisted product, so near-duplicate entries
+   accumulate (e.g. the same hex-key set entered twice). This reports them, grouped by normalised
+   description; merging stays a human decision because it moves stock balances and cost history. */
+async function findDuplicates() {
+  const box = document.getElementById('dupReport');
+  if (!box) return;
+  box.style.display = '';
+  box.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Scanning...</span></div>';
+  try {
+    const r = await fetchFlow('findDuplicateInventory');
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not scan the catalogue.');
+    const groups = (r.data || []);
+    if (!groups.length) {
+      box.innerHTML = '<p style="color:var(--text-muted,#64748b);padding:0.6rem 0;">No likely duplicates found — every item has a distinct description.</p>';
+      return;
+    }
+    box.innerHTML = `
+      <div style="margin:0.6rem 0 1rem;padding:0.8rem 1rem;border:1px solid var(--border,#334155);border-radius:10px;">
+        <div style="font-weight:600;margin-bottom:0.5rem;">
+          ${groups.length} possible duplicate${groups.length === 1 ? '' : ' groups'} · ${r.items} item${r.items === 1 ? '' : 's'}
+        </div>
+        <p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.7rem;">
+          Same description, separate records. Nothing is merged automatically — merging moves stock and
+          cost history, so decide per group and edit or delete the extra record yourself.
+        </p>
+        <table class="flow-table" style="min-width:640px;"><thead><tr>
+          <th>Description</th><th>Item No</th><th>Item ID</th><th class="num">Balance</th><th class="num">Landed/Unit</th><th>Type</th>
+        </tr></thead><tbody>${groups.map(g => g.items.map((it, k) => `
+          <tr${k === 0 ? ' style="border-top:2px solid var(--border,#334155);"' : ''}>
+            <td>${k === 0 ? flowEsc(it.description || '') : ''}</td>
+            <td>${flowEsc(it.itemNo || '')}</td>
+            <td style="font-family:monospace;font-size:0.8rem;color:var(--text-muted,#64748b);">${flowEsc(it.itemId || '—')}</td>
+            <td class="num">${flowNum(it.balance)}</td>
+            <td class="num">${flowMoney(it.landedCost, 'PHP')}</td>
+            <td>${flowEsc(it.type || '')}</td>
+          </tr>`).join('')).join('')}</tbody></table>
+      </div>`;
+  } catch (e) {
+    box.innerHTML = `<p style="color:#ef4444;padding:0.6rem 0;">${flowEsc(e.message)}</p>`;
+  }
 }

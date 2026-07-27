@@ -129,23 +129,72 @@ function prFillContacts() {
 // (A63). A brand-new item is added to inventory (Catalog, balance 0) on submit — no separate step. The
 // datalist is keyed on Item No; picking one auto-fills the description from the first matching inventory
 // row (an exact code is unique; the shared "N/A" is a rare edge the user can override).
+/* A159: 92 catalogue items share the item number 'N/A', so a datalist keyed on the NUMBER resolved
+   every one of them to the first match (the reported bug: picking a bladder yielded a plier set).
+   The option value is now a unique label; picking one stamps the row with the item's permanent
+   Item ID, and the visible Item No box still shows the plain 'N/A' that documents print. */
+let prInvByLabel = {};
+
+function prInvLabel(i, seen) {
+  let label = `${i.itemNo} — ${i.description || ''}`.trim();
+  if (seen[label]) { seen[label]++; label += ` (${seen[label]})`; }   // identical descriptions stay distinguishable
+  else seen[label] = 1;
+  return label;
+}
+
 function fillPrDatalist() {
   const dl = document.getElementById('prInvList');
-  if (dl) dl.innerHTML = prInventory.map(i => `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+  const seen = {};
+  prInvByLabel = {};
+  const opts = prInventory.map(i => {
+    const label = prInvLabel(i, seen);
+    prInvByLabel[label] = i;
+    return `<option value="${flowEsc(label)}"></option>`;
+  });
+  if (dl) dl.innerHTML = opts.join('');
 }
 function prFillDesc(inp) {
   const tr = inp.closest('tr');
   const desc = tr.querySelector('.pr-desc');
-  const inv = prInventory.find(i => String(i.itemNo).toLowerCase() === String(inp.value).trim().toLowerCase());
-  if (inv && desc && !desc.value) desc.value = inv.description || '';
+  const typed = String(inp.value || '').trim();
+
+  // 1. An exact datalist pick — the only unambiguous case. Stamp the id, then put the plain item
+  //    number back in the box so the rep sees (and the document prints) 'N/A', not an internal id.
+  const picked = prInvByLabel[typed];
+  if (picked) {
+    tr.dataset.itemId = picked.itemId || '';
+    inp.value = picked.itemNo || '';
+    if (desc) desc.value = picked.description || '';
+    return;
+  }
+
+  // 2. Free-typed text: the stamp can no longer be trusted to match what's in the box.
+  delete tr.dataset.itemId;
+
+  // 3. Convenience — a typed number that matches exactly ONE item is still unambiguous, so adopt it.
+  //    A number shared by several products (N/A) deliberately stamps nothing; the server then
+  //    resolves by description and flags the line if it still can't tell them apart.
+  const hits = prInventory.filter(i => String(i.itemNo).toLowerCase() === typed.toLowerCase());
+  if (hits.length === 1) {
+    tr.dataset.itemId = hits[0].itemId || '';
+    if (desc && !desc.value) desc.value = hits[0].description || '';
+  }
+}
+
+/* Editing the description by hand also invalidates a stamped id — the row may no longer be the
+   product that was picked. */
+function prDescEdited(inp) {
+  const tr = inp.closest('tr');
+  if (tr && tr.dataset.itemId) delete tr.dataset.itemId;
 }
 
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
+  if (item && item.itemId) tr.dataset.itemId = item.itemId;   // A159: keep the identity on edit/reload
   tr.innerHTML = `
     <td><input type="text" class="pr-itemno" list="prInvList" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" oninput="prFillDesc(this)" style="width:100%;"></td>
-    <td><input type="text" class="pr-desc" value="${item ? flowEsc(item.itemName || item.description || '') : ''}" placeholder="Description" style="width:100%;"></td>
+    <td><input type="text" class="pr-desc" value="${item ? flowEsc(item.itemName || item.description || '') : ''}" placeholder="Description" oninput="prDescEdited(this)" style="width:100%;"></td>
     <td class="num"><input type="number" step="any" min="0" class="pr-qty" value="${item ? flowNum(item.qty) : 1}"></td>
     <td><input type="text" class="pr-uom" value="${item ? flowEsc(item.uom || '') : ''}" placeholder="pc"></td>
     <td><input type="text" class="pr-remarks" value="${item ? flowEsc(item.remarks || '') : ''}" placeholder="optional"></td>
@@ -166,6 +215,7 @@ function collectItems() {
     // Keep any line with a code, a description or a quantity; blank code → shared 'N/A' key (flow convention).
     if (!itemNo && !desc && !(qty > 0)) return;
     items.push({
+      itemId: tr.dataset.itemId || '',   // A159: which catalogue item this actually is
       itemNo: itemNo || 'N/A', itemName: desc || itemNo,
       qty: qty,
       uom: tr.querySelector('.pr-uom').value.trim(),
@@ -230,12 +280,25 @@ async function saveRequest() {
     // A146: free-typed items not yet in inventory → add them as Catalog products (balance 0), so the
     // request's items become real inventory records (mirrors the admin A63 quotation auto-add).
     const known = new Set(prInventory.map(i => String(i.itemNo).toLowerCase()));
+    const knownDesc = new Set(prInventory.map(i => String(i.description || '').trim().toLowerCase()));
     for (const it of items) {
+      if (it.itemId) continue;                       // already a catalogue item — nothing to add
       const code = String(it.itemNo || '').trim();
-      if (!code || code.toUpperCase() === 'N/A' || known.has(code.toLowerCase())) continue;
-      known.add(code.toLowerCase());
+      const desc = String(it.itemName || '').trim();
+      if (!code) continue;
+      const isNA = code.toUpperCase() === 'N/A';
+      // A159: an item without a part number can now own its own row, because identity no longer
+      // depends on the number. Match on description so re-typing an existing no-code product
+      // doesn't spawn a duplicate; genuinely new ones finally get a record.
+      if (isNA) {
+        if (!desc || knownDesc.has(desc.toLowerCase())) continue;
+        knownDesc.add(desc.toLowerCase());
+      } else {
+        if (known.has(code.toLowerCase())) continue;
+        known.add(code.toLowerCase());
+      }
       try {
-        await postFlow('addInventoryItem', { itemNo: code, description: it.itemName || code, balance: 0, currency: 'PHP', type: 'Catalog' });
+        await postFlow('addInventoryItem', { itemNo: code, description: desc || code, balance: 0, currency: 'PHP', type: 'Catalog' });
       } catch (e) { /* ignore "already exists" and transient errors */ }
     }
     await loadInventory();
@@ -824,7 +887,18 @@ function loadFlowPricing(prNo) {
   // Prefill rows from the saved breakdown when re-pricing (buy/discount/qty/cbm).
   let bd = [];
   try { bd = JSON.parse(r.pricedItemsJson || r.legacyItemsJson || '[]'); } catch (e) { bd = []; }
-  const bdBy = {}; bd.forEach(b => { const k = String((b && (b.modelNo || b.itemNo)) || ''); if (k) bdBy[k] = b; });
+  // A159: key the saved breakdown by LINE, not item number. Two 'N/A' lines on one request
+  // overwrote each other, so re-pricing a multi-line no-code PR prefilled the second line with the
+  // first's buy price and CBM. Line is unique per request; fall back to the number for legacy
+  // breakdowns written before the line was stored.
+  const bdByLine = {}, bdByNo = {};
+  bd.forEach((b, bi) => {
+    if (!b) return;
+    const line = (b.line != null && b.line !== '') ? String(b.line) : String(bi + 1);
+    bdByLine[line] = b;
+    const k = String((b.modelNo || b.itemNo) || '');
+    if (k && !bdByNo[k]) bdByNo[k] = b;   // first wins; only used when the line lookup misses
+  });
   // Seed Forex/Duties from the principal; if re-pricing, override from the saved breakdown.
   mUpdateReadouts(true);
   if (bd.length && bd[0]) {
@@ -832,7 +906,7 @@ function loadFlowPricing(prNo) {
     if (bd[0].dutiesPct != null) set('mDuties', bd[0].dutiesPct);
   }
   const rowsHtml = inc.map((i, idx) => {
-    const b = bdBy[String(i.itemNo)] || {};
+    const b = bdByLine[String(i.line != null ? i.line : idx + 1)] || bdByNo[String(i.itemNo)] || {};
     // Buy price + CBM come from the item's CURRENT sourcing values — admin re-sourcing updates them,
     // and setMgmtPricing writes management's own edits back there too, so they are always the latest.
     // The saved breakdown is only a fallback for legacy/migrated rows that carry no supplier price
@@ -989,6 +1063,7 @@ async function savePricing() {
       qty: _peNum(tr, '.pe-qty')
     });
     breakdown.push({
+      line: (line != null && line !== '') ? flowNum(line) : '',   // A159: unique per request — two 'N/A' lines no longer overwrite each other
       modelNo: mEl ? mEl.value : '', name: nEl ? nEl.value : '',
       qty: _peNum(tr, '.pe-qty'), buyPrice: round2(_peNum(tr, '.pe-buy')), discount: _peNum(tr, '.pe-disc'),
       cbm: _peNum(tr, '.pe-cbm'), forex: out.forexRate, dutiesPct: out.dutiesPct,

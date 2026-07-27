@@ -132,7 +132,7 @@ function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach((tr, i) => {
     const src = rcCurrent.items[i];
-    items.push({ itemNo: src.itemNo, itemName: src.itemName,
+    items.push({ itemId: src.itemId || '', itemNo: src.itemNo, itemName: src.itemName,
       qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value) });
   });
   return items;

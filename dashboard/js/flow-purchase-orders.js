@@ -1,6 +1,7 @@
 /* flow-purchase-orders.js — POs that load from a sales order; auto-create AP entry */
 let poSOs = [];
 let poInventory = [];
+let poInvByLabel = {};   // A159: unique datalist label → inventory item
 let poList = [];
 let poSession = null;
 // A145: quotation No → { _supplier, _currency, <itemNoLower>: supplierPrice } from the originating
@@ -48,8 +49,16 @@ async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); poInventory = (r && r.data) || []; }
   catch (e) { poInventory = []; }
   const dl = document.getElementById('poInvList');
-  if (dl) dl.innerHTML = poInventory.map(i =>
-    `<option value="${flowEsc(i.itemNo)}">${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
+  const seen = {};
+  poInvByLabel = {};
+  // A159: keyed on a UNIQUE label — 92 items share the number 'N/A', so a number-keyed datalist
+  // resolved every one of them to the first match.
+  if (dl) dl.innerHTML = poInventory.map(i => {
+    let label = `${i.itemNo} — ${i.description || ''}`.trim();
+    if (seen[label]) { seen[label]++; label += ` (${seen[label]})`; } else seen[label] = 1;
+    poInvByLabel[label] = i;
+    return `<option value="${flowEsc(label)}"></option>`;
+  }).join('');
 }
 
 // A145: build quotation-No → sourced-price map from the pricing requests. A quoted PR stores
@@ -100,9 +109,10 @@ function loadFromSO() {
 function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
+  if (item && item.itemId) tr.dataset.itemId = item.itemId;   // A159: keep the identity on edit/reload
   tr.innerHTML = `
     <td><input type="text" class="itemNo" list="poInvList" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" style="width:38%;display:inline-block;" oninput="poFillItem(this)">
-        <input type="text" class="itemName" value="${item ? flowEsc(item.itemName) : ''}" placeholder="Description" style="width:60%;display:inline-block;"></td>
+        <input type="text" class="itemName" value="${item ? flowEsc(item.itemName) : ''}" placeholder="Description" style="width:60%;display:inline-block;" oninput="poDescEdited(this)"></td>
     <td class="num"><input type="number" step="any" min="0" class="qty" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
     <td class="num"><input type="number" step="any" min="0" class="price" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
     <td class="num lineTotal">0.00</td>
@@ -112,13 +122,32 @@ function addRow(item) {
   recalc();
 }
 
-// When an item-no matches an inventory item (e.g. picked from the datalist), auto-fill its
-// description. Manual/new items are left as typed. (Stock is added later at Materials Receiving.)
+// A datalist pick stamps the item's permanent id and fills its description; free-typing clears the
+// stamp so it can never point at a different product. (Stock is added later at Materials Receiving.)
 function poFillItem(input) {
-  const match = poInventory.find(x => String(x.itemNo) === input.value.trim());
-  if (!match) return;
-  const nameInput = input.closest('tr').querySelector('.itemName');
-  if (nameInput && !nameInput.value.trim()) nameInput.value = match.description || '';
+  const tr = input.closest('tr');
+  const nameInput = tr.querySelector('.itemName');
+  const typed = input.value.trim();
+
+  const picked = poInvByLabel[typed];
+  if (picked) {
+    tr.dataset.itemId = picked.itemId || '';
+    input.value = picked.itemNo || '';
+    if (nameInput) nameInput.value = picked.description || '';
+    return;
+  }
+  delete tr.dataset.itemId;
+  const hits = poInventory.filter(x => String(x.itemNo).toLowerCase() === typed.toLowerCase());
+  if (hits.length === 1) {                       // a number only ONE product uses is unambiguous
+    tr.dataset.itemId = hits[0].itemId || '';
+    if (nameInput && !nameInput.value.trim()) nameInput.value = hits[0].description || '';
+  }
+}
+
+// Editing the description invalidates a stamped id.
+function poDescEdited(input) {
+  const tr = input.closest('tr');
+  if (tr && tr.dataset.itemId) delete tr.dataset.itemId;
 }
 
 function poFxRate() {
@@ -170,6 +199,7 @@ function collectItems() {
     const itemNo = tr.querySelector('.itemNo').value.trim();
     if (!itemNo) return;
     items.push({
+      itemId: tr.dataset.itemId || '',   // A159: which catalogue item this actually is
       itemNo, itemName: tr.querySelector('.itemName').value.trim(),
       qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value)
     });

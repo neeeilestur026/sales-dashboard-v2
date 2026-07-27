@@ -5,7 +5,9 @@
 const FG_STEPS = [
   { n: 1, who: 'Sales / Admin', title: 'Inventory', page: 'flow-inventory.html',
     body: 'Products live here as <b>Stock</b> (real, on-hand or purchased) or <b>Catalog</b> (quoting-only, balance 0). Sales can free-type a new item on a Purchase Request and it is auto-added here as Catalog.',
-    notes: ['Stock cost is set by Receiving (weighted-average). Catalog items carry no cost until purchased & received.'] },
+    notes: ['Stock cost is set by Receiving (weighted-average). Catalog items carry no cost until purchased & received.',
+            'Items without a manufacturer part number print <b>N/A</b> on documents — that is expected. Each one still has its own hidden internal ID, so picking it anywhere in the flow selects that exact product and costs it from its own landed cost. Always pick from the suggestion list rather than typing <b>N/A</b> by hand.',
+            'Quoting an unlisted product auto-adds it, so near-duplicate records accumulate. <b>Find duplicates</b> on the Inventory page lists them; merging is left to you because it moves stock and cost history.'] },
 
   { n: 2, who: 'Sales / Admin', title: 'Purchase Request (PR)', page: 'flow-pricing-request.html',
     body: 'A sales rep (or admin) starts a request: customer, client contact block, and the items needed. On submit the branded PR PDF is auto-saved to Drive and the client contact details self-populate the Client master.',

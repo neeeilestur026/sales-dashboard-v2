@@ -34,14 +34,26 @@ async function loadInventory() {
   catch (e) { ivInventory = []; }
 }
 
-function landedFor(itemNo) {
-  const i = ivInventory.find(x => String(x.itemNo) === String(itemNo));
-  return i ? flowNum(i.landedCost) : 0;
+/* A159: resolve the line to ONE catalogue item. Matching on itemNo alone showed the first 'N/A'
+   row's cost and stock for all 92 no-part-number products — the same phantom-item bug the pickers
+   had, surfacing here as a wrong "low stock" / "no cost" badge and a wrong landed cost on screen. */
+function ivFind(it) {
+  if (!it) return null;
+  if (it.itemId) {
+    const byId = ivInventory.find(x => String(x.itemId) === String(it.itemId));
+    if (byId) return byId;
+  }
+  const byNo = ivInventory.filter(x => String(x.itemNo) === String(it.itemNo));
+  if (byNo.length === 1) return byNo[0];
+  if (byNo.length > 1) {                                   // shared number → disambiguate by name
+    const d = String(it.itemName || '').trim().toLowerCase();
+    const byDesc = byNo.filter(x => String(x.description || '').trim().toLowerCase() === d);
+    if (byDesc.length === 1) return byDesc[0];
+  }
+  return byNo[0] || null;
 }
-function onHand(itemNo) {
-  const i = ivInventory.find(x => String(x.itemNo) === String(itemNo));
-  return i ? flowNum(i.balance) : 0;
-}
+function landedFor(it) { const i = ivFind(it); return i ? flowNum(i.landedCost) : 0; }
+function onHand(it)    { const i = ivFind(it); return i ? flowNum(i.balance) : 0; }
 
 function loadFromSO() {
   const no = document.getElementById('loadSO').value;
@@ -57,17 +69,17 @@ function renderItems() {
   const tb = document.getElementById('itemRows');
   if (!ivCurrent) { tb.innerHTML = ''; return; }
   tb.innerHTML = (ivCurrent.items || []).map((it, i) => {
-    const stock = onHand(it.itemNo);
+    const stock = onHand(it);
     const warn = flowNum(it.qty) > stock ? ` <span class="flow-badge b-unpaid" title="On hand: ${stock}">low stock</span>` : '';
     // A145: a line with no landed cost books COGS 0 (usually not yet received / AP not paid) — flag it.
-    const noCost = flowNum(it.qty) > 0 && !(landedFor(it.itemNo) > 0)
+    const noCost = flowNum(it.qty) > 0 && !(landedFor(it) > 0)
       ? ` <span class="flow-badge b-unpaid" title="No landed cost recorded — COGS will be ₱0. Receive this item (after paying its AP) first.">no cost</span>` : '';
     return `<tr data-i="${i}">
       <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}${warn}${noCost}</td>
       <td class="num"><input type="number" step="any" min="0" class="qty" value="${flowNum(it.qty)}" oninput="recalc()"></td>
       <td class="num"><input type="number" step="any" min="0" class="price" value="${flowNum(it.price)}" oninput="recalc()"></td>
       <td class="num lineSales">0.00</td>
-      <td class="num">${flowMoney(landedFor(it.itemNo), 'PHP')}</td>
+      <td class="num">${flowMoney(landedFor(it), 'PHP')}</td>
       <td class="num lineCOGS">0.00</td></tr>`;
   }).join('');
   recalc();
@@ -80,7 +92,7 @@ function recalc() {
     const qty = flowNum(tr.querySelector('.qty').value);
     const price = flowNum(tr.querySelector('.price').value);
     const ls = qty * price;
-    const lc = qty * landedFor(it.itemNo);
+    const lc = qty * landedFor(it);
     tr.querySelector('.lineSales').textContent = ls.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     tr.querySelector('.lineCOGS').textContent = lc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     sales += ls; cogs += lc;
@@ -94,7 +106,7 @@ function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach((tr, i) => {
     const src = ivCurrent.items[i];
-    items.push({ itemNo: src.itemNo, itemName: src.itemName,
+    items.push({ itemId: src.itemId || '', itemNo: src.itemNo, itemName: src.itemName,
       qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value) });
   });
   return items;
@@ -107,7 +119,7 @@ async function saveInvoice() {
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Nothing to invoice.', false); return; }
   // A145: warn before issuing lines with no landed cost — they book COGS 0 (100% gross profit).
-  const noCostLines = items.filter(it => flowNum(it.qty) > 0 && !(landedFor(it.itemNo) > 0)).length;
+  const noCostLines = items.filter(it => flowNum(it.qty) > 0 && !(landedFor(it) > 0)).length;
   if (noCostLines > 0 &&
       !confirm(`${noCostLines} item(s) have no landed cost — their COGS will be ₱0 (full gross profit). This usually means the goods aren't received yet. Issue the invoice anyway?`)) {
     return;
