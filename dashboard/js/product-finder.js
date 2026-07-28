@@ -6,9 +6,9 @@
    cylinder-recommender.js, loaded before this file). Catalog updates = edit dashboard/data/*.json;
    the admin screen (pf-admin.html) can also stage a replacement file per device via localStorage. */
 
-/* ── Config: set these once and every "Send to Hi-ESCORP" button uses them ── */
-const PF_WHATSAPP_NUMBER = '';                       // e.g. '639171234567' (country code, digits only)
-const PF_EMAIL = 'safe3.hi-escorp@hiescorp.com';
+/* A169: the old "Send to Hi-ESCORP (WhatsApp)" / "Email" buttons are gone — there is no WhatsApp
+   account behind them. A result now hands off INSIDE the system: Create Purchase Request (which
+   starts the real PR → sourcing → pricing → quotation flow) plus Copy details for anything else. */
 
 const PF_CONFIRM_MSG = 'Needs engineer confirmation — Hi-ESCORP will contact you.';
 const PF_DATA_FILES = ['products.json', 'synonyms.json', 'cross_reference.json', 'torque_chart.json'];
@@ -508,14 +508,24 @@ function pfMissesCsv(rows) {
   return ['date,text'].concat((rows || []).map(r => [r.date, r.text].map(esc).join(','))).join('\n');
 }
 
-/** "Send to Hi-ESCORP" prefill links. */
-function pfShareLinks(text) {
-  const t = encodeURIComponent(text);
-  const wa = PF_WHATSAPP_NUMBER
-    ? 'https://wa.me/' + PF_WHATSAPP_NUMBER + '?text=' + t
-    : 'https://api.whatsapp.com/send?text=' + t;
-  const mail = 'mailto:' + PF_EMAIL + '?subject=' + encodeURIComponent('Product Finder inquiry') + '&body=' + t;
-  return { wa, mail };
+/** A169: offer the saved client names. Typing the SAME name the client master holds is what lets
+ *  the purchase-request form auto-fill that client's address/contact/email (it matches on the name). */
+async function pfLoadClients() {
+  const dl = document.getElementById('pfClientList');
+  if (!dl || typeof fetchFlow !== 'function') return;
+  try {
+    const res = await fetchFlow('getClients', {});
+    const rows = (res && res.data) || [];
+    dl.innerHTML = rows.map(c => '<option value="' + pfEsc(c.customer) + '"></option>').join('');
+  } catch (e) { /* no backend → the field stays a plain text input */ }
+}
+
+/** Who may start a Purchase Request — the same two roles the PR form itself is built for. */
+function pfCanCreatePR() {
+  try {
+    const s = JSON.parse(localStorage.getItem('session') || '{}');
+    return s.role === 'sales' || s.role === 'admin';
+  } catch (e) { return false; }
 }
 
 /* ── Backend logbook sync (FlowAPI PFInquiries, v96+). Best-effort: the device list always works;
@@ -533,7 +543,9 @@ function pfSyncRow(rec) {
   postFlow('savePfInquiry', {
     id: rec.id, date: rec.date, source: rec.source || '', client: rec.client || '',
     industry: rec.industry || '', rawText: rec.rawText || '', recommendation: rec.recommendation || '',
-    status: rec.status || 'new', notes: rec.notes || ''
+    status: rec.status || 'new', notes: rec.notes || '',
+    // A169 — ignored harmlessly by a pre-v97 backend
+    itemsJson: rec.items ? JSON.stringify(rec.items) : '', prNo: rec.prNo || ''
   }).then(res => {
     if (res && res.success) {
       const l = pfGetList('pf_inquiries');
@@ -637,6 +649,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dl = document.getElementById('pfSynList');
     if (dl) dl.innerHTML = pfData.synonyms.flatMap(g => g.terms).map(t => '<option value="' + pfEsc(t) + '"></option>').join('');
     pfRenderLog();
+    pfLoadClients();      // A169: consistent company names → the PR form can auto-fill their contacts
   } catch (e) {
     const el = document.getElementById('pfDataErr');
     if (el) { el.style.display = ''; el.textContent = 'Product data failed to load: ' + e.message; }
@@ -657,11 +670,56 @@ function pfMatchTab(name, btn) {
   if (btn) btn.classList.add('active');
 }
 
-function pfShareBtns(text) {
-  const l = pfShareLinks(text);
-  return '<div class="cr-actions" style="justify-content:flex-start;margin-top:10px;">'
-    + '<a class="cr-btn" style="text-decoration:none;" target="_blank" href="' + pfEsc(l.wa) + '">📱 Send to Hi-ESCORP (WhatsApp)</a>'
-    + '<a class="cr-btn cr-btn-sec" style="text-decoration:none;" href="' + pfEsc(l.mail) + '">✉️ Email</a></div>';
+/* ── In-system result actions (A169) ──────────────────────────────────────────
+   opts = { text: <what "Copy details" puts on the clipboard>,
+            inquiryId: <INQ-… when this result was logged>,
+            product: { name, id, category, capacityTons } when ONE product is identifiable,
+            qty }
+   "Create Purchase Request" only appears when we have both an inquiry to stamp and a product to
+   carry, and only for the roles whose PR form actually exists. */
+function pfActionBtns(opts) {
+  const o = opts || {};
+  const btns = [];
+  if (o.inquiryId && o.product && o.product.name && pfCanCreatePR()) {
+    btns.push('<button class="cr-btn" onclick="pfCreatePR(' + pfAttr(o.inquiryId) + ',' + pfAttr(o.product) + ',' + (Number(o.qty) || 1) + ')">📝 Create Purchase Request</button>');
+  }
+  btns.push('<button class="cr-btn cr-btn-sec" onclick="pfCopyDetails(this,' + pfAttr(o.text || '') + ')">📋 Copy details</button>');
+  return '<div class="cr-actions" style="justify-content:flex-start;margin-top:10px;">' + btns.join('') + '</div>';
+}
+
+/** JSON → a safe inline-handler argument (single-quoted attribute context). */
+function pfAttr(v) {
+  return pfEsc(JSON.stringify(v)).replace(/"/g, '&quot;');
+}
+
+/** Copy that also works on plain http (navigator.clipboard is undefined there, not rejecting). */
+function pfCopyDetails(btn, text) {
+  const done = okMsg => { if (btn) { const t = btn.textContent; btn.textContent = okMsg; setTimeout(() => { btn.textContent = t; }, 2000); } };
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      done(ok ? '✓ Copied' : '⚠ Could not copy — select the text manually');
+    } catch (e) { done('⚠ Could not copy — select the text manually'); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => done('✓ Copied')).catch(fallback);
+  } else fallback();
+}
+
+/** Hand off to the Purchase Request form: record WHICH product was chosen, then navigate. */
+function pfCreatePR(inquiryId, product, qty) {
+  // the localStorage write is synchronous, so it survives the navigation that follows
+  pfUpdateInquiry(inquiryId, {
+    items: [{ id: product.id || '', name: product.name, category: product.category || '',
+              capacityTons: product.capacityTons || null, qty: Number(qty) || 1 }],
+    chosenAt: new Date().toISOString()
+  });
+  window.location.href = 'flow-pricing-request.html?fromInquiry=' + encodeURIComponent(inquiryId);
 }
 
 function pfBadge(verified) {
@@ -704,15 +762,19 @@ async function pfRfqSubmit() {
     return;
   }
 
-  let recSummary;
+  const recSummary = m.miss ? PF_CONFIRM_MSG : m.results.map(p => p.name).join(' | ');
+  // The inquiry is created BEFORE the render so each card can carry its id into "Create Purchase Request".
+  const inq = pfAddInquiry({ source: 'RFQ', client, industry,
+    rawText: text + (purpose ? ' | purpose: ' + purpose : '') + (qty ? ' | qty: ' + qty : ''),
+    recommendation: recSummary });
+
   if (m.miss) {
-    recSummary = PF_CONFIRM_MSG;
     pfLogMiss(text);
     box.innerHTML = xrefHtml + '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3>'
       + '<p class="cr-rec-line">We could not match "' + pfEsc(text) + '" to a product family. '
-      + 'The request is logged so our engineer can follow up.</p></div>' + pfShareBtns(pfRfqShareText(text, client, industry, qty, purpose, null));
+      + 'The request is logged so our engineer can follow up.</p></div>'
+      + pfActionBtns({ text: pfRfqShareText(text, client, industry, qty, purpose, null) });
   } else {
-    recSummary = m.results.map(p => p.name).join(' | ');
     box.innerHTML = xrefHtml
       + '<p class="cr-capnote">Matched to <b>' + pfEsc(m.category) + '</b> (from "' + pfEsc(m.matchedTerm) + '")'
       + (m.attrs && m.attrs.tons > 0 ? ' · load ' + pfEsc(m.attrs.tons) + ' t — only sizes that COVER it are shown' : '')
@@ -724,11 +786,11 @@ async function pfRfqSubmit() {
           <div class="cr-rec-series">${pfEsc(p.name)}</div>
           <div class="cr-rec-line">${pfEsc(pfWhyFits(p, industry, { attrs: m.attrs }))}</div>
           ${pfPairs(p, pfData.products).length ? '<div class="cr-rec-line"><b>Don’t forget:</b> ' + pfEsc(pfPairs(p, pfData.products).join(' · ')) + '</div>' : ''}
+          ${pfActionBtns({ text: pfRfqShareText(text, client, industry, qty, purpose, [p]), inquiryId: inq.id, qty: qty || 1,
+                           product: { id: p.id, name: p.name, category: p.category, capacityTons: p.capacity_tons } })}
         </div>`).join('')
-      + '<p class="cr-hint">Budgetary matches — final model confirmed by Hi-ESCORP engineer.</p>'
-      + pfShareBtns(pfRfqShareText(text, client, industry, qty, purpose, m.results));
+      + '<p class="cr-hint">Budgetary matches — final model confirmed by Hi-ESCORP engineer.</p>';
   }
-  pfAddInquiry({ source: 'RFQ', client, industry, rawText: text + (purpose ? ' | purpose: ' + purpose : '') + (qty ? ' | qty: ' + qty : ''), recommendation: recSummary });
   pfRenderLog();
 }
 
@@ -756,6 +818,8 @@ async function pfBoltMatch() {
   box.style.display = '';
   const row = pfTorqueLookup(bolt, grade, pfData.torque);
   const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
+  const inq = pfAddInquiry({ source: 'Match-bolt', client: '', industry: '', rawText: bolt + ' grade ' + grade,
+    recommendation: row ? (row.verified ? 'torque row' : 'unverified row — confirmation') : PF_CONFIRM_MSG });
   if (!row) {
     pfLogMiss('torque: ' + bolt + ' grade ' + grade);
     box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">No torque data for ' + pfEsc(bolt) + ' grade ' + pfEsc(grade) + ' in our chart yet. Logged for the engineer.</p></div>';
@@ -776,10 +840,11 @@ async function pfBoltMatch() {
       + (w ? '<div class="cr-rec-line"><b>Matching wrench:</b> ' + pfEsc(w.name) + ' ' + pfBadge(w.verified) + '</div>' : '')
       + (row.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
       + '</div>'
-      + pfShareBtns('Bolt torque: ' + row.bolt + ' grade ' + row.grade + ' → ' + row.torque_max_nm + ' Nm'
-        + (w ? '\nWrench: ' + w.name : ''));
+      // the wrench IS the orderable product here — offer it straight to a Purchase Request
+      + pfActionBtns({ text: 'Bolt torque: ' + row.bolt + ' grade ' + row.grade + ' → ' + row.torque_max_nm + ' Nm' + (w ? '\nWrench: ' + w.name : ''),
+                       inquiryId: inq.id, qty: 1,
+                       product: w ? { id: w.id, name: w.name, category: w.category } : null });
   }
-  pfAddInquiry({ source: 'Match-bolt', client: '', industry: '', rawText: bolt + ' grade ' + grade, recommendation: row ? (row.verified ? 'torque row' : 'unverified row — confirmation') : PF_CONFIRM_MSG });
 }
 
 async function pfHoseMatch() {
@@ -792,23 +857,26 @@ async function pfHoseMatch() {
   box.style.display = '';
   if (!(bar > 0)) { box.innerHTML = '<p class="cr-hint">Enter the working pressure first — the match must never be rated below it.</p>'; return; }
   const r = pfCouplerMatch(thread, bar, pfData.products);
+  const inq = pfAddInquiry({ source: 'Match-hose', client: '', industry: '',
+    rawText: 'thread ' + thread + ' @ ' + pressure + ' ' + unit,
+    recommendation: r.matches.length ? r.matches.map(p => p.name).join('; ') : PF_CONFIRM_MSG });
   let html = '<p class="cr-capnote">Working pressure ' + pressure + ' ' + pfEsc(unit) + (unit !== 'bar' ? ' (≈ ' + bar.toFixed(0) + ' bar)' : '') + ' — only items rated <b>at or above</b> this are ever shown.</p>';
   if (r.matches.length) {
     html += r.matches.map(p => '<div class="cr-rec"><div class="cr-rec-label">' + pfEsc(p.brand) + ' ' + pfBadge(true) + '</div>'
       + '<div class="cr-rec-series">' + pfEsc(p.name) + '</div>'
       + '<div class="cr-rec-line">Thread ' + pfEsc(p.thread || '—') + ' · rated ' + pfEsc(p.max_pressure_bar) + ' bar ≥ your ' + bar.toFixed(0) + ' bar.</div>'
       + (p.source ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">Spec source: ' + pfEsc(p.source) + '</div>' : '')
-      + '</div>').join('')
-      + pfShareBtns('Coupler/hose for thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + ':\n'
-        + r.matches.map(p => p.name + ' (rated ' + p.max_pressure_bar + ' bar)').join('\n'));
+      + pfActionBtns({ text: 'Coupler/hose for thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + ':\n' + p.name + ' (rated ' + p.max_pressure_bar + ' bar)',
+                       inquiryId: inq.id, qty: 1,
+                       product: { id: p.id, name: p.name, category: p.category } })
+      + '</div>').join('');
   } else {
     pfLogMiss('coupler: thread ' + thread + ' @ ' + bar.toFixed(0) + ' bar');
     html += '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">No <b>verified</b> coupler in our data covers this thread + pressure. Logged for the engineer.'
       + (r.samples.length ? ' (Sample rows exist but sample pressure ratings are never used for safety matches.)' : '') + '</p></div>'
-      + pfShareBtns('Coupler/hose needed: thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + '\n' + PF_CONFIRM_MSG);
+      + pfActionBtns({ text: 'Coupler/hose needed: thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + '\n' + PF_CONFIRM_MSG });
   }
   box.innerHTML = html;
-  pfAddInquiry({ source: 'Match-hose', client: '', industry: '', rawText: 'thread ' + thread + ' @ ' + pressure + ' ' + unit, recommendation: r.matches.length ? r.matches.map(p => p.name).join('; ') : PF_CONFIRM_MSG });
 }
 
 async function pfCylMatch() {
@@ -824,7 +892,8 @@ async function pfCylMatch() {
   box.innerHTML = '<div class="cr-sect"><h3>Pump set for a ' + tons + '-ton ' + (acting === 'double' ? 'double-acting' : 'single-acting') + ' cylinder</h3>'
     + '<ul>' + pump.map(p => '<li>' + pfEsc(p) + '</li>').join('') + '</ul>'
     + '<p class="cr-hint">Budgetary pairing — final set confirmed by Hi-ESCORP engineer.</p></div>'
-    + pfShareBtns('Pump set for ' + tons + 't ' + acting + '-acting cylinder:\n' + pump.join('\n'));
+    // a pump SET is several models, not one orderable line — copy only, no Create-PR
+    + pfActionBtns({ text: 'Pump set for ' + tons + 't ' + acting + '-acting cylinder:\n' + pump.join('\n') });
   pfAddInquiry({ source: 'Match-cylinder', client: '', industry: '', rawText: tons + 't ' + acting + '-acting, power: ' + (power || 'unknown'), recommendation: pump[0] });
 }
 
@@ -836,10 +905,16 @@ async function pfXrefSearch() {
   box.style.display = '';
   const rows = pfCrossRef(q, pfData.crossRef);
   const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
+  // "what is your equivalent for <competitor model>?" is a real customer request — log it like the rest
+  const inq = pfAddInquiry({ source: 'Cross-Ref', client: '', industry: '', rawText: q,
+    recommendation: rows.length
+      ? rows.map(r => (byId[r.our_id] ? byId[r.our_id].name : r.our_id)).join('; ')
+      : PF_CONFIRM_MSG });
   if (!rows.length) {
     pfLogMiss('xref: ' + q);
     box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">"' + pfEsc(q) + '" is not in our cross-reference yet. Logged so we can add it.</p></div>'
-      + pfShareBtns('Cross-reference request: ' + q + '\n' + PF_CONFIRM_MSG);
+      + pfActionBtns({ text: 'Cross-reference request: ' + q + '\n' + PF_CONFIRM_MSG });
+    pfRenderLog();
     return;
   }
   box.innerHTML = rows.map(r => {
@@ -847,11 +922,11 @@ async function pfXrefSearch() {
     return '<div class="cr-rec"><div class="cr-rec-label">' + pfEsc(r.competitor_brand) + ' ' + pfEsc(r.competitor_model) + ' ' + pfBadge(r.verified === true) + '</div>'
       + '<div class="cr-rec-series">→ ' + pfEsc(ours ? ours.name : r.our_id) + '</div>'
       + (r.note ? '<div class="cr-rec-line">' + pfEsc(r.note) + '</div>' : '')
-      + '<div class="cr-actions" style="justify-content:flex-start;margin-top:8px;">'
-      + '<button class="cr-btn cr-btn-sec" onclick="pfQuoteFromXref(' + pfEsc(JSON.stringify(ours ? ours.name : r.our_id)).replace(/"/g, '&quot;') + ')">Request quote</button></div></div>';
-  }).join('')
-    + pfShareBtns('Cross-reference: ' + q + '\n'
-      + rows.map(r => r.competitor_brand + ' ' + r.competitor_model + ' → ' + (byId[r.our_id] ? byId[r.our_id].name : r.our_id)).join('\n'));
+      + pfActionBtns({ text: 'Cross-reference: ' + r.competitor_brand + ' ' + r.competitor_model + ' → ' + (ours ? ours.name : r.our_id),
+                       inquiryId: inq.id, qty: 1,
+                       product: ours ? { id: ours.id, name: ours.name, category: ours.category, capacityTons: ours.capacity_tons } : null });
+  }).join('');
+  pfRenderLog();
 }
 
 function pfQuoteFromXref(name) {
@@ -925,6 +1000,7 @@ function pfRenderLog() {
       <div class="cr-rec-line"><b>${pfEsc(r.client || '(no client)')}</b>${r.industry ? ' · ' + pfEsc(r.industry) : ''}</div>
       <div class="cr-rec-line">Asked: ${pfEsc(r.rawText)}</div>
       <div class="cr-rec-line">Shown: ${pfEsc(r.recommendation)}</div>
+      ${r.prNo ? '<div class="cr-rec-line">Became: <a href="flow-pricing-request.html" style="font-weight:600;color:#4f46e5;">→ ' + pfEsc(r.prNo) + '</a></div>' : ''}
       <div class="cr-actions" style="justify-content:flex-start;gap:8px;margin-top:6px;">
         <select onchange="pfUpdateInquiry('${pfEsc(r.id)}', {status:this.value}); pfRenderLog();" style="padding:4px 8px;border-radius:8px;border:1px solid #d7dce3;">
           ${['new', 'quoted', 'won', 'lost'].map(s => `<option value="${s}"${r.status === s ? ' selected' : ''}>${s}</option>`).join('')}

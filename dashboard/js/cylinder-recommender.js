@@ -7,7 +7,7 @@
      STEP 4  stroke    = must cover the lift; pancakes cap at 1.75"; heights confirmed by engineer
      STEP 5  pump      = matched to power source / usage / environment / acting, + accessories
    The engine half (ptRecommend) is a pure function so it is unit-testable and reusable on other
-   dashboards later; the page half wires the director-recommender.html form to it.
+   dashboards later; the page half wires the product-finder.html form to it.
    Cylinder model numbers are NEVER invented — series only, "final model confirmed by Hi-ESCORP
    engineer". Pump models named are only the ones the spec itself lists. */
 
@@ -337,15 +337,15 @@ function ptRecommend(a) {
 /* Would a flat cylinder genuinely be forced by the gap? (helper for a nicer warning only) */
 function flatLiftNeeded(gapMm, strokeMm) { return gapMm > 0 && gapMm < 180 && strokeMm > 0; }
 
-/* ─────────────────────────── Page wiring (director-recommender.html) ─────────────────────────── */
+/* ─────────────────────────── Page wiring (product-finder.html) ─────────────────────────── */
 
 let crSession = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('crForm')) return;   // engine-only contexts (tests) load this file too
-  crSession = requireDirector();
+  crSession = requireProductFinderAccess();         // sales + admin own this tool; director oversees
   if (!crSession) return;
-  renderNavbar('director-recommender');
+  renderNavbar('product-finder');
 });
 
 function crChecked(name) {

@@ -162,6 +162,25 @@ function requirePricingFlowAccess() {
 }
 
 /**
+ * Require Product Finder access — sales and admin are the people who take the customer call and
+ * can start a Purchase Request; director keeps access for oversight. Management/accounting are
+ * deliberately OUT: they have no navbar link to it and cannot use the Purchase Request form the
+ * finder hands off to, so admitting them would only strand them on a dead-end page.
+ */
+function requireProductFinderAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['sales', 'admin', 'director'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
+/**
  * Require inventory access — sales can add/edit (delete is hidden for sales in the UI);
  * admin & accounting retain full access including delete.
  */
@@ -390,13 +409,14 @@ function renderNavbar(activePage) {
         Marketing
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${(activePage || '').indexOf('flow') === 0 ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
           <a href="flow-home.html" class="${activePage === 'flow-home' ? 'active' : ''}">Overview</a>
+          <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">Product Finder</a>
           <a href="flow-lifecycle.html" class="${activePage === 'flow-lifecycle' ? 'active' : ''}">SO Lifecycle Tracker</a>
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
@@ -584,7 +604,7 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         Home
       </a>
-      <a href="director-recommender.html" class="${activePage === 'director-recommender' ? 'active' : ''}">
+      <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Product Finder
       </a>
@@ -705,7 +725,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['flow-pricing-request', 'flow-quotations', 'flow-inventory'].includes(activePage);
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory'].includes(activePage);
     const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -721,6 +741,7 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
+          <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">Product Finder</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>

@@ -46,7 +46,80 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   await loadRequests();
   if (prRole === 'management') loadFlowPricingHistory();
+  // A169: ?fromInquiry=INQ-… — a Product Finder result being turned into a real request.
+  // Runs LAST so loadInventory()/loadClients() above are already warm.
+  const fromInquiry = new URLSearchParams(location.search).get('fromInquiry');
+  if (fromInquiry) await prLoadFromInquiry(fromInquiry);
 });
+
+/* ── A169: Product Finder hand-off ────────────────────────────────────────────
+   The Product Finder writes the chosen product onto its inquiry (localStorage, synchronously) and
+   navigates here with just the id — the house convention: only an identifier travels in the URL.
+   Resolution is LOCAL FIRST on purpose: the finder's backend sync is fire-and-forget, so navigating
+   can abort it, and fetchFlow's 60-second cache may still hold a list captured before the inquiry
+   existed. Reading the device's own list works on any backend version, or none at all. */
+
+let prFromInquiry = '';
+
+/** Read one Product Finder inquiry from this device (same localStorage key product-finder.js uses). */
+function prLocalInquiry(id) {
+  try {
+    const list = JSON.parse(localStorage.getItem('pf_inquiries') || '[]');
+    return list.find(x => x && x.id === id) || null;
+  } catch (e) { return null; }
+}
+
+function prInquiryBanner(html, tone) {
+  const el = document.getElementById('prInquiryBanner');   // lives OUTSIDE #salesFormCard on purpose:
+  if (!el) return;                                          // that card is hidden for oversight roles
+  el.style.display = '';
+  el.style.borderLeftColor = tone === 'warn' ? '#f59e0b' : '#4f46e5';
+  el.innerHTML = html;
+}
+
+async function prLoadFromInquiry(id) {
+  if (prRole !== 'sales' && prRole !== 'admin') {
+    prInquiryBanner('This Product Finder result can only be turned into a purchase request by sales or admin.', 'warn');
+    return;
+  }
+  let inq = prLocalInquiry(id);
+  if (!inq) {                                   // different device / cleared storage → ask the backend
+    try {
+      const res = await fetchFlow('getPfInquiries', prRole === 'sales' ? { user: prSession.name } : {}, { fresh: true });
+      inq = ((res && res.data) || []).find(x => x && x.id === id) || null;
+      if (inq && typeof inq.itemsJson === 'string' && inq.itemsJson) {
+        try { inq.items = JSON.parse(inq.itemsJson); } catch (e) { inq.items = []; }
+      }
+    } catch (e) { /* offline / old backend — the banner below explains it */ }
+  }
+  if (!inq) {
+    prInquiryBanner('Could not find Product Finder inquiry <b>' + flowEsc(id) + '</b> on this device. '
+      + 'Fill the request in manually, or run the search again in the Product Finder.', 'warn');
+    return;
+  }
+
+  const items = (inq.items || []).filter(it => it && it.name);
+  // Clear the blank starter row first — its qty defaults to 1, so collectItems() would keep it and
+  // save a phantom "N/A" line on every handed-off request.
+  const rows = document.getElementById('itemRows');
+  if (rows) rows.innerHTML = '';
+  const cust = document.getElementById('customer');
+  if (cust && inq.client) { cust.value = inq.client; prFillContacts(); }   // fills blanks from the client master
+  items.forEach(it => addRow({
+    itemNo: 'N/A',                          // finder products are catalog names, not part numbers
+    itemName: it.name,
+    qty: flowNum(it.qty) || 1,
+    uom: 'pc',
+    remarks: 'From Product Finder — confirm exact model'
+  }));
+  if (!items.length) addRow();
+  countLines();
+  prFromInquiry = id;
+  prInquiryBanner('Started from Product Finder inquiry <b>' + flowEsc(id) + '</b>'
+    + (items.length ? ' · ' + items.length + ' item(s) filled in' : '')
+    + '. Check the details and add anything else before submitting.');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 function renderSteps(activeIdx) {
   document.getElementById('prSteps').innerHTML = STEP_LABELS.map((lbl, i) => {
@@ -267,6 +340,19 @@ async function saveRequest() {
   try {
     const res = await postFlow('createPricingRequest', payload);
     if (!res.success) throw new Error(res.message);
+    // A169: close the loop — stamp the PR number back on the Product Finder inquiry so the rep can
+    // see which searches became real business. Never allowed to break the request that just saved.
+    if (prFromInquiry) {
+      try {
+        const list = JSON.parse(localStorage.getItem('pf_inquiries') || '[]');
+        const i = list.findIndex(x => x && x.id === prFromInquiry);
+        if (i !== -1) {
+          list[i] = Object.assign({}, list[i], { prNo: res.prNo, status: 'quoted', updatedAt: new Date().toISOString(), _synced: false });
+          localStorage.setItem('pf_inquiries', JSON.stringify(list));
+        }
+        postFlow('savePfInquiry', { id: prFromInquiry, prNo: res.prNo, status: 'quoted' }).catch(() => {});
+      } catch (e) { /* the PR is already saved — a logbook stamp must never undo that */ }
+    }
     // A145: self-populate the client master with any newly-typed contact details (best-effort).
     if (customer && (doc.companyAddress || doc.contactPerson || doc.contactEmail || doc.contactPhone)) {
       const prev = prClients[String(customer).toLowerCase()] || {};
@@ -346,6 +432,9 @@ function resetForm() {
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formMsg').style.display = 'none';
+  prFromInquiry = '';                                   // A169: a second Save must not re-stamp the inquiry
+  const banner = document.getElementById('prInquiryBanner');
+  if (banner) banner.style.display = 'none';
   addRow();
 }
 

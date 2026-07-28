@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 96;   // A167 Product Finder shared inquiry logbook (PFInquiries + savePfInquiry/getPfInquiries) · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 97;   // A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -94,9 +94,10 @@ var SCHEMA = {
   ActivityLog: ['Timestamp', 'Date', 'User', 'Module', 'Action', 'Ref No', 'Summary', 'Amount', 'Currency'],
   DailyNotes:  ['Date', 'Notes', 'Updated By', 'Updated At'],
 
-  // ── A167: Product Finder shared inquiry logbook (device localStorage syncs here; upsert by Inquiry ID) ──
+  // ── A167: Product Finder shared inquiry logbook (device localStorage syncs here; upsert by Inquiry ID)
+  //    A169: += 'Items JSON' (which product the rep actually chose) and 'PR No' (what it became). ──
   PFInquiries: ['Inquiry ID', 'Date', 'User', 'Source', 'Client', 'Industry', 'Raw Text',
-                'Recommendation', 'Status', 'Notes', 'Updated At'],
+                'Recommendation', 'Status', 'Notes', 'Updated At', 'Items JSON', 'PR No'],
 
   // ── Daily report SUBMISSION (one row per user per day; the frozen snapshot the user stands behind
   //    plus their narrative). Column ORDER IS FROZEN — _sheet self-migrates appended columns, but a
@@ -3841,21 +3842,37 @@ function saveDailyNote(p) {
 function savePfInquiry(p) {
   var id = String((p && p.id) || '').trim();
   if (!id) return { success: false, message: 'Inquiry id is required.' };
-  var vals = [id, p.date || _now(), String(p.actorName || p.user || ''), p.source || '', p.client || '',
-              p.industry || '', p.rawText || '', p.recommendation || '', p.status || 'new',
-              p.notes || '', _now()];
   var sh = _sheet('PFInquiries');
   var rows = _rows('PFInquiries');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i]['Inquiry ID']) === id) {
-      // keep the original Date + User on update (the edit is a status/notes change)
-      vals[1] = rows[i]['Date'] || vals[1];
-      vals[2] = rows[i]['User'] || vals[2];
-      sh.getRange(rows[i].rowIndex, 1, 1, vals.length).setValues([vals]);
+      // MERGE, never rebuild. A caller may send a PARTIAL patch — e.g. the purchase-request page
+      // stamps only {id, prNo} — and blanking Client / Raw Text / Recommendation on that write would
+      // silently destroy the inquiry. Every field the caller omits keeps the cell that is already there.
+      var r = rows[i];
+      var keep = function (v, cur) { return v === undefined || v === null ? cur : v; };
+      var merged = [
+        id,
+        r['Date'] || _now(),                                  // original date + user always survive
+        r['User'] || String(p.actorName || p.user || ''),
+        keep(p.source, r['Source'] || ''),
+        keep(p.client, r['Client'] || ''),
+        keep(p.industry, r['Industry'] || ''),
+        keep(p.rawText, r['Raw Text'] || ''),
+        keep(p.recommendation, r['Recommendation'] || ''),
+        keep(p.status, r['Status'] || 'new'),
+        keep(p.notes, r['Notes'] || ''),
+        _now(),
+        keep(p.itemsJson, r['Items JSON'] || ''),
+        keep(p.prNo, r['PR No'] || '')
+      ];
+      sh.getRange(r.rowIndex, 1, 1, merged.length).setValues([merged]);
       return { success: true, id: id, updated: true, message: 'Inquiry updated.' };
     }
   }
-  _append('PFInquiries', vals);
+  _append('PFInquiries', [id, p.date || _now(), String(p.actorName || p.user || ''), p.source || '',
+                          p.client || '', p.industry || '', p.rawText || '', p.recommendation || '',
+                          p.status || 'new', p.notes || '', _now(), p.itemsJson || '', p.prNo || '']);
   return { success: true, id: id, created: true, message: 'Inquiry saved.' };
 }
 
@@ -3870,6 +3887,7 @@ function getPfInquiries(p) {
                industry: String(r['Industry'] || ''), rawText: String(r['Raw Text'] || ''),
                recommendation: String(r['Recommendation'] || ''), status: String(r['Status'] || 'new'),
                notes: String(r['Notes'] || ''),
+               itemsJson: String(r['Items JSON'] || ''), prNo: String(r['PR No'] || ''),
                updatedAt: r['Updated At'] instanceof Date ? r['Updated At'].toISOString() : String(r['Updated At'] || '') };
     });
   out.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
