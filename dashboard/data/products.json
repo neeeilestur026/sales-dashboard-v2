@@ -1,0 +1,3860 @@
+{
+ "_note": "Edit this file to update the catalog. verified:false rows are SAMPLE data and are never shown as safe answers.",
+ "products": [
+  {
+   "id": "pt-c-5",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 5 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 5,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-10",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 10 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 10,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-15",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 15 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 15,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-25",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 25 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 25,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-30",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 30 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 30,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-55",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 55,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-60",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 60,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-75",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 75,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-c-100",
+   "brand": "Power Team",
+   "series": "C",
+   "name": "C Series Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 100,
+   "features": [
+    "general lifting",
+    "pressing",
+    "light to medium duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgl-55",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 55,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-60",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 60,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-75",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 75,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-100",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 100,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-150",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 150,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-200",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 200,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-250",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 250,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-300",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 300 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 300,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-400",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 400 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 400,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-500",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 500 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 500,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rgl-600",
+   "brand": "Power Team",
+   "series": "RGL",
+   "name": "RGL Locking Collar Cylinder 600 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 600,
+   "features": [
+    "locking collar",
+    "load holding",
+    "swivel cap"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true,
+   "stroke_options_mm": [
+    51,
+    102,
+    152,
+    203,
+    254,
+    305
+   ]
+  },
+  {
+   "id": "pt-rd-10",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 10 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 10,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-15",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 15 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 15,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-25",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 25 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 25,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-30",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 30 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 30,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-55",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 55,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-60",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 60,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-75",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 75,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-100",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 100,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-150",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 150,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-200",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 200,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-250",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 250,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-300",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 300 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 300,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-400",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 400 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 400,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rd-500",
+   "brand": "Power Team",
+   "series": "RD",
+   "name": "RD Double-Acting Cylinder 500 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 500,
+   "features": [
+    "powered return",
+    "fast retraction",
+    "general purpose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-55",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 55,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-60",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 60,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-75",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 75,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-100",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 100,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-150",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 150,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-200",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 200,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-250",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 250,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-300",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 300 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 300,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-400",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 400 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 400,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-500",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 500 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 500,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rdg-600",
+   "brand": "Power Team",
+   "series": "RDG",
+   "name": "RDG Double-Acting Construction Cylinder 600 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 600,
+   "features": [
+    "powered return",
+    "construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "pt-pa6d",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-10",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 10 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 10,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-15",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 15 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 15,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-25",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 25 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 25,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-30",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 30 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 30,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-55",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 55,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-60",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 60,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-75",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 75,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rh-100",
+   "brand": "Power Team",
+   "series": "RH",
+   "name": "RH Center-Hole Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_tons": 100,
+   "features": [
+    "center hole",
+    "pulling",
+    "tensioning"
+   ],
+   "industries": [
+    "shipbuilding",
+    "power",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-25",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Aluminum Cylinder 25 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum",
+   "capacity_tons": 25,
+   "features": [
+    "aluminum",
+    "lightweight",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-30",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Aluminum Cylinder 30 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum",
+   "capacity_tons": 30,
+   "features": [
+    "aluminum",
+    "lightweight",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-55",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Aluminum Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum",
+   "capacity_tons": 55,
+   "features": [
+    "aluminum",
+    "lightweight",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-60",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Aluminum Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum",
+   "capacity_tons": 60,
+   "features": [
+    "aluminum",
+    "lightweight",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-75",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Aluminum Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum",
+   "capacity_tons": 75,
+   "features": [
+    "aluminum",
+    "lightweight",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-100",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Aluminum Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum",
+   "capacity_tons": 100,
+   "features": [
+    "aluminum",
+    "lightweight",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-l-55",
+   "brand": "Power Team",
+   "series": "RA_L",
+   "name": "RA_L Aluminum Locking Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum-locking",
+   "capacity_tons": 55,
+   "features": [
+    "aluminum",
+    "locking collar",
+    "load holding",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-l-100",
+   "brand": "Power Team",
+   "series": "RA_L",
+   "name": "RA_L Aluminum Locking Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-aluminum-locking",
+   "capacity_tons": 100,
+   "features": [
+    "aluminum",
+    "locking collar",
+    "load holding",
+    "non-sparking"
+   ],
+   "industries": [
+    "oil-gas",
+    "semiconductor",
+    "mining"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler",
+    "acc-swivel"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-5",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 5 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 5,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-10",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 10 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 10,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-15",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 15 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 15,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-25",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 25 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 25,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-30",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 30 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 30,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-55",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 55,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-60",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 60,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-75",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 75,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-100",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 100,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rls-150",
+   "brand": "Power Team",
+   "series": "RLS",
+   "name": "RLS Low Profile Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-low-profile",
+   "capacity_tons": 150,
+   "features": [
+    "low profile",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-10",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 10 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 10,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-15",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 15 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 15,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-25",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 25 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 25,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-30",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 30 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 30,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-55",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 55,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-60",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 60,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-75",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 75,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-100",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 100,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-150",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 150,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-200",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 200,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-ra-shorty-250",
+   "brand": "Power Team",
+   "series": "RA",
+   "name": "RA Shorty Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-short",
+   "capacity_tons": 250,
+   "features": [
+    "short body",
+    "tight space"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-75",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 75,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-100",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 100,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-150",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 150,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-200",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 200,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-250",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 250,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-300",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 300 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 300,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-400",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 400 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 400,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-plc-500",
+   "brand": "Power Team",
+   "series": "PLC",
+   "name": "PLC Pancake Cylinder 500 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pancake",
+   "capacity_tons": 500,
+   "features": [
+    "pancake",
+    "very flat",
+    "max 44 mm stroke"
+   ],
+   "industries": [
+    "cement",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-55",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 55,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-60",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 60,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-75",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 75,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-100",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 100,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-150",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 150,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-200",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 200,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-250",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 250,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-300",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 300 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 300,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-400",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 400 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 400,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-500",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 500 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 500,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-rgg-600",
+   "brand": "Power Team",
+   "series": "RGG",
+   "name": "RGG Construction Cylinder 600 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 600,
+   "features": [
+    "heavy construction duty"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-55",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 55 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 55,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-60",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 60 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 60,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-75",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 75 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 75,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-100",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 100,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-150",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 150 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 150,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-200",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 200 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 200,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-250",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 250 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 250,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-300",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 300 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 300,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-400",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 400 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 400,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-r-c-500",
+   "brand": "Power Team",
+   "series": "R_C",
+   "name": "R_C Budget Construction Cylinder 500 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 500,
+   "features": [
+    "construction duty",
+    "budget option"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-zcc-550",
+   "brand": "Power Team",
+   "series": "ZCC",
+   "name": "ZCC Z-Series Cylinder 550-1650 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-load-return",
+   "capacity_tons": 550,
+   "features": [
+    "Z-series",
+    "covers 550-1650 tons"
+   ],
+   "industries": [
+    "mining",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-pe400",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-zcl-550",
+   "brand": "Power Team",
+   "series": "ZCL",
+   "name": "ZCL Z-Series Locking Cylinder 550-1100 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-locking",
+   "capacity_tons": 550,
+   "features": [
+    "Z-series",
+    "locking collar",
+    "covers 550-1100 tons"
+   ],
+   "industries": [
+    "mining",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-pe400",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-zdd-550",
+   "brand": "Power Team",
+   "series": "ZDD",
+   "name": "ZDD Z-Series Double-Acting 550-1650 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_tons": 550,
+   "features": [
+    "Z-series",
+    "powered return",
+    "covers 550-1650 tons"
+   ],
+   "industries": [
+    "mining",
+    "power",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-pe400",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-p157",
+   "brand": "Power Team",
+   "series": "P157",
+   "name": "P157 Two-Speed Hand Pump",
+   "category": "pump",
+   "subtype": "hand",
+   "features": [
+    "no power needed",
+    "two-speed",
+    "D version available for double-acting"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-p300",
+   "brand": "Power Team",
+   "series": "P300",
+   "name": "P300 Two-Speed Hand Pump",
+   "category": "pump",
+   "subtype": "hand",
+   "features": [
+    "no power needed",
+    "two-speed",
+    "D version available for double-acting"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-p460",
+   "brand": "Power Team",
+   "series": "P460",
+   "name": "P460 Two-Speed Hand Pump",
+   "category": "pump",
+   "subtype": "hand",
+   "features": [
+    "no power needed",
+    "two-speed",
+    "D version available for double-acting"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pa6",
+   "brand": "Power Team",
+   "series": "PA6",
+   "name": "PA6 Air Hydraulic Pump",
+   "category": "pump",
+   "subtype": "air",
+   "features": [
+    "air driven",
+    "no electric sparks",
+    "single-acting"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pa9",
+   "brand": "Power Team",
+   "series": "PA9",
+   "name": "PA9 Air Hydraulic Pump",
+   "category": "pump",
+   "subtype": "air",
+   "features": [
+    "air driven",
+    "no electric sparks",
+    "single-acting"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pa6d",
+   "brand": "Power Team",
+   "series": "PA6D",
+   "name": "PA6D Air Hydraulic Pump",
+   "category": "pump",
+   "subtype": "air",
+   "features": [
+    "air driven",
+    "double-acting valve"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pa60",
+   "brand": "Power Team",
+   "series": "PA60",
+   "name": "PA60 Air Hydraulic Pump",
+   "category": "pump",
+   "subtype": "air",
+   "features": [
+    "air driven",
+    "multiple cylinders"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pe46",
+   "brand": "Power Team",
+   "series": "PE46",
+   "name": "PE46 Portable Electric Pump",
+   "category": "pump",
+   "subtype": "electric-portable",
+   "features": [
+    "portable",
+    "field work"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pe55",
+   "brand": "Power Team",
+   "series": "PE55",
+   "name": "PE55 Portable Electric Pump",
+   "category": "pump",
+   "subtype": "electric-portable",
+   "features": [
+    "portable",
+    "field work"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pe21",
+   "brand": "Power Team",
+   "series": "PE21",
+   "name": "PE21 Electric Pump",
+   "category": "pump",
+   "subtype": "electric-production",
+   "features": [
+    "daily production use"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pq60",
+   "brand": "Power Team",
+   "series": "PQ60",
+   "name": "PQ60 Electric Pump",
+   "category": "pump",
+   "subtype": "electric-production",
+   "features": [
+    "daily production use"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pe400",
+   "brand": "Power Team",
+   "series": "PE400",
+   "name": "PE400 Electric Pump",
+   "category": "pump",
+   "subtype": "electric-production",
+   "features": [
+    "high tonnage",
+    "multiple cylinders"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pb10",
+   "brand": "Power Team",
+   "series": "PB10",
+   "name": "PB10 Battery Pump",
+   "category": "pump",
+   "subtype": "battery",
+   "features": [
+    "no site power",
+    "faster than hand pump"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "pt-pb43",
+   "brand": "Power Team",
+   "series": "PB43",
+   "name": "PB43 Battery Pump",
+   "category": "pump",
+   "subtype": "battery",
+   "features": [
+    "no site power",
+    "faster than hand pump"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "verified": true
+  },
+  {
+   "id": "acc-hose",
+   "brand": "Power Team",
+   "series": "Accessory",
+   "name": "High-Pressure Hydraulic Hose",
+   "category": "accessory",
+   "subtype": "accessory",
+   "features": [],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": true
+  },
+  {
+   "id": "acc-gauge",
+   "brand": "Power Team",
+   "series": "Accessory",
+   "name": "Pressure Gauge",
+   "category": "accessory",
+   "subtype": "accessory",
+   "features": [],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": true
+  },
+  {
+   "id": "acc-coupler",
+   "brand": "Power Team",
+   "series": "Accessory",
+   "name": "Hydraulic Coupler",
+   "category": "accessory",
+   "subtype": "accessory",
+   "features": [],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": true
+  },
+  {
+   "id": "acc-manifold",
+   "brand": "Power Team",
+   "series": "Accessory",
+   "name": "Manifold Block",
+   "category": "accessory",
+   "subtype": "accessory",
+   "features": [],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": true
+  },
+  {
+   "id": "acc-swivel",
+   "brand": "Power Team",
+   "series": "Accessory",
+   "name": "Swivel Cap Saddle",
+   "category": "accessory",
+   "subtype": "accessory",
+   "features": [],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": true
+  },
+  {
+   "id": "cejn-115-coupler",
+   "brand": "CEJN",
+   "series": "115",
+   "name": "CEJN Series 115 Coupler (SAMPLE)",
+   "category": "coupler",
+   "subtype": "quick-connect",
+   "thread": "3/8-18 NPT",
+   "max_pressure_bar": 800,
+   "features": [
+    "quick connect"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "cejn-116-uhp",
+   "brand": "CEJN",
+   "series": "116",
+   "name": "CEJN UHP Coupler 700 bar class (SAMPLE)",
+   "category": "coupler",
+   "subtype": "quick-connect-uhp",
+   "thread": "3/8-18 NPT",
+   "max_pressure_bar": 1500,
+   "features": [
+    "ultra high pressure"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "cejn-hose-38",
+   "brand": "CEJN",
+   "series": "Hose",
+   "name": "CEJN High-Pressure Hose 3/8 (SAMPLE)",
+   "category": "hose",
+   "subtype": "high-pressure",
+   "thread": "3/8-18 NPT",
+   "max_pressure_bar": 1000,
+   "features": [
+    "high pressure hose"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "cejn-nipple-38",
+   "brand": "CEJN",
+   "series": "115",
+   "name": "CEJN Series 115 Nipple (SAMPLE)",
+   "category": "coupler",
+   "subtype": "nipple",
+   "thread": "1/4-18 NPT",
+   "max_pressure_bar": 800,
+   "features": [
+    "quick connect"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "rad-1500nm",
+   "brand": "RAD Torque",
+   "series": "Pneumatic",
+   "name": "RAD Pneumatic Wrench ~1500 Nm (SAMPLE)",
+   "category": "torque-wrench",
+   "subtype": "pneumatic",
+   "torque_min_nm": 200,
+   "torque_max_nm": 1500,
+   "features": [
+    "pneumatic"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "rad-3000nm",
+   "brand": "RAD Torque",
+   "series": "Pneumatic",
+   "name": "RAD Pneumatic Wrench ~3000 Nm (SAMPLE)",
+   "category": "torque-wrench",
+   "subtype": "pneumatic",
+   "torque_min_nm": 1000,
+   "torque_max_nm": 3000,
+   "features": [
+    "pneumatic"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "rad-b1350",
+   "brand": "RAD Torque",
+   "series": "Battery",
+   "name": "RAD Battery Wrench ~1350 Nm (SAMPLE)",
+   "category": "torque-wrench",
+   "subtype": "battery",
+   "torque_min_nm": 100,
+   "torque_max_nm": 1350,
+   "features": [
+    "battery",
+    "cordless"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  },
+  {
+   "id": "rad-6000nm",
+   "brand": "RAD Torque",
+   "series": "Pneumatic",
+   "name": "RAD Pneumatic Wrench ~6000 Nm (SAMPLE)",
+   "category": "torque-wrench",
+   "subtype": "pneumatic",
+   "torque_min_nm": 2000,
+   "torque_max_nm": 6000,
+   "features": [
+    "pneumatic"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": false,
+   "note": "sample data \u2014 replace with catalog data"
+  }
+ ]
+}

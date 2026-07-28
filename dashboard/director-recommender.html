@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cylinder Selector — Power Team</title>
+  <title>Product Finder — Hi-ESCORP</title>
   <link rel="stylesheet" href="css/styles.css">
   <style>
     /* Self-contained, matching the A131 director design language (indigo, Inter, soft cards). */
@@ -55,8 +55,22 @@
     .cr-sect li{font:400 13.5px/1.6 'Inter',sans-serif;color:var(--ink);margin:3px 0;}
     .cr-warn{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;}
     .cr-miss{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+    /* Product Finder tabs (A165) */
+    .pf-tabs{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:16px;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
+    .pf-tab{flex:0 0 auto;border:1px solid #d7dce3;background:#fff;color:var(--ink);border-radius:999px;
+      padding:9px 18px;font:600 13.5px 'Inter',sans-serif;cursor:pointer;white-space:nowrap;}
+    .pf-tab.active{background:linear-gradient(180deg,#6a63ea,var(--ac2));color:#fff;border-color:transparent;
+      box-shadow:0 8px 18px -8px rgba(79,70,229,.6);}
+    .pf-mtab{border:1px solid #d7dce3;background:#fff;border-radius:999px;padding:7px 14px;
+      font:600 12.5px 'Inter',sans-serif;cursor:pointer;}
+    .pf-mtab.active{background:#eef2ff;border-color:var(--ac);color:var(--ac2);}
+    .pf-badge{font:700 10.5px 'Inter',sans-serif;letter-spacing:.03em;padding:2px 9px;border-radius:999px;margin-left:6px;}
+    .pf-ok{background:#dcfce7;color:#166534;}
+    .pf-sample{background:#fef3c7;color:#92400e;}
+    .pf-follow{background:#fee2e2;color:#b91c1c;margin-left:8px;}
+    .pf-calc-out{font:600 14px 'Inter',sans-serif;color:var(--ac2);margin-top:8px;min-height:20px;}
     @media print{
-      .navbar,.no-print,#crForm,.cr-headband .no-print{display:none !important;}
+      .navbar,.no-print,#crForm,.pf-tabs,.pf-pane:not(#pane-selector),.cr-headband .no-print{display:none !important;}
       body{background:#fff;}
       .main-content{padding-top:0;max-width:none;}
       .cr-card{box-shadow:none;border:none;padding:0;}
@@ -69,11 +83,97 @@
   <main class="main-content">
     <div class="cr-headband">
       <div>
-        <h1>Cylinder Selector</h1>
-        <p>Power Team / Hydraulic Technologies — enter the customer's survey answers, get the budgetary cylinder + pump set. Skip what the customer skipped; the engine lists what to ask.</p>
+        <h1>Product Finder</h1>
+        <p>Match customers to the right Power Team / CEJN / RAD equipment — RFQ matching, partner finding, the cylinder survey, competitor cross-reference and calculators. Safety specs come only from the catalog data; anything unconfirmed goes to the engineer.</p>
       </div>
     </div>
 
+    <p id="pfDataErr" class="cr-warn" style="display:none;padding:10px 14px;border-radius:10px;margin-bottom:14px;"></p>
+
+    <div class="pf-tabs" id="pfTabs">
+      <button class="pf-tab active" data-tab="rfq" onclick="pfTab('rfq', this)">🔍 RFQ — I need this item</button>
+      <button class="pf-tab" data-tab="match" onclick="pfTab('match', this)">🔗 Match — find its partner</button>
+      <button class="pf-tab" data-tab="selector" onclick="pfTab('selector', this)">📐 Cylinder Selector</button>
+      <button class="pf-tab" data-tab="xref" onclick="pfTab('xref', this)">↔️ Competitor Cross-Ref</button>
+      <button class="pf-tab" data-tab="calc" onclick="pfTab('calc', this)">🧮 Calculators</button>
+      <button class="pf-tab" data-tab="log" onclick="pfTab('log', this)">📒 Inquiry Logbook</button>
+    </div>
+
+    <!-- ── RFQ mode ── -->
+    <div class="pf-pane" id="pane-rfq">
+      <form class="cr-card" onsubmit="event.preventDefault(); pfRfqSubmit();">
+        <div class="cr-sect-title">What does the customer need?</div>
+        <div class="cr-grid" style="margin-bottom:12px;">
+          <div class="cr-field" style="grid-column:1/-1;"><label>Item needed (their own words)</label>
+            <input type="text" id="pfItem" list="pfSynList" placeholder="e.g. 100 ton jack, UHP coupling, torque gun…">
+            <datalist id="pfSynList"></datalist></div>
+          <div class="cr-field"><label>Company</label><input type="text" id="pfClient" placeholder="customer name"></div>
+          <div class="cr-field"><label>Industry</label>
+            <select id="pfIndustry"><option value="">—</option>
+              <option value="cement">Cement</option><option value="mining">Mining</option>
+              <option value="power">Power generation</option><option value="oil-gas">Oil &amp; Gas</option>
+              <option value="semiconductor">Semiconductor</option><option value="shipbuilding">Shipbuilding</option>
+            </select></div>
+          <div class="cr-field"><label>Purpose / use (optional)</label><input type="text" id="pfPurpose"></div>
+          <div class="cr-field"><label>Quantity (optional)</label><input type="number" min="1" id="pfQty"></div>
+        </div>
+        <div class="cr-actions"><button type="submit" class="cr-btn">Find products</button></div>
+      </form>
+      <div id="pfRfqResult" class="cr-card" style="display:none;"></div>
+    </div>
+
+    <!-- ── Match mode ── -->
+    <div class="pf-pane" id="pane-match" style="display:none;">
+      <div class="cr-card">
+        <div class="cr-sect-title">I have this — find its partner</div>
+        <div class="cr-checks" style="margin-bottom:14px;">
+          <button type="button" class="pf-mtab active" onclick="pfMatchTab('bolt', this)">🔩 A bolt / nut</button>
+          <button type="button" class="pf-mtab" onclick="pfMatchTab('hose', this)">🧵 A hose / pump</button>
+          <button type="button" class="pf-mtab" onclick="pfMatchTab('cyl', this)">🛢 A cylinder</button>
+        </div>
+        <div class="pf-mpane" id="mpane-bolt">
+          <div class="cr-grid" style="margin-bottom:12px;">
+            <div class="cr-field"><label>Bolt size</label>
+              <select id="pfBolt"><option>M16</option><option>M20</option><option>M24</option><option>M30</option><option>M36</option>
+                <option>1/2 in</option><option>3/4 in</option><option>1 in</option><option>1-1/4 in</option></select></div>
+            <div class="cr-field"><label>Grade</label>
+              <select id="pfGrade"><option>8.8</option><option>10.9</option><option>12.9</option><option>A325</option></select></div>
+          </div>
+          <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfBoltMatch()">Find torque + wrench</button></div>
+          <div id="pfBoltResult" style="display:none;margin-top:10px;"></div>
+        </div>
+        <div class="pf-mpane" id="mpane-hose" style="display:none;">
+          <div class="cr-grid" style="margin-bottom:12px;">
+            <div class="cr-field"><label>Thread type</label>
+              <select id="pfThread"><option value="">any</option><option>3/8-18 NPT</option><option>1/4-18 NPT</option><option>1/2-14 NPT</option></select></div>
+            <div class="cr-field"><label>Working pressure</label>
+              <div class="cr-unit">
+                <input type="number" step="any" min="0" id="pfPressure" placeholder="e.g. 700">
+                <select id="pfPressureUnit"><option value="bar">bar</option><option value="psi">psi</option></select>
+              </div>
+              <div class="cr-hint">A match is never rated below this pressure.</div></div>
+          </div>
+          <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfHoseMatch()">Find couplers</button></div>
+          <div id="pfHoseResult" style="display:none;margin-top:10px;"></div>
+        </div>
+        <div class="pf-mpane" id="mpane-cyl" style="display:none;">
+          <div class="cr-grid" style="margin-bottom:12px;">
+            <div class="cr-field"><label>Cylinder tonnage</label><input type="number" step="any" min="0" id="pfCylTons" placeholder="e.g. 100"></div>
+            <div class="cr-field"><label>Acting type</label>
+              <select id="pfCylActing"><option value="single">Single-acting</option><option value="double">Double-acting</option></select></div>
+            <div class="cr-field"><label>Power at site</label>
+              <select id="pfCylPower"><option value="">unknown</option><option value="electric">Electricity</option><option value="air">Compressed air</option><option value="none">None</option></select></div>
+            <div class="cr-field"><label>Usage</label>
+              <select id="pfCylUsage"><option value="occasional">Occasional</option><option value="daily">Daily / production</option></select></div>
+          </div>
+          <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfCylMatch()">Suggest pump set</button></div>
+          <div id="pfCylResult" style="display:none;margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Cylinder Selector (the A164 survey — unchanged) ── -->
+    <div class="pf-pane" id="pane-selector" style="display:none;">
     <form id="crForm" class="cr-card" onsubmit="event.preventDefault(); crRecommend();">
       <div class="cr-sect-title">1 · Customer</div>
       <div class="cr-grid" style="margin-bottom:16px;">
@@ -175,10 +275,81 @@
     </form>
 
     <div id="crResult" class="cr-card" style="display:none;"></div>
+    </div>
+
+    <!-- ── Competitor cross-reference ── -->
+    <div class="pf-pane" id="pane-xref" style="display:none;">
+      <div class="cr-card">
+        <div class="cr-sect-title">Competitor cross-reference</div>
+        <div class="cr-grid" style="margin-bottom:12px;">
+          <div class="cr-field" style="grid-column:1/-1;"><label>Competitor brand + model</label>
+            <input type="text" id="pfXrefQ" placeholder="e.g. Enerpac RC-1006"></div>
+        </div>
+        <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfXrefSearch()">Find our equivalent</button></div>
+      </div>
+      <div id="pfXrefResult" class="cr-card" style="display:none;"></div>
+    </div>
+
+    <!-- ── Calculators ── -->
+    <div class="pf-pane" id="pane-calc" style="display:none;">
+      <div class="cr-card">
+        <div class="cr-sect-title">Required tonnage</div>
+        <div class="cr-grid">
+          <div class="cr-field"><label>Load (tons)</label><input type="number" step="any" min="0" id="pfCalcLoad" oninput="pfCalcTonnage()"></div>
+          <div class="cr-field"><label>Lifting points</label><input type="number" min="1" step="1" id="pfCalcPts" value="1" oninput="pfCalcTonnage()"></div>
+        </div>
+        <div class="pf-calc-out" id="pfCalcTonOut">—</div>
+        <div class="cr-hint">load ÷ points × 1.25 safety margin, rounded up to a standard tonnage — the same rule as the Cylinder Selector.</div>
+      </div>
+      <div class="cr-card">
+        <div class="cr-sect-title">Oil volume vs pump reservoir</div>
+        <div class="cr-grid">
+          <div class="cr-field"><label>Bore Ø (mm)</label><input type="number" step="any" min="0" id="pfCalcBore" oninput="pfCalcOil()"></div>
+          <div class="cr-field"><label>…or effective area (cm²)</label><input type="number" step="any" min="0" id="pfCalcArea" oninput="pfCalcOil()"></div>
+          <div class="cr-field"><label>Stroke (mm)</label><input type="number" step="any" min="0" id="pfCalcStroke" oninput="pfCalcOil()"></div>
+          <div class="cr-field"><label>Pump reservoir (litres, optional)</label><input type="number" step="any" min="0" id="pfCalcResv" oninput="pfCalcOil()"></div>
+        </div>
+        <div class="pf-calc-out" id="pfCalcOilOut">Enter bore (or area) and stroke.</div>
+        <div class="cr-hint">Uses the bore/area YOU measure — we never guess a cylinder's internal dimensions.</div>
+      </div>
+      <div class="cr-card">
+        <div class="cr-sect-title">Unit converter</div>
+        <div class="cr-grid">
+          <div class="cr-field"><label>Value</label><input type="number" step="any" id="pfConvVal" oninput="pfCalcConvert()"></div>
+          <div class="cr-field"><label>Conversion</label>
+            <select id="pfConvKind" onchange="pfCalcConvert()">
+              <option value="psi-bar">psi → bar</option><option value="bar-psi">bar → psi</option>
+              <option value="tons-kn">tons → kN</option><option value="kn-tons">kN → tons</option>
+              <option value="mm-in">mm → inch</option><option value="in-mm">inch → mm</option>
+            </select></div>
+        </div>
+        <div class="pf-calc-out" id="pfConvOut">—</div>
+      </div>
+    </div>
+
+    <!-- ── Inquiry logbook ── -->
+    <div class="pf-pane" id="pane-log" style="display:none;">
+      <div class="cr-card">
+        <div class="cr-result-head">
+          <h2 style="font-size:17px;">Inquiry Logbook <span class="cr-hint" id="pfLogMeta"></span></h2>
+          <button class="cr-btn cr-btn-sec" onclick="pfExportLog()">⬇ Export CSV</button>
+        </div>
+        <div class="cr-grid" style="margin-bottom:12px;">
+          <div class="cr-field"><label>Status</label>
+            <select id="pfLogStatus" onchange="pfRenderLog()"><option value="">all</option>
+              <option>new</option><option>quoted</option><option>won</option><option>lost</option></select></div>
+          <div class="cr-field"><label>Search</label>
+            <input type="text" id="pfLogSearch" oninput="pfRenderLog()" placeholder="client, item, notes…"></div>
+        </div>
+        <p class="cr-hint" style="margin-bottom:10px;">Saved on THIS device only. Export weekly — the CSV keeps the customer's exact words (your future training data). Red badge = "new" for over 3 days.</p>
+        <div id="pfLogBody"></div>
+      </div>
+    </div>
   </main>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/cylinder-recommender.js"></script>
+  <script src="js/product-finder.js"></script>
 </body>
 </html>

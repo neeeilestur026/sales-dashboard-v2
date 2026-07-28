@@ -1,0 +1,68 @@
+{
+ "_note": "Map customer wording to a category. To extend: add words to terms[].",
+ "synonyms": [
+  {
+   "category": "high-pressure",
+   "terms": [
+    "uhp",
+    "ultra high pressure",
+    "700 bar",
+    "10000 psi",
+    "10k psi",
+    "high pressure"
+   ]
+  },
+  {
+   "category": "cylinder",
+   "terms": [
+    "jack",
+    "ram",
+    "cylinder",
+    "lifter",
+    "lifting jack",
+    "hydraulic jack"
+   ]
+  },
+  {
+   "category": "coupler",
+   "terms": [
+    "coupling",
+    "coupler",
+    "quick connect",
+    "qc",
+    "fitting",
+    "quick-connect"
+   ]
+  },
+  {
+   "category": "torque-wrench",
+   "terms": [
+    "torque gun",
+    "bolting machine",
+    "pneumatic wrench",
+    "torque wrench",
+    "torque tool",
+    "bolting"
+   ]
+  },
+  {
+   "category": "pump",
+   "terms": [
+    "power pack",
+    "powerpack",
+    "hpu",
+    "pump unit",
+    "pump",
+    "hand pump",
+    "electric pump"
+   ]
+  },
+  {
+   "category": "hose",
+   "terms": [
+    "hose",
+    "hydraulic hose"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,69 @@
+{
+ "_note": "Bolt size + grade -> torque range -> RAD wrench. ALL rows UNVERIFIED until RAD catalog data is supplied.",
+ "rows": [
+  {
+   "bolt": "M16",
+   "grade": "8.8",
+   "torque_min_nm": 190,
+   "torque_max_nm": 210,
+   "wrench_id": "rad-1500nm",
+   "verified": false
+  },
+  {
+   "bolt": "M20",
+   "grade": "8.8",
+   "torque_min_nm": 370,
+   "torque_max_nm": 410,
+   "wrench_id": "rad-1500nm",
+   "verified": false
+  },
+  {
+   "bolt": "M24",
+   "grade": "8.8",
+   "torque_min_nm": 640,
+   "torque_max_nm": 710,
+   "wrench_id": "rad-1500nm",
+   "verified": false
+  },
+  {
+   "bolt": "M24",
+   "grade": "10.9",
+   "torque_min_nm": 900,
+   "torque_max_nm": 1000,
+   "wrench_id": "rad-1500nm",
+   "verified": false
+  },
+  {
+   "bolt": "M30",
+   "grade": "8.8",
+   "torque_min_nm": 1260,
+   "torque_max_nm": 1400,
+   "wrench_id": "rad-3000nm",
+   "verified": false
+  },
+  {
+   "bolt": "M30",
+   "grade": "10.9",
+   "torque_min_nm": 1790,
+   "torque_max_nm": 1980,
+   "wrench_id": "rad-3000nm",
+   "verified": false
+  },
+  {
+   "bolt": "M36",
+   "grade": "8.8",
+   "torque_min_nm": 2190,
+   "torque_max_nm": 2430,
+   "wrench_id": "rad-3000nm",
+   "verified": false
+  },
+  {
+   "bolt": "M36",
+   "grade": "10.9",
+   "torque_min_nm": 3100,
+   "torque_max_nm": 3450,
+   "wrench_id": "rad-6000nm",
+   "verified": false
+  }
+ ]
+}

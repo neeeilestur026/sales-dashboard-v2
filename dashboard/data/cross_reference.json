@@ -1,0 +1,40 @@
+{
+ "_note": "Competitor model -> our equivalent. All rows below are UNVERIFIED placeholders.",
+ "rows": [
+  {
+   "competitor_brand": "Enerpac",
+   "competitor_model": "RC-1006",
+   "our_id": "pt-c-100",
+   "note": "equivalent 100t 6in single-acting (UNVERIFIED sample)",
+   "verified": false
+  },
+  {
+   "competitor_brand": "Enerpac",
+   "competitor_model": "RC-506",
+   "our_id": "pt-c-55",
+   "note": "equivalent ~50t single-acting (UNVERIFIED sample)",
+   "verified": false
+  },
+  {
+   "competitor_brand": "Enerpac",
+   "competitor_model": "P-80",
+   "our_id": "pt-p460",
+   "note": "two-speed hand pump equivalent (UNVERIFIED sample)",
+   "verified": false
+  },
+  {
+   "competitor_brand": "Enerpac",
+   "competitor_model": "CLL-1006",
+   "our_id": "pt-rgl-100",
+   "note": "lock nut 100t equivalent (UNVERIFIED sample)",
+   "verified": false
+  },
+  {
+   "competitor_brand": "Holmatro",
+   "competitor_model": "HJ100G15",
+   "our_id": "pt-c-100",
+   "note": "100t jack equivalent (UNVERIFIED sample)",
+   "verified": false
+  }
+ ]
+}

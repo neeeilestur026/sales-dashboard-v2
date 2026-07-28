@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Finder — Data Admin</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    :root{--ac:#4f46e5;--ac2:#4338ca;--ink:#111827;--ink2:#64748b;--line:#e5e7eb;}
+    body{background:radial-gradient(1200px 560px at 50% -140px,#eef2ff 0%,#f5f6f8 55%,#e6e9ee 100%);}
+    .main-content{max-width:960px;margin:0 auto;padding-top:88px;}
+    h1{font:800 24px 'Inter',sans-serif;color:var(--ink);margin:0 0 6px;}
+    .sub{font:400 13.5px 'Inter',sans-serif;color:var(--ink2);margin:0 0 18px;}
+    .pfa-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px;
+      box-shadow:0 1px 2px rgba(17,24,39,.04),0 12px 28px -18px rgba(17,24,39,.18);}
+    .pfa-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font:400 13.5px 'Inter',sans-serif;color:var(--ink);}
+    .pfa-name{font-weight:700;min-width:180px;}
+    .pfa-badge{font:700 10.5px 'Inter',sans-serif;padding:2px 9px;border-radius:999px;}
+    .b-ok{background:#dcfce7;color:#166534;} .b-warn{background:#fef3c7;color:#92400e;} .b-ov{background:#dbeafe;color:#1d4ed8;}
+    .pfa-btn{border:1px solid #d7dce3;background:#fff;border-radius:999px;padding:6px 14px;font:600 12.5px 'Inter',sans-serif;cursor:pointer;}
+    .pfa-note{font:400 12px 'Inter',sans-serif;color:var(--ink2);margin-top:6px;}
+    table{width:100%;border-collapse:collapse;font:400 13px 'Inter',sans-serif;}
+    th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;}
+    th{font-weight:700;color:var(--ink2);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;}
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <h1>Product Finder — Data Admin</h1>
+    <p class="sub">The catalog lives in <b>dashboard/data/*.json</b> — edit those files to update it permanently.
+      Uploading here stages a replacement on THIS device only (stored in the browser), useful for testing a new
+      catalog before committing it. Unverified rows are sample data and are never shown as safe answers.</p>
+
+    <div id="pfaFiles"></div>
+
+    <div class="pfa-card">
+      <div class="pfa-row" style="justify-content:space-between;">
+        <span class="pfa-name">Miss log (pf_misses)</span>
+        <button class="pfa-btn" onclick="pfaClearMisses()">Clear</button>
+      </div>
+      <p class="pfa-note">What customers typed that matched NO category — grow synonyms.json from this weekly.</p>
+      <div id="pfaMisses" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="pfa-card">
+      <div class="pfa-row"><span class="pfa-name">Inquiry logbook</span><span id="pfaInqCount"></span></div>
+      <p class="pfa-note">Inquiries are stored per device — export the CSV from the Product Finder's Logbook tab.</p>
+    </div>
+  </main>
+
+  <input type="file" id="pfaUpload" accept=".json,application/json" style="display:none;">
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/product-finder.js"></script>
+  <script>
+    let pfaTarget = null;
+    const PFA_SHAPES = { 'products.json': 'products', 'synonyms.json': 'synonyms',
+                         'cross_reference.json': 'rows', 'torque_chart.json': 'rows' };
+    const pfaEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const session = requireDirector();
+      if (!session) return;
+      renderNavbar('pf-admin');
+      await pfaRender();
+      document.getElementById('pfaUpload').addEventListener('change', pfaHandleUpload);
+    });
+
+    async function pfaRender() {
+      const box = document.getElementById('pfaFiles');
+      const cards = [];
+      for (const file of PF_DATA_FILES) {
+        let html = '<div class="pfa-card"><div class="pfa-row">'
+          + '<span class="pfa-name">' + file + '</span>';
+        try {
+          const data = await pfFetchFile(file);
+          const rows = data[PFA_SHAPES[file]] || [];
+          const ver = rows.filter(r => r.verified !== false).length;
+          const unver = rows.length - ver;
+          html += '<span>' + rows.length + ' rows</span>'
+            + (ver ? '<span class="pfa-badge b-ok">' + ver + ' verified</span>' : '')
+            + (unver ? '<span class="pfa-badge b-warn">' + unver + ' sample — replace with catalog data</span>' : '')
+            + (pfOverride(file) ? '<span class="pfa-badge b-ov">device override active</span>' : '');
+        } catch (e) {
+          html += '<span class="pfa-badge b-warn">failed to load: ' + pfaEsc(e.message) + '</span>';
+        }
+        html += '<span style="flex:1"></span>'
+          + '<button class="pfa-btn" onclick="pfaDownload(\'' + file + '\')">⬇ Download</button>'
+          + '<button class="pfa-btn" onclick="pfaPickUpload(\'' + file + '\')">⬆ Upload replacement</button>'
+          + (pfOverride(file) ? '<button class="pfa-btn" onclick="pfaClearOverride(\'' + file + '\')">Clear override</button>' : '')
+          + '</div>'
+          + (pfOverride(file) ? '<p class="pfa-note">⚠ This device is using an uploaded replacement, not the bundled file. To make it permanent, replace <b>dashboard/data/' + file + '</b> in the app.</p>' : '')
+          + '</div>';
+        cards.push(html);
+      }
+      box.innerHTML = cards.join('');
+
+      const misses = pfGetList('pf_misses');
+      document.getElementById('pfaMisses').innerHTML = misses.length
+        ? '<table><thead><tr><th>Date</th><th>Customer typed</th></tr></thead><tbody>'
+          + misses.slice(0, 50).map(m => '<tr><td>' + pfaEsc(String(m.date).slice(0, 10)) + '</td><td>' + pfaEsc(m.text) + '</td></tr>').join('')
+          + '</tbody></table>'
+        : '<p class="pfa-note">No misses logged — every query so far matched a category.</p>';
+      document.getElementById('pfaInqCount').textContent = pfGetList('pf_inquiries').length + ' on this device';
+    }
+
+    async function pfaDownload(file) {
+      const data = await pfFetchFile(file);
+      const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = file;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function pfaPickUpload(file) { pfaTarget = file; document.getElementById('pfaUpload').click(); }
+
+    function pfaHandleUpload(ev) {
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = '';
+      if (!f || !pfaTarget) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          const key = PFA_SHAPES[pfaTarget];
+          if (!Array.isArray(data[key])) throw new Error('expected a "' + key + '" array — check the file shape against the bundled ' + pfaTarget);
+          localStorage.setItem('pf_override_' + pfaTarget, JSON.stringify(data));
+          pfData = null;                      // force the finder to re-read
+          alert('Replacement staged for ' + pfaTarget + ' on this device (' + data[key].length + ' rows).');
+          pfaRender();
+        } catch (e) { alert('Not accepted: ' + e.message); }
+      };
+      reader.readAsText(f);
+    }
+
+    function pfaClearOverride(file) {
+      localStorage.removeItem('pf_override_' + file);
+      pfData = null;
+      pfaRender();
+    }
+
+    function pfaClearMisses() { pfSetList('pf_misses', []); pfaRender(); }
+  </script>
+</body>
+</html>

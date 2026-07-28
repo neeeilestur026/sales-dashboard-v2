@@ -116,7 +116,7 @@ def create_app():
             if os.path.isfile(filepath):
                 return send_from_directory(DASHBOARD_DIR, page)
         # Serve dashboard JS files
-        if page.startswith("js/") or page.startswith("css/") or page.startswith("images/"):
+        if page.startswith("js/") or page.startswith("css/") or page.startswith("images/") or page.startswith("data/"):
             filepath = os.path.join(DASHBOARD_DIR, page)
             if os.path.isfile(filepath):
                 return send_from_directory(DASHBOARD_DIR, page)

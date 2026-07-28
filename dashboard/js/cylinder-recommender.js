@@ -43,6 +43,44 @@ function ptRglStroke(strokeMm) {
   return opt || null;
 }
 
+
+/** STEP 5 as a standalone helper — the matching pump + accessories for a cylinder.
+ *  Used by ptRecommend and by the Product Finder's "I have a cylinder" Match tab.
+ *  o: { tonnage, doubleActing, points, power('electric'|'air'|'none'|''), voltage, usage, explosive } */
+function ptPumpSet(o) {
+  o = o || {};
+  const T = ptNum(o.tonnage);
+  const points = ptNum(o.points) || 1;
+  const isDA = o.doubleActing === true;
+  const multi = points > 1;
+  const daily = o.usage === 'daily';
+  const explosive = o.explosive === true;
+  const pump = [];
+  if (explosive || o.power === 'air') {
+    pump.push((multi ? 'PA60 air hydraulic pump — one air pump can drive the multiple cylinders'
+      : (isDA ? 'PA6D air hydraulic pump — air-driven, with the valve a double-acting cylinder needs'
+              : 'PA6 or PA9 air hydraulic pump — air-driven, no electric sparks'))
+      + (explosive ? ' (air power is the safe choice in a no-spark area)' : ''));
+  } else if (o.power === 'electric') {
+    if (daily) pump.push('PE21 or PQ60 electric pump — built for daily production use'
+      + (T >= 150 || multi ? '; step up to PE400 for high tonnage or several cylinders' : '')
+      + (o.voltage ? ' (site voltage: ' + o.voltage + ')' : ''));
+    else pump.push('PE46 or PE55 portable electric pump — easy to move around the site'
+      + (o.voltage ? ' (site voltage: ' + o.voltage + ')' : ''));
+  } else if (o.power === 'none') {
+    if (daily) pump.push('PB10 or PB43 battery pump — no site power, but daily use needs more speed than a hand pump');
+    else pump.push('P157, P300 or P460 two-speed hand pump — no power needed for occasional jobs'
+      + (isDA ? ' (use the "D" version, e.g. P460D, for the double-acting cylinder)' : ''));
+  } else {
+    pump.push('Pump to be chosen once the site power is known — hand pump (no power), PA air pump, or PE electric pump.');
+  }
+  if (isDA) pump.push('4-way directional valve + TWO hoses — a double-acting cylinder always needs both');
+  if (multi) pump.push('Manifold for ' + points + ' lifting points + pressure gauge — one pump feeds all cylinders evenly');
+  pump.push('Hydraulic hose' + (isDA ? 's' : '') + ', pressure gauge and coupler — included in every set');
+  pump.push('Swivel cap — suggested in case the load bears unevenly on the saddle');
+  return pump;
+}
+
 /**
  * The whole spec in one pure call.
  * answers: { jobTypes:[], loadTons, liftingPoints, strokeMm, gapMm, tightSpace, longHolding,
@@ -273,32 +311,10 @@ function ptRecommend(a) {
       + 'against it by the Hi-ESCORP engineer (switching to a low-profile/pancake model or staged lifting if it does not fit).');
   }
 
-  /* STEP 5 — the matching pump + accessories */
+  /* STEP 5 — the matching pump + accessories (shared with the Product Finder's Match mode). */
   const isDA = powered || (primary && /double-acting/i.test(primary.series));
-  const multi = points > 1;
-  const pump = [];
-  if (explosive || airPower) {
-    pump.push((multi ? 'PA60 air hydraulic pump — one air pump can drive the multiple cylinders'
-      : (isDA ? 'PA6D air hydraulic pump — air-driven, with the valve a double-acting cylinder needs'
-              : 'PA6 or PA9 air hydraulic pump — air-driven, no electric sparks'))
-      + (explosive ? ' (air power is the safe choice in a no-spark area)' : ''));
-  } else if (electric) {
-    if (daily) pump.push('PE21 or PQ60 electric pump — built for daily production use'
-      + (T >= 150 || multi ? '; step up to PE400 for high tonnage or several cylinders' : '')
-      + (a.voltage ? ' (site voltage: ' + a.voltage + ')' : ''));
-    else pump.push('PE46 or PE55 portable electric pump — easy to move around the site'
-      + (a.voltage ? ' (site voltage: ' + a.voltage + ')' : ''));
-  } else if (noPower) {
-    if (daily) pump.push('PB10 or PB43 battery pump — no site power, but daily use needs more speed than a hand pump');
-    else pump.push('P157, P300 or P460 two-speed hand pump — no power needed for occasional jobs'
-      + (isDA ? ' (use the "D" version, e.g. P460D, for the double-acting cylinder)' : ''));
-  } else {
-    pump.push('Pump to be chosen once the site power is known — hand pump (no power), PA air pump, or PE electric pump.');
-  }
-  if (isDA) pump.push('4-way directional valve + TWO hoses — a double-acting cylinder always needs both');
-  if (multi) pump.push('Manifold for ' + points + ' lifting points + pressure gauge — one pump feeds all cylinders evenly');
-  pump.push('Hydraulic hose' + (isDA ? 's' : '') + ', pressure gauge and coupler — included in every set');
-  pump.push('Swivel cap — suggested in case the load bears unevenly on the saddle');
+  const pump = ptPumpSet({ tonnage: T, doubleActing: isDA, points, power: a.power,
+                           voltage: a.voltage, usage: a.usage, explosive });
 
   warnings.push(PT_FINAL_WARNING);
 
