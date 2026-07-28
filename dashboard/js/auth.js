@@ -578,7 +578,7 @@ function renderNavbar(activePage) {
     const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses'].includes(activePage);
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-performance'].includes(activePage);
-    const dirAcctActive = ['director-emails', 'email-setup', 'change-password'].includes(activePage);
+    const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
     navLinks = `
       <a href="director-home.html" class="${activePage === 'director-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -632,6 +632,7 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="director-emails.html" class="${activePage === 'director-emails' ? 'active' : ''}">Email</a>
           <a href="email-setup.html" class="${activePage === 'email-setup' ? 'active' : ''}">Connect Email</a>
+          <a href="pf-admin.html" class="${activePage === 'pf-admin' ? 'active' : ''}">PF Data Admin</a>
           <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
         </div>
       </div>`;

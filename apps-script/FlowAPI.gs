@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 95;   // A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine · 89: A149 names · 88: A147 bug-scan)
+var FLOW_VERSION = 96;   // A167 Product Finder shared inquiry logbook (PFInquiries + savePfInquiry/getPfInquiries) · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -93,6 +93,10 @@ var SCHEMA = {
   // ── Daily report: auto-logged activity + per-day notes ──
   ActivityLog: ['Timestamp', 'Date', 'User', 'Module', 'Action', 'Ref No', 'Summary', 'Amount', 'Currency'],
   DailyNotes:  ['Date', 'Notes', 'Updated By', 'Updated At'],
+
+  // ── A167: Product Finder shared inquiry logbook (device localStorage syncs here; upsert by Inquiry ID) ──
+  PFInquiries: ['Inquiry ID', 'Date', 'User', 'Source', 'Client', 'Industry', 'Raw Text',
+                'Recommendation', 'Status', 'Notes', 'Updated At'],
 
   // ── Daily report SUBMISSION (one row per user per day; the frozen snapshot the user stands behind
   //    plus their narrative). Column ORDER IS FROZEN — _sheet self-migrates appended columns, but a
@@ -3830,6 +3834,48 @@ function saveDailyNote(p) {
   return { success: true, message: 'Notes saved.' };
 }
 
+// ── A167: Product Finder shared inquiry logbook ──────────────────────────────
+// Upsert by Inquiry ID (the device-generated 'INQ-…' key), like saveDailyNote's scan-and-rewrite.
+// Deliberately ABSENT from _MODULE_MAP: a Product Finder inquiry is not a daily-report task, so it
+// must not append ActivityLog rows (same reasoning as saveDailyNote/submitDailyReport).
+function savePfInquiry(p) {
+  var id = String((p && p.id) || '').trim();
+  if (!id) return { success: false, message: 'Inquiry id is required.' };
+  var vals = [id, p.date || _now(), String(p.actorName || p.user || ''), p.source || '', p.client || '',
+              p.industry || '', p.rawText || '', p.recommendation || '', p.status || 'new',
+              p.notes || '', _now()];
+  var sh = _sheet('PFInquiries');
+  var rows = _rows('PFInquiries');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i]['Inquiry ID']) === id) {
+      // keep the original Date + User on update (the edit is a status/notes change)
+      vals[1] = rows[i]['Date'] || vals[1];
+      vals[2] = rows[i]['User'] || vals[2];
+      sh.getRange(rows[i].rowIndex, 1, 1, vals.length).setValues([vals]);
+      return { success: true, id: id, updated: true, message: 'Inquiry updated.' };
+    }
+  }
+  _append('PFInquiries', vals);
+  return { success: true, id: id, created: true, message: 'Inquiry saved.' };
+}
+
+function getPfInquiries(p) {
+  var rows = _rows('PFInquiries');
+  var user = p && p.user ? String(p.user) : '';
+  var out = rows
+    .filter(function (r) { return !user || String(r['User'] || '') === user; })
+    .map(function (r) {
+      return { id: String(r['Inquiry ID'] || ''), date: r['Date'] instanceof Date ? r['Date'].toISOString() : String(r['Date'] || ''),
+               user: String(r['User'] || ''), source: String(r['Source'] || ''), client: String(r['Client'] || ''),
+               industry: String(r['Industry'] || ''), rawText: String(r['Raw Text'] || ''),
+               recommendation: String(r['Recommendation'] || ''), status: String(r['Status'] || 'new'),
+               notes: String(r['Notes'] || ''),
+               updatedAt: r['Updated At'] instanceof Date ? r['Updated At'].toISOString() : String(r['Updated At'] || '') };
+    });
+  out.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+  return { success: true, data: out };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  DAILY REPORT SUBMISSION  (role dashboards → management / HR)
 //
@@ -4415,6 +4461,7 @@ var HANDLERS = {
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
   submitDailyReport: submitDailyReport, getDailyReports: getDailyReports, reviewDailyReport: reviewDailyReport,
+  savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
   verifyReturnToSales: verifyReturnToSales, createQuotationFromPR: createQuotationFromPR, savePRPDF: savePRPDF,
@@ -4443,6 +4490,7 @@ var MUTATIONS = {
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
+  savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
   addDocument: 1, deleteDocument: 1,

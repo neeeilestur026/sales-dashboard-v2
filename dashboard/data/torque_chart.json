@@ -20,6 +20,15 @@
    "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
+   "bolt": "M12",
+   "grade": "12.9",
+   "torque_min_nm": 167,
+   "torque_max_nm": 167,
+   "wrench_id": null,
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
    "bolt": "M16",
    "grade": "8.8",
    "torque_min_nm": 248,
@@ -33,6 +42,15 @@
    "grade": "10.9",
    "torque_min_nm": 354,
    "torque_max_nm": 354,
+   "wrench_id": "rad-1500nm",
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
+   "bolt": "M16",
+   "grade": "12.9",
+   "torque_min_nm": 413,
+   "torque_max_nm": 413,
    "wrench_id": "rad-1500nm",
    "verified": true,
    "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
@@ -56,6 +74,15 @@
    "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
+   "bolt": "M20",
+   "grade": "12.9",
+   "torque_min_nm": 809,
+   "torque_max_nm": 809,
+   "wrench_id": "rad-1500nm",
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
    "bolt": "M24",
    "grade": "8.8",
    "torque_min_nm": 865,
@@ -74,6 +101,15 @@
    "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
+   "bolt": "M24",
+   "grade": "12.9",
+   "torque_min_nm": 1395,
+   "torque_max_nm": 1395,
+   "wrench_id": "rad-3000nm",
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
    "bolt": "M30",
    "grade": "8.8",
    "torque_min_nm": 1719,
@@ -87,6 +123,15 @@
    "grade": "10.9",
    "torque_min_nm": 2377,
    "torque_max_nm": 2377,
+   "wrench_id": "rad-3000nm",
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
+   "bolt": "M30",
+   "grade": "12.9",
+   "torque_min_nm": 2774,
+   "torque_max_nm": 2774,
    "wrench_id": "rad-3000nm",
    "verified": true,
    "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."

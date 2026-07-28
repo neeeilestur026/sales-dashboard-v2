@@ -16,7 +16,7 @@ const PF_INDUSTRIES = ['cement', 'mining', 'power', 'oil-gas', 'semiconductor', 
 
 /* ─────────────────────────── Data loading (override-aware) ─────────────────────────── */
 
-let pfData = null;      // { products:[], synonyms:[], crossRef:[], torque:[] }
+let pfData = null;      // { products:[], synonyms:[], crossRef:[], torque:[], loadErrors:[] }
 let pfLoading = null;
 
 function pfOverride(file) {
@@ -32,20 +32,38 @@ async function pfFetchFile(file) {
   return res.json();
 }
 
+/* Per-file resilient loader: one broken/missing file never kills the other three, a transient
+   failure never bricks the page (pfLoading is always cleared), and a data failure is recorded in
+   loadErrors so handlers can SHOW it instead of presenting it as a product miss. */
+const PF_FILE_KEYS = { 'products.json': 'products', 'synonyms.json': 'synonyms',
+                       'cross_reference.json': 'rows', 'torque_chart.json': 'rows' };
+
 async function pfLoadData(force) {
-  if (pfData && !force) return pfData;
+  if (pfData && !force && !(pfData.loadErrors || []).length) return pfData;
   if (pfLoading && !force) return pfLoading;
   pfLoading = (async () => {
-    const [p, s, x, t] = await Promise.all(PF_DATA_FILES.map(pfFetchFile));
-    pfData = {
-      products: p.products || [],
-      synonyms: s.synonyms || [],
-      crossRef: x.rows || [],
-      torque: t.rows || []
+    const settled = await Promise.allSettled(PF_DATA_FILES.map(pfFetchFile));
+    const loadErrors = [];
+    const arr = (i) => {
+      const file = PF_DATA_FILES[i], key = PF_FILE_KEYS[file];
+      if (settled[i].status === 'rejected') {
+        const r = settled[i].reason;
+        loadErrors.push({ file, message: String((r && r.message) || r) });
+        return [];
+      }
+      const v = settled[i].value ? settled[i].value[key] : null;
+      if (!Array.isArray(v)) {
+        loadErrors.push({ file, message: 'unexpected file shape — missing the "' + key + '" array' });
+        return [];
+      }
+      return v;
     };
+    pfData = { products: arr(0), synonyms: arr(1), crossRef: arr(2), torque: arr(3), loadErrors };
+    pfLoading = null;                       // errors present → next call re-fetches (auto-retry)
     return pfData;
   })();
-  return pfLoading;
+  try { return await pfLoading; }
+  catch (e) { pfLoading = null; throw e; } // never leave a rejected promise cached
 }
 
 /* ─────────────────────────── Pure helpers (unit-tested) ─────────────────────────── */
@@ -54,16 +72,58 @@ function pfNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').t
 /* For model-number comparison: case/space/dash-insensitive so "RC1006" finds "RC-1006". */
 function pfModelKey(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
+/* ── Token-level matching: whole words only (no more 'ram' inside 'frame'), plural-tolerant,
+      and one-typo-tolerant for words of 5+ letters ('cylnder' still finds 'cylinder'). ── */
+
+function pfTokenize(text) {
+  return pfNorm(text).split(/[^a-z0-9\/]+/).filter(Boolean);   // keeps fractions like 3/8
+}
+
+function pfStripPlural(w) {
+  return (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) ? w.slice(0, -1) : w;
+}
+
+/** True when a and b are within ONE edit (substitute/insert/delete) of each other. */
+function pfEdit1(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  if (a.length > b.length) { const t = a; a = b; b = t; }      // a is the shorter (or equal)
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length === b.length) { i++; j++; }                    // substitution
+    else j++;                                                   // extra char in b
+  }
+  return edits + (b.length - j) + (a.length - i) <= 1;
+}
+
+/** Does the (possibly multi-word) term appear in the token stream as whole words? */
+function pfTermHit(tokens, term) {
+  const words = pfTokenize(term);
+  if (!words.length) return false;
+  outer:
+  for (let s = 0; s + words.length <= tokens.length; s++) {
+    for (let k = 0; k < words.length; k++) {
+      const tok = tokens[s + k], w = words[k];
+      const exact = pfStripPlural(tok) === pfStripPlural(w);
+      const fuzzy = tok.length >= 5 && w.length >= 5 && pfEdit1(pfStripPlural(tok), pfStripPlural(w));
+      if (!exact && !fuzzy) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
 /** Detect the category the customer's wording means. Longest matching term wins. */
 function pfDetectCategory(text, synonyms) {
-  const t = ' ' + pfNorm(text) + ' ';
+  const tokens = pfTokenize(text);
   let best = null;
   (synonyms || []).forEach(group => {
     (group.terms || []).forEach(term => {
-      const needle = ' ' + pfNorm(term) + ' ';
-      // whole-word-ish containment; also catch term at string edges
-      if (t.indexOf(pfNorm(term)) !== -1) {
-        if (!best || pfNorm(term).length > best.term.length) best = { category: group.category, term: pfNorm(term) };
+      const t = pfNorm(term);
+      if (pfTermHit(tokens, t)) {
+        if (!best || t.length > best.term.length) best = { category: group.category, term: t };
       }
     });
   });
@@ -76,39 +136,150 @@ function pfExtractTons(text) {
   return m ? parseFloat(m[1]) : 0;
 }
 
+/* ── Attribute extraction: load (tons/kg/kN), stroke, pressure, and subtype signals — so
+      "100 ton low height double acting jack" filters on ALL of it, not just the tonnage. ── */
+
+const pfMpaToBar = m => m * 10;
+
+/* signal → key(s) matched as substrings of the product's `subtype` field */
+const PF_SUBTYPE_SIGNALS = [
+  [/double[- ]acting|powered return/, 'double-acting'],
+  [/low[- ](height|profile)|flat (jack|cylinder)/, 'low-profile'],
+  [/pancake/, 'pancake'],
+  [/lock[- ]?nut|locking|load[- ]hold|hold the load/, 'locking'],
+  [/hollow|cent(er|re)[- ]hole|through[- ]hole/, 'center-hole'],
+  [/alumin(um|ium)|light[- ]?weight/, 'aluminum']
+];
+/* 'low height' honestly covers three catalog families */
+const PF_SUBTYPE_EXPAND = { 'low-profile': ['low-profile', 'pancake', 'short'] };
+
+function pfExtractAttrs(text) {
+  let t = ' ' + pfNorm(text) + ' ';
+  // pressure first, and STRIP it, so "100 mpa" / "700 bar" numbers never read as tons
+  let pressureBar = 0;
+  const pr = t.match(/(\d+(?:\.\d+)?)\s*(bar|psi|mpa)\b/);
+  if (pr) {
+    const v = parseFloat(pr[1]);
+    pressureBar = pr[2] === 'psi' ? pfPsiToBar(v) : pr[2] === 'mpa' ? pfMpaToBar(v) : v;
+    t = t.replace(pr[0], ' ');
+  }
+  // stroke ("160 mm stroke" / "stroke of 6 in"), stripped for the same reason
+  let strokeMm = 0;
+  const st = t.match(/(\d+(?:\.\d+)?)\s*(mm|in|inch|inches)\s*stroke/) ||
+             t.match(/stroke\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*(mm|in|inch|inches)/);
+  if (st) {
+    strokeMm = st[2] === 'mm' ? parseFloat(st[1]) : parseFloat(st[1]) * 25.4;
+    t = t.replace(st[0], ' ');
+  }
+  // load: tons first, else kg (÷1000), else kN
+  let tons = pfExtractTons(t);
+  if (!tons) {
+    const kg = t.match(/(\d+(?:\.\d+)?)\s*kgs?\b/);
+    if (kg) tons = Math.round(parseFloat(kg[1]) / 10) / 100;
+  }
+  if (!tons) {
+    const kn = t.match(/(\d+(?:\.\d+)?)\s*kn\b/);
+    if (kn) tons = Math.round(pfKnToTons(parseFloat(kn[1])) * 100) / 100;
+  }
+  const subtypes = PF_SUBTYPE_SIGNALS.filter(([re]) => re.test(t)).map(([, k]) => k);
+  return { tons, strokeMm, pressureBar, subtypes };
+}
+
+/** Competitor model typed inside an RFQ ("customer has Enerpac RC-1006") → surface the crossover. */
+function pfXrefInText(text, rows) {
+  const toks = pfTokenize(text);
+  const cands = [];
+  toks.forEach((w, i) => {
+    if (/\d/.test(w) && pfModelKey(w).length >= 4) cands.push(pfModelKey(w));
+    if (i + 1 < toks.length) {                                  // "RC-1006" tokenizes to rc + 1006
+      const pair = pfModelKey(toks[i] + toks[i + 1]);
+      if (/\d/.test(pair) && pair.length >= 4) cands.push(pair);
+    }
+  });
+  if (!cands.length) return [];
+  return (rows || []).filter(r => {
+    const mk = pfModelKey(r.competitor_model);
+    return mk.length >= 4 && cands.includes(mk);
+  }).slice(0, 3);
+}
+
 /* 'high-pressure' is a wording group, not a product category — it means UHP couplers/hoses. */
 const PF_CATEGORY_ALIAS = { 'high-pressure': ['coupler', 'hose'] };
 
-/** RFQ matcher: category filter + industry boost + capacity proximity. Verified rank above sample. */
+/** RFQ matcher v2: category filter + HARD never-undersized filter + subtype narrowing +
+ *  capacity-proximity / stroke / industry scoring, with fully deterministic tie-breaks.
+ *  A cylinder ask with NO load returns { needTons:true } instead of guessing a size. */
 function pfRfqMatch(text, industry, data) {
   const det = pfDetectCategory(text, data.synonyms);
-  if (!det) return { miss: true, category: null, results: [] };
+  const attrs = pfExtractAttrs(text);
+  const xref = pfXrefInText(text, data.crossRef);
+  if (!det) return { miss: true, category: null, attrs, xref, results: [] };
   const cats = PF_CATEGORY_ALIAS[det.category] || [det.category];
-  const wantTons = pfExtractTons(text);
   const uhp = det.category === 'high-pressure';
-  const scored = data.products
-    .filter(p => cats.includes(p.category))
+  const tons = attrs.tons;
+
+  // A cylinder recommendation without a load would just be a guess — ask instead of answering big.
+  if (det.category === 'cylinder' && !(tons > 0)) {
+    return { miss: false, needTons: true, category: det.category, matchedTerm: det.term,
+             attrs, xref, results: [] };
+  }
+
+  let pool = data.products.filter(p => cats.includes(p.category));
+
+  // HARD safety-style filter: never recommend a cylinder below the asked load (same rule as couplers).
+  if (tons > 0) pool = pool.filter(p => typeof p.capacity_tons !== 'number' || p.capacity_tons >= tons);
+
+  // Subtype narrowing — filter when the catalog can satisfy the signal, else relax + say so.
+  let relaxed = false;
+  (attrs.subtypes || []).forEach(sig => {
+    const keys = PF_SUBTYPE_EXPAND[sig] || [sig];
+    const narrowed = pool.filter(p => keys.some(k => String(p.subtype || '').indexOf(k) !== -1));
+    if (narrowed.length) pool = narrowed; else relaxed = true;
+  });
+
+  const scored = pool
     .map(p => {
       let score = 1;
-      if (p.verified) score += 10;                                   // sample data can never outrank real data
+      if (p.verified === true) score += 10;                          // sample data can never outrank real data
       if (industry && (p.industries || []).includes(industry)) score += 2;
-      if (wantTons && p.capacity_tons) {
-        const diff = Math.abs(p.capacity_tons - wantTons);
-        if (p.capacity_tons >= wantTons) score += Math.max(0, 4 - diff / 25);   // prefer covering the need
-        else score -= 2;                                             // below the asked tonnage ranks down
+      if (tons > 0 && typeof p.capacity_tons === 'number') {
+        score += Math.max(0, 6 - (p.capacity_tons - tons) / 25);     // closest COVERING size scores highest
       }
+      if (attrs.strokeMm > 0 && (p.stroke_options_mm || []).some(s => s >= attrs.strokeMm)) score += 3;
       if (uhp && (p.features || []).some(f => /ultra high pressure|high pressure/i.test(f))) score += 3;
       return { p, score };
     })
-    .sort((a, b) => b.score - a.score || (b.p.capacity_tons || 0) - (a.p.capacity_tons || 0));
+    .sort((a, b) => b.score - a.score
+      || (tons > 0 ? ((a.p.capacity_tons || 0) - tons) - ((b.p.capacity_tons || 0) - tons) : 0)
+      || ((a.p.series === 'C' ? 0 : 1) - (b.p.series === 'C' ? 0 : 1))   // generic ask → general-purpose first
+      || String(a.p.name).localeCompare(String(b.p.name)));              // fully deterministic
   return { miss: scored.length === 0, category: det.category, matchedTerm: det.term,
-           results: scored.slice(0, 3).map(x => x.p) };
+           attrs, xref, relaxed, results: scored.slice(0, 3).map(x => x.p) };
 }
 
-/** 1–2 plain-English sentences: why this product fits. */
-function pfWhyFits(p, industry) {
-  const feats = (p.features || []).slice(0, 3).join(', ');
-  let s = feats ? (p.name + ' offers ' + feats + '.') : (p.name + '.');
+/** 1–2 plain-English sentences: WHY this product fits — the actual reasons, not just feature blurb. */
+function pfWhyFits(p, industry, ctx) {
+  const attrs = (ctx && ctx.attrs) || {};
+  const reasons = [];
+  if (attrs.tons > 0 && typeof p.capacity_tons === 'number') {
+    reasons.push('Rated ' + p.capacity_tons + ' t — covers your ' + attrs.tons + '-t load');
+  }
+  (attrs.subtypes || []).forEach(sig => {
+    const keys = PF_SUBTYPE_EXPAND[sig] || [sig];
+    if (keys.some(k => String(p.subtype || '').indexOf(k) !== -1)) {
+      reasons.push(sig.replace('-', ' ') + ', as you asked');
+    }
+  });
+  if (attrs.strokeMm > 0 && (p.stroke_options_mm || []).some(s => s >= attrs.strokeMm)) {
+    reasons.push('stroke options cover ' + attrs.strokeMm + ' mm');
+  }
+  let s;
+  if (reasons.length) {
+    s = p.name + ': ' + reasons.join('; ') + '.';
+  } else {
+    const feats = (p.features || []).slice(0, 3).join(', ');
+    s = feats ? (p.name + ' offers ' + feats + '.') : (p.name + '.');
+  }
   if (industry && (p.industries || []).includes(industry)) {
     s += ' It is commonly used in ' + industry.replace('-', ' & ') + ' work like yours.';
   }
@@ -128,13 +299,30 @@ function pfTorqueLookup(bolt, grade, rows) {
   return r || null;
 }
 
+/** Canonical thread key: size + family, TPI dropped — '3/8 NPT', '3/8-18 NPT', '3/8" npt'
+ *  all become "3/8|npt". Unknown formats fall back to the model key. */
+function pfThreadKey(s) {
+  const t = pfNorm(s);
+  if (!t) return '';
+  const size = t.match(/\d+\s*\/\s*\d+|\d+(?:\.\d+)?/);
+  const fam = t.match(/npt|bsp|unf|jic/);
+  return (size ? size[0].replace(/\s+/g, '') : pfModelKey(t)) + '|' + (fam ? fam[0] : '');
+}
+/** Threads match when sizes agree and families agree (a missing family on either side is tolerated). */
+function pfThreadMatch(a, b) {
+  const ka = pfThreadKey(a), kb = pfThreadKey(b);
+  if (!ka || !kb) return false;
+  const [sa, fa] = ka.split('|'), [sb, fb] = kb.split('|');
+  return !!sa && sa === sb && (!fa || !fb || fa === fb);
+}
+
 /** Coupler safety filter. NEVER returns a coupler rated below the entered pressure, and only
  *  VERIFIED couplers count as matches — samples are surfaced separately, greyed, confirmation-only. */
 function pfCouplerMatch(thread, pressureBar, products) {
   const want = pfNorm(thread);
   const pool = (products || []).filter(p =>
     (p.category === 'coupler' || p.category === 'hose') &&
-    (!want || pfNorm(p.thread || '') === want) &&
+    (!want || pfThreadMatch(want, p.thread || '')) &&
     typeof p.max_pressure_bar === 'number' &&
     p.max_pressure_bar >= pressureBar);            // the hard safety line: ≥ entered pressure, always
   return {
@@ -143,14 +331,81 @@ function pfCouplerMatch(thread, pressureBar, products) {
   };
 }
 
-/** Cross-reference search: exact key match first, then fuzzy containment either way. */
+/** Cross-reference search: exact key match first; fuzzy needs a 4+ char key, is RANKED by how much
+ *  of the entry the query covers, and is capped at 5 (no more "R" → the whole table). */
 function pfCrossRef(query, rows) {
   const q = pfModelKey(query);
   if (!q) return [];
   const keyed = (rows || []).map(r => ({ r, key: pfModelKey(r.competitor_brand + r.competitor_model), mkey: pfModelKey(r.competitor_model) }));
   const exact = keyed.filter(x => x.key === q || x.mkey === q);
   if (exact.length) return exact.map(x => x.r);
-  return keyed.filter(x => x.key.indexOf(q) !== -1 || q.indexOf(x.mkey) !== -1).map(x => x.r);
+  if (q.length < 4) return [];
+  return keyed
+    .map(x => {
+      let score = 0;
+      if (x.key.indexOf(q) !== -1) score = q.length / x.key.length;
+      else if (x.mkey.length >= 4 && q.indexOf(x.mkey) !== -1) score = x.mkey.length / q.length;
+      return { x, score };
+    })
+    .filter(y => y.score > 0)
+    .sort((a, b) => b.score - a.score || String(a.x.mkey).localeCompare(String(b.x.mkey)))
+    .slice(0, 5)
+    .map(y => y.x.r);
+}
+
+/* ── Data health: schema + cross-file reference validation (drives the pf-admin panel). ── */
+function pfValidateData(data) {
+  const out = [];
+  const err = (file, msg) => out.push({ level: 'error', file, msg });
+  const warn = (file, msg) => out.push({ level: 'warn', file, msg });
+  const products = (data && data.products) || [];
+  const ids = {};
+  products.forEach((p, i) => {
+    const label = p && (p.id || p.name) ? (p.id || p.name) : ('row ' + (i + 1));
+    if (!p || !p.id || !p.name || !p.category) err('products.json', label + ': missing id/name/category');
+    if (p && typeof p.verified !== 'boolean') err('products.json', label + ': "verified" must be true or false');
+    if (p && p.id) { if (ids[p.id]) err('products.json', 'duplicate id ' + p.id); ids[p.id] = true; }
+    (p && p.pairs_with || []).forEach(pid => {
+      if (!products.some(x => x.id === pid)) err('products.json', label + ': pairs_with "' + pid + '" does not exist');
+    });
+    if (p && (p.category === 'coupler' || p.category === 'hose')) {
+      if (!p.thread) warn('products.json', label + ': coupler/hose without a thread');
+      if (typeof p.max_pressure_bar !== 'number') err('products.json', label + ': coupler/hose without max_pressure_bar — it can never be safety-matched');
+    }
+    if (p && p.category === 'torque-wrench' && !(typeof p.torque_min_nm === 'number' && typeof p.torque_max_nm === 'number')) {
+      warn('products.json', label + ': torque wrench without a Nm range');
+    }
+  });
+  ((data && data.torque) || []).forEach(r => {
+    const label = (r.bolt || '?') + '/' + (r.grade || '?');
+    if (r.wrench_id) {
+      const w = products.find(p => p.id === r.wrench_id);
+      if (!w) err('torque_chart.json', label + ': wrench_id "' + r.wrench_id + '" does not exist');
+      else if (r.verified === true && typeof w.torque_min_nm === 'number' &&
+               (r.torque_min_nm < w.torque_min_nm || r.torque_max_nm > w.torque_max_nm)) {
+        err('torque_chart.json', label + ': torque ' + r.torque_min_nm + '–' + r.torque_max_nm +
+            ' Nm is OUTSIDE the ' + w.name + ' range (' + w.torque_min_nm + '–' + w.torque_max_nm + ' Nm)');
+      }
+    }
+  });
+  ((data && data.crossRef) || []).forEach(r => {
+    if (!r.competitor_model) err('cross_reference.json', 'row without a competitor_model');
+    if (r.our_id && !products.some(p => p.id === r.our_id)) {
+      err('cross_reference.json', (r.competitor_model || '?') + ': our_id "' + r.our_id + '" does not exist');
+    }
+  });
+  const seenTerm = {};
+  ((data && data.synonyms) || []).forEach(g => {
+    if (!(g.terms || []).length) warn('synonyms.json', 'category "' + g.category + '" has no terms');
+    (g.terms || []).forEach(t => {
+      const k = pfNorm(t);
+      if (seenTerm[k] && seenTerm[k] !== g.category) {
+        warn('synonyms.json', '"' + t + '" appears under both "' + seenTerm[k] + '" and "' + g.category + '"');
+      }
+      seenTerm[k] = g.category;
+    });
+  });
+  return out;
 }
 
 /* ── Calculators (pure math on user inputs — no invented product dimensions) ── */
@@ -165,10 +420,16 @@ function pfOilLitres(boreMm, areaCm2, strokeMm) {
   return { areaCm2: area, litres: (area * (strokeMm / 10)) / 1000 };
 }
 
-/* ── Miss log + inquiry logbook (localStorage; the CSV is the future training dataset) ── */
+/* ── Miss log + inquiry logbook (localStorage + best-effort backend sync; CSV exportable) ── */
+
+const PF_INQ_CAP = 300;                 // device cap — the backend sheet (and the CSV) hold the history
+let pfStorageWarning = false;           // set when a localStorage write fails (quota) — surfaced in the UI
 
 function pfGetList(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return []; } }
-function pfSetList(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function pfSetList(key, v) {
+  try { localStorage.setItem(key, JSON.stringify(v)); return true; }
+  catch (e) { pfStorageWarning = true; return false; }
+}
 
 function pfLogMiss(text) {
   const l = pfGetList('pf_misses');
@@ -183,14 +444,34 @@ function pfAddInquiry(inq) {
     date: new Date().toISOString(), status: 'new', notes: ''
   }, inq);
   l.unshift(rec);
+  if (l.length > PF_INQ_CAP) l.length = PF_INQ_CAP;
   pfSetList('pf_inquiries', l);
+  pfSyncRow(rec);                                   // best-effort backend save (no-op when unavailable)
   return rec;
 }
 
 function pfUpdateInquiry(id, patch) {
   const l = pfGetList('pf_inquiries');
   const i = l.findIndex(x => x.id === id);
-  if (i !== -1) { l[i] = Object.assign({}, l[i], patch); pfSetList('pf_inquiries', l); }
+  if (i !== -1) {
+    l[i] = Object.assign({}, l[i], patch, { updatedAt: new Date().toISOString(), _synced: false });
+    pfSetList('pf_inquiries', l);
+    pfSyncRow(l[i]);
+  }
+}
+
+/** Merge device + backend inquiry lists: union by id; the newer updatedAt/date wins a conflict. */
+function pfMergeInquiries(local, remote) {
+  const byId = {};
+  const ts = r => new Date(r.updatedAt || r.date || 0).getTime() || 0;
+  (remote || []).forEach(r => { if (r && r.id) byId[r.id] = Object.assign({}, r, { _synced: true }); });
+  (local || []).forEach(l => {
+    if (!l || !l.id) return;
+    const r = byId[l.id];
+    if (!r) byId[l.id] = l;                                        // local-only → keep (will push)
+    else if (ts(l) > ts(r)) byId[l.id] = Object.assign({}, l, { _synced: false });  // local newer → re-push
+  });
+  return Object.values(byId).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 }
 
 /** Follow-up needed: still "new" and older than 3 days. */
@@ -198,13 +479,28 @@ function pfFollowUpDue(inq, nowMs) {
   return inq.status === 'new' && ((nowMs || Date.now()) - new Date(inq.date).getTime()) > 3 * 86400000;
 }
 
-/** CSV incl. the raw text the customer typed (the future training dataset). */
+/** Logbook filtering (pure — the render and the export use the SAME rows). */
+function pfFilterInquiries(rows, status, q) {
+  let out = rows || [];
+  if (status) out = out.filter(r => r.status === status);
+  const k = pfNorm(q || '');
+  if (k) out = out.filter(r => [r.client, r.industry, r.rawText, r.recommendation, r.notes].some(v => pfNorm(v).indexOf(k) !== -1));
+  return out;
+}
+
+/** CSV incl. the raw text the customer typed (the future training dataset) + the record id. */
 function pfInquiriesCsv(rows) {
   const esc = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
-  const head = ['date', 'source', 'client', 'industry', 'raw_text', 'recommendation', 'status', 'notes'];
+  const head = ['date', 'source', 'client', 'industry', 'raw_text', 'recommendation', 'status', 'notes', 'id'];
   return [head.join(',')].concat((rows || []).map(r =>
-    [r.date, r.source, r.client, r.industry, r.rawText, r.recommendation, r.status, r.notes].map(esc).join(',')
+    [r.date, r.source, r.client, r.industry, r.rawText, r.recommendation, r.status, r.notes, r.id].map(esc).join(',')
   )).join('\n');
+}
+
+/** Miss-log CSV — the synonym-growth / training dataset, finally exportable. */
+function pfMissesCsv(rows) {
+  const esc = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
+  return ['date,text'].concat((rows || []).map(r => [r.date, r.text].map(esc).join(','))).join('\n');
 }
 
 /** "Send to Hi-ESCORP" prefill links. */
@@ -217,15 +513,121 @@ function pfShareLinks(text) {
   return { wa, mail };
 }
 
+/* ── Backend logbook sync (FlowAPI PFInquiries, v96+). Best-effort: the device list always works;
+      the backend makes it shared + permanent. Degrades silently when flow-api.js / v96 is absent. ── */
+
+const pfSync = { enabled: false, checked: false, msg: '' };
+
+function pfSyncAvailable() {
+  return typeof postFlow === 'function' && typeof flowVersionAtLeast === 'function';
+}
+
+/** Fire-and-forget: push one inquiry row to the backend, mark it synced on success. */
+function pfSyncRow(rec) {
+  if (!pfSync.enabled || !pfSyncAvailable() || !rec || !rec.id) return;
+  postFlow('savePfInquiry', {
+    id: rec.id, date: rec.date, source: rec.source || '', client: rec.client || '',
+    industry: rec.industry || '', rawText: rec.rawText || '', recommendation: rec.recommendation || '',
+    status: rec.status || 'new', notes: rec.notes || ''
+  }).then(res => {
+    if (res && res.success) {
+      const l = pfGetList('pf_inquiries');
+      const i = l.findIndex(x => x.id === rec.id);
+      if (i !== -1) { l[i]._synced = true; pfSetList('pf_inquiries', l); }
+      pfSyncMeta();
+    }
+  }).catch(() => {});
+}
+
+/** On page load: check the backend version, pull the shared list, merge, push anything unsynced. */
+async function pfSyncInit() {
+  if (pfSync.checked) return;
+  pfSync.checked = true;
+  if (!pfSyncAvailable()) { pfSync.msg = 'device-only (no backend on this page)'; pfSyncMeta(); return; }
+  try {
+    if (!(await flowVersionAtLeast(96))) {
+      pfSync.msg = 'sync available after the next backend update'; pfSyncMeta(); return;
+    }
+    pfSync.enabled = true;
+    const res = await fetchFlow('getPfInquiries', {});
+    const remote = (res && res.success && res.data) || [];
+    const merged = pfMergeInquiries(pfGetList('pf_inquiries'), remote).slice(0, PF_INQ_CAP);
+    pfSetList('pf_inquiries', merged);
+    pfRenderLog();
+    merged.filter(r => !r._synced).forEach(pfSyncRow);          // push local-only / locally-newer rows
+    pfSync.msg = 'synced with the shared logbook';
+    pfSyncMeta();
+  } catch (e) { pfSync.msg = 'sync unavailable — device-only for now'; pfSyncMeta(); }
+}
+
+function pfSyncMeta() {
+  const meta = document.getElementById('pfLogMeta');
+  if (!meta) return;
+  const rows = pfGetList('pf_inquiries');
+  const pending = rows.filter(r => !r._synced).length;
+  let t = rows.length + ' inquiry(ies) on this device';
+  if (pfSync.enabled) t += pending ? ' · ' + pending + ' waiting to sync' : ' · ' + (pfSync.msg || 'synced');
+  else if (pfSync.msg) t += ' · ' + pfSync.msg;
+  meta.textContent = t;
+}
+
 /* ─────────────────────────── Page wiring (Product Finder tabs) ─────────────────────────── */
 
 const pfEsc = s => String(s === undefined || s === null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** A data failure is shown as a DATA problem with a retry — never disguised as "no product match". */
+function pfLoadErrorHtml(errors) {
+  return '<div class="cr-warn cr-sect"><h3>Product data did not load</h3>'
+    + (errors || []).map(e => '<p class="cr-rec-line">' + pfEsc(e.file) + ' — ' + pfEsc(e.message) + '</p>').join('')
+    + '<p class="cr-rec-line">Matching cannot run on missing data. Check the connection, then reload the data and press your button again.</p>'
+    + '<div class="cr-actions" style="justify-content:flex-start;margin-top:8px;">'
+    + '<button class="cr-btn" onclick="pfReloadData(this)">↻ Reload data</button></div></div>';
+}
+
+async function pfReloadData(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Reloading…'; }
+  pfData = null; pfLoading = null;
+  try {
+    const d = await pfLoadData(true);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = (d.loadErrors || []).length ? '↻ Still failing — try again' : '✓ Reloaded — press your button again';
+    }
+  } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '↻ Still failing — try again'; } }
+}
+
+/** Loads data and, when the files this feature needs are broken, renders the error card. */
+async function pfEnsureData(box, needs) {
+  try { await pfLoadData(); }
+  catch (e) {
+    if (box) { box.style.display = ''; box.innerHTML = pfLoadErrorHtml([{ file: 'data', message: e.message }]); }
+    return false;
+  }
+  const errs = (pfData.loadErrors || []).filter(e => (needs || []).includes(e.file));
+  if (errs.length) {
+    if (box) { box.style.display = ''; box.innerHTML = pfLoadErrorHtml(errs); }
+    return false;
+  }
+  return true;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   if (!document.getElementById('pfTabs')) return;      // engine-only / admin contexts also load this file
+  // Industry options come from the one PF_INDUSTRIES constant (no HTML drift)
+  const ind = document.getElementById('pfIndustry');
+  if (ind && ind.options.length <= 1) {
+    ind.innerHTML = '<option value="">— industry —</option>'
+      + PF_INDUSTRIES.map(i => '<option value="' + pfEsc(i) + '">' + pfEsc(i) + '</option>').join('');
+  }
   try {
     await pfLoadData();
+    const errBox = document.getElementById('pfDataErr');
+    if (errBox && (pfData.loadErrors || []).length) {
+      errBox.style.display = '';
+      errBox.textContent = 'Some product data failed to load: '
+        + pfData.loadErrors.map(e => e.file + ' (' + e.message + ')').join(' · ') + ' — matching on those files is paused.';
+    }
     // Autocomplete suggestions from every synonym term
     const dl = document.getElementById('pfSynList');
     if (dl) dl.innerHTML = pfData.synonyms.flatMap(g => g.terms).map(t => '<option value="' + pfEsc(t) + '"></option>').join('');
@@ -234,6 +636,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById('pfDataErr');
     if (el) { el.style.display = ''; el.textContent = 'Product data failed to load: ' + e.message; }
   }
+  pfSyncInit();                                        // best-effort backend logbook sync
 });
 
 function pfTab(name, btn) {
@@ -264,54 +667,87 @@ function pfBadge(verified) {
 
 /* ── Feature 1: RFQ mode ── */
 async function pfRfqSubmit() {
-  await pfLoadData();
+  const box = document.getElementById('pfRfqResult');
+  if (!(await pfEnsureData(box, ['products.json', 'synonyms.json']))) return;
   const text = (document.getElementById('pfItem') || {}).value || '';
   const client = (document.getElementById('pfClient') || {}).value || '';
   const industry = (document.getElementById('pfIndustry') || {}).value || '';
   const purpose = (document.getElementById('pfPurpose') || {}).value || '';
   const qty = (document.getElementById('pfQty') || {}).value || '';
-  const box = document.getElementById('pfRfqResult');
   if (!pfNorm(text)) { box.style.display = ''; box.innerHTML = '<p class="cr-hint">Type what the customer needs first.</p>'; return; }
 
   const m = pfRfqMatch(text, industry, pfData);
   box.style.display = '';
+
+  // Competitor model typed into the request → show the official crossover above everything.
+  const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
+  const xrefHtml = (m.xref && m.xref.length)
+    ? '<div class="cr-rec" style="border-left-color:#f59e0b;"><div class="cr-rec-label">Competitor model detected</div>'
+      + m.xref.map(r => '<div class="cr-rec-line">' + pfEsc(r.competitor_brand + ' ' + r.competitor_model)
+        + ' → official crossover: <b>' + pfEsc(byId[r.our_id] ? byId[r.our_id].name : r.our_id) + '</b></div>').join('')
+      + '</div>'
+    : '';
+
+  // Cylinder ask with no load: ask for the load instead of guessing a size. Nothing is logged yet.
+  if (m.needTons) {
+    box.innerHTML = xrefHtml
+      + '<div class="cr-sect"><h3>What is the load?</h3>'
+      + '<p class="cr-rec-line">This is a <b>' + pfEsc(m.category) + '</b> request, but without the load we would only be guessing a size — and we never suggest an undersized unit. Tap the load or type it into the request:</p>'
+      + '<div class="cr-actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px;">'
+      + [5, 10, 25, 55, 100, 200].map(t => '<button class="cr-btn cr-btn-sec" onclick="pfPickTons(' + t + ')">' + t + ' t</button>').join('')
+      + '</div></div>';
+    return;
+  }
+
   let recSummary;
   if (m.miss) {
     recSummary = PF_CONFIRM_MSG;
     pfLogMiss(text);
-    box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3>'
+    box.innerHTML = xrefHtml + '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3>'
       + '<p class="cr-rec-line">We could not match "' + pfEsc(text) + '" to a product family. '
-      + 'The request is logged so our engineer can follow up.</p></div>' + pfShareBtns(pfRfqShareText(text, client, industry, qty, null));
+      + 'The request is logged so our engineer can follow up.</p></div>' + pfShareBtns(pfRfqShareText(text, client, industry, qty, purpose, null));
   } else {
     recSummary = m.results.map(p => p.name).join(' | ');
-    box.innerHTML = '<p class="cr-capnote">Matched to <b>' + pfEsc(m.category) + '</b> (from "' + pfEsc(m.matchedTerm) + '"). Top options:</p>'
+    box.innerHTML = xrefHtml
+      + '<p class="cr-capnote">Matched to <b>' + pfEsc(m.category) + '</b> (from "' + pfEsc(m.matchedTerm) + '")'
+      + (m.attrs && m.attrs.tons > 0 ? ' · load ' + pfEsc(m.attrs.tons) + ' t — only sizes that COVER it are shown' : '')
+      + (m.relaxed ? ' · <span style="color:#b45309;">no exact model for every requested feature — closest options shown</span>' : '')
+      + '. Top options:</p>'
       + m.results.map(p => `
         <div class="cr-rec">
           <div class="cr-rec-label">${pfEsc(p.brand)} ${pfBadge(p.verified)}</div>
           <div class="cr-rec-series">${pfEsc(p.name)}</div>
-          <div class="cr-rec-line">${pfEsc(pfWhyFits(p, industry))}</div>
+          <div class="cr-rec-line">${pfEsc(pfWhyFits(p, industry, { attrs: m.attrs }))}</div>
           ${pfPairs(p, pfData.products).length ? '<div class="cr-rec-line"><b>Don’t forget:</b> ' + pfEsc(pfPairs(p, pfData.products).join(' · ')) + '</div>' : ''}
         </div>`).join('')
       + '<p class="cr-hint">Budgetary matches — final model confirmed by Hi-ESCORP engineer.</p>'
-      + pfShareBtns(pfRfqShareText(text, client, industry, qty, m.results));
+      + pfShareBtns(pfRfqShareText(text, client, industry, qty, purpose, m.results));
   }
   pfAddInquiry({ source: 'RFQ', client, industry, rawText: text + (purpose ? ' | purpose: ' + purpose : '') + (qty ? ' | qty: ' + qty : ''), recommendation: recSummary });
   pfRenderLog();
 }
 
-function pfRfqShareText(text, client, industry, qty, results) {
+/** Quick-pick load chip on the "what is the load?" prompt. */
+function pfPickTons(t) {
+  const item = document.getElementById('pfItem');
+  if (item) item.value = (item.value + ' ' + t + ' ton').replace(/\s+/g, ' ').trim();
+  pfRfqSubmit();
+}
+
+function pfRfqShareText(text, client, industry, qty, purpose, results) {
   return 'Hi-ESCORP Product Finder inquiry\n'
     + (client ? 'Client: ' + client + '\n' : '') + (industry ? 'Industry: ' + industry + '\n' : '')
     + 'Needs: ' + text + (qty ? ' (qty ' + qty + ')' : '') + '\n'
+    + (purpose ? 'Purpose: ' + purpose + '\n' : '')
     + (results && results.length ? 'Suggested: ' + results.map(p => p.name).join('; ') : PF_CONFIRM_MSG);
 }
 
 /* ── Feature 2: Match mode ── */
 async function pfBoltMatch() {
-  await pfLoadData();
+  const box = document.getElementById('pfBoltResult');
+  if (!(await pfEnsureData(box, ['torque_chart.json', 'products.json']))) return;
   const bolt = (document.getElementById('pfBolt') || {}).value || '';
   const grade = (document.getElementById('pfGrade') || {}).value || '';
-  const box = document.getElementById('pfBoltResult');
   box.style.display = '';
   const row = pfTorqueLookup(bolt, grade, pfData.torque);
   const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
@@ -329,41 +765,49 @@ async function pfBoltMatch() {
     const nm = row.torque_min_nm === row.torque_max_nm
       ? '≈ ' + pfEsc(row.torque_min_nm)
       : pfEsc(row.torque_min_nm) + '–' + pfEsc(row.torque_max_nm);
+    const ftlb = Math.round(row.torque_max_nm * 0.7376);
     box.innerHTML = '<div class="cr-rec"><div class="cr-rec-label">Torque ' + pfBadge(true) + '</div>'
-      + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' grade ' + pfEsc(row.grade) + ' → ' + nm + ' Nm</div>'
+      + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' grade ' + pfEsc(row.grade) + ' → ' + nm + ' Nm (≈ ' + ftlb + ' ft·lb)</div>'
       + (w ? '<div class="cr-rec-line"><b>Matching wrench:</b> ' + pfEsc(w.name) + ' ' + pfBadge(w.verified) + '</div>' : '')
       + (row.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
-      + '</div>';
+      + '</div>'
+      + pfShareBtns('Bolt torque: ' + row.bolt + ' grade ' + row.grade + ' → ' + row.torque_max_nm + ' Nm'
+        + (w ? '\nWrench: ' + w.name : ''));
   }
   pfAddInquiry({ source: 'Match-bolt', client: '', industry: '', rawText: bolt + ' grade ' + grade, recommendation: row ? (row.verified ? 'torque row' : 'unverified row — confirmation') : PF_CONFIRM_MSG });
 }
 
 async function pfHoseMatch() {
-  await pfLoadData();
+  const box = document.getElementById('pfHoseResult');
+  if (!(await pfEnsureData(box, ['products.json']))) return;
   const thread = (document.getElementById('pfThread') || {}).value || '';
   const pressure = parseFloat((document.getElementById('pfPressure') || {}).value) || 0;
   const unit = (document.getElementById('pfPressureUnit') || {}).value || 'bar';
-  const bar = unit === 'psi' ? pfPsiToBar(pressure) : pressure;
-  const box = document.getElementById('pfHoseResult');
+  const bar = unit === 'psi' ? pfPsiToBar(pressure) : unit === 'mpa' ? pfMpaToBar(pressure) : pressure;
   box.style.display = '';
   if (!(bar > 0)) { box.innerHTML = '<p class="cr-hint">Enter the working pressure first — the match must never be rated below it.</p>'; return; }
   const r = pfCouplerMatch(thread, bar, pfData.products);
-  let html = '<p class="cr-capnote">Working pressure ' + pressure + ' ' + pfEsc(unit) + (unit === 'psi' ? ' (≈ ' + bar.toFixed(0) + ' bar)' : '') + ' — only items rated <b>at or above</b> this are ever shown.</p>';
+  let html = '<p class="cr-capnote">Working pressure ' + pressure + ' ' + pfEsc(unit) + (unit !== 'bar' ? ' (≈ ' + bar.toFixed(0) + ' bar)' : '') + ' — only items rated <b>at or above</b> this are ever shown.</p>';
   if (r.matches.length) {
     html += r.matches.map(p => '<div class="cr-rec"><div class="cr-rec-label">' + pfEsc(p.brand) + ' ' + pfBadge(true) + '</div>'
       + '<div class="cr-rec-series">' + pfEsc(p.name) + '</div>'
-      + '<div class="cr-rec-line">Thread ' + pfEsc(p.thread || '—') + ' · rated ' + pfEsc(p.max_pressure_bar) + ' bar ≥ your ' + bar.toFixed(0) + ' bar.</div></div>').join('');
+      + '<div class="cr-rec-line">Thread ' + pfEsc(p.thread || '—') + ' · rated ' + pfEsc(p.max_pressure_bar) + ' bar ≥ your ' + bar.toFixed(0) + ' bar.</div>'
+      + (p.source ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">Spec source: ' + pfEsc(p.source) + '</div>' : '')
+      + '</div>').join('')
+      + pfShareBtns('Coupler/hose for thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + ':\n'
+        + r.matches.map(p => p.name + ' (rated ' + p.max_pressure_bar + ' bar)').join('\n'));
   } else {
     pfLogMiss('coupler: thread ' + thread + ' @ ' + bar.toFixed(0) + ' bar');
     html += '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">No <b>verified</b> coupler in our data covers this thread + pressure. Logged for the engineer.'
-      + (r.samples.length ? ' (Sample rows exist but sample pressure ratings are never used for safety matches.)' : '') + '</p></div>';
+      + (r.samples.length ? ' (Sample rows exist but sample pressure ratings are never used for safety matches.)' : '') + '</p></div>'
+      + pfShareBtns('Coupler/hose needed: thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + '\n' + PF_CONFIRM_MSG);
   }
   box.innerHTML = html;
   pfAddInquiry({ source: 'Match-hose', client: '', industry: '', rawText: 'thread ' + thread + ' @ ' + pressure + ' ' + unit, recommendation: r.matches.length ? r.matches.map(p => p.name).join('; ') : PF_CONFIRM_MSG });
 }
 
 async function pfCylMatch() {
-  await pfLoadData();
+  try { await pfLoadData(); } catch (e) {}             // engine-only — works even if data files fail
   const tons = parseFloat((document.getElementById('pfCylTons') || {}).value) || 0;
   const acting = (document.getElementById('pfCylActing') || {}).value || 'single';
   const power = (document.getElementById('pfCylPower') || {}).value || '';
@@ -381,15 +825,16 @@ async function pfCylMatch() {
 
 /* ── Feature 4: cross-reference ── */
 async function pfXrefSearch() {
-  await pfLoadData();
-  const q = (document.getElementById('pfXrefQ') || {}).value || '';
   const box = document.getElementById('pfXrefResult');
+  if (!(await pfEnsureData(box, ['cross_reference.json', 'products.json']))) return;
+  const q = (document.getElementById('pfXrefQ') || {}).value || '';
   box.style.display = '';
   const rows = pfCrossRef(q, pfData.crossRef);
   const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
   if (!rows.length) {
     pfLogMiss('xref: ' + q);
-    box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">"' + pfEsc(q) + '" is not in our cross-reference yet. Logged so we can add it.</p></div>';
+    box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">"' + pfEsc(q) + '" is not in our cross-reference yet. Logged so we can add it.</p></div>'
+      + pfShareBtns('Cross-reference request: ' + q + '\n' + PF_CONFIRM_MSG);
     return;
   }
   box.innerHTML = rows.map(r => {
@@ -399,7 +844,9 @@ async function pfXrefSearch() {
       + (r.note ? '<div class="cr-rec-line">' + pfEsc(r.note) + '</div>' : '')
       + '<div class="cr-actions" style="justify-content:flex-start;margin-top:8px;">'
       + '<button class="cr-btn cr-btn-sec" onclick="pfQuoteFromXref(' + pfEsc(JSON.stringify(ours ? ours.name : r.our_id)).replace(/"/g, '&quot;') + ')">Request quote</button></div></div>';
-  }).join('');
+  }).join('')
+    + pfShareBtns('Cross-reference: ' + q + '\n'
+      + rows.map(r => r.competitor_brand + ' ' + r.competitor_model + ' → ' + (byId[r.our_id] ? byId[r.our_id].name : r.our_id)).join('\n'));
 }
 
 function pfQuoteFromXref(name) {
@@ -455,14 +902,18 @@ function pfRenderLog() {
   const box = document.getElementById('pfLogBody');
   if (!box) return;
   const status = (document.getElementById('pfLogStatus') || {}).value || '';
-  const q = pfNorm((document.getElementById('pfLogSearch') || {}).value || '');
-  let rows = pfGetList('pf_inquiries');
-  if (status) rows = rows.filter(r => r.status === status);
-  if (q) rows = rows.filter(r => [r.client, r.industry, r.rawText, r.recommendation, r.notes].some(v => pfNorm(v).indexOf(q) !== -1));
-  const meta = document.getElementById('pfLogMeta');
-  if (meta) meta.textContent = rows.length + ' inquiry(ies) on this device';
-  if (!rows.length) { box.innerHTML = '<p class="cr-hint">No inquiries yet — every RFQ / Match / Cross-Ref submission is saved here automatically.</p>'; return; }
-  box.innerHTML = rows.map(r => `
+  const q = (document.getElementById('pfLogSearch') || {}).value || '';
+  const all = pfGetList('pf_inquiries');
+  const rows = pfFilterInquiries(all, status, q);
+  pfSyncMeta();
+  let warn = '';
+  if (pfStorageWarning) {
+    warn = '<div class="cr-warn cr-sect"><p class="cr-rec-line">⚠ Could not save on this device — storage is full. Export the CSV now so nothing is lost.</p></div>';
+  } else if (all.length >= PF_INQ_CAP - 30) {
+    warn = '<div class="cr-warn cr-sect"><p class="cr-rec-line">⚠ This device keeps only the latest ' + PF_INQ_CAP + ' inquiries (' + all.length + ' stored) — export the CSV to keep the full history.</p></div>';
+  }
+  if (!rows.length) { box.innerHTML = warn + '<p class="cr-hint">No inquiries yet — every RFQ / Match / Cross-Ref submission is saved here automatically.</p>'; return; }
+  box.innerHTML = warn + rows.map(r => `
     <div class="cr-rec" style="border-left-color:${r.status === 'won' ? '#16a34a' : r.status === 'lost' ? '#dc2626' : '#4f46e5'};">
       <div class="cr-rec-label">${pfEsc(String(r.date).slice(0, 10))} · ${pfEsc(r.source)}
         ${pfFollowUpDue(r) ? '<span class="pf-badge pf-follow">follow up!</span>' : ''}</div>
@@ -480,12 +931,19 @@ function pfRenderLog() {
     </div>`).join('');
 }
 
-function pfExportLog() {
-  const csv = pfInquiriesCsv(pfGetList('pf_inquiries'));
+function pfDownloadCsv(csv, name) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'product-finder-inquiries-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Exports what the Logbook currently SHOWS (the active status filter + search). */
+function pfExportLog() {
+  const status = (document.getElementById('pfLogStatus') || {}).value || '';
+  const q = (document.getElementById('pfLogSearch') || {}).value || '';
+  const rows = pfFilterInquiries(pfGetList('pf_inquiries'), status, q);
+  pfDownloadCsv(pfInquiriesCsv(rows), 'product-finder-inquiries-' + new Date().toISOString().slice(0, 10) + '.csv');
 }

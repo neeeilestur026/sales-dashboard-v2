@@ -109,11 +109,8 @@
             <datalist id="pfSynList"></datalist></div>
           <div class="cr-field"><label>Company</label><input type="text" id="pfClient" placeholder="customer name"></div>
           <div class="cr-field"><label>Industry</label>
-            <select id="pfIndustry"><option value="">—</option>
-              <option value="cement">Cement</option><option value="mining">Mining</option>
-              <option value="power">Power generation</option><option value="oil-gas">Oil &amp; Gas</option>
-              <option value="semiconductor">Semiconductor</option><option value="shipbuilding">Shipbuilding</option>
-            </select></div>
+            <select id="pfIndustry"><option value="">—</option></select>
+            <!-- options come from PF_INDUSTRIES in product-finder.js (one source, no drift) --></div>
           <div class="cr-field"><label>Purpose / use (optional)</label><input type="text" id="pfPurpose"></div>
           <div class="cr-field"><label>Quantity (optional)</label><input type="number" min="1" id="pfQty"></div>
         </div>
@@ -133,11 +130,10 @@
         </div>
         <div class="pf-mpane" id="mpane-bolt">
           <div class="cr-grid" style="margin-bottom:12px;">
-            <div class="cr-field"><label>Bolt size</label>
-              <select id="pfBolt"><option>M16</option><option>M20</option><option>M24</option><option>M30</option><option>M36</option>
-                <option>1/2 in</option><option>3/4 in</option><option>1 in</option><option>1-1/4 in</option></select></div>
+            <div class="cr-field"><label>Bolt size (metric coarse)</label>
+              <select id="pfBolt"><option>M12</option><option selected>M16</option><option>M20</option><option>M24</option><option>M30</option><option>M36</option></select></div>
             <div class="cr-field"><label>Grade</label>
-              <select id="pfGrade"><option>8.8</option><option>10.9</option><option>12.9</option><option>A325</option></select></div>
+              <select id="pfGrade"><option>8.8</option><option>10.9</option><option>12.9</option></select></div>
           </div>
           <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfBoltMatch()">Find torque + wrench</button></div>
           <div id="pfBoltResult" style="display:none;margin-top:10px;"></div>
@@ -149,7 +145,7 @@
             <div class="cr-field"><label>Working pressure</label>
               <div class="cr-unit">
                 <input type="number" step="any" min="0" id="pfPressure" placeholder="e.g. 700">
-                <select id="pfPressureUnit"><option value="bar">bar</option><option value="psi">psi</option></select>
+                <select id="pfPressureUnit"><option value="bar">bar</option><option value="psi">psi</option><option value="mpa">MPa</option></select>
               </div>
               <div class="cr-hint">A match is never rated below this pressure.</div></div>
           </div>
@@ -349,6 +345,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
   <script src="js/cylinder-recommender.js"></script>
   <script src="js/product-finder.js"></script>
 </body>
