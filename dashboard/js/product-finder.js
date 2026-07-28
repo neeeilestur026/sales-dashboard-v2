@@ -28,7 +28,12 @@ async function pfFetchFile(file) {
   const ov = pfOverride(file);
   if (ov) return ov;
   const res = await fetch('/data/' + file, { cache: 'no-cache' });
-  if (!res.ok) throw new Error(file + ' failed to load (' + res.status + ')');
+  if (!res.ok) {
+    // 404 almost always means the SERVER is not serving /data — not that the file is missing.
+    throw new Error(res.status === 404
+      ? file + ' is not being served (404). The app needs a restart, or this deployment is older than the Product Finder.'
+      : file + ' failed to load (' + res.status + ')');
+  }
   return res.json();
 }
 
