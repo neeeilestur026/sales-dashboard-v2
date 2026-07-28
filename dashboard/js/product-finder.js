@@ -326,9 +326,13 @@ async function pfBoltMatch() {
       + 'Torque values are safety-critical, so the engineer must confirm before use.</p></div>';
   } else {
     const w = byId[row.wrench_id];
+    const nm = row.torque_min_nm === row.torque_max_nm
+      ? '≈ ' + pfEsc(row.torque_min_nm)
+      : pfEsc(row.torque_min_nm) + '–' + pfEsc(row.torque_max_nm);
     box.innerHTML = '<div class="cr-rec"><div class="cr-rec-label">Torque ' + pfBadge(true) + '</div>'
-      + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' grade ' + pfEsc(row.grade) + ' → ' + pfEsc(row.torque_min_nm) + '–' + pfEsc(row.torque_max_nm) + ' Nm</div>'
+      + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' grade ' + pfEsc(row.grade) + ' → ' + nm + ' Nm</div>'
       + (w ? '<div class="cr-rec-line"><b>Matching wrench:</b> ' + pfEsc(w.name) + ' ' + pfBadge(w.verified) + '</div>' : '')
+      + (row.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
       + '</div>';
   }
   pfAddInquiry({ source: 'Match-bolt', client: '', industry: '', rawText: bolt + ' grade ' + grade, recommendation: row ? (row.verified ? 'torque row' : 'unverified row — confirmation') : PF_CONFIRM_MSG });

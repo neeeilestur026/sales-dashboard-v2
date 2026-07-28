@@ -9,7 +9,12 @@
     "700 bar",
     "10000 psi",
     "10k psi",
-    "high pressure"
+    "high pressure",
+    "1000 bar",
+    "1500 bar",
+    "15000 psi",
+    "100 mpa",
+    "700bar"
    ]
   },
   {
@@ -20,7 +25,15 @@
     "cylinder",
     "lifter",
     "lifting jack",
-    "hydraulic jack"
+    "hydraulic jack",
+    "hydraulic cylinder",
+    "single acting cylinder",
+    "double acting cylinder",
+    "hollow ram",
+    "lock nut cylinder",
+    "pancake cylinder",
+    "low height cylinder",
+    "enerpac"
    ]
   },
   {
@@ -31,7 +44,12 @@
     "quick connect",
     "qc",
     "fitting",
-    "quick-connect"
+    "quick-connect",
+    "quick coupling",
+    "npt coupler",
+    "nipple",
+    "hydraulic fitting",
+    "cejn"
    ]
   },
   {
@@ -42,7 +60,15 @@
     "pneumatic wrench",
     "torque wrench",
     "torque tool",
-    "bolting"
+    "bolting",
+    "torque machine",
+    "nut runner",
+    "rad gun",
+    "pneumatic torque wrench",
+    "battery torque wrench",
+    "torque multiplier",
+    "bolt tightening",
+    "rad"
    ]
   },
   {
@@ -54,14 +80,24 @@
     "pump unit",
     "pump",
     "hand pump",
-    "electric pump"
+    "electric pump",
+    "hydraulic pump",
+    "air pump",
+    "air hydraulic pump",
+    "battery pump",
+    "two speed pump",
+    "foot pump"
    ]
   },
   {
    "category": "hose",
    "terms": [
     "hose",
-    "hydraulic hose"
+    "hydraulic hose",
+    "uhp hose",
+    "high pressure hose",
+    "whip hose",
+    "hose assembly"
    ]
   }
  ]

@@ -1,5 +1,5 @@
 {
- "_note": "Edit this file to update the catalog. verified:false rows are SAMPLE data and are never shown as safe answers.",
+ "_note": "Power Team entries generated from the verified domain rules; CEJN and RAD entries carry manufacturer-published figures (see each row's source). Update via pf-admin or by editing this file.",
  "products": [
   {
    "id": "pt-c-5",
@@ -3667,13 +3667,15 @@
    "id": "cejn-115-coupler",
    "brand": "CEJN",
    "series": "115",
-   "name": "CEJN Series 115 Coupler (SAMPLE)",
+   "name": "CEJN Series 115 Ultra High-Pressure Coupling (100 MPa)",
    "category": "coupler",
    "subtype": "quick-connect",
    "thread": "3/8-18 NPT",
-   "max_pressure_bar": 800,
+   "max_pressure_bar": 1000,
    "features": [
-    "quick connect"
+    "quick connect",
+    "ultra high pressure",
+    "1000 bar working pressure"
    ],
    "industries": [
     "cement",
@@ -3683,20 +3685,24 @@
     "semiconductor",
     "shipbuilding"
    ],
-   "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "pairs_with": [
+    "cejn-115-nipple",
+    "cejn-hose-38"
+   ],
+   "verified": true,
+   "source": "cejn.com \u2014 Series 115, working pressure 100 MPa (1000 bar)"
   },
   {
-   "id": "cejn-116-uhp",
+   "id": "cejn-115-nipple",
    "brand": "CEJN",
-   "series": "116",
-   "name": "CEJN UHP Coupler 700 bar class (SAMPLE)",
+   "series": "115",
+   "name": "CEJN Series 115 Nipple (100 MPa)",
    "category": "coupler",
-   "subtype": "quick-connect-uhp",
+   "subtype": "nipple",
    "thread": "3/8-18 NPT",
-   "max_pressure_bar": 1500,
+   "max_pressure_bar": 1000,
    "features": [
+    "quick connect",
     "ultra high pressure"
    ],
    "industries": [
@@ -3707,21 +3713,51 @@
     "semiconductor",
     "shipbuilding"
    ],
-   "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "pairs_with": [
+    "cejn-115-coupler"
+   ],
+   "verified": true,
+   "source": "cejn.com \u2014 Series 115, working pressure 100 MPa (1000 bar)"
+  },
+  {
+   "id": "cejn-116-uhp",
+   "brand": "CEJN",
+   "series": "116",
+   "name": "CEJN Series 116 Ultra High-Pressure Coupling (150 MPa)",
+   "category": "coupler",
+   "subtype": "quick-connect-uhp",
+   "thread": "3/8-18 NPT",
+   "max_pressure_bar": 1500,
+   "features": [
+    "ultra high pressure",
+    "1500 bar working pressure"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "cejn-hose-38"
+   ],
+   "verified": true,
+   "source": "cejn.com / tom-parker.co.uk \u2014 Series 116, working pressure 150 MPa (1500 bar)"
   },
   {
    "id": "cejn-hose-38",
    "brand": "CEJN",
-   "series": "Hose",
-   "name": "CEJN High-Pressure Hose 3/8 (SAMPLE)",
+   "series": "UHP Hose",
+   "name": "CEJN Ultra High-Pressure Hose 3/8 (100 MPa class)",
    "category": "hose",
    "subtype": "high-pressure",
    "thread": "3/8-18 NPT",
    "max_pressure_bar": 1000,
    "features": [
-    "high pressure hose"
+    "high pressure hose",
+    "1000 bar working pressure"
    ],
    "industries": [
     "cement",
@@ -3731,45 +3767,24 @@
     "semiconductor",
     "shipbuilding"
    ],
-   "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
-  },
-  {
-   "id": "cejn-nipple-38",
-   "brand": "CEJN",
-   "series": "115",
-   "name": "CEJN Series 115 Nipple (SAMPLE)",
-   "category": "coupler",
-   "subtype": "nipple",
-   "thread": "1/4-18 NPT",
-   "max_pressure_bar": 800,
-   "features": [
-    "quick connect"
+   "pairs_with": [
+    "cejn-115-coupler"
    ],
-   "industries": [
-    "cement",
-    "mining",
-    "power",
-    "oil-gas",
-    "semiconductor",
-    "shipbuilding"
-   ],
-   "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "verified": true,
+   "source": "cejn.com \u2014 UHP hose range, 100 MPa working-pressure class (range spans 100\u2013400 MPa)"
   },
   {
    "id": "rad-1500nm",
    "brand": "RAD Torque",
-   "series": "Pneumatic",
-   "name": "RAD Pneumatic Wrench ~1500 Nm (SAMPLE)",
+   "series": "10GX",
+   "name": "RAD 10GX Pneumatic Torque Wrench (270\u20131,350 Nm)",
    "category": "torque-wrench",
    "subtype": "pneumatic",
-   "torque_min_nm": 200,
-   "torque_max_nm": 1500,
+   "torque_min_nm": 270,
+   "torque_max_nm": 1350,
    "features": [
-    "pneumatic"
+    "pneumatic",
+    "continuous rotation"
    ],
    "industries": [
     "cement",
@@ -3780,20 +3795,21 @@
     "shipbuilding"
    ],
    "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "verified": true,
+   "source": "radtorque.com \u2014 10GX, 200\u20131,000 ft\u00b7lb (\u2248270\u20131,350 Nm)"
   },
   {
    "id": "rad-3000nm",
    "brand": "RAD Torque",
-   "series": "Pneumatic",
-   "name": "RAD Pneumatic Wrench ~3000 Nm (SAMPLE)",
+   "series": "25GX",
+   "name": "RAD 25GX Pneumatic Torque Wrench (680\u20133,390 Nm)",
    "category": "torque-wrench",
    "subtype": "pneumatic",
-   "torque_min_nm": 1000,
-   "torque_max_nm": 3000,
+   "torque_min_nm": 680,
+   "torque_max_nm": 3390,
    "features": [
-    "pneumatic"
+    "pneumatic",
+    "continuous rotation"
    ],
    "industries": [
     "cement",
@@ -3804,21 +3820,21 @@
     "shipbuilding"
    ],
    "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "verified": true,
+   "source": "radtorque.com \u2014 25GX, 500\u20132,500 ft\u00b7lb (\u2248680\u20133,390 Nm)"
   },
   {
-   "id": "rad-b1350",
+   "id": "rad-4600nm",
    "brand": "RAD Torque",
-   "series": "Battery",
-   "name": "RAD Battery Wrench ~1350 Nm (SAMPLE)",
+   "series": "34GX",
+   "name": "RAD 34GX Pneumatic Torque Wrench (1,360\u20134,610 Nm)",
    "category": "torque-wrench",
-   "subtype": "battery",
-   "torque_min_nm": 100,
-   "torque_max_nm": 1350,
+   "subtype": "pneumatic",
+   "torque_min_nm": 1360,
+   "torque_max_nm": 4610,
    "features": [
-    "battery",
-    "cordless"
+    "pneumatic",
+    "continuous rotation"
    ],
    "industries": [
     "cement",
@@ -3829,20 +3845,21 @@
     "shipbuilding"
    ],
    "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "verified": true,
+   "source": "radtorque.com \u2014 34GX, 1,000\u20133,400 ft\u00b7lb (\u22481,360\u20134,610 Nm)"
   },
   {
    "id": "rad-6000nm",
    "brand": "RAD Torque",
-   "series": "Pneumatic",
-   "name": "RAD Pneumatic Wrench ~6000 Nm (SAMPLE)",
+   "series": "RAD 50",
+   "name": "RAD 50 Pneumatic Torque Wrench (2,030\u20136,780 Nm)",
    "category": "torque-wrench",
    "subtype": "pneumatic",
-   "torque_min_nm": 2000,
-   "torque_max_nm": 6000,
+   "torque_min_nm": 2030,
+   "torque_max_nm": 6780,
    "features": [
-    "pneumatic"
+    "pneumatic",
+    "continuous rotation"
    ],
    "industries": [
     "cement",
@@ -3853,8 +3870,34 @@
     "shipbuilding"
    ],
    "pairs_with": [],
-   "verified": false,
-   "note": "sample data \u2014 replace with catalog data"
+   "verified": true,
+   "source": "radtorque.com \u2014 RAD 50, 1,500\u20135,000 ft\u00b7lb (\u22482,030\u20136,780 Nm)"
+  },
+  {
+   "id": "rad-b1350",
+   "brand": "RAD Torque",
+   "series": "B-RAD Select",
+   "name": "RAD B-RAD Select 1400 Battery Torque Wrench (270\u20131,400 Nm)",
+   "category": "torque-wrench",
+   "subtype": "battery",
+   "torque_min_nm": 270,
+   "torque_max_nm": 1400,
+   "features": [
+    "battery",
+    "cordless",
+    "digital torque select"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [],
+   "verified": true,
+   "source": "radtorque.com \u2014 B-RAD Select 1000/1400-M, 270\u20131,400 Nm"
   }
  ]
 }

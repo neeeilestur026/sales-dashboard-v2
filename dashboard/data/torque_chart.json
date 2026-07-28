@@ -1,53 +1,95 @@
 {
- "_note": "Bolt size + grade -> torque range -> RAD wrench. ALL rows UNVERIFIED until RAD catalog data is supplied.",
+ "_note": "Reference tightening torques for metric coarse bolts (source: fractory.com metric bolt torque chart \u2014 lightly oiled threads, 85% proof load). Rows without a published reference stay unverified and always take the engineer-confirmation path. wrench_id is null when the torque falls below our smallest wrench's minimum.",
  "rows": [
+  {
+   "bolt": "M12",
+   "grade": "8.8",
+   "torque_min_nm": 99.8,
+   "torque_max_nm": 99.8,
+   "wrench_id": null,
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
+   "bolt": "M12",
+   "grade": "10.9",
+   "torque_min_nm": 143,
+   "torque_max_nm": 143,
+   "wrench_id": null,
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
   {
    "bolt": "M16",
    "grade": "8.8",
-   "torque_min_nm": 190,
-   "torque_max_nm": 210,
+   "torque_min_nm": 248,
+   "torque_max_nm": 248,
+   "wrench_id": null,
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
+   "bolt": "M16",
+   "grade": "10.9",
+   "torque_min_nm": 354,
+   "torque_max_nm": 354,
    "wrench_id": "rad-1500nm",
-   "verified": false
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
    "bolt": "M20",
    "grade": "8.8",
-   "torque_min_nm": 370,
-   "torque_max_nm": 410,
+   "torque_min_nm": 500,
+   "torque_max_nm": 500,
    "wrench_id": "rad-1500nm",
-   "verified": false
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+  },
+  {
+   "bolt": "M20",
+   "grade": "10.9",
+   "torque_min_nm": 690,
+   "torque_max_nm": 690,
+   "wrench_id": "rad-1500nm",
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
    "bolt": "M24",
    "grade": "8.8",
-   "torque_min_nm": 640,
-   "torque_max_nm": 710,
+   "torque_min_nm": 865,
+   "torque_max_nm": 865,
    "wrench_id": "rad-1500nm",
-   "verified": false
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
    "bolt": "M24",
    "grade": "10.9",
-   "torque_min_nm": 900,
-   "torque_max_nm": 1000,
+   "torque_min_nm": 1195,
+   "torque_max_nm": 1195,
    "wrench_id": "rad-1500nm",
-   "verified": false
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
    "bolt": "M30",
    "grade": "8.8",
-   "torque_min_nm": 1260,
-   "torque_max_nm": 1400,
+   "torque_min_nm": 1719,
+   "torque_max_nm": 1719,
    "wrench_id": "rad-3000nm",
-   "verified": false
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
    "bolt": "M30",
    "grade": "10.9",
-   "torque_min_nm": 1790,
-   "torque_max_nm": 1980,
+   "torque_min_nm": 2377,
+   "torque_max_nm": 2377,
    "wrench_id": "rad-3000nm",
-   "verified": false
+   "verified": true,
+   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
   },
   {
    "bolt": "M36",
@@ -55,15 +97,17 @@
    "torque_min_nm": 2190,
    "torque_max_nm": 2430,
    "wrench_id": "rad-3000nm",
-   "verified": false
+   "verified": false,
+   "note": "No published reference in our chart for M36 \u2014 engineer confirms."
   },
   {
    "bolt": "M36",
    "grade": "10.9",
    "torque_min_nm": 3100,
    "torque_max_nm": 3450,
-   "wrench_id": "rad-6000nm",
-   "verified": false
+   "wrench_id": "rad-4600nm",
+   "verified": false,
+   "note": "No published reference in our chart for M36 \u2014 engineer confirms."
   }
  ]
 }
