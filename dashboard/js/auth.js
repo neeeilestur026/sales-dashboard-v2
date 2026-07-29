@@ -417,7 +417,6 @@ function renderNavbar(activePage) {
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
-          <a href="flow-quote-configurator.html" class="${activePage === 'flow-quote-configurator' ? 'active' : ''}">New Quotation (Configurator)</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="admin-import-quotation.html" class="${activePage === 'admin-import-quotation' ? 'active' : ''}">Import Quotation</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
@@ -596,10 +595,8 @@ function renderNavbar(activePage) {
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-performance'].includes(activePage);
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
-    // A172: the Quote Configurator is on director first as a sandbox. Director-created quotations land
-    // Approved on the spot, so it can be exercised end to end without pulling admin and management
-    // into test approvals. flow-quotations.html already admits director but had no way in.
-    const dirQuoteActive = ['flow-quote-configurator', 'flow-quotations'].includes(activePage);
+    // A175: one quotation page — the builder and the history live together on flow-quotations.html.
+    const dirQuoteActive = ['flow-quotations'].includes(activePage);
     navLinks = `
       <a href="director-home.html" class="${activePage === 'director-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -616,7 +613,6 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
-          <a href="flow-quote-configurator.html" class="${activePage === 'flow-quote-configurator' ? 'active' : ''}">New Quotation (Configurator)</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">All Quotations</a>
         </div>
       </div>
@@ -737,7 +733,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-quote-configurator', 'flow-inventory'].includes(activePage);
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory'].includes(activePage);
     const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -755,7 +751,6 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">Product Finder</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
-          <a href="flow-quote-configurator.html" class="${activePage === 'flow-quote-configurator' ? 'active' : ''}">New Quotation</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>

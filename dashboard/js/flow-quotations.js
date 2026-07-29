@@ -5,12 +5,20 @@ let qHasSO = {};   // A145: quotationNo → true when a sales order references i
 let qSession = null;
 
 let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
-let qReturnedPRs = [];      // sales: PRs Returned to Sales, loadable into a quotation
-let qFromPr = '';           // when set, Save creates the quotation from this PR (carries mgmt final prices)
 let qAdmin = false;         // admin: free-typed item rows (incl. new items) auto-added to inventory on save
 let qCanClose = false;      // A152: the Close/Reopen actions need FlowAPI v91
 const Q_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];   // A152 soft-close outcomes
 
+/* A175 — one quotation page. The Quote Configurator (flow-quote-configurator.js) is the CREATE half
+ * above; everything below — the list, review, approval, close/reopen — is this file's.
+ *
+ * The boot order is deliberate and load-bearing. The old boot set `#date` and called `addRow()`
+ * BEFORE loadQuotations(), unguarded, inside an async handler: the moment the create form went away
+ * those lines threw, the throw aborted the rest of the handler, and the history sat on its "Loading…"
+ * spinner forever with all four KPIs blank — a dead list caused entirely by the create half. So the
+ * history loads FIRST, and every create-side call sits behind its own try/catch. Nothing in the
+ * builder can stop the list from rendering.
+ */
 document.addEventListener('DOMContentLoaded', async () => {
   qSession = requireQuotationAccess();
   if (!qSession) return;
@@ -19,312 +27,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-quotations');
   // Only admin/accounting can open the rest of the flow — show the sub-nav to them.
   if (qSession.role === 'admin' || qSession.role === 'accounting') renderFlowNav('flow-quotations.html');
-  // Admin: switch the item table to free-typed rows (Item No · Description · …) so brand-new items
-  // can be quoted directly and auto-added to inventory on save (no PR/management pricing needed).
-  if (qAdmin) {
-    const head = document.getElementById('itemHead');
-    if (head) head.innerHTML = '<tr><th style="width:18%;">Item No</th><th style="width:30%;">Description</th>' +
-      '<th class="num" style="width:12%;">Quoted Qty</th><th class="num" style="width:16%;">Quoted Price</th>' +
-      '<th class="num" style="width:16%;">Line Total</th><th></th></tr>';
-    const nib = document.getElementById('newItemBtn'); if (nib) nib.style.display = 'none';
-  }
-  document.getElementById('date').value = flowToday();
-  await loadInventory();
-  addRow();
-  await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
-  // Sales: offer to load a Returned-to-Sales PR (with its management final prices) into the form.
-  if (qSession.role === 'sales') await loadReturnedPRs();
+
   const params = new URLSearchParams(location.search);
+
+  // ── the history, first and unconditionally ────────────────────────────────
+  try {
+    await loadQuotations();
+    if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  } catch (e) {
+    const c = document.getElementById('listContainer');
+    if (c) c.innerHTML = `<p style="color:#ef4444;">Could not load quotations — ${flowEsc(e.message || 'unknown error')}</p>`;
+  }
   // Deep-link: ?review=<quotationNo> opens the review modal directly (e.g. from the admin dashboard).
   const reviewNo = params.get('review');
-  if (reviewNo) openReviewModal(reviewNo);
-  // Deep-link: ?fromPR=<prNo> pre-loads that returned PR's final-priced items for review + create.
-  const fromPr = params.get('fromPR');
-  if (fromPr) loadFromPR(fromPr);
-});
+  if (reviewNo) { try { openReviewModal(reviewNo); } catch (e) { /* the list still stands */ } }
 
-// ─── Load a Returned-to-Sales Pricing Request into the quotation form ─────────────
-async function loadReturnedPRs() {
-  const wrap = document.getElementById('fromPrWrap'), sel = document.getElementById('fromPrSelect');
-  if (!wrap || !sel) return;
+  // ── the create half — guarded, so a fault here costs the builder, not the list ──
   try {
-    const r = await fetchFlow('getPricingRequests', { requestedBy: qSession.name });
-    qReturnedPRs = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales');
-  } catch (e) { qReturnedPRs = []; }
-  sel.innerHTML = '<option value="">— load a returned Purchase Request —</option>' +
-    qReturnedPRs.map(p => `<option value="${flowEsc(p.prNo)}">${flowEsc(p.prNo)} — ${flowEsc(p.customer || '')}</option>`).join('');
-  wrap.style.display = qReturnedPRs.length ? 'block' : 'none';
-}
-
-// Pre-fill the form from a returned PR: customer + a row per included item priced at its Final Price.
-// Save then routes through createQuotationFromPR (uses the PR's stored management finals + flips it to Quoted).
-async function loadFromPR(prNo) {
-  let pr = qReturnedPRs.find(p => String(p.prNo) === String(prNo));
-  if (!pr) {
-    try {
-      const r = await fetchFlow('getPricingRequests', { requestedBy: qSession.name });
-      pr = ((r && r.data) || []).find(p => String(p.prNo) === String(prNo));
-    } catch (e) { /* ignore */ }
+    await loadInventory();                       // still needed by the PDF dialog's descriptions
+    if (typeof qcInit === 'function') qcInit({ session: qSession });
+    // Deep-link: ?fromPR=<prNo> opens the builder with that returned request's final-priced items.
+    const fromPr = params.get('fromPR');
+    if (fromPr && typeof qcLoadFromPR === 'function') {
+      qcToggleCreate(true);
+      await qcLoadFromPR(fromPr);
+    }
+  } catch (e) {
+    console.error('Quote builder failed to start:', e);
+    const msg = document.getElementById('qcMsg');
+    if (msg) msg.innerHTML = '<div style="margin:.5rem 0 1rem;padding:.6rem .85rem;border-radius:10px;font-size:.86rem;' +
+      'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">The quotation builder could not start — reload the page. ' +
+      'The list below is unaffected.</div>';
   }
-  if (!pr) { flowMsg('formMsg', 'Purchase Request ' + prNo + ' not found or not returned to you.', false); return; }
-  const included = (pr.items || []).filter(i => i.included);
-  document.getElementById('customer').value = pr.customer || '';
-  document.getElementById('itemRows').innerHTML = '';
-  included.forEach(addPrRow);
-  if (!included.length) addRow();
-  qFromPr = String(pr.prNo);
-  // A146: default a Subject from customer + first item description(s) when the field is empty (still
-  // editable, still required by qRequireManualFields).
-  const subjEl = document.getElementById('subjectInput');
-  if (subjEl && !subjEl.value.trim()) {
-    const firstDesc = (included[0] && (included[0].itemName || included[0].itemNo)) || '';
-    subjEl.value = firstDesc ? `${pr.customer || ''} — ${firstDesc}`.trim().replace(/^—\s*/, '') : (pr.customer || '');
-  }
-  const sel = document.getElementById('fromPrSelect'); if (sel) sel.value = qFromPr;
-  const banner = document.getElementById('fromPrBanner');
-  banner.style.display = 'block';
-  banner.innerHTML = `Loaded from <b>${flowEsc(pr.prNo)}</b> — management final prices shown below. Review, then <b>Save Quotation</b> to create it.` +
-    `<br><span style="font-weight:500;">The quotation is built server-side from the approved prices, so edits here would not be saved — the items are read-only. Create it first, then edit the Draft if something needs to change.</span>`;
-  // A158: these rows used to look editable — you could change a qty, watch the total update, save, and
-  // get the ORIGINAL qty, because the save path rebuilds the items from the PR server-side.
-  qLockPrRows();
-  document.getElementById('formTitle').textContent = 'Quotation from ' + pr.prNo;
-  recalc();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// A form row for a PR item priced at its Final Price; injects a select option for non-inventory items.
-function addPrRow(it) {
-  // addRow keys inventory rows by rowIndex and injects a raw option for non-inventory items (like PR lines).
-  addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: flowNum(it.finalPrice),
-           origItemNo: it.origItemNo || '', origItemName: it.origItemName || '' });
-}
-
-/** A158: make the loaded PR rows read-only. createQuotationFromPR rebuilds the items from the pricing
- *  request on the server, so anything typed here is discarded — better to say so than to accept edits
- *  that silently don't take. Cleared by resetForm via qUnlockPrRows. */
-function qLockPrRows() {
-  document.querySelectorAll('#itemRows input, #itemRows select').forEach(el => {
-    el.disabled = true;
-    el.title = 'Set by management on the pricing request — create the quotation, then edit the Draft.';
-  });
-  document.querySelectorAll('#itemRows .rm-btn, #itemRows button').forEach(b => { b.style.display = 'none'; });
-  const add = document.getElementById('addRowBtn'); if (add) add.style.display = 'none';
-}
-function qUnlockPrRows() {
-  const add = document.getElementById('addRowBtn'); if (add) add.style.display = '';
-}
+});
 
 async function loadInventory() {
   try { const r = await fetchFlow('getInventory'); qInventory = (r && r.data) || []; }
   catch (e) { qInventory = []; }
-  qFillDatalist();
-}
-
-// Admin: populate the item-no autocomplete from inventory.
-// A159: keyed on a UNIQUE label, not the item number — 92 items share the number 'N/A', so a
-// number-keyed datalist resolved all of them to the first match.
-let qInvByLabel = {};
-
-function qFillDatalist() {
-  const dl = document.getElementById('qInvList');
-  if (!dl || !qAdmin) return;
-  const seen = {};
-  qInvByLabel = {};
-  dl.innerHTML = qInventory.map(i => {
-    let label = `${i.itemNo} — ${i.description || ''}`.trim();
-    if (seen[label]) { seen[label]++; label += ` (${seen[label]})`; } else seen[label] = 1;
-    qInvByLabel[label] = i;
-    return `<option value="${flowEsc(label)}"></option>`;
-  }).join('');
-}
-
-// Admin free-type: an exact pick stamps the item's permanent id; editing by hand clears it.
-function onItemNoType(inp) {
-  const tr = inp.closest('tr');
-  const desc = tr.querySelector('.i-desc');
-  const typed = String(inp.value || '').trim();
-
-  const picked = qInvByLabel[typed];
-  if (picked) {
-    tr.dataset.itemId = picked.itemId || '';
-    inp.value = picked.itemNo || '';
-    if (desc) desc.value = picked.description || '';
-    return;
-  }
-  delete tr.dataset.itemId;                       // free-typed → the stamp no longer matches the box
-  const hits = qInventory.filter(i => String(i.itemNo).toLowerCase() === typed.toLowerCase());
-  if (hits.length === 1) {                        // a number only ONE product uses is unambiguous
-    tr.dataset.itemId = hits[0].itemId || '';
-    if (desc && !desc.value.trim()) desc.value = hits[0].description || '';
-  }
-}
-
-// Editing the description invalidates a stamped id.
-function onItemDescType(inp) {
-  const tr = inp.closest('tr');
-  if (tr && tr.dataset.itemId) delete tr.dataset.itemId;
-}
-
-// Option value = the item's permanent Item ID. Keying on itemNo was broken because many items share
-// itemNo "N/A" (every N/A pick resolved to the first N/A row — a phantom item); A159 moves off
-// rowIndex too, because a row number shifts the moment anyone deletes an item above it.
-function itemOptions(selectedItemId) {
-  return '<option value="">— select item —</option>' + qInventory.map(i =>
-    `<option value="${flowEsc(i.itemId || '')}"${i.itemId && String(i.itemId) === String(selectedItemId) ? ' selected' : ''}>${flowEsc(i.itemNo)} — ${flowEsc(i.description)}</option>`).join('');
-}
-// The Item ID of a saved/loaded line (for pre-selection): its stored id when it has one, else the
-// item matching BOTH number and description — which is what rescues every pre-A159 line.
-function invRowKey(item) {
-  if (!item) return '';
-  if (item.itemId) {
-    const byId = qInventory.find(i => String(i.itemId) === String(item.itemId));
-    if (byId) return String(byId.itemId);
-  }
-  const m = qInventory.find(i => String(i.itemNo) === String(item.itemNo || '') &&
-    String(i.description) === String(item.itemName || item.description || ''));
-  return m ? String(m.itemId || '') : '';
-}
-
-function addRow(item) {
-  const tb = document.getElementById('itemRows');
-  const tr = document.createElement('tr');
-  // Preserve the requested-vs-offered pairing (A86) across edits: PR-derived items carry the
-  // client's ORIGINAL code/description; stamp them on the row so collectItems round-trips them.
-  if (item && (item.origItemNo || item.origItemName)) {
-    tr.dataset.origNo = item.origItemNo || '';
-    tr.dataset.origName = item.origItemName || '';
-  }
-  if (item && item.itemId) tr.dataset.itemId = item.itemId;   // A159: keep the identity on edit/reload
-  if (qAdmin) {
-    // Free-typed row: Item No (with inventory autocomplete) · Description · Qty · Price · Line Total.
-    tr.innerHTML = `
-      <td><input type="text" class="i-no" list="qInvList" value="${item ? flowEsc(item.itemNo) : ''}" oninput="onItemNoType(this)" placeholder="Item No"></td>
-      <td><input type="text" class="i-desc" value="${item ? flowEsc(item.itemName || item.description) : ''}" placeholder="Description" oninput="onItemDescType(this)"></td>
-      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
-      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
-      <td class="num lineTotal">0.00</td>
-      <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
-  } else {
-    tr.innerHTML = `
-      <td><select onchange="onItemPick(this)">${itemOptions(invRowKey(item))}</select></td>
-      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.qty) : 0}" oninput="recalc()"></td>
-      <td class="num"><input type="number" step="any" min="0" value="${item ? flowNum(item.price) : 0}" oninput="recalc()"></td>
-      <td class="num lineTotal">0.00</td>
-      <td><button type="button" class="link-btn del-btn" onclick="this.closest('tr').remove();recalc();">✕</button></td>`;
-    // A saved/loaded item not found in inventory (e.g. a PR final-priced line or a since-deleted item):
-    // keep it as a raw option carrying its own data so collectItems preserves it instead of dropping it.
-    if (item && !invRowKey(item) && (item.itemNo || item.itemName || item.description)) {
-      const sel = tr.querySelector('select');
-      const opt = document.createElement('option');
-      opt.value = 'raw';
-      opt.dataset.no = item.itemNo || '';
-      opt.dataset.name = item.itemName || item.description || '';
-      opt.dataset.itemId = item.itemId || '';
-      opt.textContent = (item.itemNo ? item.itemNo + ' — ' : '') + (item.itemName || item.description || '');
-      opt.selected = true;
-      sel.appendChild(opt);
-    }
-  }
-  tb.appendChild(tr);
-  recalc();
-}
-
-function onItemPick(sel) { recalc(); }
-
-function recalc() {
-  let total = 0;
-  document.querySelectorAll('#itemRows tr').forEach(tr => {
-    // qty/price are the two number inputs immediately before the .lineTotal cell (layout-agnostic).
-    const nums = tr.querySelectorAll('input[type="number"]');
-    const qty = flowNum(nums[0] ? nums[0].value : 0);
-    const price = flowNum(nums[1] ? nums[1].value : 0);
-    const lt = qty * price;
-    tr.querySelector('.lineTotal').textContent = lt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    total += lt;
-  });
-  document.getElementById('grandTotal').textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function collectItems() {
-  const items = [];
-  document.querySelectorAll('#itemRows tr').forEach(tr => {
-    const nums = tr.querySelectorAll('input[type="number"]');
-    const qty = flowNum(nums[0] ? nums[0].value : 0);
-    const price = flowNum(nums[1] ? nums[1].value : 0);
-    const orig = { origItemNo: tr.dataset.origNo || '', origItemName: tr.dataset.origName || '' };
-    if (qAdmin) {
-      const itemNo = (tr.querySelector('.i-no').value || '').trim();
-      const desc = (tr.querySelector('.i-desc').value || '').trim();
-      if (!itemNo && !desc) return;                        // skip empty row
-      items.push({ itemId: tr.dataset.itemId || '', itemNo: itemNo || 'N/A', itemName: desc || itemNo || 'N/A', qty, price, ...orig });
-    } else {
-      const sel = tr.children[0].querySelector('select');
-      const key = sel.value;                                 // Item ID of the picked inventory row, or "raw"
-      if (!key) return;
-      if (key === 'raw') {                                   // non-inventory line (PR item / since-deleted)
-        const opt = sel.options[sel.selectedIndex];
-        const no = (opt && opt.dataset.no) || '';
-        const nm = (opt && opt.dataset.name) || '';
-        if (!no && !nm) return;
-        items.push({ itemId: (opt && opt.dataset.itemId) || '', itemNo: no || 'N/A', itemName: nm || no || 'N/A', qty, price, ...orig });
-        return;
-      }
-      const inv = qInventory.find(i => String(i.itemId) === String(key));
-      if (!inv) return;
-      items.push({ itemId: inv.itemId || '', itemNo: inv.itemNo, itemName: inv.description, qty, price, ...orig });
-    }
-  });
-  return items;
-}
-
-function toggleNewItem() {
-  const b = document.getElementById('newItemBox');
-  b.style.display = b.style.display === 'none' ? 'block' : 'none';
-}
-
-async function createInventoryItem() {
-  const payload = {
-    itemNo: document.getElementById('niItemNo').value.trim(),
-    description: document.getElementById('niDesc').value.trim(),
-    balance: document.getElementById('niBal').value || 0,
-    purchasePrice: document.getElementById('niPP').value || 0,
-    shippingCost: document.getElementById('niSC').value || 0,
-    currency: 'PHP',
-    type: 'Catalog'   // quotation working item — becomes Stock once it reaches a purchase order
-  };
-  if (!payload.itemNo || !payload.description) { flowMsg('niMsg', 'Item No and Description required.', false); return; }
-  try {
-    const res = await postFlow('addInventoryItem', payload);
-    if (!res.success) throw new Error(res.message);
-    flowMsg('niMsg', 'Added to inventory.', true);
-    await loadInventory();
-    document.querySelectorAll('#itemRows select').forEach(sel => {
-      const cur = sel.value; sel.innerHTML = itemOptions(cur);
-    });
-    document.getElementById('niItemNo').value = '';
-    document.getElementById('niDesc').value = '';
-  } catch (e) { flowMsg('niMsg', e.message, false); }
-}
-
-// The quotation number is the company's OWN code and the subject shows on the PDF —
-// both must be typed on every create (no auto-numbering, no auto-subject).
-function qRequireManualFields() {
-  const noEl = document.getElementById('quotationNoInput');
-  const typedNo = (noEl.value || '').trim();
-  if (!typedNo) {
-    flowMsg('formMsg', 'Quotation No is required — type your own quotation code.', false);
-    noEl.focus();
-    return null;
-  }
-  const subEl = document.getElementById('subjectInput');
-  const subject = ((subEl && subEl.value) || '').trim();
-  if (!subject) {
-    flowMsg('formMsg', 'Subject is required — type the quotation subject.', false);
-    if (subEl) subEl.focus();
-    return null;
-  }
-  return { typedNo, subject };
 }
 
 // Read a discount-% input, clamped to 0–100 (blank/invalid → 0).
@@ -332,158 +71,6 @@ function qDiscountVal(id) {
   const el = document.getElementById(id);
   const n = flowNum(el && el.value);
   return Math.max(0, Math.min(100, n || 0));
-}
-
-async function saveQuotation() {
-  // Loaded from a returned PR: create via createQuotationFromPR so the management final prices are
-  // applied and the PR flips to Quoted; then open the new quotation's review.
-  if (qFromPr && !document.getElementById('quotationNo').value) {
-    const manual = qRequireManualFields();
-    if (!manual) return;
-    const btn = document.getElementById('saveBtn');
-    btn.disabled = true; btn.textContent = 'Creating...';
-    try {
-      const ref = flowClientRef();   // A145: per-submission idempotency key (safe retry; not a permanent PR key)
-      const base = { prNo: qFromPr, quotationNo: manual.typedNo, subject: manual.subject,
-                     discountPct: qDiscountVal('discountInput'), clientRef: ref };
-      let res = await postFlow('createQuotationFromPR', base);
-      // A158: lines priced at ₱0.00 print on the client's quotation as free — a deliberate freebie or a
-      // line management meant to drop. The rep confirms which, rather than discovering it afterwards.
-      if (!res.success && res.needsConfirm === 'zeroPrice') {
-        if (!confirm(res.message + '\n\nCreate the quotation with these items as free?')) {
-          btn.disabled = false; btn.textContent = 'Save Quotation';
-          return;
-        }
-        res = await postFlow('createQuotationFromPR', Object.assign({}, base, { confirmZero: true }));
-      }
-      if (!res.success) throw new Error(res.message);
-      if (res.duplicate) { alert(res.message); }
-      window.location.href = 'flow-quotations.html?review=' + encodeURIComponent(res.quotationNo || '');
-      return;
-    } catch (e) {
-      flowMsg('formMsg', e.message, false);
-      btn.disabled = false; btn.textContent = 'Save Quotation';
-      return;
-    }
-  }
-  const items = collectItems();
-  const customer = document.getElementById('customer').value.trim();
-  if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
-  if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
-  const btn = document.getElementById('saveBtn');
-  const editingNo = document.getElementById('quotationNo').value;      // hidden edit-key
-  const manual = qRequireManualFields();                               // required on create AND edit
-  if (!manual) return;
-  const customNo = manual.typedNo;
-  if (!editingNo) {
-    // Duplicate check against the FULL list — sales' own qList holds only their quotations.
-    try {
-      const all = await fetchFlow('getQuotations', {});
-      const clash = ((all && all.data) || [])
-        .some(q => String(q.quotationNo).toLowerCase() === customNo.toLowerCase());
-      if (clash) {
-        flowMsg('formMsg', `Quotation No "${customNo}" already exists — open it with Edit instead.`, false);
-        document.getElementById('quotationNoInput').focus();
-        return;
-      }
-    } catch (e) { /* offline check is best-effort; the server rejects duplicates too */ }
-  }
-  const payload = {
-    quotationNo: editingNo || customNo,                                // the typed code on create
-    customer, date: document.getElementById('date').value,
-    subject: manual.subject,
-    discountPct: qDiscountVal('discountInput'),                        // % off the total, before VAT
-    createdBy: qSession.name, items: JSON.stringify(items)
-  };
-  if (!editingNo) payload.clientRef = flowClientRef();                 // idempotent create (safe retry)
-  // Editing with a changed number → RENAME the record (whole string editable).
-  if (editingNo && customNo && customNo !== editingNo) payload.newQuotationNo = customNo;
-  // Admin creating a new quotation: save as an editable Draft (bypasses PR/management pricing).
-  if (qAdmin && !editingNo) payload.status = 'Draft';
-  btn.disabled = true; btn.textContent = 'Saving...';
-  try {
-    const res = await postFlow(editingNo ? 'updateQuotation' : 'createQuotation', payload);
-    if (!res.success) throw new Error(res.message);
-    let extra = '';
-    // Admin: auto-add any brand-new items to inventory (balance 0). Ignore "already exists".
-    if (qAdmin && !editingNo) {
-      let added = 0;
-      for (const it of items) {
-        const exists = qInventory.some(i => String(i.itemNo).toLowerCase() === String(it.itemNo).toLowerCase());
-        if (exists) continue;
-        try {
-          const inv = await postFlow('addInventoryItem', {
-            itemNo: it.itemNo, description: it.itemName || it.itemNo, balance: 0, currency: 'PHP',
-            type: 'Catalog'   // quotation working item — not yet purchased
-          });
-          if (inv.success) added++;
-        } catch (e) { /* best-effort */ }
-      }
-      if (added) { extra = ` · ${added} new item(s) added to inventory`; await loadInventory(); }
-    }
-    flowMsg('formMsg', `${res.message} (${res.quotationNo || payload.quotationNo})${extra}`, true);
-    resetForm();
-    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
-    // The refetch right after a write can return the PRE-save record (Sheets read-after-write
-    // staleness) — and that stale copy then sits in the 60s client cache, so a PDF generated now
-    // would carry the OLD price/discount. Overwrite the list entry with what we KNOW we saved.
-    const finalNo = editingNo ? customNo : (res.quotationNo || customNo);
-    qPatchLocal(finalNo, {
-      customer, date: payload.date, subject: manual.subject,
-      discountPct: payload.discountPct, items
-    }, editingNo || null);
-    // Refresh the saved PDF so the document can't contradict the figures — but ONLY when that is
-    // lossless. Attached product photos aren't stored anywhere, so a quotation whose PDF carries one
-    // is left alone and flagged out-of-date instead of silently losing its picture.
-    if (await qAutoRefreshPdf(finalNo)) {
-      flowMsg('formMsg', `${res.message} (${finalNo})${extra} · PDF refreshed to match.`, true);
-    }
-    // A revised/edited quotation must go back through approval (Admin → Management) before it can
-    // be sent — offer the submission right away so it isn't forgotten. (Not automatic: once
-    // Pending, the server blocks further edits, so incremental saving must stay possible.)
-    if (editingNo && confirm(`Saved. Submit ${finalNo} for approval now?\n\nIt will go to Admin, then Management, for approval before it can be sent to the client.`)) {
-      try {
-        const sub = await postFlow('submitQuotationApproval', { quotationNo: finalNo });
-        if (!sub.success) throw new Error(sub.message);
-        qPatchLocal(finalNo, { status: sub.status || 'Pending Admin' });
-        flowMsg('formMsg', `${finalNo} submitted for approval — now ${sub.status || 'Pending Admin'}.`, true);
-      } catch (e) { flowMsg('formMsg', 'Saved, but submitting for approval failed: ' + e.message, false); }
-    }
-  } catch (e) { flowMsg('formMsg', e.message, false); }
-  finally { btn.disabled = false; btn.textContent = 'Save Quotation'; }
-}
-
-/** Re-render the saved PDF from its stored document fields + the CURRENT items, silently (no tab).
- *  Only runs when it can be done without losing content: there must be a saved PDF, the doc fields
- *  must have been captured, and the previous PDF must not have carried an attached photo (those are
- *  never stored, so re-rendering would drop them). Returns true when the Drive file was replaced. */
-async function qAutoRefreshPdf(no) {
-  const q = qList.find(x => String(x.quotationNo) === String(no));
-  if (!q || !q.pdfLink) return false;
-  const info = qPdfInfo(q);
-  if (!info.doc || info.hasImages) return false;            // nothing to render from, or would lose a photo
-  if (qPdfState(q) === 'fresh') return false;               // already matches
-  const vatOption = info.vatOption || 'inclusive';
-  const payload = {
-    quotationNo: q.quotationNo, customer: q.customer, date: flowDate(q.date),
-    vatOption, discountPct: flowNum(q.discountPct) || 0, descMode: info.descMode || 'long',
-    doc: info.doc, brochures: [],
-    items: (q.items || []).map(it => {
-      const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
-      return { itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
-        origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
-        description: (inv && inv.description) || it.itemName || '', imageDataUrl: '' };
-    })
-  };
-  const pdfData = JSON.stringify({ v: 1, doc: info.doc, vatOption, descMode: payload.descMode,
-    hasImages: false, stamp: qPdfStamp(q, vatOption) });
-  try {
-    const { link } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
-      'quotationNo', q.quotationNo, `Quotation_${q.quotationNo}.pdf`, { background: true, extra: { pdfData } });
-    if (!link) return false;
-    qPatchLocal(q.quotationNo, { pdfLink: link, pdfData });
-    return true;
-  } catch (e) { return false; }   // best-effort — the out-of-date banner catches whatever this misses
 }
 
 /** Overwrite (or insert) the qList entry with the values we KNOW were just saved. The refetch after
@@ -504,24 +91,6 @@ function qPatchLocal(no, saved, oldNo) {
   try { _flowCacheClear(); } catch (e) { /* cache clear is best-effort */ }
   qBuildMonthOptions();
   renderQuotationList();
-}
-
-function resetForm() {
-  document.getElementById('quotationNo').value = '';
-  const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = ''; qni.disabled = false; }
-  const subj = document.getElementById('subjectInput'); if (subj) subj.value = '';
-  const disc = document.getElementById('discountInput'); if (disc) disc.value = '';
-  document.getElementById('customer').value = '';
-  document.getElementById('date').value = flowToday();
-  document.getElementById('itemRows').innerHTML = '';
-  document.getElementById('formTitle').textContent = 'New Quotation';
-  document.getElementById('formMsg').style.display = 'none';
-  // clear any Returned-to-Sales PR load
-  qFromPr = '';
-  const b = document.getElementById('fromPrBanner'); if (b) b.style.display = 'none';
-  const s = document.getElementById('fromPrSelect'); if (s) s.value = '';
-  qUnlockPrRows();          // A158: restore the Add-item control after a from-PR load
-  addRow();
 }
 
 async function loadQuotations() {
@@ -827,22 +396,19 @@ function renderGroupedByRep(rows) {
   }).join('');
 }
 
+/** A175 — Edit (and Revise, which calls this) now opens the Configurator above with the record
+ *  loaded, so the surface that creates a quotation is also the one that revises it. The whole
+ *  quotation number stays editable — changing it RENAMES the record (items, SO link and attached
+ *  docs follow; the backend rejects duplicates). */
 function editQuotation(no) {
-  const q = qList.find(x => x.quotationNo === no);
+  const q = qList.find(x => String(x.quotationNo) === String(no));
   if (!q) return;
-  document.getElementById('quotationNo').value = q.quotationNo;
-  // The whole quotation number is editable on edit — changing it RENAMES the record
-  // (items, SO link, and attached docs follow; backend rejects duplicates).
-  const qni = document.getElementById('quotationNoInput'); if (qni) { qni.value = q.quotationNo; qni.disabled = false; }
-  document.getElementById('customer').value = q.customer;
-  const subj = document.getElementById('subjectInput'); if (subj) subj.value = q.subject || '';
-  const disc = document.getElementById('discountInput'); if (disc) disc.value = flowNum(q.discountPct) || '';
-  document.getElementById('date').value = flowDate(q.date);
-  document.getElementById('formTitle').textContent = 'Edit ' + q.quotationNo;
-  document.getElementById('itemRows').innerHTML = '';
-  (q.items || []).forEach(addRow);
-  if (!q.items || !q.items.length) addRow();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (typeof qcLoadExisting !== 'function') {
+    alert('The quotation builder did not load — reload the page and try again.');
+    return;
+  }
+  qcToggleCreate(true);
+  qcLoadExisting(q);
 }
 
 async function deleteQuotation(no) {

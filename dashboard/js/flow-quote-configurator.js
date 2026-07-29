@@ -31,28 +31,122 @@ const QC_VAT_PCT = 0.12;
 const QC_DEBOUNCE = 500;
 const QC_WAKE_AFTER = 4000;       // Render's free tier sleeps; say so rather than spin silently
 
-document.addEventListener('DOMContentLoaded', async () => {
-  qcSession = requireQuotationAccess();
-  if (!qcSession) return;
-  qcRole = qcSession.role;
-  renderNavbar('flow-quote-configurator');
+/* A175 — this module no longer owns a page of its own: it is the create half of flow-quotations.html.
+   It therefore has NO DOMContentLoaded handler, no auth guard and no navbar call — the host page does
+   the auth check once and calls qcInit() from inside its own boot, AFTER the history has rendered, so
+   a fault in here can never stop the quotation list from loading. */
+function qcInit(opts) {
+  qcSession = (opts && opts.session) || null;
+  if (!qcSession) {
+    try { qcSession = JSON.parse(localStorage.getItem('session') || '{}'); } catch (e) { qcSession = {}; }
+  }
+  qcRole = qcSession.role || '';
 
-  document.getElementById('qcDate').value = (typeof flowToday === 'function')
-    ? flowToday() : new Date().toISOString().slice(0, 10);
+  const d = document.getElementById('qcDate');
+  if (d) d.value = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
 
   qcPrefillDoc();
   qcBindInputs();
-  document.getElementById('qcPhotoInput').addEventListener('change', qcPhotoChosen);
+  const photo = document.getElementById('qcPhotoInput');
+  if (photo) photo.addEventListener('change', qcPhotoChosen);
 
-  const prNo = new URLSearchParams(location.search).get('fromPR');
-  if (prNo) {
-    await qcLoadFromPR(prNo);
-  } else {
-    qcAddRow();
-    if (qcRole === 'admin' || qcRole === 'director') qcLoadInventory();
-  }
+  qcAddRow();
+  if (qcRole === 'admin' || qcRole === 'director') qcLoadInventory();
   qcRenderTotals();
-});
+}
+
+/* Show/hide the create half. Collapsed on a plain visit so the history is the landing view; opened by
+   the New Quotation buttons, by ?fromPR=, and by Edit/Revise. */
+function qcToggleCreate(open) {
+  const sec = document.getElementById('qcCreate');
+  if (!sec) return false;
+  const show = (open === undefined) ? sec.hasAttribute('hidden') : !!open;
+  if (show) sec.removeAttribute('hidden'); else sec.setAttribute('hidden', '');
+  const btn = document.getElementById('qcToggleBtn');
+  if (btn) btn.textContent = show ? '▲ Hide' : '+ New Quotation';
+  if (show) {
+    qcRenderItems();            // re-measure now that the section is laid out
+    qcSchedulePreview();
+    try { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* older browsers */ }
+  }
+  return show;
+}
+
+/* Clear the builder back to a blank quotation (leaves the remembered doc defaults in place). */
+function qcResetForm() {
+  qcQuotationNo = '';
+  qcFromPr = '';
+  qcLocked = false;
+  qcItems = [];
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('qcNo', ''); set('qcCustomer', ''); set('qcSubject', ''); set('qcDiscount', 0);
+  set('qcDate', (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
+  const msg = document.getElementById('qcMsg'); if (msg) msg.innerHTML = '';
+  const title = document.getElementById('formTitle'); if (title) title.textContent = 'New Quotation';
+  const btn = document.getElementById('qcFinalizeBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Finalize quotation'; }
+  qcAddRow();                   // renders + reschedules the preview
+}
+
+/* Edit/Revise from the history: load a saved quotation into the builder so the same surface that
+   creates a document also revises it. Finalize then routes through updateQuotation. */
+function qcLoadExisting(q) {
+  if (!q) return;
+  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
+  const dt = (typeof flowDate === 'function') ? flowDate : (v => String(v || '').slice(0, 10));
+  qcResetForm();
+  qcQuotationNo = String(q.quotationNo || '');
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+  set('qcNo', q.quotationNo);
+  set('qcDate', dt(q.date));
+  set('qcCustomer', q.customer);
+  set('qcSubject', q.subject);
+  set('qcDiscount', num(q.discountPct) || 0);
+
+  // Layout JSON (A172) — restore the template, photo switch and the three summary blocks.
+  let lay = {}; try { lay = q.layoutJson ? (JSON.parse(q.layoutJson) || {}) : {}; } catch (e) { lay = {}; }
+  if (lay.template) set('qcTemplate', lay.template);
+  if (lay.photos === false) set('qcPhotos', 'off');
+  const blocks = lay.blocks || {};
+  [['qcBlkScope', 'scope', 'qcScope'], ['qcBlkExcl', 'exclusions', 'qcExclusions'],
+   ['qcBlkOpts', 'options', 'qcOptions']].forEach(([cb, key, ta]) => {
+    const on = !!(blocks[key] || lay[key]);
+    const c = document.getElementById(cb); if (c) c.checked = on;
+    if (lay[key]) set(ta, lay[key]);
+  });
+  qcSyncBlocks();
+
+  // Document fields from the record's last PDF stamp, so regenerating reproduces the same document.
+  let prev = {}; try { prev = q.pdfData ? (JSON.parse(q.pdfData) || {}) : {}; } catch (e) { prev = {}; }
+  if (prev.doc) {
+    [['address', 'qcAddress'], ['attention', 'qcAttention'], ['designation', 'qcDesignation'],
+     ['email', 'qcEmail'], ['rfqNo', 'qcRfq'], ['validity', 'qcValidity'], ['delivery', 'qcDelivery'],
+     ['payment', 'qcPayment'], ['warranty', 'qcWarranty'], ['sigName', 'qcSigName'],
+     ['sigDesignation', 'qcSigDesignation'], ['sigMobile', 'qcSigMobile'], ['sigEmail', 'qcSigEmail']]
+      .forEach(([k, id]) => { if (prev.doc[k]) set(id, prev.doc[k]); });
+    if (prev.vatOption) set('qcVat', prev.vatOption);
+  }
+  if (!document.getElementById('qcRfq').value && q.clientRefNo) set('qcRfq', q.clientRefNo);
+
+  qcItems = (q.items || []).map(it => ({
+    lineKey: it.lineKey || qcLineKey(),
+    itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo || '',
+    qty: num(it.qty), price: num(it.price), uom: it.uom || '',
+    origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
+    itemId: it.itemId || '', vat: it.vat || '', imageDataUrl: ''
+  }));
+  if (!qcItems.length) qcItems = [{ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0,
+    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '' }];
+  qcRenderItems();
+
+  const title = document.getElementById('formTitle');
+  if (title) title.textContent = 'Edit ' + qcQuotationNo;
+  qcBanner('Editing <strong>' + (typeof flowEsc === 'function' ? flowEsc(qcQuotationNo) : qcQuotationNo)
+    + '</strong>. Finalize saves the changes and refiles the PDF — a re-priced quotation goes back '
+    + 'through approval before it can be sent.');
+  if (qcRole === 'admin' || qcRole === 'director') qcLoadInventory();
+  qcOnChange();
+}
 
 /* Doc fields are remembered per user by the existing quotation dialog — reuse the same store so
    nobody retypes their signature block. */
@@ -464,7 +558,8 @@ async function qcFinalize() {
       newNo = res.quotationNo;
       if (res.duplicate) {
         qcMsg('That request was already quoted as ' + newNo + ' — revise that quotation rather than creating another.', true);
-        setTimeout(() => { location.href = 'flow-quotations.html?review=' + encodeURIComponent(newNo); }, 1600);
+        btn.disabled = false; btn.textContent = 'Finalize quotation';
+        await qcAfterSave(newNo);
         return;
       }
       // A174: layout now rides along on the create above. It used to be a follow-up
@@ -505,11 +600,24 @@ async function qcFinalize() {
 
     qcMsg('Quotation ' + newNo + ' saved' + (qcFromPr ? ' and ' + qcFromPr + ' is now Quoted' : '')
         + '. The PDF is filed to Drive.', true);
-    setTimeout(() => { location.href = 'flow-quotations.html?review=' + encodeURIComponent(newNo); }, 1400);
+    btn.disabled = false; btn.textContent = 'Finalize quotation';
+    await qcAfterSave(newNo);
   } catch (e) {
     qcMsg(e.message || 'Could not save.', false);
     btn.disabled = false; btn.textContent = 'Finalize quotation';
   }
+}
+
+/* A175 — the history is on this same page now, so a finished quotation refreshes the list in place
+   and opens its review, instead of reloading the whole page to get there. */
+async function qcAfterSave(no) {
+  try {
+    if (typeof loadQuotations === 'function') await loadQuotations();
+    if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  } catch (e) { /* the list has its own error state */ }
+  qcResetForm();
+  qcToggleCreate(false);
+  try { if (typeof openReviewModal === 'function') openReviewModal(no); } catch (e) { /* review is a bonus */ }
 }
 
 async function qcAutoAddItems(items) {
