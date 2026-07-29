@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 98;   // A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 99;   // A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -42,12 +42,18 @@ var SCHEMA = {
   //    A145: 'Plant Site' + 'Client Ref No' carry PR context onto the quotation (appended at END).
   //    A151: 'PR No' links a quotation back to the pricing request it came from (populated by
   //    createQuotationFromPR; blank for direct/legacy quotations). Appended at END.
+  //    A172: 'Layout JSON' holds presentation only — template, photo toggle, which optional blocks are
+  //    on and their text. Deliberately NOT folded into 'PDF Data JSON', which has one job (the A123
+  //    stale-document stamp); overloading it would blur the freshness signal.
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %',
-                   'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No'],
+                   'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No', 'Layout JSON'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
+  //    A172: 'Line Key' is a per-line id that survives reordering. Row position can't identify a line
+  //    once lines move, and Item ID isn't unique when a quote carries two lines of the same product —
+  //    so item photos key on this.
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
-                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID'],
+                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID', 'Line Key'],
 
   SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID'],
@@ -732,14 +738,98 @@ function getQuotations(p) {
       subject: q['Subject'] || '', discountPct: _num(q['Discount %']) || 0,
       pdfData: q['PDF Data JSON'] || '',
       plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '', prNo: q['PR No'] || '',
+      layoutJson: q['Layout JSON'] || '',
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
         origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
-        vat: r['Supplier VAT'] || '', uom: r['UOM'] || '' }; })
+        vat: r['Supplier VAT'] || '', uom: r['UOM'] || '', lineKey: r['Line Key'] || '' }; })
     };
   }) };
+}
+
+/* A172 — a per-line id that survives reordering, so an item photo stays attached to its line even
+   after the lines move. Short enough to read in a Drive filename. */
+function _lineKey() {
+  return 'LK' + Utilities.getUuid().replace(/-/g, '').slice(0, 10).toUpperCase();
+}
+
+/* Photos are stored as ordinary Documents rows (module Quotation, docType 'Item Photo') with the line
+   key carried in the filename — `photo-<lineKey>.jpg`. This reads it back out. */
+function _photoLineKey(fileName) {
+  var m = String(fileName || '').match(/^photo-([A-Za-z0-9]+)\./);
+  return m ? m[1] : '';
+}
+
+/* A172 — every item photo for a quotation, in ONE round trip.
+   Before this, photos lived only in a JS object that was wiped on every dialog open, so they vanished
+   on reload and A123's auto-refresh had to refuse to run whenever a quotation had any. */
+function getQuotationPhotos(p) {
+  var no = String((p && p.quotationNo) || '');
+  if (!no) return { success: false, message: 'quotationNo is required.' };
+  var out = [];
+  _rows('Documents').forEach(function (d) {
+    if (String(d['Module']) !== 'Quotation') return;
+    if (String(d['Ref No']) !== no) return;
+    if (String(d['Doc Type']) !== 'Item Photo') return;
+    var id = String(d['File ID'] || '');
+    if (!id) return;
+    try {
+      var blob = DriveApp.getFileById(id).getBlob();
+      out.push({ docId: d['Doc ID'], lineKey: _photoLineKey(d['File Name']),
+                 fileName: d['File Name'] || '', mimeType: blob.getContentType(),
+                 base64: Utilities.base64Encode(blob.getBytes()) });
+    } catch (e) { /* a trashed or unreadable file must not break the whole load */ }
+  });
+  return { success: true, data: out };
+}
+
+/* A172 — reorder a quotation's lines.
+   The hazard here is the A147/A159 class: rebuilding each row field-by-field is exactly how
+   'Supplier VAT' got blanked on every edit, and how 'Item ID' would go missing. So this never
+   hand-writes a row. It reads the stored rows, reorders them as whole objects, and rewrites them
+   column-for-column from SCHEMA — which means a column appended in future is carried automatically. */
+function reorderQuotationItems(p) {
+  var no = String((p && p.quotationNo) || '');
+  if (!no) return { success: false, message: 'quotationNo is required.' };
+  var order = p.order;
+  if (typeof order === 'string') { try { order = JSON.parse(order); } catch (e) { order = null; } }
+  if (!order || !order.length) return { success: false, message: 'order is required.' };
+
+  var sh = _sheet('QuotationItems');
+  var headers = SCHEMA.QuotationItems;
+  var keyCol = headers.indexOf('Line Key') + 1;
+  var rows = _rows('QuotationItems').filter(function (r) { return String(r['Quotation No']) === no; });
+  if (!rows.length) return { success: false, message: 'No items found on ' + no + '.' };
+
+  // Legacy rows predate line keys — mint one each, in place. Idempotent, so a re-run is a no-op.
+  rows.forEach(function (r) {
+    if (!r['Line Key']) {
+      r['Line Key'] = _lineKey();
+      sh.getRange(r.rowIndex, keyCol, 1, 1).setValues([[r['Line Key']]]);
+    }
+  });
+
+  var byKey = {};
+  rows.forEach(function (r) { byKey[String(r['Line Key'])] = r; });
+  var ordered = [];
+  order.forEach(function (k) {
+    var r = byKey[String(k)];
+    if (r) { ordered.push(r); delete byKey[String(k)]; }
+  });
+  // A key the caller didn't mention keeps its existing relative position, at the end — so a partial
+  // or stale order can never drop a line.
+  rows.forEach(function (r) { if (byKey[String(r['Line Key'])]) ordered.push(r); });
+
+  var values = ordered.map(function (r) {
+    return headers.map(function (h) { return r[h] === undefined || r[h] === null ? '' : r[h]; });
+  });
+  rows.slice().sort(function (a, b) { return b.rowIndex - a.rowIndex; })
+      .forEach(function (r) { sh.deleteRow(r.rowIndex); });
+  values.forEach(function (v) { sh.appendRow(v); });
+
+  return { success: true, quotationNo: no, count: values.length, message: 'Item order updated.' };
 }
 
 function _writeItems(sheetName, key, no, items, mapRow) {
@@ -775,11 +865,11 @@ function createQuotation(p) {
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
     creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
-    '', p.plantSite || '', p.clientRefNo || '', p.prNo || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No
+    '', p.plantSite || '', p.clientRefNo || '', p.prNo || '', p.layoutJson || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No / A172 Layout JSON
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
-            it.itemId || ''];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID
+            it.itemId || '', it.lineKey || _lineKey()];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID, A172 Line Key
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -827,7 +917,16 @@ function updateQuotation(p) {
   var no = p.quotationNo;
   if (!no) return { success: false, message: 'quotationNo required.' };
   var cur = _quotationRow(no);
+  // A172: layout is PRESENTATION, not terms — restyling the document (photos off, compact template)
+  // changes nothing an approver signed or a client was quoted, so it is handled BEFORE the status gate
+  // and may be saved at any status. Amounts, items and dates stay gated below, unchanged.
+  var layoutOnly = p.layoutJson !== undefined;
+  if (layoutOnly) _setCellByKey('Quotations', 'Quotation No', no, 'Layout JSON', p.layoutJson || '');
   if (cur && !_quotationEditable(cur['Status'])) {
+    // A layout-only call has already done its work and must not report failure.
+    if (layoutOnly && p.items === undefined && p.customer === undefined && p.date === undefined) {
+      return { success: true, quotationNo: String(no), layoutOnly: true, message: 'Layout saved.' };
+    }
     return { success: false, message: 'This quotation is ' + cur['Status'] +
       ' — use Revise to reopen it for editing.' };
   }
@@ -864,12 +963,19 @@ function updateQuotation(p) {
   if (p.subject !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Subject', p.subject);
   // Discount % (off the pre-VAT total) — persist edits so the regenerated PDF uses it.
   if (p.discountPct !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Discount %', _num(p.discountPct) || 0);
+  // A172: layout was already written above (before the status gate). On a RENAME it must follow the
+  // new number, since _setCellByKey keys on it.
+  if (p.layoutJson !== undefined && newNo !== String(no)) {
+    _setCellByKey('Quotations', 'Quotation No', newNo, 'Layout JSON', p.layoutJson || '');
+  }
   // Items: delete rows keyed on the OLD number, re-append keyed on the new one.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
-    // A147: write all 10 columns like createQuotation — the old 8-col write silently blanked
+    // A147: write all columns like createQuotation — the old 8-col write silently blanked
     // Supplier VAT (and would blank UOM) on every edit, since _writeItems delete+re-appends.
+    // A172: carry the line key through, or a photo loses the line it belongs to on every edit.
     return [newNo, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '', it.itemId || ''];
+            it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '', it.itemId || '',
+            it.lineKey || _lineKey()];
   });
   if (newNo !== String(no)) {
     // Sales orders built from this quotation keep their link.
@@ -3871,6 +3977,7 @@ var _MODULE_MAP = {
   submitQuotationApproval: ['Quotation', 'Submitted'], approveQuotation: ['Quotation', 'Approved'],
   rejectQuotation: ['Quotation', 'Rejected'], sendQuotation: ['Quotation', 'Sent'],
   reviseQuotation: ['Quotation', 'Revised'],
+  reorderQuotationItems: ['Quotation', 'Reordered'],
   closeQuotation: ['Quotation', 'Closed'], reopenQuotation: ['Quotation', 'Reopened'],
   submitPOApproval: ['Purchase Order', 'Submitted'], approvePO: ['Purchase Order', 'Approved'],
   rejectPO: ['Purchase Order', 'Rejected'],
@@ -4585,6 +4692,7 @@ var HANDLERS = {
   importInventory: importInventory, classifyInventory: classifyInventory,
   backfillItemIds: backfillItemIds, findDuplicateInventory: findDuplicateInventory,   // A159
   getQuotations: getQuotations, createQuotation: createQuotation,
+  getQuotationPhotos: getQuotationPhotos, reorderQuotationItems: reorderQuotationItems,
   updateQuotation: updateQuotation, deleteQuotation: deleteQuotation,
   getSalesOrders: getSalesOrders, createSalesOrder: createSalesOrder,
   updateSalesOrder: updateSalesOrder, deleteSalesOrder: deleteSalesOrder, importSalesOrders: importSalesOrders,
@@ -4638,7 +4746,7 @@ var HANDLERS = {
 var MUTATIONS = {
   addInventoryItem: 1, updateInventoryItem: 1, deleteInventoryItem: 1,
   importInventory: 1, classifyInventory: 1,
-  createQuotation: 1, updateQuotation: 1, deleteQuotation: 1,
+  createQuotation: 1, updateQuotation: 1, deleteQuotation: 1, reorderQuotationItems: 1,
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, correctCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
