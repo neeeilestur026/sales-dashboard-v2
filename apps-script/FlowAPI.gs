@@ -1925,6 +1925,45 @@ function _apPaidPHP(poNo) {
   return paid;
 }
 
+/* A171 — the documents that must exist before goods may be costed into inventory. Keyed by the
+   shipment STAGE KEY, because that is what `Doc Type` already carries for a shipment document
+   (`module='Shipment'`, `refNo=<shipment id>`, `docType=<stage key>`) — so her existing uploads
+   satisfy these without her learning a new vocabulary.
+
+   Only documents that exist BEFORE the goods are costed are listed. `invoiced` and `collected` come
+   after receiving, so requiring them here would deadlock every shipment; they gate their own money
+   step instead. */
+var _RECEIVING_REQUIRED_DOCS = [
+  { key: 'delivered',               label: 'the delivery receipt' },
+  { key: 'shipping_docs_received',  label: 'the packing list and commercial invoice' },
+  { key: 'customs_clearance',       label: 'the customs / duties assessment' },
+  { key: 'fan_sad_tan',             label: 'the FAN, SAD or TAN document' },
+  { key: 'debit_memo',              label: 'the bank debit memo' },
+  { key: 'forwarder_final_invoice', label: "the forwarder's final invoice" },
+  { key: 'local_charges',           label: 'the local-charges document' }
+];
+
+/** Which required shipment documents are missing for this PO? Returns [] when receiving may proceed.
+ *  Returns [] for a PO with no shipment at all — a rule can't bind a record that doesn't exist yet,
+ *  and the 8 in-flight POs predate this (see the gap-list, not-retro-blocking, decision). */
+function _receivingDocGaps(poNo) {
+  var ship = _rows('Shipments').filter(function (s) {
+    return String(s['PO No'] || '') === String(poNo);
+  })[0];
+  if (!ship) return [];
+  var refNo = String(ship['Shipment ID'] || '');
+  if (!refNo) return [];
+  var docs = _rows('Documents').filter(function (d) {
+    return String(d['Module']) === 'Shipment' && String(d['Ref No']) === refNo && !_isGeneratedDoc(d);
+  });
+  var have = {};
+  docs.forEach(function (d) { have[String(d['Doc Type'] || '').trim().toLowerCase()] = true; });
+  // Report EVERY missing document at once — one round trip per missing file would be its own burden.
+  return _RECEIVING_REQUIRED_DOCS
+    .filter(function (r) { return !have[r.key]; })
+    .map(function (r) { return r.label; });
+}
+
 function createReceiving(p) {
   var items = JSON.parse(p.items || '[]');
   if (!items.length) return { success: false, message: 'At least one received item is required.' };
@@ -1940,6 +1979,19 @@ function createReceiving(p) {
     var t = 0; items.forEach(function (it) { t += _num(it.price) * _num(it.qty); }); return t;
   })();
   var paidPHP = _apPaidPHP(p.poNo);
+
+  /* A171 — receiving is where free-typed pesos (duties, VAT, delivery, other) become inventory cost
+     and then COGS, and until now it required NO supporting document at all — the only money step in
+     the chain that didn't. Every other one (PR forward, PO submit, payment submit, mark-paid) has
+     demanded evidence for a while. Blocking here, rather than at the stage tick, is deliberate: the
+     shipment board stays free to show where the goods actually are. */
+  var _rcGaps = p.poNo ? _receivingDocGaps(p.poNo) : [];
+  if (_rcGaps.length && !p.confirmNoDocs) {
+    return { success: false, missingDocs: _rcGaps,
+      message: 'Before receiving ' + p.poNo + ' into inventory, attach: ' + _rcGaps.join('; ') +
+               '. (Docs → the matching type on the shipment.)' };
+  }
+
   // A145: receiving costs inventory from AP Paid (PHP). If nothing is paid yet, every unit lands at ₱0 —
   // a silent zero cost basis that then books COGS 0 on the invoice. Refuse unless explicitly confirmed.
   if (p.poNo && !(paidPHP > 0) && !p.confirmUnpaid) {
