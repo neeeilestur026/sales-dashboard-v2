@@ -692,7 +692,13 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         desc = str(it.get("description") or "").strip()
         orig_code = str(it.get("orig_code") or "").strip()
         orig_name = str(it.get("orig_name") or "").strip()
-        paired = (orig_code and orig_code != code) or (orig_name and orig_name != name)
+        # A173 — "N/A" is not something a customer asked for; it is a line that simply had no part
+        # number. Treating it as a difference paired the line against the supplier's real code and,
+        # with no original description to show, printed the SAME description twice — once as the
+        # request and again under OUR OFFER. The model-line writer below already skips an N/A code;
+        # this makes the pairing test agree with it instead of contradicting it.
+        _orig_code_real = orig_code and orig_code.lower() not in ("n/a", "na", "-")
+        paired = (_orig_code_real and orig_code != code) or (orig_name and orig_name != name)
 
         sub_lines = []
         if desc and desc != name and desc_mode != "short":
