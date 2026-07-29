@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 99;   // A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 100;  // A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -922,11 +922,18 @@ function updateQuotation(p) {
   // and may be saved at any status. Amounts, items and dates stay gated below, unchanged.
   var layoutOnly = p.layoutJson !== undefined;
   if (layoutOnly) _setCellByKey('Quotations', 'Quotation No', no, 'Layout JSON', p.layoutJson || '');
+
+  /* A174 — this return MUST sit above the status gate, and it did not.
+     It was nested inside the not-editable branch, so a layout-only save on a DRAFT quotation — which
+     IS editable — fell straight through to the full-record rewrite below: `p.items` undefined became
+     an empty array and every line was deleted, `p.customer` undefined blanked the customer.
+     That destroyed 2026-415-GL-LANCETENTERPRISED six seconds after it was created. */
+  if (layoutOnly && p.items === undefined && p.customer === undefined && p.date === undefined
+      && p.subject === undefined && p.discountPct === undefined && p.newQuotationNo === undefined) {
+    return { success: true, quotationNo: String(no), layoutOnly: true, message: 'Layout saved.' };
+  }
+
   if (cur && !_quotationEditable(cur['Status'])) {
-    // A layout-only call has already done its work and must not report failure.
-    if (layoutOnly && p.items === undefined && p.customer === undefined && p.date === undefined) {
-      return { success: true, quotationNo: String(no), layoutOnly: true, message: 'Layout saved.' };
-    }
     return { success: false, message: 'This quotation is ' + cur['Status'] +
       ' — use Revise to reopen it for editing.' };
   }
@@ -954,8 +961,15 @@ function updateQuotation(p) {
       // A158: the status is NOT editable here. It used to take `p.status`, so a Draft could be POSTed
       // straight to Approved — skipping both approver tiers and the stale-PDF guard. Status changes
       // belong to the workflow actions (submit / approve / reject / revise / send / close).
+      /* A174 — a field the caller did not send must be LEFT ALONE, not blanked.
+         `p.customer` used to be written straight through, so a partial update (e.g. saving only the
+         layout) wrote undefined over a real customer name; and `total` was recomputed from an items
+         array that was empty for the same reason. Between them they emptied
+         2026-415-GL-LANCETENTERPRISED. Same rule updateAPAging has followed since A171. */
       sh.getRange(rows[i].rowIndex, 1, 1, 7).setValues([[newNo, p.date || rows[i]['Date'],
-        p.customer, rows[i]['Status'], total, rows[i]['Created By'], rows[i]['Created At']]]);
+        (p.customer !== undefined ? p.customer : rows[i]['Customer']), rows[i]['Status'],
+        (p.items !== undefined ? total : _num(rows[i]['Total'])),
+        rows[i]['Created By'], rows[i]['Created At']]]);
       break;
     }
   }
@@ -969,7 +983,21 @@ function updateQuotation(p) {
     _setCellByKey('Quotations', 'Quotation No', newNo, 'Layout JSON', p.layoutJson || '');
   }
   // Items: delete rows keyed on the OLD number, re-append keyed on the new one.
-  _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
+  /* A174 — only rewrite the lines when the caller actually SENT lines. _writeItems deletes before it
+     appends, so treating an absent `items` as an empty array wipes the whole quotation on a partial
+     update. A rename still has to re-key the stored rows, so that case reads them back from the sheet
+     rather than trusting the caller. */
+  if (p.items === undefined && newNo !== String(no)) {
+    items = _rows('QuotationItems')
+      .filter(function (r) { return String(r['Quotation No']) === String(no); })
+      .map(function (r) {
+        return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
+                 price: _num(r['Quoted Price']), origItemNo: r['Orig Item No'] || '',
+                 origItemName: r['Orig Item Name'] || '', vat: r['Supplier VAT'] || '',
+                 uom: r['UOM'] || '', itemId: r['Item ID'] || '', lineKey: r['Line Key'] || '' };
+      });
+  }
+  if (p.items !== undefined || newNo !== String(no)) _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     // A147: write all columns like createQuotation — the old 8-col write silently blanked
     // Supplier VAT (and would blank UOM) on every edit, since _writeItems delete+re-appends.
     // A172: carry the line key through, or a photo loses the line it belongs to on every edit.
@@ -4593,6 +4621,7 @@ function createQuotationFromPR(p) {
   // The sales rep types their own quotation code + subject on the form; both carry through here.
   // A clientRef makes a retry-after-success return the SAME quotation instead of a false "already exists".
   var qres = createQuotation({ customer: hdr['Customer'], date: _now(), status: 'Draft',
+    layoutJson: p.layoutJson || '',   // A174: set on the create, so no second write can wipe the lines
     quotationNo: p.quotationNo || '', subject: p.subject || '', discountPct: _num(p.discountPct) || 0,
     plantSite: hdr['Plant Site'] || '', clientRefNo: clientRefNo, prNo: p.prNo,   // A151: link quotation → its pricing request
     /* A158: the client's per-SUBMISSION token, not a permanent per-PR key. The old 'qfp_'+prNo key

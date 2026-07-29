@@ -448,6 +448,7 @@ async function qcFinalize() {
          Sending items here would be ignored, so we don't pretend otherwise. */
       const base = {
         prNo: qcFromPr, quotationNo: val('qcNo').trim(), subject: val('qcSubject').trim(),
+        layoutJson: qcLayoutJson(),
         discountPct: Math.min(100, Math.max(0, num(val('qcDiscount')))),
         clientRef: (typeof flowClientRef === 'function') ? flowClientRef() : ('QC-' + Date.now())
       };
@@ -466,8 +467,8 @@ async function qcFinalize() {
         setTimeout(() => { location.href = 'flow-quotations.html?review=' + encodeURIComponent(newNo); }, 1600);
         return;
       }
-      // layout is presentation, so it saves separately and is not blocked by the status gate
-      try { await postFlow('updateQuotation', { quotationNo: newNo, layoutJson: qcLayoutJson() }); } catch (e) {}
+      // A174: layout now rides along on the create above. It used to be a follow-up
+      // updateQuotation call, and that call deleted every line of the quotation it had just made.
     } else {
       const items = priced.map(i => ({
         itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
