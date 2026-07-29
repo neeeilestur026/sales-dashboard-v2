@@ -119,7 +119,7 @@
             <tbody id="qcItemBody"></tbody>
           </table>
           <div class="qc-actions">
-            <button class="btn btn-secondary btn-sm" onclick="qcAddRow()">+ Add item</button>
+            <button class="btn btn-secondary btn-sm" id="qcAddBtn" onclick="qcAddRow()">+ Add item</button>
           </div>
 
           <!-- live, no server round trip -->
@@ -138,8 +138,31 @@
             <div><label>Product photos</label>
               <select id="qcPhotos"><option value="on">Show photos</option><option value="off">Hide photos</option></select></div>
           </div>
-          <div class="qc-note">Templates are wired through to the PDF in a later step — the toggles are saved on the
-            quotation now so the preview and the finalized document agree.</div>
+        </div>
+
+        <div class="qc-pane" style="margin-top:1rem;">
+          <h3>Scope, Exclusions &amp; Options</h3>
+          <div class="qc-blocks" style="margin-bottom:.7rem;">
+            <label class="qc-tog"><input type="checkbox" id="qcBlkScope"> Scope of Supply</label>
+            <label class="qc-tog"><input type="checkbox" id="qcBlkExcl"> Exclusions</label>
+            <label class="qc-tog"><input type="checkbox" id="qcBlkOpts"> Options</label>
+          </div>
+          <div class="qc-grid">
+            <div class="full" id="qcScopeWrap" style="display:none;">
+              <label>Scope of Supply — Included</label>
+              <textarea id="qcScope" placeholder="One item per line. Wrap a line in **asterisks** to bold it."></textarea>
+            </div>
+            <div class="full" id="qcExclWrap" style="display:none;">
+              <label>Exclusions — unless otherwise stated in writing</label>
+              <textarea id="qcExclusions" placeholder="One per line."></textarea>
+            </div>
+            <div class="full" id="qcOptsWrap" style="display:none;">
+              <label>Available as Options — priced separately</label>
+              <textarea id="qcOptions" placeholder="One per line as:  description | PHP 174,150.00"></textarea>
+            </div>
+          </div>
+          <div class="qc-note" id="qcBlkNote">Switch a block on to add it to the document. Long lists are shortened
+            to fit the page rather than breaking the PDF — you will see that in the preview.</div>
         </div>
 
         <div class="qc-pane" style="margin-top:1rem;">
@@ -180,6 +203,7 @@
     </div>
   </main>
 
+  <datalist id="qcInvList"></datalist>
   <input type="file" id="qcPhotoInput" accept="image/png,image/jpeg" style="display:none;">
 
   <script src="js/api.js"></script>

@@ -417,6 +417,7 @@ function renderNavbar(activePage) {
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="flow-quote-configurator.html" class="${activePage === 'flow-quote-configurator' ? 'active' : ''}">New Quotation (Configurator)</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="admin-import-quotation.html" class="${activePage === 'admin-import-quotation' ? 'active' : ''}">Import Quotation</a>
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
@@ -736,7 +737,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory'].includes(activePage);
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-quote-configurator', 'flow-inventory'].includes(activePage);
     const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -754,6 +755,7 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">Product Finder</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
+          <a href="flow-quote-configurator.html" class="${activePage === 'flow-quote-configurator' ? 'active' : ''}">New Quotation</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>

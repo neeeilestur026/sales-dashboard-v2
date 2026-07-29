@@ -1328,7 +1328,9 @@ async function verifyReturn() {
 // Open the quotation form pre-loaded with this PR's included items + management final prices so the
 // rep can see/review the prices before creating (the form's Save routes through createQuotationFromPR).
 function makeQuotation(no) {
-  window.location.href = 'flow-quotations.html?fromPR=' + encodeURIComponent(no);
+  // A173: the Configurator is now the creation surface — same ?fromPR contract, same
+  // createQuotationFromPR save, so the process flow is unchanged.
+  window.location.href = 'flow-quote-configurator.html?fromPR=' + encodeURIComponent(no);
 }
 
 // ─── PR PDF (identical legacy layout) ────────────
