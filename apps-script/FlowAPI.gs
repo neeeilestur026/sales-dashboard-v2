@@ -1337,6 +1337,53 @@ function getAPAging() {
   }) };
 }
 
+/* A171 — plausible peso-per-unit band for a foreign-currency payable. Deliberately wide: it exists to
+   catch a digit slip or a copy-paste from another supplier's row, NOT to police the day's rate. The
+   two live errors implied ₱620 and ₱1,539 per USD; every real rate in the system sits near ₱60. */
+var _FX_BAND = { min: 20, max: 200 };
+
+/** Is this AP amount impossible? Returns null when fine, else {block, message, impliedFx}.
+ *  `block` is false for things that are merely worth saying out loud (the VAT ratio) — per the
+ *  standing decision, VAT is warned about, never enforced. */
+function _apAmountProblem(poNo, currency, amountFC, amountPHP, paidPHP) {
+  var cur = String(currency || 'PHP').toUpperCase();
+  var msg = [];
+
+  // Paid more than the payable — AP-202607-005 is ₱465.77 over. The payment-request path already
+  // caps this; the AP row edit did not.
+  if (paidPHP > amountPHP + 0.005 && amountPHP > 0) {
+    return { block: true, impliedFx: 0,
+      message: 'Paid (₱' + paidPHP.toFixed(2) + ') is more than the payable (₱' + amountPHP.toFixed(2) +
+               '). Correct the payable first, or reduce the paid amount.' };
+  }
+
+  if (!(amountFC > 0) || !(amountPHP > 0)) return null;
+  var implied = amountPHP / amountFC;
+
+  if (cur === 'PHP') {
+    // A PHP purchase order should have a peso payable equal to its own total. RS Components is
+    // 27,000 → 30,240 (×1.12) because VAT was typed onto the payable. Say so; don't block.
+    if (Math.abs(implied - 1) > 0.001) {
+      var pct = ((implied - 1) * 100).toFixed(1);
+      return { block: false, impliedFx: implied,
+        message: 'This is a PHP purchase order, but the payable is ' + pct + '% ' +
+                 (implied > 1 ? 'above' : 'below') + ' the order total' +
+                 (Math.abs(implied - 1.12) < 0.005 ? ' — that looks like 12% VAT added by hand.' : '.') };
+    }
+    return null;
+  }
+
+  // Foreign currency: an implied rate outside the band is a typo, not a rate.
+  if (implied < _FX_BAND.min || implied > _FX_BAND.max) {
+    return { block: true, impliedFx: implied,
+      message: '₱' + amountPHP.toFixed(2) + ' for ' + amountFC.toFixed(2) + ' ' + cur +
+               ' implies ₱' + implied.toFixed(2) + ' per ' + cur + '. That is outside any real rate' +
+               ' (₱' + _FX_BAND.min + '–₱' + _FX_BAND.max + ') — check for a mistyped digit or a' +
+               ' figure copied from another payable.' };
+  }
+  return null;
+}
+
 function updateAPAging(p) {
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
@@ -1366,6 +1413,16 @@ function updateAPAging(p) {
   if (String(cur[6]).toLowerCase() === 'paid' && _num(cur[8]) > 0) {
     cur[5] = _num(cur[8]);
   }
+
+  /* A171 — the payable is the number that becomes landed cost, COGS and gross profit, and until now
+     this function accepted it as a bare number with no idea what the PO was. That is how a 202-USD
+     order came to be recorded at ₱310,895 and a 720-USD order at ₱446,393. Check it against the PO. */
+  var _apGuard = _apAmountProblem(cur[1], cur[3], _num(cur[4]), _num(cur[5]), _num(cur[8]));
+  if (_apGuard && _apGuard.block && !p.confirmAmount) {
+    return { success: false, needsConfirm: 'apAmount', impliedFx: _apGuard.impliedFx,
+             message: _apGuard.message };
+  }
+
   cur[11] = _now();                                                  // Updated At
   sh.getRange(ri, 1, 1, headers.length).setValues([cur]);
   // GL: payment of A/P — Dr Accounts Payable / Cr Cash (PHP). Amount = paid, or full PHP if marked Paid.

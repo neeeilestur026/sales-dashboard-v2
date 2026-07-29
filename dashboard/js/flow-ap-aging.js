@@ -133,10 +133,12 @@ async function saveRow(rowIndex, btn) {
     // A158: the row NUMBER alone isn't a safe key — a row deleted above shifts everything up and this
     // save would land on another supplier's payable. The server refuses if they disagree.
     apNo: tr.dataset.apno || '',
-    amountPHP: tr.querySelector('.f-php').value || 0,
+    // A171 — `value || 0` used to turn a BLANK box into a real ₱0 and wipe the payable. Send
+    // undefined instead: the server's `set()` skips it and leaves the stored figure alone.
+    amountPHP: tr.querySelector('.f-php').value === '' ? undefined : tr.querySelector('.f-php').value,
     status: tr.querySelector('.f-status').value,
     dueDate: tr.querySelector('.f-due').value,
-    paidPHP: tr.querySelector('.f-paid').value || 0,
+    paidPHP: tr.querySelector('.f-paid').value === '' ? undefined : tr.querySelector('.f-paid').value,
     notes: tr.querySelector('.f-notes').value
   };
   btn.disabled = true; btn.textContent = '...';
