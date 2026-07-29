@@ -1181,6 +1181,14 @@ function createPurchaseOrder(p) {
   }
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+
+  /* A171 — the rate and the peso total arrive as two INDEPENDENT numbers and nothing has ever checked
+     that they agree. That is how a 720-USD order came to carry a ₱446,393 payable. If both are given
+     they must reconcile; if only the peso total is given, its implied rate must at least be real. */
+  var _poFx = _poFxProblem(currency, total, _num(p.exchangeRate), _num(p.totalPHP));
+  if (_poFx && !p.confirmAmount) {
+    return { success: false, needsConfirm: 'poAmount', impliedFx: _poFx.impliedFx, message: _poFx.message };
+  }
   _append('PurchaseOrders', [no, p.soNo || '', p.date || _now(), p.supplier, currency, total,
     p.status || 'Draft', p.createdBy || '', _now(), '',
     p.actorRole || p.createdByRole || '', '', '', '',
@@ -1380,6 +1388,29 @@ function _apAmountProblem(poNo, currency, amountFC, amountPHP, paidPHP) {
                ' implies ₱' + implied.toFixed(2) + ' per ' + cur + '. That is outside any real rate' +
                ' (₱' + _FX_BAND.min + '–₱' + _FX_BAND.max + ') — check for a mistyped digit or a' +
                ' figure copied from another payable.' };
+  }
+  return null;
+}
+
+/** A171 — a PO's peso total and its exchange rate must tell the same story. Returns null when fine. */
+function _poFxProblem(currency, totalFC, rate, totalPHP) {
+  var cur = String(currency || 'PHP').toUpperCase();
+  if (cur === 'PHP' || !(totalFC > 0) || !(totalPHP > 0)) return null;
+  var implied = totalPHP / totalFC;
+
+  // Both supplied → they must reconcile. 2% tolerance absorbs rounding and bank spread.
+  if (rate > 0 && Math.abs(implied - rate) / rate > 0.02) {
+    return { impliedFx: implied,
+      message: 'The PHP total (₱' + totalPHP.toFixed(2) + ') works out to ₱' + implied.toFixed(2) +
+               ' per ' + cur + ', but the exchange rate entered is ₱' + rate.toFixed(2) +
+               '. Correct whichever is wrong before saving.' };
+  }
+  // Only the peso total supplied → its implied rate must at least be plausible.
+  if (implied < _FX_BAND.min || implied > _FX_BAND.max) {
+    return { impliedFx: implied,
+      message: '₱' + totalPHP.toFixed(2) + ' for ' + totalFC.toFixed(2) + ' ' + cur + ' implies ₱' +
+               implied.toFixed(2) + ' per ' + cur + ' — outside any real rate (₱' + _FX_BAND.min +
+               '–₱' + _FX_BAND.max + '). Check for a mistyped digit.' };
   }
   return null;
 }
