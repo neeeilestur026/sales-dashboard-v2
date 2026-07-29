@@ -1,5 +1,5 @@
 {
- "_note": "Power Team entries generated from the verified domain rules; CEJN and RAD entries carry manufacturer-published figures (see each row's source). Update via pf-admin or by editing this file.",
+ "_note": "Power Team families from the HT Professional Hydraulic Equipment brochure (family level with the real capacity ranges and model numbers it prints), plus CEJN and RAD rows with manufacturer-published figures. Every row carries its source. Update via pf-admin or by editing this file.",
  "products": [
   {
    "id": "pt-c-5",
@@ -3898,6 +3898,1053 @@
    "pairs_with": [],
    "verified": true,
    "source": "radtorque.com \u2014 B-RAD Select 1000/1400-M, 270\u20131,400 Nm"
+  },
+  {
+   "id": "pt-hp35",
+   "series": "HP35",
+   "name": "HP35 Hydraulic Punch 35 ton",
+   "category": "punch",
+   "subtype": "hole-punch",
+   "capacity_tons": 35,
+   "features": [
+    "punches holes up to 1/2 in mild steel",
+    "punches and dies included",
+    "portable"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose",
+    "acc-coupler"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-hns150",
+   "series": "HNS",
+   "name": "HNS150 Nut Splitter 15 & 25 ton",
+   "category": "nut-splitter",
+   "subtype": "hydraulic-nut-splitter",
+   "capacity_min_tons": 15,
+   "capacity_max_tons": 25,
+   "features": [
+    "hex sizes 1/2 in to 2-1/4 in",
+    "splits seized nuts without damaging the bolt"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose",
+    "acc-coupler"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-ens",
+   "series": "ENS",
+   "name": "ENS Nut Splitter (M20\u2013M90)",
+   "category": "nut-splitter",
+   "subtype": "hydraulic-nut-splitter",
+   "features": [
+    "bolt sizes 3/4 in to 3-1/2 in (M20 to M90)",
+    "triple-edge replaceable cutting blade",
+    "blade positioning scale prevents bolt damage",
+    "nut size adjustable via rotating cylinder"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-rwp55",
+    "acc-hose"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-fls15",
+   "series": "FLS",
+   "name": "FLS15 Hydraulic Flange Spreader 16.5 ton",
+   "category": "spreader",
+   "subtype": "flange-spreader",
+   "capacity_tons": 16.5,
+   "features": [
+    "wedge-driven",
+    "serrated shoe",
+    "compact and lightweight",
+    "suitable for offshore"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-hs2000",
+   "series": "HS",
+   "name": "HS2000 Hydraulic Spreader 1 & 1-1/2 ton",
+   "category": "spreader",
+   "subtype": "pry-spreader",
+   "capacity_min_tons": 1,
+   "capacity_max_tons": 1.5,
+   "features": [
+    "works like a hydraulic pry bar",
+    "compact"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-vise-859",
+   "series": "PTPHV",
+   "name": "PTPHV859ASPX Hydraulic Vise (8 in jaw, 5 ton)",
+   "category": "vise",
+   "subtype": "hydraulic-vise",
+   "capacity_tons": 5,
+   "features": [
+    "8 in jaw opening",
+    "5 ton clamping force",
+    "optional foot-operated pump for hands-free use"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-jack-9015b",
+   "series": "9015B",
+   "name": "Hydraulic Jacks 2\u2013110 ton (bottle, low-profile, telescoping, sidewinder)",
+   "category": "jack",
+   "subtype": "bottle-jack",
+   "capacity_min_tons": 2,
+   "capacity_max_tons": 110,
+   "features": [
+    "bottle, low profile, telescoping and sidewinder jacks",
+    "self-contained \u2014 no separate pump needed"
+   ],
+   "pairs_with": [
+    "acc-gauge"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-jack-toe",
+   "series": "9015B",
+   "name": "Toe Jacks 2\u201310 ton",
+   "category": "jack",
+   "subtype": "toe-jack",
+   "capacity_min_tons": 2,
+   "capacity_max_tons": 10,
+   "features": [
+    "lifts loads close to the floor",
+    "toe and top-lift positions"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-rj100t24e",
+   "series": "RJ",
+   "name": "RJ100T24E Portable Railroad Jack 100 ton",
+   "category": "jack",
+   "subtype": "railroad-jack",
+   "capacity_tons": 100,
+   "features": [
+    "16 in to 27 in stroke",
+    "extended height up to 64 in",
+    "cribbing blocks, spacers, extensions and swivel caps included",
+    "electric or air hydraulic powered",
+    "remote control",
+    "ideal for locomotive and railcar maintenance"
+   ],
+   "industries": [
+    "mining",
+    "power",
+    "construction"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-sj-stressing",
+   "series": "SJ",
+   "name": "SJ2010 / SJ3010 Post-Tension & Stressing Jacks 20 & 30 ton",
+   "category": "jack",
+   "subtype": "stressing-jack",
+   "capacity_min_tons": 20,
+   "capacity_max_tons": 30,
+   "features": [
+    "monostrand stressing jacks",
+    "optional power seater"
+   ],
+   "industries": [
+    "cement",
+    "construction",
+    "power"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-ph553c",
+   "series": "PH",
+   "name": "PH553C / PH1002 ENFORCER Hydraulic Universal Puller 55 & 100 ton",
+   "category": "puller",
+   "subtype": "universal-puller",
+   "capacity_min_tons": 55,
+   "capacity_max_tons": 100,
+   "features": [
+    "Grip-O-Matic feature",
+    "hydraulic lift for easy precise positioning",
+    "ease of mobility"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-pt110",
+   "series": "PT",
+   "name": "PT110 / PT213 Mechanical Jaw Puller 1\u201340 ton",
+   "category": "puller",
+   "subtype": "mechanical-jaw-puller",
+   "capacity_min_tons": 1,
+   "capacity_max_tons": 40,
+   "features": [
+    "2 and 3 jaw",
+    "safety cage and T handle control the jaws at all times",
+    "long and extra-long jaw options on select models"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-ptphc",
+   "series": "PTPHC",
+   "name": "PTPHC Series Hydraulic Puller 5\u201350 ton",
+   "category": "puller",
+   "subtype": "hydraulic-jaw-puller",
+   "capacity_min_tons": 5,
+   "capacity_max_tons": 50,
+   "features": [
+    "2 and 3 jaws",
+    "available with electric or hand pump",
+    "long and extra-long jaw options"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "pt-pe55"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-ptph",
+   "series": "PTPH",
+   "name": "PTPH Series Hydraulic Puller 50\u2013200 ton",
+   "category": "puller",
+   "subtype": "hydraulic-jaw-puller",
+   "capacity_min_tons": 50,
+   "capacity_max_tons": 200,
+   "features": [
+    "2, 3 and 4 jaw configurations",
+    "vertical and horizontal models",
+    "optional jaw tips for 100 and 200 ton models",
+    "available in single and double-acting"
+   ],
+   "pairs_with": [
+    "pt-pe55"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-pr3100j",
+   "series": "PR",
+   "name": "PR3100J Universal Railroad Axle Roller Bearing Puller/Installer 100 ton",
+   "category": "puller",
+   "subtype": "bearing-puller",
+   "capacity_tons": 100,
+   "features": [
+    "100 ton pulling force",
+    "jack or sling type",
+    "hydraulic lift for precise positioning",
+    "services Class B through GG and metric bearings",
+    "double-acting"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-spm1010",
+   "series": "SPM",
+   "name": "SPM1010 C-Frame Press 25 ton",
+   "category": "press",
+   "subtype": "c-frame-press",
+   "capacity_tons": 25,
+   "features": [
+    "optional pedestal base"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-spm256c",
+   "series": "SPM",
+   "name": "SPM256C Bench Press 10 ton",
+   "category": "press",
+   "subtype": "bench-press",
+   "capacity_tons": 10,
+   "features": [
+    "benchtop"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-spe256",
+   "series": "SPE",
+   "name": "SPE256 Economy H-Frame Press 25 ton",
+   "category": "press",
+   "subtype": "h-frame-press",
+   "capacity_tons": 25,
+   "features": [
+    "economy H-frame"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-sp1010a",
+   "series": "SP",
+   "name": "SP1010A Floor Press 10 ton",
+   "category": "press",
+   "subtype": "floor-press",
+   "capacity_tons": 10,
+   "features": [
+    "floor standing"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-spm2514",
+   "series": "SPM",
+   "name": "SPM2514 Open-Throat H-Frame Press 25 ton",
+   "category": "press",
+   "subtype": "h-frame-press",
+   "capacity_tons": 25,
+   "features": [
+    "open throat"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-spe5513",
+   "series": "SPE",
+   "name": "SPE5513 H-Frame Press 55\u2013200 ton",
+   "category": "press",
+   "subtype": "h-frame-press",
+   "capacity_min_tons": 55,
+   "capacity_max_tons": 200,
+   "features": [
+    "heavy-duty H-frame"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-rb10013s",
+   "series": "RB",
+   "name": "RB10013S Roll-Bed H-Frame Press 80\u2013200 ton",
+   "category": "press",
+   "subtype": "h-frame-press",
+   "capacity_min_tons": 80,
+   "capacity_max_tons": 200,
+   "features": [
+    "fast and easy loading of heavy workpieces",
+    "centering of pressing jobs"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-fc2200",
+   "series": "FC",
+   "name": "FC2200 Floor Crane 1 & 2 ton",
+   "category": "crane",
+   "subtype": "floor-crane",
+   "capacity_min_tons": 1,
+   "capacity_max_tons": 2,
+   "features": [
+    "foldaway feature for compact storage",
+    "ease of mobility"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-twlc",
+   "series": "TWLC",
+   "name": "TWLC Series Hydraulic Torque Wrench (1,880\u201339,000 Nm)",
+   "category": "torque-wrench",
+   "subtype": "hydraulic-square-drive",
+   "torque_min_nm": 1880,
+   "torque_max_nm": 39000,
+   "features": [
+    "1,390 to 28,800 ft-lb capacity",
+    "super compact and lightweight",
+    "durable rigid all-steel body",
+    "multi-axis high-flow swivel manifold",
+    "safety pressure release mechanism"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-rwp55"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-twhc",
+   "series": "TWHC",
+   "name": "TWHC Series Hydraulic Torque Wrench \u2014 hollow (1,880\u201339,000 Nm)",
+   "category": "torque-wrench",
+   "subtype": "hydraulic-hollow",
+   "torque_min_nm": 1880,
+   "torque_max_nm": 39000,
+   "features": [
+    "patented torque transfer mechanism",
+    "side-load free piston",
+    "topside or sub-sea applications",
+    "accurate torque output"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-rwp55"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-rwp55",
+   "series": "RWP",
+   "name": "RWP55 Series Torque Wrench Pump",
+   "category": "pump",
+   "subtype": "torque-wrench-pump",
+   "features": [
+    "high performance pump for rapid tool advance",
+    "external adjustable pressure regulator for torque setting",
+    "retract-side internal relief valve protects the tool",
+    "hand remote control with 6 m cord",
+    "single or four-tool manifold"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-twlc",
+    "pt-twhc"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-pe60-tw",
+   "series": "PE60",
+   "name": "PE60 Series Torque Wrench Pump (electric / air)",
+   "category": "pump",
+   "subtype": "torque-wrench-pump",
+   "features": [
+    "electric TW pump with optional oil cooling fan",
+    "air TW pump safe in hazardous or explosive environments",
+    "use for single- or double-acting tools"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-twlc",
+    "pt-twhc"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-srt",
+   "series": "SRT",
+   "name": "SRT Bolt Tensioner (3/4 in \u2013 4 in bolts)",
+   "category": "tensioner",
+   "subtype": "bolt-tensioner",
+   "features": [
+    "spring-return and manual-return options",
+    "bolt coverage 3/4 in to 4 in",
+    "unique quick-release bridge adaptation",
+    "subsea tensioners available",
+    "wind tensioners available"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-hputp"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-hputp",
+   "series": "HPUTP",
+   "name": "HPUTP Series Tensioner Pump",
+   "category": "pump",
+   "subtype": "tensioner-pump",
+   "features": [
+    "corrosion resistant frame",
+    "continuous duty up to 50 C ambient",
+    "calibrated 6 in pressure gauge",
+    "dual oil outlets with no-spill quick connects",
+    "pneumatic filter/regulator/lubricator included"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-srt"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-cbt",
+   "series": "CBT",
+   "name": "CBT Series Threaded-End Cylinder 5\u201325 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-threaded-end",
+   "capacity_min_tons": 5,
+   "capacity_max_tons": 25,
+   "features": [
+    "threaded collars",
+    "threaded piston rod ends",
+    "internal base threads",
+    "accommodates accessories and adapters"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose",
+    "acc-gauge",
+    "acc-coupler"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-rp",
+   "series": "RP",
+   "name": "RP Series Pulling Cylinder 2 & 5 ton",
+   "category": "cylinder",
+   "subtype": "single-acting-pulling",
+   "capacity_min_tons": 2,
+   "capacity_max_tons": 5,
+   "features": [
+    "threaded piston rod ends",
+    "heavy-duty spring for long life and rapid extension",
+    "for pulling and pressing"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-rt",
+   "series": "RT",
+   "name": "RT Series Center-Hole Cylinder 17.5\u2013100 ton",
+   "category": "cylinder",
+   "subtype": "center-hole",
+   "capacity_min_tons": 17.5,
+   "capacity_max_tons": 100,
+   "features": [
+    "hollow piston, twin cylinder design",
+    "compact design",
+    "interchangeable piston head inserts",
+    "base mounting holes"
+   ],
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "pairs_with": [
+    "pt-p460",
+    "acc-hose",
+    "acc-gauge"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-r-d",
+   "series": "R_D",
+   "name": "R_D Series Double-Acting Cylinder 100\u2013565 ton",
+   "category": "cylinder",
+   "subtype": "double-acting",
+   "capacity_min_tons": 100,
+   "capacity_max_tons": 565,
+   "features": [
+    "plated piston rod resists corrosion",
+    "built-in safety relief prevents retraction over-pressurization"
+   ],
+   "pairs_with": [
+    "pt-pe55",
+    "acc-hose",
+    "acc-gauge"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-p12-p55",
+   "series": "P",
+   "name": "P12 / P23 / P55 Single-Speed Hand Pumps",
+   "category": "pump",
+   "subtype": "hand-pump-single-speed",
+   "features": [
+    "oil capacities from 12 to 55 cubic inches",
+    "P23 up to 3,000 psi",
+    "no power needed"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-p19-p159",
+   "series": "P",
+   "name": "P19 / P59 / P159 Two-Speed Hand Pumps",
+   "category": "pump",
+   "subtype": "hand-pump-two-speed",
+   "features": [
+    "two-speed for fast advance then high pressure",
+    "single-acting"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-pe17-pe30",
+   "series": "PE",
+   "name": "PE17 / PE18 / PE30 Portable Electric Pumps",
+   "category": "pump",
+   "subtype": "electric-portable",
+   "features": [
+    "1/2 hp to 1 hp motors",
+    "for maintenance and construction applications",
+    "two-speed"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-pe60",
+   "series": "PE60",
+   "name": "PE60 Series Compact Electric Pump",
+   "category": "pump",
+   "subtype": "electric-portable",
+   "features": [
+    "1-1/8 hp universal motor",
+    "compact and lightweight",
+    "operates single or double-acting cylinders or stressing jacks"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-ped25",
+   "series": "PED",
+   "name": "PED25 Series Dual-Flow Electric Pump",
+   "category": "pump",
+   "subtype": "electric-stationary",
+   "features": [
+    "1-1/2 hp induction motor",
+    "dual flow \u2014 runs multiple tools or cylinders from one power unit"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-pq120",
+   "series": "PQ",
+   "name": "PQ120 Series Electric Pump (3 hp, 3-phase)",
+   "category": "pump",
+   "subtype": "electric-stationary",
+   "features": [
+    "3 hp 3-phase motor",
+    "low-speed high-torque for heavy-duty extended-cycle operations"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "construction"
+   ],
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-fluid",
+   "series": "9639/9638",
+   "name": "Power Team Hydraulic Fluid",
+   "category": "fluid",
+   "subtype": "hydraulic-oil",
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "features": [
+    "standard, flame-out, biodegradable and low-temperature grades",
+    "1 quart, 1 gallon and 2-1/2 gallon packs"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-gauge-9040",
+   "series": "9040",
+   "name": "9040 / 9040GA Pressure Gauges (2-1/2 in, 4 in, 6 in + digital)",
+   "category": "gauge",
+   "subtype": "pressure-gauge",
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "features": [
+    "2-1/2 in, 4 in and 6 in analog dials plus a 2.5 in digital gauge",
+    "ASME B40-1 Grade B",
+    "dry or silicone filled",
+    "stainless steel case",
+    "optional maximum peak indicator lens",
+    "1/4 in NPT"
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
+  },
+  {
+   "id": "pt-hose-9774",
+   "series": "9774",
+   "name": "Power Team High-Pressure Hose (1/4 in & 3/8 in, 2\u2013100 ft)",
+   "category": "hose",
+   "subtype": "high-pressure",
+   "thread": "3/8-18 NPT",
+   "max_pressure_bar": 700,
+   "industries": [
+    "cement",
+    "mining",
+    "power",
+    "oil-gas",
+    "semiconductor",
+    "shipbuilding"
+   ],
+   "features": [
+    "polyurethane or rubber wire-braided",
+    "non-conductive hoses available for electrical isolation",
+    "2 ft to 100 ft lengths",
+    "1/4 in or 3/8 in I.D."
+   ],
+   "brand": "Power Team",
+   "verified": true,
+   "pairs_with": [],
+   "source": "HT Professional Hydraulic Equipment brochure (HT_PROFESSIONAL_HYDRAULIC_EQUIPMENT_0824_GB_A4)"
   }
  ]
 }

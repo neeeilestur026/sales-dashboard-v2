@@ -1,104 +1,281 @@
 {
- "_note": "Map customer wording to a category. To extend: add words to terms[].",
- "synonyms": [
-  {
-   "category": "high-pressure",
-   "terms": [
-    "uhp",
-    "ultra high pressure",
-    "700 bar",
-    "10000 psi",
-    "10k psi",
-    "high pressure",
-    "1000 bar",
-    "1500 bar",
-    "15000 psi",
-    "100 mpa",
-    "700bar"
-   ]
-  },
-  {
-   "category": "cylinder",
-   "terms": [
-    "jack",
-    "ram",
-    "cylinder",
-    "lifter",
-    "lifting jack",
-    "hydraulic jack",
-    "hydraulic cylinder",
-    "single acting cylinder",
-    "double acting cylinder",
-    "hollow ram",
-    "lock nut cylinder",
-    "pancake cylinder",
-    "low height cylinder",
-    "enerpac"
-   ]
-  },
-  {
-   "category": "coupler",
-   "terms": [
-    "coupling",
-    "coupler",
-    "quick connect",
-    "qc",
-    "fitting",
-    "quick-connect",
-    "quick coupling",
-    "npt coupler",
-    "nipple",
-    "hydraulic fitting",
-    "cejn"
-   ]
-  },
-  {
-   "category": "torque-wrench",
-   "terms": [
-    "torque gun",
-    "bolting machine",
-    "pneumatic wrench",
-    "torque wrench",
-    "torque tool",
-    "bolting",
-    "torque machine",
-    "nut runner",
-    "rad gun",
-    "pneumatic torque wrench",
-    "battery torque wrench",
-    "torque multiplier",
-    "bolt tightening",
-    "rad"
-   ]
-  },
-  {
-   "category": "pump",
-   "terms": [
-    "power pack",
-    "powerpack",
-    "hpu",
-    "pump unit",
-    "pump",
-    "hand pump",
-    "electric pump",
-    "hydraulic pump",
-    "air pump",
-    "air hydraulic pump",
-    "battery pump",
-    "two speed pump",
-    "foot pump"
-   ]
-  },
-  {
-   "category": "hose",
-   "terms": [
-    "hose",
-    "hydraulic hose",
-    "uhp hose",
-    "high pressure hose",
-    "whip hose",
-    "hose assembly"
-   ]
-  }
- ]
+  "_note": "Map customer wording to a category. Longest matching term wins, so a specific phrase like 'bottle jack' beats the generic 'jack'. To extend: add words to terms[].",
+  "synonyms": [
+    {
+      "category": "high-pressure",
+      "terms": [
+        "uhp",
+        "ultra high pressure",
+        "700 bar",
+        "10000 psi",
+        "10k psi",
+        "high pressure",
+        "1000 bar",
+        "1500 bar",
+        "15000 psi",
+        "100 mpa",
+        "700bar"
+      ]
+    },
+    {
+      "category": "cylinder",
+      "terms": [
+        "jack",
+        "ram",
+        "cylinder",
+        "lifter",
+        "lifting jack",
+        "hydraulic jack",
+        "hydraulic cylinder",
+        "single acting cylinder",
+        "double acting cylinder",
+        "hollow ram",
+        "lock nut cylinder",
+        "pancake cylinder",
+        "low height cylinder",
+        "enerpac",
+        "threaded end cylinder",
+        "pulling cylinder",
+        "twin cylinder",
+        "stressing cylinder",
+        "ram cylinder",
+        "center hole",
+        "centre hole",
+        "hollow cylinder",
+        "center hole cylinder",
+        "through hole cylinder"
+      ]
+    },
+    {
+      "category": "coupler",
+      "terms": [
+        "coupling",
+        "coupler",
+        "quick connect",
+        "qc",
+        "fitting",
+        "quick-connect",
+        "quick coupling",
+        "npt coupler",
+        "nipple",
+        "hydraulic fitting",
+        "cejn"
+      ]
+    },
+    {
+      "category": "torque-wrench",
+      "terms": [
+        "torque gun",
+        "bolting machine",
+        "pneumatic wrench",
+        "torque wrench",
+        "torque tool",
+        "bolting",
+        "torque machine",
+        "nut runner",
+        "rad gun",
+        "pneumatic torque wrench",
+        "battery torque wrench",
+        "torque multiplier",
+        "bolt tightening",
+        "rad",
+        "hydraulic torque wrench",
+        "square drive wrench",
+        "hollow torque wrench",
+        "twlc",
+        "twhc",
+        "torque tool for flange bolts",
+        "subsea torque wrench"
+      ]
+    },
+    {
+      "category": "pump",
+      "terms": [
+        "power pack",
+        "powerpack",
+        "hpu",
+        "pump unit",
+        "pump",
+        "hand pump",
+        "electric pump",
+        "hydraulic pump",
+        "air pump",
+        "air hydraulic pump",
+        "battery pump",
+        "two speed pump",
+        "foot pump",
+        "torque wrench pump",
+        "tensioner pump",
+        "dual flow pump",
+        "stationary pump",
+        "hand pump 2 speed",
+        "12v pump"
+      ]
+    },
+    {
+      "category": "hose",
+      "terms": [
+        "hose",
+        "hydraulic hose",
+        "uhp hose",
+        "high pressure hose",
+        "whip hose",
+        "hose assembly",
+        "non conductive hose",
+        "wire braided hose",
+        "hose assembly 3/8"
+      ]
+    },
+    {
+      "category": "punch",
+      "terms": [
+        "hydraulic punch",
+        "hydraulic puncher",
+        "puncher",
+        "hole punch",
+        "punching machine",
+        "punch holes",
+        "plate punch",
+        "busbar punch",
+        "punch and die"
+      ]
+    },
+    {
+      "category": "nut-splitter",
+      "terms": [
+        "nut splitter",
+        "nut cracker",
+        "nut breaker",
+        "split a nut",
+        "seized nut",
+        "remove seized nut",
+        "stuck nut",
+        "nut removal",
+        "nut splitting"
+      ]
+    },
+    {
+      "category": "spreader",
+      "terms": [
+        "flange spreader",
+        "spreader",
+        "hydraulic spreader",
+        "pry bar",
+        "flange separator",
+        "wedge spreader",
+        "separate flanges"
+      ]
+    },
+    {
+      "category": "puller",
+      "terms": [
+        "puller",
+        "bearing puller",
+        "gear puller",
+        "jaw puller",
+        "hydraulic puller",
+        "mechanical puller",
+        "pulley puller",
+        "grip-o-matic",
+        "enforcer puller",
+        "bearing removal",
+        "pull a bearing"
+      ]
+    },
+    {
+      "category": "press",
+      "terms": [
+        "shop press",
+        "hydraulic press",
+        "h frame press",
+        "h-frame",
+        "c frame press",
+        "c-frame",
+        "bench press",
+        "floor press",
+        "arbor press",
+        "workshop press",
+        "press machine",
+        "roll bed press",
+        "open throat press"
+      ]
+    },
+    {
+      "category": "jack",
+      "terms": [
+        "bottle jack",
+        "toe jack",
+        "telescoping jack",
+        "sidewinder jack",
+        "stressing jack",
+        "post tension jack",
+        "railroad jack",
+        "locomotive jack",
+        "railcar jack",
+        "porta power",
+        "floor jack",
+        "low profile jack",
+        "service jack"
+      ]
+    },
+    {
+      "category": "tensioner",
+      "terms": [
+        "tensioner",
+        "bolt tensioner",
+        "stud tensioner",
+        "hydraulic tensioner",
+        "bolt tensioning",
+        "subsea tensioner",
+        "wind tensioner",
+        "flange bolt tensioner"
+      ]
+    },
+    {
+      "category": "vise",
+      "terms": [
+        "hydraulic vise",
+        "vise",
+        "vice",
+        "bench vise",
+        "clamping",
+        "work holding"
+      ]
+    },
+    {
+      "category": "crane",
+      "terms": [
+        "floor crane",
+        "shop crane",
+        "engine crane",
+        "mobile crane",
+        "folding crane",
+        "lifting crane"
+      ]
+    },
+    {
+      "category": "fluid",
+      "terms": [
+        "hydraulic oil",
+        "hydraulic fluid",
+        "jack oil",
+        "biodegradable oil",
+        "low temperature oil",
+        "flame out oil",
+        "oil for the pump"
+      ]
+    },
+    {
+      "category": "gauge",
+      "terms": [
+        "pressure gauge",
+        "gauge",
+        "manometer",
+        "digital gauge",
+        "analog gauge",
+        "peak indicator",
+        "pressure indicator"
+      ]
+    }
+  ]
 }

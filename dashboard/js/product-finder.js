@@ -146,17 +146,55 @@ function pfExtractTons(text) {
 
 const pfMpaToBar = m => m * 10;
 
-/* signal → key(s) matched as substrings of the product's `subtype` field */
+/* signal → key(s) matched as substrings of the product's `subtype` field.
+   Signals only ever narrow WITHIN the matched category, so a press signal can never pull a cylinder. */
 const PF_SUBTYPE_SIGNALS = [
+  // cylinders
   [/double[- ]acting|powered return/, 'double-acting'],
   [/low[- ](height|profile)|flat (jack|cylinder)/, 'low-profile'],
   [/pancake/, 'pancake'],
   [/lock[- ]?nut|locking|load[- ]hold|hold the load/, 'locking'],
   [/hollow|cent(er|re)[- ]hole|through[- ]hole/, 'center-hole'],
-  [/alumin(um|ium)|light[- ]?weight/, 'aluminum']
+  [/alumin(um|ium)|light[- ]?weight/, 'aluminum'],
+  // jacks — "bottle jack" must land on the bottle jack, not the nearest-tonnage jack family
+  [/bottle/, 'bottle-jack'],
+  [/toe[- ]jack/, 'toe-jack'],
+  [/stressing|post[- ]tension/, 'stressing-jack'],
+  [/railroad|railway|locomotive|railcar/, 'railroad-jack'],
+  // spreaders — "flange spreader" is a distinct tool from a pry spreader
+  [/flange/, 'flange-spreader'],
+  // pumps — "hand pump" must not answer with a tensioner pump
+  [/hand[- ]pump|manual pump/, 'hand'],
+  [/two[- ]speed|2[- ]speed|dual[- ]speed/, 'two-speed'],
+  [/single[- ]speed/, 'single-speed'],
+  [/air[- ](hydraulic[- ])?pump|pneumatic pump/, 'air'],
+  [/battery|cordless/, 'battery'],
+  [/electric[- ]?(al)?[- ]pump/, 'electric'],
+  [/torque[- ]wrench pump|tw pump/, 'torque-wrench-pump'],
+  [/tensioner pump/, 'tensioner-pump'],
+  // presses
+  [/h[- ]?frame/, 'h-frame-press'],
+  [/c[- ]?frame/, 'c-frame-press'],
+  [/bench[- ]press/, 'bench-press'],
+  [/floor[- ]press/, 'floor-press'],
+  // pullers
+  [/mechanical/, 'mechanical'],
+  [/bearing/, 'bearing-puller']
 ];
 /* 'low height' honestly covers three catalog families */
 const PF_SUBTYPE_EXPAND = { 'low-profile': ['low-profile', 'pancake', 'short'] };
+
+const pfFtlbToNm = f => f * 1.35582;
+
+/* Model/series tokens the rep typed ("RT series", "P23", "RC1006"). Kept deliberately tight:
+   a bare number is a size, not a model, and a 1-letter token is noise. */
+function pfModelTokens(text) {
+  return pfTokenize(text).filter(t =>
+    t.length >= 2 && /[a-z]/.test(t) && !PF_MODEL_STOPWORDS.has(t));
+}
+const PF_MODEL_STOPWORDS = new Set(['series','type','model','the','and','for','with','ton','tons','tonne',
+  'mm','cm','inch','in','bar','psi','mpa','nm','kg','kn','hydraulic','pump','jack','ram','press','need',
+  'want','set','sets','pcs','pc','unit','units','high','low','new','old']);
 
 function pfExtractAttrs(text) {
   let t = ' ' + pfNorm(text) + ' ';
@@ -167,6 +205,16 @@ function pfExtractAttrs(text) {
     const v = parseFloat(pr[1]);
     pressureBar = pr[2] === 'psi' ? pfPsiToBar(v) : pr[2] === 'mpa' ? pfMpaToBar(v) : v;
     t = t.replace(pr[0], ' ');
+  }
+  // torque, also STRIPPED — "20000 nm" must never be read as a tonnage, and a wrench that cannot
+  // reach the asked figure must never be offered (the same safety rule the coupler path enforces).
+  let torqueNm = 0;
+  const tq = t.match(/(\d+(?:[.,]\d+)?)\s*(nm|n\.m|newton met(?:er|re)s?)\b/) ||
+             t.match(/(\d+(?:[.,]\d+)?)\s*(ft[- ]?lbs?|ft\.?lbs?|foot[- ]?pounds?)\b/);
+  if (tq) {
+    const v = parseFloat(String(tq[1]).replace(/,/g, ''));
+    torqueNm = /^n/.test(tq[2]) ? v : pfFtlbToNm(v);
+    t = t.replace(tq[0], ' ');
   }
   // stroke ("160 mm stroke" / "stroke of 6 in"), stripped for the same reason
   let strokeMm = 0;
@@ -187,7 +235,27 @@ function pfExtractAttrs(text) {
     if (kn) tons = Math.round(pfKnToTons(parseFloat(kn[1])) * 100) / 100;
   }
   const subtypes = PF_SUBTYPE_SIGNALS.filter(([re]) => re.test(t)).map(([, k]) => k);
-  return { tons, strokeMm, pressureBar, subtypes };
+  return { tons, strokeMm, pressureBar, torqueNm, subtypes, modelTokens: pfModelTokens(text) };
+}
+
+/* ── Capacity helpers: a family may carry a RANGE ("presses 55–200 ton") instead of one size.
+      The brochure gives ranges, so we store the range rather than invent discrete models. ── */
+function pfCapMax(p) {
+  if (typeof p.capacity_max_tons === 'number') return p.capacity_max_tons;
+  if (typeof p.capacity_tons === 'number') return p.capacity_tons;
+  return null;
+}
+function pfCapMin(p) {
+  if (typeof p.capacity_min_tons === 'number') return p.capacity_min_tons;
+  if (typeof p.capacity_tons === 'number') return p.capacity_tons;
+  return null;
+}
+/** Plain-English capacity for a card: "100 ton" or "55–200 ton". */
+function pfCapLabel(p) {
+  const lo = pfCapMin(p), hi = pfCapMax(p);
+  if (lo === null && hi === null) return '';
+  if (lo !== null && hi !== null && lo !== hi) return lo + '–' + hi + ' t';
+  return (hi !== null ? hi : lo) + ' t';
 }
 
 /** Competitor model typed inside an RFQ ("customer has Enerpac RC-1006") → surface the crossover. */
@@ -210,10 +278,12 @@ function pfXrefInText(text, rows) {
 
 /* 'high-pressure' is a wording group, not a product category — it means UHP couplers/hoses. */
 const PF_CATEGORY_ALIAS = { 'high-pressure': ['coupler', 'hose'] };
+/* Families whose whole point is a load rating — answering one without the load is a guess. */
+const PF_LOAD_RATED = ['jack', 'press', 'puller', 'punch', 'spreader', 'vise', 'crane'];
 
 /** RFQ matcher v2: category filter + HARD never-undersized filter + subtype narrowing +
  *  capacity-proximity / stroke / industry scoring, with fully deterministic tie-breaks.
- *  A cylinder ask with NO load returns { needTons:true } instead of guessing a size. */
+ *  A load-rated ask with NO load returns { needTons:true } instead of guessing a size. */
 function pfRfqMatch(text, industry, data) {
   const det = pfDetectCategory(text, data.synonyms);
   const attrs = pfExtractAttrs(text);
@@ -231,8 +301,14 @@ function pfRfqMatch(text, industry, data) {
 
   let pool = data.products.filter(p => cats.includes(p.category));
 
-  // HARD safety-style filter: never recommend a cylinder below the asked load (same rule as couplers).
-  if (tons > 0) pool = pool.filter(p => typeof p.capacity_tons !== 'number' || p.capacity_tons >= tons);
+  // HARD safety-style filter: never recommend below the asked load (same rule as couplers).
+  // Range-aware — a family like "H-Frame Press 55–200 t" qualifies when its MAX covers the ask.
+  if (tons > 0) pool = pool.filter(p => { const m = pfCapMax(p); return m === null || m >= tons; });
+
+  // The same line for TORQUE. A wrench that cannot reach the asked figure must never be the answer.
+  if (attrs.torqueNm > 0) {
+    pool = pool.filter(p => typeof p.torque_max_nm !== 'number' || p.torque_max_nm >= attrs.torqueNm);
+  }
 
   // Subtype narrowing — filter when the catalog can satisfy the signal, else relax + say so.
   let relaxed = false;
@@ -242,20 +318,50 @@ function pfRfqMatch(text, industry, data) {
     if (narrowed.length) pool = narrowed; else relaxed = true;
   });
 
+  // Same rule as cylinders, applied after narrowing: a load-rated family spanning very different
+  // sizes (presses 10–200 t, pullers 1–100 t) can't be answered from a bare "shop press" without
+  // guessing — but when a signal or a small catalog leaves one obvious family, just answer.
+  if (!(tons > 0) && PF_LOAD_RATED.includes(det.category) && pool.length > 1) {
+    const rated = pool.filter(p => pfCapMax(p) !== null);
+    const spread = rated.length > 1 &&
+      Math.max(...rated.map(pfCapMax)) >= 4 * Math.min(...rated.map(pfCapMax));
+    if (spread) {
+      return { miss: false, needTons: true, category: det.category, matchedTerm: det.term,
+               attrs, xref, relaxed, results: [] };
+    }
+  }
+
   const scored = pool
     .map(p => {
       let score = 1;
       if (p.verified === true) score += 10;                          // sample data can never outrank real data
       if (industry && (p.industries || []).includes(industry)) score += 2;
-      if (tons > 0 && typeof p.capacity_tons === 'number') {
-        score += Math.max(0, 6 - (p.capacity_tons - tons) / 25);     // closest COVERING size scores highest
+      if (tons > 0 && pfCapMax(p) !== null) {
+        score += Math.max(0, 6 - (pfCapMax(p) - tons) / 25);         // closest COVERING size scores highest
+      }
+      if (attrs.torqueNm > 0 && typeof p.torque_max_nm === 'number') {
+        score += Math.max(0, 6 - (p.torque_max_nm - attrs.torqueNm) / 5000);   // closest covering tool first
       }
       if (attrs.strokeMm > 0 && (p.stroke_options_mm || []).some(s => s >= attrs.strokeMm)) score += 3;
+      // the rep named a series or model ("RT series", "P23") — that beats every soft signal
+      if ((attrs.modelTokens || []).length) {
+        const ser = String(p.series || '').toLowerCase();
+        const mk = pfModelKey((p.model_example || '') + ' ' + p.name);
+        if (attrs.modelTokens.some(t => t === ser || (/\d/.test(t) && t.length >= 3 && mk.indexOf(t) !== -1))) {
+          score += 8;
+        }
+      }
       if (uhp && (p.features || []).some(f => /ultra high pressure|high pressure/i.test(f))) score += 3;
       return { p, score };
     })
     .sort((a, b) => b.score - a.score
-      || (tons > 0 ? ((a.p.capacity_tons || 0) - tons) - ((b.p.capacity_tons || 0) - tons) : 0)
+      || (tons > 0 ? ((pfCapMax(a.p) || 0) - tons) - ((pfCapMax(b.p) || 0) - tons) : 0)
+      || (attrs.torqueNm > 0 ? ((a.p.torque_max_nm || 0) - attrs.torqueNm) - ((b.p.torque_max_nm || 0) - attrs.torqueNm) : 0)
+      // between two RANGE families, the more general one first (a standard H-frame before the
+      // roll-bed specialty). Never applied to discrete sizes — that would let any range outrank
+      // the exact-size match the capacity filter just found.
+      || (typeof a.p.capacity_min_tons === 'number' && typeof b.p.capacity_min_tons === 'number'
+          ? a.p.capacity_min_tons - b.p.capacity_min_tons : 0)
       || ((a.p.series === 'C' ? 0 : 1) - (b.p.series === 'C' ? 0 : 1))   // generic ask → general-purpose first
       || String(a.p.name).localeCompare(String(b.p.name)));              // fully deterministic
   return { miss: scored.length === 0, category: det.category, matchedTerm: det.term,
@@ -266,8 +372,11 @@ function pfRfqMatch(text, industry, data) {
 function pfWhyFits(p, industry, ctx) {
   const attrs = (ctx && ctx.attrs) || {};
   const reasons = [];
-  if (attrs.tons > 0 && typeof p.capacity_tons === 'number') {
-    reasons.push('Rated ' + p.capacity_tons + ' t — covers your ' + attrs.tons + '-t load');
+  if (attrs.tons > 0 && pfCapMax(p) !== null) {
+    reasons.push('Rated ' + pfCapLabel(p) + ' — covers your ' + attrs.tons + '-t load');
+  }
+  if (attrs.torqueNm > 0 && typeof p.torque_max_nm === 'number') {
+    reasons.push('reaches ' + p.torque_max_nm + ' Nm — covers your ' + Math.round(attrs.torqueNm) + ' Nm');
   }
   (attrs.subtypes || []).forEach(sig => {
     const keys = PF_SUBTYPE_EXPAND[sig] || [sig];
@@ -751,7 +860,7 @@ async function pfRfqSubmit() {
       + '</div>'
     : '';
 
-  // Cylinder ask with no load: ask for the load instead of guessing a size. Nothing is logged yet.
+  // Load-rated ask with no load: ask for the load instead of guessing a size. Nothing is logged yet.
   if (m.needTons) {
     box.innerHTML = xrefHtml
       + '<div class="cr-sect"><h3>What is the load?</h3>'
