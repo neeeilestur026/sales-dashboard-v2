@@ -400,10 +400,6 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Accounting
       </a>
-      <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-        Inventory
-      </a>
       <a href="marketing-home.html" class="${activePage === 'marketing-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         Marketing
@@ -899,6 +895,18 @@ async function flowComputeActions(session) {
       const t = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
       return s && s < t; } catch (e) { return false; }
   };
+  /* A171 — a nudge is only a nudge if someone can still act on it. A delivered or closed record has
+     nothing left to do, and one untouched for months is history. Without these the strip filled with
+     long-finished work and buried the things that genuinely needed her. */
+  const _actionable = (status) => !/deliver|closed|complete|cancel|void|paid|quoted|rejected/i.test(String(status || ''));
+  const _stale = (d, days) => {
+    if (!d) return false;
+    try {
+      const then = new Date((typeof flowDate === 'function') ? flowDate(d) : String(d).slice(0, 10));
+      const now = new Date((typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
+      return !isNaN(then) && (now - then) / 86400000 > days;
+    } catch (e) { return false; }
+  };
   const jobs = [];
 
   // Low stock — oversight roles (existing behaviour). Real stocks only; "low" = 0 < balance < 10.
@@ -991,12 +999,21 @@ async function flowComputeActions(session) {
       const received = {}; ((rc && rc.data) || []).forEach(m => { if (m.poNo) received[String(m.poNo)] = true; });
       const rcSO = {}; ((rc && rc.data) || []).forEach(m => { if (m.soNo) rcSO[String(m.soNo)] = true; });
       const invSO = {}; ((iv && iv.data) || []).forEach(v => { if (v.soNo) invSO[String(v.soNo)] = true; });
-      const noPO = ((so && so.data) || []).filter(s => !hasPO[String(s.soNo)]).length;
+      /* A171 — this nudge filtered by nothing at all, so it counted every sales order ever closed.
+         On live data it read "96 sales orders with no purchase order yet" of which 93 were already
+         Delivered, 92% were over 60 days old and NONE were actionable — the single largest entry in
+         her Action Center, and pure noise. An order that is delivered or closed will never need a
+         PO, and one nobody has touched in two months is history, not a task. */
+      const noPO = ((so && so.data) || []).filter(s =>
+        !hasPO[String(s.soNo)] && _actionable(s.status) && !_stale(s.date, 60)).length;
       if (noPO) add('report', '#b45309', noPO + ' sales order(s) with no purchase order yet', 'flow-purchase-orders.html');
-      const notRc = ((po && po.data) || []).filter(p => (p.status === 'Approved' || p.status === 'Sent') && !received[String(p.poNo)]).length;
+      // A171: same treatment — a PO raised a year ago and never received is not this week's work.
+      const notRc = ((po && po.data) || []).filter(p =>
+        (p.status === 'Approved' || p.status === 'Sent') && !received[String(p.poNo)] && !_stale(p.date, 120)).length;
       if (notRc) add('report', '#b45309', notRc + ' purchase order(s) not received yet', 'flow-receiving.html');
       // A151: received but not yet invoiced — the SO is sitting between delivery and billing.
-      const delNotInv = ((so && so.data) || []).filter(s => rcSO[String(s.soNo)] && !invSO[String(s.soNo)]).length;
+      const delNotInv = ((so && so.data) || []).filter(s =>
+        rcSO[String(s.soNo)] && !invSO[String(s.soNo)] && !_stale(s.date, 120)).length;
       if (delNotInv) add('report', '#b45309', delNotInv + ' received order(s) not yet invoiced', 'flow-lifecycle.html');
     }).catch(() => {}));
   }

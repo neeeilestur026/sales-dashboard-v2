@@ -2,9 +2,6 @@
    admin.js — Admin home hub logic
    ═══════════════════════════════════════════════ */
 
-let _adminEmailType = '';
-let _adminEmailRef  = '';
-const _adminEmailDataMap = {};
 
 document.addEventListener('DOMContentLoaded', async () => {
   const session = requireAdmin();
@@ -202,7 +199,6 @@ async function loadTaskOverview() {
     _setText('kpiPoOpen', pRows.filter(p => _isOpenStatus(p.status)).length);
     const pendingQ  = qRows.filter(q => String(q.status) === 'Pending Admin').length;
     const pendingPr = prRows.filter(p => ['Requested', 'Sourcing'].includes(String(p.status))).length;
-    _setText('kpiPending', pendingQ + pendingPr);
   } catch (err) {
     console.error('loadTaskOverview (flow) stats error:', err);
   }
@@ -301,66 +297,7 @@ async function loadInventorySnapshot() {
 // Shipment Monitoring
 // ---------------------------------------------------------------------------
 
-let _poTrackDataMap = {}; // poNo → { poNo, vendorName, referenceNo, itemsSummary, date }
-
 let _smAllRows = [];
-
-// Process-stage definitions (in workflow order)
-const _SM_STAGES = [
-  { key: 'salesOrder',          label: 'Sales Order',                           note: 'From client — triggers PO creation' },
-  { key: 'proformaInvoice',     label: 'Proforma Invoice / Order Confirmation', note: 'From supplier after PO is sent' },
-  { key: 'telegraphicTransfer', label: 'Telegraphic Transfer (TT) Form',        note: 'Payment document sent to supplier' },
-  { key: 'packingDocs',         label: 'Packing List & Commercial Invoice',     note: 'From supplier — confirms goods are packed' },
-  { key: 'forwarderQuotation',  label: 'Forwarder Quotation',                   note: 'Freight cost quote from forwarder' },
-  { key: 'waybill',             label: 'Waybill / Airway Bill',                 note: 'Shipment booking confirmation' },
-  { key: 'customsDocs',         label: 'Customs Docs (ECDT / FAN / SAD / TAN)',  note: 'BOC clearance documents' },
-  { key: 'debitMemo',           label: 'Bank Debit Memo',                       note: 'Bank debit for duties & taxes paid' },
-  { key: 'forwarderInvoice',    label: 'Forwarder Invoice (Final Cost)',         note: 'Final freight invoice from forwarder' },
-  { key: 'localCharges',        label: 'Local Charges',                         note: 'Local delivery charge document' },
-];
-
-async function trackShipmentFromPO(poNo) {
-  // Called from PO table — creates a shipment for an existing PO that has none yet
-  const po  = _poTrackDataMap[poNo] || { poNo };
-  const btn = event && event.target;
-  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
-  try {
-    const r = await apiSaveShipment({
-      poNo:        po.poNo        || '',
-      principal:   po.vendorName  || '',
-      clientsPO:   po.referenceNo || '',
-      hiescorpPO:  po.poNo        || '',
-      item:        po.itemsSummary|| '',
-      status:      'Pending',
-    });
-    if (r && r.success) {
-      // Refresh PO tab so the button changes to "View"
-      _taskLoaded['po'] = false;
-      _loadTaskPanel('po');
-      // Also refresh shipments cache
-      _smAllRows = [];
-      _taskLoaded['sm'] = false;
-    } else {
-      if (btn) { btn.disabled = false; btn.textContent = '+ Track'; }
-      alert(r.message || 'Failed to create shipment.');
-    }
-  } catch (err) {
-    if (btn) { btn.disabled = false; btn.textContent = '+ Track'; }
-    alert('Error: ' + err.message);
-  }
-}
-
-async function openSmModalByPO(poNo) {
-  // Open the edit modal for the shipment linked to this PO
-  if (!_smAllRows.length) {
-    const r = await apiGetShipments();
-    _smAllRows = (r.success && r.data) ? r.data : [];
-  }
-  const idx = _smAllRows.findIndex(s => s.poNo === poNo);
-  if (idx >= 0) {
-    openSmModal(idx);
-  }
-}
 
 async function _loadSmPanel() {
   const wrap = document.getElementById('smTableWrap');
@@ -653,134 +590,6 @@ async function saveSmEdit() {
 // ---------------------------------------------------------------------------
 // Shipment Documents
 // ---------------------------------------------------------------------------
-
-let _smCurrentDocs       = {};
-let _smCurrentDocStage   = '';
-let _smCurrentShipmentId = '';
-
-// Render the full process-stage timeline inside the modal
-function _smRenderTimeline() {
-  const wrap = document.getElementById('smTimelineWrap');
-  if (!wrap) return;
-  let html = '';
-  _SM_STAGES.forEach((stage, idx) => {
-    const files  = (_smCurrentDocs[stage.key] || []);
-    const isDone = files.length > 0;
-    const isOpen = _smCurrentDocStage === stage.key;
-    const borderCol = isOpen ? 'rgba(99,102,241,0.55)' : (isDone ? 'rgba(34,197,94,0.3)' : '#e2e8f0');
-    const bgCol     = isOpen ? 'rgba(99,102,241,0.05)' : 'transparent';
-    html += `<div style="border:1px solid ${borderCol};border-radius:8px;margin-bottom:0.4rem;overflow:hidden;background:${bgCol};transition:border-color 0.15s;">
-      <div onclick="smOpenDocStage('${stage.key}')" style="display:flex;align-items:center;gap:0.65rem;padding:0.5rem 0.75rem;cursor:pointer;user-select:none;">
-        <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;
-          background:${isDone ? 'rgba(34,197,94,0.2)' : '#e2e8f0'};
-          color:${isDone ? '#22c55e' : '#64748b'};
-          border:1px solid ${isDone ? 'rgba(34,197,94,0.5)' : '#e2e8f0'};">
-          ${isDone ? '✓' : (idx + 1)}
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:0.8rem;font-weight:600;color:${isDone ? 'var(--text-primary,#f1f5f9)' : 'var(--text-secondary,#94a3b8)'};">${esc(stage.label)}</div>
-          <div style="font-size:0.69rem;color:var(--text-muted,#64748b);margin-top:0.05rem;">${esc(stage.note)}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:0.45rem;flex-shrink:0;">
-          ${isDone
-            ? `<span style="font-size:0.67rem;font-weight:600;background:rgba(34,197,94,0.15);color:#22c55e;border-radius:99px;padding:0.1rem 0.45rem;border:1px solid rgba(34,197,94,0.3);">${files.length} file${files.length !== 1 ? 's' : ''}</span>`
-            : `<span style="font-size:0.67rem;color:var(--text-muted,#64748b);">—</span>`}
-          <span style="font-size:0.72rem;color:var(--text-muted,#64748b);">${isOpen ? '▾' : '▸'}</span>
-        </div>
-      </div>
-      ${isOpen ? `<div style="padding:0.5rem 0.75rem 0.65rem;border-top:1px solid #e2e8f0;">${_smRenderStageBody(stage.key, files)}</div>` : ''}
-    </div>`;
-  });
-  wrap.innerHTML = html;
-}
-
-function smOpenDocStage(key) {
-  _smCurrentDocStage = (_smCurrentDocStage === key) ? '' : key;
-  _smRenderTimeline();
-}
-
-function _smRenderStageBody(stageKey, files) {
-  const remaining = 5 - files.length;
-  let html = '';
-  if (files.length) {
-    html += files.map((f, i) => `
-      <div class="sm-doc-file">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <span class="sm-doc-name" title="${esc(f.name)}">${esc(f.name)}</span>
-        <button onclick="smViewDoc('${esc(f.previewUrl)}','${esc(f.url)}','${esc(f.name)}')"
-          style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#818cf8;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer;white-space:nowrap;">
-          👁 View
-        </button>
-        <button onclick="smDeleteDoc('${esc(f.fileId)}',${i},'${esc(f.name)}')"
-          style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);color:#ef4444;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer;">
-          ×
-        </button>
-      </div>`).join('');
-  } else {
-    html += `<div style="font-size:0.78rem;color:var(--text-muted,#64748b);padding:0.1rem 0 0.4rem;">No documents attached for this stage yet.</div>`;
-  }
-  if (remaining > 0) {
-    html += `<label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.45rem;cursor:pointer;padding:0.35rem 0.65rem;border:1px dashed rgba(99,102,241,0.4);border-radius:6px;background:rgba(99,102,241,0.04);">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <span style="font-size:0.75rem;color:#818cf8;">Attach document <span style="color:var(--text-muted,#64748b);font-weight:400;">(${remaining} slot${remaining !== 1 ? 's' : ''} left)</span></span>
-      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" style="display:none;" onchange="smUploadDoc(this)">
-    </label>`;
-  } else {
-    html += `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin-top:0.4rem;text-align:center;">Max 5 files reached for this stage.</div>`;
-  }
-  return html;
-}
-
-async function smUploadDoc(input) {
-  if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
-
-  // Show uploading indicator
-  const uploadLabel = input.closest('label');
-  if (uploadLabel) uploadLabel.innerHTML = '<span style="font-size:0.76rem;color:var(--text-muted,#64748b);">Uploading…</span>';
-
-  try {
-    const base64 = await _smFileToBase64(file);
-    const r = await apiUploadShipmentDoc(
-      _smCurrentShipmentId,
-      _smCurrentDocStage,
-      file.name,
-      base64,
-      file.type || 'application/octet-stream'
-    );
-    if (r && r.success) {
-      _smCurrentDocs = r.documents || _smCurrentDocs;
-      // Update the cached shipment row
-      const row = _smAllRows.find(s => s.shipmentId === _smCurrentShipmentId);
-      if (row) row.documents = JSON.stringify(_smCurrentDocs);
-      _smRenderTimeline();
-    } else {
-      _smRenderTimeline();
-      alert(r.message || 'Upload failed.');
-    }
-  } catch (err) {
-    _smRenderTimeline();
-    alert('Upload error: ' + err.message);
-  }
-  input.value = '';
-}
-
-async function smDeleteDoc(fileId, idx, fileName) {
-  if (!confirm('Remove this file?')) return;
-  try {
-    const r = await apiDeleteShipmentDoc(_smCurrentShipmentId, _smCurrentDocStage, fileId, fileName || '');
-    if (r && r.success) {
-      _smCurrentDocs = r.documents || _smCurrentDocs;
-      const row = _smAllRows.find(s => s.shipmentId === _smCurrentShipmentId);
-      if (row) row.documents = JSON.stringify(_smCurrentDocs);
-      _smRenderTimeline();
-    } else {
-      alert(r.message || 'Delete failed.');
-    }
-  } catch (err) {
-    alert('Error: ' + err.message);
-  }
-}
 
 function smViewDoc(previewUrl, driveUrl, name) {
   document.getElementById('smPdfTitle').textContent   = name || 'Document';
@@ -1559,67 +1368,3 @@ function _esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ─── Admin Email Modal (Follow Up / Supplier Inquiry) ─────────────
-
-function openAdminFollowUpEmail(key) {
-  const d = _adminEmailDataMap[key] || {};
-  _adminEmailType = 'followup';
-  _adminEmailRef  = key;
-  document.getElementById('adminEmailTitle').textContent   = 'Send Follow-Up Email';
-  document.getElementById('adminEmailTo').value            = d.email || '';
-  document.getElementById('adminEmailSubject').value       = `Follow-Up: ${d.ref || key}`;
-  document.getElementById('adminEmailBody').value          =
-    `Dear ${d.name || 'Sir/Ma\'am'},\n\n` +
-    `I hope this message finds you well. I am following up regarding ${d.ref || key}` +
-    (d.date ? ` dated ${d.date}` : '') + `.\n\n` +
-    `Please let us know if you have any updates or if there is anything we can assist you with.\n\n` +
-    `Best regards,\nHi-Escorp Team`;
-  document.getElementById('adminEmailModal').classList.add('open');
-}
-
-function openAdminSupplierInquiryEmail(key) {
-  const d = _adminEmailDataMap[key] || {};
-  _adminEmailType = 'supplier';
-  _adminEmailRef  = key;
-  document.getElementById('adminEmailTitle').textContent   = 'Send Supplier Inquiry';
-  document.getElementById('adminEmailTo').value            = d.email || '';
-  document.getElementById('adminEmailSubject').value       = `Supplier Inquiry \u2014 ${d.ref || key}`;
-  document.getElementById('adminEmailBody').value          =
-    `Dear ${d.name || 'Sir/Ma\'am'},\n\n` +
-    `We would like to inquire about the status of Purchase Order ${d.ref || key}` +
-    (d.date ? ` dated ${d.date}` : '') + `.\n\n` +
-    (d.amount ? `Order Amount: ${d.amount}\n\n` : '') +
-    `Kindly provide an update on availability, lead time, and expected delivery schedule at your earliest convenience.\n\n` +
-    `Best regards,\nHi-Escorp Procurement Team`;
-  document.getElementById('adminEmailModal').classList.add('open');
-}
-
-function closeAdminEmailModal() {
-  document.getElementById('adminEmailModal').classList.remove('open');
-  _adminEmailType = '';
-  _adminEmailRef  = '';
-}
-
-async function sendAdminEmail() {
-  const to      = document.getElementById('adminEmailTo').value.trim();
-  const subject = document.getElementById('adminEmailSubject').value.trim();
-  const body    = document.getElementById('adminEmailBody').value.trim();
-  if (!to)      { alert('Recipient email is required.'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { alert('Please enter a valid email address.'); return; }
-  if (!subject) { alert('Subject is required.'); return; }
-  if (!body)    { alert('Message body is required.'); return; }
-  const btn = document.getElementById('adminBtnSend');
-  btn.disabled = true;
-  btn.textContent = 'Sending\u2026';
-  try {
-    const res = await apiSendAdminEmail({ ref: _adminEmailRef, type: _adminEmailType, to, subject, body });
-    if (!res.success) throw new Error(res.message);
-    alert('Email sent successfully to ' + to);
-    closeAdminEmailModal();
-  } catch (err) {
-    alert('Error: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Send Email';
-  }
-}
