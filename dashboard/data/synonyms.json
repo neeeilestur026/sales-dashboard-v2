@@ -276,6 +276,129 @@
         "peak indicator",
         "pressure indicator"
       ]
+    },
+    {
+      "category": "impact-wrench",
+      "terms": [
+        "impact wrench",
+        "air impact wrench",
+        "pneumatic impact wrench",
+        "impact gun",
+        "air gun",
+        "impact driver",
+        "air impact",
+        "impactool",
+        "wheel gun",
+        "rattle gun",
+        "windy gun",
+        "chicago pneumatic impact",
+        "cp impact wrench",
+        "square drive impact wrench",
+        "butterfly impact wrench",
+        "t handle impact wrench",
+        "d handle impact wrench"
+      ]
+    },
+    {
+      "category": "ratchet-wrench",
+      "terms": [
+        "air ratchet",
+        "ratchet wrench",
+        "pneumatic ratchet",
+        "air ratchet wrench",
+        "ratchet gun"
+      ]
+    },
+    {
+      "category": "grinder",
+      "terms": [
+        "grinder",
+        "die grinder",
+        "angle grinder",
+        "air grinder",
+        "pneumatic grinder",
+        "vertical grinder",
+        "straight grinder",
+        "pencil grinder",
+        "mini grinder",
+        "grinding tool",
+        "burr grinder",
+        "disc grinder",
+        "cut off tool",
+        "collet grinder"
+      ]
+    },
+    {
+      "category": "chipping-hammer",
+      "terms": [
+        "chipping hammer",
+        "chipper",
+        "air hammer",
+        "pneumatic hammer",
+        "scaling hammer",
+        "needle scaler",
+        "descaling hammer",
+        "riveting hammer",
+        "rivet hammer",
+        "chisel hammer",
+        "scaler",
+        "digging hammer",
+        "air chisel"
+      ]
+    },
+    {
+      "category": "air-prep",
+      "terms": [
+        "frl",
+        "filter regulator lubricator",
+        "air preparation",
+        "air filter",
+        "air regulator",
+        "air lubricator",
+        "hose reel",
+        "air hose",
+        "hose whip",
+        "spiral hose",
+        "air coupling",
+        "quick coupler air",
+        "tool balancer",
+        "air line",
+        "airline network",
+        "air treatment"
+      ]
+    },
+    {
+      "category": "tool-set",
+      "terms": [
+        "tool set",
+        "tool box",
+        "tool chest",
+        "roll cab",
+        "tool storage",
+        "tool cabinet",
+        "socket set",
+        "mechanic tool set",
+        "tool trolley",
+        "334 set",
+        "bluepoint set",
+        "tool kit"
+      ]
+    },
+    {
+      "category": "locking-nut",
+      "terms": [
+        "locking nut",
+        "lock nut",
+        "combi nut",
+        "nord lock",
+        "nordlock",
+        "wedge locking",
+        "anti vibration nut",
+        "self locking nut",
+        "locking washer",
+        "nord-lock washer",
+        "vibration proof nut"
+      ]
     }
   ]
 }

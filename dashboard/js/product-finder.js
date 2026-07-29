@@ -179,7 +179,25 @@ const PF_SUBTYPE_SIGNALS = [
   [/floor[- ]press/, 'floor-press'],
   // pullers
   [/mechanical/, 'mechanical'],
-  [/bearing/, 'bearing-puller']
+  [/bearing/, 'bearing-puller'],
+  // air tools — handle style, grinder style, hammer style
+  [/butterfly/, 'butterfly'],
+  [/t[- ]handle/, 't-handle'],
+  [/d[- ]handle/, 'd-handle'],
+  [/angle grinder/, 'angle-grinder'],
+  [/die grinder|pencil grinder|burr/, 'die-grinder'],
+  [/vertical grinder/, 'vertical-grinder'],
+  [/needle|scaler/, 'needle-scaler'],
+  [/rivet/, 'riveting-hammer'],
+  [/scaling|descal|digging/, 'scaling-hammer'],
+  [/micro|pencil (hammer|chip)/, 'micro-chipper'],
+  [/low[- ]vibration|anti[- ]vibration hammer/, 'low-vibration'],
+  // air preparation
+  [/frl|filter regulator|air preparation|air filter|regulator|lubricator/, 'frl'],
+  [/hose reel|reel/, 'hose-reel'],
+  [/balancer/, 'balancer'],
+  [/coupling|quick connect/, 'coupling'],
+  [/whip|spiral hose|air hose/, 'hose']
 ];
 /* 'low height' honestly covers three catalog families */
 const PF_SUBTYPE_EXPAND = { 'low-profile': ['low-profile', 'pancake', 'short'] };
@@ -280,6 +298,8 @@ function pfXrefInText(text, rows) {
 const PF_CATEGORY_ALIAS = { 'high-pressure': ['coupler', 'hose'] };
 /* Families whose whole point is a load rating — answering one without the load is a guess. */
 const PF_LOAD_RATED = ['jack', 'press', 'puller', 'punch', 'spreader', 'vise', 'crane'];
+/* The same idea for torque tools: "impact wrench" spans 102 Nm to 25,000 Nm. */
+const PF_TORQUE_RATED = ['impact-wrench', 'ratchet-wrench', 'torque-wrench'];
 
 /** RFQ matcher v2: category filter + HARD never-undersized filter + subtype narrowing +
  *  capacity-proximity / stroke / industry scoring, with fully deterministic tie-breaks.
@@ -323,10 +343,21 @@ function pfRfqMatch(text, industry, data) {
   // guessing — but when a signal or a small catalog leaves one obvious family, just answer.
   if (!(tons > 0) && PF_LOAD_RATED.includes(det.category) && pool.length > 1) {
     const rated = pool.filter(p => pfCapMax(p) !== null);
-    const spread = rated.length > 1 &&
-      Math.max(...rated.map(pfCapMax)) >= 4 * Math.min(...rated.map(pfCapMax));
+    const hi = Math.max(...rated.map(pfCapMax)), lo = Math.min(...rated.map(pfCapMax));
+    const spread = rated.length > 1 && hi >= 4 * lo && hi >= 25;   // only when the choice really matters
     if (spread) {
       return { miss: false, needTons: true, category: det.category, matchedTerm: det.term,
+               attrs, xref, relaxed, results: [] };
+    }
+  }
+
+  // …and the same for torque tools, so a bare "impact wrench" doesn't answer with the 25,000 Nm one.
+  if (!(attrs.torqueNm > 0) && PF_TORQUE_RATED.includes(det.category) && pool.length > 1) {
+    const rated = pool.filter(p => typeof p.torque_max_nm === 'number');
+    const hi = Math.max(...rated.map(p => p.torque_max_nm)), lo = Math.min(...rated.map(p => p.torque_max_nm));
+    const spread = rated.length > 1 && hi >= 4 * lo && hi >= 500;  // a 21–122 Nm ratchet range needs no prompt
+    if (spread) {
+      return { miss: false, needTorque: true, category: det.category, matchedTerm: det.term,
                attrs, xref, relaxed, results: [] };
     }
   }
@@ -860,13 +891,18 @@ async function pfRfqSubmit() {
       + '</div>'
     : '';
 
-  // Load-rated ask with no load: ask for the load instead of guessing a size. Nothing is logged yet.
-  if (m.needTons) {
+  // Rated ask with no figure: ask for it instead of guessing a size. Nothing is logged yet.
+  if (m.needTons || m.needTorque) {
+    const torque = !!m.needTorque;
+    const chips = torque ? [100, 500, 1000, 2500, 5000, 20000] : [5, 10, 25, 55, 100, 200];
     box.innerHTML = xrefHtml
-      + '<div class="cr-sect"><h3>What is the load?</h3>'
-      + '<p class="cr-rec-line">This is a <b>' + pfEsc(m.category) + '</b> request, but without the load we would only be guessing a size — and we never suggest an undersized unit. Tap the load or type it into the request:</p>'
+      + '<div class="cr-sect"><h3>' + (torque ? 'What torque is needed?' : 'What is the load?') + '</h3>'
+      + '<p class="cr-rec-line">This is ' + (/^[aeiou]/i.test(m.category) ? 'an' : 'a') + ' <b>' + pfEsc(m.category) + '</b> request, but without the '
+      + (torque ? 'torque' : 'load') + ' we would only be guessing a size — and we never suggest an '
+      + 'under-rated unit. Tap a figure or type it into the request:</p>'
       + '<div class="cr-actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px;">'
-      + [5, 10, 25, 55, 100, 200].map(t => '<button class="cr-btn cr-btn-sec" onclick="pfPickTons(' + t + ')">' + t + ' t</button>').join('')
+      + chips.map(v => '<button class="cr-btn cr-btn-sec" onclick="' + (torque ? 'pfPickTorque' : 'pfPickTons')
+          + '(' + v + ')">' + v.toLocaleString() + (torque ? ' Nm' : ' t') + '</button>').join('')
       + '</div></div>';
     return;
   }
@@ -907,6 +943,12 @@ async function pfRfqSubmit() {
 function pfPickTons(t) {
   const item = document.getElementById('pfItem');
   if (item) item.value = (item.value + ' ' + t + ' ton').replace(/\s+/g, ' ').trim();
+  pfRfqSubmit();
+}
+
+function pfPickTorque(nm) {
+  const item = document.getElementById('pfItem');
+  if (item) item.value = (item.value + ' ' + nm + ' Nm').replace(/\s+/g, ' ').trim();
   pfRfqSubmit();
 }
 
