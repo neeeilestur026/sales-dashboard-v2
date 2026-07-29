@@ -458,6 +458,23 @@ def _bullet_para(text, style):
     return Paragraph("&bull;&nbsp;" + body, style)
 
 
+def _cap_name(name, limit=600, token=40):
+    """A173 — keep a product name inside its row.
+
+    The item row is a one-row table nested in another, so neither can split: an unbounded name is a
+    LayoutError waiting to happen (~2,800 chars), and a single unbreakable token wider than the 219pt
+    text column cannot wrap at all. Reps do paste spec sheets into this field, and the front end also
+    falls back to using the name as the description, so this is reachable in normal use.
+    Two guards: a length cap, and zero-width spaces sprinkled into any monster token so it wraps."""
+    s = str(name or "")
+    if len(s) > limit:
+        s = s[:limit - 1].rstrip() + "\u2026"
+    return " ".join(
+        w if len(w) <= token else "\u200b".join(w[i:i + token] for i in range(0, len(w), token))
+        for w in s.split(" ")
+    )
+
+
 def _bullet_block(heading, bullets, edge, width, columns=1, size=11.5, leading=1.7):
     """Uppercase heading + hairline rule, then a bordered card with a 3px left edge.
 
@@ -469,6 +486,28 @@ def _bullet_block(heading, bullets, edge, width, columns=1, size=11.5, leading=1
     rows = [r for r in rows if str(r.get("text") or "").strip()]
     if not rows:
         return None
+
+    # A173 — CAP THE BLOCK, or a long list takes the whole render down with it.
+    # _card is a one-row, one-cell Table and a ReportLab table row cannot split across pages, so once
+    # the card is taller than the frame (~774pt) the build raises LayoutError and the route answers
+    # 500. Measured: scope/options die at roughly 52 wrapped lines, the two-column exclusions at ~114.
+    # Truncating visibly is strictly better than failing — the rep sees "+N more" in the live preview
+    # and can shorten the text, where a 500 just leaves them with no document and no explanation.
+    per_line = max(1.0, leading) * size * PX          # rendered height of one wrapped line
+    usable = 700 * PX / max(per_line, 1.0)            # frame height less heading, padding and rule
+    budget = int(usable * (2 if columns == 2 else 1))
+    # a long bullet wraps, so charge it more than one line
+    chars_per_line = 96 if columns == 2 else 58
+    spent, kept = 0, []
+    for r in rows:
+        cost = max(1, -(-len(str(r.get("text") or "")) // chars_per_line))
+        if spent + cost > budget:
+            kept.append({"text": "… +%d more (shortened to fit the page)" % (len(rows) - len(kept)),
+                         "bold": False})
+            break
+        spent += cost
+        kept.append(r)
+    rows = kept
 
     st = _ps("blBul", size, BODY2, leading_mult=leading)
     st_bold = _ps("blBulB", size, TEXT, LATO_B, leading_mult=leading)
@@ -503,6 +542,14 @@ def _options_block(label, options, width):
     rows = [o for o in (options or []) if str((o or {}).get("text") or "").strip()]
     if not rows:
         return None
+
+    # A173 — same one-row-card ceiling as _bullet_block: this card cannot split either, so a long
+    # options list took the whole render down with a LayoutError. Cap it and say so on the page.
+    _cap = int(700 * PX / max(11 * PX * 1.6, 1.0))
+    if len(rows) > _cap:
+        hidden = len(rows) - _cap + 1
+        rows = rows[:_cap - 1] + [{"text": "… +%d more option(s) (shortened to fit the page)" % hidden,
+                                   "price": ""}]
 
     desc_st = _ps("optD", 11, BODY2, leading_mult=1.6)
     price_st = _ps("optP", 11, HEADING, LATO_B, align=2, leading_mult=1.6)
@@ -676,13 +723,13 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             text_col.append(Spacer(1, 4 * PX))
             text_col.append(Paragraph(_sp("OUR OFFER"), offer_label_st))
             text_col.append(Paragraph(
-                f"<font name='{ARCH_SB}' color='{_hx(HEADING)}'>{_esc(name)}</font>", sub_st))
+                f"<font name='{ARCH_SB}' color='{_hx(HEADING)}'>{_esc(_cap_name(name))}</font>", sub_st))
             if sub_lines:
                 text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))
             if has_code:
                 text_col.append(Paragraph(model_line(code), sub_st))
         else:
-            text_col = [Paragraph(_esc(name), title_st)]
+            text_col = [Paragraph(_esc(_cap_name(name)), title_st)]
             if sub_lines:
                 text_col.append(Spacer(1, 2 * PX))
                 text_col.append(Paragraph("<br/>".join(sub_lines), sub_st))

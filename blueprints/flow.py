@@ -69,9 +69,14 @@ def _bullets(v):
             text, bold = _s(ln).strip(), False
         # Detect **bold** FIRST — the bullet-stripper below eats '*', which would
         # otherwise swallow the opening marker and leave a stray '**' at the end.
+        # A173: strip the pasted bullet glyph FIRST. Doing it after the bold test meant a line like
+        # '**Note** includes freight' failed endswith('**'), then the stripper (whose character class
+        # contains \*) ate the opening marker and the PDF printed a literal '**'.
+        text = re.sub(r"^[\u2022\u00b7\-\u2013\u2014]+\s*", "", text).strip()
         if not bold and text.startswith("**") and text.endswith("**") and len(text) > 4:
             text, bold = text[2:-2].strip(), True
-        text = re.sub(r"^[•·\-\*–—]+\s*", "", text).strip()
+        elif text.startswith("*") and not text.startswith("**"):
+            text = text[1:].strip()
         if not text:
             continue
         out.append({"text": text, "bold": bold})
@@ -217,6 +222,11 @@ def quotation_pdf():
 
     items, images, total_ex_vat = [], {}, 0.0
     for idx, it in enumerate(raw_items, start=1):
+        # A173: a non-dict entry used to raise AttributeError HERE, outside the try that wraps the
+        # build — so the caller got Flask's HTML 500 page instead of this route's JSON envelope.
+        if not isinstance(it, dict):
+            logger.warning("quotation_pdf: skipping non-dict item at position %s", idx)
+            continue
         qty, price = _num(it.get("qty")), _num(it.get("price"))
         total_ex_vat += qty * price
         items.append({
