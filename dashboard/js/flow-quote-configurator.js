@@ -24,8 +24,18 @@ let qcLastUrl = '';
 let qcPhotoTarget = '';
 let qcQuotationNo = '';           // set once saved, so a second Finalize updates instead of duplicating
 let qcFromPr = '';                // the process-flow path
-let qcLocked = false;             // items display-only (fromPR)
+let qcLocked = false;             // items display-only (fromPR, and A176 document mode)
 let qcInventory = [];             // for the admin free-type datalist
+let qcPlantSite = '';             // A145: destination carried from the pricing request onto the doc
+/* A176 — one surface, two modes:
+     'edit'     the record is Draft/Rejected and the viewer may change it. Finalize writes the
+                record (updateQuotation / createQuotation) AND files the PDF.
+     'document' anything else. The money is locked to the record and the button only re-renders and
+                re-files the PDF — it never calls updateQuotation, so the A119 status gate is never
+                hit and ANY role can refresh the document at ANY status. That is what keeps the A123
+                approve-gate escapable: an approver facing a stale/unverified PDF has no Edit and
+                could not use one anyway. */
+let qcMode = 'edit';
 
 const QC_VAT_PCT = 0.12;
 const QC_DEBOUNCE = 500;
@@ -77,15 +87,54 @@ function qcResetForm() {
   qcQuotationNo = '';
   qcFromPr = '';
   qcLocked = false;
+  qcMode = 'edit';
+  qcPlantSite = '';
   qcItems = [];
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
   set('qcNo', ''); set('qcCustomer', ''); set('qcSubject', ''); set('qcDiscount', 0);
   set('qcDate', (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
+  set('qcNote', '');
+  const br = document.getElementById('qcBrochures'); if (br) br.value = '';
   const msg = document.getElementById('qcMsg'); if (msg) msg.innerHTML = '';
   const title = document.getElementById('formTitle'); if (title) title.textContent = 'New Quotation';
-  const btn = document.getElementById('qcFinalizeBtn');
-  if (btn) { btn.disabled = false; btn.textContent = 'Finalize quotation'; }
+  const btn = document.getElementById('qcFinalizeBtn'); if (btn) btn.disabled = false;
+  qcSyncLock();
   qcAddRow();                   // renders + reschedules the preview
+}
+
+/* Start a brand-new quotation: clear whatever was loaded, then open the builder. */
+function qcNewQuotation() {
+  qcResetForm();
+  qcToggleCreate(true);
+}
+
+/* A176 — the single opener the history row uses, for both jobs.
+   mode 'edit'     → change the quotation (Draft/Rejected, sales/admin).
+   mode 'document' → regenerate/refile its PDF only, at any status, for any role. */
+function qcOpen(no, mode, record) {
+  const q = record || (typeof qList !== 'undefined'
+    ? qList.find(x => String(x.quotationNo) === String(no)) : null);
+  if (!q) { alert('Quotation ' + no + ' is not in the list — hit Refresh and try again.'); return; }
+  qcMode = (mode === 'document') ? 'document' : 'edit';
+  qcToggleCreate(true);
+  qcLoadExisting(q);
+}
+
+/* Lock/unlock the commercial half. In document mode the figures MUST match the record — a document
+   that disagrees with its own record is exactly what A123 flags as out of date, and on a Pending
+   quotation that blocks its own approval. Prices change through Edit/Revise, which re-enter approval. */
+function qcSyncLock() {
+  const lockMoney = (qcMode === 'document');   // NOT qcLocked — ?fromPR locks only the item rows
+  ['qcNo', 'qcDate', 'qcCustomer', 'qcDiscount', 'qcVat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = lockMoney;
+    el.title = lockMoney ? 'Locked to the saved quotation — use Edit or Revise to change the figures.' : '';
+  });
+  const btn = document.getElementById('qcFinalizeBtn');
+  if (btn) btn.textContent = (qcMode === 'document') ? 'Regenerate & file PDF' : 'Finalize quotation';
+  const hint = document.getElementById('qcModeHint');
+  if (hint) hint.style.display = (qcMode === 'document') ? '' : 'none';
 }
 
 /* Edit/Revise from the history: load a saved quotation into the builder so the same surface that
@@ -94,7 +143,9 @@ function qcLoadExisting(q) {
   if (!q) return;
   const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
   const dt = (typeof flowDate === 'function') ? flowDate : (v => String(v || '').slice(0, 10));
+  const mode = qcMode;            // qcResetForm clears it — the caller's choice must survive the wipe
   qcResetForm();
+  qcMode = mode;
   qcQuotationNo = String(q.quotationNo || '');
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
   set('qcNo', q.quotationNo);
@@ -105,7 +156,6 @@ function qcLoadExisting(q) {
 
   // Layout JSON (A172) — restore the template, photo switch and the three summary blocks.
   let lay = {}; try { lay = q.layoutJson ? (JSON.parse(q.layoutJson) || {}) : {}; } catch (e) { lay = {}; }
-  if (lay.template) set('qcTemplate', lay.template);
   if (lay.photos === false) set('qcPhotos', 'off');
   const blocks = lay.blocks || {};
   [['qcBlkScope', 'scope', 'qcScope'], ['qcBlkExcl', 'exclusions', 'qcExclusions'],
@@ -122,11 +172,14 @@ function qcLoadExisting(q) {
     [['address', 'qcAddress'], ['attention', 'qcAttention'], ['designation', 'qcDesignation'],
      ['email', 'qcEmail'], ['rfqNo', 'qcRfq'], ['validity', 'qcValidity'], ['delivery', 'qcDelivery'],
      ['payment', 'qcPayment'], ['warranty', 'qcWarranty'], ['sigName', 'qcSigName'],
-     ['sigDesignation', 'qcSigDesignation'], ['sigMobile', 'qcSigMobile'], ['sigEmail', 'qcSigEmail']]
+     ['sigDesignation', 'qcSigDesignation'], ['sigViber', 'qcSigViber'], ['sigMobile', 'qcSigMobile'],
+     ['sigEmail', 'qcSigEmail'], ['note', 'qcNote']]
       .forEach(([k, id]) => { if (prev.doc[k]) set(id, prev.doc[k]); });
     if (prev.vatOption) set('qcVat', prev.vatOption);
+    if (prev.descMode) set('qcDescMode', prev.descMode);
   }
   if (!document.getElementById('qcRfq').value && q.clientRefNo) set('qcRfq', q.clientRefNo);
+  qcPlantSite = q.plantSite || '';   // A145: prints on the document, never re-typed
 
   qcItems = (q.items || []).map(it => ({
     lineKey: it.lineKey || qcLineKey(),
@@ -137,46 +190,65 @@ function qcLoadExisting(q) {
   }));
   if (!qcItems.length) qcItems = [{ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0,
     uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '' }];
+  // Document mode locks the figures (items included) but leaves the photo buttons live — photos are
+  // never stored, so they always have to be re-attached before a regenerate.
+  qcLocked = (qcMode === 'document');
   qcRenderItems();
+  qcSyncLock();
 
+  const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
   const title = document.getElementById('formTitle');
-  if (title) title.textContent = 'Edit ' + qcQuotationNo;
-  qcBanner('Editing <strong>' + (typeof flowEsc === 'function' ? flowEsc(qcQuotationNo) : qcQuotationNo)
-    + '</strong>. Finalize saves the changes and refiles the PDF — a re-priced quotation goes back '
-    + 'through approval before it can be sent.');
+  if (qcMode === 'document') {
+    if (title) title.textContent = 'Document — ' + qcQuotationNo;
+    qcBanner('Rebuilding the document for <strong>' + esc(qcQuotationNo) + '</strong> (' + esc(q.status || 'Draft')
+      + '). The figures are locked to the saved quotation; change the terms, signatory or summary blocks, '
+      + 'then <strong>Regenerate &amp; file PDF</strong>. Nothing about the quotation itself is altered.');
+  } else {
+    if (title) title.textContent = 'Edit ' + qcQuotationNo;
+    qcBanner('Editing <strong>' + esc(qcQuotationNo)
+      + '</strong>. Finalize saves the changes and refiles the PDF — a re-priced quotation goes back '
+      + 'through approval before it can be sent.');
+  }
   if (qcRole === 'admin' || qcRole === 'director') qcLoadInventory();
   qcOnChange();
 }
 
-/* Doc fields are remembered per user by the existing quotation dialog — reuse the same store so
-   nobody retypes their signature block. */
+/* Doc fields are remembered per user. A176 — read BOTH key casings: the retired PDF dialog saved
+   `Validity`/`SigName`, this builder saves `validity`/`sigName`. Without the fallback every rep would
+   silently lose their remembered signature block the day the dialog went away. */
 function qcPrefillDoc() {
   let d = {};
   try { d = (typeof flowLoadDefaults === 'function' ? flowLoadDefaults('quotation') : {}) || {}; } catch (e) { d = {}; }
+  const pick = k => d[k] || d[k.charAt(0).toUpperCase() + k.slice(1)] || '';
   const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-  set('qcValidity', d.validity || '30 days');
-  set('qcDelivery', d.delivery || '1-3 weeks upon receipt of order');
-  set('qcPayment', d.payment || '30 days upon delivery and receipt of invoice');
-  set('qcWarranty', d.warranty || '1 year');
-  set('qcSigName', d.sigName || qcSession.name || '');
-  set('qcSigDesignation', d.sigDesignation || '');
-  set('qcSigMobile', d.sigMobile || '');
-  set('qcSigEmail', d.sigEmail || '');
-  set('qcScope', d.scope || '');
-  set('qcExclusions', d.exclusions || '');
-  set('qcOptions', d.options || '');
+  set('qcAddress', pick('address'));
+  set('qcAttention', pick('attention'));
+  set('qcDesignation', pick('designation'));
+  set('qcEmail', pick('email'));
+  set('qcValidity', pick('validity') || '30 days');
+  set('qcDelivery', pick('delivery') || '1-3 weeks upon receipt of order');
+  set('qcPayment', pick('payment') || '30 days upon delivery and receipt of invoice');
+  set('qcWarranty', pick('warranty') || '1 year');
+  set('qcSigName', pick('sigName') || qcSession.name || '');
+  set('qcSigDesignation', pick('sigDesignation'));
+  set('qcSigViber', pick('sigViber'));
+  set('qcSigMobile', pick('sigMobile'));
+  set('qcSigEmail', pick('sigEmail'));
+  set('qcScope', pick('scope'));
+  set('qcExclusions', pick('exclusions'));
+  set('qcOptions', pick('options'));
   ['Scope', 'Excl', 'Opts'].forEach((k, i) => {
-    const src = [d.scope, d.exclusions, d.options][i];
+    const src = [pick('scope'), pick('exclusions'), pick('options')][i];
     if (src) document.getElementById('qcBlk' + k).checked = true;
   });
   qcSyncBlocks();
 }
 
 function qcBindInputs() {
-  ['qcNo', 'qcDate', 'qcCustomer', 'qcSubject', 'qcDiscount', 'qcVat', 'qcTemplate', 'qcPhotos',
+  ['qcNo', 'qcDate', 'qcCustomer', 'qcSubject', 'qcDiscount', 'qcVat', 'qcPhotos', 'qcDescMode',
    'qcAddress', 'qcAttention', 'qcDesignation', 'qcEmail', 'qcRfq', 'qcValidity', 'qcDelivery',
-   'qcPayment', 'qcWarranty', 'qcSigName', 'qcSigDesignation', 'qcSigMobile', 'qcSigEmail',
-   'qcScope', 'qcExclusions', 'qcOptions']
+   'qcPayment', 'qcWarranty', 'qcSigName', 'qcSigDesignation', 'qcSigViber', 'qcSigMobile',
+   'qcSigEmail', 'qcNote', 'qcScope', 'qcExclusions', 'qcOptions']
     .forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -205,7 +277,9 @@ function qcOnChange() { qcRenderTotals(); qcSchedulePreview(); }
    every line is management's, at management's price. */
 async function qcLoadFromPR(prNo) {
   qcFromPr = String(prNo);
-  qcLocked = true;
+  qcMode = 'edit';          // the rep still contributes the number, subject, discount and layout
+  qcLocked = true;          // ...but every line is management's, rebuilt server-side
+  qcSyncLock();
   try {
     const scoped = qcRole === 'sales' ? { requestedBy: qcSession.name } : {};
     let res = await fetchFlow('getPricingRequests', scoped);
@@ -409,7 +483,10 @@ function qcPayload(withImages) {
     date: val('qcDate'),
     vatOption: val('qcVat'),
     discountPct: Math.min(100, Math.max(0, num(val('qcDiscount')))),
-    layout: val('qcTemplate'),
+    // A176: the renderer gates the per-item description sub-lines on desc_mode != "short". This used
+    // to go unsent, so the route defaulted to "short" and every quotation built here silently lost
+    // its multi-line descriptions. It now follows the selector, which defaults to Full.
+    descMode: val('qcDescMode') || 'long',
     photos: showPhotos,
     items: qcItems.filter(i => (i.itemNo || i.itemName)).map(i => ({
       itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
@@ -422,9 +499,13 @@ function qcPayload(withImages) {
     doc: {
       address: val('qcAddress'), attention: val('qcAttention'), designation: val('qcDesignation'),
       email: val('qcEmail'), subject: val('qcSubject'), rfqNo: val('qcRfq'),
+      note: val('qcNote'),                                 // prints on the final page (Full format)
+      plantSite: qcPlantSite,                              // A145: carried from the pricing request
+      descMode: val('qcDescMode') || 'long',
       validity: val('qcValidity'), delivery: val('qcDelivery'), payment: val('qcPayment'),
       warranty: val('qcWarranty'), sigName: val('qcSigName'), sigDesignation: val('qcSigDesignation'),
-      sigMobile: val('qcSigMobile'), sigViber: val('qcSigMobile'), sigEmail: val('qcSigEmail'),
+      sigMobile: val('qcSigMobile'), sigViber: val('qcSigViber') || val('qcSigMobile'),
+      sigEmail: val('qcSigEmail'),
       // A173: the route reads these ONLY from doc — a top-level copy is silently ignored.
       scope: on('qcBlkScope') ? val('qcScope') : '',
       exclusions: on('qcBlkExcl') ? val('qcExclusions') : '',
@@ -515,13 +596,17 @@ function qcLayoutJson() {
   const val = id => (document.getElementById(id) || {}).value || '';
   const on = id => document.getElementById(id).checked;
   return JSON.stringify({
-    template: val('qcTemplate'), photos: val('qcPhotos') !== 'off',
+    // A176: the Template selector is gone — neither the Flask route nor the ReportLab renderer has
+    // ever read `layout`, so it promised something it never did. Re-add it when A172-P4 is built.
+    template: 'full', photos: val('qcPhotos') !== 'off',
     blocks: { scope: on('qcBlkScope'), exclusions: on('qcBlkExcl'), options: on('qcBlkOpts') },
     scope: val('qcScope'), exclusions: val('qcExclusions'), options: val('qcOptions')
   });
 }
 
 async function qcFinalize() {
+  // A176 — document mode never writes the record; it only rebuilds and refiles the PDF.
+  if (qcMode === 'document') return qcRegenerateOnly();
   const val = id => (document.getElementById(id) || {}).value || '';
   const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
   const btn = document.getElementById('qcFinalizeBtn');
@@ -620,6 +705,25 @@ async function qcAfterSave(no) {
   try { if (typeof openReviewModal === 'function') openReviewModal(no); } catch (e) { /* review is a bonus */ }
 }
 
+/* A176 — the document half of the old PDF dialog: re-render this quotation's PDF and refile it,
+   touching nothing else. No updateQuotation, so the A119 status gate is never hit and this works at
+   any status for any role — which is what lets an approver clear the A123 stale/unverified block on
+   a Pending quotation they are not allowed to edit. */
+async function qcRegenerateOnly() {
+  const btn = document.getElementById('qcFinalizeBtn');
+  if (!qcQuotationNo) { qcMsg('No quotation is loaded.', false); return; }
+  btn.disabled = true; btn.textContent = 'Generating PDF…';
+  try {
+    await qcSavePdf(qcQuotationNo);
+    qcMsg('The document for ' + qcQuotationNo + ' has been rebuilt and filed to Drive.', true);
+    btn.disabled = false; btn.textContent = 'Regenerate & file PDF';
+    await qcAfterSave(qcQuotationNo);
+  } catch (e) {
+    qcMsg(e.message || 'Could not regenerate the document.', false);
+    btn.disabled = false; btn.textContent = 'Regenerate & file PDF';
+  }
+}
+
 async function qcAutoAddItems(items) {
   const known = new Set(qcInventory.map(i => String(i.itemNo || '').toLowerCase()));
   for (const it of items) {
@@ -644,6 +748,14 @@ async function qcAutoAddItems(items) {
 async function qcSavePdf(no) {
   const payload = qcPayload(true);
   payload.quotationNo = no;
+
+  // Attach-PDFs ride only on the real save — they are base64 documents, far too heavy for a preview
+  // that re-posts on every pause in typing. The server appends them after the quotation's last page.
+  const brFiles = Array.from((document.getElementById('qcBrochures') || {}).files || []);
+  if (brFiles.length && typeof fileToDataURL === 'function') {
+    try { payload.brochures = await Promise.all(brFiles.map(fileToDataURL)); }
+    catch (e) { throw new Error('Could not read an attached PDF — ' + (e.message || 'unsupported file')); }
+  }
 
   let rec = null;
   try {
@@ -692,7 +804,7 @@ async function qcSavePdf(no) {
                        discountPct: payload.discountPct, items: payload.items.map(i => ({
                          itemNo: i.itemNo, qty: i.qty, price: i.price })) };
   const stamp = {
-    v: 1, doc: payload.doc, vatOption: payload.vatOption, descMode: 'short',
+    v: 1, doc: payload.doc, vatOption: payload.vatOption, descMode: payload.descMode || 'long',
     hasImages: qcItems.some(i => !!i.imageDataUrl),
     stamp: {
       customer: String(src.customer || ''), date: dt(src.date) || '',

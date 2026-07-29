@@ -184,11 +184,18 @@ function quotationActions(q) {
   const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.5rem;">${label}</button>`;
   // Everyone can Review (read-only details + PDF). Approvers get Approve/Reject inside the modal.
   let a = `<button class="link-btn" onclick='openReviewModal("${no}")'>Review</button>`
-    + B(`openPdfModal("${no}")`, 'PDF') + B(`openDocsModal("Quotation","${no}")`, 'Docs');
+    + B(`openDocsModal("Quotation","${no}")`, 'Docs');
   // Submit / re-submit while Draft or Rejected — the creator, admin, or accounting.
   if (editable && (isCreator || isAdmin || isSales || role === 'accounting'))
     a += B(`submitQuotationAction("${no}")`, st === 'Rejected' ? 'Re-submit' : 'Submit');
-  if ((isSales || isAdmin) && editable) a += B(`editQuotation("${no}")`, 'Edit') + B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
+  /* A176 — Edit and PDF were two buttons doing different jobs on the same row, which read as
+     duplication. They are now ONE surface: whoever may change the quotation gets Edit (record +
+     document); everyone else gets PDF, which opens the same builder with the figures locked and
+     rebuilds the document only. Never both — and never neither, because an approver staring at a
+     stale PDF must always be able to regenerate it (A123 blocks Approve until they do). */
+  if (editable && (isSales || isAdmin)) a += B(`editQuotation("${no}")`, 'Edit');
+  else a += B(`qcOpen("${no}","document")`, 'PDF');
+  if ((isSales || isAdmin) && editable) a += B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
   // Client came back asking for a different price? Reopen it — creator, sales or admin.
   if (reopenable && (isCreator || isSales || isAdmin)) a += B(`reviseQuotationAction("${no}")`, 'Revise');
   // A145: Send-to-Client is offered to the CREATOR and to admin/management/director — not sales-only —
@@ -350,7 +357,7 @@ function openReviewModal(no) {
   }
   if (fid) pv.innerHTML = warn + `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
   else if (q.pdfLink) pv.innerHTML = warn + `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
-  else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();openPdfModal('${flowEsc(q.quotationNo)}')">generate the PDF</button> first.</div>`;
+  else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();qcOpen('${flowEsc(q.quotationNo)}','document')">generate the PDF</button> first.</div>`;
   const foot = document.getElementById('qrFoot');
   // Approving a quotation whose attached document shows different figures is the failure this guards
   // against — so Approve waits for a matching PDF. Reject always stays available.
@@ -366,8 +373,8 @@ function openReviewModal(no) {
 }
 function closeReviewModal() { document.getElementById('qrModal').classList.remove('open'); }
 /** From the out-of-date banner: straight into the PDF dialog, prefilled from the stored doc fields
- *  so nothing has to be retyped (openPdfModal restores them). */
-function qrRegenerate(no) { closeReviewModal(); openPdfModal(no); }
+ *  so nothing has to be retyped (qcLoadExisting restores them). */
+function qrRegenerate(no) { closeReviewModal(); qcOpen(no, 'document'); }
 function qrApprove(no) { closeReviewModal(); _qAction('approveQuotation', no); }
 function qrReject(no) {
   const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
@@ -401,14 +408,11 @@ function renderGroupedByRep(rows) {
  *  quotation number stays editable — changing it RENAMES the record (items, SO link and attached
  *  docs follow; the backend rejects duplicates). */
 function editQuotation(no) {
-  const q = qList.find(x => String(x.quotationNo) === String(no));
-  if (!q) return;
-  if (typeof qcLoadExisting !== 'function') {
+  if (typeof qcOpen !== 'function') {
     alert('The quotation builder did not load — reload the page and try again.');
     return;
   }
-  qcToggleCreate(true);
-  qcLoadExisting(q);
+  qcOpen(no, 'edit');
 }
 
 async function deleteQuotation(no) {
@@ -453,199 +457,4 @@ function qPdfSavedTotals(q) {
   }, 0);
   const d = Math.max(0, Math.min(100, flowNum(s.discountPct) || 0));
   return { gross, discountPct: d, net: gross * (1 - d / 100) };
-}
-
-// ─── PDF generation ───────────────────────────────
-let pdfQuote = null;            // the quotation being printed
-const pdfImages = {};           // row INDEX → data URL (itemNo keying collided on duplicate/N-A numbers)
-
-function openPdfModal(no) {
-  const q = qList.find(x => x.quotationNo === no);
-  if (!q) return;
-  pdfQuote = q;
-  Object.keys(pdfImages).forEach(k => delete pdfImages[k]);
-  document.getElementById('pdfQuotationNo').value = q.quotationNo;
-  document.getElementById('pdfModalSub').textContent = `${q.quotationNo} · ${q.customer} · ${q.items.length} item(s)`;
-  // Prefill from the subject typed at creation (stored on the record); still editable + required.
-  document.getElementById('pdfSubject').value = q.subject || '';
-  // Discount % prefilled from the record (editable — lets a rejected quote be re-priced at regen time).
-  const pd = document.getElementById('pdfDiscount'); if (pd) pd.value = flowNum(q.discountPct) || '';
-  // Summary blocks are cleared first: a blank means "omit the block", and the prefills below skip
-  // empty values — without this a previous quotation's scope would linger in the open modal.
-  ['Scope', 'Exclusions', 'Options'].forEach(f => {
-    const el = document.getElementById('pdf' + f); if (el) el.value = '';
-  });
-  // restore remembered defaults (terms, signatory, summary blocks)
-  const d = flowLoadDefaults('quotation');
-  ['Address', 'Attention', 'Designation', 'Email', 'Validity', 'Delivery', 'Payment', 'Warranty',
-   'SigName', 'SigDesignation', 'SigViber', 'SigMobile', 'SigEmail',
-   'Scope', 'Exclusions', 'Options'].forEach(f => {
-    const el = document.getElementById('pdf' + f);
-    if (el && d[f] !== undefined && d[f] !== '') el.value = d[f];
-  });
-  // This quotation's OWN fields from its last PDF beat the browser-wide defaults, so regenerating
-  // after a re-price reproduces the same document (incl. RFQ No, which defaults never carried).
-  const prev = qPdfInfo(q);
-  if (prev.doc) {
-    [['address', 'Address'], ['attention', 'Attention'], ['designation', 'Designation'],
-     ['email', 'Email'], ['rfqNo', 'RfqNo'], ['note', 'Note'], ['validity', 'Validity'],
-     ['delivery', 'Delivery'], ['payment', 'Payment'], ['warranty', 'Warranty'],
-     ['sigName', 'SigName'], ['sigDesignation', 'SigDesignation'], ['sigViber', 'SigViber'],
-     ['sigMobile', 'SigMobile'], ['sigEmail', 'SigEmail'],
-     ['scope', 'Scope'], ['exclusions', 'Exclusions'], ['options', 'Options']].forEach(([k, id]) => {
-      const el = document.getElementById('pdf' + id);
-      if (el && prev.doc[k]) el.value = prev.doc[k];
-    });
-    // (Subject deliberately NOT restored — the record's current subject wins.)
-    const vs = document.getElementById('pdfVat'); if (vs && prev.vatOption) vs.value = prev.vatOption;
-    const dm = document.getElementById('pdfDescMode'); if (dm && prev.descMode) dm.value = prev.descMode;
-  }
-  // A145: prefill the RFQ line from the client's own RFQ number carried from the pricing request
-  // (only when nothing more specific was restored above) so it isn't re-typed and prints on the PDF.
-  const rfqEl = document.getElementById('pdfRfqNo');
-  if (rfqEl && !rfqEl.value && q.clientRefNo) rfqEl.value = q.clientRefNo;
-  // A regenerated document must re-attach any product photo — it was never stored.
-  const imgWarn = document.getElementById('pdfImgWarn');
-  if (imgWarn) {
-    const needsPhoto = prev.hasImages && qPdfState(q) !== 'fresh';
-    imgWarn.style.display = needsPhoto ? 'block' : 'none';
-    imgWarn.textContent = needsPhoto
-      ? '⚠ The previous PDF had a product photo attached. Photos are not stored — re-attach it below, or the new document will not have it.' : '';
-  }
-  // item image pickers
-  document.getElementById('pdfItems').innerHTML = (q.items || []).map((it, i) => `
-    <div class="pdf-item-row">
-      <span class="grow">${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)} · ${flowNum(it.qty)} × ${flowMoney(it.price, 'PHP')}</span>
-      <span class="img-state" id="pdfImgState${i}" style="font-size:0.72rem;white-space:nowrap;"></span>
-      <input type="file" accept="image/png,image/jpeg,image/webp" onchange="pickPdfImage(this, ${i})">
-    </div>`).join('');
-  const br = document.getElementById('pdfBrochures'); if (br) br.value = '';
-  document.getElementById('pdfModalMsg').style.display = 'none';
-  document.getElementById('pdfModal').classList.add('open');
-}
-
-function closePdfModal() { document.getElementById('pdfModal').classList.remove('open'); }
-
-async function pickPdfImage(input, idx) {
-  const file = input.files && input.files[0];
-  const tag = document.getElementById('pdfImgState' + idx);
-  if (!file) { delete pdfImages[idx]; if (tag) tag.textContent = ''; return; }
-  if (file.size > 25 * 1024 * 1024) {
-    delete pdfImages[idx]; input.value = '';
-    flowMsg('pdfModalMsg', 'Image too large (max 25MB): ' + file.name, false);
-    if (tag) { tag.textContent = '✗ too large'; tag.style.color = '#dc2626'; }
-    return;
-  }
-  try {
-    // Downscale in the browser (the PDF thumbnail is tiny) — phone photos of any size now work,
-    // and the old silent 5MB rejection that left PDFs without their attached images is gone.
-    pdfImages[idx] = await _downscaleImage(file, 900, 0.85);
-    if (tag) { tag.textContent = '✓ image attached'; tag.style.color = '#15803d'; }
-  } catch (e) {
-    delete pdfImages[idx]; input.value = '';
-    flowMsg('pdfModalMsg', 'Could not read image "' + file.name + '" — ' + (e.message || 'unsupported format (use JPG/PNG)'), false);
-    if (tag) { tag.textContent = '✗ failed'; tag.style.color = '#dc2626'; }
-  }
-}
-
-// Resize any picked image to ≤maxDim px and re-encode as JPEG (canvas). Rejects on undecodable files.
-function _downscaleImage(file, maxDim, quality) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      try {
-        URL.revokeObjectURL(url);
-        const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
-        const w = Math.max(1, Math.round((img.width || 1) * scale));
-        const h = Math.max(1, Math.round((img.height || 1) * scale));
-        const cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        const ctx = cv.getContext('2d');
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);   // flatten PNG transparency onto white
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(cv.toDataURL('image/jpeg', quality));
-      } catch (e) { reject(e); }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unsupported or corrupted image')); };
-    img.src = url;
-  });
-}
-
-async function submitPdf() {
-  if (!pdfQuote) return;
-  const btn = document.getElementById('pdfGenBtn');
-  const g = id => document.getElementById('pdf' + id).value.trim();
-  if (!g('Subject')) {
-    flowMsg('pdfModalMsg', 'Subject is required — type the quotation subject before generating.', false);
-    document.getElementById('pdfSubject').focus();
-    return;
-  }
-  const doc = {
-    address: g('Address'), attention: g('Attention'), designation: g('Designation'), email: g('Email'),
-    subject: g('Subject'), rfqNo: g('RfqNo'), note: g('Note'),
-    plantSite: (pdfQuote && pdfQuote.plantSite) || '',   // A145: plant-site destination carried from the PR
-    validity: g('Validity'), delivery: g('Delivery'), payment: g('Payment'), warranty: g('Warranty'),
-    sigName: g('SigName'), sigDesignation: g('SigDesignation'), sigViber: g('SigViber'),
-    sigMobile: g('SigMobile'), sigEmail: g('SigEmail'), descMode: document.getElementById('pdfDescMode').value,
-    // Summary blocks — one bullet per line; the server splits and renders them (blank = block omitted)
-    scope: g('Scope'), exclusions: g('Exclusions'), options: g('Options')
-  };
-  flowSaveDefaults('quotation', {
-    Address: doc.address, Attention: doc.attention, Designation: doc.designation, Email: doc.email,
-    Validity: doc.validity, Delivery: doc.delivery, Payment: doc.payment, Warranty: doc.warranty,
-    SigName: doc.sigName, SigDesignation: doc.sigDesignation, SigViber: doc.sigViber,
-    SigMobile: doc.sigMobile, SigEmail: doc.sigEmail,
-    Scope: doc.scope, Exclusions: doc.exclusions, Options: doc.options
-  });
-  // The number SHOWN on the PDF (title chip + filename) is editable in the dialog; the Drive-link
-  // row write below stays keyed on the real record number so the quotation row still gets its link.
-  const displayNo = (document.getElementById('pdfQuotationNo').value || '').trim() || pdfQuote.quotationNo;
-  // optional PDF attachments → appended by the server after the quotation's last page
-  const brFiles = Array.from((document.getElementById('pdfBrochures') || {}).files || []);
-  let brochures = [];
-  try { brochures = await Promise.all(brFiles.map(fileToDataURL)); }
-  catch (e) { flowMsg('pdfModalMsg', 'Could not read an attached PDF — ' + e.message, false); return; }
-  const payload = {
-    quotationNo: displayNo, customer: pdfQuote.customer, date: flowDate(pdfQuote.date),
-    vatOption: document.getElementById('pdfVat').value, discountPct: qDiscountVal('pdfDiscount'),
-    descMode: doc.descMode, doc, brochures,
-    items: (pdfQuote.items || []).map((it, i) => {
-      // Match on itemNo AND name so N/A-numbered items don't grab another N/A row's description.
-      const inv = qInventory.find(x => String(x.itemNo) === String(it.itemNo) && String(x.description) === String(it.itemName));
-      return {
-        itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price,
-        uom: it.uom || '',   // A147: carry the real unit onto the PDF (else it forces "pc(s)")
-        origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',  // requested vs offered
-        description: (inv && inv.description) || it.itemName || '',  // multi-line desc from inventory
-        imageDataUrl: pdfImages[i] || ''
-      };
-    })
-  };
-  btn.disabled = true; btn.textContent = 'Generating...';
-  // Record what this PDF is rendered from, so the saved document can be checked against the record
-  // later (and refreshed automatically when that can be done without losing an attached photo).
-  const hasImages = (pdfQuote.items || []).some((it, i) => !!pdfImages[i]);
-  const pdfData = JSON.stringify({
-    v: 1, doc, vatOption: payload.vatOption, descMode: doc.descMode, hasImages,
-    stamp: qPdfStamp(Object.assign({}, pdfQuote, { discountPct: payload.discountPct }), payload.vatOption)
-  });
-  try {
-    const { link, saveError, configured } = await generateFlowPdf('/flow/quotation-pdf', payload, 'saveQuotationPDF',
-      'quotationNo', pdfQuote.quotationNo, `Quotation_${displayNo}.pdf`, { extra: { pdfData } });
-    if (link) {
-      flowMsg('pdfModalMsg', 'PDF generated and saved to Drive.', true);
-    } else if (!configured) {
-      flowMsg('pdfModalMsg', 'PDF generated (Drive save skipped — backend not configured).', true);
-    } else {
-      // A147: real save failure — say so honestly instead of the misleading "not configured".
-      flowMsg('pdfModalMsg', 'PDF generated, but the Drive save failed' + (saveError ? ' (' + saveError + ')' : '') + ' — reopen and Generate again to retry.', false);
-    }
-    await loadQuotations(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
-    // The list refetch can lag the write (Sheets read-after-write) — patch what we know when the save
-    // actually produced a Drive link. On a failed save there is no saved PDF, so nothing to patch.
-    if (link) { qPatchLocal(pdfQuote.quotationNo, { pdfLink: link, pdfData, discountPct: payload.discountPct }); setTimeout(closePdfModal, 900); }
-  } catch (e) {
-    flowMsg('pdfModalMsg', e.message, false);
-  } finally { btn.disabled = false; btn.textContent = 'Generate & Save'; }
 }

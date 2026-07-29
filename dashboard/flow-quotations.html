@@ -84,7 +84,7 @@
           <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
           <div><div class="eyebrow">Process Flow · Step 2 of 6</div><h1>Quotations</h1><p>Load items from inventory and set quoted quantity &amp; price. Missing items can be added to inventory (even at zero stock).</p></div>
         </div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-primary" onclick="qcToggleCreate(true)">New Quotation &rarr;</a></div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><a class="btn btn-primary" onclick="qcNewQuotation()">New Quotation &rarr;</a></div>
       </div>
         <nav class="stepper">
           <a class="step done" href="flow-inventory.html"><span class="n">1</span>Inventory</a><span class="step-sep">&rsaquo;</span>
@@ -112,7 +112,7 @@
             real document redraw beside it — the same PDF the customer receives, not a mock-up of it.</p>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-          <button type="button" class="btn btn-sm btn-secondary" id="qcToggleBtn" onclick="qcToggleCreate()">+ New Quotation</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="qcToggleBtn" onclick="qcNewQuotation()">+ New Quotation</button>
         </div>
       </div>
 
@@ -161,11 +161,10 @@
             <div class="qc-pane" style="margin-top:1rem;">
               <h3>Layout</h3>
               <div class="qc-grid">
-                <div><label>Template</label>
-                  <select id="qcTemplate">
-                    <option value="full">Full — photos, all blocks</option>
-                    <option value="compact">Compact — no photos, tight table</option>
-                    <option value="formal">Formal / Tender — conservative</option>
+                <div><label>Description detail</label>
+                  <select id="qcDescMode">
+                    <option value="long">Full — show each item's description</option>
+                    <option value="short">Short — item name only, tighter table</option>
                   </select></div>
                 <div><label>Product photos</label>
                   <select id="qcPhotos"><option value="on">Show photos</option><option value="off">Hide photos</option></select></div>
@@ -211,14 +210,22 @@
                 <div><label>Warranty</label><input type="text" id="qcWarranty" placeholder="1 year"></div>
                 <div><label>Signatory</label><input type="text" id="qcSigName"></div>
                 <div><label>Signatory title</label><input type="text" id="qcSigDesignation"></div>
+                <div><label>Viber</label><input type="text" id="qcSigViber"></div>
                 <div><label>Mobile</label><input type="text" id="qcSigMobile"></div>
                 <div class="full"><label>Signatory email</label><input type="text" id="qcSigEmail"></div>
+                <div class="full"><label>Note <span style="text-transform:none;font-weight:500;">(prints on the final page, Full format)</span></label>
+                  <input type="text" id="qcNote"></div>
+                <div class="full"><label>Attach PDFs <span style="text-transform:none;font-weight:500;">(appended after the quotation's last page)</span></label>
+                  <input type="file" id="qcBrochures" accept="application/pdf" multiple></div>
               </div>
             </div>
 
             <div class="qc-actions" style="margin-top:1rem;">
               <button type="button" class="btn btn-primary" onclick="qcFinalize()" id="qcFinalizeBtn">Finalize quotation</button>
               <button type="button" class="btn btn-secondary" onclick="qcResetForm()">Reset</button>
+              <span id="qcModeHint" class="qc-note" style="display:none;flex-basis:100%;margin-top:.2rem;">
+                The figures above are locked to the saved quotation — only the document changes. Photos are
+                never stored, so re-attach any product photo before regenerating.</span>
             </div>
           </div>
 
@@ -269,79 +276,6 @@
       <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>
-
-  <!-- Generate Quotation PDF modal -->
-  <div class="flow-modal-overlay" id="pdfModal">
-    <div class="flow-modal">
-      <h3>Generate Quotation PDF</h3>
-      <div class="sub" id="pdfModalSub">—</div>
-
-      <div class="flow-form">
-        <div><label>Quotation No. (shown on the PDF)</label><input type="text" id="pdfQuotationNo" placeholder="e.g. 2026-276-ADM-…"></div>
-        <div><label>VAT</label><select id="pdfVat"><option value="inclusive">VAT Inclusive (12%)</option><option value="exclusive">VAT Exclusive</option><option value="zero">Zero-Rated</option></select></div>
-        <div><label>Discount % <span style="font-weight:400;color:var(--text-muted,#64748b);">(before VAT)</span></label><input type="number" id="pdfDiscount" min="0" max="100" step="any" placeholder="0"></div>
-        <div><label>Format</label><select id="pdfDescMode"><option value="long">Full description</option><option value="short">Short (compact)</option></select></div>
-        <div><label>Subject *</label><input type="text" id="pdfSubject" required placeholder="Required — type the quotation subject"></div>
-      </div>
-
-      <div class="group-title">Client</div>
-      <div class="flow-form">
-        <div class="full"><label>Address</label><input type="text" id="pdfAddress"></div>
-        <div><label>Attention</label><input type="text" id="pdfAttention"></div>
-        <div><label>Designation</label><input type="text" id="pdfDesignation"></div>
-        <div><label>Email</label><input type="text" id="pdfEmail"></div>
-        <div><label>RFQ No.</label><input type="text" id="pdfRfqNo"></div>
-      </div>
-
-      <div class="group-title">Terms &amp; Conditions</div>
-      <div class="flow-form">
-        <div><label>Validity</label><input type="text" id="pdfValidity" placeholder="e.g. 30 days"></div>
-        <div><label>Delivery</label><input type="text" id="pdfDelivery"></div>
-        <div><label>Payment</label><input type="text" id="pdfPayment"></div>
-        <div><label>Warranty</label><input type="text" id="pdfWarranty" value="1 year warranty against factory defect"></div>
-      </div>
-
-      <div class="group-title">Scope, Exclusions &amp; Options</div>
-      <div class="flow-form">
-        <div class="full">
-          <label>Scope of Supply — Included <span style="font-weight:400;color:var(--text-muted);">(one per line · wrap a line in **asterisks** to bold it · leave blank to omit the block)</span></label>
-          <textarea id="pdfScope" rows="5" placeholder="3 units – 1500 kW open type diesel generator set as specified above, brand new&#10;SmartGen HGM9510 digital genset controller, one per unit"></textarea>
-        </div>
-        <div class="full">
-          <label>Exclusions <span style="font-weight:400;color:var(--text-muted);">(one per line · printed in two columns · **asterisks** to bold the catch-all)</span></label>
-          <textarea id="pdfExclusions" rows="5" placeholder="Fuel tank, day tank, bulk storage tank, fuel piping and accessories&#10;**Any item not expressly listed under Scope of Supply**"></textarea>
-        </div>
-        <div class="full">
-          <label>Available as Options <span style="font-weight:400;color:var(--text-muted);">(one per line as <code>description | price</code>)</span></label>
-          <textarea id="pdfOptions" rows="3" placeholder="Deep Sea DSE8610 controller in place of SmartGen HGM9510 | PHP 174,150.00 / unit"></textarea>
-        </div>
-      </div>
-
-      <div class="group-title">Signatory</div>
-      <div class="flow-form">
-        <div><label>Name</label><input type="text" id="pdfSigName"></div>
-        <div><label>Designation</label><input type="text" id="pdfSigDesignation"></div>
-        <div><label>Viber</label><input type="text" id="pdfSigViber"></div>
-        <div><label>Mobile</label><input type="text" id="pdfSigMobile"></div>
-        <div><label>Email</label><input type="text" id="pdfSigEmail"></div>
-      </div>
-
-      <div class="group-title">Items &amp; Images (optional — photos are auto-resized)</div>
-      <div id="pdfImgWarn" class="flow-msg" style="display:none;background:#fffbeb;color:#92400e;border:1px solid #fcd34d;"></div>
-      <div id="pdfItems"></div>
-
-      <div class="group-title">Attach PDFs (optional — appended after the quotation's last page)</div>
-      <input type="file" id="pdfBrochures" accept="application/pdf" multiple>
-
-      <div class="full" style="margin-top:0.6rem;"><label>Note (shown on final page in Long format)</label><input type="text" id="pdfNote"></div>
-
-      <div id="pdfModalMsg" class="flow-msg" style="display:none;"></div>
-      <div class="flow-modal-foot">
-        <button type="button" class="btn btn-secondary" onclick="closePdfModal()">Cancel</button>
-        <button type="button" class="btn btn-primary" id="pdfGenBtn" onclick="submitPdf()">Generate &amp; Save</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Review modal: details + PDF, with Approve/Reject for the current approver -->
   <div class="flow-modal-overlay" id="qrModal">
