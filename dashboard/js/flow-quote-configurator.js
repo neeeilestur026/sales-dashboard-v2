@@ -524,10 +524,43 @@ async function qcAutoAddItems(items) {
 }
 
 /* Render the real document with photos and file it to Drive, stamped so A123's staleness check has
-   something to compare the record against. */
+   something to compare the record against.
+
+   A173 — build BOTH from the saved record, never from the browser's copy. On the from-PR path the
+   server rebuilds every line itself from PricingRequestItems and dates the quotation with its own
+   clock, so the browser's version can differ in the item fields it carries (uom, the requested-vs-
+   offered pair) and almost certainly differs in date format. Stamping the browser's version would
+   describe something the record does not contain — and A123 compares the two, so a brand-new
+   quotation would be flagged out of date and its approval blocked on the spot. */
 async function qcSavePdf(no) {
   const payload = qcPayload(true);
   payload.quotationNo = no;
+
+  let rec = null;
+  try {
+    const r = await fetchFlow('getQuotations', {}, { fresh: true });
+    rec = ((r && r.data) || []).find(q => String(q.quotationNo) === String(no)) || null;
+  } catch (e) { /* fall back to the local copy below */ }
+
+  if (rec) {
+    const photoByKey = {};
+    qcItems.forEach(i => { if (i.imageDataUrl) photoByKey[String(i.lineKey)] = i.imageDataUrl; });
+    const byPos = qcItems.filter(i => i.imageDataUrl).map(i => i.imageDataUrl);
+    payload.customer = rec.customer || payload.customer;
+    payload.date = rec.date || payload.date;
+    payload.discountPct = (typeof flowNum === 'function' ? flowNum(rec.discountPct) : +rec.discountPct) || 0;
+    payload.doc.subject = rec.subject || payload.doc.subject;
+    payload.items = (rec.items || []).map((it, i) => ({
+      itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo,
+      qty: (typeof flowNum === 'function' ? flowNum(it.qty) : +it.qty) || 0,
+      price: (typeof flowNum === 'function' ? flowNum(it.price) : +it.price) || 0,
+      description: it.itemName || '',
+      uom: it.uom || '',
+      // A86: the pairing the customer sees — what they asked for, then OUR OFFER
+      origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
+      imageDataUrl: photoByKey[String(it.lineKey)] || byPos[i] || ''
+    }));
+  }
   const res = await fetch('/flow/quotation-pdf', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
@@ -539,13 +572,24 @@ async function qcSavePdf(no) {
     r.onload = () => resolve(String(r.result).split(',')[1]);
     r.readAsDataURL(blob);
   });
+  /* A173 — this MUST be byte-identical to what flow-quotations.js `qPdfStamp` builds, because
+     `qPdfState` compares the two with JSON.stringify. That makes both the KEY ORDER and the exact
+     value formatting load-bearing: a raw date instead of flowDate(), or a missing vatOption, and
+     every quotation created here is flagged stale the moment it is saved — which blocks its
+     approval. Key order below deliberately mirrors qPdfStamp field for field. */
+  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
+  const dt = (typeof flowDate === 'function') ? flowDate : (d => String(d || '').slice(0, 10));
+  const src = rec || { customer: payload.customer, date: payload.date, subject: payload.doc.subject,
+                       discountPct: payload.discountPct, items: payload.items.map(i => ({
+                         itemNo: i.itemNo, qty: i.qty, price: i.price })) };
   const stamp = {
     v: 1, doc: payload.doc, vatOption: payload.vatOption, descMode: 'short',
     hasImages: qcItems.some(i => !!i.imageDataUrl),
     stamp: {
-      customer: payload.customer, date: payload.date, subject: payload.doc.subject,
-      discountPct: payload.discountPct,
-      items: payload.items.map(i => [i.itemNo, i.qty, i.price].join('|'))
+      customer: String(src.customer || ''), date: dt(src.date) || '',
+      subject: String(src.subject || ''), discountPct: num(src.discountPct) || 0,
+      vatOption: payload.vatOption || '',
+      items: (src.items || []).map(it => `${it.itemNo}|${num(it.qty)}|${num(it.price)}`)
     }
   };
   await postFlow('saveQuotationPDF', {
