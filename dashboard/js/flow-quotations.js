@@ -7,6 +7,8 @@ let qSession = null;
 let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
 let qAdmin = false;         // admin: free-typed item rows (incl. new items) auto-added to inventory on save
 let qCanClose = false;      // A152: the Close/Reopen actions need FlowAPI v91
+let qPrByNo = {};           // A183: prNo → pricing-request record, for the approval pricing review
+let qrGate = { block: false, needTick: false };   // A183: state the tick uses to re-enable Approve
 const Q_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];   // A152 soft-close outcomes
 
 /* A175 — one quotation page. The Quote Configurator (flow-quote-configurator.js) is the CREATE half
@@ -38,6 +40,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const c = document.getElementById('listContainer');
     if (c) c.innerHTML = `<p style="color:#ef4444;">Could not load quotations — ${flowEsc(e.message || 'unknown error')}</p>`;
   }
+  // A183: approvers (oversight roles) need the pricing behind each quotation for the review. Sales
+  // never approve, so they don't pay this fetch. Best-effort — the modal degrades to no-breakdown.
+  if (qIsOversight) { try { await qLoadPricingRefs(); } catch (e) { /* modal falls back to hasPr:false */ } }
   // Deep-link: ?review=<quotationNo> opens the review modal directly (e.g. from the admin dashboard).
   const reviewNo = params.get('review');
   if (reviewNo) { try { openReviewModal(reviewNo); } catch (e) { /* the list still stands */ } }
@@ -313,6 +318,13 @@ async function reviseQuotationAction(no) {
 }
 
 // ─── Review modal (see details + PDF before approving) ─────────────
+/** A183: prNo → pricing-request record, so the review can show the cost/margin behind a quotation. */
+async function qLoadPricingRefs() {
+  const r = await fetchFlow('getPricingRequests');
+  qPrByNo = {};
+  ((r && r.data) || []).forEach(p => { if (p && p.prNo) qPrByNo[String(p.prNo)] = p; });
+}
+
 function openReviewModal(no) {
   const q = qList.find(x => String(x.quotationNo) === String(no));
   if (!q) return;
@@ -353,24 +365,68 @@ function openReviewModal(no) {
   if (fid) pv.innerHTML = warn + `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
   else if (q.pdfLink) pv.innerHTML = warn + `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
   else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();qcOpen('${flowEsc(q.quotationNo)}','document')">generate the PDF</button> first.</div>`;
+  // A183: the pricing this quotation was built from. Oversight roles see the cost/margin breakdown; a
+  // loud banner fires when the quoted total no longer matches what management priced; and when the
+  // viewer is the approver, a tick "I've reviewed the pricing" gates Approve. Cost figures are never
+  // shown to sales.
+  const bd = document.getElementById('qrBreakdown');
+  const pr = (qIsOversight && q.prNo) ? qPrByNo[String(q.prNo)] : null;
+  const review = pr ? flowQuotationPricingReview(q, pr) : null;
+  const needTick = !!(isApprover && review && review.hasPr);
+  if (bd) {
+    if (review && review.hasPr) {
+      bd.innerHTML =
+        `<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Pricing management set</div>` +
+        flowDeviationBanner(review) + review.breakdownHtml +
+        (needTick
+          ? `<label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.6rem;font-size:0.82rem;font-weight:600;cursor:pointer;">
+               <input type="checkbox" id="qrTick" onchange="qrSyncApprove()"> I've reviewed the pricing above and confirm it.</label>`
+          : '');
+    } else if (qIsOversight && q.prNo) {
+      bd.innerHTML = `<div style="font-size:0.78rem;color:#b45309;">Pricing record for ${flowEsc(q.prNo)} not found — approval is governed by the server's pricing check.</div>`;
+    } else {
+      bd.innerHTML = '';
+    }
+  }
+
   const foot = document.getElementById('qrFoot');
   // Approving a quotation whose attached document shows different figures is the failure this guards
-  // against — so Approve waits for a matching PDF. Reject always stays available.
+  // against — so Approve waits for a matching PDF. A183 adds a second, independent gate: the pricing
+  // tick. Reject always stays available.
   const blockApprove = pdfState === 'stale' || pdfState === 'unverified';
-  const approveBtn = blockApprove
-    ? `<button type="button" class="btn btn-primary" disabled style="opacity:0.5;cursor:not-allowed;" title="Regenerate the PDF first — the attached document does not match the figures above.">Approve</button>`
-    : `<button type="button" class="btn btn-primary" onclick="qrApprove('${flowEsc(q.quotationNo)}')">Approve</button>`;
+  qrGate = { block: blockApprove, needTick: needTick };
   foot.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Close</button>` +
     (isApprover
-      ? `<button type="button" class="btn btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>` + approveBtn
+      ? `<button type="button" class="btn btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>` +
+        `<button type="button" class="btn btn-primary" id="qrApproveBtn" onclick="qrApprove('${flowEsc(q.quotationNo)}')">Approve</button>`
       : `<span style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-left:auto;">${st.indexOf('Pending') === 0 ? 'Awaiting ' + st.replace('Pending ', '') + ' approval' : ''}</span>`);
+  qrSyncApprove();
   document.getElementById('qrModal').classList.add('open');
+}
+
+/** A183: keep Approve disabled until BOTH gates pass — a matching PDF (qrGate.block) and, for a
+ *  from-PR quotation, the pricing tick. Rendered once; called on open and on each tick change. */
+function qrSyncApprove() {
+  const btn = document.getElementById('qrApproveBtn');
+  if (!btn) return;
+  const ticked = !qrGate.needTick || !!(document.getElementById('qrTick') || {}).checked;
+  const ok = !qrGate.block && ticked;
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '' : '0.5';
+  btn.style.cursor = ok ? '' : 'not-allowed';
+  btn.title = qrGate.block
+    ? 'Regenerate the PDF first — the attached document does not match the figures above.'
+    : (!ticked ? 'Tick “I’ve reviewed the pricing” to approve.' : '');
 }
 function closeReviewModal() { document.getElementById('qrModal').classList.remove('open'); }
 /** From the out-of-date banner: straight into the PDF dialog, prefilled from the stored doc fields
  *  so nothing has to be retyped (qcLoadExisting restores them). */
 function qrRegenerate(no) { closeReviewModal(); qcOpen(no, 'document'); }
-function qrApprove(no) { closeReviewModal(); _qAction('approveQuotation', no); }
+/* A183: the pricing tick in the modal IS the deviation acknowledgement, so approving from here passes
+   acknowledgeDeviation — the server's per-line message (which is unreliable when reps rewrite item
+   descriptions) is replaced by the visual banner + tick the approver just cleared. Harmless when
+   nothing deviates: the server only consults it to skip the deviation gate. */
+function qrApprove(no) { closeReviewModal(); _qAction('approveQuotation', no, { acknowledgeDeviation: true }); }
 function qrReject(no) {
   const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
   if (reason === null) return;

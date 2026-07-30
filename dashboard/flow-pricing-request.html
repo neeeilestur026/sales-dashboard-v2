@@ -109,6 +109,10 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         Re-pricing <span class="pe-edit-id" id="peEditId"></span>
       </div>
+      <!-- A183: fires when the record's saved margin/commission no longer reproduce the saved line
+           prices (a partial re-price left a stray margin) — re-pricing now would silently change those
+           lines vs what was quoted. Populated by peRenderRepriceWarn. -->
+      <div id="peRepriceWarn" style="display:none;"></div>
       <!-- A156: where the goods actually have to land. Admin captures this at sourcing, but management
            never opened the request detail (openPr jumps straight into the engine), so it was invisible
            exactly where the freight is priced. -->

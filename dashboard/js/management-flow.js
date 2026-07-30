@@ -11,6 +11,10 @@ function _mfe(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(
 function _mfm(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
 function _mfn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
+let mfPrByNo = {};   // A183: prNo → pricing record, for the quotation approval review
+let mfQByNo = {};    // A183: quotationNo → quotation
+let mfrGate = { needTick: false };   // A183: whether the review tick gates Approve
+
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof _flowConfigured === 'function' && !_flowConfigured()) return;
   if (document.getElementById('mgmtKpiGrid')) mfLoadKpis();
@@ -105,11 +109,15 @@ async function mfLoadApprovals() {
   const c = document.getElementById('mgmtApprovals');
   c.innerHTML = '<div class="mf-empty">Loading approvals…</div>';
   try {
-    const [q, po, pr] = await Promise.all([
+    const [q, po, pr, prq] = await Promise.all([
       fetchFlow('getQuotations').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
+      fetchFlow('getPricingRequests').catch(() => ({ data: [] })),   // A183: pricing behind each quotation
     ]);
+    // A183: prNo → pricing record + quotationNo → quotation, so the review modal can join them.
+    mfPrByNo = {}; ((prq && prq.data) || []).forEach(p => { if (p && p.prNo) mfPrByNo[String(p.prNo)] = p; });
+    mfQByNo = {}; ((q && q.data) || []).forEach(x => { if (x && x.quotationNo) mfQByNo[String(x.quotationNo)] = x; });
     const quotes = ((q && q.data) || []).filter(x => x.status === 'Pending Management');
     const pos = ((po && po.data) || []).filter(x => x.status === 'Pending Management');
     // Payment requests awaiting management. A156 put BOTH types on the one Admin → Management →
@@ -126,7 +134,7 @@ async function mfLoadApprovals() {
       <td>${_mfe(x.quotationNo)}</td><td>${_mfe(x.customer)}</td>
       <td class="num">${_mfm(qTot(x))}</td>
       <td class="num" style="white-space:nowrap;">
-        <button class="link-btn" onclick="mfApprove('approveQuotation','${_mfe(x.quotationNo)}','quotationNo')">Approve</button>
+        <button class="link-btn" onclick="mfOpenReview('${_mfe(x.quotationNo)}')">Review &amp; approve</button>
         <button class="link-btn del-btn" onclick="mfReject('rejectQuotation','${_mfe(x.quotationNo)}','quotationNo')">Reject</button></td></tr>`).join('');
     const pRows = pos.map(x => `<tr>
       <td><span class="flow-badge b-pending">Purchase Order</span></td>
@@ -148,9 +156,53 @@ async function mfLoadApprovals() {
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
 }
 
-async function mfApprove(action, no, key) {
+/* A183: the quotation review modal — management must SEE the pricing breakdown and TICK before
+   approving. Reuses the shared flow-api.js builder so it is byte-identical to the quotations page. */
+function mfOpenReview(no) {
+  const q = mfQByNo[String(no)];
+  if (!q) { mfApprove('approveQuotation', no, 'quotationNo'); return; }   // fallback: no data, let the server gate govern
+  const pr = q.prNo ? mfPrByNo[String(q.prNo)] : null;
+  const review = pr ? flowQuotationPricingReview(q, pr) : null;
+  const needTick = !!(review && review.hasPr);
+  document.getElementById('mfrTitle').textContent = q.quotationNo;
+  document.getElementById('mfrSub').innerHTML = `${_mfe(q.customer)} · ${_mfm(_mfn(q.total) || (q.items || []).reduce((s, it) => s + _mfn(it.qty) * _mfn(it.price), 0))}`;
+  const itemsTable = `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.8rem;"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th></tr></thead><tbody>` +
+    (q.items || []).map(it => `<tr><td>${_mfe(it.itemNo)} ${_mfe(it.itemName)}</td><td class="num">${_mfn(it.qty)}</td><td class="num">${_mfm(_mfn(it.price))}</td></tr>`).join('') +
+    `</tbody></table></div>`;
+  const pricing = review && review.hasPr
+    ? `<div style="margin-top:0.9rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:0.3rem;">Pricing management set</div>` +
+      flowDeviationBanner(review) + review.breakdownHtml +
+      `<label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.6rem;font-size:0.82rem;font-weight:600;cursor:pointer;">
+         <input type="checkbox" id="mfrTick" onchange="mfSyncApprove()"> I've reviewed the pricing above and confirm it.</label>`
+    : (q.prNo ? `<div style="margin-top:0.6rem;font-size:0.78rem;color:#b45309;">Pricing record for ${_mfe(q.prNo)} not found — approval is governed by the server's pricing check.</div>` : '');
+  document.getElementById('mfrBody').innerHTML = itemsTable + pricing;
+  mfrGate = { needTick: needTick };
+  document.getElementById('mfrFoot').innerHTML =
+    `<button class="btn btn-secondary" onclick="mfCloseReview()">Close</button>` +
+    `<button class="btn btn-primary" id="mfrApproveBtn" onclick="mfCloseReview();mfApprove('approveQuotation','${_mfe(no)}','quotationNo',{acknowledgeDeviation:true})">Approve</button>`;
+  mfSyncApprove();
+  document.getElementById('mfReviewModal').style.display = 'flex';
+}
+function mfCloseReview() { document.getElementById('mfReviewModal').style.display = 'none'; }
+function mfSyncApprove() {
+  const btn = document.getElementById('mfrApproveBtn');
+  if (!btn) return;
+  const ticked = !mfrGate.needTick || !!(document.getElementById('mfrTick') || {}).checked;
+  btn.disabled = !ticked;
+  btn.style.opacity = ticked ? '' : '0.5';
+  btn.style.cursor = ticked ? '' : 'not-allowed';
+  btn.title = ticked ? '' : 'Tick “I’ve reviewed the pricing” to approve.';
+}
+
+async function mfApprove(action, no, key, extra) {
   try {
-    const r = await postFlow(action, { [key]: no });
+    let r = await postFlow(action, Object.assign({ [key]: no }, extra || {}));
+    // A183: was a dead-end — the server's deviation gate returns needsConfirm and this just alerted a
+    // confusing error, so management could not approve a deviating quotation from their own page.
+    if (!r.success && r.needsConfirm === 'prDeviation') {
+      if (!confirm(r.message)) return;
+      r = await postFlow(action, Object.assign({ [key]: no, acknowledgeDeviation: true }, extra || {}));
+    }
     if (!r.success) throw new Error(r.message);
     mfLoadApprovals(); mfLoadKpis();
   } catch (e) { alert(e.message); }

@@ -478,6 +478,137 @@ function flowPricingBreakdownTable(rows) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   A183 — the pricing review shown to management before they approve a quotation.
+
+   A quotation carries the customer-facing prices; the pricing request it was built from carries the
+   cost/margin breakdown management set. This joins the two so an approver sees the breakdown again AND
+   is told, loudly, when a line's quoted price no longer matches the price management priced it at —
+   the exact situation that let PR-202607-210's re-price drift go unnoticed.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Normalised name for matching — upper, punctuation stripped, whitespace collapsed. */
+function _flowNormItem(s) {
+  return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+}
+// Item numbers reps leave as a placeholder — never a reliable join key.
+function _flowPlaceholderNo(s) {
+  const v = String(s == null ? '' : s).trim().toLowerCase();
+  return v === '' || v === 'n/a' || v === 'na' || v === '-' || v === '--';
+}
+
+/* Best-effort match of a quotation line back to its pricing line. The reliable keys are tried first
+   (item identity, then a NON-placeholder item number); only then an exact normalised name against the
+   PR's mapped OR original description. Claim-once via the `used` set, so two lines can't share a row.
+   Returns the PR item or null. When a quotation has been rewritten by the rep (item numbers blanked to
+   'N/A', descriptions replaced — the PR-202607-210 case) most lines correctly return null: the join is
+   simply not recoverable, and the caller falls back to the total-level check. */
+function _flowMatchPrItem(prItems, qi, used) {
+  const id = String(qi.itemId == null ? '' : qi.itemId).trim();
+  const no = String(qi.itemNo == null ? '' : qi.itemNo).trim().toLowerCase();
+  const nm = _flowNormItem(qi.itemName);
+  const free = (i) => !used.has(i);
+  let idx = -1;
+  if (id) idx = prItems.findIndex((p, i) => free(i) && String(p.itemId || '').trim() === id);
+  if (idx < 0 && !_flowPlaceholderNo(no)) {
+    idx = prItems.findIndex((p, i) => free(i) && !_flowPlaceholderNo(p.itemNo) &&
+      String(p.itemNo).trim().toLowerCase() === no);
+  }
+  if (idx < 0 && nm) {
+    idx = prItems.findIndex((p, i) => free(i) &&
+      (_flowNormItem(p.itemName) === nm || _flowNormItem(p.origItemName) === nm));
+  }
+  if (idx < 0) return null;
+  used.add(idx);
+  return prItems[idx];
+}
+
+/* Given a quotation and the pricing-request record it came from, build the approval review.
+
+   The load-bearing signal is the TOTAL, not the per-line join: reps routinely rewrite item numbers and
+   descriptions (blanking the codes to 'N/A'), which destroys any reliable line-to-line link — and the
+   server's own per-line gate collapses on exactly that data. So the auto-flag compares the PRICED total
+   (Σ included finalPrice×qty) to the QUOTED gross (Σ quoted price×qty). That reliably answers "did the
+   quotation's money move from what management priced" (the ₱14,290 of manual adds on PR-202607-210),
+   whatever the reps did to the descriptions. A quotation-level discount is reported SEPARATELY — it is a
+   legitimate deal decision (A158), not a pricing mismatch. Per-line diffs are shown only where a line
+   confidently matches, with an honest "N of M matched" count. */
+function flowQuotationPricingReview(quotation, prRecord) {
+  quotation = quotation || {};
+  const hasPr = !!(prRecord && Array.isArray(prRecord.items) && prRecord.items.length);
+  if (!hasPr) {
+    return { hasPr: false, breakdownHtml: '', incomplete: false, flagged: false,
+             pricedTotal: 0, quotedGross: 0, totalDelta: 0, discountPct: 0,
+             perLine: [], matched: 0, total: (quotation.items || []).length };
+  }
+  const rows = flowPricingRows(prRecord);
+  const breakdownHtml = flowPricingBreakdownTable(rows);
+  const incomplete = flowPricingRowsIncomplete(rows);
+
+  const prItems = prRecord.items || [];
+  const included = prItems.filter(p => p.included === undefined || p.included === true || String(p.included) === 'true');
+  const pricedTotal = included.reduce((s, p) => s + flowNum(p.finalPrice) * flowNum(p.qty), 0);
+  const quotedGross = flowQuotationGross(quotation);
+  const totalDelta = quotedGross - pricedTotal;
+  const discountPct = flowQuotationDiscountPct(quotation);
+
+  const used = new Set();
+  const perLine = [];
+  const qItems = quotation.items || [];
+  qItems.forEach(qi => {
+    const src = _flowMatchPrItem(prItems, qi, used);
+    if (!src) return;
+    const priced = flowNum(src.finalPrice), quoted = flowNum(qi.price);
+    if (Math.abs(priced - quoted) > 0.005) {
+      perLine.push({ item: String(qi.itemName || qi.itemNo || ''), priced, quoted, diff: quoted - priced });
+    }
+  });
+  const matched = used.size;
+
+  return {
+    hasPr: true, breakdownHtml, incomplete,
+    pricedTotal, quotedGross, totalDelta, discountPct,
+    flagged: Math.abs(totalDelta) > 0.5,
+    perLine, matched, total: qItems.length,
+  };
+}
+
+/** The loud banner for a review, or '' when there is nothing to flag. Shared by both approval surfaces
+ *  so their wording can't drift. Red when the money moved from what management priced; amber-only when
+ *  the totals agree but the breakdown is incomplete. */
+function flowDeviationBanner(review) {
+  review = review || {};
+  if (!review.hasPr) return '';
+  const money = v => flowMoney(v, 'PHP');
+  const flagged = review.flagged;
+  if (!flagged && !review.incomplete) return '';
+
+  const parts = [];
+  if (flagged) {
+    const up = review.totalDelta > 0;
+    parts.push(`<div style="font-weight:700;margin-bottom:0.35rem;">⚠ The quoted total does not match what management priced</div>`);
+    parts.push(`<div>Priced <strong>${money(review.pricedTotal)}</strong> → quoted <strong>${money(review.quotedGross)}</strong> ` +
+      `<span style="color:${up ? '#dc2626' : '#b45309'};">(${up ? '+' : ''}${money(review.totalDelta)})</span>` +
+      (review.discountPct ? ` before a ${review.discountPct}% discount` : '') + `</div>`);
+    if (review.perLine.length) {
+      parts.push(`<div style="margin-top:0.3rem;">` + review.perLine.map(d =>
+        `${flowEsc(String(d.item).slice(0, 44))}: ${money(d.priced)} → ${money(d.quoted)} ` +
+        `<span style="color:${d.diff < 0 ? '#b45309' : '#dc2626'};">(${d.diff < 0 ? '' : '+'}${money(d.diff)})</span>`
+      ).join('<br>') + `</div>`);
+    }
+    if (review.matched < review.total) {
+      parts.push(`<div style="margin-top:0.3rem;color:#b45309;">Only ${review.matched} of ${review.total} line(s) ` +
+        `could be matched to the pricing (the rest were re-described on the quotation) — review the breakdown below.</div>`);
+    }
+  } else {
+    parts.push(`<div style="font-weight:700;">⚠ Review the pricing before approving</div>`);
+  }
+  if (review.incomplete) {
+    parts.push(`<div style="margin-top:0.3rem;color:#b45309;">Some lines have no saved cost breakdown.</div>`);
+  }
+  return `<div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.6rem;font-size:0.78rem;color:#991b1b;">${parts.join('')}</div>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    A182 — what a quotation is actually worth.
 
    Quotations['Total'] stores the PRE-discount line sum. The quotations page has always applied the

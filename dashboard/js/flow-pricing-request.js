@@ -1044,9 +1044,79 @@ function loadFlowPricing(prNo) {
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = false;
   const db = document.getElementById('peDocsBtn'); if (db) db.disabled = false;
   recalcPricing();
+  peRenderRepriceWarn(peRepriceGuard(r));   // A183: warn before a stray-margin re-price can inflate
   peLoadPriceHistory(r.customer);
   const card = document.getElementById('mgmtEngineCard');
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* A183 — before a re-price can silently inflate lines, compare each saved line price against what the
+   record's OWN stored margin/commission/duties would now produce. When a request was priced across two
+   runs at different margins (PR-202607-210: lines 1-4 at 25%/7.5%, line 5 at 35%/10%), the record keeps
+   only the last run's single margin, so reloading recomputes every line at that stray margin — inflating
+   the others ~20%. A reload+save+re-quote would then overcharge, and the approval deviation gate can't
+   catch it (quotation and PR would agree on the inflated number). This is the only place to catch it.
+
+   Read-only: recomputes with flowCalcItem using the SAME prefilled inputs the reload used (record
+   commission/margin, breakdown[0] forex/duties override, current supplier price / cbm). Returns the
+   lines whose recomputed VAT-ex unit differs from the stored Final Price. */
+function peRepriceGuard(r) {
+  r = r || {};
+  const inc = (r.items || []).filter(i => i.included);
+  let bd = [];
+  try { bd = JSON.parse(r.pricedItemsJson || r.legacyItemsJson || '[]') || []; } catch (e) { bd = []; }
+  const bd0 = bd[0] || {};
+  const bdByLine = {}, bdByNo = {};
+  bd.forEach((b, bi) => {
+    if (!b) return;
+    const line = (b.line != null && b.line !== '') ? String(b.line) : String(bi + 1);
+    bdByLine[line] = b;
+    const k = String((b.modelNo || b.itemNo) || '');
+    if (k && !bdByNo[k]) bdByNo[k] = b;
+  });
+  const gPrin = (inc.find(i => i.principal) || {}).principal || '';
+  const principal = (typeof flowPrincipalByName === 'function') ? flowPrincipalByName(gPrin) : null;
+  const dest = (typeof flowDestinationByName === 'function') ? flowDestinationByName(r.destination || '') : null;
+  const comm = flowNum(r.commission), marg = flowNum(r.margin);
+  // Mirror the reload: forex/duties override ONLY when the saved breakdown carries them, else the
+  // principal's own defaults apply (flowCalcItem treats a missing opt as "use the principal").
+  const override = {};
+  if (bd0.forex != null) override.forex = flowNum(bd0.forex);
+  if (bd0.dutiesPct != null) override.dutiesPct = flowNum(bd0.dutiesPct);
+
+  const changed = [];
+  inc.forEach((i, idx) => {
+    const stored = flowNum(i.finalPrice);
+    if (!(stored > 0)) return;                         // nothing recorded to compare against
+    const b = bdByLine[String(i.line != null ? i.line : idx + 1)] || bdByNo[String(i.itemNo)] || {};
+    const buyPrice = flowNum(i.supplierPrice) ? flowNum(i.supplierPrice) : flowNum(b.buyPrice);
+    const cbm = flowNum(i.cbm) ? flowNum(i.cbm) : flowNum(b.cbm);
+    const out = flowCalcItem({ buyPrice, discount: flowNum(b.discount), qty: flowNum(i.qty), cbm },
+                             principal, dest, comm, marg, override);
+    const now = Math.round(out.unitPriceVatEx * 100) / 100;
+    if (Math.abs(now - stored) > 0.005) {
+      changed.push({ line: i.line, name: i.itemName || i.itemNo || ('line ' + i.line), was: stored, now });
+    }
+  });
+  return changed;
+}
+
+/** Render (or clear) the stray-margin warning banner. */
+function peRenderRepriceWarn(changed) {
+  const el = document.getElementById('peRepriceWarn');
+  if (!el) return;
+  if (!changed || !changed.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const rows = changed.map(c => {
+    const pct = c.was > 0 ? Math.round((c.now - c.was) / c.was * 100) : 0;
+    return `<div>Line ${flowEsc(String(c.line))} — ${flowEsc(String(c.name).slice(0, 40))}: ` +
+      `<strong>${flowMoney(c.was, 'PHP')}</strong> → <strong>${flowMoney(c.now, 'PHP')}</strong> ` +
+      `<span>(${pct >= 0 ? '+' : ''}${pct}%)</span></div>`;
+  }).join('');
+  el.style.display = '';
+  el.innerHTML = `<div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:0.6rem 0.75rem;margin:0.5rem 0;font-size:0.8rem;color:#991b1b;">
+    <div style="font-weight:700;margin-bottom:0.35rem;">⚠ This request's saved margin/commission no longer reproduce ${changed.length} of its saved line price${changed.length > 1 ? 's' : ''}</div>
+    <div style="margin-bottom:0.35rem;">Re-pricing and saving now will change ${changed.length > 1 ? 'these lines' : 'this line'} to the figures below — different from what was already quoted. Review each line and the margin before saving.</div>
+    ${rows}</div>`;
 }
 
 function recalcPricing() {

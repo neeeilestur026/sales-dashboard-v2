@@ -1183,6 +1183,18 @@
         </div>
       </div>
     </div>
+
+    <!-- A183: quotation approval review — the pricing this quotation was built from, a loud banner when
+         it no longer matches, and a tick that gates Approve. Self-styled so it needs no payroll CSS. -->
+    <div id="mfReviewModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,0.5);align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)mfCloseReview()">
+      <div style="background:#fff;border-radius:14px;max-width:840px;width:100%;max-height:90vh;overflow:auto;padding:1.25rem 1.4rem;box-shadow:0 24px 60px -20px rgba(15,23,42,0.5);">
+        <h3 style="margin:0 0 0.2rem;font:800 18px 'Inter',sans-serif;">Review quotation <span id="mfrTitle"></span></h3>
+        <div id="mfrSub" style="font-size:0.8rem;color:#64748b;margin-bottom:0.9rem;">—</div>
+        <div id="mfrBody"></div>
+        <div id="mfrFoot" style="display:flex;gap:0.6rem;justify-content:flex-end;margin-top:1rem;"></div>
+      </div>
+    </div>
+
     <div class="section" id="section-shipments">
       <div class="section-header" onclick="toggleSection('section-shipments')">
         <h2 class="section-title">
