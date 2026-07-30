@@ -63,6 +63,14 @@ function flowIsGeneratedDoc(d) {
   return String((d && d.docType) || '').trim().toLowerCase().indexOf('generated pdf') === 0;
 }
 
+/** A178: a quotation's item photos are archived as documents so a regenerate can reproduce them, but
+ *  they are managed on the item rows in the builder (attach / ✕ remove) — not here. Listing them would
+ *  bury the real attachments under a photo-LK1234.jpg per line, and offer a second, easy-to-miss way to
+ *  change the document. flowHasDoc still sees them, since no gate ever asks for this type. */
+function flowIsItemPhotoDoc(d) {
+  return String((d && d.docType) || '').trim().toLowerCase() === 'item photo';
+}
+
 async function flowHasDoc(module, refNo, type) {
   try {
     const res = await fetchFlow('getDocuments', { module, refNo: String(refNo) });
@@ -83,7 +91,7 @@ async function flowDocsRefresh() {
   list.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div>';
   try {
     const res = await fetchFlow('getDocuments', { module: _docsCtx.module, refNo: _docsCtx.refNo });
-    const docs = (res && res.data) || [];
+    const docs = ((res && res.data) || []).filter(d => !flowIsItemPhotoDoc(d));
     if (!docs.length) {
       list.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No documents attached yet.</div>';
       return;

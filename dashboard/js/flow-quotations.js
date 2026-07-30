@@ -347,7 +347,7 @@ function openReviewModal(no) {
       <div style="font-size:0.8rem;color:#7f1d1d;margin-top:0.25rem;">
         It shows <b>${flowMoney(was.net, 'PHP')}</b>${was.discountPct ? ` (${was.discountPct}% discount)` : ''} —
         the quotation is now <b>${flowMoney(qtnTotal(q), 'PHP')}</b>${flowNum(q.discountPct) ? ` (${flowNum(q.discountPct)}% discount)` : ''}.
-        ${qPdfInfo(q).hasImages ? 'Re-attach the product photo when regenerating.' : ''}
+        ${qPdfInfo(q).hasImages ? 'Its product photos are restored automatically.' : ''}
       </div>${regenBtn}</div>`;
   } else if (pdfState === 'unverified') {
     warn = `<div style="background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">

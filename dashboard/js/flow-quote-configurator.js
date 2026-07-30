@@ -26,7 +26,16 @@ let qcQuotationNo = '';           // set once saved, so a second Finalize update
 let qcFromPr = '';                // the process-flow path
 let qcLocked = false;             // items display-only (fromPR, and A176 document mode)
 let qcInventory = [];             // for the admin free-type datalist
-let qcPlantSite = '';             // A145: destination carried from the pricing request onto the doc
+/* A178 — item photos. `qcPhotoDocs` is what Drive already holds (lineKey -> docId) and `qcPhotoDirty`
+   is what changed in THIS session; together they are the idempotence rule — stored and not dirty means
+   the save skips it, so an unedited regenerate issues no writes at all. `qcPhotoFailed` is the safety
+   catch: if the read-back could not run we must REFUSE to file, because the new PDF would silently
+   replace a good one with a photo-less copy. */
+let qcPhotoDocs = {};
+let qcPhotoDirty = {};
+let qcPhotoLoad = null;           // the in-flight read-back — every save awaits it first
+let qcPhotoFailed = false;
+let qcPreviewPhotos = false;      // include images in the NEXT completed preview render, once
 /* A176 — one surface, two modes:
      'edit'     the record is Draft/Rejected and the viewer may change it. Finalize writes the
                 record (updateQuotation / createQuotation) AND files the PDF.
@@ -88,12 +97,18 @@ function qcResetForm() {
   qcFromPr = '';
   qcLocked = false;
   qcMode = 'edit';
-  qcPlantSite = '';
   qcItems = [];
+  qcPhotoDocs = {}; qcPhotoDirty = {}; qcPhotoLoad = null; qcPhotoFailed = false; qcPreviewPhotos = false;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
   set('qcNo', ''); set('qcCustomer', ''); set('qcSubject', ''); set('qcDiscount', 0);
   set('qcDate', (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
-  set('qcNote', '');
+  set('qcNote', ''); set('qcPlantSite', '');
+  /* A178 — these three selects are RESTORED by qcLoadExisting but were never reset, so they leaked
+     into the next quotation: after viewing one saved with photos off, every later save silently
+     blanked its images. qcVat leaking matters most — it is inside the A123 freshness stamp, so the
+     wrong VAT option would be stamped onto a brand-new quotation. Safe here because qcLoadExisting
+     resets FIRST and restores afterwards. */
+  set('qcPhotos', 'on'); set('qcVat', 'inclusive'); set('qcDescMode', 'long');
   const br = document.getElementById('qcBrochures'); if (br) br.value = '';
   const msg = document.getElementById('qcMsg'); if (msg) msg.innerHTML = '';
   const title = document.getElementById('formTitle'); if (title) title.textContent = 'New Quotation';
@@ -132,7 +147,18 @@ function qcSyncLock() {
     el.title = lockMoney ? 'Locked to the saved quotation — use Edit or Revise to change the figures.' : '';
   });
   const btn = document.getElementById('qcFinalizeBtn');
-  if (btn) btn.textContent = (qcMode === 'document') ? 'Regenerate & file PDF' : 'Finalize quotation';
+  if (btn) {
+    btn.textContent = (qcMode === 'document') ? 'Regenerate & file PDF' : 'Finalize quotation';
+    /* A178 — refuse rather than destroy. If the archived photos could not be read back, filing now
+       would replace a good document with a photo-less copy, and the rep would have no way to tell. */
+    if (qcPhotoFailed) {
+      btn.disabled = true;
+      btn.title = 'The saved product photos could not be read back — filing now would produce a '
+                + 'document without them. Reload the page and reopen this quotation.';
+    } else if (btn.title && btn.title.indexOf('product photos') === 0) {
+      btn.title = '';
+    }
+  }
   const hint = document.getElementById('qcModeHint');
   if (hint) hint.style.display = (qcMode === 'document') ? '' : 'none';
 }
@@ -173,13 +199,17 @@ function qcLoadExisting(q) {
      ['email', 'qcEmail'], ['rfqNo', 'qcRfq'], ['validity', 'qcValidity'], ['delivery', 'qcDelivery'],
      ['payment', 'qcPayment'], ['warranty', 'qcWarranty'], ['sigName', 'qcSigName'],
      ['sigDesignation', 'qcSigDesignation'], ['sigViber', 'qcSigViber'], ['sigMobile', 'qcSigMobile'],
-     ['sigEmail', 'qcSigEmail'], ['note', 'qcNote']]
+     ['sigEmail', 'qcSigEmail'], ['note', 'qcNote'], ['plantSite', 'qcPlantSite']]
       .forEach(([k, id]) => { if (prev.doc[k]) set(id, prev.doc[k]); });
     if (prev.vatOption) set('qcVat', prev.vatOption);
     if (prev.descMode) set('qcDescMode', prev.descMode);
   }
   if (!document.getElementById('qcRfq').value && q.clientRefNo) set('qcRfq', q.clientRefNo);
-  qcPlantSite = q.plantSite || '';   // A145: prints on the document, never re-typed
+  /* A178 — plant site precedence: the last filed document wins, then the stored column. The document
+     is what the client received, and it is the only one of the two that an edit here can update
+     (updateQuotation does not write the Plant Site column), so preferring the column would silently
+     revert a rep's correction the next time they opened the quotation. */
+  if (!document.getElementById('qcPlantSite').value && q.plantSite) set('qcPlantSite', q.plantSite);
 
   qcItems = (q.items || []).map(it => ({
     lineKey: it.lineKey || qcLineKey(),
@@ -190,11 +220,15 @@ function qcLoadExisting(q) {
   }));
   if (!qcItems.length) qcItems = [{ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0,
     uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '' }];
-  // Document mode locks the figures (items included) but leaves the photo buttons live — photos are
-  // never stored, so they always have to be re-attached before a regenerate.
+  // Document mode locks the figures (items included) but leaves the photo buttons live, because the
+  // document half of the builder is where photos are managed.
   qcLocked = (qcMode === 'document');
   qcRenderItems();
   qcSyncLock();
+  /* A178 — put the saved product photos back on their lines. Fire-and-forget on purpose: this function
+     is called straight from inline onclick attributes in flow-quotations.js, so making it async would
+     un-await it at every one of those call sites. qcSavePdf awaits qcPhotoLoad instead. */
+  if (qcQuotationNo) qcPhotoLoad = qcLoadPhotos(qcQuotationNo);
 
   const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
   const title = document.getElementById('formTitle');
@@ -211,6 +245,49 @@ function qcLoadExisting(q) {
   }
   if (qcRole === 'admin' || qcRole === 'director') qcLoadInventory();
   qcOnChange();
+}
+
+/* A178 — put a quotation's archived item photos back on their lines.
+
+   The server half has existed since A172 (v99) and nothing ever called it, which is the whole bug:
+   every regenerate rebuilt the document from lines whose photo had been blanked, and filed that
+   photo-less PDF over the good one in Drive. A123's stale-PDF banner pushes users down exactly that
+   path, so the damage was routine rather than rare.
+
+   Photos are ordinary Documents rows (module Quotation, docType 'Item Photo') with the line key in the
+   filename — the same store getQuotationPhotos reads. */
+async function qcLoadPhotos(no) {
+  qcPhotoDocs = {}; qcPhotoDirty = {}; qcPhotoFailed = false;
+  const btn = document.getElementById('qcFinalizeBtn');
+  // Hold the save shut while Drive is being read. getQuotationPhotos fetches one blob per photo, so
+  // this window is seconds long on a photo-heavy quotation — and a Regenerate inside it would file a
+  // document missing the very photos still in flight.
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading photos…'; }
+  try {
+    const r = await fetchFlow('getQuotationPhotos', { quotationNo: no }, { fresh: true });
+    const dupes = [];
+    ((r && r.data) || []).forEach(d => {
+      const k = String(d.lineKey || '');
+      if (!k) return;                       // a filename _photoLineKey could not parse
+      // addDocument carries no idempotency token and postFlow does not retry it, so a response lost
+      // after the write leaves a second row for one line. Sheet order is append order: newest wins.
+      if (qcPhotoDocs[k]) dupes.push(qcPhotoDocs[k].docId);
+      qcPhotoDocs[k] = { docId: d.docId };
+      const it = qcItems.find(i => String(i.lineKey) === k);
+      if (it) it.imageDataUrl = 'data:' + (d.mimeType || 'image/jpeg') + ';base64,' + d.base64;
+    });
+    dupes.forEach(id => { postFlow('deleteDocument', { docId: id }).catch(() => {}); });
+    qcPreviewPhotos = true;                 // show them once, so the rep can see they are really there
+    qcRenderItems();
+    qcOnChange();
+  } catch (e) {
+    qcPhotoFailed = true;
+    qcMsg('The saved product photos could not be read back, so filing a new PDF now would lose them. '
+        + 'Reload the page and reopen this quotation, or re-attach each photo by hand.', false);
+  } finally {
+    if (btn) btn.disabled = false;
+    qcSyncLock();                           // restores the mode-correct label, or keeps the hard stop
+  }
 }
 
 /* Doc fields are remembered per user. A176 — read BOTH key casings: the retired PDF dialog saved
@@ -246,7 +323,7 @@ function qcPrefillDoc() {
 
 function qcBindInputs() {
   ['qcNo', 'qcDate', 'qcCustomer', 'qcSubject', 'qcDiscount', 'qcVat', 'qcPhotos', 'qcDescMode',
-   'qcAddress', 'qcAttention', 'qcDesignation', 'qcEmail', 'qcRfq', 'qcValidity', 'qcDelivery',
+   'qcAddress', 'qcAttention', 'qcDesignation', 'qcEmail', 'qcRfq', 'qcPlantSite', 'qcValidity', 'qcDelivery',
    'qcPayment', 'qcWarranty', 'qcSigName', 'qcSigDesignation', 'qcSigViber', 'qcSigMobile',
    'qcSigEmail', 'qcNote', 'qcScope', 'qcExclusions', 'qcOptions']
     .forEach(id => {
@@ -259,6 +336,9 @@ function qcBindInputs() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { qcSyncBlocks(); qcOnChange(); });
   });
+  // A178: turning photos back on is a photo-set change, so let the next preview carry the images.
+  const ph = document.getElementById('qcPhotos');
+  if (ph) ph.addEventListener('change', () => { qcPreviewPhotos = true; });
 }
 
 function qcSyncBlocks() {
@@ -297,6 +377,13 @@ async function qcLoadFromPR(prNo) {
       const first = (included[0] && (included[0].itemName || included[0].itemNo)) || '';
       subj.value = (pr.customer || '') + (first ? ' — ' + first : '');
     }
+    /* A178 — the plant site admin captured at sourcing. It sits OUTSIDE the docJson try below because
+       it is a top-level PR field: a request whose doc block is malformed must still carry its
+       destination. Without this the first PDF a client receives — the one built right here — had no
+       Plant Site row at all, and it only reappeared if someone later reopened and regenerated. */
+    const psEl = document.getElementById('qcPlantSite');
+    if (psEl && !psEl.value && pr.plantSite) psEl.value = pr.plantSite;
+
     // Prefill the client's contact block from what admin captured on the request.
     try {
       const dj = JSON.parse(pr.docJson || '{}');
@@ -377,7 +464,9 @@ function qcRenderItems() {
       <td class="num"><input type="number" min="0" step="any" value="${i.price}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','price',this.value)"></td>
       <td><button class="btn btn-secondary btn-sm qc-photo-btn ${i.imageDataUrl ? 'qc-photo-on' : ''}"
-            onclick="qcPickPhoto('${esc(i.lineKey)}')">${i.imageDataUrl ? '✓ photo' : '+ photo'}</button></td>
+            onclick="qcPickPhoto('${esc(i.lineKey)}')">${i.imageDataUrl ? '✓ photo' : '+ photo'}</button>${
+          i.imageDataUrl ? `<button class="qc-del" style="margin-left:.3rem;"
+            onclick="qcClearPhoto('${esc(i.lineKey)}')" title="Remove this photo">✕</button>` : ''}</td>
       <td>${qcLocked ? '' : `<button class="qc-del" onclick="qcRemoveRow('${esc(i.lineKey)}')" title="Remove line">✕</button>`}</td>
     </tr>`).join('');
   const add = document.getElementById('qcAddBtn');
@@ -411,9 +500,28 @@ async function qcPhotoChosen(ev) {
   if (file.size > 10 * 1024 * 1024) { qcMsg('That image is over 10MB — pick a smaller one.', false); return; }
   try {
     it.imageDataUrl = await qcDownscale(file, 900, 0.85);
+    qcPhotoDirty[String(it.lineKey)] = true;   // A178: this one needs archiving on the next save
+    qcPreviewPhotos = true;                    // ...and showing in the preview, once
     qcRenderItems();
     qcOnChange();
+    /* A178 — a photo needs a line key to be filed under, and quotations written before A172 have none.
+       Mint them at the moment a photo is actually attached, so quotations nobody photographs are never
+       touched. Awaited here (not at save time) so the row already carries its real key. */
+    await qcEnsureLineKeys();
   } catch (e) { qcMsg('Could not read that image.', false); }
+}
+
+/* A178 — drop a line's photo. Deliberately NOT gated on qcLocked: the photo buttons stay live while
+   the figures are locked, because document mode is where photos are managed. The Drive file is trashed
+   by the next save, not here, so an accidental click costs nothing until the document is refiled. */
+function qcClearPhoto(key) {
+  const it = qcItems.find(i => i.lineKey === key);
+  if (!it || !it.imageDataUrl) return;
+  it.imageDataUrl = '';
+  qcPhotoDirty[String(key)] = true;
+  qcPreviewPhotos = true;
+  qcRenderItems();
+  qcOnChange();
 }
 
 function qcDownscale(file, maxPx, quality) {
@@ -468,10 +576,12 @@ function qcRenderTotals() {
 
 // ── the live document ───────────────────────────────────────────────────────
 
-/* withImages=false for the preview. Base64 photos are hundreds of KB each and the preview re-posts on
-   every pause in typing — five photos would mean ~1.5MB per keystroke burst, which is punishing on a
-   free-tier server. The thumbnail placeholder shows the layout just as well; the real photos go up
-   once, on Finalize. */
+/* withImages=false for keystroke-driven previews. Base64 photos are hundreds of KB each and the preview
+   re-posts on every pause in typing — five photos would mean ~1.5MB per keystroke burst, which is
+   punishing on a free-tier server.
+   A178: but a rep who attached a photo and saw only a placeholder concluded it had not worked, so
+   qcRenderPreview passes true for the FIRST render after the photo set changes (qcPreviewPhotos) and
+   false thereafter. The real save always passes true. */
 function qcPayload(withImages) {
   const val = id => (document.getElementById(id) || {}).value || '';
   const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
@@ -500,7 +610,7 @@ function qcPayload(withImages) {
       address: val('qcAddress'), attention: val('qcAttention'), designation: val('qcDesignation'),
       email: val('qcEmail'), subject: val('qcSubject'), rfqNo: val('qcRfq'),
       note: val('qcNote'),                                 // prints on the final page (Full format)
-      plantSite: qcPlantSite,                              // A145: carried from the pricing request
+      plantSite: val('qcPlantSite'),                       // A178: a plain document field, like the RFQ no
       descMode: val('qcDescMode') || 'long',
       validity: val('qcValidity'), delivery: val('qcDelivery'), payment: val('qcPayment'),
       warranty: val('qcWarranty'), sigName: val('qcSigName'), sigDesignation: val('qcSigDesignation'),
@@ -552,10 +662,17 @@ async function qcRenderPreview() {
     }
   }, QC_WAKE_AFTER);
 
+  /* A178 — the preview normally strips photos, because a ~150KB image re-posted on every pause in
+     typing is wasted bandwidth. But a rep who attached a photo and saw a placeholder concluded it had
+     not worked. So include the images on the FIRST render after the photo set changes, then go back to
+     stripping. The flag is cleared on success, not here — a render aborted by the next keystroke must
+     not consume the one chance to show it. */
+  const withImages = qcPreviewPhotos;
+
   try {
     const res = await fetch('/flow/quotation-pdf', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(qcPayload(false)),
+      body: JSON.stringify(qcPayload(withImages)),
       signal: qcAbort ? qcAbort.signal : undefined
     });
     if (seq !== qcSeq) return;                    // a newer edit went out — discard this one
@@ -571,6 +688,7 @@ async function qcRenderPreview() {
     if (qcLastUrl) URL.revokeObjectURL(qcLastUrl);
     qcLastUrl = url;
     document.getElementById('qcEmpty').style.display = 'none';
+    if (withImages) qcPreviewPhotos = false;      // it actually reached the pane — one shot spent
     qcState('up to date', '');
   } catch (e) {
     if (e && e.name === 'AbortError') return;     // superseded, not a failure
@@ -659,6 +777,9 @@ async function qcFinalize() {
       const common = {
         customer: val('qcCustomer').trim(), date: val('qcDate'), subject: val('qcSubject').trim(),
         discountPct: Math.min(100, Math.max(0, num(val('qcDiscount')))),
+        // A178: createQuotation already stores this in the Plant Site column; updateQuotation ignores
+        // it today, which is why the read-back prefers the document's own stamp over the column.
+        plantSite: val('qcPlantSite').trim(),
         layoutJson: qcLayoutJson(), items: JSON.stringify(items)
       };
       if (qcQuotationNo) {
@@ -681,10 +802,11 @@ async function qcFinalize() {
     try { if (typeof flowSaveDefaults === 'function') flowSaveDefaults('quotation', qcPayload(false).doc); } catch (e) {}
 
     btn.textContent = 'Generating PDF…';
-    await qcSavePdf(newNo);
+    const photoWarn = await qcSavePdf(newNo);
 
     qcMsg('Quotation ' + newNo + ' saved' + (qcFromPr ? ' and ' + qcFromPr + ' is now Quoted' : '')
-        + '. The PDF is filed to Drive.', true);
+        + '. The PDF is filed to Drive.'
+        + (photoWarn ? ' Note: ' + photoWarn + ' — the document itself is fine.' : ''), true);
     btn.disabled = false; btn.textContent = 'Finalize quotation';
     await qcAfterSave(newNo);
   } catch (e) {
@@ -714,8 +836,9 @@ async function qcRegenerateOnly() {
   if (!qcQuotationNo) { qcMsg('No quotation is loaded.', false); return; }
   btn.disabled = true; btn.textContent = 'Generating PDF…';
   try {
-    await qcSavePdf(qcQuotationNo);
-    qcMsg('The document for ' + qcQuotationNo + ' has been rebuilt and filed to Drive.', true);
+    const photoWarn = await qcSavePdf(qcQuotationNo);
+    qcMsg('The document for ' + qcQuotationNo + ' has been rebuilt and filed to Drive.'
+        + (photoWarn ? ' Note: ' + photoWarn + ' — the document itself is fine.' : ''), true);
     btn.disabled = false; btn.textContent = 'Regenerate & file PDF';
     await qcAfterSave(qcQuotationNo);
   } catch (e) {
@@ -746,6 +869,15 @@ async function qcAutoAddItems(items) {
    describe something the record does not contain — and A123 compares the two, so a brand-new
    quotation would be flagged out of date and its approval blocked on the spot. */
 async function qcSavePdf(no) {
+  /* A178 — never build the document while the archived photos are still loading, and never build it
+     at all if that load failed. Both cases would file a PDF missing photos the record really has,
+     over the top of the good one. The button is already gated; this closes the programmatic path. */
+  if (qcPhotoLoad) { try { await qcPhotoLoad; } catch (e) { /* qcLoadPhotos already reported it */ } }
+  if (qcPhotoFailed) {
+    throw new Error('Refusing to refile the PDF — the saved product photos could not be read back, so '
+      + 'the new document would lose them. Reload the page and reopen this quotation.');
+  }
+
   const payload = qcPayload(true);
   payload.quotationNo = no;
 
@@ -763,10 +895,20 @@ async function qcSavePdf(no) {
     rec = ((r && r.data) || []).find(q => String(q.quotationNo) === String(no)) || null;
   } catch (e) { /* fall back to the local copy below */ }
 
+  /* A178 — re-attaching the photos to the record's lines. Two bugs lived here:
+       · the fallback array was COMPACTED (only rows that had a photo), so on the ?fromPR path — where
+         the server mints its own line keys and every keyed lookup misses — a photo on row 3 of 3 was
+         filed onto row 1;
+       · it read raw qcItems rather than the filtered set actually written, so a single blank row
+         above a photographed one shifted everything by one even on a direct create.
+     The server owns the keys, so match on those first and fall back to the i-th ROW, never the i-th
+     photo — and only when the two lists genuinely correspond. */
+  const priced = qcItems.filter(i => (i.itemNo || i.itemName));
+  const recKeys = rec ? (rec.items || []).map(it => String(it.lineKey || '')) : [];
+  const alignable = !!rec && recKeys.length === priced.length && recKeys.every(k => !!k);
   if (rec) {
     const photoByKey = {};
-    qcItems.forEach(i => { if (i.imageDataUrl) photoByKey[String(i.lineKey)] = i.imageDataUrl; });
-    const byPos = qcItems.filter(i => i.imageDataUrl).map(i => i.imageDataUrl);
+    priced.forEach(i => { if (i.imageDataUrl) photoByKey[String(i.lineKey)] = i.imageDataUrl; });
     payload.customer = rec.customer || payload.customer;
     payload.date = rec.date || payload.date;
     payload.discountPct = (typeof flowNum === 'function' ? flowNum(rec.discountPct) : +rec.discountPct) || 0;
@@ -779,7 +921,8 @@ async function qcSavePdf(no) {
       uom: it.uom || '',
       // A86: the pairing the customer sees — what they asked for, then OUR OFFER
       origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
-      imageDataUrl: photoByKey[String(it.lineKey)] || byPos[i] || ''
+      imageDataUrl: photoByKey[String(it.lineKey)]
+                    || (alignable ? (priced[i].imageDataUrl || '') : '')
     }));
   }
   const res = await fetch('/flow/quotation-pdf', {
@@ -805,7 +948,10 @@ async function qcSavePdf(no) {
                          itemNo: i.itemNo, qty: i.qty, price: i.price })) };
   const stamp = {
     v: 1, doc: payload.doc, vatOption: payload.vatOption, descMode: payload.descMode || 'long',
-    hasImages: qcItems.some(i => !!i.imageDataUrl),
+    /* A178 — same rows the document was built from. Its MEANING changed too: it used to warn "you
+       must re-attach these by hand", which is no longer true now that photos are archived and read
+       back. The stamp's shape and key order are untouched, so A123's comparison is unaffected. */
+    hasImages: priced.some(i => !!i.imageDataUrl),
     stamp: {
       customer: String(src.customer || ''), date: dt(src.date) || '',
       subject: String(src.subject || ''), discountPct: num(src.discountPct) || 0,
@@ -817,4 +963,120 @@ async function qcSavePdf(no) {
     quotationNo: no, fileName: 'Quotation_' + no + '.pdf',
     pdfBase64: b64, pdfData: JSON.stringify(stamp)
   });
+
+  /* A178 — archive the photos AFTER the document is filed, so a Drive hiccup here can never cost the
+     deliverable. Returns a warning string for the caller to append to its success message. */
+  try { return await qcSyncPhotos(no, recKeys, priced, alignable); }
+  catch (e) { return 'a product photo could not be archived'; }
+}
+
+/* A178 — keep Drive in step with the item rows, so reopening this quotation reproduces its document.
+
+   Idempotent by construction: a photo that was read back from Drive and not touched this session has
+   an entry in qcPhotoDocs and none in qcPhotoDirty, so it is skipped — an unedited regenerate performs
+   zero writes while the bytes still ride into the PDF. */
+async function qcSyncPhotos(no, recKeys, priced, alignable) {
+  let warn = '';
+  let badKey = false;
+  const jobs = [];
+  const seen = {};
+
+  priced.forEach((row, i) => {
+    // The server's key wins when the two lists correspond — on the ?fromPR path the browser's keys
+    // were never stored, so filing under them would orphan the photo on the next reopen.
+    const k = String((alignable && recKeys[i]) || row.lineKey || '');
+    if (!k) return;                      // a legacy line with no key at all: nothing to file it under
+    /* _photoLineKey parses /^photo-([A-Za-z0-9]+)\./ back out of the filename, so a key carrying a
+       dash or an underscore would upload fine and then be unreadable forever. Refuse instead. */
+    if (!/^[A-Za-z0-9]+$/.test(k)) { badKey = true; return; }
+    seen[k] = true;
+    const stored = qcPhotoDocs[k];
+    const dirty = !!qcPhotoDirty[String(row.lineKey)] || !!qcPhotoDirty[k];
+    if (row.imageDataUrl && (!stored || dirty)) {
+      jobs.push({ put: k, dataUrl: row.imageDataUrl, old: stored && stored.docId });
+    } else if (!row.imageDataUrl && stored) {
+      jobs.push({ del: k, old: stored.docId });
+    }
+  });
+
+  /* A178 — a line that was deleted (or dropped on an edit) leaves its photo on Drive forever, and a
+     later quotation could never reach it. Sweep those, but ONLY when the record and the rows provably
+     correspond: acting on a stale or partial `rec` here would trash photos that are still in use. This
+     is the one branch in the change that deletes anything, so it is the most heavily guarded. */
+  if (alignable) {
+    Object.keys(qcPhotoDocs).forEach(k => {
+      if (!seen[k]) jobs.push({ del: k, old: qcPhotoDocs[k].docId });
+    });
+  }
+
+  if (!jobs.length) return badKey ? 'a line has an unusable line key, so its photo was not archived' : '';
+
+  const btn = document.getElementById('qcFinalizeBtn');
+  const label = btn ? btn.textContent : '';
+  for (let n = 0; n < jobs.length; n++) {
+    const j = jobs[n];
+    if (btn) btn.textContent = 'Filing photo ' + (n + 1) + ' of ' + jobs.length + '…';
+    try {
+      if (j.put) {
+        const mime = (String(j.dataUrl).match(/^data:([^;]+);/) || [])[1] || 'image/jpeg';
+        const b64 = String(j.dataUrl).split(',')[1] || '';
+        const r = await postFlow('addDocument', {
+          module: 'Quotation', refNo: no, docType: 'Item Photo',
+          fileName: 'photo-' + j.put + '.' + (mime === 'image/png' ? 'png' : 'jpg'),
+          fileBase64: b64, mimeType: mime
+        });
+        if (!r || !r.success) { warn = 'a product photo could not be archived'; continue; }
+        qcPhotoDocs[j.put] = { docId: r.docId };
+        qcPhotoDirty[j.put] = false;
+        /* Add first, delete second — never the reverse. If the add failed after a delete, the line
+           would have no photo on Drive at all; this way the worst case is a duplicate, which the next
+           reopen trashes. */
+        if (j.old) await postFlow('deleteDocument', { docId: j.old });
+      } else {
+        await postFlow('deleteDocument', { docId: j.old });
+        delete qcPhotoDocs[j.del];
+      }
+    } catch (e) { warn = 'a product photo could not be archived'; }
+  }
+  if (btn && label) btn.textContent = label;
+  if (badKey && !warn) warn = 'a line has an unusable line key, so its photo was not archived';
+  return warn;
+}
+
+/* A178 — legacy quotations (56 of 57 live ones) have item rows with no Line Key, and the key is what a
+   photo is filed under. Rather than write to every old record on sight, mint the keys only when a rep
+   actually attaches a photo to one. reorderQuotationItems is the purpose-built action for it: it mints
+   missing keys in place, is idempotent, and rewrites rows column-for-column from the schema so it
+   cannot drop a column. Passing the CURRENT order makes it a key-backfill and nothing more. */
+async function qcEnsureLineKeys() {
+  if (!qcQuotationNo) return false;              // a brand-new quotation gets its keys on create
+  let stored = [];
+  try {
+    const r = await fetchFlow('getQuotations', {}, { fresh: true });
+    const rec = ((r && r.data) || []).find(q => String(q.quotationNo) === String(qcQuotationNo));
+    stored = (rec && rec.items) || [];
+  } catch (e) { return false; }
+  if (!stored.length || stored.every(it => String(it.lineKey || '').trim())) return false;
+  try {
+    const order = stored.map(it => String(it.lineKey || '')).filter(Boolean);
+    const res = await postFlow('reorderQuotationItems', {
+      quotationNo: qcQuotationNo, order: JSON.stringify(order.length ? order : ['__mint__'])
+    });
+    if (!res || !res.success) return false;
+    // Re-read so the browser's rows carry the keys that were just persisted.
+    const r2 = await fetchFlow('getQuotations', {}, { fresh: true });
+    const rec2 = ((r2 && r2.data) || []).find(q => String(q.quotationNo) === String(qcQuotationNo));
+    const keys = ((rec2 && rec2.items) || []).map(it => String(it.lineKey || ''));
+    if (keys.length === qcItems.length && keys.every(Boolean)) {
+      qcItems.forEach((row, i) => {
+        const oldKey = String(row.lineKey);
+        if (oldKey !== keys[i]) {
+          if (qcPhotoDirty[oldKey]) { qcPhotoDirty[keys[i]] = true; delete qcPhotoDirty[oldKey]; }
+          row.lineKey = keys[i];
+        }
+      });
+      qcRenderItems();
+    }
+    return true;
+  } catch (e) { return false; }
 }
