@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 100;  // A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 101;  // A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -171,7 +171,13 @@ var SCHEMA = {
                     // A156: Admin is now the FIRST approval stage (Admin → Management → Director), and an
                     // approved request is then marked Paid by whoever owns that payment method, with proof.
                     // Appended at the END — 'Acct Approved *' stays, holding history for legacy rows.
-                    'Admin Approved By', 'Admin Approved At', 'Paid By', 'Paid At', 'Payment Ref'],
+                    'Admin Approved By', 'Admin Approved At', 'Paid By', 'Paid At', 'Payment Ref',
+                    // A180: which slice of the PO this request is ('50% DP' · 'Balance' · 'Full' ·
+                    // 'Custom'), plus the payable SNAPSHOT it was computed from — so the PRF can print
+                    // total and balance without re-reading an AP row that may since have moved, and so
+                    // history stays true when the payable is later corrected. No stored balance and no
+                    // stored percentage: both would be a second source of truth that drifts from Amount.
+                    'Payment Portion', 'PO Total (PHP)', 'PO Paid Before (PHP)'],
 
   // ── Per-SO cost breakdown migrated from the old Profit Report (revenue + COGS components) ──
   SOCostDetails: ['SO No', 'Customer', 'Date', 'Sales', 'COGS Type', 'Purchase of Goods',
@@ -2582,6 +2588,10 @@ function _prMap(r) {
     // A156: admin is the first approval stage, and Paid closes the request out.
     adminApprovedBy: r['Admin Approved By'] || '', adminApprovedAt: r['Admin Approved At'] || '',
     paidBy: r['Paid By'] || '', paidAt: r['Paid At'] || '', paymentRef: r['Payment Ref'] || '',
+    // A180: '' on every pre-A180 row and on every Type 'Other' payable, which is exactly what the
+    // list cell and the PDF caption gate on — an old PRF can never grow a portion line.
+    paymentPortion: r['Payment Portion'] || '',
+    poTotal: _num(r['PO Total (PHP)']), poPaidBefore: _num(r['PO Paid Before (PHP)']),
     rowIndex: r.rowIndex
   };
 }
@@ -2629,6 +2639,8 @@ function createPaymentRequest(p) {
   if (_prRow(no)) return { success: false, message: 'Payment Request ' + no + ' already exists.' };
   var supplier = p.supplier || '', currency = p.currency || 'PHP', amount = _num(p.amount),
       poNo = p.poNo || '', soNo = p.soNo || '';
+  // A180: blank for a Type 'Other' payable — it has no PO, so no denominator and no portion.
+  var portion = '', poTotalSnap = '', poPaidSnap = '';
   if (type === 'PO') {
     if (!poNo) return { success: false, message: 'A purchase order is required for a PO payment request.' };
     var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
@@ -2653,6 +2665,12 @@ function createPaymentRequest(p) {
         ' = ' + rem.remaining.toFixed(2) + ' remaining.' };
     }
     if (amount <= 0) return { success: false, message: 'Nothing is outstanding on ' + poNo + ' — it is already fully paid or requested.' };
+    // A180: snapshot the payable this portion was computed against, and record which slice it is.
+    // The amount is NOT recomputed from the portion — it stays hand-editable, so the portion is
+    // validated against it and downgraded to 'Custom' on a mismatch instead of overwriting money.
+    poTotalSnap = rem ? rem.amount : _poPayablePHP(poNo);
+    poPaidSnap = rem ? rem.paid : 0;
+    portion = _prCoherentPortion(p.paymentPortion, amount, rem);
   } else {
     if (!p.payee) return { success: false, message: 'Payee is required.' };
     if (amount <= 0) return { success: false, message: 'Amount must be greater than zero.' };
@@ -2661,10 +2679,37 @@ function createPaymentRequest(p) {
     p.purpose || '', p.department || '', p.bankName || '', p.accountName || '', p.accountNumber || '',
     p.paymentMethod || '', p.dueDate || '', p.remarks || '', 'Draft', p.createdBy || p.actorName || '',
     p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now(),
-    '', '', '', '', '']);   // A156 trailing: Admin Approved By/At · Paid By/At · Payment Ref
+    '', '', '', '', '',                          // A156 trailing: Admin Approved By/At · Paid By/At · Payment Ref
+    portion, poTotalSnap, poPaidSnap]);          // A180 trailing: portion + payable snapshot (37 values)
   if (type === 'PO') _linkPrToAp(poNo, no);   // connect the PR to this PO's AP Aging entry
   _refStore('createPaymentRequest', p.clientRef, no);   // A145: remember for idempotent retry
   return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
+}
+
+/* A180: keep the stored portion label from ever contradicting the stored amount — the PDF prints that
+   label, so a drift would make the document state something untrue. The amount is authoritative (it
+   stays hand-editable by design), so a label that does not match what the amount actually is gets
+   DOWNGRADED to 'Custom' rather than rejected: refusing the save would mean a support call every time
+   AP Aging is a peso out, while 'Custom' is honest and still prints the total and balance. */
+var _PR_PORTIONS = ['50% DP', 'Balance', 'Full', 'Custom'];
+
+function _prPortionAmount(portion, rem) {
+  if (!rem) return null;
+  if (portion === '50% DP') return Math.round(rem.amount * 50) / 100;
+  if (portion === 'Full') return Math.round(rem.amount * 100) / 100;
+  // The residual, never amount/2 — else a DP + Balance pair on an odd payable oversubscribes by a
+  // centavo and the second request is refused by the +0.005 cap above.
+  if (portion === 'Balance') return Math.round(Math.max(0, rem.remaining) * 100) / 100;
+  return null;
+}
+
+function _prCoherentPortion(raw, amount, rem) {
+  var s = String(raw || '').trim();
+  if (_PR_PORTIONS.indexOf(s) === -1) return '';   // absent or unknown → record nothing
+  if (!rem) return 'Custom';                        // no payable to measure against
+  var want = _prPortionAmount(s, rem);
+  if (want === null) return s;                      // 'Custom' passes through unchanged
+  return Math.abs(_num(amount) - want) > 0.01 ? 'Custom' : s;
 }
 
 /* A payment request is a money instrument: once it is submitted or approved, silently rewriting the
@@ -2684,10 +2729,35 @@ function updatePaymentRequest(p) {
   }
   var fields = { 'Supplier': p.supplier, 'Payee': p.payee, 'Currency': p.currency, 'Purpose': p.purpose,
     'Department': p.department, 'Bank Name': p.bankName, 'Account Name': p.accountName,
-    'Account Number': p.accountNumber, 'Payment Method': p.paymentMethod, 'Due Date': p.dueDate, 'Remarks': p.remarks };
+    'Account Number': p.accountNumber, 'Payment Method': p.paymentMethod, 'Due Date': p.dueDate, 'Remarks': p.remarks,
+    // A180: the portion is accepted from the client but normalised below. 'PO Total (PHP)' and
+    // 'PO Paid Before (PHP)' deliberately are NOT here — they are computed server-side, never taken
+    // from the browser, or a caller could make the printed balance say anything it liked.
+    'Payment Portion': p.paymentPortion };
   var set = {};
   Object.keys(fields).forEach(function (k) { if (fields[k] !== undefined) set[k] = fields[k]; });
-  if (p.amount !== undefined) set['Amount'] = _num(p.amount);
+  /* A180: A158 put the remaining-payable cap on CREATE only, so this path has been accepting any
+     amount at all — including 0 and including more than the PO owes. Close both holes.
+     _poRemainingPayable must exclude THIS record: its own open amount is part of the claimed total,
+     so without the exclusion every edit — even lowering the amount — is refused and a revised
+     request can never be corrected. */
+  if (String(r['Type']) === 'PO' && p.amount !== undefined) {
+    var amt = _num(p.amount);
+    if (amt <= 0) return { success: false, message: 'Amount must be greater than zero.' };
+    var rem = _poRemainingPayable(r['PO No'], p.prNo);
+    if (rem && amt > rem.remaining + 0.005) {
+      return { success: false, message: 'That exceeds what is still owed on ' + r['PO No'] + ': payable ' +
+        rem.amount.toFixed(2) + ' less paid ' + rem.paid.toFixed(2) +
+        (rem.openRequests > 0 ? ' less other open requests ' + rem.openRequests.toFixed(2) : '') +
+        ' = ' + rem.remaining.toFixed(2) + ' remaining.' };
+    }
+    set['Amount'] = amt;
+    set['Payment Portion'] = _prCoherentPortion(p.paymentPortion, amt, rem);
+    set['PO Total (PHP)'] = rem ? rem.amount : _poPayablePHP(r['PO No']);
+    set['PO Paid Before (PHP)'] = rem ? rem.paid : 0;
+  } else if (p.amount !== undefined) {
+    set['Amount'] = _num(p.amount);
+  }
   _prSet(p.prNo, set);
   return { success: true, prNo: p.prNo, message: 'Payment Request updated.' };
 }

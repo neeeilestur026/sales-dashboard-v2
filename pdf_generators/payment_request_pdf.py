@@ -44,6 +44,27 @@ def _fmt_currency(raw):
         return str(raw)
 
 
+# A180 — the portion a payment request covers. 'Custom' reads as "Partial" on the document: the payer
+# does not care that it was hand-typed, only that it is not the whole PO.
+_PORTION_LABELS = {
+    "50% DP": "50% Down Payment",
+    "Balance": "Balance Payment",
+    "Full": "Full Payment",
+    "Custom": "Partial Payment",
+}
+
+
+def _to_float(raw):
+    """A180 — a number from a form field, or 0.0. Never raises: an unreadable snapshot must degrade to
+    'print the label without figures', not to a 500 on a document someone is waiting for."""
+    if raw is None or raw == "":
+        return 0.0
+    try:
+        return float(str(raw).replace(",", "").strip())
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _label_style():
     return ParagraphStyle(
         "label", fontName="Helvetica-Bold", fontSize=8.5,
@@ -254,6 +275,32 @@ def build_payment_request_pdf(buffer, details, supporting_docs=None):
             ("ROUNDEDCORNERS", [6, 6, 6, 6]),
         ]))
         elements.append(amt_box)
+
+        # ── A180: which slice of the PO this payment is ───────────
+        # Deliberately NOT a fifth tuple in the PAYMENT INFORMATION section above: that list is
+        # consumed two-at-a-time, so a fifth entry would add a shaded table row even when blank and
+        # would move the legacy /payment-request/ output. A gated paragraph adds nothing when the
+        # keys are absent, which is exactly the state of every pre-A180 record and every non-PO
+        # payable. Inside `if amt_val:` because a portion without an amount says nothing, and before
+        # the Spacer so the section's spacing is unchanged.
+        portion = str(details.get("payment_portion", "") or "").strip()
+        if portion:
+            label = _PORTION_LABELS.get(portion, portion)
+            po_total = _to_float(details.get("po_total"))
+            po_paid = _to_float(details.get("po_paid_before"))
+            this_amt = _to_float(details.get("amount"))
+            # Gate on the SNAPSHOT, not just the portion: a legacy row or an 'Other' payable carries
+            # 0 here, and printing "PO total 0.00" would be worse than printing nothing.
+            if po_total > 0:
+                balance = max(0.0, po_total - po_paid - this_amt)
+                label += (f" — PO total {currency} {po_total:,.2f}, "
+                          f"balance {currency} {balance:,.2f}")
+            elements.append(Paragraph(label, ParagraphStyle(
+                "portion", fontName="Helvetica-Oblique", fontSize=8.5,
+                textColor=colors.HexColor("#1e40af"), leading=11, alignment=2,
+                spaceBefore=3,
+            )))
+
         elements.append(Spacer(1, 0.2 * inch))
 
     # ── 4. Remarks / Notes ───────────────────────────────────────

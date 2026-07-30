@@ -473,6 +473,12 @@ def payment_request_pdf():
         "amount": _s(data.get("amount")),
         "due_date": ph_date_ymd(data.get("dueDate"), default=_s(data.get("dueDate"))),
         "remarks": _s(data.get("remarks")),
+        # A180: which slice of the PO this is, plus the payable snapshot it was measured against.
+        # The renderer prints nothing unless po_total > 0, so the legacy /payment-request/ route —
+        # which builds its details from a fixed key list and never sends these — is unaffected.
+        "payment_portion": _s(data.get("paymentPortion")),
+        "po_total": _s(data.get("poTotal")),
+        "po_paid_before": _s(data.get("poPaidBefore")),
     }
     try:
         buffer = BytesIO()
