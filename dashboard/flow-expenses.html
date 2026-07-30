@@ -9,8 +9,16 @@
   <link rel="stylesheet" href="css/bento-skin-v2.css">
   <link rel="stylesheet" href="css/flow-screen.css">
   <style>
+    /* A184: the sheet becomes a flex column that fills the viewport, so the row area
+       (.ex-scroll, flex:1) absorbs whatever height is left after the header band, KPIs
+       and toolbar — and the pinned total always lands on screen. Subtracting a fixed
+       reserve could not work: the chrome above measured 559px of an 860px viewport. */
     .report { max-width: 1280px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
+    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; display: flex; flex-direction: column; max-height: calc(100vh - 128px); }
+    .report-sheet .report-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .report-sheet #container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .report-sheet .ex-group { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0.5rem; }
+    .report-sheet .ex-group-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
     .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
     .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
@@ -29,15 +37,49 @@
     .ex-group-head .gc { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
     .ex-group-head .gsub { margin-left: auto; font-size: 1rem; font-weight: 700; color: var(--accent-dark, #0f766e); font-variant-numeric: tabular-nums; }
     .ex-group.collapsed .ex-group-body { display: none; }
-    .ex-catbar { padding: 0.5rem 1rem; background: #fbfdfd; border-bottom: 1px dashed var(--border); display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; font-size: 0.74rem; color: var(--text-secondary); }
+    /* A184: the category chips wrapped to ~114px of stacked lines, which is height the
+       rows need more. One tidy row that scrolls sideways instead — every category stays
+       reachable, and nothing is left clipped mid-line. */
+    .ex-catbar { padding: 0.45rem 1rem; background: #fbfdfd; border-bottom: 1px dashed var(--border); display: flex; flex-wrap: nowrap; gap: 0 1.1rem; font-size: 0.74rem; color: var(--text-secondary); overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; }
+    .ex-catbar > span { flex: 0 0 auto; }
     .ex-catbar b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .ex-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .ex-table th { text-align: left; padding: 0.5rem 0.6rem; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; }
+    /* ── A184: the ledger table ────────────────────────────────────────────────
+       It used to render 2,335px wide (Client 483px + Description 745px alone were
+       53% of it) inside a page 14,578px tall, so BOTH axes scrolled the whole
+       document and the totals scrolled out of sight. table-layout:fixed stops the
+       browser sizing columns to their longest cell; the widths below fit the
+       1,360px content shell with no horizontal scrollbar.
+       Scoped to .ex-* on this page only — css/flow-screen.css is shared by ~10
+       pages and must not be touched. */
+    .ex-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
+    .ex-table th { text-align: left; padding: 0.5rem 0.6rem; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; z-index: 2; }
     .ex-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
     .ex-table tr:hover td { background: var(--accent-light, #ccfbf1); }
     .ex-table .num { text-align: right; font-variant-numeric: tabular-nums; }
     .ex-table .amt { font-weight: 700; }
-    .ex-grand { display: flex; justify-content: space-between; align-items: center; padding: 0.9rem 1.1rem; border: 2px solid var(--accent); border-radius: 12px; background: linear-gradient(180deg, #ffffff, #f0fbf9); margin-top: 0.5rem; }
+
+    /* Fixed geometry. Date/Voucher/Amount/actions never shrink; Client and
+       Description share what is left (their median content is only ~25 chars). */
+    .ex-table .c-date   { width: 92px;  white-space: nowrap; }
+    .ex-table .c-vou    { width: 96px;  white-space: nowrap; }
+    .ex-table .c-cat    { width: 140px; }
+    .ex-table .c-client { width: 20%; }
+    .ex-table .c-desc   { width: 34%; }
+    .ex-table .c-break  { width: 170px; }
+    .ex-table .c-amt    { width: 110px; white-space: nowrap; }
+    .ex-table .c-act    { width: 132px; white-space: nowrap; }
+
+    /* Long text clamps to two lines; the full value stays on the title attribute. */
+    .ex-cell-clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .ex-break { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.74rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .ex-dim { color: var(--text-muted); }
+
+    /* The rows scroll INSIDE this box, not the page. flex:1 + min-height:0 makes it take
+       exactly the height left over in the flex column above, so the sticky header stays
+       at its top and the pinned total below always lands on screen. */
+    .ex-scroll { flex: 1; min-height: 160px; overflow-y: auto; overflow-x: auto; }
+
+    .ex-grand { display: flex; justify-content: space-between; align-items: center; padding: 0.9rem 1.1rem; border: 2px solid var(--accent); border-radius: 12px; background: linear-gradient(180deg, #ffffff, #f0fbf9); margin-top: 0.5rem; position: sticky; bottom: 0; z-index: 3; box-shadow: 0 -6px 16px -12px rgba(15,23,42,0.5); }
     .ex-grand .gl { font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-primary); }
     .ex-grand .gv { font-size: 1.35rem; font-weight: 800; color: var(--accent-dark, #0f766e); font-variant-numeric: tabular-nums; }
     .ex-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.66rem; font-weight: 700; }
@@ -53,6 +95,27 @@
     .ex-form input, .ex-form select, .ex-form textarea { width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: #fff; }
     .ex-comp { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
     @media (max-width: 640px) { .ex-form { grid-template-columns: 1fr; } .ex-comp { grid-template-columns: repeat(2, 1fr); } }
+
+    /* A184: Print must not inherit the on-screen scroll cage, or the ledger would
+       come out as a single clipped page. There was no print block on this page at
+       all before — the Print button (flow-expenses.js:49) just calls window.print(). */
+    @media print {
+      /* Undo the whole viewport-height flex column, not just .ex-scroll — .report-sheet's
+         max-height would otherwise clip the ledger to one page on its own. */
+      .report-sheet, .report-sheet .report-body, .report-sheet #container,
+      .report-sheet .ex-group, .report-sheet .ex-group-body {
+        display: block !important; max-height: none !important; min-height: 0 !important; overflow: visible !important;
+      }
+      .ex-scroll { flex: none !important; max-height: none !important; min-height: 0 !important; overflow: visible !important; }
+      .ex-catbar { max-height: none !important; overflow: visible !important; flex-wrap: wrap !important; white-space: normal !important; }
+      .ex-table th { position: static !important; }
+      .ex-grand { position: static !important; box-shadow: none !important; }
+      /* Let a clamped cell print in full — paper has no hover. */
+      .ex-cell-clip, .ex-break { display: block !important; -webkit-line-clamp: none !important; overflow: visible !important; }
+      .ex-toolbar, .ex-act { display: none !important; }
+      thead { display: table-header-group; }   /* repeat the header on every printed page */
+      tr { break-inside: avoid; }
+    }
   </style>
 </head>
 <body class="flow-screen">

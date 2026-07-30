@@ -144,10 +144,11 @@ function render() {
       </div>
       <div class="ex-group-body">
         <div class="ex-catbar">${catBar}</div>
-        <div style="overflow-x:auto;"><table class="ex-table"><thead><tr>
-          <th>Date</th><th>Category</th><th>Voucher</th><th>Client</th><th>Description</th>
-          <th class="num">Toll</th><th class="num">Fuel</th><th class="num">Meals</th><th class="num">Load</th><th class="num">Other</th>
-          <th class="num">Amount</th><th></th></tr></thead><tbody>
+        <div class="ex-scroll"><table class="ex-table"><thead><tr>
+          <th class="c-date">Date</th><th class="c-cat">Category</th><th class="c-vou">Voucher</th>
+          <th class="c-client">Client</th><th class="c-desc">Description</th>
+          <th class="c-break">Breakdown</th>
+          <th class="num c-amt">Amount</th><th class="c-act"></th></tr></thead><tbody>
           ${list.map(rowHtml).join('')}
         </tbody></table></div>
       </div></div>
@@ -160,18 +161,37 @@ function render() {
     openDocsModal('Expense', b.getAttribute('data-docs'), 'Expense ' + b.getAttribute('data-docs'))));
 }
 
+/* A184: the five per-type columns (Toll/Fuel/Meals/Load/Other) cost ~440px of table width while being
+   almost entirely empty — across 325 live rows Load carried a value in 7, Toll 17, Fuel 39, Meals 72.
+   They fold into ONE cell that names only the parts that actually have a value, so nothing is lost and
+   the em-dash noise goes away. Amount stays the authoritative total and is untouched. */
+const EX_PARTS = [['toll', 'Toll'], ['fuel', 'Fuel'], ['meals', 'Meals'],
+                  ['loadBalance', 'Load'], ['other', 'Other']];
+
+function exBreakdownCell(r) {
+  const parts = EX_PARTS
+    .filter(([k]) => flowNum(r[k]) > 0)
+    .map(([k, label]) => `${label} ${flowMoney(r[k], 'PHP')}`);
+  if (!parts.length) return '<span class="ex-dim">—</span>';
+  return `<span class="ex-break" title="${flowEsc(parts.join(' · '))}">${flowEsc(parts.join(' · '))}</span>`;
+}
+
 function rowHtml(r) {
-  const c = v => v ? flowMoney(v, 'PHP') : '—';
+  // A184: Client and Description clamp to two lines; the full text stays reachable via title=.
+  const clip = (v) => {
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return '<span class="ex-dim">—</span>';
+    return `<span class="ex-cell-clip" title="${flowEsc(s)}">${flowEsc(s)}</span>`;
+  };
   return `<tr>
-    <td style="white-space:nowrap;">${flowEsc(flowDate(r.date) || r.date || '—')}</td>
-    <td>${flowEsc(r.category || '—')}</td>
-    <td>${flowEsc(r.voucherNo || '—')}</td>
-    <td>${flowEsc(r.client || '—')}</td>
-    <td>${flowEsc(r.description || '—')}</td>
-    <td class="num">${c(r.toll)}</td><td class="num">${c(r.fuel)}</td><td class="num">${c(r.meals)}</td>
-    <td class="num">${c(r.loadBalance)}</td><td class="num">${c(r.other)}</td>
-    <td class="num amt">${flowMoney(r.amount, 'PHP')}</td>
-    <td style="white-space:nowrap;">
+    <td class="c-date">${flowEsc(flowDate(r.date) || r.date || '—')}</td>
+    <td class="c-cat">${clip(r.category)}</td>
+    <td class="c-vou">${flowEsc(r.voucherNo || '—')}</td>
+    <td class="c-client">${clip(r.client)}</td>
+    <td class="c-desc">${clip(r.description)}</td>
+    <td class="c-break">${exBreakdownCell(r)}</td>
+    <td class="num amt c-amt">${flowMoney(r.amount, 'PHP')}</td>
+    <td class="c-act">
       <button class="ex-act" data-edit="${r.rowIndex}">Edit</button>
       <button class="ex-act" data-docs="${flowEsc(r.expNo)}">Docs</button>
       <button class="ex-act" data-del="${r.rowIndex}">✕</button>
