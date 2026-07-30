@@ -77,7 +77,7 @@
     .bs-hint{font:400 11.5px 'Inter',sans-serif;color:#5b6673;margin:7px 0 0;}
     .pf-calc-out{font:600 14px 'Inter',sans-serif;color:var(--ac2);margin-top:8px;min-height:20px;}
     @media print{
-      .navbar,.no-print,#crForm,.pf-tabs,#bsResult .cr-actions,.pf-pane:not(#pane-selector):not(#pane-survey),.cr-headband .no-print{display:none !important;}
+      .navbar,.no-print,#crForm,.pf-tabs,#bsResult .cr-actions,#psResult .cr-actions,.pf-pane:not(#pane-selector):not(#pane-survey):not(#pane-puller),.cr-headband .no-print{display:none !important;}
       body{background:#fff;}
       .main-content{padding-top:0;max-width:none;}
       .cr-card{box-shadow:none;border:none;padding:0;}
@@ -102,6 +102,7 @@
       <button class="pf-tab" data-tab="match" onclick="pfTab('match', this)">🔗 Match — find its partner</button>
       <button class="pf-tab" data-tab="selector" onclick="pfTab('selector', this)">📐 Cylinder Selector</button>
       <button class="pf-tab" data-tab="survey" onclick="pfTab('survey', this)">🔩 Bolting Survey</button>
+      <button class="pf-tab" data-tab="puller" onclick="pfTab('puller', this)">🛠 Puller Selector</button>
       <button class="pf-tab" data-tab="xref" onclick="pfTab('xref', this)">↔️ Competitor Cross-Ref</button>
       <button class="pf-tab" data-tab="calc" onclick="pfTab('calc', this)">🧮 Calculators</button>
       <button class="pf-tab" data-tab="log" onclick="pfTab('log', this)">📒 Inquiry Logbook</button>
@@ -443,6 +444,115 @@
       </div>
     </div>
 
+    <!-- ── Hydraulic Puller Selector (A185) ── -->
+    <div class="pf-pane" id="pane-puller" style="display:none;">
+      <div class="cr-card">
+        <div class="cr-result-head">
+          <h2 style="font-size:17px;">Hydraulic Puller Selector</h2>
+          <button type="button" class="cr-btn cr-btn-sec" onclick="psPrintBlank()">🖨 Print blank form</button>
+        </div>
+        <p class="cr-hint" style="margin-bottom:14px;">Measure the job and we'll work out the pulling force
+          and the jaw geometry it needs, then suggest a puller — or print it blank and fill it by hand on
+          site. We hold family ratings only, so jaw spread and reach are stated as a <b>requirement to
+          confirm</b> against the model's dimension table, never guessed.</p>
+
+        <div class="cr-sect-title">Request</div>
+        <div class="cr-grid" style="margin-bottom:14px;">
+          <div class="cr-field"><label>Request by</label><input type="text" id="psRequestBy"></div>
+          <div class="cr-field"><label>Request date</label><input type="date" id="psRequestDate"></div>
+          <div class="cr-field"><label>Industry</label><input type="text" id="psIndustry"></div>
+          <div class="cr-field"><label>Customer name</label><input type="text" id="psCustomer" list="pfClientList"></div>
+          <div class="cr-field"><label>Application</label><input type="text" id="psApplication" placeholder="e.g. kiln fan bearing, railcar axle"></div>
+          <div class="cr-field"><label>Contact / title</label><input type="text" id="psContact"></div>
+          <div class="cr-field"><label>Date of visit</label><input type="date" id="psVisitDate"></div>
+          <div class="cr-field"><label>Phone</label><input type="text" id="psPhone"></div>
+          <div class="cr-field"><label>Email</label><input type="text" id="psEmail"></div>
+          <div class="cr-field"><label>Quantity</label><input type="number" id="psQuantity" min="1" placeholder="1"></div>
+        </div>
+
+        <div class="cr-sect-title">The job</div>
+        <div class="cr-grid" style="margin-bottom:8px;">
+          <div class="cr-field"><label>What is being pulled</label>
+            <select id="psJobType">
+              <option value="">— select —</option>
+              <option value="bearing">Bearing</option>
+              <option value="gear">Gear</option>
+              <option value="pulley">Pulley / sheave</option>
+              <option value="hub">Hub / coupling</option>
+              <option value="sleeve">Sleeve / bush</option>
+              <option value="blind-hole">Blind-hole / internal race</option>
+            </select></div>
+          <div class="cr-field"><label>Where it sits</label>
+            <select id="psLocation">
+              <option value="">— select —</option>
+              <option value="shaft-end">On a shaft end (open access)</option>
+              <option value="against-shoulder">Against a shoulder / housing</option>
+              <option value="blind-bore">In a blind bore (no outer rim to grip)</option>
+              <option value="vertical-shaft">On a vertical shaft</option>
+            </select></div>
+          <div class="cr-field"><label>How often</label>
+            <select id="psDuty">
+              <option value="">— select —</option>
+              <option value="one-off">One-off job</option>
+              <option value="occasional">Occasional</option>
+              <option value="repeat">Repeat / production</option>
+            </select></div>
+        </div>
+        <div class="cr-checks" style="margin-bottom:14px;">
+          <label><input type="checkbox" id="psAccessObstructed"> Access blocked on two opposing sides (webs, spokes, housing)</label>
+          <label><input type="checkbox" id="psAwkwardPosition"> Part is heavy or awkward to position</label>
+          <label><input type="checkbox" id="psNoPower"> No power available on site</label>
+        </div>
+
+        <div class="cr-sect-title">Measurements</div>
+        <div class="cr-grid" style="margin-bottom:14px;">
+          <div class="cr-field"><label>Units</label>
+            <select id="psDimUnit" onchange="psSyncUnit()">
+              <option value="mm">Millimetres</option>
+              <option value="in">Inches</option>
+            </select></div>
+          <div class="cr-field"><label>Part outside diameter (<span id="psPartOdUnit">mm</span>)</label>
+            <input type="number" step="any" id="psPartOd" placeholder="across the part the jaws go around"></div>
+          <div class="cr-field"><label>Shaft diameter (<span id="psShaftDiaUnit">mm</span>)</label>
+            <input type="number" step="any" id="psShaftDia"></div>
+          <div class="cr-field"><label>Reach — pulling face to shaft end (<span id="psReachUnit">mm</span>)</label>
+            <input type="number" step="any" id="psReach" placeholder="how far the puller must span"></div>
+          <div class="cr-field"><label>Hub / bearing width (<span id="psContactLenUnit">mm</span>)</label>
+            <input type="number" step="any" id="psContactLen" placeholder="contact length along the shaft"></div>
+          <div class="cr-field"><label>Shaft end condition</label>
+            <input type="text" id="psShaftEndCond" placeholder="e.g. threaded, centre-drilled, damaged"></div>
+        </div>
+
+        <div class="cr-sect-title">Fit &amp; known force</div>
+        <div class="cr-grid" style="margin-bottom:14px;">
+          <div class="cr-field"><label>How it is fitted</label>
+            <select id="psFitType">
+              <option value="">— select —</option>
+              <option value="slip">Slip / transition (slides on)</option>
+              <option value="press">Press fit</option>
+              <option value="shrink">Shrink / heat fit</option>
+              <option value="unknown">Not known</option>
+            </select></div>
+          <div class="cr-field"><label>Known pulling force (tons)</label>
+            <input type="number" step="any" id="psKnownTons" placeholder="leave blank and we'll estimate"></div>
+        </div>
+
+        <div class="cr-sect-title">Opportunity &amp; notes</div>
+        <div class="cr-grid" style="margin-bottom:8px;">
+          <div class="cr-field"><label>Opportunity / timing</label><input type="text" id="psOpportunity"></div>
+        </div>
+        <div class="cr-field" style="margin-bottom:14px;"><label>Additional application notes</label>
+          <textarea id="psNotes" rows="3"></textarea></div>
+
+        <div class="cr-actions">
+          <button type="button" class="cr-btn" onclick="psSuggest()">Suggest a puller</button>
+          <button type="button" class="cr-btn cr-btn-sec" onclick="psExportPdf()">📄 Export filled PDF</button>
+          <button type="button" class="cr-btn cr-btn-sec" onclick="psReset()">Reset</button>
+        </div>
+        <div id="psResult" style="display:none;margin-top:14px;"></div>
+      </div>
+    </div>
+
     <!-- ── Inquiry logbook ── -->
     <div class="pf-pane" id="pane-log" style="display:none;">
       <div class="cr-card">
@@ -469,5 +579,6 @@
   <script src="js/cylinder-recommender.js"></script>
   <script src="js/product-finder.js"></script>
   <script src="js/bolting-survey.js"></script>
+  <script src="js/puller-selector.js"></script>
 </body>
 </html>

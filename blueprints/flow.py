@@ -449,6 +449,33 @@ def bolting_survey_pdf():
     return _pdf_response(pdf_bytes, f"{stem}.pdf")
 
 
+@flow_bp.route("/flow/puller-survey-pdf", methods=["GET", "POST"])
+def puller_survey_pdf():
+    """A185 — the Hydraulic Puller Application Survey, same two modes from one generator.
+
+    GET  ?blank=1  → the printable empty hard copy.
+    POST           → the filled survey + its recommendation block.
+    """
+    from pdf_generators.puller_survey_pdf import build_puller_survey_pdf_bytes
+
+    blank = request.method == "GET" or _s(request.args.get("blank")) in ("1", "true", "yes")
+    data = request.get_json(silent=True) or {}
+    answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
+    rec = data.get("recommendation") if isinstance(data.get("recommendation"), dict) else {}
+    prepared_by = _s(data.get("preparedBy"))
+
+    try:
+        pdf_bytes = build_puller_survey_pdf_bytes(answers=answers, recommendation=rec,
+                                                  blank=blank, prepared_by=prepared_by)
+    except Exception as e:
+        logger.exception("Puller survey PDF failed")
+        return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
+
+    who = answers.get("customer") if not blank else ""
+    stem = "Puller_Survey_BLANK" if blank else f"Puller_Survey_{sanitize_filename(who or 'Survey')}"
+    return _pdf_response(pdf_bytes, f"{stem}.pdf")
+
+
 @flow_bp.route("/flow/payment-request-pdf", methods=["POST"])
 def payment_request_pdf():
     """Render a flow Payment Request (PRF) using the legacy generator — identical output."""

@@ -520,6 +520,16 @@ function pfValidateData(data) {
     if (p && p.category === 'torque-wrench' && !(typeof p.torque_min_nm === 'number' && typeof p.torque_max_nm === 'number')) {
       warn('products.json', label + ': torque wrench without a Nm range');
     }
+    /* A185: the Puller Selector sizes on tonnage alone (we hold no jaw geometry), so a puller with no
+       rating can never be safety-matched — and a typo'd subtype silently drops out of PS_SUBTYPE_RANK
+       to rank 9 and quietly loses every tie-break, which is invisible without this. */
+    if (p && p.category === 'puller') {
+      if (pfCapMax(p) === null) err('products.json', label + ': puller without a tonnage rating — it can never be safety-matched');
+      const knownPullerSubtypes = ['hydraulic-jaw-puller', 'universal-puller', 'mechanical-jaw-puller', 'bearing-puller'];
+      if (p.subtype && knownPullerSubtypes.indexOf(p.subtype) < 0) {
+        warn('products.json', label + ': unknown puller subtype "' + p.subtype + '" — it will not rank correctly');
+      }
+    }
   });
   ((data && data.torque) || []).forEach(r => {
     const label = (r.bolt || '?') + '/' + (r.grade || '?');
