@@ -1283,22 +1283,14 @@ function togglePhDetail(i) {
 
 // Full per-item breakdown for a history row (from the saved priced/legacy breakdown JSON).
 function phDetailHtml(r) {
-  let bd = [];
-  try { bd = JSON.parse(r.pricedItemsJson || r.legacyItemsJson || '[]'); } catch (e) { bd = []; }
   const head = `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin:0.4rem 0;">
     Destination: <strong>${flowEsc(r.destination || '—')}</strong> · Commission: <strong>${flowNum(r.commission)}%</strong> · Margin: <strong>${flowNum(r.margin)}%</strong></div>`;
-  if (bd.length) {
-    const M = v => flowMoney(flowNum(v), 'PHP');
-    const cols = [['modelNo', 'Model'], ['name', 'Name'], ['qty', 'Qty'], ['buyPrice', 'Buy'], ['landedCost', 'Landed'], ['totalCOGS', 'COGS'], ['commission', 'Comm'], ['profitMargin', 'Margin'], ['vat', 'VAT'], ['unitPriceVatEx', 'Unit (VAT-ex)'], ['finalPrice', 'Final']];
-    const body = bd.map(it => '<tr>' + cols.map(([k]) => {
-      if (k === 'modelNo' || k === 'name') return `<td>${flowEsc(it[k] || '—')}</td>`;
-      if (k === 'qty') return `<td class="num">${flowNum(it[k])}</td>`;
-      return `<td class="num">${M(it[k])}</td>`;
-    }).join('') + '</tr>').join('');
-    return head + `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.76rem;">
-      <thead><tr>${cols.map(([, l]) => `<th${l === 'Model' || l === 'Name' ? '' : ' class="num"'}>${l}</th>`).join('')}</tr></thead>
-      <tbody>${body}</tbody></table></div>`;
-  }
+  /* A181: one row per ITEM, each joined to its saved breakdown. This used to render the breakdown
+     rows alone, so a request whose breakdown covered fewer lines than it had items showed only those
+     lines — PR-202607-210 listed 1 of 5. When nothing was ever priced there is no breakdown to join,
+     so the narrow item table below stays as it was rather than showing eight empty cost columns. */
+  const rows = flowPricingRows(r);
+  if (rows.some(x => x.hasBd)) return head + flowPricingBreakdownTable(rows);
   const items = (r.items || []);
   const body = items.map(it => `<tr><td>${flowEsc(it.itemNo || '—')}</td><td>${flowEsc(it.itemName || '—')}</td>
     <td class="num">${flowNum(it.qty)}</td><td>${flowEsc(it.principal || '—')}</td><td class="num">${flowMoney(flowNum(it.finalPrice), 'PHP')}</td></tr>`).join('');

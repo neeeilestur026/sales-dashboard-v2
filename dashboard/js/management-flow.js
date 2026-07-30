@@ -264,23 +264,13 @@ function mfRenderPricing() {
 function _mfPrDate(d) { return (typeof flowDate === 'function') ? (flowDate(d) || d || '') : (d || ''); }
 
 function mfPricingDetail(p) {
-  // Prefer the full engine breakdown — legacy (migrated) or the new priced breakdown; else the flow items.
-  let legacy = null;
-  const bdJson = p.legacyItemsJson || p.pricedItemsJson;
-  if (bdJson) { try { legacy = JSON.parse(bdJson); } catch (e) { legacy = null; } }
   const head = `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin:0.4rem 0;">
     Destination: <strong>${_mfe(p.destination || '—')}</strong> · Commission: <strong>${_mfn(p.commission)}%</strong> · Margin: <strong>${_mfn(p.margin)}%</strong>${p.legacyId ? ' · <em>legacy pricing history</em>' : ''}</div>`;
-  if (legacy && legacy.length) {
-    const cols = [['modelNo', 'Model'], ['name', 'Name'], ['qty', 'Qty'], ['buyPrice', 'Buy'], ['landedCost', 'Landed'], ['totalCOGS', 'COGS'], ['commission', 'Comm'], ['profitMargin', 'Margin'], ['vat', 'VAT'], ['unitPriceVatEx', 'Unit (VAT-ex)'], ['finalPrice', 'Final']];
-    const body = legacy.map(it => '<tr>' + cols.map(([k]) => {
-      if (k === 'modelNo' || k === 'name') return `<td>${_mfe(it[k] || '—')}</td>`;
-      if (k === 'qty') return `<td class="num">${_mfn(it[k])}</td>`;
-      return `<td class="num">${_mfm(_mfn(it[k]))}</td>`;
-    }).join('') + '</tr>').join('');
-    return head + `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.76rem;">
-      <thead><tr>${cols.map(([, l]) => `<th${l === 'Model' || l === 'Name' ? '' : ' class="num"'}>${l}</th>`).join('')}</tr></thead>
-      <tbody>${body}</tbody></table></div>`;
-  }
+  /* A181: this held its own copy of the breakdown table and the same fault as the pricing-history
+     page — it rendered the saved breakdown rows ALONE, hiding every item the breakdown did not cover.
+     Both now go through the shared join in flow-api.js, so the two views can no longer disagree. */
+  const rows = flowPricingRows(p);
+  if (rows.some(x => x.hasBd)) return head + flowPricingBreakdownTable(rows);
   const items = p.items || [];
   if (!items.length) return head + '<div class="mf-empty">No item detail.</div>';
   const body = items.map(it => `<tr>

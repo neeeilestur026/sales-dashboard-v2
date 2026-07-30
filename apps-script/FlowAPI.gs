@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 101;  // A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 102;  // A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -4599,7 +4599,13 @@ function setMgmtPricing(p) {
   _rows('PricingRequests').forEach(function (h) {
     if (String(h['PR No']) === String(p.prNo)) {
       sh.getRange(h.rowIndex, 5, 1, 3).setValues([[p.destination || '', _num(p.commission), _num(p.margin)]]); // Destination, Commission %, Margin %
-      if (p.pricedItemsJson) sh.getRange(h.rowIndex, 15, 1, 1).setValues([[String(p.pricedItemsJson)]]);        // full engine breakdown for history
+      // A181: MERGE the incoming breakdown into what is already stored. This used to overwrite the
+      // whole column, so re-pricing a single line in the engine silently discarded the breakdown for
+      // every other line — PR-202607-210 kept 1 row of 5 and its history could only show one item.
+      if (p.pricedItemsJson) {
+        sh.getRange(h.rowIndex, 15, 1, 1)
+          .setValues([[_mergePricedItems(h['Priced Items JSON'], p.pricedItemsJson, p.excludedLines)]]);
+      }
     }
   });
   var ish = _sheet('PricingRequestItems');
@@ -4629,6 +4635,43 @@ function setMgmtPricing(p) {
   _setPRStatus(p.prNo, 'Mgmt Priced');
   return { success: true, prNo: p.prNo, repriced: prStatus !== 'For Mgmt Pricing',
            message: 'Final pricing saved; returned to admin.' };
+}
+
+/* A181 — fold this save's engine breakdown into the stored one instead of replacing it.
+   The engine is a calculator: management legitimately opens it with a subset of the request's lines to
+   re-price one of them. Replacing the column wholesale meant every OTHER line lost its recorded cost
+   breakdown while keeping its final price, leaving a request whose history could only show the lines
+   from the last save (PR-202607-210: 1 of 5, and PR-202607-285 the same under current code).
+
+   A stored row is superseded when the incoming set covers the same line, or — for the pre-A159 rows
+   that carry no line at all — the same name. A line management explicitly excluded is dropped, since
+   it is no longer part of the request. Order follows the incoming rows, then whatever survived. */
+function _mergePricedItems(storedJson, incomingJson, excludedLinesJson) {
+  var incoming = [], stored = [], excluded = [];
+  try { incoming = JSON.parse(incomingJson || '[]') || []; } catch (e) { incoming = []; }
+  try { stored = JSON.parse(storedJson || '[]') || []; } catch (e) { stored = []; }
+  try { excluded = JSON.parse(excludedLinesJson || '[]') || []; } catch (e) { excluded = []; }
+  if (!incoming.length) return String(incomingJson || '');   // nothing to merge into — keep old behaviour
+  if (!stored.length) return JSON.stringify(incoming);
+
+  var norm = function (s) { return String(s == null ? '' : s).toUpperCase().replace(/\s+/g, ' ').trim(); };
+  var key = function (r) {
+    return (r && r.line != null && r.line !== '') ? 'L:' + String(r.line) : 'N:' + norm(r && r.name);
+  };
+  var seen = {}, out = [];
+  incoming.forEach(function (r) { if (r) { seen[key(r)] = 1; out.push(r); } });
+  var dropped = {};
+  excluded.forEach(function (l) { dropped['L:' + String(_num(l))] = 1; });
+
+  stored.forEach(function (r) {
+    if (!r) return;
+    var k = key(r);
+    if (seen[k] || dropped[k]) return;                      // superseded, or the line was excluded
+    // A row with no line and no name cannot be identified — keeping it would duplicate silently.
+    if (k === 'N:') return;
+    out.push(r);
+  });
+  return JSON.stringify(out);
 }
 
 function verifyReturnToSales(p) {

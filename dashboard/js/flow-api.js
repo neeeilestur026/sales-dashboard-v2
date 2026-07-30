@@ -364,3 +364,115 @@ function flowLoadDefaults(key) {
 function flowSaveDefaults(key, obj) {
   try { localStorage.setItem('flowpdf_' + key, JSON.stringify(obj)); } catch (e) {}
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   A181 — a pricing request's per-item breakdown, for display.
+
+   Two pages rendered the pricing history detail (flow-pricing-request.js phDetailHtml and
+   management-flow.js mfPricingDetail) and BOTH did the same thing: if a saved engine breakdown
+   existed they rendered only its rows and never looked at the request's items. So a request whose
+   breakdown covers fewer lines than it has items showed only those lines — PR-202607-210 displayed
+   1 of its 5 items, because a later re-price saved the engine with a single row and
+   setMgmtPricing replaced the whole breakdown column.
+
+   This returns ONE ROW PER ITEM, each carrying its saved breakdown when there is one. The join is
+   by line where the breakdown records one (A159 onwards) and by exact name otherwise; measured
+   against all 269 live requests that resolves every stored row (25 by line, 110 by name, 0 left
+   over). A breakdown row that matches no item is still returned, so nothing is ever dropped.
+   ════════════════════════════════════════════════════════════════════════════ */
+function _flowNormName(s) { return String(s == null ? '' : s).toUpperCase().replace(/\s+/g, ' ').trim(); }
+
+function flowPricingRows(rec) {
+  rec = rec || {};
+  let bd = [];
+  try { bd = JSON.parse(rec.pricedItemsJson || rec.legacyItemsJson || '[]') || []; } catch (e) { bd = []; }
+  if (!Array.isArray(bd)) bd = [];
+  const items = Array.isArray(rec.items) ? rec.items : [];
+
+  const used = new Array(bd.length).fill(false);
+  // Claim a breakdown row at most once, so two identically-named lines cannot share one row.
+  const pick = (test) => {
+    for (let i = 0; i < bd.length; i++) {
+      if (used[i] || !bd[i]) continue;
+      if (test(bd[i])) { used[i] = true; return bd[i]; }
+    }
+    return null;
+  };
+
+  const rows = items.map(it => {
+    const line = (it.line != null && it.line !== '') ? String(it.line) : '';
+    // 1) by line — only breakdowns written since A159 carry one
+    let b = line ? pick(x => x.line != null && x.line !== '' && String(x.line) === line) : null;
+    // 2) by exact name — the engine stores the name it was priced under, which is the item's
+    //    original (customer-supplied) description, or failing that its mapped name
+    if (!b) {
+      const cand = [_flowNormName(it.origItemName), _flowNormName(it.itemName)].filter(Boolean);
+      if (cand.length) b = pick(x => cand.indexOf(_flowNormName(x.name)) !== -1);
+    }
+    return { item: it, bd: b, hasBd: !!b, orphan: false };
+  });
+
+  // Any breakdown row that belongs to no item still gets shown — it is real recorded pricing.
+  bd.forEach((b, i) => { if (b && !used[i]) rows.push({ item: null, bd: b, hasBd: true, orphan: true }); });
+  return rows;
+}
+
+/** True when at least one item has no recorded breakdown — the caller should say so. */
+function flowPricingRowsIncomplete(rows) {
+  return (rows || []).some(r => !r.hasBd && r.item);
+}
+
+/** The wide per-item breakdown table, shared by the pricing-history and management-home details.
+ *  Engine-derived figures are shown ONLY where they were recorded. They are never recomputed: on
+ *  PR-202607-210 the four unrecorded lines do not reconcile with their own buy prices at the
+ *  request's commission and margin, so anything computed here would be an invented number on a
+ *  pricing document. An unrecorded cell says so, in the cell and in a note under the table. */
+function flowPricingBreakdownTable(rows) {
+  const M = v => flowMoney(flowNum(v), 'PHP');
+  const GAP = '<span style="color:var(--text-muted,#94a3b8);" title="Not recorded — the saved pricing breakdown does not cover this line.">—</span>';
+  const cols = [
+    ['modelNo', 'Model'], ['name', 'Name'], ['qty', 'Qty'], ['buyPrice', 'Buy'],
+    ['landedCost', 'Landed'], ['totalCOGS', 'COGS'], ['commission', 'Comm'],
+    ['profitMargin', 'Margin'], ['vat', 'VAT'], ['unitPriceVatEx', 'Unit (VAT-ex)'], ['finalPrice', 'Final'],
+  ];
+  /* Which columns an item can still fill without its breakdown. item.finalPrice is the VAT-EXCLUSIVE
+     UNIT price (verified against every joined row), NOT the breakdown's VAT-inclusive line total, so
+     it maps to 'unitPriceVatEx' and must never be dropped into 'Final'. */
+  const fromItem = {
+    modelNo: it => it.itemNo || it.origItemNo || '',
+    name: it => it.itemName || it.origItemName || '',
+    qty: it => flowNum(it.qty),
+    buyPrice: it => it.supplierPrice,
+    unitPriceVatEx: it => it.finalPrice,
+  };
+
+  const body = (rows || []).map(r => {
+    const b = r.bd || {}, it = r.item || {};
+    const tds = cols.map(([k]) => {
+      let v, known;
+      if (r.hasBd) { v = b[k]; known = v !== undefined && v !== null && v !== ''; }
+      else if (fromItem[k]) { v = fromItem[k](it); known = v !== undefined && v !== null && v !== ''; }
+      else { known = false; }
+      if (k === 'modelNo' || k === 'name') return `<td>${known ? flowEsc(v) : GAP}</td>`;
+      if (k === 'qty') return `<td class="num">${known ? flowNum(v) : GAP}</td>`;
+      return `<td class="num">${known ? M(v) : GAP}</td>`;
+    }).join('');
+    const excluded = r.item && r.item.included === false;
+    const tag = r.orphan
+      ? ' title="This priced line no longer matches any item on the request."'
+      : (excluded ? ' title="Excluded from the quotation."' : '');
+    return `<tr${tag}${excluded ? ' style="opacity:0.55;"' : ''}>${tds}</tr>`;
+  }).join('');
+
+  const missing = (rows || []).filter(r => !r.hasBd && r.item).length;
+  const note = missing
+    ? `<div style="font-size:0.72rem;color:#b45309;margin-top:0.35rem;">⚠ ${missing} of ${(rows || []).filter(r => r.item).length} item(s)
+        have no saved cost breakdown — the pricing engine was last saved covering fewer lines than the
+        request has. Their buy and unit prices below are the recorded ones; the cost columns were never
+        stored and are not recomputed here.</div>`
+    : '';
+
+  return `<div style="overflow-x:auto;"><table class="flow-table" style="font-size:0.76rem;">
+    <thead><tr>${cols.map(([, l]) => `<th${l === 'Model' || l === 'Name' ? '' : ' class="num"'}>${l}</th>`).join('')}</tr></thead>
+    <tbody>${body}</tbody></table></div>${note}`;
+}
