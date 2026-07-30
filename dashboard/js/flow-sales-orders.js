@@ -26,7 +26,10 @@ async function loadQuotationOptions() {
   const ready = soQuotations.filter(q => { const s = String(q.status || ''); return s === 'Approved' || s === 'Sent'; });
   document.getElementById('loadQuotation').innerHTML =
     '<option value="">— select an approved quotation —</option>' + ready.map(q =>
-      `<option value="${flowEsc(q.quotationNo)}">${flowEsc(q.quotationNo)} — ${flowEsc(q.customer)} · ${flowEsc(q.status)} (${flowMoney(q.total, 'PHP')})</option>`).join('');
+      // A182: the NET value. This label showed the pre-discount total, so 2026-393-KIM-THPAL-CEJN
+      // HOSES read ₱370,982.88 for a quotation actually worth ₱352,433.74 — which is why it could
+      // not be found here.
+      `<option value="${flowEsc(q.quotationNo)}">${flowEsc(q.quotationNo)} — ${flowEsc(q.customer)} · ${flowEsc(q.status)} (${flowMoney(flowQuotationNet(q), 'PHP')})${flowQuotationDiscountTag(q)}</option>`).join('');
 }
 
 function loadFromQuotation() {
@@ -36,9 +39,29 @@ function loadFromQuotation() {
   document.getElementById('quotationNo').value = q.quotationNo;
   document.getElementById('customer').value = q.customer;
   document.getElementById('itemRows').innerHTML = '';
-  (q.items || []).forEach(it => addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price }));
-  if (!q.items || !q.items.length) addRow();
+  /* A182: load the quotation's DISCOUNTED prices. This used to copy it.price verbatim and ignore
+     discountPct entirely, so converting 2026-393-KIM-THPAL-CEJN HOSES (5%) would have created a
+     sales order at ₱370,982.88 instead of ₱352,433.74 — overstating revenue, and profit with it,
+     by ₱18,549.14. The sales order deliberately has no discount field of its own (a percentage
+     stored beside already-discounted prices invites double-application), so the prices carry it. */
+  const netItems = flowQuotationNetItems(q);
+  netItems.forEach(it => addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price, itemId: it.itemId }));
+  if (!netItems.length) addRow();
   recalc();
+  soShowDiscountNotice(q);
+}
+
+/** Say so when the loaded prices are not the quotation's printed unit prices — a silent price change
+ *  on a money form is worse than a loud one. */
+function soShowDiscountNotice(q) {
+  const el = document.getElementById('soDiscountNote');
+  if (!el) return;
+  const pct = flowQuotationDiscountPct(q);
+  if (!pct) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `ℹ Unit prices include this quotation's <strong>${pct}%</strong> discount, so the total ` +
+    `matches the quotation at <strong>${flowMoney(flowQuotationNet(q), 'PHP')}</strong> ` +
+    `(before discount ${flowMoney(flowQuotationGross(q), 'PHP')}). Do not deduct the discount again.`;
 }
 
 function addRow(item) {
@@ -136,6 +159,8 @@ function resetForm() {
   const st = document.getElementById('soSupplierType'); if (st) st.value = '';
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
+  const dn = document.getElementById('soDiscountNote');
+  if (dn) { dn.style.display = 'none'; dn.innerHTML = ''; }   // A182
   document.getElementById('formTitle').textContent = 'New Sales Order';
   document.getElementById('formMsg').style.display = 'none';
   addRow();

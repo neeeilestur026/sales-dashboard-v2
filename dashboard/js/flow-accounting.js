@@ -117,7 +117,7 @@ function soBody(m) {
   // Quotation
   html += `<div class="acc-sec"><h4>Quotation</h4>`;
   if (m.quote) {
-    html += `<div class="acc-muted" style="font-size:0.8rem;margin-bottom:0.3rem;">${flowEsc(m.quote.quotationNo)} · ${flowDate(m.quote.date)} · ${flowEsc(m.quote.status)} · Total ${flowMoney(m.quote.total, 'PHP')}${m.quote.pdfLink ? ` · <a href="${flowEsc(m.quote.pdfLink)}" target="_blank" class="link-btn">PDF</a>` : ''}</div>`;
+    html += `<div class="acc-muted" style="font-size:0.8rem;margin-bottom:0.3rem;">${flowEsc(m.quote.quotationNo)} · ${flowDate(m.quote.date)} · ${flowEsc(m.quote.status)} · Total ${flowMoney(flowQuotationNet(m.quote), 'PHP')}${flowQuotationDiscountTag(m.quote)}${m.quote.pdfLink ? ` · <a href="${flowEsc(m.quote.pdfLink)}" target="_blank" class="link-btn">PDF</a>` : ''}</div>`;
     html += itemsTable(
       [{ t: 'Item' }, { t: 'Name' }, { t: 'Qty', num: 1 }, { t: 'Quoted Price', num: 1 }, { t: 'Line Total', num: 1 }],
       (m.quote.items || []).map(it => `<tr><td>${flowEsc(it.itemNo)}</td><td>${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(it.lineTotal, 'PHP')}</td></tr>`));

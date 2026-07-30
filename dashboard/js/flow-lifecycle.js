@@ -260,7 +260,7 @@ function llBody(m) {
 
   // Quotation
   h += `<div class="acc-sec"><h4>Quotation</h4>`;
-  if (m.quote) h += _line(flowEsc(m.quote.quotationNo), `${flowDate(m.quote.date)} · ${flowStatusBadge(m.quote.status)} · ${flowMoney(m.quote.total, 'PHP')}${m.quote.pdfLink ? ` · <a href="${flowEsc(m.quote.pdfLink)}" target="_blank" class="link-btn">PDF</a>` : ''}`);
+  if (m.quote) h += _line(flowEsc(m.quote.quotationNo), `${flowDate(m.quote.date)} · ${flowStatusBadge(m.quote.status)} · ${flowMoney(flowQuotationNet(m.quote), 'PHP')}${flowQuotationDiscountTag(m.quote)}${m.quote.pdfLink ? ` · <a href="${flowEsc(m.quote.pdfLink)}" target="_blank" class="link-btn">PDF</a>` : ''}`);
   else h += `<div class="acc-muted">No source quotation linked.</div>`;
   h += `</div>`;
 

@@ -41,6 +41,9 @@
         <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
         <span style="margin-left:auto;font-weight:700;">Total Sales Order: <span id="grandTotal">0.00</span></span>
       </div>
+      <!-- A182: shown when the loaded quotation carries a discount, so the reduced unit prices are
+           never mistaken for a typo or deducted a second time. -->
+      <div id="soDiscountNote" style="display:none;margin-top:0.4rem;font-size:0.78rem;color:#0f766e;"></div>
 
       <div class="flow-actions">
         <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveSO()">Save Sales Order</button>

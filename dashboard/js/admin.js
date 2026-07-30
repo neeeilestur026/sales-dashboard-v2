@@ -93,7 +93,8 @@ async function _loadTaskPanel(tab) {
         ['Quotation', 'Date', 'Customer', 'Status', 'Total', 'Items', 'PDF', ''],
         rows.map(q => [
           `<span class="ref">${esc(q.quotationNo)}</span>`, esc(flowDate(q.date)), esc(q.customer),
-          _badge(q.status), `<span class="amt">${flowMoney(q.total, 'PHP')}</span>`, String((q.items || []).length),
+          // A182: the NET value — q.total is the pre-discount line sum, so a discounted quotation read high here.
+          _badge(q.status), `<span class="amt">${flowMoney(flowQuotationNet(q), 'PHP')}</span>${flowQuotationDiscountTag(q)}`, String((q.items || []).length),
           _pdfCell(q.pdfLink), _docsBtn('Quotation', q.quotationNo),
         ]));
     } else if (tab === 'so') {

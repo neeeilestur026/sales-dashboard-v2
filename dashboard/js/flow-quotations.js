@@ -213,16 +213,11 @@ function quotationActions(q) {
   return a;
 }
 
-// Total shown even if the stored Total is 0/blank (self-heals from the line items on the client).
-// Gross ex-VAT subtotal (Σ qty×price), preferring the stored total.
-function qtnGross(q) {
-  return flowNum(q.total) || (q.items || []).reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
-}
-// Net after the discount (before VAT) — what the client actually pays ex-VAT.
-function qtnTotal(q) {
-  const d = Math.max(0, Math.min(100, flowNum(q.discountPct) || 0));
-  return qtnGross(q) * (1 - d / 100);
-}
+/* A182: these were correct but private to this page, which is exactly why four other screens read
+   q.total raw and overstated every discounted quotation. The bodies now live in flow-api.js so every
+   page shares them; these stay as delegates so this page's call sites are untouched. */
+function qtnGross(q) { return flowQuotationGross(q); }
+function qtnTotal(q) { return flowQuotationNet(q); }
 
 function quotationRow(q) {
   const st = q.status || 'Draft';

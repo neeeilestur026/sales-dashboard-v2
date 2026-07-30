@@ -476,3 +476,60 @@ function flowPricingBreakdownTable(rows) {
     <thead><tr>${cols.map(([, l]) => `<th${l === 'Model' || l === 'Name' ? '' : ' class="num"'}>${l}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody></table></div>${note}`;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   A182 — what a quotation is actually worth.
+
+   Quotations['Total'] stores the PRE-discount line sum. The quotations page has always applied the
+   discount for display (qtnGross/qtnTotal), but those were private to that page — so four other
+   screens read q.total raw and overstated every discounted quotation. The sales-order dropdown was
+   one of them: 2026-393-KIM-THPAL-CEJN HOSES showed ₱370,982.88 for a quotation worth ₱352,433.74,
+   which is why it could not be recognised there. Promoted here, where every page can reach it.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/** Gross ex-VAT subtotal (Σ qty×price), preferring the stored total but self-healing from the
+ *  line items when it is 0/blank (legacy rows, or a create path that did not persist it). */
+function flowQuotationGross(q) {
+  q = q || {};
+  return flowNum(q.total) || (q.items || []).reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+}
+
+/** The discount percentage, clamped — a stored 120, -5 or 'abc' must never produce a negative
+ *  or NaN amount on a money screen. */
+function flowQuotationDiscountPct(q) {
+  return Math.max(0, Math.min(100, flowNum((q || {}).discountPct) || 0));
+}
+
+/** Net after the discount, before VAT — what the client actually pays ex-VAT, and the figure the
+ *  quotation PDF prints (pdf_generators/flow_quotation_pdf.py build_summary_table). */
+function flowQuotationNet(q) {
+  return flowQuotationGross(q) * (1 - flowQuotationDiscountPct(q) / 100);
+}
+
+/** " −5% disc" for a label, '' when there is no discount. */
+function flowQuotationDiscountTag(q) {
+  const d = flowQuotationDiscountPct(q);
+  return d > 0 ? ` · −${d}% disc` : '';
+}
+
+/* Unit prices with the quotation's discount folded in, for handing to a sales order.
+   A182: the sales order carries no discount field — by decision, since a percentage stored alongside
+   already-discounted prices invites double-application — so the prices themselves must be net.
+
+   The net prices are deliberately NOT rounded to 2 decimals. Rounding each one breaks the total: on
+   2026-393, 47768.54×0.95=45380.11 and 75892.42×0.95=72097.80 sum to 352,433.73 — a centavo under the
+   352,433.74 the client was quoted — and the shortfall cannot be repaired by nudging a unit price,
+   because with qty 3 a one-centavo line adjustment needs 0.0033 per unit, which rounding erases again.
+   Left unrounded the identity (Σ qty·price)·(1−d) === Σ qty·(price·(1−d)) holds exactly, so the sales
+   order total always equals the quotation to the centavo. A sales order that agrees with the document
+   the client holds matters more than a tidy-looking unit price. */
+function flowQuotationNetItems(q) {
+  q = q || {};
+  const pct = flowQuotationDiscountPct(q);
+  const factor = 1 - pct / 100;
+  return (q.items || []).map(it => ({
+    itemNo: it.itemNo, itemName: it.itemName, itemId: it.itemId,
+    qty: flowNum(it.qty),
+    price: pct ? flowNum(it.price) * factor : flowNum(it.price),
+  }));
+}
