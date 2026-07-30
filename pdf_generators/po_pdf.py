@@ -9,7 +9,6 @@ formatting, vendor terms box, and watermark background.
 import os
 import locale
 import logging
-from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
@@ -28,7 +27,7 @@ from reportlab.platypus import (
 )
 from PIL import Image as PILImage
 
-from pdf_generators.utils import get_static_path, format_bullet_description
+from pdf_generators.utils import get_static_path, format_bullet_description, ph_date_long
 
 logger = logging.getLogger(__name__)
 
@@ -221,15 +220,15 @@ class PODocTemplate(BaseDocTemplate):
             canvas.setFont("Helvetica", 10)
             po_number = self.client_details.get("po_number", "")
             po_date = self.client_details.get("po_date", "")
-            formatted_date = ""
-            if po_date:
-                try:
-                    parsed_date = datetime.strptime(po_date.strip(), "%Y-%m-%d")
-                    formatted_date = parsed_date.strftime("%B %d, %Y")
-                except ValueError:
-                    formatted_date = datetime.now().strftime("%B %d, %Y")
-            else:
-                formatted_date = datetime.now().strftime("%B %d, %Y")
+            # A179 — never invent a date on a supplier document. This used to strptime strictly for
+            # '%Y-%m-%d' and substitute datetime.now() on failure OR on empty, so a back-dated PO
+            # printed TODAY. The legacy /po/ route pre-formats to '%B %d, %Y' before calling, which
+            # means the strict parse there ALWAYS failed and every legacy PO has been printing today's
+            # date. ph_date_long reads YMD, an ISO timestamp (Manila-correct) and that long form
+            # alike, and falls back to the value as typed rather than to the clock.
+            formatted_date = ph_date_long(po_date, default=str(po_date or "").strip())
+            if po_date and not formatted_date:
+                logger.warning("Unreadable PO date %r — printing it verbatim.", po_date)
             # Left-aligned with the Payment Terms / Ship To / Date Needed column below
             # (same x as payment_terms_x), so the right header reads as one clean block.
             label_x = self.leftMargin + self.frame_width - 3.0 * inch

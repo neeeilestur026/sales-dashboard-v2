@@ -7,9 +7,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 from reportlab.platypus import BaseDocTemplate, Frame, Image, PageTemplate
 from PIL import Image as PILImage
-from dateutil.parser import parse as dateutil_parse
 
-from pdf_generators.utils import get_static_path
+from pdf_generators.utils import get_static_path, ph_date_long
 
 logger = logging.getLogger(__name__)
 
@@ -123,13 +122,11 @@ class PRDocTemplate(BaseDocTemplate):
         cd = self.pr_details  # set by the caller before build()
 
         # ── Format dates ─────────────────────────────────────────────
+        # A179 — one shared formatter. The local copy parsed with dateutil but never converted the
+        # zone, so a Manila-midnight timestamp ('…T16:00Z') printed the day BEFORE. Bare YYYY-MM-DD
+        # from the legacy form resolves identically, so that output is unchanged.
         def fmt_date(raw):
-            if not raw:
-                return ""
-            try:
-                return dateutil_parse(raw).strftime("%B %d, %Y")
-            except Exception:
-                return raw
+            return ph_date_long(raw, default=("" if not raw else str(raw)))
 
         pr_date     = fmt_date(cd.get("pr_date", ""))
         date_needed = fmt_date(cd.get("date_needed", ""))

@@ -232,16 +232,34 @@ function qcLoadExisting(q) {
 
   const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
   const title = document.getElementById('formTitle');
+  const savedDate = dt(q.date);
+  const today = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
   if (qcMode === 'document') {
     if (title) title.textContent = 'Document — ' + qcQuotationNo;
+    /* A179 — document mode CANNOT move the date: it never calls updateQuotation (that is what lets an
+       approver refile a document for a quotation they may not edit), and the freshness check compares
+       the document's stamp against the record both here and in Apps Script — where a mismatch is a hard
+       refusal to approve. Printing today while the record said otherwise would make the quotation
+       permanently unapprovable, so say plainly which date it will carry. */
     qcBanner('Rebuilding the document for <strong>' + esc(qcQuotationNo) + '</strong> (' + esc(q.status || 'Draft')
       + '). The figures are locked to the saved quotation; change the terms, signatory or summary blocks, '
-      + 'then <strong>Regenerate &amp; file PDF</strong>. Nothing about the quotation itself is altered.');
+      + 'then <strong>Regenerate &amp; file PDF</strong>. Nothing about the quotation itself is altered — '
+      + 'it keeps its saved date, <strong>' + esc(savedDate) + '</strong>. To date it today, use Edit '
+      + '(Draft or Rejected) or Revise (Approved or Sent).');
   } else {
     if (title) title.textContent = 'Edit ' + qcQuotationNo;
+    /* A179 — you are re-issuing it now, so it carries today's date. Done here rather than silently at
+       save time so the rep can see it in the Date field and put the old one back if they only came to
+       fix a typo. */
+    let dateNote = '';
+    if (savedDate && savedDate !== today) {
+      set('qcDate', today);
+      dateNote = ' Dated <strong>' + esc(today) + '</strong> because you are re-issuing it now — set the '
+               + 'Date field back to ' + esc(savedDate) + ' if it should keep its original date.';
+    }
     qcBanner('Editing <strong>' + esc(qcQuotationNo)
       + '</strong>. Finalize saves the changes and refiles the PDF — a re-priced quotation goes back '
-      + 'through approval before it can be sent.');
+      + 'through approval before it can be sent.' + dateNote);
   }
   if (qcRole === 'admin' || qcRole === 'director') qcLoadInventory();
   qcOnChange();
@@ -889,6 +907,15 @@ async function qcSavePdf(no) {
     catch (e) { throw new Error('Could not read an attached PDF — ' + (e.message || 'unsupported file')); }
   }
 
+  /* A179 — declared HERE, not down beside the stamp where they used to live. The record's date has
+     to be formatted the moment it is read (below), and a `const` referenced above its declaration is
+     in its temporal dead zone — that throws a ReferenceError, and since this function is awaited by
+     both qcFinalize and qcRegenerateOnly it would break every save and every regenerate. Having them
+     early also retires the inline `typeof flowNum === 'function' ? …` forms that only existed because
+     `num` was not yet in scope. */
+  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
+  const dt = (typeof flowDate === 'function') ? flowDate : (d => String(d || '').slice(0, 10));
+
   let rec = null;
   try {
     const r = await fetchFlow('getQuotations', {}, { fresh: true });
@@ -910,13 +937,16 @@ async function qcSavePdf(no) {
     const photoByKey = {};
     priced.forEach(i => { if (i.imageDataUrl) photoByKey[String(i.lineKey)] = i.imageDataUrl; });
     payload.customer = rec.customer || payload.customer;
-    payload.date = rec.date || payload.date;
-    payload.discountPct = (typeof flowNum === 'function' ? flowNum(rec.discountPct) : +rec.discountPct) || 0;
+    /* A179 — format it. Sheets hands back a Manila-midnight datetime, so the raw value is an ISO
+       timestamp ('2026-07-28T16:00:00.000Z'); the route prints the string it is given, so the client's
+       document read "Date 2026-07-28T16:00:00.000Z" — with a time, and a day early. */
+    payload.date = dt(rec.date) || payload.date;
+    payload.discountPct = num(rec.discountPct) || 0;
     payload.doc.subject = rec.subject || payload.doc.subject;
     payload.items = (rec.items || []).map((it, i) => ({
       itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo,
-      qty: (typeof flowNum === 'function' ? flowNum(it.qty) : +it.qty) || 0,
-      price: (typeof flowNum === 'function' ? flowNum(it.price) : +it.price) || 0,
+      qty: num(it.qty) || 0,
+      price: num(it.price) || 0,
       description: it.itemName || '',
       uom: it.uom || '',
       // A86: the pairing the customer sees — what they asked for, then OUR OFFER
@@ -940,9 +970,8 @@ async function qcSavePdf(no) {
      `qPdfState` compares the two with JSON.stringify. That makes both the KEY ORDER and the exact
      value formatting load-bearing: a raw date instead of flowDate(), or a missing vatOption, and
      every quotation created here is flagged stale the moment it is saved — which blocks its
-     approval. Key order below deliberately mirrors qPdfStamp field for field. */
-  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
-  const dt = (typeof flowDate === 'function') ? flowDate : (d => String(d || '').slice(0, 10));
+     approval. Key order below deliberately mirrors qPdfStamp field for field.
+     A179 — `num`/`dt` are declared above the record fetch now; see the note there. */
   const src = rec || { customer: payload.customer, date: payload.date, subject: payload.doc.subject,
                        discountPct: payload.discountPct, items: payload.items.map(i => ({
                          itemNo: i.itemNo, qty: i.qty, price: i.price })) };

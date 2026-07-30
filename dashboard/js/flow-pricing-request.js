@@ -1249,7 +1249,8 @@ function renderPricingHistoryTable() {
   const cl = client.toLowerCase().trim();
   const list = _pricingHistory.filter(r => {
     if (status && String(r.status) !== status) return false;
-    if (month && String(r.date || '').slice(0, 7) !== month) return false;
+    // A179: via flowDate — a raw slice puts a Manila 1st-of-month into the previous month.
+    if (month && flowDate(r.date).slice(0, 7) !== month) return false;
     if (cl && !String(r.customer || '').toLowerCase().includes(cl)) return false;
     return true;
   });
@@ -1468,7 +1469,7 @@ function sqRowsHtml(recs, line) {
       <th>Date</th><th>Supplier</th><th>Item as quoted</th><th class="num">Qty</th>
       <th class="num">Price/Unit</th><th>Cur</th><th>Ref / PR</th><th></th></tr></thead><tbody>
     ${recs.map(r => `<tr>
-      <td style="white-space:nowrap;">${flowEsc(String(r.date || '').slice(0, 10))}</td>
+      <td style="white-space:nowrap;">${flowEsc(flowDate(r.date))}</td>
       <td><b>${flowEsc(r.supplierCompany || '')}</b>${r.contactPerson ? `<br><span class="pr-meta">${flowEsc(r.contactPerson)}</span>` : ''}</td>
       <td style="max-width:280px;font-size:0.8rem;">${flowEsc(String(r.itemDescription || '').slice(0, 160))}</td>
       <td class="num">${flowNum(r.qty)}</td>
@@ -1606,7 +1607,9 @@ function sqRenderSummary() {
   if (cnt) cnt.textContent = all.length ? `· ${all.length} recorded` : '';
   if (kpis) {
     const suppliers = new Set(all.map(r => String(r.supplierCompany || '').trim()).filter(Boolean));
-    const latest = all.map(r => String(r.date || '').slice(0, 10)).filter(Boolean).sort().pop() || '—';
+    // A179: flowDate, not a raw slice — a Manila-midnight value truncates to the day before.
+    // Still YYYY-MM-DD, so the lexical sort still finds the most recent.
+    const latest = all.map(r => flowDate(r.date)).filter(Boolean).sort().pop() || '—';
     const tile = (label, val) => `<div style="flex:1;min-width:130px;padding:0.5rem 0.7rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
       <div class="pr-meta" style="margin:0;">${label}</div><div style="font-weight:700;font-size:1.05rem;">${val}</div></div>`;
     kpis.innerHTML = tile('Quotations', all.length) + tile('Suppliers', suppliers.size)

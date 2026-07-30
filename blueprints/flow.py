@@ -22,7 +22,7 @@ from pdf_generators.flow_quotation_pdf import build_quotation_pdf_bytes, build_s
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
-from pdf_generators.utils import sanitize_filename
+from pdf_generators.utils import sanitize_filename, ph_date_ymd, ph_date_long
 from blueprints.session_auth import validate_session, display_name_for, INTERNAL_SHARED_SECRET
 
 logger = logging.getLogger(__name__)
@@ -220,6 +220,12 @@ def quotation_pdf():
     doc = data.get("doc") or {}
     desc_mode = (data.get("descMode") or doc.get("descMode") or "short").strip().lower()
 
+    # A179: normalise the date ONCE, before it is used twice — printed on the document (long form,
+    # below) and embedded in the /QuoData metadata that a re-import reads back. The stored value is a
+    # Manila-midnight timestamp, so the embedded copy has to be a plain Manila-correct date rather
+    # than an ISO string, or admin-import-quotation cannot populate its date field from it.
+    data["date"] = ph_date_ymd(data.get("date"), default=_s(data.get("date")))
+
     items, images, total_ex_vat = [], {}, 0.0
     for idx, it in enumerate(raw_items, start=1):
         # A173: a non-dict entry used to raise AttributeError HERE, outside the try that wraps the
@@ -257,7 +263,9 @@ def quotation_pdf():
         "reference_no": _s(data.get("quotationNo")),
         "reference_rfq_no": _s(doc.get("rfqNo")),
         "plant_site": _s(doc.get("plantSite")),   # A145: plant-site destination carried from the PR
-        "quotation_date": _s(data.get("date")),
+        # A179: the renderer draws this exactly as given, so the long form is produced here.
+        # Manila-correct: the stored value is a Manila-midnight timestamp, a day earlier in UTC.
+        "quotation_date": ph_date_long(data.get("date"), default=_s(data.get("date"))),
         "signature_name": _s(doc.get("sigName")),
         "signature_designation": _s(doc.get("sigDesignation")),
         "signature_viber": _s(doc.get("sigViber")),
@@ -326,9 +334,11 @@ def po_pdf():
         "vendor_email": _s(doc.get("vendorEmail")),
         "vendor_tin": _s(doc.get("vendorTin")),
         "payment_terms": _s(doc.get("paymentTerms")),
-        "date_needed": _s(doc.get("dateNeeded")),
+        # A179: po_pdf prints this one raw, directly under a long-form PO Date — match it.
+        "date_needed": ph_date_long(doc.get("dateNeeded"), default=_s(doc.get("dateNeeded"))),
         "po_number": _s(data.get("poNo")),
-        "po_date": raw_date,
+        # A179: normalised but kept as YYYY-MM-DD — po_pdf parses this one strictly.
+        "po_date": ph_date_ymd(raw_date, default=raw_date),
         "invoice_contact_person": _s(doc.get("invoiceContact")),
         "invoice_email": _s(doc.get("invoiceEmail")),
         "reference_no": _s(doc.get("referenceNo")) or _s(data.get("soNo")),
@@ -388,8 +398,10 @@ def pr_pdf():
         "contact_email": _s(doc.get("contactEmail")),
         "contact_phone": _s(doc.get("contactPhone")),
         "designation": _s(doc.get("designation")),
-        "pr_date": _s(data.get("date")),
-        "date_needed": _s(doc.get("dateNeeded")),
+        # A179: pr_pdf formats these itself — give it a Manila-correct plain date so it
+        # cannot render the day before off an ISO timestamp.
+        "pr_date": ph_date_ymd(data.get("date"), default=_s(data.get("date"))),
+        "date_needed": ph_date_ymd(doc.get("dateNeeded"), default=_s(doc.get("dateNeeded"))),
         "urgency": _s(doc.get("urgency")),
         "reference_number": _s(doc.get("referenceNumber") or data.get("prNo")),
         "pr_number_client": _s(doc.get("prNumberClient")),
@@ -442,7 +454,9 @@ def payment_request_pdf():
     """Render a flow Payment Request (PRF) using the legacy generator — identical output."""
     data = request.get_json(silent=True) or {}
     details = {
-        "request_date": _s(data.get("requestDate") or data.get("date")),
+        # A179: payment_request_pdf formats these — hand it Manila-correct plain dates.
+        "request_date": ph_date_ymd(data.get("requestDate") or data.get("date"),
+                                    default=_s(data.get("requestDate") or data.get("date"))),
         "pr_number": _s(data.get("prNo")),
         "requested_by": _s(data.get("requestedBy")),
         "department": _s(data.get("department")),
@@ -457,7 +471,7 @@ def payment_request_pdf():
         "payment_method": _s(data.get("paymentMethod")),
         "currency": _s(data.get("currency")) or "PHP",
         "amount": _s(data.get("amount")),
-        "due_date": _s(data.get("dueDate")),
+        "due_date": ph_date_ymd(data.get("dueDate"), default=_s(data.get("dueDate"))),
         "remarks": _s(data.get("remarks")),
     }
     try:
