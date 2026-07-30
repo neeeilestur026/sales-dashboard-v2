@@ -407,6 +407,36 @@ def pr_pdf():
     return _pdf_response(pdf_bytes, fname)
 
 
+@flow_bp.route("/flow/bolting-survey-pdf", methods=["GET", "POST"])
+def bolting_survey_pdf():
+    """A177 — the Bolting Application Survey, from ONE generator in two modes.
+
+    GET  ?blank=1  → the printable empty hard copy (a plain link/window.open is enough).
+    POST           → the filled survey + its recommendation block.
+
+    Sharing the generator is deliberate: the sheet a rep fills by hand and the sheet the system
+    prints are described in one place, so they cannot drift apart.
+    """
+    from pdf_generators.bolting_survey_pdf import build_bolting_survey_pdf_bytes
+
+    blank = request.method == "GET" or _s(request.args.get("blank")) in ("1", "true", "yes")
+    data = request.get_json(silent=True) or {}
+    answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
+    rec = data.get("recommendation") if isinstance(data.get("recommendation"), dict) else {}
+    prepared_by = _s(data.get("preparedBy"))
+
+    try:
+        pdf_bytes = build_bolting_survey_pdf_bytes(answers=answers, recommendation=rec,
+                                                   blank=blank, prepared_by=prepared_by)
+    except Exception as e:
+        logger.exception("Bolting survey PDF failed")
+        return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
+
+    who = answers.get("customer") if not blank else ""
+    stem = "Bolting_Survey_BLANK" if blank else f"Bolting_Survey_{sanitize_filename(who or 'Survey')}"
+    return _pdf_response(pdf_bytes, f"{stem}.pdf")
+
+
 @flow_bp.route("/flow/payment-request-pdf", methods=["POST"])
 def payment_request_pdf():
     """Render a flow Payment Request (PRF) using the legacy generator — identical output."""

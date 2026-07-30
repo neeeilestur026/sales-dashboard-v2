@@ -68,9 +68,16 @@
     .pf-ok{background:#dcfce7;color:#166534;}
     .pf-sample{background:#fef3c7;color:#92400e;}
     .pf-follow{background:#fee2e2;color:#b91c1c;margin-left:8px;}
+    .bs-pick{margin-top:10px;padding:12px 14px;border:1px solid #d7dce3;border-radius:12px;background:#fbfbfc;}
+    .bs-pick label{display:block;font:700 11px 'Inter',sans-serif;letter-spacing:.04em;
+      text-transform:uppercase;color:#5b6673;margin-bottom:5px;}
+    .bs-pick select,.bs-pick input{width:100%;padding:8px 10px;border:1px solid #d7dce3;border-radius:9px;
+      font:400 13.5px 'Inter',sans-serif;background:#fff;}
+    .bs-pick input{margin-top:7px;}
+    .bs-hint{font:400 11.5px 'Inter',sans-serif;color:#5b6673;margin:7px 0 0;}
     .pf-calc-out{font:600 14px 'Inter',sans-serif;color:var(--ac2);margin-top:8px;min-height:20px;}
     @media print{
-      .navbar,.no-print,#crForm,.pf-tabs,.pf-pane:not(#pane-selector),.cr-headband .no-print{display:none !important;}
+      .navbar,.no-print,#crForm,.pf-tabs,#bsResult .cr-actions,.pf-pane:not(#pane-selector):not(#pane-survey),.cr-headband .no-print{display:none !important;}
       body{background:#fff;}
       .main-content{padding-top:0;max-width:none;}
       .cr-card{box-shadow:none;border:none;padding:0;}
@@ -94,6 +101,7 @@
       <button class="pf-tab active" data-tab="rfq" onclick="pfTab('rfq', this)">🔍 RFQ — I need this item</button>
       <button class="pf-tab" data-tab="match" onclick="pfTab('match', this)">🔗 Match — find its partner</button>
       <button class="pf-tab" data-tab="selector" onclick="pfTab('selector', this)">📐 Cylinder Selector</button>
+      <button class="pf-tab" data-tab="survey" onclick="pfTab('survey', this)">🔩 Bolting Survey</button>
       <button class="pf-tab" data-tab="xref" onclick="pfTab('xref', this)">↔️ Competitor Cross-Ref</button>
       <button class="pf-tab" data-tab="calc" onclick="pfTab('calc', this)">🧮 Calculators</button>
       <button class="pf-tab" data-tab="log" onclick="pfTab('log', this)">📒 Inquiry Logbook</button>
@@ -140,6 +148,11 @@
           </div>
           <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfBoltMatch()">Find torque + wrench</button></div>
           <div id="pfBoltResult" style="display:none;margin-top:10px;"></div>
+          <p class="cr-hint" style="margin-top:10px;">A quick check on size + grade. For the whole job —
+            clearance, coating, dimensions, a printable form and a PDF — use the
+            <button type="button" class="cr-btn cr-btn-sec" style="padding:3px 10px;font-size:12px;"
+              onclick="pfTab('survey', document.querySelector('#pfTabs [data-tab=survey]'))">Bolting Survey</button>
+            tab.</p>
         </div>
         <div class="pf-mpane" id="mpane-hose" style="display:none;">
           <div class="cr-grid" style="margin-bottom:12px;">
@@ -326,6 +339,110 @@
       </div>
     </div>
 
+    <!-- ── Bolting Application Survey (A177) ── -->
+    <div class="pf-pane" id="pane-survey" style="display:none;">
+      <div class="cr-card">
+        <div class="cr-result-head">
+          <h2 style="font-size:17px;">Bolting Application Survey</h2>
+          <button type="button" class="cr-btn cr-btn-sec" onclick="bsPrintBlank()">🖨 Print blank form</button>
+        </div>
+        <p class="cr-hint" style="margin-bottom:14px;">Fill this in with the customer and we'll suggest the
+          tool — or print it blank and fill it by hand on site. Both come off the same form, so the paper
+          copy and the system copy always match.</p>
+
+        <div class="cr-sect-title">Request</div>
+        <div class="cr-grid" style="margin-bottom:14px;">
+          <div class="cr-field"><label>Request by</label><input type="text" id="bsRequestBy"></div>
+          <div class="cr-field"><label>Request date</label><input type="date" id="bsRequestDate"></div>
+          <div class="cr-field"><label>Industry</label><input type="text" id="bsIndustry"></div>
+          <div class="cr-field"><label>Customer name</label><input type="text" id="bsCustomer" list="pfClientList"></div>
+          <div class="cr-field"><label>Application</label><input type="text" id="bsApplication" placeholder="e.g. kiln flange, wind tower"></div>
+          <div class="cr-field"><label>Contact / title</label><input type="text" id="bsContact"></div>
+          <div class="cr-field"><label>Date of visit</label><input type="date" id="bsVisitDate"></div>
+          <div class="cr-field"><label>Phone / fax</label><input type="text" id="bsPhone"></div>
+          <div class="cr-field"><label>Install date</label><input type="date" id="bsInstallDate"></div>
+          <div class="cr-field"><label>Email</label><input type="text" id="bsEmail"></div>
+        </div>
+
+        <div class="cr-sect-title">Technical data</div>
+        <div class="cr-grid" style="margin-bottom:6px;">
+          <div class="cr-field"><label>Dimensions in</label>
+            <select id="bsUnit" onchange="bsSyncUnit()">
+              <option value="metric">METRIC</option><option value="inch">INCH</option>
+            </select></div>
+          <div class="cr-field"><label>Quantity</label><input type="number" min="0" step="1" id="bsQuantity"></div>
+          <div class="cr-field" id="bsMetricSize"><label>Bolt diameter</label>
+            <select id="bsBoltSize">
+              <option value="">— select —</option>
+              <option>M12</option><option>M16</option><option>M20</option>
+              <option>M24</option><option>M30</option><option>M36</option>
+            </select></div>
+          <div class="cr-field" id="bsInchSize" style="display:none;"><label>Bolt diameter (inch)</label>
+            <input type="text" id="bsBoltSizeInch" placeholder='e.g. 3/4"'></div>
+          <div class="cr-field"><label>Bolt T.P.I. / pitch</label><input type="text" id="bsTpi"></div>
+          <div class="cr-field"><label>Bolt grade</label>
+            <select id="bsGrade"><option value="">— select —</option>
+              <option>8.8</option><option>10.9</option><option>12.9</option></select></div>
+          <div class="cr-field"><label>Bolt coating</label><input type="text" id="bsCoating" placeholder="e.g. plain, PTFE, zinc"></div>
+          <div class="cr-field"><label>Gasket type</label><input type="text" id="bsGasket"></div>
+          <div class="cr-field"><label>Operating temp.</label><input type="text" id="bsTempValue"></div>
+          <div class="cr-field"><label>Temp unit</label>
+            <select id="bsTempUnit"><option value="C">°C</option><option value="F">°F</option></select></div>
+          <div class="cr-field"><label>Bolt application position</label>
+            <select id="bsPosition"><option value="">— select —</option>
+              <option value="top-side">Top-Side</option><option value="vertical">Vertical</option>
+              <option value="inverted">Inverted</option></select></div>
+        </div>
+        <p id="bsInchNote" class="cr-hint" style="display:none;margin:0 0 10px;color:#92400e;">
+          Inch bolts are recorded in full, but we hold no verified imperial torque data — no figure is
+          calculated and the engineer will specify the torque.</p>
+        <label class="cr-check" style="display:block;margin-bottom:14px;">
+          <input type="checkbox" id="bsLimitedClearance"> Limited Clearance / Limited Radius</label>
+
+        <div class="cr-sect-title">Known bolting values</div>
+        <p class="cr-hint" style="margin:0 0 8px;">Fill in whatever the customer already knows. A torque
+          figure here is used as-is; load, stretch, turn-of-nut and % of yield are recorded for the
+          engineer — turning those into a torque needs the bolt's proof load and friction factor,
+          which we don't hold.</p>
+        <div class="cr-grid" style="margin-bottom:14px;">
+          <div class="cr-field"><label>Torque</label><input type="text" id="bsTorqueValue"></div>
+          <div class="cr-field"><label>Torque unit</label>
+            <select id="bsTorqueUnit"><option value="nm">Nm</option><option value="ftlb">ft·lb</option>
+              <option value="kgm">kgm</option></select></div>
+          <div class="cr-field"><label>Load</label><input type="text" id="bsLoadValue"></div>
+          <div class="cr-field"><label>Load unit</label>
+            <select id="bsLoadUnit"><option value="lbs">lbs</option><option value="kN">kN</option></select></div>
+          <div class="cr-field"><label>Stretch-bolt length (mm / in.)</label><input type="text" id="bsStretch"></div>
+          <div class="cr-field"><label>Turn of nut (preload / degrees)</label><input type="text" id="bsTurnOfNut"></div>
+          <div class="cr-field"><label>% of yield (psi / N·mm²)</label><input type="text" id="bsPctYield"></div>
+        </div>
+
+        <div class="cr-sect-title">Dimensions, lubrication &amp; opportunity</div>
+        <div class="cr-grid" style="margin-bottom:14px;">
+          <div class="cr-field"><label>A</label><input type="text" id="bsDimA"></div>
+          <div class="cr-field"><label>B</label><input type="text" id="bsDimB"></div>
+          <div class="cr-field"><label>C</label><input type="text" id="bsDimC"></div>
+          <div class="cr-field"><label>D</label><input type="text" id="bsDimD"></div>
+          <div class="cr-field"><label>Distance to closure</label><input type="text" id="bsDistClosure"></div>
+          <div class="cr-field"><label>Current lubrication — type</label><input type="text" id="bsLubeType" placeholder="e.g. lightly oiled, dry, anti-seize"></div>
+          <div class="cr-field"><label>Lubrication brand</label><input type="text" id="bsLubeBrand"></div>
+          <div class="cr-field"><label>Opportunity</label>
+            <select id="bsOpportunity"><option value="">— select —</option>
+              <option value="sell">Sell</option><option value="demo">Demo</option></select></div>
+        </div>
+
+        <div class="cr-field" style="margin-bottom:14px;"><label>Additional application notes</label>
+          <textarea id="bsNotes" rows="3"></textarea></div>
+
+        <div class="cr-actions">
+          <button type="button" class="cr-btn" onclick="bsSuggest()">Suggest a tool</button>
+          <button type="button" class="cr-btn cr-btn-sec" onclick="bsExportPdf()">📄 Export filled PDF</button>
+          <button type="button" class="cr-btn cr-btn-sec" onclick="bsReset()">Reset</button>
+        </div>
+        <div id="bsResult" style="display:none;margin-top:14px;"></div>
+      </div>
+    </div>
+
     <!-- ── Inquiry logbook ── -->
     <div class="pf-pane" id="pane-log" style="display:none;">
       <div class="cr-card">
@@ -351,5 +468,6 @@
   <script src="js/flow-api.js"></script>
   <script src="js/cylinder-recommender.js"></script>
   <script src="js/product-finder.js"></script>
+  <script src="js/bolting-survey.js"></script>
 </body>
 </html>

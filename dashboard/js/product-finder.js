@@ -771,6 +771,11 @@ async function pfEnsureData(box, needs) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (!document.getElementById('pfTabs')) return;      // engine-only / admin contexts also load this file
+  /* A177 — guard the PAGE, not one form. The only auth check used to live in cylinder-recommender.js
+     gated on `#crForm`, so removing or renaming the Cylinder Selector would have silently un-guarded
+     everything here — including the survey, which carries customer contact details. Idempotent: it
+     redirects only when there is no valid session, so running alongside that check costs nothing. */
+  if (typeof requireProductFinderAccess === 'function' && !requireProductFinderAccess()) return;
   // Industry options come from the one PF_INDUSTRIES constant (no HTML drift)
   const ind = document.getElementById('pfIndustry');
   if (ind && ind.options.length <= 1) {
