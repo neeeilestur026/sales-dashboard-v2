@@ -10,6 +10,7 @@ let adrEntries = [];        // all users' activity for the selected date
 let adrNotes = {};          // user -> note text
 let adrEmails = {};         // display name -> { emails, needsSetup } (per-day GoDaddy sent mail, all roles except director)
 let adrSubs = {};           // user -> that day's submitted daily report (what they stand behind)
+let adrVisits = {};         // A189 — user -> that day's client visits
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 
 function _e(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -65,6 +66,18 @@ async function load(fresh) {
     document.getElementById('userReports').innerHTML = `<div class="dr-empty">${_e(e.message)}</div>`;
   }
   adrNotes = {};
+  // A189 — one call for the whole team's visits, grouped here rather than per user, so adding a rep
+  // costs no extra request. Failure is non-fatal: the rest of the report still renders.
+  adrVisits = {};
+  try {
+    const vr = await fetchFlow('getClientVisits', { date }, opts);
+    if (seq === adrLoadSeq) {
+      ((vr && vr.data) || []).forEach(v => {
+        const u = String(v.user || 'Unknown').trim() || 'Unknown';
+        (adrVisits[u] = adrVisits[u] || []).push(v);
+      });
+    }
+  } catch (e) { adrVisits = {}; }
   adrEmailsLoading = true;
   render();
 
@@ -157,6 +170,8 @@ function render() {
   document.getElementById('sumSales').textContent = _m(orgSales);
   document.getElementById('sumPaid').textContent = _m(orgPaid);
   document.getElementById('sumPdfs').textContent = orgPdfs;
+  const orgVisits = Object.keys(adrVisits).reduce((s, u) => s + adrVisits[u].length, 0);   // A189
+  const sv = document.getElementById('sumVisits'); if (sv) sv.textContent = orgVisits;
   const totalEmails = Object.values(adrEmails).reduce((s, v) => s + ((v.emails || []).length), 0);
   const meta = document.getElementById('reportMeta');
   if (meta) {
@@ -169,6 +184,9 @@ function render() {
   Object.keys(adrNotes).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
   Object.keys(adrSubs).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
   Object.keys(adrEmails).forEach(u => { if (!byUser[u] && (adrEmails[u].emails || []).length) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  // A189 — a rep whose whole day was client visits has no ActivityLog rows, so without this they
+  // would be missing from the team report entirely.
+  Object.keys(adrVisits).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
   names = Array.from(new Set(names));
   if (q) names = names.filter(n => n.toLowerCase().includes(q));
   document.getElementById('userCount').textContent = names.length;
@@ -188,10 +206,11 @@ function render() {
     const sub = adrSubs[String(name).trim()];
     return `<details class="urep"${i === 0 ? ' open' : ''} data-user="${_e(name)}">
       <summary><span class="uname">${_e(name)}</span>
-        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}${sub ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted</span>` : ' · <span style="color:#b45309;">not submitted</span>'}</span></summary>
+        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${(adrVisits[name] || []).length ? ` · 🤝 ${adrVisits[name].length} visit(s)` : ''}${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}${sub ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted</span>` : ' · <span style="color:#b45309;">not submitted</span>'}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
         ${flowRenderTaskCards(tasks, { moduleOrder: MODULE_ORDER, emptyText: 'No movements (note only).' })}
+        ${adrVisitHtml(name)}
         ${adrEmailHtml(name)}
         ${adrSubmissionHtml(sub)}
         ${note ? `<div class="urep-note"><strong>Notes:</strong> ${_e(note)}</div>` : ''}
@@ -210,18 +229,20 @@ function renderProductivity(names, userTasks) {
       .slice(0, 3).map(function (m) { return _e(m) + ' ' + c.byModule[m]; }).join(' · ');
     const sub = adrSubs[String(n).trim()];
     const em = (adrEmails[n] && (adrEmails[n].emails || []).length) || 0;
-    return { name: n, tasks: c.tasks, docs: c.docs, top: top, emails: em, submitted: !!sub };
+    const vis = (adrVisits[String(n).trim()] || []).length;   // A189
+    return { name: n, tasks: c.tasks, docs: c.docs, top: top, emails: em, visits: vis, submitted: !!sub };
   }).sort(function (a, b) { return b.tasks - a.tasks || a.name.localeCompare(b.name); });
   const max = Math.max(1, rows[0] ? rows[0].tasks : 1);
   el.innerHTML = '<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>'
     + '<th>User</th><th class="num">Tasks</th><th>Output</th><th style="width:30%;"></th>'
-    + '<th class="num">Emails</th><th>Submitted</th></tr></thead><tbody>'
+    + '<th class="num">Visits</th><th class="num">Emails</th><th>Submitted</th></tr></thead><tbody>'
     + rows.map(function (r) {
       return '<tr><td style="font-weight:600;">' + _e(r.name) + '</td>'
         + '<td class="num" style="font-weight:700;">' + r.tasks + '</td>'
         + '<td style="font-size:0.78rem;color:var(--text-secondary,#475569);">' + (r.top || '—') + '</td>'
         + '<td><div style="height:8px;border-radius:999px;background:var(--bg-inset,#f1f5f9);overflow:hidden;">'
         + '<div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--accent,#4f46e5);"></div></div></td>'
+        + '<td class="num">' + (r.visits || '') + '</td>'
         + '<td class="num">' + (r.emails || '') + '</td>'
         + '<td>' + (r.submitted ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#b45309;">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
@@ -244,6 +265,23 @@ function adrSubmissionHtml(sub) {
     </div>
     ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
   </div>`;
+}
+
+/** A189 — one rep's client visits for the selected day. Silent when they logged none, so the card
+    doesn't grow an empty section for the roles that never do visits. */
+function adrVisitHtml(name) {
+  const visits = adrVisits[String(name).trim()] || [];
+  if (!visits.length) return '';
+  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">🤝 Client Visits — ${_e(_date())} <span style="font-weight:600;color:var(--text-secondary,#475569);">(${visits.length})</span></div>`;
+  return head + `<div style="overflow-x:auto;"><table class="flow-table">
+    <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Topic</th></tr></thead>
+    <tbody>${visits.map(v => `<tr>
+      <td>${_e(v.time || _time(v.createdAt))}</td>
+      <td>${_e(v.personVisited || '—')}</td>
+      <td>${_e(v.company || '—')}</td>
+      <td>${_e(v.cityAddress || '—')}</td>
+      <td style="color:var(--text-secondary,#475569);">${_e(v.topic || '')}</td>
+    </tr>`).join('')}</tbody></table></div>`;
 }
 
 function adrEmailHtml(name) {

@@ -198,6 +198,7 @@ function _fpdTotalTiles(t, hideAmounts) {
   const tiles = [
     _fpdTile('Movements', _fpdNum(t.moves).toLocaleString()),
     _fpdTile('Calls', _fpdNum(t.calls).toLocaleString()),
+    _fpdTile('Client Visits', _fpdNum(t.visits).toLocaleString()),   // A189
     _fpdTile('Emails Sent', _fpdNum(t.emails).toLocaleString()),
     _fpdTile('Documents', _fpdNum(t.docs).toLocaleString()),
     _fpdTile('PDFs', _fpdNum(t.pdfs).toLocaleString()),
@@ -348,6 +349,13 @@ function flowPersonDayHtml(m) {
     <tbody>${m.calls.map(c => `<tr><td>${_fpdEsc(c.time)}</td><td>${_fpdEsc(c.contact)}</td><td>${_fpdEsc(c.company)}</td>
       <td>${_fpdEsc(c.outcome)}</td><td>${_fpdEsc(c.notes)}</td></tr>`).join('')}</tbody></table>` : '';
 
+  // A189 — client visits print beside the call log; omitted entirely on days with none, so no
+  // report gains an empty section.
+  const visits = (m.visits && m.visits.length) ? `<div class="sec">Client Visits</div>
+    <table><thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Topic</th></tr></thead>
+    <tbody>${m.visits.map(v => `<tr><td>${_fpdEsc(v.time)}</td><td>${_fpdEsc(v.personVisited)}</td><td>${_fpdEsc(v.company)}</td>
+      <td>${_fpdEsc(v.cityAddress)}</td><td>${_fpdEsc(v.topic)}</td></tr>`).join('')}</tbody></table>` : '';
+
   const emails = (m.emails && m.emails.length) ? `<div class="sec">Sent Emails</div>
     <table><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>
     <tbody>${m.emails.map(e => `<tr><td>${_fpdEsc(e.time)}</td><td>${_fpdEsc(e.to)}</td><td>${_fpdEsc(e.subject)}</td></tr>`).join('')}</tbody></table>` : '';
@@ -367,6 +375,7 @@ function flowPersonDayHtml(m) {
     ${_fpdTotalTiles(m.totals, hide)}
     ${sections ? `<div class="sec">Activity by Module</div>${sections}` : '<div class="muted">No recorded movements for this day.</div>'}
     ${calls}
+    ${visits}
     ${emails}
     <div class="sec">Report Notes</div>
     ${narrative}

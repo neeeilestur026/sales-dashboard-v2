@@ -37,14 +37,14 @@ function _tpn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
 // Each role sees ITS tasks on the chart/summary (label → counter key; keys: calls/emails/other or a module).
 const TP_ROLE_TASKS = {
-  sales: [['Calls', 'calls'], ['Emails', 'emails'], ['Quotations', 'Quotation'],
+  sales: [['Calls', 'calls'], ['Client Visits', 'visits'], ['Emails', 'emails'], ['Quotations', 'Quotation'],
           ['Purchase Requests', 'Pricing Request'], ['Inventory', 'Inventory'], ['Other', 'other']],
   accounting: [['Emails', 'emails'], ['Invoices', 'Invoice'], ['Receiving', 'Receiving'],
                ['Collections', 'Collection'], ['Expenses', 'Expense'], ['Sales Orders', 'Sales Order'], ['Other', 'other']],
   admin: [['Emails', 'emails'], ['Purchase Orders', 'Purchase Order'], ['Sales Orders', 'Sales Order'],
           ['Shipments', 'Shipment'], ['Payment Requests', 'Payment Request'],
           ['Pricing Requests', 'Pricing Request'], ['Other', 'other']],
-  default: [['Calls', 'calls'], ['Emails', 'emails'], ['Quotations', 'Quotation'],
+  default: [['Calls', 'calls'], ['Client Visits', 'visits'], ['Emails', 'emails'], ['Quotations', 'Quotation'],
             ['Purchase Requests', 'Pricing Request'], ['Sales Orders', 'Sales Order'],
             ['Purchase Orders', 'Purchase Order'], ['Invoices', 'Invoice'], ['Other', 'other']],
 };
@@ -122,12 +122,16 @@ async function tpLoad() {
   _tpRoster.forEach(u => { _tpRoles[_tpKey(u.fullName || u.username)] = String(u.role || '').toLowerCase(); });
   if (seq !== _tpSeq) return;
 
-  // Activity + calls ×7 (all users) in parallel; future days skipped.
-  const [acts, calls] = await Promise.all([
+  // Activity + calls + client visits ×7 (all users) in parallel; future days skipped.
+  const [acts, calls, visits] = await Promise.all([
     Promise.all(days.map(d => d > today ? Promise.resolve([])
       : fetchFlow('getActivityLog', { date: d }).then(r => (r && r.data) || []).catch(() => []))),
     Promise.all(days.map(d => d > today ? Promise.resolve([])
       : fetchFlow('getSalesCalls', { date: d }).then(r => (r && r.data) || []).catch(() => []))),
+    // A189 — same shape as calls so a backend without ClientVisits yet degrades to zeros rather
+    // than breaking the whole week view.
+    Promise.all(days.map(d => d > today ? Promise.resolve([])
+      : fetchFlow('getClientVisits', { date: d }).then(r => (r && r.data) || []).catch(() => []))),
   ]);
   if (seq !== _tpSeq) return;
 
@@ -167,8 +171,9 @@ async function tpLoad() {
 
   // Per-user aggregation.
   const users = {};
-  const U = name => users[name] = users[name] || { moves: 0, calls: 0, emails: 0, docs: 0, pdfs: 0,
-    amount: 0, perDay: new Array(7).fill(0), perDayCalls: new Array(7).fill(0), mods: {} };
+  const U = name => users[name] = users[name] || { moves: 0, calls: 0, visits: 0, emails: 0, docs: 0, pdfs: 0,
+    amount: 0, perDay: new Array(7).fill(0), perDayCalls: new Array(7).fill(0),
+    perDayVisits: new Array(7).fill(0), mods: {} };   // A189
   days.forEach((d, i) => {
     // A148: dedup within (user, day) — collapse each user's raw actions on day i into DISTINCT tasks,
     // so a record touched several times counts once (true productivity, not raw action volume).
@@ -186,6 +191,9 @@ async function tpLoad() {
       });
     });
     calls[i].forEach(c => { const u = U(_tpKey(c.user) || '(unknown)'); u.calls++; u.perDayCalls[i]++; });
+    // A189 — a rep who spent the day on the road logs no activity rows; U() creates them here so a
+    // visits-only day still counts as work rather than showing the rep as idle.
+    visits[i].forEach(v => { const u = U(_tpKey(v.user) || '(unknown)'); u.visits++; u.perDayVisits[i]++; });
   });
   // People who submitted a report but logged no system activity still belong in the report.
   Object.keys(_tpReports).forEach(n => { if (n) U(n); });
@@ -231,6 +239,7 @@ async function tpLoad() {
 function _tpCounts(u, tasks) {
   return tasks.map(([, key]) => {
     if (key === 'calls') return u.calls;
+    if (key === 'visits') return u.visits || 0;   // A189
     if (key === 'emails') return u.emails;
     if (key === 'other') {
       const named = tasks.map(t => t[1]);
@@ -339,7 +348,7 @@ function tpRenderCompact() {
     return `<div class="mfTw-card" style="border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.9rem;background:#fff;">
       <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
         <strong style="font-size:0.95rem;">${_tpe(name)}</strong>${roleChip}${compChip}
-        <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.emails} email(s)</span>
+        <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.visits || 0} visit(s) · ${u.emails} email(s)</span>
         ${pdfBtn}
       </div>
       <div style="display:grid;grid-template-columns:minmax(280px,1.1fr) 1fr;gap:1rem;align-items:center;margin-top:0.7rem;">
@@ -356,11 +365,11 @@ function tpRenderCompact() {
   // Full mode leads with a comparison table — otherwise comparing two people means paging cards.
   const teamTable = full ? `<div style="overflow-x:auto;margin-bottom:1rem;">
     <table class="flow-table"><thead><tr><th>Person</th><th>Role</th><th class="num">Movements</th>
-      <th class="num">Calls</th><th class="num">Emails</th><th class="num">Docs</th><th class="num">Reports</th></tr></thead>
+      <th class="num">Calls</th><th class="num">Visits</th><th class="num">Emails</th><th class="num">Docs</th><th class="num">Reports</th></tr></thead>
     <tbody>${names.map(n => {
       const u = users[n], c = _tpCompliance(n, days, today);
       return `<tr><td>${_tpe(n)}</td><td>${_tpe(_tpRoleOf(n) || '—')}</td>
-        <td class="num">${u.moves}</td><td class="num">${u.calls}</td><td class="num">${u.emails}</td>
+        <td class="num">${u.moves}</td><td class="num">${u.calls}</td><td class="num">${u.visits || 0}</td><td class="num">${u.emails}</td>
         <td class="num">${u.docs}</td>
         <td class="num"${c.done < c.of ? ' style="color:#b45309;font-weight:700;"' : ''}>${c.done}/${c.of}</td></tr>`;
     }).join('')}</tbody></table></div>` : '';
@@ -375,6 +384,7 @@ function tpRenderCompact() {
       <div class="dr-tile"><div class="l">Team Members Active</div><div class="v">${names.length}</div></div>
       <div class="dr-tile"><div class="l">Movements</div><div class="v">${tot('moves')}</div></div>
       <div class="dr-tile"><div class="l">Calls</div><div class="v">${tot('calls')}</div></div>
+      <div class="dr-tile"><div class="l">Client Visits</div><div class="v">${tot('visits')}</div></div>
       <div class="dr-tile"><div class="l">Emails</div><div class="v">${tot('emails')}</div></div>
       <div class="dr-tile"><div class="l">Quotations</div><div class="v">${totMod('Quotation')}</div></div>
       <div class="dr-tile"><div class="l">Purchase Requests</div><div class="v">${totMod('Pricing Request')}</div></div>
@@ -436,6 +446,11 @@ function tpRenderFull() {
   _tpSet('tpKpiMissedSub', atRisk + ' ' + (atRisk === 1 ? 'person' : 'people') + ' at risk');
   _tpSet('tpKpiAvg', (moves / elapsed).toFixed(1));
   _tpSet('tpKpiAvgSub', 'over ' + elapsed + ' day' + (elapsed === 1 ? '' : 's'));
+  // A189 — visits KPI. Named people rather than a bare count, so it says who was actually out.
+  const totVisits = names.reduce((s, n) => s + ((users[n] && users[n].visits) || 0), 0);
+  const visitors = names.filter(n => (users[n] && users[n].visits) > 0).length;
+  _tpSet('tpKpiVisits', String(totVisits));
+  _tpSet('tpKpiVisitsSub', visitors ? `by ${visitors} ${visitors === 1 ? 'person' : 'people'}` : 'none logged');
   const meta = document.getElementById('tpSheetMeta');
   if (meta) meta.textContent = `${names.length} ${names.length === 1 ? 'person' : 'people'} · ${roles.size} role${roles.size === 1 ? '' : 's'} · week of ${days[0]} – ${days[6]}`;
 
@@ -514,7 +529,8 @@ function tpOpenPerson(name) {
     ? `<img src="${_tpChartImg[name]}" alt="" style="width:100%;max-width:420px;border:1px solid #eef1f5;border-radius:10px;">`
     : '<div class="mf-empty">Chart unavailable — the counts below carry the same data.</div>';
 
-  const tiles = [['Movements', m.totals.moves], ['Calls', m.totals.calls], ['Emails', m.totals.emails],
+  const tiles = [['Movements', m.totals.moves], ['Calls', m.totals.calls],
+    ['Client Visits', m.totals.visits || 0], ['Emails', m.totals.emails],
     ['Documents', m.totals.docs], ['PDFs', m.totals.pdfs],
     ['Reports', m.totals.submitted + ' / ' + m.totals.reportableDays]]
     .concat(hide ? [] : [[m.totals.amountLabel, flowMoney(m.totals.amount, 'PHP')]])
@@ -523,6 +539,7 @@ function tpOpenPerson(name) {
   const taskRows = m.tasks.map(([l, v]) => `<tr><td>${_tpe(l)}</td><td class="n">${v}</td></tr>`).join('');
   const dayRows = m.days.map(d => `<tr><td>${_tpe(d.dayName)}</td><td>${_tpe(d.date)}</td>
     <td class="n">${d.future ? '—' : d.moves}</td><td class="n">${d.future ? '—' : d.calls}</td>
+    <td class="n">${d.future ? '—' : (d.visits || 0)}</td>
     <td>${d.future ? '<span style="color:#94a3b8;">upcoming</span>'
       : d.submitted ? '<span style="color:#15803d;font-weight:700;">✓ submitted</span>'
                     : '<span style="color:#b91c1c;font-weight:700;">— missed</span>'}</td></tr>`).join('');
@@ -551,7 +568,7 @@ function tpOpenPerson(name) {
         <tbody>${taskRows}</tbody></table></div>
     </div>
     <h4 class="tp-detail-h">Day by day</h4>
-    <div style="overflow-x:auto;"><table class="ptable"><thead><tr><th>Day</th><th>Date</th><th class="n">Activities</th><th class="n">Calls</th><th>Daily report</th></tr></thead>
+    <div style="overflow-x:auto;"><table class="ptable"><thead><tr><th>Day</th><th>Date</th><th class="n">Activities</th><th class="n">Calls</th><th class="n">Visits</th><th>Daily report</th></tr></thead>
       <tbody>${dayRows}</tbody></table></div>
     <h4 class="tp-detail-h">What they reported</h4>
     ${subs}
@@ -603,12 +620,13 @@ function _tpPersonModel(name) {
   return {
     name, role: _tpRoleOf(name), weekStart: days[0], weekEnd: days[6], generatedAt: flowToday(),
     hideAmounts: !!_tpOpts.hideAmounts,
-    totals: { moves: u.moves, calls: u.calls, emails: u.emails, docs: u.docs, pdfs: u.pdfs,
+    totals: { moves: u.moves, calls: u.calls, visits: u.visits || 0, emails: u.emails, docs: u.docs, pdfs: u.pdfs,
       amount: u.amount, amountLabel: 'Invoiced', submitted: c.done, reportableDays: c.of },
     tasks: tasks.map((t, j) => [t[0], counts[j]]),
     chartImg: _tpChartImg[name] || '',
     days: days.map((d, j) => ({ date: d, dayName: _TP_DAYS[j], moves: u.perDay[j],
-      calls: u.perDayCalls[j], emails: 0, submitted: !!recs[d], future: d > today })),
+      calls: u.perDayCalls[j], visits: (u.perDayVisits || [])[j] || 0, emails: 0,
+      submitted: !!recs[d], future: d > today })),   // A189
     submissions: Object.keys(recs).map(k => recs[k]),
   };
 }
@@ -630,10 +648,11 @@ function tpTeamPdf() {
   const names = _tpOrder.filter(n => users[n]);
   const people = names.map(_tpPersonModel);
   const org = people.reduce((a, p) => {
-    a.moves += p.totals.moves; a.calls += p.totals.calls; a.emails += p.totals.emails;
+    a.moves += p.totals.moves; a.calls += p.totals.calls; a.visits += (p.totals.visits || 0);
+    a.emails += p.totals.emails;
     a.docs += p.totals.docs; a.submitted += p.totals.submitted; a.reportableDays += p.totals.reportableDays;
     return a;
-  }, { moves: 0, calls: 0, emails: 0, docs: 0, submitted: 0, reportableDays: 0 });
+  }, { moves: 0, calls: 0, visits: 0, emails: 0, docs: 0, submitted: 0, reportableDays: 0 });
   const btn = document.getElementById(_tpOpts.pdfBtnId);
   const label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Rendering…'; }

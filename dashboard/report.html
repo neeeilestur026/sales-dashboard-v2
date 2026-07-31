@@ -64,6 +64,7 @@
             <div class="dr-tile"><div class="l">Quotations Created</div><div class="v" id="sumQuotes">—</div></div>
             <div class="dr-tile"><div class="l">Inventory Added</div><div class="v" id="sumInv">—</div></div>
             <div class="dr-tile"><div class="l">Calls Made</div><div class="v" id="sumCalls">—</div></div>
+            <div class="dr-tile"><div class="l">Client Visits</div><div class="v" id="sumVisits">—</div></div>
             <div class="dr-tile"><div class="l">PDFs Generated</div><div class="v" id="sumPdfs">—</div></div>
             <div class="dr-tile"><div class="l">Emails Sent</div><div class="v" id="sumEmails">—</div></div>
           </div>
@@ -88,6 +89,24 @@
             <div style="overflow-x:auto;"><table class="flow-table">
               <thead><tr><th>Time</th><th>Contact</th><th>Company</th><th>Outcome</th><th>Notes</th><th class="no-print"></th></tr></thead>
               <tbody id="callBody"></tbody>
+            </table></div>
+          </div>
+
+          <!-- A189 — Client Visits: the face-to-face counterpart of the call log. Same shape on
+               purpose, so a rep who knows one already knows the other. -->
+          <div class="dr-sect">
+            <div class="dr-sect-title">Client Visits <span class="pill" id="visitCount">0</span></div>
+            <div class="no-print" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.7rem;">
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Time of visit</label><input type="time" id="visitTime" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Person visited</label><input type="text" id="visitPerson" placeholder="Name" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Company</label><input type="text" id="visitCompany" placeholder="Company" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">City / address</label><input type="text" id="visitCity" placeholder="e.g. Davao City" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div style="flex:1;min-width:170px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Topic discussed</label><input type="text" id="visitTopic" placeholder="What was discussed" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <button class="btn btn-sm btn-primary" id="logVisitBtn">+ Log Visit</button>
+            </div>
+            <div style="overflow-x:auto;"><table class="flow-table">
+              <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Topic</th><th class="no-print"></th></tr></thead>
+              <tbody id="visitBody"></tbody>
             </table></div>
           </div>
 

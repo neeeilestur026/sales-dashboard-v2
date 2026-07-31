@@ -9,6 +9,7 @@ let drEntries = [];        // this rep's activity entries for the selected date
 let drEmailCount = 0;
 let drEmailMeta = null;    // {folder, windowCount, matched, date} diagnostic from the mail fetch
 let drCalls = [];          // this rep's logged calls for the selected date
+let drVisits = [];         // A189 — this rep's logged client visits for the selected date
 
 // Muted diagnostic appended when a day shows zero sent emails (explains why: folder/window/matched).
 function _emailMetaHint() {
@@ -37,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('pdfBtn').addEventListener('click', _drDayPdf);
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
   document.getElementById('logCallBtn').addEventListener('click', logCall);
+  document.getElementById('logVisitBtn').addEventListener('click', logVisit);   // A189
 
   load();
   // Auto-refresh the read-only parts (activity + sent emails + calls) every 60s while viewing TODAY
@@ -59,6 +61,7 @@ async function refreshLive() {
   } catch (e) { /* keep previous */ }
   loadEmails();
   if (typeof loadCalls === 'function') loadCalls();
+  if (typeof loadVisits === 'function') loadVisits();   // A189
 }
 
 async function load() {
@@ -83,6 +86,7 @@ async function load() {
   loadEmails();
   loadNotes();
   loadCalls();
+  loadVisits();   // A189
   if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', withCalls: true, modules: ['Quotation', 'Pricing Request', 'Inventory'] });
   // Submission card — initialized from load() only (never the poller), so typing is never interrupted.
   if (typeof initReportSubmit === 'function') {
@@ -90,6 +94,7 @@ async function load() {
       user: drSession.name, role: 'sales', date, mountId: 'submitSect', chipId: 'drSubmitChip',
       getSnapshot: () => ({
         entries: drEntries, calls: drCalls.length, emails: drEmailCount,
+        visits: drVisits.length,   // A189
         notes: (document.getElementById('notesField') || {}).value || '',
       }),
     });
@@ -113,10 +118,14 @@ function _drDayPdf() {
     name: drSession.name, role: 'sales', date, generatedAt: flowToday(),
     totals: {
       moves: tasks.length, calls: drCalls.length, emails: drEmailCount,
+      visits: drVisits.length,   // A189
       docs: counts.docs, pdfs: counts.pdfs, amount: 0,
     },
     modules: order.filter(m => byMod[m]).map(m => ({ module: m, rows: byMod[m] })),
     calls: drCalls.map(c => ({ time: _time(c.createdAt), contact: c.contact, company: c.company, outcome: c.outcome, notes: c.notes })),
+    // A189 — falls back to the logged-at time when the rep left the visit time blank.
+    visits: drVisits.map(v => ({ time: v.time || _time(v.createdAt), personVisited: v.personVisited,
+                                 company: v.company, cityAddress: v.cityAddress, topic: v.topic })),
     notes: (document.getElementById('notesField') || {}).value || '',
     submission: (typeof _rsRecord !== 'undefined') ? _rsRecord : null,
   };
@@ -240,5 +249,59 @@ async function delCall(rowIndex) {
     const r = await postFlow('deleteSalesCall', { rowIndex });
     if (!r || !r.success) throw new Error((r && r.message) || 'Failed.');
     await loadCalls();
+  } catch (e) { alert(e.message); }
+}
+
+// ── A189: Client Visits (flow backend, scoped by rep + date) ──
+async function loadVisits() {
+  try {
+    const r = await fetchFlow('getClientVisits', { date: _date(), user: drSession.name });
+    drVisits = (r && r.data) || [];
+  } catch (e) { drVisits = []; }
+  document.getElementById('sumVisits').textContent = drVisits.length;
+  document.getElementById('visitCount').textContent = drVisits.length;
+  if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
+  document.getElementById('visitBody').innerHTML = drVisits.length ? drVisits.map(v => `
+    <tr>
+      <td>${_esc(v.time || _time(v.createdAt))}</td>
+      <td>${_esc(v.personVisited || '—')}</td>
+      <td>${_esc(v.company || '—')}</td>
+      <td>${_esc(v.cityAddress || '—')}</td>
+      <td style="color:var(--text-secondary);">${_esc(v.topic || '')}</td>
+      <td class="no-print"><button class="btn btn-xs" data-del="${v.rowIndex}" data-no="${_esc(v.visitNo)}" style="border:1px solid var(--border);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
+    </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No client visits logged for this day.</td></tr>';
+  document.querySelectorAll('#visitBody [data-del]').forEach(b =>
+    b.addEventListener('click', () => delVisit(b.getAttribute('data-del'), b.getAttribute('data-no'))));
+}
+
+async function logVisit() {
+  const personVisited = document.getElementById('visitPerson').value.trim();
+  const company = document.getElementById('visitCompany').value.trim();
+  if (!personVisited && !company) { alert('Enter the person visited or the company.'); return; }
+  const btn = document.getElementById('logVisitBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const r = await postFlow('logClientVisit', {
+      date: _date(), personVisited, company,
+      time: document.getElementById('visitTime').value,
+      cityAddress: document.getElementById('visitCity').value.trim(),
+      topic: document.getElementById('visitTopic').value.trim(),
+    });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Failed to log visit.');
+    ['visitTime', 'visitPerson', 'visitCompany', 'visitCity', 'visitTopic']
+      .forEach(id => { document.getElementById(id).value = ''; });
+    await loadVisits();
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = '+ Log Visit'; }
+}
+
+async function delVisit(rowIndex, visitNo) {
+  if (!confirm('Remove this client visit?')) return;
+  try {
+    // visitNo goes with the row index so the backend can refuse a stale-list delete rather than
+    // removing whichever visit has since shifted into that position.
+    const r = await postFlow('deleteClientVisit', { rowIndex, visitNo });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Failed.');
+    await loadVisits();
   } catch (e) { alert(e.message); }
 }
