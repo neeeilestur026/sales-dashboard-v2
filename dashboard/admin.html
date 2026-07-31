@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/bento-skin-v2.css">
   <link rel="stylesheet" href="css/flow-screen.css">
+  <!-- A188: the Revenue & Net Profit report's styles, shared with the Accounting dashboard. Must
+       stay AFTER bento-skin-v2.css — the skin also styles .pnl-card/.pnl-tile and these must win. -->
+  <link rel="stylesheet" href="css/pnl-report.css">
   <style>
     .hero {
       position: relative;
@@ -373,6 +376,25 @@
     </div>
     <!-- ── End Task Overview ──────────────────────────────── -->
 
+    <!-- A188 — Revenue & Net Profit report. Identical markup, styles and behaviour to the
+         Accounting dashboard: accounting-profit.js renders into these ids and so-cost-editor.js
+         supplies the per-order cost editing, which admin has always been permitted to use
+         (pnlCanEditCost covers accounting and admin alike). -->
+    <section class="pnl-card" style="margin-top:1.5rem;">
+      <div class="pnl-head">
+        <div>
+          <h2>Revenue &amp; Net Profit Report</h2>
+          <div class="pnl-state" id="pnlState">Loading…</div>
+        </div>
+        <div class="pnl-controls">
+          <label style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Year</label>
+          <select id="pnlYear"></select>
+        </div>
+      </div>
+      <div class="pnl-tiles" id="pnlTotals"></div>
+      <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
+    </section>
+
   </main>
 
   <script src="js/api.js"></script>
@@ -381,6 +403,10 @@
   <script src="js/flow-docs.js"></script>
   <script src="js/stage-meta.js"></script>
   <script src="js/admin.js"></script>
+  <!-- A188 — Revenue & Net Profit report, same pair and same order as accounting-home.html.
+       so-cost-editor.js must come first: accounting-profit.js calls openSoCostEditor() from it. -->
+  <script src="js/so-cost-editor.js"></script>
+  <script src="js/accounting-profit.js"></script>
   <!-- Shipment Edit Modal -->
   <div id="smEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;overflow-y:auto;padding:2rem 1rem;">
     <div style="max-width:720px;margin:0 auto;background:var(--surface,#1e293b);border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
