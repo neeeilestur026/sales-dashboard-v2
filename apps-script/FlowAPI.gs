@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 102;  // A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 103;  // A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -55,7 +55,11 @@ var SCHEMA = {
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
                    'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID', 'Line Key'],
 
-  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type'],
+  // A186: 'Client PO Date' is the date printed on the customer's own PO; 'PO Received Date' is when
+  // it actually reached us. They routinely differ by days, and only the second one is ours to know.
+  // Appended at the END (house convention) — but see updateSalesOrder, which hard-codes its value
+  // list and MUST be extended in step with this array.
+  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID'],
 
   //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
@@ -1060,6 +1064,7 @@ function getSalesOrders() {
       soNo: String(s['SO No']), quotationNo: s['Quotation No'], date: s['Date'], customer: s['Customer'],
       status: s['Status'], total: _num(s['Total']), createdBy: s['Created By'], createdAt: s['Created At'],
       supplierType: s['Supplier Type'] || '', rowIndex: s.rowIndex,
+      clientPoDate: s['Client PO Date'] || '', poReceivedDate: s['PO Received Date'] || '',   // A186
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Price/Unit']), total: _num(r['Total Price']) }; })
@@ -1082,7 +1087,8 @@ function createSalesOrder(p) {
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
-    total, p.createdBy || '', _now(), p.supplierType || '']);
+    total, p.createdBy || '', _now(), p.supplierType || '',
+    p.clientPoDate || '', p.poReceivedDate || '']);   // A186
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || ''];   // A159 Item ID
@@ -1248,9 +1254,16 @@ function updateSalesOrder(p) {
   var sh = _sheet('SalesOrders');
   _rows('SalesOrders').forEach(function (r) {
     if (String(r['SO No']) === String(no)) {
+      // This value list is written into a SCHEMA.SalesOrders.length-wide range, so it must carry
+      // exactly as many entries as SCHEMA.SalesOrders has columns. Adding a column there without
+      // adding a value here throws on EVERY sales-order save (create would only leave it blank,
+      // so the breakage shows up on edit).
       sh.getRange(r.rowIndex, 1, 1, SCHEMA.SalesOrders.length).setValues([[no, p.quotationNo || r['Quotation No'],
         p.date || r['Date'], p.customer, p.status || r['Status'], total, r['Created By'], r['Created At'],
-        (p.supplierType != null ? p.supplierType : (r['Supplier Type'] || ''))]]);
+        (p.supplierType != null ? p.supplierType : (r['Supplier Type'] || '')),
+        // A186 — null means "not sent", so an edit that omits the field keeps what is stored.
+        (p.clientPoDate != null ? p.clientPoDate : (r['Client PO Date'] || '')),
+        (p.poReceivedDate != null ? p.poReceivedDate : (r['PO Received Date'] || ''))]]);
     }
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {

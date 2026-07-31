@@ -107,6 +107,82 @@ function collectItems() {
   return items;
 }
 
+function soVal(id) { const e = document.getElementById(id); return e ? (e.value || '').trim() : ''; }
+
+/* A186 — how late their PO reached us, in whole days. Null when either date is missing, so the
+   caller shows nothing rather than a confident "0 days". */
+function soReceiptGap(clientPoDate, poReceivedDate) {
+  const a = flowDate(clientPoDate), b = flowDate(poReceivedDate);
+  if (!a || !b) return null;
+  const ms = Date.parse(b + 'T00:00:00') - Date.parse(a + 'T00:00:00');
+  return isNaN(ms) ? null : Math.round(ms / 86400000);
+}
+
+/* A186 — stamp the client's PO RECEIVED and file both copies.
+
+   Order matters: the ORIGINAL is filed first. If the stamped upload then fails, the customer's
+   document is already safely on the record — the reverse order risks losing the only copy we were
+   sent. The received date is required here rather than defaulted, because a stamp carrying an
+   invented date is worse than no stamp at all. */
+async function soAttachClientPo() {
+  const btn = document.getElementById('clientPoBtn');
+  const input = document.getElementById('clientPoFile');
+  const file = input && input.files && input.files[0];
+  const soNo = document.getElementById('soNo').value || soVal('soNoInput');
+  const received = soVal('poReceivedDate');
+
+  if (!soNo) { flowMsg('clientPoMsg', 'Enter the SO No first — the document is filed against it.', false); return; }
+  if (!file) { flowMsg('clientPoMsg', 'Choose the client\'s PO file first.', false); return; }
+  if (!received) {
+    flowMsg('clientPoMsg', 'Pick the date the PO was received before stamping.', false);
+    const e = document.getElementById('poReceivedDate'); if (e) e.focus();
+    return;
+  }
+  if (file.size > FLOW_DOC_MAX_MB * 1024 * 1024) {
+    flowMsg('clientPoMsg', `That file is ${(file.size / 1048576).toFixed(1)} MB — the limit is ${FLOW_DOC_MAX_MB} MB.`, false);
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Stamping...';
+  try {
+    const fd = new FormData();
+    fd.append('pdf', file);
+    fd.append('receivedDate', received);
+    fd.append('receivedBy', soSession.name || '');
+    fd.append('soNumber', soNo);
+    fd.append('poNumber', soNo);          // in this system the SO No IS the client's PO number
+    const res = await fetch('/flow/stamp-po-received', { method: 'POST', body: fd });
+    const out = await res.json().catch(() => ({ success: false, message: 'Server did not answer with JSON.' }));
+    if (!out.success) throw new Error(out.message || 'The PO could not be stamped.');
+
+    const original = await fileToDataURL(file);
+    await postFlow('addDocument', {
+      module: 'Sales Order', refNo: soNo, docType: 'Client PO',
+      fileName: file.name, fileBase64: String(original).split(',')[1] || '',
+      mimeType: file.type || 'application/pdf'
+    });
+    await postFlow('addDocument', {
+      module: 'Sales Order', refNo: soNo, docType: 'Client PO (stamped)',
+      fileName: file.name.replace(/\.pdf$/i, '') + '_RECEIVED.pdf',
+      fileBase64: out.pdf, mimeType: 'application/pdf'
+    });
+
+    const warn = (out.report && out.report.warnings) || [];
+    flowMsg('clientPoMsg',
+      'Stamped and attached — their original is filed unchanged alongside it.' +
+      (warn.length ? ' ' + warn.join(' ') : ''), !warn.length);
+    if (warn.length) {                     // a warning must not read as an error, but must be seen
+      const m = document.getElementById('clientPoMsg');
+      if (m) { m.style.display = 'block'; m.style.color = '#b45309'; }
+    }
+    input.value = '';
+  } catch (e) {
+    flowMsg('clientPoMsg', e.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Stamp & attach';
+  }
+}
+
 async function saveSO() {
   const items = collectItems();
   const customer = document.getElementById('customer').value.trim();
@@ -134,6 +210,7 @@ async function saveSO() {
     soNo: soNo || soNoTyped, quotationNo: document.getElementById('quotationNo').value, customer,
     date: document.getElementById('date').value, status: document.getElementById('status').value,
     supplierType: document.getElementById('soSupplierType').value,
+    clientPoDate: soVal('clientPoDate'), poReceivedDate: soVal('poReceivedDate'),   // A186
     createdBy: soSession.name, items: JSON.stringify(items)
   };
   if (!soNo) payload.clientRef = flowClientRef();          // idempotent create (safe retry)
@@ -158,6 +235,12 @@ function resetForm() {
   document.getElementById('status').value = 'Open';
   const st = document.getElementById('soSupplierType'); if (st) st.value = '';
   document.getElementById('date').value = flowToday();
+  // A186 — deliberately NOT defaulted to today. The received date has to be a date someone
+  // actually chose; pre-filling it invites accepting today's date without thinking, which is the
+  // exact habit this feature exists to break.
+  ['clientPoDate', 'poReceivedDate'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  const cf = document.getElementById('clientPoFile'); if (cf) cf.value = '';
+  const cm = document.getElementById('clientPoMsg'); if (cm) cm.style.display = 'none';
   document.getElementById('itemRows').innerHTML = '';
   const dn = document.getElementById('soDiscountNote');
   if (dn) { dn.style.display = 'none'; dn.innerHTML = ''; }   // A182
@@ -225,6 +308,17 @@ function soTypeBadge(t) {
   return '<span style="color:var(--text-muted,#64748b);">—</span>';
 }
 
+/* A186 — the received date, with the lag flagged when their PO sat somewhere before reaching us.
+   Three days is the threshold: shorter is ordinary post/email latency, longer is worth seeing. */
+function soReceivedCell(s) {
+  const got = flowDate(s.poReceivedDate);
+  if (!got) return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  const gap = soReceiptGap(s.clientPoDate, s.poReceivedDate);
+  if (gap === null || gap < 3) return flowEsc(got);
+  return `${flowEsc(got)} <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" ` +
+         `title="Their PO is dated ${flowEsc(flowDate(s.clientPoDate))} but only reached us ${gap} days later">+${gap}d</span>`;
+}
+
 function renderSOs() {
   const c = document.getElementById('listContainer');
   const q = (document.getElementById('soSearch').value || '').trim().toLowerCase();
@@ -243,8 +337,8 @@ function renderSOs() {
   if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
   if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
-  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
-    <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${flowEsc(s.customer)}</td>
+  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
+    <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
     <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
     <td style="white-space:nowrap;"><button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>Costs</button>
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>
@@ -265,6 +359,13 @@ function editSO(no) {
   document.getElementById('date').value = flowDate(s.date);
   document.getElementById('status').value = s.status || 'Open';
   document.getElementById('soSupplierType').value = s.supplierType || '';
+  // A186 — flowDate() returns '' for an empty cell, which is what a date input wants.
+  ['clientPoDate', 'poReceivedDate'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.value = flowDate(id === 'clientPoDate' ? s.clientPoDate : s.poReceivedDate) || '';
+  });
+  const cf = document.getElementById('clientPoFile'); if (cf) cf.value = '';
+  const cm = document.getElementById('clientPoMsg'); if (cm) cm.style.display = 'none';
   document.getElementById('formTitle').textContent = 'Edit ' + s.soNo;
   document.getElementById('itemRows').innerHTML = '';
   (s.items || []).forEach(addRow);

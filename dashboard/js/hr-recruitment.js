@@ -16,9 +16,14 @@ const STAGE_CLASS = {
   'Complete': 'stage-complete'
 };
 
+let hrSession = null;      // A186 — so the form can default Assigned HR to whoever is logged in
+
 document.addEventListener('DOMContentLoaded', async () => {
   const session = requireHROrAdmin();
   if (!session) return;
+  hrSession = session;
+  const hrField = document.getElementById('candHR');
+  if (hrField && !hrField.value) hrField.value = session.name || '';
   renderNavbar('hr-recruitment');
   await Promise.all([loadPipeline(), loadStats()]);
 });
@@ -37,6 +42,10 @@ function toggleForm() {
 function resetForm() {
   document.getElementById('recForm').reset();
   document.getElementById('editRowIndex').value = '';
+  // A186 — form.reset() empties Assigned HR, and a blank there is what used to hide the candidate
+  // from every daily report. Default it back to the person filling the form in.
+  const hrField = document.getElementById('candHR');
+  if (hrField && hrSession) hrField.value = hrSession.name || '';
   document.getElementById('formTitle').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Candidate';
   document.getElementById('submitBtn').textContent = 'Add Candidate';
   document.getElementById('formMsg').style.display = 'none';
@@ -76,7 +85,8 @@ async function submitCandidate(e) {
     stage: document.getElementById('candStage').value,
     dateApplied: document.getElementById('candDate').value,
     assignedHR: document.getElementById('candHR').value.trim(),
-    notes: document.getElementById('candNotes').value.trim()
+    notes: document.getElementById('candNotes').value.trim(),
+    actorName: (hrSession && hrSession.name) || ''      // A186 — credits the daily report
   };
 
   try {
@@ -126,7 +136,11 @@ async function advanceStage(rowIndex, currentStage) {
   if (idx < 0 || idx >= STAGES.length - 1) return;
   const nextStage = STAGES[idx + 1];
   try {
-    const result = await apiUpdateCandidate({ rowIndex: String(rowIndex), stage: nextStage });
+    // A186 — actorName is what puts this into the mover's daily report. Advancing a stage is the
+    // most common recruitment action and used to send nothing identifying anyone, so the work
+    // was invisible unless the candidate happened to be assigned to that exact person.
+    const result = await apiUpdateCandidate({ rowIndex: String(rowIndex), stage: nextStage,
+                                              actorName: (hrSession && hrSession.name) || '' });
     if (!result.success) throw new Error(result.message);
     clearApiCache();
     await Promise.all([loadPipeline(), loadStats()]);

@@ -800,3 +800,79 @@ def import_quotation_pdf():
     if data is None:
         return jsonify({"success": False, "message": (warnings or ["Could not parse PDF."])[0]}), 422
     return jsonify({"success": True, "source": "parsed", "warnings": warnings, **data})
+
+
+@flow_bp.errorhandler(413)
+def _upload_too_large(_e):
+    """A186 — an oversized upload must answer in JSON, not Flask's HTML error page.
+
+    The stamping UI reads `message` off the response; without this the rep sees a bare browser
+    error and has no idea the file was simply too big.
+    """
+    return jsonify({"success": False, "reason": "too-large",
+                    "message": "That file is larger than 16 MB. Attach the original unstamped, or "
+                               "ask the client for a smaller copy."}), 413
+
+
+@flow_bp.route("/flow/stamp-po-received", methods=["POST"])
+def stamp_po_received():
+    """A186 — stamp an uploaded client PO 'RECEIVED <date>' on page 1.
+
+    Read-only with respect to the flow: this returns the stamped copy and nothing else. The
+    caller stores the client's original separately and unmodified.
+
+    Answers JSON by default because the stamp carries warnings the rep must see BEFORE filing —
+    "this page was a scan so the stamp is on an added strip", "this file was already stamped" —
+    and a warning inside a PDF blob reaches nobody. `?inline=1` returns the plain PDF for preview.
+    """
+    from pdf_generators.po_stamp_pdf import build_stamped_po_bytes
+
+    f = request.files.get("pdf")
+    if not f:
+        return jsonify({"success": False, "reason": "empty",
+                        "message": "No PDF uploaded."}), 400
+    try:
+        pdf_bytes = f.read()
+    except Exception as e:
+        return jsonify({"success": False, "reason": "unreadable",
+                        "message": f"Could not read upload: {e}"}), 400
+    if not pdf_bytes:
+        return jsonify({"success": False, "reason": "empty", "message": "Empty file."}), 400
+
+    received_date = _s(request.form.get("receivedDate"))
+    if not received_date:
+        # Deliberately not defaulted. The whole point of the feature is that this date is the real
+        # one someone chose, so inventing it here would quietly defeat it.
+        return jsonify({"success": False, "reason": "bad-date",
+                        "message": "Pick the date the PO was received before stamping."}), 400
+
+    try:
+        stamped, report = build_stamped_po_bytes(
+            pdf_bytes, received_date,
+            received_by=_s(request.form.get("receivedBy")),
+            po_number=_s(request.form.get("poNumber")),
+            so_number=_s(request.form.get("soNumber")))
+    except Exception as e:                      # the builder swallows its own errors; belt and braces
+        logger.exception("PO stamp failed")
+        return jsonify({"success": False, "reason": "stamp-failed",
+                        "message": f"Stamping error: {e}"}), 500
+
+    if not stamped:
+        msg = {
+            "bad-date": "That received date could not be read. Pick it again.",
+            "unreadable": "That file could not be read as a PDF. Attach the original unstamped.",
+            "encrypted": "That PDF is password-protected. Ask the client for an unlocked copy, or "
+                         "attach it unstamped.",
+            "no-pages": "That PDF has no pages.",
+            "empty": "Empty file.",
+        }.get(report.get("reason"), "The PO could not be stamped. Attach the original unstamped.")
+        code = 400 if report.get("reason") in ("bad-date", "empty") else 422
+        return jsonify({"success": False, "reason": report.get("reason"),
+                        "message": msg, "report": report}), code
+
+    if _s(request.args.get("inline")) in ("1", "true", "yes"):
+        stem = sanitize_filename(_s(request.form.get("soNumber")) or "Client_PO")
+        return _pdf_response(stamped, f"{stem}_RECEIVED.pdf")
+
+    return jsonify({"success": True, "report": report,
+                    "pdf": base64.b64encode(stamped).decode("ascii")})

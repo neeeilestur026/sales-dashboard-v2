@@ -6739,7 +6739,11 @@ function _recruitmentSheet() {
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
   return _getOrCreateSheet(ss, 'Recruitment Pipeline', [
     'Candidate Name', 'Position', 'Stage', 'Date Applied',
-    'Assigned HR', 'Notes', 'Created At', 'Updated At'
+    'Assigned HR', 'Notes', 'Created At', 'Updated At',
+    // A186: who actually touched the row. Without it the daily report can only ask "who is this
+    // candidate assigned to?", which is a different question from "who did work today" — and the
+    // reason recruitment work never showed up in anyone's report.
+    'Updated By'
   ]);
 }
 
@@ -6994,7 +6998,8 @@ function handleAddCandidate(params) {
       (params.dateApplied || formatDate(new Date())),
       (params.assignedHR || '').trim(),
       (params.notes || '').trim(),
-      now, now
+      now, now,
+      _resolveActor(params)          // A186 Updated By — credits the adder in the daily report
     ]);
 
     return { success: true, message: 'Candidate added successfully.' };
@@ -7019,6 +7024,11 @@ function handleUpdateCandidate(params) {
     if (params.assignedHR !== undefined) sheet.getRange(rowIndex, 5).setValue(params.assignedHR);
     if (params.notes !== undefined) sheet.getRange(rowIndex, 6).setValue(params.notes);
     sheet.getRange(rowIndex, 8).setValue(now); // Updated At
+    // A186 — stamp the actor so the daily report can credit whoever did the work, not just
+    // whoever the candidate happens to be assigned to. Advancing a stage sends only
+    // {rowIndex, stage}, so this is the ONLY signal that a person was involved at all.
+    var _actor = _resolveActor(params);
+    if (_actor) sheet.getRange(rowIndex, 9).setValue(_actor); // Updated By
 
     // Auto-create employee when candidate reaches Onboarding or Complete stage
     if (params.stage === 'Onboarding' || params.stage === 'Complete') {
@@ -7241,6 +7251,12 @@ function handleGetEmployees(params) {
 
     for (var i = 1; i < data.length; i++) {
       var hireDate = parseSheetDate(data[i][3]);
+      // A186 — Birthdate needs the SAME normalisation Date Hired has always had. setValue() on a
+      // 'yyyy-MM-dd' string makes Sheets store a real Date, so a raw String() returns
+      // "Mon Jan 01 1990 00:00:00 GMT+0800" — which <input type="date"> silently DISCARDS, leaving
+      // the field blank. That read the user as "it didn't save", and was self-erasing: the blank
+      // field posted back '' and wiped the cell on the next edit of any other field.
+      var birthDate = parseSheetDate(data[i][9]);
       results.push({
         rowIndex: i + 1,
         employeeName: String(data[i][0] || '').trim(),
@@ -7252,7 +7268,7 @@ function handleGetEmployees(params) {
         notes: String(data[i][6] || '').trim(),
         createdAt: String(data[i][7] || ''),
         updatedAt: String(data[i][8] || ''),
-        birthdate: String(data[i][9] || '')
+        birthdate: birthDate ? formatDate(birthDate) : String(data[i][9] || '').trim()
       });
     }
 
@@ -7304,7 +7320,14 @@ function handleUpdateEmployee(params) {
     if (params.onboardingStatus !== undefined) sheet.getRange(rowIndex, 5).setValue(params.onboardingStatus);
     if (params.contactInfo !== undefined) sheet.getRange(rowIndex, 6).setValue(params.contactInfo);
     if (params.notes !== undefined) sheet.getRange(rowIndex, 7).setValue(params.notes);
-    if (params.birthdate !== undefined) sheet.getRange(rowIndex, 10).setValue(params.birthdate);
+    // A186 — a BLANK birthdate is ignored rather than written. Every other field here is visible in
+    // the form, so an empty one is a real intent to clear; the birthdate spent months rendering
+    // blank through no fault of the user, and any path that posts the form back would silently
+    // erase it. Clearing a birthdate deliberately is not a workflow anyone has; losing one by
+    // accident is what actually kept happening.
+    if (params.birthdate !== undefined && String(params.birthdate).trim() !== '') {
+      sheet.getRange(rowIndex, 10).setValue(String(params.birthdate).trim());
+    }
     sheet.getRange(rowIndex, 9).setValue(now); // Updated At
 
     return { success: true, message: 'Employee updated successfully.' };
@@ -8449,7 +8472,10 @@ function handleGetBirthdayAnniversary(params) {
     for (var i = 1; i < data.length; i++) {
       var name = String(data[i][0] || '');
       var dateHired = data[i][3];
-      var birthdate = data[i][8]; // Column I — Birthdate
+      // A186 — index 9, not 8. Column I (index 8) is 'Updated At'; Birthdate is column J (index 9).
+      // Reading 8 computed every "birthday" from the last-modified timestamp, so any employee
+      // edited today was announced as having a birthday today.
+      var birthdate = data[i][9]; // Column J — Birthdate
 
       // Check work anniversary
       if (dateHired) {
@@ -12613,7 +12639,12 @@ function handleGetHrDailyAutofill(params) {
         if (!rec[i][0]) continue;
         var hit = _rowDateMatches(rec[i][3], dateISO) || _rowDateMatches(rec[i][7], dateISO) || _rowDateMatches(rec[i][6], dateISO);
         if (!hit) continue;
-        if (userLC && String(rec[i][4]||'').trim().toLowerCase() !== userLC) continue;
+        // A186 — match on who DID the work as well as who the candidate is assigned to. Keying on
+        // 'Assigned HR' alone (a free-text box with no default and no validation) meant a blank or
+        // misspelt name hid the row from everyone forever, and 'Next' — the most common update —
+        // never sets it at all. This mirrors HR Tasks below, which has always had the fallback.
+        if (userLC && String(rec[i][4]||'').trim().toLowerCase() !== userLC &&
+            String(rec[i][8]||'').trim().toLowerCase() !== userLC) continue;
         out.recruitment.push({ name: String(rec[i][0]||''), position: String(rec[i][1]||''),
           stage: String(rec[i][2]||''), notes: String(rec[i][5]||'') });
       }
