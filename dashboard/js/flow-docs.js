@@ -6,7 +6,9 @@
    ═══════════════════════════════════════════════ */
 
 let _docsCtx = { module: '', refNo: '' };
-const FLOW_DOC_MAX_MB = 10;
+/* A190: FLOW_DOC_MAX_MB moved to flow-api.js. The client-visit photo picker needs the same limit,
+   and report.html loads flow-api.js but not this file — declaring it in both places would be a
+   const redeclaration and break every page that loads the pair. */
 
 function _docsModalEl() {
   let el = document.getElementById('flowDocsModal');

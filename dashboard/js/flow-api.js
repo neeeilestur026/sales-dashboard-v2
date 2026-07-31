@@ -121,7 +121,10 @@ const FLOW_SECURED_ACTIONS = [
   'setMgmtPricing', 'verifyReturnToSales',
   'deleteQuotation', 'deleteSalesOrder', 'deletePurchaseOrder', 'deletePaymentRequest',
   'deleteAPEntry', 'updateAPAging', 'recordCollection', 'correctCollection',
-  'voidCollection', 'voidInvoice'
+  'voidCollection', 'voidInvoice',
+  // A190 — mirrors _SECURED (FlowAPI.gs) and SECURED_ACTIONS (blueprints/flow.py). If this list
+  // omits an action the other two secure, the POST goes direct and the server rejects it.
+  'approveWeeklyItinerary', 'rejectWeeklyItinerary'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
@@ -663,4 +666,56 @@ function flowQuotationNetItems(q) {
     qty: flowNum(it.qty),
     price: pct ? flowNum(it.price) * factor : flowNum(it.price),
   }));
+}
+
+
+/** Upload ceiling for anything filed through addDocument. Lives here rather than in flow-docs.js
+ *  so pages that upload without the docs modal (the client-visit photo) can honour the same limit. */
+const FLOW_DOC_MAX_MB = 10;
+
+/* ── A190: shared week + image helpers ────────────────────────────────────────────────────────
+   Both were about to be written a third time — once for the Weekly Itinerary's week navigation and
+   once for the client-visit photo. The Mon–Sun helper already existed twice (report-week.js and
+   team-performance.js) with byte-identical logic, which is exactly the drift team-performance.js's
+   own header warns about. One definition, several callers. */
+
+/** The Mon→Sun dates of the week containing `baseDate`, shifted by `offset` weeks.
+ *  Returns [] for an unparseable date rather than today's week — a silent fallback to "this week"
+ *  would quietly show the wrong seven days. */
+function flowWeekDates(baseDate, offset) {
+  const d = new Date(String(baseDate || '') + 'T00:00:00');
+  if (isNaN(d)) return [];
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7) + (offset || 0) * 7);   // Mon=0 … Sun=6
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const x = new Date(mon);
+    x.setDate(mon.getDate() + i);
+    out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+/** A picked image file → a downscaled JPEG data URL. Longest edge capped at `maxPx`; never upscales.
+ *  Always re-encodes to JPEG regardless of the input type, which is what keeps a 6 MB phone PNG from
+ *  becoming a 6 MB base64 payload on every read-back. */
+function flowDownscaleImage(file, maxPx, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxPx || h > maxPx) { const s = Math.min(maxPx / w, maxPx / h); w = Math.round(w * s); h = Math.round(h * s); }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }

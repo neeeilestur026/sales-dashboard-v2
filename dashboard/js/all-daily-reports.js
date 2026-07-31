@@ -11,6 +11,9 @@ let adrNotes = {};          // user -> note text
 let adrEmails = {};         // display name -> { emails, needsSetup } (per-day GoDaddy sent mail, all roles except director)
 let adrSubs = {};           // user -> that day's submitted daily report (what they stand behind)
 let adrVisits = {};         // A189 — user -> that day's client visits
+let adrVisitPhotos = {};    // A190 — visitNo -> data: URI, filled lazily when a card is opened
+let adrPhotoLoaded = {};    // A190 — user -> true once their photos have been fetched
+let adrPlans = {};          // A190 — user -> their APPROVED itinerary for the week containing the date
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 
 function _e(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -78,6 +81,21 @@ async function load(fresh) {
       });
     }
   } catch (e) { adrVisits = {}; }
+
+  /* A190 — the approved plans for the week containing this date, so each rep's card can say which
+     planned visits happened and which did not. One call for everyone. */
+  adrPlans = {}; adrVisitPhotos = {}; adrPhotoLoaded = {};
+  try {
+    const week = (typeof flowWeekDates === 'function') ? flowWeekDates(date, 0) : [];
+    if (week.length) {
+      const pr = await fetchFlow('getWeeklyItineraries', { weekStart: week[0] }, opts);
+      if (seq === adrLoadSeq) {
+        ((pr && pr.data) || []).filter(x => x.status === 'Approved')
+          .forEach(x => { adrPlans[String(x.user || '').trim()] = x; });
+      }
+    }
+  } catch (e) { adrPlans = {}; }
+
   adrEmailsLoading = true;
   render();
 
@@ -217,6 +235,12 @@ function render() {
       </div>
     </details>`;
   }).join('');
+
+  // A190 — photos load on expand, never on paint.
+  cont.querySelectorAll('details.urep').forEach(d => {
+    d.addEventListener('toggle', () => { if (d.open) adrLoadPhotos(d.getAttribute('data-user')); });
+    if (d.open) adrLoadPhotos(d.getAttribute('data-user'));   // the first card renders open
+  });
 }
 
 /** Compact per-user productivity comparison (distinct tasks today), sorted high→low. */
@@ -273,15 +297,78 @@ function adrVisitHtml(name) {
   const visits = adrVisits[String(name).trim()] || [];
   if (!visits.length) return '';
   const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">🤝 Client Visits — ${_e(_date())} <span style="font-weight:600;color:var(--text-secondary,#475569);">(${visits.length})</span></div>`;
-  return head + `<div style="overflow-x:auto;"><table class="flow-table">
-    <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Topic</th></tr></thead>
+  return head + adrPlanVsActual(name) + `<div style="overflow-x:auto;"><table class="flow-table">
+    <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Agenda</th><th>Summary of agenda</th><th>Plan</th><th>Photo</th></tr></thead>
     <tbody>${visits.map(v => `<tr>
       <td>${_e(v.time || _time(v.createdAt))}</td>
       <td>${_e(v.personVisited || '—')}</td>
       <td>${_e(v.company || '—')}</td>
       <td>${_e(v.cityAddress || '—')}</td>
-      <td style="color:var(--text-secondary,#475569);">${_e(v.topic || '')}</td>
+      <td>${_e(v.agenda || '')}</td>
+      <td style="color:var(--text-secondary,#475569);">${_e(v.summaryOfAgenda || '')}</td>
+      <td>${v.itineraryItem ? '<span class="flow-badge" style="background:rgba(16,185,129,0.14);color:#047857;">planned</span>'
+                            : '<span style="color:var(--text-muted,#64748b);font-size:0.72rem;">unplanned</span>'}</td>
+      <td data-photo="${_e(v.visitNo)}">${adrPhotoCell(v)}</td>
     </tr>`).join('')}</tbody></table></div>`;
+}
+
+/* A190 — planned vs actual for this rep's week, shown above their visit table. Without this the
+   approval of a weekly plan is ceremony: nobody could see whether the sanctioned week happened. */
+function adrPlanVsActual(name) {
+  const plan = adrPlans[String(name).trim()];
+  if (!plan) return '';
+  const visits = adrVisits[String(name).trim()] || [];
+  // Count against the WHOLE week's plan, but only the visits shown for this date can be matched
+  // here, so the label says "so far" rather than implying the week is finished.
+  const done = new Set(visits.filter(v => v.itineraryItem).map(v => String(v.itineraryItem)));
+  const planned = (plan.items || []).length;
+  const unplanned = visits.filter(v => !v.itineraryItem).length;
+  return `<div style="font-size:0.75rem;color:var(--text-secondary,#475569);margin:0 0 0.4rem;">
+    Against <strong>${_e(plan.itineraryNo)}</strong> (${_e(plan.weekStart)} – ${_e(plan.weekEnd)}):
+    ${planned} planned this week ·
+    <span style="color:#047857;font-weight:700;">${done.size} matched so far</span> ·
+    <span style="color:#b45309;font-weight:700;">${unplanned} unplanned</span></div>`;
+}
+
+/* A190 — the photo cell. Starts as a button; the image is fetched only when the rep's card is
+   expanded, because each photo is a Drive round trip and a team of eight would otherwise cost
+   dozens of them on page load. The rendered src is a data: URI — a Drive /view or /preview URL
+   serves HTML and renders as a broken image, which is the dead end already sitting in
+   management-home.js and accounting-home.js. */
+function adrPhotoCell(v) {
+  if (!v.photoDocId) return '<span style="color:#b45309;font-size:0.72rem;" title="No photo on this visit">—</span>';
+  const src = adrVisitPhotos[String(v.visitNo)];
+  if (!src) return '<span style="color:var(--text-muted,#64748b);font-size:0.72rem;">📷 loading…</span>';
+  return `<img src="${src}" alt="Visit photo" loading="lazy" style="height:42px;border-radius:6px;border:1px solid var(--border,#e2e8f0);cursor:zoom-in;" onclick="adrZoomPhoto('${_e(v.visitNo)}')">`;
+}
+
+async function adrLoadPhotos(name) {
+  const key = String(name).trim();
+  if (adrPhotoLoaded[key]) return;
+  const visits = (adrVisits[key] || []).filter(v => v.photoDocId);
+  if (!visits.length) { adrPhotoLoaded[key] = true; return; }
+  adrPhotoLoaded[key] = true;
+  try {
+    const r = await fetchFlow('getVisitPhotos', { date: _date(), user: key });
+    ((r && r.data) || []).forEach(p => {
+      adrVisitPhotos[String(p.visitNo)] = 'data:' + (p.mimeType || 'image/jpeg') + ';base64,' + p.base64;
+    });
+    // Patch only the photo cells, so an open card does not flicker or lose its scroll position.
+    document.querySelectorAll('[data-photo]').forEach(td => {
+      const v = (adrVisits[key] || []).find(x => String(x.visitNo) === td.getAttribute('data-photo'));
+      if (v) td.innerHTML = adrPhotoCell(v);
+    });
+  } catch (e) { adrPhotoLoaded[key] = false; }
+}
+
+function adrZoomPhoto(visitNo) {
+  const src = adrVisitPhotos[String(visitNo)];
+  if (!src) return;
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:4000;display:flex;align-items:center;justify-content:center;padding:2rem;cursor:zoom-out;';
+  el.innerHTML = `<img src="${src}" alt="Visit photo" style="max-width:100%;max-height:100%;border-radius:8px;">`;
+  el.addEventListener('click', () => el.remove());
+  document.body.appendChild(el);
 }
 
 function adrEmailHtml(name) {

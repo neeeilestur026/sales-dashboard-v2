@@ -352,9 +352,10 @@ function flowPersonDayHtml(m) {
   // A189 — client visits print beside the call log; omitted entirely on days with none, so no
   // report gains an empty section.
   const visits = (m.visits && m.visits.length) ? `<div class="sec">Client Visits</div>
-    <table><thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Topic</th></tr></thead>
+    <table><thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Agenda</th><th>Summary of agenda</th><th>Plan</th></tr></thead>
     <tbody>${m.visits.map(v => `<tr><td>${_fpdEsc(v.time)}</td><td>${_fpdEsc(v.personVisited)}</td><td>${_fpdEsc(v.company)}</td>
-      <td>${_fpdEsc(v.cityAddress)}</td><td>${_fpdEsc(v.topic)}</td></tr>`).join('')}</tbody></table>` : '';
+      <td>${_fpdEsc(v.cityAddress)}</td><td>${_fpdEsc(v.agenda)}</td><td>${_fpdEsc(v.summaryOfAgenda)}</td>
+      <td>${v.planned ? 'planned' : 'unplanned'}</td></tr>`).join('')}</tbody></table>` : '';
 
   const emails = (m.emails && m.emails.length) ? `<div class="sec">Sent Emails</div>
     <table><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>

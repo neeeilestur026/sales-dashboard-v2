@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weekly Itinerary</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <style>
+    /* A190 — the plan is read day by day, so each day is its own block rather than one long table.
+       A rep filling Tuesday should never have to count rows to find where Tuesday ends. */
+    .wiWeekBar { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .wiWeekBar .rng { font-weight:700; font-size:0.95rem; }
+    .wiStatus { display:inline-block; font-size:0.68rem; font-weight:800; text-transform:uppercase;
+                letter-spacing:0.05em; padding:0.15rem 0.55rem; border-radius:999px; border:1px solid; }
+    .wiStatus.draft   { color:#475569; border-color:#cbd5e1; background:#f8fafc; }
+    .wiStatus.pending { color:#b45309; border-color:#fcd34d; background:#fffbeb; }
+    .wiStatus.approved{ color:#15803d; border-color:#86efac; background:#f0fdf4; }
+    .wiStatus.rejected{ color:#b91c1c; border-color:#fca5a5; background:#fef2f2; }
+
+    .wiDay { border:1px solid var(--border); border-radius:12px; margin-bottom:0.9rem; overflow:hidden; }
+    .wiDayHead { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.85rem;
+                 background:var(--bg-inset); border-bottom:1px solid var(--border); }
+    .wiDayHead .d { font-weight:800; font-size:0.86rem; }
+    .wiDayHead .dt { font-size:0.76rem; color:var(--text-muted); }
+    .wiDayHead .n { margin-left:auto; font-size:0.72rem; color:var(--text-muted); }
+    .wiTable { width:100%; border-collapse:collapse; font-size:0.82rem; min-width:900px; }
+    .wiTable th { text-align:left; padding:0.4rem 0.55rem; font-size:0.64rem; text-transform:uppercase;
+                  letter-spacing:0.04em; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border); }
+    .wiTable td { padding:0.3rem 0.4rem; border-bottom:1px solid var(--border); vertical-align:top; }
+    .wiTable input, .wiTable textarea { width:100%; box-sizing:border-box; padding:0.32rem 0.45rem;
+      border:1px solid var(--border); border-radius:6px; font-size:0.8rem; font-family:inherit; }
+    .wiTable textarea { resize:vertical; min-height:32px; }
+    .wiDel { border:1px solid var(--border); border-radius:6px; padding:0.1rem 0.4rem;
+             font-size:0.72rem; cursor:pointer; background:transparent; }
+    .wiLocked .wiTable input, .wiLocked .wiTable textarea { background:var(--bg-inset); pointer-events:none; }
+    .wiLocked .wiDel, .wiLocked .wiAddRow { display:none; }
+    .wiNote { font-size:0.78rem; color:var(--text-muted); margin:0.3rem 0 0; }
+    .wiBanner { padding:0.6rem 0.85rem; border-radius:8px; font-size:0.82rem; margin-bottom:0.9rem; }
+    .wiBanner.warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .wiBanner.bad  { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .wiBanner.good { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Weekly Itinerary</h1>
+      <p>Plan the week's client visits, then send it for approval — the director signs off first,
+         then management. Once approved you can log each visit against its planned stop.</p>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:1.25rem;">
+      <div class="wiWeekBar">
+        <button class="btn btn-sm btn-secondary" id="wiPrev">◀</button>
+        <span class="rng" id="wiRange">—</span>
+        <button class="btn btn-sm btn-secondary" id="wiNext">▶</button>
+        <button class="btn btn-sm btn-secondary" id="wiThis">This week</button>
+        <span id="wiStatusChip"></span>
+        <span style="margin-left:auto;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-secondary" id="wiSaveBtn">Save draft</button>
+          <button class="btn btn-sm btn-primary" id="wiSubmitBtn">Submit for approval</button>
+          <button class="btn btn-sm btn-secondary" id="wiReviseBtn" style="display:none;">Reopen for editing</button>
+        </span>
+      </div>
+
+      <div id="wiBanner"></div>
+
+      <div class="flow-form" style="margin-bottom:1rem;">
+        <div style="grid-column:1 / -1;"><label>Objectives for the week</label>
+          <input type="text" id="wiObjectives" placeholder="e.g. Close the Petra follow-up, open two accounts in Davao"></div>
+        <div style="grid-column:1 / -1;"><label>Notes</label>
+          <input type="text" id="wiNotes" placeholder="Anything the approver should know"></div>
+      </div>
+
+      <div id="wiDays"></div>
+      <div id="wiMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <div class="chart-card">
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">Previous weeks</h3>
+      <div id="wiHistory" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner"></div></div></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/weekly-itinerary.js"></script>
+</body>
+</html>

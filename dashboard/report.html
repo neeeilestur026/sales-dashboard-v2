@@ -101,11 +101,26 @@
               <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Person visited</label><input type="text" id="visitPerson" placeholder="Name" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
               <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Company</label><input type="text" id="visitCompany" placeholder="Company" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
               <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">City / address</label><input type="text" id="visitCity" placeholder="e.g. Davao City" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div style="flex:1;min-width:170px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Topic discussed</label><input type="text" id="visitTopic" placeholder="What was discussed" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <button class="btn btn-sm btn-primary" id="logVisitBtn">+ Log Visit</button>
+              <!-- A190: agenda = what the visit was FOR; summary = what came OUT of it. One 'topic'
+                   field was collapsing two different questions. -->
+              <div style="flex:1;min-width:170px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Agenda</label><input type="text" id="visitAgenda" placeholder="What the visit was for" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div style="flex:1;min-width:200px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Summary of agenda</label><input type="text" id="visitSummary" placeholder="What came out of it" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div style="min-width:190px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Against the plan</label>
+                <select id="visitPlanItem" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;">
+                  <option value="">Unplanned visit</option>
+                </select></div>
+            </div>
+            <!-- A190: the photo is required. Kept on its own row with the preview so it reads as a
+                 step rather than one more optional box in the strip above. -->
+            <div class="no-print" style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;margin-bottom:0.7rem;padding:0.55rem 0.7rem;border:1px dashed var(--border);border-radius:8px;">
+              <span style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Photo <span style="color:#b91c1c;">*required</span></span>
+              <input type="file" id="visitPhoto" accept="image/png,image/jpeg" style="font-size:0.78rem;">
+              <img id="visitPhotoPreview" alt="" style="display:none;height:44px;border-radius:6px;border:1px solid var(--border);">
+              <span id="visitPhotoMsg" style="font-size:0.72rem;color:var(--text-muted);"></span>
+              <button class="btn btn-sm btn-primary" id="logVisitBtn" style="margin-left:auto;">+ Log Visit</button>
             </div>
             <div style="overflow-x:auto;"><table class="flow-table">
-              <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Topic</th><th class="no-print"></th></tr></thead>
+              <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Agenda</th><th>Summary of agenda</th><th>Plan</th><th>Photo</th><th class="no-print"></th></tr></thead>
               <tbody id="visitBody"></tbody>
             </table></div>
           </div>

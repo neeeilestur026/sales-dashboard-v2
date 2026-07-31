@@ -20,19 +20,9 @@ let _rwData = null;      // last rendered aggregate — lets the PDF build witho
 function _rwEsc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
 
 /** The 7 yyyy-MM-dd dates of the Mon–Sun week containing dateStr, shifted by offset weeks. */
-function _rwWeekDates(dateStr, offset) {
-  const d = new Date((dateStr || '') + 'T00:00:00');
-  if (isNaN(d)) return [];
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7) + (offset || 0) * 7);   // Mon=0 … Sun=6
-  const out = [];
-  for (let i = 0; i < 7; i++) {
-    const x = new Date(monday);
-    x.setDate(monday.getDate() + i);
-    out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`);
-  }
-  return out;
-}
+/* A190: was a byte-identical copy of team-performance.js's _tpWeekDates. Both now defer to
+   flowWeekDates in flow-api.js; this wrapper stays so the call sites read unchanged. */
+function _rwWeekDates(dateStr, offset) { return flowWeekDates(dateStr, offset); }
 
 /** ◀ ▶ / reset navigation — re-renders the mounted week section for another week. */
 function rwNavWeek(delta) {

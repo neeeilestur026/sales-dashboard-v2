@@ -131,6 +131,18 @@
     </div>
     <script>document.addEventListener('DOMContentLoaded', function () { if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300); });</script>
 
+    <!-- A190 — the director's approvals queue. This page had none: it is a payroll dashboard, and a
+         director's only acting surface was the payment-requests page reached from the navbar. The
+         weekly itinerary is approved DIRECTOR FIRST, so without this there would be nowhere to do
+         the first step of its chain. -->
+    <div class="chart-card" style="margin:0 0 1.1rem;padding:1rem 1.2rem;background:#fff;border:1px solid var(--border,#e2e8f0);border-radius:14px;">
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;">
+        <h3 style="font-size:0.95rem;font-weight:700;margin:0;">✍ Awaiting your approval</h3>
+        <button class="btn btn-sm btn-secondary" id="dirApprRefresh" style="margin-left:auto;">Refresh</button>
+      </div>
+      <div id="dirApprovals"><div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div></div>
+    </div>
+
     <!-- SPOTLIGHT + KPI -->
     <div class="pay-top">
       <div class="pay-spot">
@@ -285,6 +297,7 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/director-home.js"></script>
+  <script src="js/director-approvals.js"></script>   <!-- A190 -->
   <script>
     // Date pill in the header band
     (function(){

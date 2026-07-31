@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
   document.getElementById('logCallBtn').addEventListener('click', logCall);
   document.getElementById('logVisitBtn').addEventListener('click', logVisit);   // A189
+  document.getElementById('visitPhoto').addEventListener('change', visitPhotoChosen);   // A190
 
   load();
   // Auto-refresh the read-only parts (activity + sent emails + calls) every 60s while viewing TODAY
@@ -86,7 +87,8 @@ async function load() {
   loadEmails();
   loadNotes();
   loadCalls();
-  loadVisits();   // A189
+  loadVisits();          // A189
+  loadVisitPlanOptions();   // A190 — offer this week's approved plan items
   if (typeof initReportWeek === 'function') initReportWeek({ user: drSession.name, date, mountId: 'weekSect', withCalls: true, modules: ['Quotation', 'Pricing Request', 'Inventory'] });
   // Submission card — initialized from load() only (never the poller), so typing is never interrupted.
   if (typeof initReportSubmit === 'function') {
@@ -125,7 +127,9 @@ function _drDayPdf() {
     calls: drCalls.map(c => ({ time: _time(c.createdAt), contact: c.contact, company: c.company, outcome: c.outcome, notes: c.notes })),
     // A189 — falls back to the logged-at time when the rep left the visit time blank.
     visits: drVisits.map(v => ({ time: v.time || _time(v.createdAt), personVisited: v.personVisited,
-                                 company: v.company, cityAddress: v.cityAddress, topic: v.topic })),
+                                 company: v.company, cityAddress: v.cityAddress,
+                                 agenda: v.agenda, summaryOfAgenda: v.summaryOfAgenda,
+                                 planned: !!v.itineraryItem })),   // A190
     notes: (document.getElementById('notesField') || {}).value || '',
     submission: (typeof _rsRecord !== 'undefined') ? _rsRecord : null,
   };
@@ -267,17 +271,53 @@ async function loadVisits() {
       <td>${_esc(v.personVisited || '—')}</td>
       <td>${_esc(v.company || '—')}</td>
       <td>${_esc(v.cityAddress || '—')}</td>
-      <td style="color:var(--text-secondary);">${_esc(v.topic || '')}</td>
+      <td>${_esc(v.agenda || '')}</td>
+      <td style="color:var(--text-secondary);">${_esc(v.summaryOfAgenda || '')}</td>
+      <td>${v.itineraryItem ? `<span class="act-chip" title="Fulfils a planned stop">planned</span>` : `<span style="color:var(--text-muted);font-size:0.72rem;">unplanned</span>`}</td>
+      <td>${v.photoDocId ? '📷' : '<span style="color:#b45309;" title="No photo on this visit">—</span>'}</td>
       <td class="no-print"><button class="btn btn-xs" data-del="${v.rowIndex}" data-no="${_esc(v.visitNo)}" style="border:1px solid var(--border);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
-    </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No client visits logged for this day.</td></tr>';
+    </tr>`).join('') : '<tr><td colspan="9" class="dr-empty">No client visits logged for this day.</td></tr>';
   document.querySelectorAll('#visitBody [data-del]').forEach(b =>
     b.addEventListener('click', () => delVisit(b.getAttribute('data-del'), b.getAttribute('data-no'))));
+}
+
+/* A190 — the picked photo, downscaled once on selection rather than at submit time, so the rep
+   sees immediately that it took and the Log button stays instant. */
+let drVisitPhoto = null;   // data URL of the downscaled shot, or null
+
+async function visitPhotoChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  const msg = document.getElementById('visitPhotoMsg');
+  const prev = document.getElementById('visitPhotoPreview');
+  drVisitPhoto = null; prev.style.display = 'none'; msg.textContent = '';
+  if (!file) return;
+  if (file.size > FLOW_DOC_MAX_MB * 1024 * 1024) {
+    msg.textContent = `That image is ${(file.size / 1048576).toFixed(1)} MB — the limit is ${FLOW_DOC_MAX_MB} MB.`;
+    msg.style.color = '#b91c1c'; e.target.value = ''; return;
+  }
+  msg.textContent = 'Preparing…'; msg.style.color = '';
+  try {
+    drVisitPhoto = await flowDownscaleImage(file, 900, 0.85);
+    prev.src = drVisitPhoto; prev.style.display = '';
+    msg.textContent = 'Ready'; msg.style.color = 'var(--text-muted)';
+  } catch (err) {
+    msg.textContent = 'That file could not be read as an image.'; msg.style.color = '#b91c1c';
+    e.target.value = '';
+  }
 }
 
 async function logVisit() {
   const personVisited = document.getElementById('visitPerson').value.trim();
   const company = document.getElementById('visitCompany').value.trim();
   if (!personVisited && !company) { alert('Enter the person visited or the company.'); return; }
+  /* The photo is required. The server enforces it too — this check only saves a round trip and
+     lets the message point at the field. It names the way out so a rep who genuinely cannot take
+     one asks someone rather than logging nothing at all. */
+  if (!drVisitPhoto) {
+    alert('A photo is required to log a client visit.\n\nIf you could not take one — site policy, no phone — ask your manager to record the visit for you.');
+    document.getElementById('visitPhoto').focus();
+    return;
+  }
   const btn = document.getElementById('logVisitBtn');
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
@@ -285,14 +325,47 @@ async function logVisit() {
       date: _date(), personVisited, company,
       time: document.getElementById('visitTime').value,
       cityAddress: document.getElementById('visitCity').value.trim(),
-      topic: document.getElementById('visitTopic').value.trim(),
+      agenda: document.getElementById('visitAgenda').value.trim(),
+      summaryOfAgenda: document.getElementById('visitSummary').value.trim(),
+      itineraryItem: document.getElementById('visitPlanItem').value,
+      photoBase64: String(drVisitPhoto).split(',')[1] || '',
+      photoMimeType: 'image/jpeg',
     });
     if (!r || !r.success) throw new Error((r && r.message) || 'Failed to log visit.');
-    ['visitTime', 'visitPerson', 'visitCompany', 'visitCity', 'visitTopic']
+    // The visit saved even if the photo did not — say so rather than showing a plain success.
+    if (r.photoFailed) alert(r.message);
+    ['visitTime', 'visitPerson', 'visitCompany', 'visitCity', 'visitAgenda', 'visitSummary']
       .forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('visitPlanItem').value = '';
+    document.getElementById('visitPhoto').value = '';
+    document.getElementById('visitPhotoPreview').style.display = 'none';
+    document.getElementById('visitPhotoMsg').textContent = '';
+    drVisitPhoto = null;
     await loadVisits();
   } catch (e) { alert(e.message); }
   finally { btn.disabled = false; btn.textContent = '+ Log Visit'; }
+}
+
+/* A190 — fill the "against the plan" picker from this rep's APPROVED itinerary for the week that
+   contains the selected day. Only approved plans are offered: tying a visit to a plan nobody has
+   sanctioned would make the plan-vs-actual numbers meaningless. */
+async function loadVisitPlanOptions() {
+  const sel = document.getElementById('visitPlanItem');
+  if (!sel) return;
+  const week = (typeof flowWeekDates === 'function') ? flowWeekDates(_date(), 0) : [];
+  if (!week.length) return;
+  try {
+    const r = await fetchFlow('getWeeklyItineraries', { user: drSession.name, weekStart: week[0] });
+    const itin = ((r && r.data) || []).filter(x => x.status === 'Approved')[0];
+    const opts = ['<option value="">Unplanned visit</option>'];
+    if (itin) {
+      (itin.items || []).filter(it => !it.date || it.date === _date()).forEach(it => {
+        const label = [it.plannedTime, it.company || it.personToMeet, it.cityArea].filter(Boolean).join(' · ');
+        opts.push(`<option value="${_esc(itin.itineraryNo)}#${it.seq}">${_esc(label || ('Item ' + it.seq))}</option>`);
+      });
+    }
+    sel.innerHTML = opts.join('');
+  } catch (e) { /* no approved plan — the picker stays at "Unplanned visit" */ }
 }
 
 async function delVisit(rowIndex, visitNo) {

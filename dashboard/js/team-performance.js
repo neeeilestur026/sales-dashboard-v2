@@ -62,18 +62,9 @@ function _tpBaseDate() {
   return v || (typeof flowToday === 'function' ? flowToday() : '');
 }
 
-function _tpWeekDates(baseDate, offset) {
-  const d = new Date(String(baseDate || '') + 'T00:00:00');
-  if (isNaN(d)) return [];
-  const mon = new Date(d);
-  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7) + (offset || 0) * 7);
-  const out = [];
-  for (let i = 0; i < 7; i++) {
-    const x = new Date(mon); x.setDate(mon.getDate() + i);
-    out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`);
-  }
-  return out;
-}
+/* A190: see the header note about duplication — this was the second copy. flowWeekDates in
+   flow-api.js is now the only definition; this wrapper keeps the call sites unchanged. */
+function _tpWeekDates(baseDate, offset) { return flowWeekDates(baseDate, offset); }
 
 function _tpWeekAfterIsFuture(days) {
   const last = new Date(days[6] + 'T00:00:00');
@@ -133,6 +124,14 @@ async function tpLoad() {
     Promise.all(days.map(d => d > today ? Promise.resolve([])
       : fetchFlow('getClientVisits', { date: d }).then(r => (r && r.data) || []).catch(() => []))),
   ]);
+  /* A190 — the approved itineraries for THIS week, so each person's row can be read as plan vs
+     actual rather than a bare visit count. One call, not seven. */
+  let plans = {};
+  try {
+    const pr = await fetchFlow('getWeeklyItineraries', { weekStart: days[0] });
+    ((pr && pr.data) || []).filter(x => x.status === 'Approved')
+      .forEach(x => { plans[_tpKey(x.user)] = x; });
+  } catch (e) { plans = {}; }
   if (seq !== _tpSeq) return;
 
   // Submitted daily reports for the week (compliance + the narrative each person wrote).
@@ -173,7 +172,8 @@ async function tpLoad() {
   const users = {};
   const U = name => users[name] = users[name] || { moves: 0, calls: 0, visits: 0, emails: 0, docs: 0, pdfs: 0,
     amount: 0, perDay: new Array(7).fill(0), perDayCalls: new Array(7).fill(0),
-    perDayVisits: new Array(7).fill(0), mods: {} };   // A189
+    perDayVisits: new Array(7).fill(0), mods: {},                       // A189
+    planned: 0, planKeys: {}, unplanned: 0 };                           // A190
   days.forEach((d, i) => {
     // A148: dedup within (user, day) — collapse each user's raw actions on day i into DISTINCT tasks,
     // so a record touched several times counts once (true productivity, not raw action volume).
@@ -193,8 +193,15 @@ async function tpLoad() {
     calls[i].forEach(c => { const u = U(_tpKey(c.user) || '(unknown)'); u.calls++; u.perDayCalls[i]++; });
     // A189 — a rep who spent the day on the road logs no activity rows; U() creates them here so a
     // visits-only day still counts as work rather than showing the rep as idle.
-    visits[i].forEach(v => { const u = U(_tpKey(v.user) || '(unknown)'); u.visits++; u.perDayVisits[i]++; });
+    visits[i].forEach(v => {
+      const u = U(_tpKey(v.user) || '(unknown)'); u.visits++; u.perDayVisits[i]++;
+      if (v.itineraryItem) u.planKeys[String(v.itineraryItem)] = 1; else u.unplanned++;
+    });
   });
+  // A190 — a rep with an approved plan belongs in the report even with no logged activity at all:
+  // an approved week that produced nothing is exactly what management needs to see.
+  Object.keys(plans).forEach(n => { if (n) U(n); });
+  Object.keys(plans).forEach(n => { if (users[n]) users[n].planned = (plans[n].items || []).length; });
   // People who submitted a report but logged no system activity still belong in the report.
   Object.keys(_tpReports).forEach(n => { if (n) U(n); });
   _tpData = { users, days, today };
@@ -348,7 +355,7 @@ function tpRenderCompact() {
     return `<div class="mfTw-card" style="border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.9rem;background:#fff;">
       <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
         <strong style="font-size:0.95rem;">${_tpe(name)}</strong>${roleChip}${compChip}
-        <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.visits || 0} visit(s) · ${u.emails} email(s)</span>
+        <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.visits || 0} visit(s) · ${u.emails} email(s)${_tpPlanLine(u)}</span>
         ${pdfBtn}
       </div>
       <div style="display:grid;grid-template-columns:minmax(280px,1.1fr) 1fr;gap:1rem;align-items:center;margin-top:0.7rem;">
@@ -663,4 +670,15 @@ function tpTeamPdf() {
     filename: `Team_Weekly_Report_${days[0]}_${days[6]}.pdf`,
   }).catch(err => alert('PDF failed: ' + err.message))
     .then(() => { if (btn) { btn.disabled = false; btn.textContent = label; } });
+}
+
+
+/* A190 — plan vs actual, in words. Silent for anyone with no approved plan for the week, so roles
+   that never file an itinerary do not grow a permanently empty metric. */
+function _tpPlanLine(u) {
+  if (!u || !u.planned) return '';
+  const matched = Object.keys(u.planKeys || {}).length;
+  const missed = Math.max(0, u.planned - matched);
+  return ` · <span style="color:${missed ? '#b45309' : '#047857'};font-weight:700;">plan ${matched}/${u.planned}` +
+         (u.unplanned ? ` (+${u.unplanned} unplanned)` : '') + '</span>';
 }

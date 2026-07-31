@@ -542,6 +542,8 @@ SECURED_ACTIONS = [
     "deleteQuotation", "deleteSalesOrder", "deletePurchaseOrder", "deletePaymentRequest",
     "deleteAPEntry", "updateAPAging", "recordCollection", "correctCollection",
     "voidCollection", "voidInvoice",
+    # A190 — must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
+    "approveWeeklyItinerary", "rejectWeeklyItinerary",
 ]
 
 

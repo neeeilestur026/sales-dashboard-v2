@@ -109,11 +109,12 @@ async function mfLoadApprovals() {
   const c = document.getElementById('mgmtApprovals');
   c.innerHTML = '<div class="mf-empty">Loading approvals…</div>';
   try {
-    const [q, po, pr, prq] = await Promise.all([
+    const [q, po, pr, prq, itn] = await Promise.all([
       fetchFlow('getQuotations').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
       fetchFlow('getPricingRequests').catch(() => ({ data: [] })),   // A183: pricing behind each quotation
+      fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),  // A190: reps' weekly plans
     ]);
     // A183: prNo → pricing record + quotationNo → quotation, so the review modal can join them.
     mfPrByNo = {}; ((prq && prq.data) || []).forEach(p => { if (p && p.prNo) mfPrByNo[String(p.prNo)] = p; });
@@ -127,7 +128,11 @@ async function mfLoadApprovals() {
     const prs = ((pr && pr.data) || []).filter(x =>
       x.status === 'Pending Management' ||
       (x.status === 'Pending Final' && !x.mgmtApprovedBy));
-    if (!quotes.length && !pos.length && !prs.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
+    /* A190 — weekly itineraries. Management is the SECOND approver: the director signs off first,
+       so anything still at Pending Director is not management's to act on yet and is deliberately
+       not listed here. */
+    const itins = ((itn && itn.data) || []).filter(x => x.status === 'Pending Management');
+    if (!quotes.length && !pos.length && !prs.length && !itins.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
     const qTot = x => _mfn(x.total) || (x.items || []).reduce((s, it) => s + _mfn(it.qty) * _mfn(it.price), 0);
     const qRows = quotes.map(x => `<tr>
       <td><span class="flow-badge b-pending">Quotation</span></td>
@@ -150,9 +155,18 @@ async function mfLoadApprovals() {
       <td class="num" style="white-space:nowrap;">
         <button class="link-btn" onclick="mfApprove('approvePaymentRequest','${_mfe(x.prNo)}','prNo')">Approve</button>
         <button class="link-btn del-btn" onclick="mfReject('rejectPaymentRequest','${_mfe(x.prNo)}','prNo')">Reject</button></td></tr>`).join('');
+    const iRows = itins.map(x => `<tr>
+      <td><span class="flow-badge b-pending">Itinerary</span></td>
+      <td>${_mfe(x.itineraryNo)}</td><td>${_mfe(x.user)}</td>
+      <td class="num">${(x.items || []).length} visit(s)<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_mfe(x.weekStart)} – ${_mfe(x.weekEnd)}</div></td>
+      <td class="num" style="white-space:nowrap;">
+        <button class="link-btn" onclick="mfViewItinerary('${_mfe(x.itineraryNo)}')">View plan</button>
+        <button class="link-btn" onclick="mfApprove('approveWeeklyItinerary','${_mfe(x.itineraryNo)}','itineraryNo')">Approve</button>
+        <button class="link-btn del-btn" onclick="mfReject('rejectWeeklyItinerary','${_mfe(x.itineraryNo)}','itineraryNo')">Reject</button></td></tr>`).join('');
+    mfItinByNo = {}; itins.forEach(x => { mfItinByNo[String(x.itineraryNo)] = x; });
     c.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table">
       <thead><tr><th>Type</th><th>No</th><th>Party</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody>${qRows}${pRows}${prRows}</tbody></table></div>`;
+      <tbody>${qRows}${pRows}${prRows}${iRows}</tbody></table></div>`;
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
 }
 
@@ -554,4 +568,47 @@ function mfLoadTeamWeek() {
     mode: 'compact', withEmails: true, withSubmissions: true,
     chartIdPrefix: 'mfTwChart_',        // unchanged canvas ids — nothing else on the page shifts
   });
+}
+
+
+/* A190 — read the plan before approving it. Approving a week of visits sight-unseen is the same
+   failure the A183 pricing review was built to stop. */
+let mfItinByNo = {};
+
+function mfViewItinerary(no) {
+  const it = mfItinByNo[String(no)];
+  if (!it) return;
+  const rows = (it.items || []).slice().sort((a, b) =>
+    String(a.date || '').localeCompare(String(b.date || '')) ||
+    String(a.plannedTime || '').localeCompare(String(b.plannedTime || '')));
+  const body = rows.length ? rows.map(r => `<tr>
+      <td>${_mfe(r.day || '')}<div style="font-size:0.7rem;color:#64748b;">${_mfe(r.date || '')}</div></td>
+      <td>${_mfe(r.plannedTime || '—')}</td>
+      <td><strong>${_mfe(r.company || '—')}</strong><div style="font-size:0.72rem;color:#64748b;">${_mfe(r.personToMeet || '')}</div></td>
+      <td>${_mfe(r.cityArea || '—')}</td>
+      <td>${_mfe(r.purpose || '')}</td>
+      <td>${_mfe(r.agenda || '')}</td>
+      <td>${_mfe(r.expectedOutcome || '')}</td></tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;padding:1rem;color:#64748b;">No planned visits.</td></tr>';
+
+  const el = document.createElement('div');
+  el.className = 'flow-modal-overlay';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:2rem 1rem;';
+  el.innerHTML = `<div class="flow-modal" style="max-width:1000px;margin:0 auto;background:#fff;border-radius:12px;padding:1.2rem 1.4rem;">
+    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;">
+      <h3 style="margin:0;font-size:1rem;">${_mfe(it.itineraryNo)} — ${_mfe(it.user)}</h3>
+      <span style="font-size:0.8rem;color:#64748b;">${_mfe(it.weekStart)} – ${_mfe(it.weekEnd)}</span>
+      <button class="btn btn-sm btn-secondary" style="margin-left:auto;">Close</button>
+    </div>
+    ${it.objectives ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;"><strong>Objectives:</strong> ${_mfe(it.objectives)}</p>` : ''}
+    ${it.notes ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;color:#64748b;">${_mfe(it.notes)}</p>` : ''}
+    <p style="margin:0 0 0.7rem;font-size:0.78rem;color:#15803d;">Director approved${it.dirApprovedBy ? ' by ' + _mfe(it.dirApprovedBy) : ''}${it.dirApprovedAt ? ' on ' + _mfe(it.dirApprovedAt) : ''}.</p>
+    <div style="overflow-x:auto;"><table class="flow-table"><thead><tr>
+      <th>Day</th><th>Time</th><th>Company / who</th><th>City / area</th><th>Purpose</th><th>Agenda</th><th>Expected outcome</th>
+    </tr></thead><tbody>${body}</tbody></table></div>
+  </div>`;
+  const close = () => el.remove();
+  el.querySelector('button').addEventListener('click', close);
+  el.addEventListener('click', ev => { if (ev.target === el) close(); });
+  document.body.appendChild(el);
 }

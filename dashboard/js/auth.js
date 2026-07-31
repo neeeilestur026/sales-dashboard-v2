@@ -733,7 +733,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory'].includes(activePage);
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary'].includes(activePage);   // A190
     const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -753,6 +753,7 @@ function renderNavbar(activePage) {
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="weekly-itinerary.html" class="${activePage === 'weekly-itinerary' ? 'active' : ''}">Weekly Itinerary</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
       </div>
@@ -938,6 +939,24 @@ async function flowComputeActions(session) {
       if (n) add('report', '#f97316', n + ' quotation(s) awaiting your approval', 'flow-quotations.html');
     }).catch(() => {}));
   }
+  /* A190 — weekly itineraries. The director is the FIRST approver and management the second, so
+     each role is shown only its own stage; surfacing the other tier's queue trains people to
+     ignore the list. A rep sees their own plan coming back rejected. */
+  if (isDir || isMgmt) {
+    const stage = isDir ? 'Pending Director' : 'Pending Management';
+    jobs.push(fetchFlow('getWeeklyItineraries').then(r => {
+      const n = ((r && r.data) || []).filter(x => x.status === stage).length;
+      if (n) add('report', '#f97316', n + ' weekly itinerar' + (n === 1 ? 'y' : 'ies') + ' awaiting your approval',
+                 isDir ? 'director-home.html' : 'management-home.html');
+    }).catch(() => {}));
+  }
+  if (isSales) {
+    jobs.push(fetchFlow('getWeeklyItineraries', { user: session.name }).then(r => {
+      const mine = ((r && r.data) || []).filter(x => x.status === 'Rejected').length;
+      if (mine) add('report', '#ef4444', mine + ' weekly itinerar' + (mine === 1 ? 'y was' : 'ies were') + ' sent back', 'weekly-itinerary.html');
+    }).catch(() => {}));
+  }
+
   // Purchase orders awaiting management/director approval.
   if (isMgmt || isDir) {
     jobs.push(fetchFlow('getPurchaseOrders').then(r => {

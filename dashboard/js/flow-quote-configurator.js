@@ -542,26 +542,9 @@ function qcClearPhoto(key) {
   qcOnChange();
 }
 
-function qcDownscale(file, maxPx, quality) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        let w = img.width, h = img.height;
-        if (w > maxPx || h > maxPx) { const s = Math.min(maxPx / w, maxPx / h); w = Math.round(w * s); h = Math.round(h * s); }
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', quality));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+/* A190: the implementation moved to flowDownscaleImage in flow-api.js so the client-visit photo
+   uses the same one. Behaviour is unchanged — same 900px / 0.85 JPEG re-encode. */
+function qcDownscale(file, maxPx, quality) { return flowDownscaleImage(file, maxPx, quality); }
 
 // ── live totals (instant, no server) ────────────────────────────────────────
 /* Mirrors build_summary_table: the discount comes off the pre-VAT subtotal, then VAT applies to the

@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 104;  // A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 105;  // A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -158,10 +158,21 @@ var SCHEMA = {
 
   // ── Sales call log (per rep, per day) ──
   SalesCalls: ['Call No', 'Date', 'User', 'Contact', 'Company', 'Outcome', 'Notes', 'Created At'],
-  // A189: client visits — the face-to-face counterpart of a sales call. 'Time' is the time of the
-  // visit as the rep reports it, which is NOT 'Created At' (a visit is usually logged afterwards).
+  // A189/A190: client visits — the face-to-face counterpart of a sales call. 'Time' is the time of
+  // the visit as the rep reports it, which is NOT 'Created At' (a visit is usually logged after).
+  // 'Agenda' is what the visit was FOR; 'Summary of Agenda' is what came out of it — two different
+  // questions that a single 'Topic' field was collapsing. 'Itinerary Item' is '<Itinerary No>#<Seq>'
+  // when the visit fulfils a planned stop, blank when it was unplanned.
   ClientVisits: ['Visit No', 'Date', 'User', 'Time', 'Person Visited', 'Company', 'City Address',
-                 'Topic', 'Created At'],
+                 'Agenda', 'Summary of Agenda', 'Photo Doc ID', 'Itinerary Item', 'Created At'],
+  // A190: the week a rep plans ahead, approved DIRECTOR FIRST then management — note that is the
+  // reverse of the payment-request chain, by decision. Header + rows, like Quotations/QuotationItems.
+  WeeklyItineraries: ['Itinerary No', 'Week Start', 'Week End', 'User', 'Status', 'Objectives',
+                      'Notes', 'Created By', 'Created By Role', 'Created At', 'Updated At',
+                      'Dir Approved By', 'Dir Approved At', 'Mgmt Approved By', 'Mgmt Approved At',
+                      'Approval Note'],
+  ItineraryItems: ['Itinerary No', 'Seq', 'Day', 'Date', 'Planned Time', 'Company', 'Person To Meet',
+                   'City Area', 'Purpose', 'Agenda', 'Expected Outcome'],
 
   // ── Balance Sheet opening balances (Cash, Inventory) — editable config ──
   OpeningBalances: ['Key', 'Amount (PHP)', 'Updated By', 'Updated At'],
@@ -328,7 +339,11 @@ var _SECURED = {
   setMgmtPricing: 1, verifyReturnToSales: 1,
   deleteQuotation: 1, deleteSalesOrder: 1, deletePurchaseOrder: 1, deletePaymentRequest: 1,
   deleteAPEntry: 1, updateAPAging: 1, recordCollection: 1, correctCollection: 1,
-  voidCollection: 1, voidInvoice: 1
+  voidCollection: 1, voidInvoice: 1,
+  // A190 — approving an itinerary decides whose week is sanctioned, so identity must come from
+  // the server, not the browser. All three secured lists have to agree; missing one re-opens the
+  // actorRole spoof the A188 review flagged on createQuotation.
+  approveWeeklyItinerary: 1, rejectWeeklyItinerary: 1
 };
 
 function _securedBlocked(action, params) {
@@ -4080,7 +4095,9 @@ function getClientVisits(p) {
     return {
       visitNo: r['Visit No'], date: _dateStr(r['Date']), user: r['User'], time: r['Time'],
       personVisited: r['Person Visited'], company: r['Company'], cityAddress: r['City Address'],
-      topic: r['Topic'], createdAt: r['Created At'], rowIndex: r.rowIndex
+      agenda: r['Agenda'], summaryOfAgenda: r['Summary of Agenda'],
+      photoDocId: r['Photo Doc ID'], itineraryItem: r['Itinerary Item'],
+      createdAt: r['Created At'], rowIndex: r.rowIndex
     };
   }) };
 }
@@ -4091,12 +4108,90 @@ function logClientVisit(p) {
   // Same rule as logSalesCall: one of the two identifies the visit. Requiring both would push reps
   // into typing placeholders, which is worse than a blank field.
   if (!person && !company) return { success: false, message: 'Person visited or company is required.' };
+
+  /* A190 — the photo is REQUIRED, and enforced HERE as well as on the form. A client-only gate is
+     the pattern the A188 review found being bypassed elsewhere, and this one carries evidentiary
+     weight: the photo is what says the rep was actually there. The message names the way out so a
+     rep who genuinely cannot photograph the site talks to someone instead of logging nothing —
+     a visit missing from the record entirely is worse than one missing its picture. */
+  var photo = String(p.photoBase64 || '');
+  if (!photo) {
+    return { success: false, needsPhoto: true,
+             message: 'A photo is required to log a client visit. If you could not take one — ' +
+                      'site policy, no phone — ask your manager to record the visit for you.' };
+  }
+
   var no = _nextNumber('ClientVisits', 1, 'VISIT');
   var date = p.date ? _dateStr(p.date) : _dateStr(_now());
+
+  /* Row FIRST, photo second. The reverse leaves an orphaned Drive file every time the row write
+     fails, and nothing in this system ever sweeps those up. */
   _append('ClientVisits', [no, date, p.actorName || '', String(p.time || '').trim(), person, company,
-    String(p.cityAddress || '').trim(), String(p.topic || '').trim(), _now()]);
-  return { success: true, visitNo: no, refNo: company || person,
+    String(p.cityAddress || '').trim(), String(p.agenda || '').trim(),
+    String(p.summaryOfAgenda || '').trim(), '', String(p.itineraryItem || '').trim(), _now()]);
+
+  var docId = '';
+  try {
+    var saved = _saveFileToDrive(photo, 'visit-' + no + '.jpg', p.photoMimeType || 'image/jpeg');
+    docId = 'DOC-' + Utilities.getUuid().slice(0, 8).toUpperCase();
+    _append('Documents', [docId, 'Client Visit', no, 'Visit Photo', 'visit-' + no + '.jpg',
+      saved.url, saved.id, p.actorName || '', _now()]);
+    _cvSet(no, { 'Photo Doc ID': docId });
+  } catch (e) {
+    // The visit is already recorded, which is the part that matters. Say the photo failed rather
+    // than pretending it saved — a silent success here would leave a visit that looks documented.
+    return { success: true, visitNo: no, refNo: company || person, photoFailed: true,
+             message: 'Visit logged, but the photo could not be saved (' + e.message +
+                      '). Re-attach it from the visit list.' };
+  }
+
+  return { success: true, visitNo: no, refNo: company || person, photoDocId: docId,
     message: 'Visit logged' + (company ? ' — ' + company : (person ? ' — ' + person : '')) };
+}
+
+/** Patch one ClientVisits row by Visit No. Mirrors _prSet. */
+function _cvSet(visitNo, patch) {
+  var sh = _sheet('ClientVisits');
+  var headers = SCHEMA.ClientVisits;
+  var rows = _rows('ClientVisits');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i]['Visit No']) !== String(visitNo)) continue;
+    Object.keys(patch).forEach(function (k) {
+      var c = headers.indexOf(k);
+      if (c >= 0) sh.getRange(rows[i].rowIndex, c + 1).setValue(patch[k]);
+    });
+    return true;
+  }
+  return false;
+}
+
+/** A190 — visit photos as base64, the getQuotationPhotos shape.
+ *  Returns bytes rather than a Drive link on purpose: a Drive /view or /preview URL serves an HTML
+ *  page, so it renders as a broken image in an <img> — the exact dead end already sitting in
+ *  management-home.js and accounting-home.js. The client builds a data: URI from what comes back.
+ *  Fetched per expanded card rather than for a whole team at once; each photo is a Drive round trip. */
+function getVisitPhotos(p) {
+  var rows = _rows('ClientVisits');
+  if (p && p.visitNo) rows = rows.filter(function (r) { return String(r['Visit No']) === String(p.visitNo); });
+  if (p && p.date) rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
+  if (p && p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+
+  var docs = _rows('Documents').filter(function (d) { return String(d['Module']) === 'Client Visit'; });
+  var byRef = {};
+  docs.forEach(function (d) { byRef[String(d['Ref No'])] = d; });
+
+  var out = [];
+  rows.forEach(function (r) {
+    var d = byRef[String(r['Visit No'])];
+    if (!d || !d['File ID']) return;
+    try {
+      var blob = DriveApp.getFileById(d['File ID']).getBlob();
+      out.push({ visitNo: r['Visit No'], docId: d['Doc ID'],
+                 mimeType: blob.getContentType(),
+                 base64: Utilities.base64Encode(blob.getBytes()) });
+    } catch (e) { /* trashed file — skip it rather than break the whole card */ }
+  });
+  return { success: true, data: out };
 }
 
 function deleteClientVisit(p) {
@@ -4113,6 +4208,194 @@ function deleteClientVisit(p) {
   }
   _sheet('ClientVisits').deleteRow(ri);
   return { success: true, refNo: row['Visit No'], message: 'Visit removed.' };
+}
+
+/* ── A190: Weekly Itinerary ───────────────────────────────────────────────────────────────────
+   A rep's planned client visits for a Mon–Sun week, approved before the week runs.
+
+   THE CHAIN IS DIRECTOR FIRST, THEN MANAGEMENT — the reverse of _PR_STAGES. That is a deliberate
+   decision, not a copy/paste slip: read the table below rather than assuming the payment-request
+   order. Everything else follows the payment-request semantics, which are the strongest in this
+   codebase: exact-role match per stage, any approver may reject with a reason, and revise returns
+   the record to Draft clearing EVERY stamp so an approval can never survive an edit. */
+
+var _ITIN_STAGES = [
+  { status: 'Pending Director',   role: 'director',   by: 'Dir Approved By',  at: 'Dir Approved At',
+    next: 'Pending Management', who: 'the director' },
+  { status: 'Pending Management', role: 'management', by: 'Mgmt Approved By', at: 'Mgmt Approved At',
+    next: 'Approved',           who: 'management' }
+];
+
+function _itinStage(status) {
+  var s = String(status || '');
+  for (var i = 0; i < _ITIN_STAGES.length; i++) if (_ITIN_STAGES[i].status === s) return _ITIN_STAGES[i];
+  return null;
+}
+
+/** Draft/Rejected only — an itinerary under approval or already approved is not editable in place. */
+function _itinEditable(status) {
+  var s = String(status || 'Draft');
+  return s === 'Draft' || s === 'Rejected' || s === '';
+}
+
+function _itinRow(no) {
+  return _rows('WeeklyItineraries').filter(function (r) { return String(r['Itinerary No']) === String(no); })[0];
+}
+
+function _itinSet(no, patch) {
+  var sh = _sheet('WeeklyItineraries');
+  var headers = SCHEMA.WeeklyItineraries;
+  var r = _itinRow(no);
+  if (!r) return false;
+  Object.keys(patch).forEach(function (k) {
+    var c = headers.indexOf(k);
+    if (c >= 0) sh.getRange(r.rowIndex, c + 1).setValue(patch[k]);
+  });
+  var u = headers.indexOf('Updated At');
+  if (u >= 0) sh.getRange(r.rowIndex, u + 1).setValue(_now());
+  return true;
+}
+
+function _itinMap(r, items) {
+  return {
+    itineraryNo: r['Itinerary No'], weekStart: _dateStr(r['Week Start']), weekEnd: _dateStr(r['Week End']),
+    user: r['User'], status: r['Status'] || 'Draft', objectives: r['Objectives'], notes: r['Notes'],
+    createdBy: r['Created By'], createdByRole: r['Created By Role'],
+    createdAt: r['Created At'], updatedAt: r['Updated At'],
+    dirApprovedBy: r['Dir Approved By'], dirApprovedAt: r['Dir Approved At'],
+    mgmtApprovedBy: r['Mgmt Approved By'], mgmtApprovedAt: r['Mgmt Approved At'],
+    approvalNote: r['Approval Note'], rowIndex: r.rowIndex,
+    items: items || []
+  };
+}
+
+function getWeeklyItineraries(p) {
+  var rows = _rows('WeeklyItineraries');
+  if (p && p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+  if (p && p.weekStart) rows = rows.filter(function (r) { return _dateStr(r['Week Start']) === String(p.weekStart); });
+  if (p && p.status) rows = rows.filter(function (r) { return String(r['Status'] || 'Draft') === String(p.status); });
+  if (p && p.itineraryNo) rows = rows.filter(function (r) { return String(r['Itinerary No']) === String(p.itineraryNo); });
+
+  var allItems = _rows('ItineraryItems');
+  rows.sort(function (a, b) { return String(b['Week Start']).localeCompare(String(a['Week Start'])); });
+  return { success: true, data: rows.map(function (r) {
+    var its = allItems.filter(function (i) { return String(i['Itinerary No']) === String(r['Itinerary No']); })
+      .sort(function (a, b) { return _num(a['Seq']) - _num(b['Seq']); })
+      .map(function (i) {
+        return { seq: _num(i['Seq']), day: i['Day'], date: _dateStr(i['Date']), plannedTime: i['Planned Time'],
+                 company: i['Company'], personToMeet: i['Person To Meet'], cityArea: i['City Area'],
+                 purpose: i['Purpose'], agenda: i['Agenda'], expectedOutcome: i['Expected Outcome'] };
+      });
+    return _itinMap(r, its);
+  }) };
+}
+
+/** Upsert a DRAFT. One itinerary per (user, week) — a second plan for the same week is an edit of
+ *  the first, never a rival record, or approvals would race each other. */
+function saveWeeklyItinerary(p) {
+  var user = String(p.actorName || p.user || '').trim();
+  var weekStart = _dateStr(p.weekStart || '');
+  if (!user) return { success: false, message: 'User is required.' };
+  if (!weekStart) return { success: false, message: 'Week start is required.' };
+  var items = JSON.parse(p.items || '[]');
+
+  var existing = _rows('WeeklyItineraries').filter(function (r) {
+    return String(r['User']) === user && _dateStr(r['Week Start']) === weekStart;
+  })[0];
+
+  var no;
+  if (existing) {
+    if (!_itinEditable(existing['Status'])) {
+      return { success: false, message: 'This week is ' + existing['Status'] +
+               ' — use Revise to reopen it before editing.' };
+    }
+    no = existing['Itinerary No'];
+    _itinSet(no, { 'Week End': _dateStr(p.weekEnd || ''), 'Objectives': p.objectives || '',
+                   'Notes': p.notes || '' });
+  } else {
+    no = _nextNumber('WeeklyItineraries', 1, 'ITIN');
+    _append('WeeklyItineraries', [no, weekStart, _dateStr(p.weekEnd || ''), user, 'Draft',
+      p.objectives || '', p.notes || '', user, String(p.actorRole || 'sales'), _now(), _now(),
+      '', '', '', '', '']);
+  }
+
+  _writeItems('ItineraryItems', 'Itinerary No', no, items, function (it, idx) {
+    return [no, _num(it.seq) || 0, it.day || '', _dateStr(it.date || ''), it.plannedTime || '',
+            it.company || '', it.personToMeet || '', it.cityArea || '', it.purpose || '',
+            it.agenda || '', it.expectedOutcome || ''];
+  });
+  return { success: true, itineraryNo: no, refNo: no, message: 'Itinerary saved.' };
+}
+
+function submitWeeklyItinerary(p) {
+  var r = _itinRow(p.itineraryNo);
+  if (!r) return { success: false, message: 'Itinerary not found.' };
+  var st = String(r['Status'] || 'Draft');
+  if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Already submitted (' + st + ').' };
+  var items = _rows('ItineraryItems').filter(function (i) {
+    return String(i['Itinerary No']) === String(p.itineraryNo);
+  });
+  // An empty plan cannot be approved into anything meaningful.
+  if (!items.length) return { success: false, message: 'Add at least one planned visit before submitting.' };
+  _itinSet(p.itineraryNo, { 'Status': _ITIN_STAGES[0].status, 'Approval Note': '' });
+  return { success: true, itineraryNo: p.itineraryNo, refNo: p.itineraryNo,
+           status: _ITIN_STAGES[0].status, message: 'Submitted for approval.' };
+}
+
+function approveWeeklyItinerary(p) {
+  var r = _itinRow(p.itineraryNo);
+  if (!r) return { success: false, message: 'Itinerary not found.' };
+  var st = String(r['Status'] || '');
+  var stage = _itinStage(st);
+  if (!stage) return { success: false, message: 'Not awaiting approval at this stage (' + st + ').' };
+  var role = String(p.actorRole || '').toLowerCase();
+  if (role !== stage.role) return { success: false, message: 'Only ' + stage.who + ' can approve at this stage.' };
+  var patch = { 'Status': stage.next };
+  patch[stage.by] = String(p.actorName || '');
+  patch[stage.at] = _now();
+  _itinSet(p.itineraryNo, patch);
+  return { success: true, itineraryNo: p.itineraryNo, refNo: p.itineraryNo, status: stage.next,
+           message: stage.next === 'Approved' ? 'Itinerary approved.' : 'Approved — now with management.' };
+}
+
+function rejectWeeklyItinerary(p) {
+  var r = _itinRow(p.itineraryNo);
+  if (!r) return { success: false, message: 'Itinerary not found.' };
+  var st = String(r['Status'] || '');
+  if (st.indexOf('Pending') !== 0) return { success: false, message: 'Only a pending itinerary can be rejected.' };
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['management', 'director'].indexOf(role) < 0) {
+    return { success: false, message: 'You are not an approver for this itinerary.' };
+  }
+  _itinSet(p.itineraryNo, { 'Status': 'Rejected', 'Approval Note': String(p.reason || '') });
+  return { success: true, itineraryNo: p.itineraryNo, refNo: p.itineraryNo, message: 'Itinerary rejected.' };
+}
+
+/** Reopen for editing. Clears BOTH stamp pairs — an approval must never survive a change to the
+ *  plan it was given for. */
+function reviseWeeklyItinerary(p) {
+  var r = _itinRow(p.itineraryNo);
+  if (!r) return { success: false, message: 'Itinerary not found.' };
+  if (_itinEditable(r['Status'])) return { success: false, message: 'Already editable.' };
+  var note = 'Reopened for revision by ' + String(p.actorName || '') +
+             (p.reason ? ' — ' + p.reason : '');
+  _itinSet(p.itineraryNo, {
+    'Status': 'Draft', 'Dir Approved By': '', 'Dir Approved At': '',
+    'Mgmt Approved By': '', 'Mgmt Approved At': '', 'Approval Note': note
+  });
+  return { success: true, itineraryNo: p.itineraryNo, refNo: p.itineraryNo, message: 'Reopened as a draft.' };
+}
+
+function deleteWeeklyItinerary(p) {
+  var r = _itinRow(p.itineraryNo);
+  if (!r) return { success: false, message: 'Itinerary not found.' };
+  if (!_itinEditable(r['Status'])) {
+    return { success: false, message: 'Only a draft or rejected itinerary can be deleted (this one is ' +
+             r['Status'] + ').' };
+  }
+  _writeItems('ItineraryItems', 'Itinerary No', p.itineraryNo, [], function (x) { return x; });
+  _sheet('WeeklyItineraries').deleteRow(r.rowIndex);
+  return { success: true, refNo: p.itineraryNo, message: 'Itinerary deleted.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4158,6 +4441,14 @@ var _MODULE_MAP = {
   // and so leaves no audit row at all; the visit log should not repeat that.
   logClientVisit: ['Client Visit', 'Logged'],
   deleteClientVisit: ['Client Visit', 'Removed'],
+  // A190 — all six, deletes included. deleteSalesCall is still absent from this map and leaves no
+  // audit row at all; an approved plan disappearing without a trace would be worse.
+  saveWeeklyItinerary: ['Weekly Itinerary', 'Saved'],
+  submitWeeklyItinerary: ['Weekly Itinerary', 'Submitted'],
+  approveWeeklyItinerary: ['Weekly Itinerary', 'Approved'],
+  rejectWeeklyItinerary: ['Weekly Itinerary', 'Rejected'],
+  reviseWeeklyItinerary: ['Weekly Itinerary', 'Reopened'],
+  deleteWeeklyItinerary: ['Weekly Itinerary', 'Deleted'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
@@ -4927,6 +5218,11 @@ var HANDLERS = {
   getMarketing: getMarketing, saveMarketingRecord: saveMarketingRecord, deleteMarketingRecord: deleteMarketingRecord,
   getSalesCalls: getSalesCalls, logSalesCall: logSalesCall, deleteSalesCall: deleteSalesCall,
   getClientVisits: getClientVisits, logClientVisit: logClientVisit, deleteClientVisit: deleteClientVisit,   // A189
+  getVisitPhotos: getVisitPhotos,                                                                          // A190
+  getWeeklyItineraries: getWeeklyItineraries, saveWeeklyItinerary: saveWeeklyItinerary,                    // A190
+  submitWeeklyItinerary: submitWeeklyItinerary, approveWeeklyItinerary: approveWeeklyItinerary,
+  rejectWeeklyItinerary: rejectWeeklyItinerary, reviseWeeklyItinerary: reviseWeeklyItinerary,
+  deleteWeeklyItinerary: deleteWeeklyItinerary,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -4976,6 +5272,8 @@ var MUTATIONS = {
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,
   logClientVisit: 1, deleteClientVisit: 1,   // A189
+  saveWeeklyItinerary: 1, submitWeeklyItinerary: 1, approveWeeklyItinerary: 1,   // A190
+  rejectWeeklyItinerary: 1, reviseWeeklyItinerary: 1, deleteWeeklyItinerary: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
