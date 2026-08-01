@@ -131,7 +131,10 @@ const FLOW_SECURED_ACTIONS = [
   // omits an action the other two secure, the POST goes direct and the server rejects it.
   'approveWeeklyItinerary', 'rejectWeeklyItinerary',
   // A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
-  'seedClientAliases', 'runDriveMigration'
+  'seedClientAliases', 'runDriveMigration', 'buildDriveSkeleton',
+  // A194 run-it-all wrappers + the folder setup call. The three preview/verify actions stay out:
+  // they are read-only.
+  'buildDriveSkeletonAll', 'runDriveMigrationAll', 'setupFlowDrive'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

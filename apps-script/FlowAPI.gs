@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 107;  // A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 108;  // A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -365,7 +365,8 @@ var _SECURED = {
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
   // deliberately NOT here — it is read-only and creates nothing.
-  seedClientAliases: 1, runDriveMigration: 1
+  seedClientAliases: 1, runDriveMigration: 1, buildDriveSkeleton: 1,
+  buildDriveSkeletonAll: 1, runDriveMigrationAll: 1, setupFlowDrive: 1
 };
 
 function _securedBlocked(action, params) {
@@ -3086,7 +3087,7 @@ function rejectPaymentRequest(p) {
 function savePaymentRequestPDF(p) {
   if (!p.prNo || !p.pdfBase64) return { success: false, message: 'prNo and pdfBase64 required.' };
   var saved = _saveFileToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'), 'application/pdf',
-    _docFolder('Payment Request', p.prNo, _GENERATED_DOC_TYPE));   // A193
+    _docFolder('Payment Request', p.prNo, _GENERATED_DOC_TYPE, _now()));   // A193 · A194 hint
   var link = saved.url;
   _setCellByKey('PaymentRequests', 'PR No', p.prNo, 'PDF Link', link);
   _registerDocument('Payment Request', p.prNo, p.fileName, link, saved.id, p.actorName);
@@ -3538,7 +3539,9 @@ function _memoRows(name) {
   if (!_FILING_MEMO[name]) { try { _FILING_MEMO[name] = _rows(name); } catch (e) { _FILING_MEMO[name] = []; } }
   return _FILING_MEMO[name];
 }
-function _flowFilingReset() { _FILING_MEMO = {}; _CLIENT_REG_CACHE = null; _DISPLAY_CACHE = null; }
+function _flowFilingReset() {
+  _FILING_MEMO = {}; _CLIENT_REG_CACHE = null; _DISPLAY_CACHE = null; _FOLDER_CACHE = null;
+}
 
 /** First row whose keyCol === keyVal, or null. */
 function _memoFind(sheet, keyCol, keyVal) {
@@ -3768,17 +3771,83 @@ function _soFolderName(soNo) {
   return name;
 }
 
-/** The full path, as segments below the root. Never throws. */
-function _docFolderPath(module, refNo, docType) {
+// ── When: the year and month a document files under ──────────────────────────
+/* A194: numeric prefixes so Drive's alphabetical sort reads chronologically. */
+var _MONTH_FOLDERS = ['01 January', '02 February', '03 March', '04 April', '05 May', '06 June',
+  '07 July', '08 August', '09 September', '10 October', '11 November', '12 December'];
+var _FLOW_UNDATED = 'Undated';
+
+/** Sheet dates arrive as Date objects, as ISO strings ("2024-12-20T16:00:00.000Z") and occasionally
+ *  as "M/D/YYYY". Parse all three, and never throw — an unreadable date must not stop a save. */
+function _ymSegments(v) {
+  try {
+    if (v instanceof Date && !isNaN(v.getTime())) return [String(v.getFullYear()), _MONTH_FOLDERS[v.getMonth()]];
+    var s = String(v || '').trim();
+    if (!s) return [_FLOW_UNDATED];
+    var iso = s.match(/^(\d{4})-(\d{1,2})/);
+    if (iso) {
+      var mo = parseInt(iso[2], 10);
+      if (mo >= 1 && mo <= 12) return [iso[1], _MONTH_FOLDERS[mo - 1]];
+    }
+    var us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (us) {
+      var mo2 = parseInt(us[1], 10);
+      if (mo2 >= 1 && mo2 <= 12) return [us[3], _MONTH_FOLDERS[mo2 - 1]];
+    }
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) return [String(d.getFullYear()), _MONTH_FOLDERS[d.getMonth()]];
+  } catch (e) {}
+  return [_FLOW_UNDATED];
+}
+
+/* THE anchoring decision. Every document takes its SALES ORDER's date, not its own — otherwise one
+   order's quotation would file under June and its invoice under September, scattering a single order
+   across month folders and defeating the point of having an order folder at all. Documents with no
+   order yet fall back to their own record's date, and move when the order appears. */
+function _docDateFor(module, refNo, soNo, hint) {
+  var m = String(module || ''), ref = String(refNo || '');
+  if (soNo) {
+    var sod = _memoField('SalesOrders', 'SO No', soNo, 'Date');
+    if (sod) return sod;
+  }
+  if (m === 'Quotation')       { var q = _memoField('Quotations', 'Quotation No', ref, 'Date'); if (q) return q; }
+  if (m === 'Pricing Request') { var p = _memoField('PricingRequests', 'PR No', ref, 'Date');   if (p) return p; }
+  if (m === 'Sales Order')     { var s = _memoField('SalesOrders', 'SO No', ref, 'Date');       if (s) return s; }
+  if (m === 'Invoice')         { var i = _memoField('Invoices', 'INV No', ref, 'Date');         if (i) return i; }
+  if (m === 'Collection')      { var c = _memoField('Collections', 'Collection No', ref, 'Date'); if (c) return c; }
+  if (m === 'Purchase Order')  { var o = _memoField('PurchaseOrders', 'PO No', ref, 'Date');    if (o) return o; }
+  if (m === 'Receiving')       { var r = _memoField('MaterialsReceiving', 'MR No', ref, 'Date'); if (r) return r; }
+  return hint || '';   // last resort: when the file was uploaded
+}
+
+/** Where a document belongs, described rather than just concatenated. Callers that need to know
+ *  WHICH segment is the client or the order read the named fields instead of guessing at indexes —
+ *  A194 inserted year/month at the front, and index arithmetic silently broke everywhere that had
+ *  assumed path[0] was the client. Never throws. */
+function _docFolderInfo(module, refNo, docType, dateHint) {
   var sub = _docSubfolder(module, docType);
   var soNo = '';
   try { soNo = _soForDoc(module, refNo); } catch (e) {}
   var customer = '';
   try { customer = soNo ? _memoField('SalesOrders', 'SO No', soNo, 'Customer') : _customerForDoc(module, refNo); } catch (e) {}
+  var when = [_FLOW_UNDATED];
+  try { when = _ymSegments(_docDateFor(module, refNo, soNo, dateHint)); } catch (e) {}
   var c = _canonClient(customer);
-  if (!c.key) return [_FLOW_UNKNOWN_CLIENT, sub];
-  if (!soNo)  return [c.display, _FLOW_PRESO_FOLDER, sub];
-  return [c.display, _soFolderName(soNo), sub];
+  var info = { year: when[0], month: when.length > 1 ? when[1] : '', sub: sub,
+    client: c.key ? c.display : _FLOW_UNKNOWN_CLIENT, order: '',
+    unknownClient: !c.key, preSalesOrder: false };
+  if (!c.key)      info.segments = when.concat([_FLOW_UNKNOWN_CLIENT, sub]);
+  else if (!soNo) { info.preSalesOrder = true; info.order = _FLOW_PRESO_FOLDER;
+                    info.segments = when.concat([c.display, _FLOW_PRESO_FOLDER, sub]); }
+  else            { info.order = _soFolderName(soNo);
+                    info.segments = when.concat([c.display, info.order, sub]); }
+  return info;
+}
+
+/** The full path, as segments below the root.
+ *  <year> / <month> / <client> / <sales order | _Pre-Sales Order> / <doc type> */
+function _docFolderPath(module, refNo, docType, dateHint) {
+  return _docFolderInfo(module, refNo, docType, dateHint).segments;
 }
 
 /** Drive tolerates most characters, but a slash reads as a path and the live SO numbers contain
@@ -3788,28 +3857,38 @@ function _safeName(s) {
   return n ? n.substring(0, 120) : 'Unnamed';
 }
 
+/* A194: the tree is five levels deep now, so resolving 234 documents means ~1,170 getFoldersByName
+   calls — and almost all of them repeat, because documents share paths. Memoise every level for the
+   life of ONE execution; cleared by _flowFilingReset(). */
+var _FOLDER_CACHE = null;
+
 /** Walk the path from the root, creating each level that is missing. */
 function _ensurePath(segments) {
-  var f = _rootFolder();
+  if (!_FOLDER_CACHE) _FOLDER_CACHE = {};
+  var f = _rootFolder(), key = '';
   for (var i = 0; i < segments.length; i++) {
     var name = _safeName(segments[i]);
+    key += '/' + name;
+    if (_FOLDER_CACHE[key]) { f = _FOLDER_CACHE[key]; continue; }
     var it = f.getFoldersByName(name);
     f = it.hasNext() ? it.next() : f.createFolder(name);
+    _FOLDER_CACHE[key] = f;
   }
   return f;
 }
 
-/** The folder a document belongs in, or null to let the caller fall back to the root. */
-function _docFolder(module, refNo, docType) {
+/** The folder a document belongs in, or null to let the caller fall back to the root.
+ *  A194: path[0] is now the YEAR, so the old "is it the unknown-client bucket" check on path[0] is
+ *  gone — _registerClient already no-ops on a blank name, so it can simply always be called. */
+function _docFolder(module, refNo, docType, dateHint) {
   try {
-    var path = _docFolderPath(module, refNo, docType);
-    if (path[0] !== _FLOW_UNKNOWN_CLIENT) {
-      var cust = '';
-      try { var so = _soForDoc(module, refNo);
-            cust = so ? _memoField('SalesOrders', 'SO No', so, 'Customer') : _customerForDoc(module, refNo); } catch (e) {}
-      _registerClient(cust);
-    }
-    return _ensurePath(path);
+    var cust = '';
+    try {
+      var so = _soForDoc(module, refNo);
+      cust = so ? _memoField('SalesOrders', 'SO No', so, 'Customer') : _customerForDoc(module, refNo);
+    } catch (e) {}
+    _registerClient(cust);
+    return _ensurePath(_docFolderPath(module, refNo, docType, dateHint));
   } catch (e) { return null; }
 }
 
@@ -3842,7 +3921,7 @@ function _adoptSoDocs(soNo) {
     _memoRows('Documents').forEach(function (d) {
       if (!want[String(d['Module']) + '|' + String(d['Ref No'])]) return;
       var fileId = String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']);
-      if (_moveFileTo(fileId, _docFolder(d['Module'], d['Ref No'], d['Doc Type']))) moved++;
+      if (_moveFileTo(fileId, _docFolder(d['Module'], d['Ref No'], d['Doc Type'], d['Uploaded At']))) moved++;
     });
   } catch (e) { /* never block the sales order */ }
   return moved;
@@ -3908,24 +3987,38 @@ function _clientProposals() {
 function previewDriveMigration(p) {
   _flowFilingReset();
   var docs = _memoRows('Documents');
-  var rows = [], byFolder = {}, byClient = {}, unresolved = 0, preSo = 0;
+  var rows = [], byFolder = {}, byClient = {}, byMonth = {}, unresolved = 0, preSo = 0, undated = 0;
+  var notOwned = [], inaccessible = [];
   docs.forEach(function (d) {
-    var path = _docFolderPath(d['Module'], d['Ref No'], d['Doc Type']);
-    var full = path.join(' / ');
+    var info = _docFolderInfo(d['Module'], d['Ref No'], d['Doc Type'], d['Uploaded At']);
+    var full = info.segments.join(' / ');
     byFolder[full] = (byFolder[full] || 0) + 1;
-    byClient[path[0]] = (byClient[path[0]] || 0) + 1;
-    var isUnknown = path[0] === _FLOW_UNKNOWN_CLIENT;
-    var isPre = path.length > 1 && path[1] === _FLOW_PRESO_FOLDER;
-    if (isUnknown) unresolved++;
-    if (isPre) preSo++;
+    byClient[info.client] = (byClient[info.client] || 0) + 1;
+    var ym = info.year + (info.month ? ' / ' + info.month : '');
+    byMonth[ym] = (byMonth[ym] || 0) + 1;
+    if (info.unknownClient) unresolved++;
+    if (info.preSalesOrder) preSo++;
+    if (info.year === _FLOW_UNDATED) undated++;
+    var fileId = String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']);
+    /* The only two ways a move can genuinely fail, reported BEFORE anything moves: a file this
+       account does not own, and a file that can no longer be opened at all. */
+    try {
+      var f = DriveApp.getFileById(fileId);
+      var owner = f.getOwner();   // null inside a Shared Drive — not an error, just not owned by a person
+      if (owner && owner.getEmail() !== Session.getEffectiveUser().getEmail()) {
+        notOwned.push({ docId: d['Doc ID'], fileName: String(d['File Name'] || ''), owner: owner.getEmail() });
+      }
+    } catch (e) { inaccessible.push({ docId: d['Doc ID'], fileName: String(d['File Name'] || ''), error: e.message }); }
     rows.push({ docId: d['Doc ID'], module: d['Module'], refNo: d['Ref No'],
-      docType: String(d['Doc Type'] || ''), fileName: String(d['File Name'] || ''),
-      fileId: String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']),
-      path: full, client: path[0], unresolved: isUnknown, preSalesOrder: isPre });
+      docType: String(d['Doc Type'] || ''), fileName: String(d['File Name'] || ''), fileId: fileId,
+      path: full, client: info.client, year: info.year, month: info.month,
+      unresolved: info.unknownClient, preSalesOrder: info.preSalesOrder });
   });
   var prop = _clientProposals();
   return { success: true, total: docs.length, resolved: docs.length - unresolved,
-    unresolved: unresolved, preSalesOrder: preSo, byClient: byClient, byFolder: byFolder,
+    unresolved: unresolved, preSalesOrder: preSo, undated: undated,
+    byClient: byClient, byFolder: byFolder, byMonth: byMonth,
+    notOwned: notOwned, inaccessible: inaccessible,
     clients: prop.clients, possibleTypos: prop.possibleTypos, documents: rows,
     message: 'Preview only — nothing was created or moved.' };
 }
@@ -3949,6 +4042,53 @@ function seedClientAliases(p) {
              'ClientAliases sheet to correct any grouping, then run the migration.' };
 }
 
+/** A194: give EVERY sales order a folder, whether or not it has any documents yet.
+ *
+ *  Driven off SalesOrders rather than off Documents, which is the whole point: all 63 orders from
+ *  2024-2025 have zero documents, so a documents-driven build would leave those years missing
+ *  entirely. This creates the real, correctly-dated home each order's paperwork drops into as it is
+ *  back-filed.
+ *
+ *  The per-doc-type subfolders are deliberately NOT pre-created — 105 orders x 8 would be 840 empty
+ *  folders. They appear when a document actually arrives.
+ *
+ *  Idempotent (an existing folder is reused, never duplicated) and resumable via `offset`.
+ *  Creates no files and moves nothing. */
+function buildDriveSkeleton(p) {
+  p = p || {};
+  var dryRun = (p.dryRun === true || String(p.dryRun) === 'true');
+  var offset = Math.max(0, Math.floor(_num(p.offset)));
+  var limit = Math.max(1, Math.floor(_num(p.limit) || 60));
+  _flowFilingReset();
+  var sos = _memoRows('SalesOrders');
+  var processed = 0, made = 0, undated = 0, errors = 0, seen = {}, log = [];
+  var started = Date.now(), i = offset;
+  for (; i < sos.length; i++) {
+    if (processed >= limit || Date.now() - started > 240000) break;
+    var so = sos[i], soNo = String(so['SO No'] || '');
+    if (!soNo) continue;
+    processed++;
+    try {
+      var when = _ymSegments(so['Date']);
+      if (when[0] === _FLOW_UNDATED) undated++;
+      var c = _canonClient(so['Customer']);
+      var path = when.concat([c.key ? c.display : _FLOW_UNKNOWN_CLIENT, _soFolderName(soNo)]);
+      var key = path.join('/');
+      if (seen[key]) continue;
+      seen[key] = true;
+      if (c.key) _registerClient(so['Customer']);
+      if (!dryRun) _ensurePath(path);
+      made++;
+      log.push({ soNo: soNo, path: key });
+    } catch (e) { errors++; log.push({ soNo: soNo, error: e.message }); }
+  }
+  var next = i < sos.length ? i : null;
+  return { success: true, dryRun: dryRun, totalSalesOrders: sos.length, processed: processed,
+    folders: made, undated: undated, errors: errors, nextOffset: next, log: log,
+    message: (dryRun ? 'Dry run: ' : '') + 'Ensured ' + made + ' sales-order folder(s)' +
+      (next === null ? ' — finished.' : ' — call again with offset ' + next + ' to continue.') };
+}
+
 /** Move the existing files. Resumable: pass back `nextOffset` until it comes back null. Stops well
  *  short of the 6-minute execution ceiling. Set dryRun to walk it without touching Drive. */
 function runDriveMigration(p) {
@@ -3956,7 +4096,9 @@ function runDriveMigration(p) {
   var dryRun = (p.dryRun === true || String(p.dryRun) === 'true');
   var onlyClient = String(p.client || '').trim();
   var offset = Math.max(0, Math.floor(_num(p.offset)));
-  var limit = Math.max(1, Math.floor(_num(p.limit) || 60));
+  // A194: 40, not 60 — the tree is two levels deeper, so each file costs more Drive calls and the
+  // 6-minute execution ceiling is what binds.
+  var limit = Math.max(1, Math.floor(_num(p.limit) || 40));
   _flowFilingReset();
   var docs = _memoRows('Documents');
   var processed = 0, moved = 0, already = 0, errors = 0, log = [];
@@ -3964,8 +4106,9 @@ function runDriveMigration(p) {
   for (; i < docs.length; i++) {
     if (processed >= limit || Date.now() - started > 240000) break;
     var d = docs[i];
-    var path = _docFolderPath(d['Module'], d['Ref No'], d['Doc Type']);
-    if (onlyClient && path[0] !== onlyClient) continue;
+    var info = _docFolderInfo(d['Module'], d['Ref No'], d['Doc Type'], d['Uploaded At']);
+    var path = info.segments;
+    if (onlyClient && info.client !== onlyClient) continue;
     processed++;
     var fileId = String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']);
     if (!fileId) { errors++; log.push({ docId: d['Doc ID'], error: 'no Drive file id on the record' }); continue; }
@@ -4014,8 +4157,120 @@ function setupFlowDrive() {
   }
   try { PropertiesService.getScriptProperties().setProperty('FLOW_DRIVE_FOLDER_ID', id); } catch (e) {}
   say('');
-  say('Ready. Next: run previewDriveMigration() — it is read-only and moves nothing.');
+  say('Ready. Next: run buildDriveSkeletonAll() to create a folder for every sales order.');
   return out.join('\n');
+}
+
+/** A194 · Select this and press Run. Takes no arguments. Creates a folder for every sales order —
+ *  including the 63 from 2024-2025 that have no documents yet — looping until it has done them all.
+ *  Idempotent: running it twice creates nothing the second time. Moves no files. */
+function buildDriveSkeletonAll() {
+  var offset = 0, folders = 0, rounds = 0, undated = 0, errors = 0;
+  while (rounds < 40) {
+    var r = buildDriveSkeleton({ offset: offset, limit: 60 });
+    folders += r.folders; undated += r.undated; errors += r.errors; rounds++;
+    if (r.nextOffset === null) break;
+    offset = r.nextOffset;
+  }
+  var msg = 'Sales-order folders ensured: ' + folders +
+            (undated ? '  ·  undated orders: ' + undated + ' (filed under "' + _FLOW_UNDATED + '")' : '') +
+            (errors ? '  ·  errors: ' + errors : '') +
+            '\nNext: run previewDriveMigrationReport() — read-only.';
+  Logger.log(msg);
+  return msg;
+}
+
+/** A194 · Select this and press Run. Takes no arguments. READ-ONLY.
+ *
+ *  Answers "can every document in the system still be opened?" — the thing filing must never break.
+ *  Run it BEFORE the migration to get a baseline, and again AFTER: the two must be identical.
+ *
+ *  A Drive move preserves a file's id and its URL, so every stored link should survive untouched.
+ *  That is the claim; this checks it against every row rather than trusting it. It also covers the
+ *  four sheets that keep a 'PDF Link' of their own, outside the Documents registry. */
+function verifyDriveIntegrity() {
+  _flowFilingReset();
+  var out = [], problems = [];
+  function say(s) { out.push(s); Logger.log(s); }
+
+  var docs = _memoRows('Documents');
+  var okDocs = 0, noId = 0, gone = 0, trashed = 0, urlDrift = 0, notShared = 0;
+  docs.forEach(function (d) {
+    var stored = String(d['Drive Link'] || '');
+    var id = String(d['File ID'] || '') || _driveIdFromUrl(stored);
+    if (!id) { noId++; problems.push('no file id: ' + d['Doc ID'] + ' ' + d['File Name']); return; }
+    var f;
+    try { f = DriveApp.getFileById(id); }
+    catch (e) { gone++; problems.push('cannot open: ' + d['Doc ID'] + ' ' + d['File Name'] + ' (' + e.message + ')'); return; }
+    if (f.isTrashed()) { trashed++; problems.push('in the trash: ' + d['Doc ID'] + ' ' + d['File Name']); return; }
+    // The stored link must still point at this exact file — that is what every "open" in the UI uses.
+    if (_driveIdFromUrl(stored) && _driveIdFromUrl(stored) !== f.getId()) {
+      urlDrift++; problems.push('link points elsewhere: ' + d['Doc ID'] + ' ' + d['File Name']);
+      return;
+    }
+    try {
+      if (f.getSharingAccess() === DriveApp.Access.PRIVATE) {
+        notShared++; problems.push('not link-shareable: ' + d['Doc ID'] + ' ' + d['File Name']);
+      }
+    } catch (e) { /* a Shared Drive can refuse to report this; not a failure */ }
+    okDocs++;
+  });
+
+  say('Documents registry');
+  say('  rows              : ' + docs.length);
+  say('  open cleanly      : ' + okDocs);
+  say('  no file id        : ' + noId);
+  say('  cannot be opened  : ' + gone);
+  say('  in the trash      : ' + trashed);
+  say('  link drifted      : ' + urlDrift);
+  say('  not link-shared   : ' + notShared);
+
+  // The four records that store their own PDF Link, which the registry does not cover.
+  var sheets = [['Quotations', 'Quotation No'], ['PricingRequests', 'PR No'],
+                ['PurchaseOrders', 'PO No'], ['PaymentRequests', 'PR No']];
+  say('');
+  say('PDF Link columns held outside the registry');
+  sheets.forEach(function (s) {
+    var rows = _memoRows(s[0]), have = 0, ok = 0;
+    rows.forEach(function (r) {
+      var link = String(r['PDF Link'] || '');
+      if (!link) return;
+      have++;
+      var id = _driveIdFromUrl(link);
+      if (!id) { problems.push(s[0] + ' ' + r[s[1]] + ': unparseable PDF Link'); return; }
+      try { var f = DriveApp.getFileById(id); if (!f.isTrashed()) ok++;
+            else problems.push(s[0] + ' ' + r[s[1]] + ': PDF is in the trash'); }
+      catch (e) { problems.push(s[0] + ' ' + r[s[1]] + ': PDF cannot be opened'); }
+    });
+    say('  ' + s[0] + ': ' + ok + ' of ' + have + ' open cleanly');
+  });
+
+  say('');
+  if (problems.length) {
+    say('PROBLEMS (' + problems.length + '):');
+    problems.slice(0, 60).forEach(function (m) { say('  ' + m); });
+    if (problems.length > 60) say('  ... and ' + (problems.length - 60) + ' more');
+  } else {
+    say('Every document in the system opens. Nothing is missing, trashed or relinked.');
+  }
+  return out.join('\n');
+}
+
+/** A194 · Select this and press Run. Moves the existing files, looping until finished. Safe to
+ *  re-run: anything already in place is skipped. Run buildDriveSkeletonAll() and the preview first. */
+function runDriveMigrationAll() {
+  var offset = 0, moved = 0, already = 0, errors = 0, rounds = 0, log = [];
+  while (rounds < 40) {
+    var r = runDriveMigration({ offset: offset, limit: 40 });
+    moved += r.moved; already += r.alreadyInPlace; errors += r.errors; rounds++;
+    r.log.forEach(function (l) { if (l.error) log.push(l); });
+    if (r.nextOffset === null) break;
+    offset = r.nextOffset;
+  }
+  var msg = 'Moved ' + moved + ' file(s); ' + already + ' already in place; ' + errors + ' error(s).';
+  if (log.length) msg += '\n' + log.map(function (l) { return '  ' + l.docId + ': ' + l.error; }).join('\n');
+  Logger.log(msg);
+  return msg;
 }
 
 /** A193 · A readable summary of previewDriveMigration, for pressing Run in the editor.
@@ -4028,6 +4283,16 @@ function previewDriveMigrationReport() {
   say('Resolved to a client : ' + r.resolved);
   say('No client to file to : ' + r.unresolved + '  (they go to ' + _FLOW_UNKNOWN_CLIENT + ')');
   say('Waiting for their SO : ' + r.preSalesOrder + '  (in ' + _FLOW_PRESO_FOLDER + ')');
+  say('Undatable            : ' + r.undated);
+  if (r.inaccessible.length || r.notOwned.length) {
+    say('');
+    say('--- FILES THAT MAY NOT MOVE CLEANLY ---');
+    r.inaccessible.forEach(function (f) { say('  cannot open : ' + f.docId + ' ' + f.fileName + ' (' + f.error + ')'); });
+    r.notOwned.forEach(function (f) { say('  owned by ' + f.owner + ' : ' + f.docId + ' ' + f.fileName); });
+  }
+  say('');
+  say('--- documents per month ---');
+  Object.keys(r.byMonth).sort().forEach(function (m) { say('  ' + r.byMonth[m] + '\t' + m); });
   say('');
   say('--- documents per client folder ---');
   Object.keys(r.byClient).sort(function (a, b) { return r.byClient[b] - r.byClient[a]; })
@@ -4113,7 +4378,7 @@ function _setCellByKey(sheetName, keyCol, keyVal, header, value) {
 function saveQuotationPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
   var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'quotation.pdf', 'application/pdf',
-    _docFolder('Quotation', p.quotationNo, _GENERATED_DOC_TYPE));   // A193
+    _docFolder('Quotation', p.quotationNo, _GENERATED_DOC_TYPE, _now()));   // A193 · A194 hint
   var link = saved.url;
   if (p.quotationNo) {
     _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Link', link);
@@ -4128,7 +4393,7 @@ function saveQuotationPDF(p) {
 function savePOPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
   var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'purchase-order.pdf', 'application/pdf',
-    _docFolder('Purchase Order', p.poNo, _GENERATED_DOC_TYPE));   // A193
+    _docFolder('Purchase Order', p.poNo, _GENERATED_DOC_TYPE, _now()));   // A193 · A194 hint
   var link = saved.url;
   if (p.poNo) {
     _setCellByKey('PurchaseOrders', 'PO No', p.poNo, 'PDF Link', link);
@@ -4142,7 +4407,7 @@ function addDocument(p) {
   if (!p.module || !p.refNo) return { success: false, message: 'module and refNo are required.' };
   if (!p.fileBase64) return { success: false, message: 'fileBase64 is required.' };
   var saved = _saveFileToDrive(p.fileBase64, p.fileName || 'document', p.mimeType,
-    _docFolder(p.module, p.refNo, p.docType));   // A193 — every hand-attached document
+    _docFolder(p.module, p.refNo, p.docType, _now()));   // A193 — every hand-attached document
   var docId = _nextNumber('Documents', 1, 'DOC');
   var now = _now();
   _append('Documents', [docId, p.module, p.refNo, p.docType || '', p.fileName || '',
@@ -4705,7 +4970,8 @@ function logClientVisit(p) {
     try {
       _registerClient(company);
       var vc = _canonClient(company);
-      if (vc.key) vFolder = _ensurePath([vc.display, 'Client Visits']);
+      // A194: dated by the visit itself — a visit has no sales order to inherit a date from.
+      if (vc.key) vFolder = _ensurePath(_ymSegments(date).concat([vc.display, 'Client Visits']));
     } catch (e) { vFolder = null; }
     var saved = _saveFileToDrive(photo, 'visit-' + no + '.jpg', p.photoMimeType || 'image/jpeg', vFolder);
     docId = 'DOC-' + Utilities.getUuid().slice(0, 8).toUpperCase();
@@ -5041,7 +5307,8 @@ var _MODULE_MAP = {
   backfillShipments: ['Sales Order', 'Lifecycle Backfilled'], backfillPdfDocuments: ['Document', 'PDFs Backfilled'],
   backfillMissingAR: ['AR Aging', 'Backfilled'], setFlowDriveFolder: ['Balance Sheet', 'Config Updated'],
   // A193
-  seedClientAliases: ['Client', 'Names Seeded'], runDriveMigration: ['Document', 'Filed to Drive']
+  seedClientAliases: ['Client', 'Names Seeded'], runDriveMigration: ['Document', 'Filed to Drive'],
+  buildDriveSkeleton: ['Sales Order', 'Folders Created']
 };
 
 function _dateStr(v) {
@@ -5748,7 +6015,7 @@ function savePRPDF(p) {
   // A193: file it under the client instead — <client>/<SO or _Pre-Sales Order>/01 Pricing Request.
   // Falls back to the old "Purchase Request/<requester>/" folder when the client cannot be resolved,
   // so a PR raised for a customer we have never seen still lands somewhere sensible.
-  var folder = _docFolder('Pricing Request', p.prNo, _GENERATED_DOC_TYPE) ||
+  var folder = _docFolder('Pricing Request', p.prNo, _GENERATED_DOC_TYPE, _now()) ||
                _prUserFolder(requester || p.actorName || 'Unknown');
   var saved = _saveFileToDrive(p.pdfBase64, p.fileName || ((p.prNo || 'PR') + '.pdf'), 'application/pdf', folder);
   var link = saved.url;
@@ -5880,7 +6147,10 @@ var HANDLERS = {
   backfillMissingAR: backfillMissingAR, setFlowDriveFolder: setFlowDriveFolder,
   // A193: Drive filing — client / sales order / document type
   previewDriveMigration: previewDriveMigration, seedClientAliases: seedClientAliases,
-  runDriveMigration: runDriveMigration
+  runDriveMigration: runDriveMigration, buildDriveSkeleton: buildDriveSkeleton,
+  previewDriveMigrationReport: previewDriveMigrationReport, setupFlowDrive: setupFlowDrive,
+  buildDriveSkeletonAll: buildDriveSkeletonAll, runDriveMigrationAll: runDriveMigrationAll,
+  verifyDriveIntegrity: verifyDriveIntegrity
 };
 
 // Actions that mutate the sheets (run under a script lock).
@@ -5921,5 +6191,6 @@ var MUTATIONS = {
   // A193 (previewDriveMigration is read-only → HANDLERS only). Neither name starts with
   // save/update/set, so _flowIdempotentAction will not auto-retry them — and both are idempotent
   // anyway: a file already in its folder is skipped, and a Raw Name already on file is left alone.
-  seedClientAliases: 1, runDriveMigration: 1
+  seedClientAliases: 1, runDriveMigration: 1, buildDriveSkeleton: 1,
+  buildDriveSkeletonAll: 1, runDriveMigrationAll: 1, setupFlowDrive: 1
 };

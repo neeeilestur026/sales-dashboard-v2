@@ -545,7 +545,10 @@ SECURED_ACTIONS = [
     # A190 — must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
     "approveWeeklyItinerary", "rejectWeeklyItinerary",
     # A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
-    "seedClientAliases", "runDriveMigration",
+    "seedClientAliases", "runDriveMigration", "buildDriveSkeleton",
+    # A194 run-it-all wrappers + the folder setup call. previewDriveMigration,
+    # previewDriveMigrationReport and verifyDriveIntegrity stay out: all three are read-only.
+    "buildDriveSkeletonAll", "runDriveMigrationAll", "setupFlowDrive",
 ]
 
 
