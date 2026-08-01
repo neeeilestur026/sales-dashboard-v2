@@ -366,7 +366,8 @@ var _SECURED = {
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
   // deliberately NOT here — it is read-only and creates nothing.
   seedClientAliases: 1, runDriveMigration: 1, buildDriveSkeleton: 1,
-  buildDriveSkeletonAll: 1, runDriveMigrationAll: 1, setupFlowDrive: 1
+  buildDriveSkeletonAll: 1, runDriveMigrationAll: 1, setupFlowDrive: 1,
+  cleanupLegacyFolders: 1, cleanupLegacyFoldersApply: 1
 };
 
 function _securedBlocked(action, params) {
@@ -4256,6 +4257,62 @@ function verifyDriveIntegrity() {
   return out.join('\n');
 }
 
+/** A194 · Select this and press Run. Takes no arguments.
+ *
+ *  A193 filed as <client>/<sales order>/..., so client folders were created at the ROOT. A194 files
+ *  as <year>/<month>/<client>/..., and the migration moves FILES, not folders — so those original
+ *  root-level client folders are left behind, empty, once everything has been re-filed.
+ *
+ *  This trashes them. It is deliberately timid: a folder is only removed when it contains NO files
+ *  anywhere inside it, checked recursively. Anything still holding a file is reported and left
+ *  exactly where it is — that means the migration has not finished, and deleting it would destroy
+ *  documents. Year folders, Undated and _Unknown Client are never touched.
+ *
+ *  Trashed, not deleted: everything stays recoverable from the Drive bin. */
+function cleanupLegacyFolders(p) {
+  p = p || {};
+  var dryRun = !(p.apply === true || String(p.apply) === 'true');   // SAFE BY DEFAULT: preview first
+  var out = [], removed = 0, kept = 0, scanned = 0;
+  function say(s) { out.push(s); Logger.log(s); }
+
+  function countFiles(folder, depth) {
+    var n = 0;
+    try {
+      var fi = folder.getFiles();
+      while (fi.hasNext()) { fi.next(); n++; if (n > 0) return n; }
+      if (depth > 8) return n;
+      var sub = folder.getFolders();
+      while (sub.hasNext()) { n += countFiles(sub.next(), depth + 1); if (n > 0) return n; }
+    } catch (e) { return 1; }   // cannot inspect it -> assume occupied, never delete
+    return n;
+  }
+
+  var root;
+  try { root = _rootFolder(); } catch (e) { return 'Cannot open the Drive folder: ' + e.message; }
+  say(dryRun ? 'DRY RUN — nothing will be trashed. Re-run as cleanupLegacyFoldersApply() to apply.'
+             : 'APPLYING — empty leftover folders will be moved to the Drive bin.');
+  say('');
+  var it = root.getFolders();
+  while (it.hasNext()) {
+    var f = it.next(), name = f.getName();
+    // The A194 tree itself, and the two buckets that legitimately live at the root.
+    if (/^\d{4}$/.test(name) || name === _FLOW_UNDATED || name === _FLOW_UNKNOWN_CLIENT) continue;
+    scanned++;
+    var n = countFiles(f, 0);
+    if (n > 0) { kept++; say('  KEPT (still holds files) : ' + name); continue; }
+    if (!dryRun) { try { f.setTrashed(true); } catch (e) { say('  could not trash: ' + name + ' (' + e.message + ')'); continue; } }
+    removed++;
+    say('  ' + (dryRun ? 'would trash (empty)      : ' : 'trashed (empty)          : ') + name);
+  }
+  say('');
+  say('Scanned ' + scanned + ' root folder(s): ' + removed + (dryRun ? ' would be trashed' : ' trashed') + ', ' + kept + ' kept.');
+  if (kept) say('Folders that still hold files were LEFT ALONE — run runDriveMigrationAll() first, then this again.');
+  return out.join('\n');
+}
+
+/** A194 · The one that actually trashes. Run cleanupLegacyFolders() first and read what it says. */
+function cleanupLegacyFoldersApply() { return cleanupLegacyFolders({ apply: true }); }
+
 /** A194 · Select this and press Run. Moves the existing files, looping until finished. Safe to
  *  re-run: anything already in place is skipped. Run buildDriveSkeletonAll() and the preview first. */
 function runDriveMigrationAll() {
@@ -5308,7 +5365,8 @@ var _MODULE_MAP = {
   backfillMissingAR: ['AR Aging', 'Backfilled'], setFlowDriveFolder: ['Balance Sheet', 'Config Updated'],
   // A193
   seedClientAliases: ['Client', 'Names Seeded'], runDriveMigration: ['Document', 'Filed to Drive'],
-  buildDriveSkeleton: ['Sales Order', 'Folders Created']
+  buildDriveSkeleton: ['Sales Order', 'Folders Created'],
+  cleanupLegacyFolders: ['Document', 'Folders Cleaned'], cleanupLegacyFoldersApply: ['Document', 'Folders Cleaned']
 };
 
 function _dateStr(v) {
@@ -6150,7 +6208,8 @@ var HANDLERS = {
   runDriveMigration: runDriveMigration, buildDriveSkeleton: buildDriveSkeleton,
   previewDriveMigrationReport: previewDriveMigrationReport, setupFlowDrive: setupFlowDrive,
   buildDriveSkeletonAll: buildDriveSkeletonAll, runDriveMigrationAll: runDriveMigrationAll,
-  verifyDriveIntegrity: verifyDriveIntegrity
+  verifyDriveIntegrity: verifyDriveIntegrity,
+  cleanupLegacyFolders: cleanupLegacyFolders, cleanupLegacyFoldersApply: cleanupLegacyFoldersApply
 };
 
 // Actions that mutate the sheets (run under a script lock).
@@ -6192,5 +6251,6 @@ var MUTATIONS = {
   // save/update/set, so _flowIdempotentAction will not auto-retry them — and both are idempotent
   // anyway: a file already in its folder is skipped, and a Raw Name already on file is left alone.
   seedClientAliases: 1, runDriveMigration: 1, buildDriveSkeleton: 1,
-  buildDriveSkeletonAll: 1, runDriveMigrationAll: 1, setupFlowDrive: 1
+  buildDriveSkeletonAll: 1, runDriveMigrationAll: 1, setupFlowDrive: 1,
+  cleanupLegacyFolders: 1, cleanupLegacyFoldersApply: 1
 };

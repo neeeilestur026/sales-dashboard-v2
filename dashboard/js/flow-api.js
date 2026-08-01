@@ -134,7 +134,8 @@ const FLOW_SECURED_ACTIONS = [
   'seedClientAliases', 'runDriveMigration', 'buildDriveSkeleton',
   // A194 run-it-all wrappers + the folder setup call. The three preview/verify actions stay out:
   // they are read-only.
-  'buildDriveSkeletonAll', 'runDriveMigrationAll', 'setupFlowDrive'
+  'buildDriveSkeletonAll', 'runDriveMigrationAll', 'setupFlowDrive',
+  'cleanupLegacyFolders', 'cleanupLegacyFoldersApply'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

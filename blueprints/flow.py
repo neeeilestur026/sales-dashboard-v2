@@ -549,6 +549,7 @@ SECURED_ACTIONS = [
     # A194 run-it-all wrappers + the folder setup call. previewDriveMigration,
     # previewDriveMigrationReport and verifyDriveIntegrity stay out: all three are read-only.
     "buildDriveSkeletonAll", "runDriveMigrationAll", "setupFlowDrive",
+    "cleanupLegacyFolders", "cleanupLegacyFoldersApply",
 ]
 
 
