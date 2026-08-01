@@ -10,7 +10,9 @@ let selected = new Set();     // legacy ids checked for migration
 const CHUNK = 25;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  migSession = requireAccountingOrAdmin();
+  // A191: was requireAccountingOrAdmin. The migration table renders commissionPct, marginPct and
+  // the full breakdown, so admin no longer belongs here either.
+  migSession = requirePricingCostAccess();
   if (!migSession) return;
   renderNavbar('migrate-pricing');
   document.getElementById('reloadBtn').addEventListener('click', loadAll);

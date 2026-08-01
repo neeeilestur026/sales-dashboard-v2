@@ -307,6 +307,29 @@ function requireAdminOrManagement() {
 }
 
 /**
+ * A191 — pages that expose COST figures: buy price, landed cost, COGS, commission % and margin %.
+ *
+ * Deliberately excludes admin. Admin sources supplier prices and approves quotations on commercial
+ * terms, but must only ever see the FINAL price — never the margin the company makes on it. Sales is
+ * excluded for the same reason, one level further out.
+ *
+ * Named for the thing it protects rather than the roles it lists, so the next page that renders a
+ * margin has an obvious guard to reach for instead of inventing another role tuple.
+ */
+function requirePricingCostAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (['accounting', 'management', 'director'].indexOf(session.role) < 0) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
+/**
  * Require HR role
  */
 function requireHR() {

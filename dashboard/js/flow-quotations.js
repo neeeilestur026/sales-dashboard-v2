@@ -5,6 +5,13 @@ let qHasSO = {};   // A145: quotationNo → true when a sales order references i
 let qSession = null;
 
 let qIsOversight = false;   // admin/accounting/management/director see ALL reps, grouped
+/* A191: WHO MAY SEE COST FIGURES — deliberately NOT the same set as qIsOversight.
+   qIsOversight answers "may this person see everyone's quotations?" and gates the unscoped load
+   (:106) and the grouped-by-rep render (:177). Admin needs both of those. It was also being used
+   to gate the cost/margin breakdown, which is a different question with a different answer:
+   admin must see the FINAL PRICE ONLY, never the buy price, landed cost, COGS, commission or
+   margin. Reusing one flag for both is what exposed the breakdown to admin. */
+let qCanSeeCosts = false;   // A191: accounting/management/director only — never admin, never sales
 let qAdmin = false;         // admin: free-typed item rows (incl. new items) auto-added to inventory on save
 let qCanClose = false;      // A152: the Close/Reopen actions need FlowAPI v91
 let qPrByNo = {};           // A183: prNo → pricing-request record, for the approval pricing review
@@ -25,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   qSession = requireQuotationAccess();
   if (!qSession) return;
   qIsOversight = qSession.role !== 'sales';
+  qCanSeeCosts = ['accounting', 'management', 'director'].indexOf(qSession.role) >= 0;   // A191
   qAdmin = qSession.role === 'admin';
   renderNavbar('flow-quotations');
   // Only admin/accounting can open the rest of the flow — show the sub-nav to them.
@@ -40,9 +48,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const c = document.getElementById('listContainer');
     if (c) c.innerHTML = `<p style="color:#ef4444;">Could not load quotations — ${flowEsc(e.message || 'unknown error')}</p>`;
   }
-  // A183: approvers (oversight roles) need the pricing behind each quotation for the review. Sales
-  // never approve, so they don't pay this fetch. Best-effort — the modal degrades to no-breakdown.
-  if (qIsOversight) { try { await qLoadPricingRefs(); } catch (e) { /* modal falls back to hasPr:false */ } }
+  /* A183/A191: the pricing behind each quotation, for the review breakdown. Fetched only for roles
+     allowed to SEE cost figures — so admin and sales never pay this call and, just as importantly,
+     the commission and margin never land in their sessionStorage read-cache. Best-effort: the modal
+     degrades to no-breakdown. */
+  if (qCanSeeCosts) { try { await qLoadPricingRefs(); } catch (e) { /* modal falls back to hasPr:false */ } }
   // Deep-link: ?review=<quotationNo> opens the review modal directly (e.g. from the admin dashboard).
   const reviewNo = params.get('review');
   if (reviewNo) { try { openReviewModal(reviewNo); } catch (e) { /* the list still stands */ } }
@@ -365,12 +375,16 @@ function openReviewModal(no) {
   if (fid) pv.innerHTML = warn + `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
   else if (q.pdfLink) pv.innerHTML = warn + `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
   else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();qcOpen('${flowEsc(q.quotationNo)}','document')">generate the PDF</button> first.</div>`;
-  // A183: the pricing this quotation was built from. Oversight roles see the cost/margin breakdown; a
-  // loud banner fires when the quoted total no longer matches what management priced; and when the
-  // viewer is the approver, a tick "I've reviewed the pricing" gates Approve. Cost figures are never
-  // shown to sales.
+  /* A183/A191: the pricing this quotation was built from. Accounting, management and director see
+     the cost/margin breakdown; a loud banner fires when the quoted total no longer matches what
+     management priced; and when that viewer is the approver, a tick "I've reviewed the pricing"
+     gates Approve. Cost figures are shown to neither sales NOR admin.
+     Consequence worth knowing: admin approving at Pending Admin gets no tick, because needTick
+     depends on a review they cannot see. qrSyncApprove treats an absent tick requirement as
+     satisfied, so admin can still approve — on the commercial terms, while management approves on
+     the pricing. That split is the point of the change, not a gap in it. */
   const bd = document.getElementById('qrBreakdown');
-  const pr = (qIsOversight && q.prNo) ? qPrByNo[String(q.prNo)] : null;
+  const pr = (qCanSeeCosts && q.prNo) ? qPrByNo[String(q.prNo)] : null;
   const review = pr ? flowQuotationPricingReview(q, pr) : null;
   const needTick = !!(isApprover && review && review.hasPr);
   if (bd) {
@@ -382,7 +396,7 @@ function openReviewModal(no) {
           ? `<label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.6rem;font-size:0.82rem;font-weight:600;cursor:pointer;">
                <input type="checkbox" id="qrTick" onchange="qrSyncApprove()"> I've reviewed the pricing above and confirm it.</label>`
           : '');
-    } else if (qIsOversight && q.prNo) {
+    } else if (qCanSeeCosts && q.prNo) {
       bd.innerHTML = `<div style="font-size:0.78rem;color:#b45309;">Pricing record for ${flowEsc(q.prNo)} not found — approval is governed by the server's pricing check.</div>`;
     } else {
       bd.innerHTML = '';

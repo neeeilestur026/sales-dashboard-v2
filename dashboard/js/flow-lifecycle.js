@@ -5,6 +5,7 @@
 
 let llData = {};
 let llModels = [];
+let llNoteBySo = {};              // A191: soNo -> note text
 let llSession = null;
 let llFilter = { q: '', gaps: false, nodocs: false, year: '', status: '' };
 const llExpanded = {};   // soNo → getSOLifecycle result (lazy-loaded on expand)
@@ -78,13 +79,17 @@ async function loadAll() {
   const c = document.getElementById('container');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading lifecycle…</span></div>';
   try {
-    const [sos, quotes, prs, pos, aps, payreqs, recs, invs, ars, cols, ships] = await Promise.all([
+    const [sos, quotes, prs, pos, aps, payreqs, recs, invs, ars, cols, ships, notes] = await Promise.all([
       fetchFlow('getSalesOrders'), fetchFlow('getQuotations'), fetchFlow('getPricingRequests'),
       fetchFlow('getPurchaseOrders'), fetchFlow('getAPAging'), fetchFlow('getPaymentRequests'),
       fetchFlow('getReceiving'), fetchFlow('getInvoices'), fetchFlow('getARAging'),
       fetchFlow('getCollections'), fetchFlow('getShipments'),
+      fetchFlow('getSONotes').catch(() => ({ data: [] })),   // A191 — absent on an older backend
     ]);
     const D = r => (r && r.data) || [];
+    // A191 — soNo → the note written on the Revenue & Net Profit report.
+    llNoteBySo = {};
+    D(notes).forEach(n => { if (n && n.soNo && n.notes) llNoteBySo[String(n.soNo)] = String(n.notes); });
     llData = { sos: D(sos), quotes: D(quotes), prs: D(prs), pos: D(pos), aps: D(aps),
       payreqs: D(payreqs), recs: D(recs), invs: D(invs), ars: D(ars), cols: D(cols), ships: D(ships) };
     buildModels();
@@ -284,6 +289,14 @@ function llBody(m) {
   m.cols.forEach(c => h += `<div class="acc-sub acc-muted" style="font-size:0.78rem;">Collection ${flowEsc(c.collectionNo)} · ${flowDate(c.date)} · ${flowMoney(c.amount, 'PHP')}${c.method ? ' · ' + flowEsc(c.method) : ''}</div>`);
   h += `</div>`;
 
+  /* A191 — the accounting note, shown before the numbers it usually explains. Escaped: free text
+     on a financial record, rendered on four dashboards. */
+  const _note = llNoteBySo[String(m.soNo)];
+  if (_note) {
+    h += `<div class="acc-sec"><h4>Note</h4>` +
+         `<p style="margin:0;padding:0.5rem 0.65rem;border-left:3px solid #0f766e;` +
+         `background:var(--bg-inset,#f1f5f9);white-space:pre-wrap;font-size:0.84rem;">${flowEsc(_note)}</p></div>`;
+  }
   // Summary
   h += `<div class="acc-sec"><h4>Summary</h4><div class="acc-summary">
     <span><small>Sales</small>${flowMoney(m.totalSales, 'PHP')}</span>

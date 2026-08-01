@@ -155,7 +155,9 @@ async function _loadTaskPanel(tab) {
           _docsBtn('Invoice', v.invNo),
         ]));
     } else if (tab === 'pr') {
-      const r = await fetchFlow('getPricingRequests');
+      // A191: noStore — admin renders six safe columns from this, but the payload also carries
+      // commission %, margin % and the cost breakdown, which must not linger in their storage.
+      const r = await fetchFlow('getPricingRequests', {}, { noStore: true });
       const rows = ((r && r.data) || []).slice(0, 50);
       wrap.innerHTML = rows.length === 0 ? _emptyMsg('No purchase requests yet.') : _tableHtml(
         ['PR No', 'Date', 'Requested By', 'Customer', 'Status', 'Items', ''],
@@ -176,7 +178,8 @@ async function loadTaskOverview() {
   try {
     const [qt, so, po, ap, rc, iv, pr] = await Promise.allSettled([
       fetchFlow('getQuotations'), fetchFlow('getSalesOrders'), fetchFlow('getPurchaseOrders'),
-      fetchFlow('getAPAging'), fetchFlow('getReceiving'), fetchFlow('getInvoices'), fetchFlow('getPricingRequests'),
+      fetchFlow('getAPAging'), fetchFlow('getReceiving'), fetchFlow('getInvoices'),
+      fetchFlow('getPricingRequests', {}, { noStore: true }),   // A191 — counted only, never cached
     ]);
     const data = (r) => (r.status === 'fulfilled' && r.value && r.value.data) ? r.value.data : [];
     const qRows = data(qt), sRows = data(so), pRows = data(po), aRows = data(ap),

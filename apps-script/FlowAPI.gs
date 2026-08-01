@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 105;  // A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 106;  // A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -103,6 +103,12 @@ var SCHEMA = {
   // ── Daily report: auto-logged activity + per-day notes ──
   ActivityLog: ['Timestamp', 'Date', 'User', 'Module', 'Action', 'Ref No', 'Summary', 'Amount', 'Currency'],
   DailyNotes:  ['Date', 'Notes', 'Updated By', 'Updated At'],
+  /* A191: a free-text note against one sales order, written from the Revenue & Net Profit report.
+     Its own sheet rather than a column on SOCostDetails, because a cost row does not exist for every
+     order, saveSOCostDetails rewrites a fixed-width array (so-cost-editor would post no note and
+     erase it on the next cost edit), and that handler also regenerates the order's migrated invoice
+     and receiving rows — none of which should happen when someone saves a note. */
+  SONotes:     ['SO No', 'Notes', 'Updated By', 'Updated At'],
 
   // ── A167: Product Finder shared inquiry logbook (device localStorage syncs here; upsert by Inquiry ID)
   //    A169: += 'Items JSON' (which product the rep actually chose) and 'PR No' (what it became). ──
@@ -4439,6 +4445,7 @@ var _MODULE_MAP = {
   logSalesCall: ['Call', 'Logged'],
   // A189 — all three are mapped, including the delete. deleteSalesCall above is absent from this map
   // and so leaves no audit row at all; the visit log should not repeat that.
+  saveSONotes: ['Sales Order', 'Note Saved'],   // A191
   logClientVisit: ['Client Visit', 'Logged'],
   deleteClientVisit: ['Client Visit', 'Removed'],
   // A190 — all six, deletes included. deleteSalesCall is still absent from this map and leaves no
@@ -4546,6 +4553,45 @@ function saveDailyNote(p) {
   }
   _append('DailyNotes', [p.date, p.notes || '', scope, _now()]);
   return { success: true, message: 'Notes saved.' };
+}
+
+/* ── A191: per-sales-order notes ──────────────────────────────────────────────────────────────
+   Read by anyone with oversight of a sales order; written from the Revenue & Net Profit report by
+   accounting and admin. An idempotent UPSERT keyed on SO No — never an append: postFlow retries any
+   action whose name starts with 'save' up to four times, so an appending writer would leave four
+   copies of one note behind a flaky connection. */
+
+function getSONotes(p) {
+  var rows = _rows('SONotes');
+  if (p && p.soNo) rows = rows.filter(function (r) { return String(r['SO No']) === String(p.soNo); });
+  return { success: true, data: rows.map(function (r) {
+    return { soNo: String(r['SO No']), notes: r['Notes'] || '',
+             updatedBy: r['Updated By'] || '', updatedAt: r['Updated At'] || '', rowIndex: r.rowIndex };
+  }) };
+}
+
+function saveSONotes(p) {
+  var no = String((p && p.soNo) || '').trim();
+  if (!no) return { success: false, message: 'soNo required.' };
+  var sh = _sheet('SONotes');
+  var headers = SCHEMA.SONotes;
+  var rows = _rows('SONotes');
+  var text = String((p && p.notes) || '');
+  var who = String((p && p.actorName) || '');
+
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i]['SO No']) !== no) continue;
+    // Column positions resolved from the schema, not a hard-coded width — saveDailyNote's
+    // getRange(..., 1, 1, 4) is exactly the shape that broke when a sheet later grew a column.
+    var set = function (header, value) {
+      var c = headers.indexOf(header);
+      if (c >= 0) sh.getRange(rows[i].rowIndex, c + 1).setValue(value);
+    };
+    set('Notes', text); set('Updated By', who); set('Updated At', _now());
+    return { success: true, soNo: no, refNo: no, message: text ? 'Note saved.' : 'Note cleared.' };
+  }
+  _append('SONotes', [no, text, who, _now()]);
+  return { success: true, soNo: no, refNo: no, message: 'Note saved.' };
 }
 
 // ── A167: Product Finder shared inquiry logbook ──────────────────────────────
@@ -5217,6 +5263,7 @@ var HANDLERS = {
   deleteExpense: deleteExpense, importExpenses: importExpenses, reclassifyExpenses: reclassifyExpenses,
   getMarketing: getMarketing, saveMarketingRecord: saveMarketingRecord, deleteMarketingRecord: deleteMarketingRecord,
   getSalesCalls: getSalesCalls, logSalesCall: logSalesCall, deleteSalesCall: deleteSalesCall,
+  getSONotes: getSONotes, saveSONotes: saveSONotes,                                                          // A191
   getClientVisits: getClientVisits, logClientVisit: logClientVisit, deleteClientVisit: deleteClientVisit,   // A189
   getVisitPhotos: getVisitPhotos,                                                                          // A190
   getWeeklyItineraries: getWeeklyItineraries, saveWeeklyItinerary: saveWeeklyItinerary,                    // A190
@@ -5271,6 +5318,7 @@ var MUTATIONS = {
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
   logSalesCall: 1, deleteSalesCall: 1,
+  saveSONotes: 1,   // A191
   logClientVisit: 1, deleteClientVisit: 1,   // A189
   saveWeeklyItinerary: 1, submitWeeklyItinerary: 1, approveWeeklyItinerary: 1,   // A190
   rejectWeeklyItinerary: 1, reviseWeeklyItinerary: 1, deleteWeeklyItinerary: 1,

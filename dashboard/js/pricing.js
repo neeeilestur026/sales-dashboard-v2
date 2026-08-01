@@ -763,7 +763,9 @@ async function loadSubmission(id) {
 // ─── Init ───────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  session = requireAdminOrManagement();
+  // A191: was requireAdminOrManagement. This page renders commission and margin rates and a full
+  // per-line cost breakdown, so admin no longer belongs here.
+  session = requirePricingCostAccess();
   if (!session) return;
   renderNavbar('pricing');
   initConfig();

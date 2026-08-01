@@ -11,6 +11,7 @@ let pnlData = { invs: [], sos: [], exps: [], pos: [], recs: [] };
 let pnlMonthsCache = [];   // rendered month models (for expand toggling)
 let pnlEntryReg = {};      // entryId -> entry (for the cost editor)
 let pnlEntrySeq = 0;
+let pnlNoteBySo = {};      // A191: soNo -> note text
 
 function _pnlRole() { try { return (JSON.parse(localStorage.getItem('session') || '{}').role || '').toLowerCase(); } catch (e) { return ''; } }
 const pnlCanEditCost = (_pnlRole() === 'accounting' || _pnlRole() === 'admin');
@@ -25,6 +26,13 @@ function _pnlComps(soNo) {
     (r.items || []).forEach(it => { out.purchaseOfGoods += _pn(it.purchasePHP) * _pn(it.qty); });
   });
   return out;
+}
+
+/** A191 — open the shared note editor for a P&L entry, then reload so the new note shows inline. */
+function pnlEditNote(id) {
+  const e = pnlEntryReg[id];
+  if (!e || !e.soNo || typeof openSoNoteEditor !== 'function') return;
+  openSoNoteEditor({ soNo: e.soNo, customer: e.customer, date: _pymd(e.date) }, () => pnlLoad());
 }
 
 /** Open the shared cost editor for a P&L entry, then reload on save. */
@@ -83,11 +91,12 @@ async function pnlLoad() {
   }
   if (state) state.textContent = 'Loading…';
   try {
-    const [invs, sos, exps, cds, pos, recs] = await Promise.all([
+    const [invs, sos, exps, cds, notes, pos, recs] = await Promise.all([
       fetchFlow('getInvoices').catch(() => ({ data: [] })),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getExpenses').catch(() => ({ data: [] })),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
+      fetchFlow('getSONotes').catch(() => ({ data: [] })),   // A191 — absent on an older backend
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getReceiving').catch(() => ({ data: [] })),
     ]);
@@ -99,6 +108,11 @@ async function pnlLoad() {
       pos: (pos && pos.data) || [],
       recs: (recs && recs.data) || [],
     };
+    // A191 — soNo → note text, rebuilt on every load so a saved note appears without a hard refresh.
+    pnlNoteBySo = {};
+    ((notes && notes.data) || []).forEach(n => {
+      if (n && n.soNo && n.notes) pnlNoteBySo[String(n.soNo)] = String(n.notes);
+    });
     pnlBuildYears();
     pnlRender();
   } catch (e) {
@@ -147,6 +161,7 @@ function pnlBuildMonths(year) {
     const inv = invBySo[String(s.soNo)];
     const cd = costBySo[String(s.soNo)];
     const edited = cd && String(cd.source) === 'Manual (edited)';
+    const note = pnlNoteBySo[String(s.soNo)] || '';
     let sales, cogs, comps = null, costNotSet = false;
     // SOCostDetails (migrated or edited) is authoritative — equals the migrated invoice, no double count.
     if (cd) { sales = _pn(cd.sales); cogs = _pn(cd.totalCOGS); }
@@ -155,7 +170,7 @@ function pnlBuildMonths(year) {
     const m = month(ym);
     m.revenue += sales; m.cogs += cogs; m.grossProfit += (sales - cogs); m.soCount++;
     m.entries.push({ soNo: s.soNo || '', date: s.date || '', customer: s.customer || '', sales, cogs, gp: sales - cogs,
-      cd: cd || null, comps, costNotSet, edited });
+      cd: cd || null, comps, costNotSet, edited, note });
   });
   // Orphan invoices (no SO record) → bucket by invoice month.
   pnlData.invs.forEach(v => {
@@ -298,7 +313,8 @@ function pnlDetailHtml(m) {
   const gpColor = v => v >= 0 ? '#16a34a' : '#ef4444';
 
   // Sales orders
-  const editCol = pnlCanEditCost ? '<th></th>' : '';
+  // A191: one extra header cell for the Note control, on the same gate as ✎ Edit.
+  const editCol = pnlCanEditCost ? '<th></th><th></th>' : '';
   let so = `<div class="pnl-detail-h">${_pe(_pnlFmtMonth(m.ym))} — Sales Orders</div>
     <div style="overflow-x:auto;"><table class="pnl-subtable">
     <thead><tr><th>Sales Order</th><th>Client</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th>${editCol}</tr></thead><tbody>`;
@@ -308,8 +324,14 @@ function pnlDetailHtml(m) {
       pnlEntryReg[id] = e;
       const chip = e.costNotSet ? ' <span class="pnl-warn" title="No cost recorded yet">⚠ cost not set</span>'
         : (e.edited ? ' <span class="pnl-edited" title="Cost edited by accounting">edited</span>' : '');
-      const editCell = pnlCanEditCost ? `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditCost('${id}')">✎ Edit</button></td>` : '';
-      return `<tr><td><strong>${_pe(e.soNo || '—')}</strong>${chip}${e.date ? `<span class="pnl-sub2">${_pymd(e.date)}</span>` : ''}</td>
+      const editCell = pnlCanEditCost
+        ? `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditCost('${id}')">✎ Edit</button></td>` +
+          `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditNote('${id}')" title="${e.note ? 'Edit the note' : 'Add a note'}">${e.note ? '🗒 Note' : '＋ Note'}</button></td>`
+        : '';
+      // Escaped like every other cell — a note is free text on a financial record, so an unescaped
+      // '<' would be an injection point on four different dashboards.
+      const noteLine = e.note ? `<div class="pnl-note">${_pe(e.note)}</div>` : '';
+      return `<tr><td><strong>${_pe(e.soNo || '—')}</strong>${chip}${e.date ? `<span class="pnl-sub2">${_pymd(e.date)}</span>` : ''}${noteLine}</td>
         <td>${_pe(e.customer || '—')}</td>
         <td class="num">${_pm(e.sales)}</td>
         <td class="num" style="color:#ef4444;">${e.cogs ? par(e.cogs) : '—'}</td>
@@ -317,9 +339,9 @@ function pnlDetailHtml(m) {
     }).join('');
     so += `<tr class="pnl-subtotal"><td colspan="2">Total (${m.soCount} SO${m.soCount !== 1 ? 's' : ''})</td>
       <td class="num">${_pm(m.revenue)}</td><td class="num" style="color:#ef4444;">${par(m.cogs)}</td>
-      <td class="num" style="color:${gpColor(m.grossProfit)};">${_pm(m.grossProfit)}</td>${pnlCanEditCost ? '<td></td>' : ''}</tr>`;
+      <td class="num" style="color:${gpColor(m.grossProfit)};">${_pm(m.grossProfit)}</td>${pnlCanEditCost ? '<td></td><td></td>' : ''}</tr>`;
   } else {
-    so += `<tr><td colspan="${pnlCanEditCost ? 6 : 5}" class="pnl-muted" style="text-align:center;padding:0.6rem;">No sales orders this month.</td></tr>`;
+    so += `<tr><td colspan="${pnlCanEditCost ? 7 : 5}" class="pnl-muted" style="text-align:center;padding:0.6rem;">No sales orders this month.</td></tr>`;
   }
   so += `</tbody></table></div>`;
 

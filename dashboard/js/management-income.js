@@ -11,6 +11,7 @@
 let miData = { invs: [], sos: [], pos: [], recs: [], exps: [] };
 let miMode = 'monthly';          // 'monthly' | 'yearly'
 let miModels = [];               // current per-SO models (for drilldown)
+let miNoteBySo = {};             // A191: soNo -> note text
 let miMonthsCache = [];
 
 function _ie(s) { return flowEsc(s); }
@@ -76,19 +77,25 @@ async function miLoad() {
   }
   if (state) state.textContent = 'Loading…';
   try {
-    const [invs, sos, pos, recs, exps, cds] = await Promise.all([
+    const [invs, sos, pos, recs, exps, cds, notes] = await Promise.all([
       fetchFlow('getInvoices').catch(() => ({ data: [] })),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getReceiving').catch(() => ({ data: [] })),
       fetchFlow('getExpenses').catch(() => ({ data: [] })),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
+      fetchFlow('getSONotes').catch(() => ({ data: [] })),   // A191 — absent on an older backend
     ]);
     miData = {
       invs: (invs && invs.data) || [], sos: (sos && sos.data) || [], pos: (pos && pos.data) || [],
       recs: (recs && recs.data) || [], exps: (exps && exps.data) || [],
       costDetails: (cds && cds.data) || [],
     };
+    // A191 — soNo → the note accounting/admin wrote on the Revenue & Net Profit report.
+    miNoteBySo = {};
+    ((notes && notes.data) || []).forEach(n => {
+      if (n && n.soNo && n.notes) miNoteBySo[String(n.soNo)] = String(n.notes);
+    });
     miBuildYears();
     miRender();
   } catch (e) {
@@ -325,8 +332,20 @@ function miSoBreakdown(m) {
       ${line('Total COGS', m.cogs, true, true)}
       <tr class="tot"><td>Gross Profit</td><td class="num" style="color:${_miCol(m.gp)};">${_im(m.gp)}</td></tr>
     </tbody></table>
+    ${miNoteHtml(m.soNo)}
     <p class="is-note" style="margin:0.5rem 0 0;">${note}</p>
   </div>`;
+}
+
+/* A191 — the sales-order note, written by accounting or admin on the Revenue & Net Profit report.
+   Escaped: it is free text on a financial record, rendered on four dashboards. */
+function miNoteHtml(soNo) {
+  const t = miNoteBySo[String(soNo)];
+  if (!t) return '';
+  return `<p class="is-note" style="margin:0.5rem 0 0;padding:0.45rem 0.6rem;border-left:3px solid #0f766e;` +
+         `background:var(--bg-inset,#f1f5f9);white-space:pre-wrap;color:var(--text-primary,#0f172a);">` +
+         `<strong style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:#0f766e;">Note</strong><br>` +
+         `${_ie(t)}</p>`;
 }
 
 function miToggleMonth(i) {

@@ -72,7 +72,12 @@ async function fetchFlow(action, params = {}, opts = {}) {
           throw new Error(`Server responded with status ${res.status}`);
         }
         const data = await res.json();
-        _flowCacheSet(q, data);
+        /* A191: opts.noStore skips the sessionStorage write. Used where a caller needs a payload
+           that carries fields the viewer may not see — admin reads getPricingRequests for six
+           harmless columns, and without this the commission and margin would sit in their browser
+           storage for 60s and survive navigation. It stays in memory for the call's lifetime;
+           sealing that needs a role-aware projection on the server. */
+        if (!opts.noStore) _flowCacheSet(q, data);
         return data;
       } catch (e) {
         clearTimeout(timer);
