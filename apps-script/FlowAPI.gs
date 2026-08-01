@@ -18,8 +18,10 @@
 
 var SHEET_ID = '1ND6d0OK1xJ3wM29L4EsD-Xia44FXfD7HOZx8tms9Msk'; // ← paste the new "v2 Process DB" spreadsheet ID here
 
-// Optional: Drive folder ID for saved quotation/PO PDFs. Blank → auto find/create "Flow Documents".
-var FLOW_DRIVE_FOLDER_ID = '';
+// Drive folder ID every saved document is filed under. A193: pinned to the company folder, so no
+// setup call is needed — _rootFolder() reads this constant BEFORE the ScriptProperty. Blank would
+// fall back to auto find/create "Flow Documents".
+var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
@@ -3504,9 +3506,12 @@ function _prUserFolder(userName) {
   return subIt.hasNext() ? subIt.next() : pr.createFolder(name);
 }
 
-/** Let the user pin the company-owned Drive folder once from the UI (writes a ScriptProperty). */
+/** Let the user pin the company-owned Drive folder once from the UI (writes a ScriptProperty).
+ *  A193: `p` is optional — pressing Run in the Apps Script editor calls this with no argument, which
+ *  used to throw "Cannot read properties of undefined". With no id it falls back to the constant. */
 function setFlowDriveFolder(p) {
-  var id = String(p.folderId || '').trim();
+  p = p || {};
+  var id = String(p.folderId || FLOW_DRIVE_FOLDER_ID || '').trim();
   if (!id) return { success: false, message: 'folderId required.' };
   try { DriveApp.getFolderById(id).getName(); }
   catch (e) { return { success: false, message: 'Folder not found or not shared with this account.' }; }
@@ -3975,6 +3980,68 @@ function runDriveMigration(p) {
     alreadyInPlace: already, errors: errors, nextOffset: next, log: log,
     message: (dryRun ? 'Dry run: ' : 'Moved ') + (dryRun ? processed + ' document(s) walked' : moved + ' file(s)') +
       (next === null ? ' — finished.' : ' — call again with offset ' + next + ' to continue.') };
+}
+
+/** A193 · SETUP — select this in the Apps Script editor and press Run. Takes no arguments.
+ *
+ *  Answers the one question that has to be settled before anything is filed: can this script account
+ *  actually WRITE to the company folder? Read-only access is the dangerous case — _rootFolder()
+ *  swallows the failure and silently falls back to a different folder called "Flow Documents", so
+ *  files look saved and land in the wrong place. This creates a probe folder, deletes it again, and
+ *  says plainly which it found. Safe to run as often as you like. */
+function setupFlowDrive() {
+  var out = [];
+  function say(s) { out.push(s); Logger.log(s); }
+  var id = FLOW_DRIVE_FOLDER_ID;
+  say('Folder ID  : ' + id);
+  var folder;
+  try { folder = DriveApp.getFolderById(id); say('Folder name: ' + folder.getName()); }
+  catch (e) {
+    say('CANNOT OPEN THIS FOLDER.');
+    say('Share it with the account running this script (' + Session.getEffectiveUser().getEmail() +
+        ') as an EDITOR, then run this again.');
+    return out.join('\n');
+  }
+  try {
+    var probe = folder.createFolder('_access probe (safe to delete)');
+    probe.setTrashed(true);
+    say('Write access: YES — folders can be created here.');
+  } catch (e) {
+    say('Write access: NO (' + e.message + ')');
+    say('The account can SEE the folder but not write to it. Change its access from Viewer to');
+    say('Editor, or documents will silently go to a different folder named "Flow Documents".');
+    return out.join('\n');
+  }
+  try { PropertiesService.getScriptProperties().setProperty('FLOW_DRIVE_FOLDER_ID', id); } catch (e) {}
+  say('');
+  say('Ready. Next: run previewDriveMigration() — it is read-only and moves nothing.');
+  return out.join('\n');
+}
+
+/** A193 · A readable summary of previewDriveMigration, for pressing Run in the editor.
+ *  Read-only: creates nothing, moves nothing. */
+function previewDriveMigrationReport() {
+  var r = previewDriveMigration({});
+  var out = [];
+  function say(s) { out.push(s); Logger.log(s); }
+  say('Documents            : ' + r.total);
+  say('Resolved to a client : ' + r.resolved);
+  say('No client to file to : ' + r.unresolved + '  (they go to ' + _FLOW_UNKNOWN_CLIENT + ')');
+  say('Waiting for their SO : ' + r.preSalesOrder + '  (in ' + _FLOW_PRESO_FOLDER + ')');
+  say('');
+  say('--- documents per client folder ---');
+  Object.keys(r.byClient).sort(function (a, b) { return r.byClient[b] - r.byClient[a]; })
+    .forEach(function (c) { say('  ' + r.byClient[c] + '\t' + c); });
+  if (r.possibleTypos.length) {
+    say('');
+    say('--- NEAR-IDENTICAL CLIENT NAMES — these will NOT be merged automatically ---');
+    say('    If a pair is really one client, point both Raw Names at the same Canonical');
+    say('    in the ClientAliases sheet, then run the migration.');
+    r.possibleTypos.forEach(function (t) { say('  ' + t.a + '   <->   ' + t.b); });
+  }
+  say('');
+  say('Nothing was created or moved.');
+  return out.join('\n');
 }
 
 /** Parse a Drive file id from a share URL (…/d/<id>/… or ?id=<id>). '' if none. */
