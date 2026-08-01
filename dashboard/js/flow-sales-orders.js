@@ -211,6 +211,7 @@ async function saveSO() {
     date: document.getElementById('date').value, status: document.getElementById('status').value,
     supplierType: document.getElementById('soSupplierType').value,
     clientPoDate: soVal('clientPoDate'), poReceivedDate: soVal('poReceivedDate'),   // A186
+    clientPoNo: soVal('clientPoNo'),                                                // A193
     createdBy: soSession.name, items: JSON.stringify(items)
   };
   if (!soNo) payload.clientRef = flowClientRef();          // idempotent create (safe retry)
@@ -238,7 +239,7 @@ function resetForm() {
   // A186 — deliberately NOT defaulted to today. The received date has to be a date someone
   // actually chose; pre-filling it invites accepting today's date without thinking, which is the
   // exact habit this feature exists to break.
-  ['clientPoDate', 'poReceivedDate'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  ['clientPoDate', 'poReceivedDate', 'clientPoNo'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   const cf = document.getElementById('clientPoFile'); if (cf) cf.value = '';
   const cm = document.getElementById('clientPoMsg'); if (cm) cm.style.display = 'none';
   document.getElementById('itemRows').innerHTML = '';
@@ -364,6 +365,7 @@ function editSO(no) {
     const e = document.getElementById(id);
     if (e) e.value = flowDate(id === 'clientPoDate' ? s.clientPoDate : s.poReceivedDate) || '';
   });
+  const cpn = document.getElementById('clientPoNo'); if (cpn) cpn.value = s.clientPoNo || '';   // A193
   const cf = document.getElementById('clientPoFile'); if (cf) cf.value = '';
   const cm = document.getElementById('clientPoMsg'); if (cm) cm.style.display = 'none';
   document.getElementById('formTitle').textContent = 'Edit ' + s.soNo;

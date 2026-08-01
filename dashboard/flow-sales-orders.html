@@ -35,6 +35,10 @@
              Both are recorded so the gap is on the record instead of in somebody's inbox. -->
         <div><label>Client PO date <span style="font-weight:400;color:var(--text-muted,#64748b);">(the date printed on their PO)</span></label><input type="date" id="clientPoDate"></div>
         <div><label>PO received on <span style="font-weight:400;color:var(--text-muted,#64748b);">(the day it actually reached us)</span></label><input type="date" id="poReceivedDate"></div>
+        <!-- A193: normally blank. The SO No above already IS the client's PO number, and that is what
+             names the Drive folder. Fill this in only on the rare order numbered SO-YYYYMM-NNN by the
+             system, where the client's PO number is a different string. -->
+        <div><label>Client PO No <span style="font-weight:400;color:var(--text-muted,#64748b);">(only if it differs from the SO No above)</span></label><input type="text" id="clientPoNo" placeholder="leave blank — the SO No is normally their PO number"></div>
       </div>
 
       <!-- A186 — attach the client's PO and stamp it RECEIVED. The original is filed untouched and

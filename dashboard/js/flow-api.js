@@ -129,7 +129,9 @@ const FLOW_SECURED_ACTIONS = [
   'voidCollection', 'voidInvoice',
   // A190 — mirrors _SECURED (FlowAPI.gs) and SECURED_ACTIONS (blueprints/flow.py). If this list
   // omits an action the other two secure, the POST goes direct and the server rejects it.
-  'approveWeeklyItinerary', 'rejectWeeklyItinerary'
+  'approveWeeklyItinerary', 'rejectWeeklyItinerary',
+  // A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
+  'seedClientAliases', 'runDriveMigration'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

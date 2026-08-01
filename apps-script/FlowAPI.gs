@@ -23,7 +23,7 @@ var FLOW_DRIVE_FOLDER_ID = '';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 106;  // A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 107;  // A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -59,7 +59,11 @@ var SCHEMA = {
   // it actually reached us. They routinely differ by days, and only the second one is ours to know.
   // Appended at the END (house convention) — but see updateSalesOrder, which hard-codes its value
   // list and MUST be extended in step with this array.
-  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date'],
+  //    A193: 'Client PO No' is an OPTIONAL override. For 102 of 105 live orders the SO No *is* the
+  //    client's PO number (A145 — the rep types it in), so this stays blank and the Drive folder is
+  //    named from SO No alone. Fill it only when the two genuinely differ, e.g. on a system-generated
+  //    SO-YYYYMM-NNN whose client PO arrived later.
+  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date', 'Client PO No'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID'],
 
   //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
@@ -144,6 +148,11 @@ var SCHEMA = {
   // ── A145 masters: prefill the fields re-typed on every payment request / purchase request ──
   Suppliers: ['Supplier', 'Bank Name', 'Account Name', 'Account Number', 'Payment Method', 'Currency',
               'TIN', 'Address', 'Notes', 'Updated By', 'Updated At'],
+  // A193: the reviewed client-name registry behind the Drive folder tree. 'Raw Name' is a spelling as
+  // it appears on an order; 'Canonical' groups the spellings that are one client; 'Display Name' is
+  // the folder. Edit a row to correct a merge — the matcher only proposes, this decides.
+  ClientAliases: ['Raw Name', 'Canonical', 'Display Name', 'Updated At'],
+
   Clients:   ['Customer', 'Address', 'Contact Person', 'Designation', 'Email', 'Phone', 'RFQ Ref',
               'Payment Terms', 'Notes', 'Updated By', 'Updated At'],
 
@@ -349,7 +358,12 @@ var _SECURED = {
   // A190 — approving an itinerary decides whose week is sanctioned, so identity must come from
   // the server, not the browser. All three secured lists have to agree; missing one re-opens the
   // actorRole spoof the A188 review flagged on createQuotation.
-  approveWeeklyItinerary: 1, rejectWeeklyItinerary: 1
+  approveWeeklyItinerary: 1, rejectWeeklyItinerary: 1,
+  // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
+  // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
+  // path calls the function directly and never reaches _dispatch. previewDriveMigration is
+  // deliberately NOT here — it is read-only and creates nothing.
+  seedClientAliases: 1, runDriveMigration: 1
 };
 
 function _securedBlocked(action, params) {
@@ -1090,6 +1104,7 @@ function getSalesOrders() {
       status: s['Status'], total: _num(s['Total']), createdBy: s['Created By'], createdAt: s['Created At'],
       supplierType: s['Supplier Type'] || '', rowIndex: s.rowIndex,
       clientPoDate: s['Client PO Date'] || '', poReceivedDate: s['PO Received Date'] || '',   // A186
+      clientPoNo: s['Client PO No'] || '',                                                    // A193
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Price/Unit']), total: _num(r['Total Price']) }; })
@@ -1113,7 +1128,8 @@ function createSalesOrder(p) {
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
     total, p.createdBy || '', _now(), p.supplierType || '',
-    p.clientPoDate || '', p.poReceivedDate || '']);   // A186
+    p.clientPoDate || '', p.poReceivedDate || '',     // A186
+    p.clientPoNo || '']);                             // A193
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || ''];   // A159 Item ID
@@ -1122,6 +1138,8 @@ function createSalesOrder(p) {
   // so every SO has a single end-to-end lifecycle record (track + nudge; the auto-derived stages are
   // recomputed live on read, so an old SO simply shows its true progress).
   _flowAutoCreateShipment(no, p.customer, (items[0] && items[0].itemName) || '', p.createdBy || p.actorName || '');
+  _registerClient(p.customer);   // A193 — pin the spelling before it names a folder
+  _adoptSoDocs(no);              // A193 — pull the quotation/PR documents out of _Pre-Sales Order
   _refStore('createSalesOrder', p.clientRef, no);
   return { success: true, soNo: no, message: 'Sales Order created.' };
 }
@@ -1288,13 +1306,19 @@ function updateSalesOrder(p) {
         (p.supplierType != null ? p.supplierType : (r['Supplier Type'] || '')),
         // A186 — null means "not sent", so an edit that omits the field keeps what is stored.
         (p.clientPoDate != null ? p.clientPoDate : (r['Client PO Date'] || '')),
-        (p.poReceivedDate != null ? p.poReceivedDate : (r['PO Received Date'] || ''))]]);
+        (p.poReceivedDate != null ? p.poReceivedDate : (r['PO Received Date'] || '')),
+        // A193 — same null-means-not-sent rule, so an edit that omits it keeps what is stored.
+        (p.clientPoNo != null ? p.clientPoNo : (r['Client PO No'] || ''))]]);
     }
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || ''];   // A159 Item ID
   });
+  // A193: an edit is where a quotation link (or a Client PO No, which renames the folder) usually
+  // appears, so re-file here too. Idempotent — a file already in place is left alone.
+  _registerClient(p.customer);
+  _adoptSoDocs(no);
   return { success: true, soNo: no, message: 'Sales Order updated.' };
 }
 
@@ -3059,7 +3083,8 @@ function rejectPaymentRequest(p) {
 
 function savePaymentRequestPDF(p) {
   if (!p.prNo || !p.pdfBase64) return { success: false, message: 'prNo and pdfBase64 required.' };
-  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'), 'application/pdf');
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || (p.prNo + '.pdf'), 'application/pdf',
+    _docFolder('Payment Request', p.prNo, _GENERATED_DOC_TYPE));   // A193
   var link = saved.url;
   _setCellByKey('PaymentRequests', 'PR No', p.prNo, 'PDF Link', link);
   _registerDocument('Payment Request', p.prNo, p.fileName, link, saved.id, p.actorName);
@@ -3489,6 +3514,469 @@ function setFlowDriveFolder(p) {
   return { success: true, folderId: id, message: 'Flow documents folder set. New PDFs/attachments will save here.' };
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  A193 · DRIVE FILING — <client> / <sales order> / <document type>
+//
+//  Everything below only decides WHICH FOLDER a file belongs in. It never decides whether a file is
+//  saved: every entry point falls back to the root folder, because a client with an odd name must
+//  not be able to block a purchase order from being filed.
+// ════════════════════════════════════════════════════════════════════════════
+
+var _FLOW_UNKNOWN_CLIENT = '_Unknown Client';
+var _FLOW_PRESO_FOLDER   = '_Pre-Sales Order';
+
+/** _rows() re-reads the whole sheet on every call, and resolving one file's folder touches several
+ *  sheets. Memoise for the life of ONE execution only — never across, since mutations depend on
+ *  _rows() being fresh. Cleared by _flowFilingReset(). */
+var _FILING_MEMO = {};
+function _memoRows(name) {
+  if (!_FILING_MEMO[name]) { try { _FILING_MEMO[name] = _rows(name); } catch (e) { _FILING_MEMO[name] = []; } }
+  return _FILING_MEMO[name];
+}
+function _flowFilingReset() { _FILING_MEMO = {}; _CLIENT_REG_CACHE = null; _DISPLAY_CACHE = null; }
+
+/** First row whose keyCol === keyVal, or null. */
+function _memoFind(sheet, keyCol, keyVal) {
+  var v = String(keyVal || ''); if (!v) return null;
+  var rows = _memoRows(sheet);
+  for (var i = 0; i < rows.length; i++) if (String(rows[i][keyCol]) === v) return rows[i];
+  return null;
+}
+function _memoField(sheet, keyCol, keyVal, field) {
+  var r = _memoFind(sheet, keyCol, keyVal);
+  return r ? String(r[field] || '') : '';
+}
+
+// ── Client naming ────────────────────────────────────────────────────────────
+/* The live order book spells one client several ways — "Eagle Cement Corporation", "Eagle Cement
+   Corp", "Eagle Cement" — and they must share ONE folder. _canonKey() reduces a name to a comparison
+   key; it is deliberately conservative, because a matcher aggressive enough to merge those is one odd
+   name away from merging two genuinely different companies. It therefore only PROPOSES: a row in the
+   ClientAliases sheet always wins, which is how a wrong merge is corrected without touching code. */
+var _CLIENT_SUFFIX_RE = /\b(corporation|corp|incorporated|inc|company|co|ltd|limited|enterprises|enterprise|ent|philippines|phils|phil|international|intl|group|holdings|resources)\b/g;
+
+function _canonKey(name) {
+  var s = String(name || '').toLowerCase();
+  s = s.replace(/\([^)]*\)/g, ' ');    // "(FFHC)" is the same firm abbreviating itself
+  /* " - TSI BU" is a business unit of the same client. The live book writes it both ways —
+     "Corporation - TSI BU" AND "Corporation- SNAPB BU" — so the rule keys on whitespace AFTER the
+     dash, not before it; keying on a fully spaced dash filed the same company two different ways
+     depending on a stray space. A dash with a word character on both sides is left alone, which is
+     what keeps "Itogon-Suyoc" intact. */
+  s = s.replace(/\s*[-–—]\s+.*$/, '');
+  s = s.replace(/[.,]/g, ' ');
+  s = s.replace(_CLIENT_SUFFIX_RE, ' ');
+  s = s.replace(/[^a-z0-9 ]/g, ' ');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/** The raw spelling, normalised only for lookup. Keyed on this (not the canon key) so an alias row
+ *  can SPLIT what the matcher merged — e.g. filing "Aboitiz Power - TL" apart from "- TSI BU". */
+function _rawKey(name) { return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+var _CLIENT_REG_CACHE = null;
+function _clientRegistry() {
+  if (_CLIENT_REG_CACHE) return _CLIENT_REG_CACHE;
+  var byRaw = {}, byKey = {};
+  _memoRows('ClientAliases').forEach(function (r) {
+    var raw = _rawKey(r['Raw Name']);
+    var key = _canonKey(r['Canonical'] || r['Raw Name']);
+    var disp = String(r['Display Name'] || r['Canonical'] || r['Raw Name'] || '').trim();
+    if (raw && key) byRaw[raw] = key;
+    if (key && disp && !byKey[key]) byKey[key] = disp;
+  });
+  _CLIENT_REG_CACHE = { byRaw: byRaw, byKey: byKey };
+  return _CLIENT_REG_CACHE;
+}
+
+/** Your own Clients sheet supplies the display spelling wherever it reaches — but it only names 7 of
+ *  the 30 clients on the order book, so it cannot be the sole authority. */
+function _clientSheetName(key) {
+  var rows = _memoRows('Clients'), best = '';
+  for (var i = 0; i < rows.length; i++) {
+    var n = String(rows[i]['Customer'] || '');
+    if (!n || _canonKey(n) !== key) continue;
+    // Normalised the same way as any other spelling: the Clients sheet also carries business-unit
+    // rows ("Aboitiz Power Corporation - TMI BU"), and that must not become the whole client's
+    // folder name. It lists several spellings of one client too, so pick deterministically.
+    var cand = _displayForm(n);
+    if (cand && (!best || _displayBetter(cand, best))) best = cand;
+  }
+  return best;
+}
+
+/* The folder name has to depend on the CANONICAL KEY, never on whichever spelling happened to be on
+   the record being filed — otherwise "Eagle Cement Corp" and "Eagle Cement" would each mint their own
+   folder and the merge would achieve nothing. So one spelling is elected per key, deterministically,
+   across every customer name the system knows. */
+/** A spelling reduced to the company itself: the business-unit tail comes off, so the folder holding
+ *  every Aboitiz BU is called "Aboitiz Power Corporation" and not whichever BU happened to sort
+ *  first. Same dash rule as _canonKey, so "Itogon-Suyoc" is untouched. */
+function _displayForm(name) {
+  var s = String(name || '').replace(/\s*[-–—]\s+.*$/, '').trim();
+  return s.replace(/[\s,;:]+$/, '').trim();
+}
+
+var _DISPLAY_CACHE = null;
+function _electedDisplay(key) {
+  if (!_DISPLAY_CACHE) {
+    var reg = _clientRegistry(), best = {};
+    _allCustomerSpellings().forEach(function (n) {
+      var k = reg.byRaw[_rawKey(n)] || _canonKey(n);
+      if (!k) return;
+      var cand = _displayForm(n);
+      if (!cand) return;
+      var cur = best[k];
+      // Most complete name first ("Eagle Cement Corporation" beats "Eagle Cement"); then prefer
+      // ordinary case over SHOUTING; then lowercase and raw comparisons so the result is total.
+      if (!cur || _displayBetter(cand, cur)) best[k] = cand;
+    });
+    _DISPLAY_CACHE = best;
+  }
+  return _DISPLAY_CACHE[key] || '';
+}
+
+/** Is `a` the better folder name than `b`? Compared field by field — an explicit comparator rather
+ *  than `<` on two arrays, which JS would silently turn into a string comparison. */
+function _displayBetter(a, b) {
+  if (a.length !== b.length) return a.length > b.length;               // the most complete name
+  var au = (a === a.toUpperCase()) ? 1 : 0, bu = (b === b.toUpperCase()) ? 1 : 0;
+  if (au !== bu) return au < bu;                                       // ordinary case over SHOUTING
+  var al = a.toLowerCase(), bl = b.toLowerCase();
+  if (al !== bl) return al < bl;
+  return a < b;                                                        // total, so the result is stable
+}
+
+/** name -> { key, display }. `display` is the folder name and MUST be stable for a given key, or
+ *  a second spelling would mint a second folder for the same client. */
+function _canonClient(name) {
+  var raw = String(name || '').trim();
+  if (!raw) return { key: '', display: _FLOW_UNKNOWN_CLIENT, raw: '' };
+  var reg = _clientRegistry();
+  var key = reg.byRaw[_rawKey(raw)] || _canonKey(raw);
+  if (!key) return { key: '', display: _FLOW_UNKNOWN_CLIENT, raw: raw };
+  // Pinned registry row wins, then your Clients sheet, then the elected spelling, then the raw name.
+  return { key: key, display: reg.byKey[key] || _clientSheetName(key) || _electedDisplay(key) || raw, raw: raw };
+}
+
+/** Pin a spelling into ClientAliases the first time it is seen, so the chosen folder name can never
+ *  drift afterwards. Best-effort: filing must survive a missing or unwritable sheet. */
+function _registerClient(name) {
+  try {
+    var raw = String(name || '').trim();
+    if (!raw) return;
+    var reg = _clientRegistry();
+    if (reg.byRaw[_rawKey(raw)]) return;
+    var c = _canonClient(raw);
+    if (!c.key) return;
+    _append('ClientAliases', [raw, c.key, c.display, _now()]);
+    reg.byRaw[_rawKey(raw)] = c.key;
+    if (!reg.byKey[c.key]) reg.byKey[c.key] = c.display;
+    if (_FILING_MEMO['ClientAliases']) delete _FILING_MEMO['ClientAliases'];
+  } catch (e) { /* never block a save */ }
+}
+
+// ── Which subfolder ──────────────────────────────────────────────────────────
+/* Numbered so Drive's alphabetical sort reads in lifecycle order. */
+var _DOC_SUBFOLDER_BY_MODULE = {
+  'Pricing Request': '01 Pricing Request', 'Quotation': '02 Quotation', 'Sales Order': '03 Client PO',
+  'Purchase Order': '04 Purchase Orders', 'Payment Request': '05 Payments', 'AP Aging': '05 Payments',
+  'Receiving': '06 Receiving & Shipping', 'Shipment': '06 Receiving & Shipping',
+  'Invoice': '07 Invoices & Collections', 'AR Aging': '07 Invoices & Collections',
+  'Collection': '07 Invoices & Collections'
+};
+/* Doc Type is free text — 71 of 234 live rows are blank and the rest range from 'Supplier Quotation'
+   to 'tt_sent' to 'Original quotation (June 24, 2026)'. So it is consulted first where it is
+   meaningful, and otherwise the Module decides. Anything unrecognised lands in 99 Other rather than
+   being guessed at. */
+var _DOC_SUBFOLDER_BY_TYPE = {
+  'supplier quotation': '01 Pricing Request', 'item photo': '02 Quotation',
+  'quotation for client': '02 Quotation', 'client po': '03 Client PO',
+  'client po (stamped)': '03 Client PO', 'client purchase order': '03 Client PO',
+  'client so': '03 Client PO', 'proof of payment': '05 Payments'
+};
+function _docSubfolder(module, docType) {
+  var t = String(docType || '').trim().toLowerCase().replace(/\s*\(superseded\)\s*$/, '');
+  if (_DOC_SUBFOLDER_BY_TYPE[t]) return _DOC_SUBFOLDER_BY_TYPE[t];
+  return _DOC_SUBFOLDER_BY_MODULE[String(module || '').trim()] || '99 Other';
+}
+
+// ── Which sales order, and therefore which client ────────────────────────────
+/* _soDocChain() walks SO -> documents; this walks it back. Targeted lookups rather than a full index,
+   because the save path resolves exactly one document. */
+function _soForDoc(module, refNo) {
+  var m = String(module || ''), ref = String(refNo || '');
+  if (!m || !ref) return '';
+  if (m === 'Sales Order')    return _memoFind('SalesOrders', 'SO No', ref) ? ref : '';
+  if (m === 'Quotation')      { var s = _memoFind('SalesOrders', 'Quotation No', ref); return s ? String(s['SO No']) : ''; }
+  if (m === 'Pricing Request') {
+    var q = _memoFind('Quotations', 'PR No', ref);
+    if (!q) return '';
+    var s2 = _memoFind('SalesOrders', 'Quotation No', q['Quotation No']);
+    return s2 ? String(s2['SO No']) : '';
+  }
+  if (m === 'Purchase Order') return _memoField('PurchaseOrders', 'PO No', ref, 'SO No');
+  if (m === 'Payment Request') {
+    var so = _memoField('PaymentRequests', 'PR No', ref, 'SO No');
+    if (so) return so;
+    var po = _memoField('PaymentRequests', 'PR No', ref, 'PO No');
+    return po ? _memoField('PurchaseOrders', 'PO No', po, 'SO No') : '';
+  }
+  if (m === 'AP Aging') {
+    var po2 = _memoField('APAging', 'AP No', ref, 'PO No');
+    return po2 ? _memoField('PurchaseOrders', 'PO No', po2, 'SO No') : '';
+  }
+  if (m === 'Receiving') {
+    var so3 = _memoField('MaterialsReceiving', 'MR No', ref, 'SO No');
+    if (so3) return so3;
+    var po3 = _memoField('MaterialsReceiving', 'MR No', ref, 'PO No');
+    return po3 ? _memoField('PurchaseOrders', 'PO No', po3, 'SO No') : '';
+  }
+  if (m === 'Invoice')    return _memoField('Invoices', 'INV No', ref, 'SO No');
+  if (m === 'AR Aging')   return _memoField('ARAging', 'AR No', ref, 'SO No');
+  if (m === 'Shipment')   return _memoField('Shipments', 'Shipment ID', ref, 'SO No');
+  if (m === 'Collection') return _memoField('Collections', 'Collection No', ref, 'SO No');
+  return '';
+}
+
+/* Only 6 of 105 sales orders carry a Quotation No, so most documents cannot reach an SO at all. They
+   can still reach a CLIENT — every quotation and pricing request names its customer — which is why
+   the client is the top level of the tree rather than the sales order. */
+function _customerForDoc(module, refNo) {
+  var m = String(module || ''), ref = String(refNo || '');
+  if (m === 'Quotation')       return _memoField('Quotations', 'Quotation No', ref, 'Customer');
+  if (m === 'Pricing Request') return _memoField('PricingRequests', 'PR No', ref, 'Customer');
+  if (m === 'Sales Order')     return _memoField('SalesOrders', 'SO No', ref, 'Customer');
+  if (m === 'Invoice')         return _memoField('Invoices', 'INV No', ref, 'Customer');
+  if (m === 'AR Aging')        return _memoField('ARAging', 'AR No', ref, 'Customer');
+  if (m === 'Collection')      return _memoField('Collections', 'Collection No', ref, 'Customer');
+  if (m === 'Shipment')        return _memoField('Shipments', 'Shipment ID', ref, 'Customer');
+  return '';
+}
+
+/** "<SO No>" — which for 102 of 105 live orders already IS the client's PO number (A145: the rep
+ *  types it in). The suffix appears only on the rare order whose client PO is a different string. */
+function _soFolderName(soNo) {
+  var name = String(soNo || '');
+  var poNo = _memoField('SalesOrders', 'SO No', name, 'Client PO No');
+  if (poNo && _rawKey(poNo) !== _rawKey(name)) name += ' - PO ' + poNo;
+  return name;
+}
+
+/** The full path, as segments below the root. Never throws. */
+function _docFolderPath(module, refNo, docType) {
+  var sub = _docSubfolder(module, docType);
+  var soNo = '';
+  try { soNo = _soForDoc(module, refNo); } catch (e) {}
+  var customer = '';
+  try { customer = soNo ? _memoField('SalesOrders', 'SO No', soNo, 'Customer') : _customerForDoc(module, refNo); } catch (e) {}
+  var c = _canonClient(customer);
+  if (!c.key) return [_FLOW_UNKNOWN_CLIENT, sub];
+  if (!soNo)  return [c.display, _FLOW_PRESO_FOLDER, sub];
+  return [c.display, _soFolderName(soNo), sub];
+}
+
+/** Drive tolerates most characters, but a slash reads as a path and the live SO numbers contain
+ *  pipes ("3120001511 | T21"), so names are normalised and length-capped. */
+function _safeName(s) {
+  var n = String(s || '').replace(/[\/\\]/g, '-').replace(/\s+/g, ' ').trim();
+  return n ? n.substring(0, 120) : 'Unnamed';
+}
+
+/** Walk the path from the root, creating each level that is missing. */
+function _ensurePath(segments) {
+  var f = _rootFolder();
+  for (var i = 0; i < segments.length; i++) {
+    var name = _safeName(segments[i]);
+    var it = f.getFoldersByName(name);
+    f = it.hasNext() ? it.next() : f.createFolder(name);
+  }
+  return f;
+}
+
+/** The folder a document belongs in, or null to let the caller fall back to the root. */
+function _docFolder(module, refNo, docType) {
+  try {
+    var path = _docFolderPath(module, refNo, docType);
+    if (path[0] !== _FLOW_UNKNOWN_CLIENT) {
+      var cust = '';
+      try { var so = _soForDoc(module, refNo);
+            cust = so ? _memoField('SalesOrders', 'SO No', so, 'Customer') : _customerForDoc(module, refNo); } catch (e) {}
+      _registerClient(cust);
+    }
+    return _ensurePath(path);
+  } catch (e) { return null; }
+}
+
+// ── Adopting documents once the sales order exists ───────────────────────────
+/* A quotation, its pricing request and their PDFs are all created BEFORE the sales order does, so
+   they are filed under <client>/_Pre-Sales Order/. When the SO finally appears they are moved in.
+
+   A move preserves the file's ID and its URL, so every 'Drive Link' already stored in the Documents
+   sheet — and every link already sitting in the UI — keeps working. Nothing needs rewriting. */
+function _moveFileTo(fileId, folder) {
+  if (!folder || !fileId) return false;
+  try {
+    var f = DriveApp.getFileById(fileId);
+    var parents = f.getParents();
+    if (parents.hasNext() && parents.next().getId() === folder.getId()) return false;  // already filed
+    f.moveTo(folder);
+    return true;
+  } catch (e) { return false; }
+}
+
+/** Move every document in a sales order's lifecycle chain into that order's folder. Idempotent, and
+ *  never throws — filing must not be able to fail a sales-order save. */
+function _adoptSoDocs(soNo) {
+  var moved = 0;
+  try {
+    SpreadsheetApp.flush();     // the SO row was just written; the resolver has to be able to see it
+    _flowFilingReset();
+    var want = {};
+    _soDocChain(soNo).forEach(function (r) { want[String(r[0]) + '|' + String(r[1])] = true; });
+    _memoRows('Documents').forEach(function (d) {
+      if (!want[String(d['Module']) + '|' + String(d['Ref No'])]) return;
+      var fileId = String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']);
+      if (_moveFileTo(fileId, _docFolder(d['Module'], d['Ref No'], d['Doc Type']))) moved++;
+    });
+  } catch (e) { /* never block the sales order */ }
+  return moved;
+}
+
+// ── Migrating the documents that are already in Drive ────────────────────────
+/* Modelled on Code.gs migrateShipmentDocs: preview first, then run in resumable batches. */
+
+/** Every customer spelling the system knows, from the three sheets that name one. */
+function _allCustomerSpellings() {
+  var seen = {}, out = [];
+  [['SalesOrders', 'Customer'], ['Quotations', 'Customer'], ['PricingRequests', 'Customer']]
+    .forEach(function (src) {
+      _memoRows(src[0]).forEach(function (r) {
+        var n = String(r[src[1]] || '').trim();
+        if (n && !seen[_rawKey(n)]) { seen[_rawKey(n)] = true; out.push(n); }
+      });
+    });
+  return out;
+}
+
+function _editDistance(a, b) {
+  var m = a.length, n = b.length, prev = [], cur = [], i, j;
+  for (j = 0; j <= n; j++) prev[j] = j;
+  for (i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    }
+    for (j = 0; j <= n; j++) prev[j] = cur[j];
+  }
+  return prev[n];
+}
+
+/** The reviewed client list: which spellings group together, and which near-identical groups are
+ *  probably a typo rather than two companies. A typo (ITOGON SOYUC vs ITOGON-SUYOC) can only be
+ *  judged by a person — merging on near-match automatically would also merge real companies. */
+function _clientProposals() {
+  var groups = {}, reg = _clientRegistry();
+  _allCustomerSpellings().forEach(function (n) {
+    var key = reg.byRaw[_rawKey(n)] || _canonKey(n);
+    if (!key) return;
+    if (!groups[key]) groups[key] = { canonical: key, display: _canonClient(n).display, spellings: [], pinned: false };
+    groups[key].spellings.push(n);
+    if (reg.byRaw[_rawKey(n)]) groups[key].pinned = true;
+  });
+  var keys = Object.keys(groups).sort(), possibleTypos = [];
+  for (var a = 0; a < keys.length; a++) {
+    for (var b = a + 1; b < keys.length; b++) {
+      if (Math.abs(keys[a].length - keys[b].length) > 2) continue;
+      if (keys[a].length < 7) continue;
+      if (_editDistance(keys[a], keys[b]) <= 2) {
+        possibleTypos.push({ a: groups[keys[a]].display, b: groups[keys[b]].display,
+          hint: 'These differ by 1-2 characters. If they are the same client, point both Raw Names ' +
+                'at one Canonical in the ClientAliases sheet before migrating.' });
+      }
+    }
+  }
+  return { clients: keys.map(function (k) { return groups[k]; }), possibleTypos: possibleTypos };
+}
+
+/** Read-only. Resolves where all 234 documents WOULD go. Creates nothing and moves nothing. */
+function previewDriveMigration(p) {
+  _flowFilingReset();
+  var docs = _memoRows('Documents');
+  var rows = [], byFolder = {}, byClient = {}, unresolved = 0, preSo = 0;
+  docs.forEach(function (d) {
+    var path = _docFolderPath(d['Module'], d['Ref No'], d['Doc Type']);
+    var full = path.join(' / ');
+    byFolder[full] = (byFolder[full] || 0) + 1;
+    byClient[path[0]] = (byClient[path[0]] || 0) + 1;
+    var isUnknown = path[0] === _FLOW_UNKNOWN_CLIENT;
+    var isPre = path.length > 1 && path[1] === _FLOW_PRESO_FOLDER;
+    if (isUnknown) unresolved++;
+    if (isPre) preSo++;
+    rows.push({ docId: d['Doc ID'], module: d['Module'], refNo: d['Ref No'],
+      docType: String(d['Doc Type'] || ''), fileName: String(d['File Name'] || ''),
+      fileId: String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']),
+      path: full, client: path[0], unresolved: isUnknown, preSalesOrder: isPre });
+  });
+  var prop = _clientProposals();
+  return { success: true, total: docs.length, resolved: docs.length - unresolved,
+    unresolved: unresolved, preSalesOrder: preSo, byClient: byClient, byFolder: byFolder,
+    clients: prop.clients, possibleTypos: prop.possibleTypos, documents: rows,
+    message: 'Preview only — nothing was created or moved.' };
+}
+
+/** Write the proposed client registry into ClientAliases so it can be reviewed and edited in the
+ *  sheet before anything moves. Idempotent: a Raw Name already present is left exactly as it is. */
+function seedClientAliases(p) {
+  _flowFilingReset();
+  var reg = _clientRegistry(), added = 0, skipped = 0;
+  _allCustomerSpellings().forEach(function (n) {
+    if (reg.byRaw[_rawKey(n)]) { skipped++; return; }
+    var c = _canonClient(n);
+    if (!c.key) { skipped++; return; }
+    _append('ClientAliases', [n, c.key, c.display, _now()]);
+    reg.byRaw[_rawKey(n)] = c.key;
+    if (!reg.byKey[c.key]) reg.byKey[c.key] = c.display;
+    added++;
+  });
+  return { success: true, added: added, skipped: skipped,
+    message: 'Seeded ' + added + ' client name(s); ' + skipped + ' already on file. Edit the ' +
+             'ClientAliases sheet to correct any grouping, then run the migration.' };
+}
+
+/** Move the existing files. Resumable: pass back `nextOffset` until it comes back null. Stops well
+ *  short of the 6-minute execution ceiling. Set dryRun to walk it without touching Drive. */
+function runDriveMigration(p) {
+  p = p || {};
+  var dryRun = (p.dryRun === true || String(p.dryRun) === 'true');
+  var onlyClient = String(p.client || '').trim();
+  var offset = Math.max(0, Math.floor(_num(p.offset)));
+  var limit = Math.max(1, Math.floor(_num(p.limit) || 60));
+  _flowFilingReset();
+  var docs = _memoRows('Documents');
+  var processed = 0, moved = 0, already = 0, errors = 0, log = [];
+  var started = Date.now(), i = offset;
+  for (; i < docs.length; i++) {
+    if (processed >= limit || Date.now() - started > 240000) break;
+    var d = docs[i];
+    var path = _docFolderPath(d['Module'], d['Ref No'], d['Doc Type']);
+    if (onlyClient && path[0] !== onlyClient) continue;
+    processed++;
+    var fileId = String(d['File ID'] || '') || _driveIdFromUrl(d['Drive Link']);
+    if (!fileId) { errors++; log.push({ docId: d['Doc ID'], error: 'no Drive file id on the record' }); continue; }
+    if (dryRun) { log.push({ docId: d['Doc ID'], to: path.join(' / '), dryRun: true }); continue; }
+    try {
+      if (_moveFileTo(fileId, _ensurePath(path))) { moved++; log.push({ docId: d['Doc ID'], to: path.join(' / ') }); }
+      else already++;
+    } catch (e) { errors++; log.push({ docId: d['Doc ID'], error: e.message }); }
+  }
+  var next = i < docs.length ? i : null;
+  return { success: true, dryRun: dryRun, total: docs.length, processed: processed, moved: moved,
+    alreadyInPlace: already, errors: errors, nextOffset: next, log: log,
+    message: (dryRun ? 'Dry run: ' : 'Moved ') + (dryRun ? processed + ' document(s) walked' : moved + ' file(s)') +
+      (next === null ? ' — finished.' : ' — call again with offset ' + next + ' to continue.') };
+}
+
 /** Parse a Drive file id from a share URL (…/d/<id>/… or ?id=<id>). '' if none. */
 function _driveIdFromUrl(url) {
   var s = String(url || '');
@@ -3557,7 +4045,8 @@ function _setCellByKey(sheetName, keyCol, keyVal, header, value) {
 
 function saveQuotationPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
-  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'quotation.pdf', 'application/pdf');
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'quotation.pdf', 'application/pdf',
+    _docFolder('Quotation', p.quotationNo, _GENERATED_DOC_TYPE));   // A193
   var link = saved.url;
   if (p.quotationNo) {
     _setCellByKey('Quotations', 'Quotation No', p.quotationNo, 'PDF Link', link);
@@ -3571,7 +4060,8 @@ function saveQuotationPDF(p) {
 
 function savePOPDF(p) {
   if (!p.pdfBase64) return { success: false, message: 'pdfBase64 required.' };
-  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'purchase-order.pdf', 'application/pdf');
+  var saved = _saveFileToDrive(p.pdfBase64, p.fileName || 'purchase-order.pdf', 'application/pdf',
+    _docFolder('Purchase Order', p.poNo, _GENERATED_DOC_TYPE));   // A193
   var link = saved.url;
   if (p.poNo) {
     _setCellByKey('PurchaseOrders', 'PO No', p.poNo, 'PDF Link', link);
@@ -3584,7 +4074,8 @@ function savePOPDF(p) {
 function addDocument(p) {
   if (!p.module || !p.refNo) return { success: false, message: 'module and refNo are required.' };
   if (!p.fileBase64) return { success: false, message: 'fileBase64 is required.' };
-  var saved = _saveFileToDrive(p.fileBase64, p.fileName || 'document', p.mimeType);
+  var saved = _saveFileToDrive(p.fileBase64, p.fileName || 'document', p.mimeType,
+    _docFolder(p.module, p.refNo, p.docType));   // A193 — every hand-attached document
   var docId = _nextNumber('Documents', 1, 'DOC');
   var now = _now();
   _append('Documents', [docId, p.module, p.refNo, p.docType || '', p.fileName || '',
@@ -3670,6 +4161,9 @@ function _soDocChain(soNo) {
   });
   _rows('Invoices').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['Invoice', r['INV No']]); });
   _rows('ARAging').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['AR Aging', r['AR No']]); });
+  // A193: Collections was the one lifecycle sheet this chain never queried, so a proof of payment
+  // attached to a collection was invisible to the SO's document view.
+  _rows('Collections').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['Collection', r['Collection No']]); });
   _rows('Shipments').forEach(function (r) { if (String(r['SO No']) === String(soNo)) refs.push(['Shipment', r['Shipment ID']]); });
   return refs;
 }
@@ -4138,7 +4632,15 @@ function logClientVisit(p) {
 
   var docId = '';
   try {
-    var saved = _saveFileToDrive(photo, 'visit-' + no + '.jpg', p.photoMimeType || 'image/jpeg');
+    /* A193: a visit has no sales order, but `company` IS the client — so the photo files under
+       <client>/Client Visits/ rather than being dumped in the root. */
+    var vFolder = null;
+    try {
+      _registerClient(company);
+      var vc = _canonClient(company);
+      if (vc.key) vFolder = _ensurePath([vc.display, 'Client Visits']);
+    } catch (e) { vFolder = null; }
+    var saved = _saveFileToDrive(photo, 'visit-' + no + '.jpg', p.photoMimeType || 'image/jpeg', vFolder);
     docId = 'DOC-' + Utilities.getUuid().slice(0, 8).toUpperCase();
     _append('Documents', [docId, 'Client Visit', no, 'Visit Photo', 'visit-' + no + '.jpg',
       saved.url, saved.id, p.actorName || '', _now()]);
@@ -4470,7 +4972,9 @@ var _MODULE_MAP = {
   importPricingSubmissions: ['Pricing Request', 'Imported'],
   // A151
   backfillShipments: ['Sales Order', 'Lifecycle Backfilled'], backfillPdfDocuments: ['Document', 'PDFs Backfilled'],
-  backfillMissingAR: ['AR Aging', 'Backfilled'], setFlowDriveFolder: ['Balance Sheet', 'Config Updated']
+  backfillMissingAR: ['AR Aging', 'Backfilled'], setFlowDriveFolder: ['Balance Sheet', 'Config Updated'],
+  // A193
+  seedClientAliases: ['Client', 'Names Seeded'], runDriveMigration: ['Document', 'Filed to Drive']
 };
 
 function _dateStr(v) {
@@ -5174,7 +5678,11 @@ function savePRPDF(p) {
     var row = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(p.prNo); })[0];
     if (row) requester = String(row['Requested By'] || '');
   }
-  var folder = _prUserFolder(requester || p.actorName || 'Unknown');
+  // A193: file it under the client instead — <client>/<SO or _Pre-Sales Order>/01 Pricing Request.
+  // Falls back to the old "Purchase Request/<requester>/" folder when the client cannot be resolved,
+  // so a PR raised for a customer we have never seen still lands somewhere sensible.
+  var folder = _docFolder('Pricing Request', p.prNo, _GENERATED_DOC_TYPE) ||
+               _prUserFolder(requester || p.actorName || 'Unknown');
   var saved = _saveFileToDrive(p.pdfBase64, p.fileName || ((p.prNo || 'PR') + '.pdf'), 'application/pdf', folder);
   var link = saved.url;
   if (p.prNo) {
@@ -5302,7 +5810,10 @@ var HANDLERS = {
   // A151: lifecycle spine + document safety
   backfillShipments: backfillShipments, backfillPdfDocuments: backfillPdfDocuments,
   getSOLifecycle: getSOLifecycle, getDocumentsForSO: getDocumentsForSO,
-  backfillMissingAR: backfillMissingAR, setFlowDriveFolder: setFlowDriveFolder
+  backfillMissingAR: backfillMissingAR, setFlowDriveFolder: setFlowDriveFolder,
+  // A193: Drive filing — client / sales order / document type
+  previewDriveMigration: previewDriveMigration, seedClientAliases: seedClientAliases,
+  runDriveMigration: runDriveMigration
 };
 
 // Actions that mutate the sheets (run under a script lock).
@@ -5339,5 +5850,9 @@ var MUTATIONS = {
   deleteMigratedRecords: 1, resetSequenceCounters: 1,
   saveSupplier: 1, deleteSupplier: 1, saveClient: 1, deleteClient: 1,
   // A151: lifecycle spine + document safety (getSOLifecycle/getDocumentsForSO are read-only → HANDLERS only)
-  backfillShipments: 1, backfillPdfDocuments: 1, backfillMissingAR: 1, setFlowDriveFolder: 1
+  backfillShipments: 1, backfillPdfDocuments: 1, backfillMissingAR: 1, setFlowDriveFolder: 1,
+  // A193 (previewDriveMigration is read-only → HANDLERS only). Neither name starts with
+  // save/update/set, so _flowIdempotentAction will not auto-retry them — and both are idempotent
+  // anyway: a file already in its folder is skipped, and a Raw Name already on file is left alone.
+  seedClientAliases: 1, runDriveMigration: 1
 };

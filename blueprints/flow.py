@@ -544,6 +544,8 @@ SECURED_ACTIONS = [
     "voidCollection", "voidInvoice",
     # A190 — must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
     "approveWeeklyItinerary", "rejectWeeklyItinerary",
+    # A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
+    "seedClientAliases", "runDriveMigration",
 ]
 
 
