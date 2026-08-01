@@ -994,11 +994,21 @@ async function flowComputeActions(session) {
       if (n) add('report', '#6366f1', n + ' pricing request(s) waiting for your final pricing', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
-  // Admin: pricing requests waiting to be sourced.
+  /* Admin: the whole pricing queue admin actually owns. A192 added the second and third counts —
+     admin previously got nudged only about sourcing, so a request it had verified and returned sat
+     unquoted with nothing anywhere pointing at it. One fetch covers all three. */
   if (isAdmin) {
     jobs.push(fetchFlow('getPricingRequests').then(r => {
-      const n = ((r && r.data) || []).filter(p => p.status === 'Requested' || p.status === 'Sourcing').length;
-      if (n) add('report', '#6366f1', n + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
+      const rows = (r && r.data) || [];
+      const src = rows.filter(p => p.status === 'Requested' || p.status === 'Sourcing').length;
+      if (src) add('report', '#6366f1', src + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
+      const ver = rows.filter(p => p.status === 'Mgmt Priced').length;
+      if (ver) add('report', '#f97316', ver + ' priced request(s) awaiting your verification', 'flow-pricing-request.html');
+      /* Deliberately unscoped: a returned request nobody has quoted is admin's problem whoever
+         raised it, and that oversight is exactly what was missing. Sales keeps its own scoped
+         nudge for the ones raised in their name. */
+      const rts = rows.filter(p => p.status === 'Returned to Sales').length;
+      if (rts) add('report', '#22c55e', rts + ' priced request(s) still waiting to be quoted', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
   // A156: one chain for both types — Admin → Management → Director → Approved → Paid.

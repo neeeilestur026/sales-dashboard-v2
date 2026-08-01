@@ -150,7 +150,11 @@ function setupRoleUI() {
     const sqc = document.getElementById('sqSummaryCard'); if (sqc) sqc.style.display = '';   // A161b: saved supplier quotations
     listTitle.textContent = 'Sourcing & Verification Queue';
     blurb.textContent = 'Create a purchase request below, or source suppliers and prices for each item then forward to management. After management prices it, verify and return to sales.';
-    seg.innerHTML = segBtns(['Requested,Sourcing', 'Mgmt Priced', ''], ['To Source', 'To Verify', 'All']);
+    /* A192: admin had no chip for the returned stage, so a request an ADMIN raised became
+       invisible the moment it came back — sales cannot see it (their list is scoped to their own
+       name) and admin's default filter excluded it. Two live records sat stranded this way. */
+    seg.innerHTML = segBtns(['Requested,Sourcing', 'Mgmt Priced', 'Returned to Sales', ''],
+                            ['To Source', 'To Verify', 'For Quotation', 'All']);
     prFilter = 'Requested,Sourcing';
   } else { // management
     listTitle.textContent = 'Pricing Queue';
@@ -596,9 +600,14 @@ function openPr(no) {
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       ${srcEditBtn(no)}
       <button class="btn btn-primary" onclick="verifyReturn()">Verify &amp; Return to Sales</button>`;
-  } else if (r.status === 'Returned to Sales' &&
-             (prRole === 'sales' || (prRole === 'admin' && String(r.requestedBy) === String(prSession.name)))) {
-    // Sales, or the admin who created this PR, can build the quotation from the returned (priced) request.
+  } else if (r.status === 'Returned to Sales' && (prRole === 'sales' || prRole === 'admin')) {
+    /* A192: was `prRole === 'admin' && r.requestedBy === prSession.name`. Tying the only
+       Create-Quotation button in the system to one exact name string is what stranded
+       PR-202607-242 and PR-202607-295: rename the user, add a trailing space, or have them leave,
+       and the record becomes permanently unactionable with nobody able to rescue it. Any admin can
+       now finish an admin-raised request. This grants no new capability — createQuotationFromPR
+       (FlowAPI.gs) gates on STATUS only and has no role check — it just stops the UI hiding a
+       button from people the backend already accepts. */
     body.innerHTML = readonlyTable(r, true);
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       ${prRole === 'admin' ? srcEditBtn(no) : ''}
