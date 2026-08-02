@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 108;  // A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 109;  // A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1753,6 +1753,15 @@ function recordCollection(p) {
           '. Record it anyway?' };
     }
   }
+  /* A195 — money in without the official receipt on file is exactly the record that goes missing.
+     Checked after the over-collection guard so a genuine overpayment is still reported first. */
+  var _colGaps = _docGaps(String(ar['SO No'] || ''), 'collect');
+  if (_colGaps.length && !p.confirmNoDocs) {
+    return { success: false, missingDocs: _colGaps,
+      message: 'Before recording this collection, attach: ' + _colGaps.join('; ') +
+               '. (Docs → the matching type on the shipment.)' };
+  }
+
   var dup = _refSeen('recordCollection', p.clientRef);
   if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
     status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
@@ -2131,43 +2140,233 @@ function _apPaidPHP(poNo) {
   return paid;
 }
 
-/* A171 — the documents that must exist before goods may be costed into inventory. Keyed by the
-   shipment STAGE KEY, because that is what `Doc Type` already carries for a shipment document
-   (`module='Shipment'`, `refNo=<shipment id>`, `docType=<stage key>`) — so her existing uploads
-   satisfy these without her learning a new vocabulary.
+// ════════════════════════════════════════════════════════════════════════════
+//  A195 · THE DOCUMENT CONTRACT — what each step of the lifecycle must produce
+//
+//  ONE table. Before this there were three overlapping vocabularies (shipment stage keys like
+//  'tt_sent', titles like 'Supplier Quotation', and free text), five gates with their type strings
+//  hardcoded inline, and a per-stage `docLabel` in stage-meta.js that declared the expected document
+//  but was display-only. Everything now reads from here.
+//
+//  `applies` is the important column. The old _RECEIVING_REQUIRED_DOCS demanded seven documents that
+//  are ALL international — bank debit memo, FAN/SAD/TAN, forwarder's final invoice, customs, local
+//  charges. A local purchase can never produce them, and p.confirmNoDocs was never sent by any
+//  client, so there was no way out. It had not fired only because _receivingDocGaps looked the
+//  shipment up by Shipments['PO No'], which is blank on every live row — the rule could not bind.
+//  Fixing that lookup without this split would have frozen every local receiving.
+// ════════════════════════════════════════════════════════════════════════════
 
-   Only documents that exist BEFORE the goods are costed are listed. `invoiced` and `collected` come
-   after receiving, so requiring them here would deadlock every shipment; they gate their own money
-   step instead. */
-var _RECEIVING_REQUIRED_DOCS = [
-  { key: 'delivered',               label: 'the delivery receipt' },
-  { key: 'shipping_docs_received',  label: 'the packing list and commercial invoice' },
-  { key: 'customs_clearance',       label: 'the customs / duties assessment' },
-  { key: 'fan_sad_tan',             label: 'the FAN, SAD or TAN document' },
-  { key: 'debit_memo',              label: 'the bank debit memo' },
-  { key: 'forwarder_final_invoice', label: "the forwarder's final invoice" },
-  { key: 'local_charges',           label: 'the local-charges document' }
+/* Rules bind records created from here on. Every one of the 105 sales orders that predates this is
+   advisory: its gaps are reported, never enforced. Most carry no documents at all, so enforcing
+   retroactively would refuse their next invoice or collection. */
+var _DOC_RULES_FROM = '2026-08-01';
+
+/* stage   — the shipment stage key this belongs to, or a pseudo-stage for non-shipment steps.
+   module  — where the document attaches (Documents.Module).
+   type    — the canonical Doc Type. Existing free-text values reach it through _docTypeKey().
+   applies — 'both' | 'local' | 'intl'.
+   gate    — the money step it blocks: 'pay' | 'receive' | 'invoice' | 'collect'. null = advisory. */
+var _DOC_RULES = [
+  // ── Before the sales order ────────────────────────────────────────────────
+  { stage: 'sourcing',   module: 'Pricing Request', type: 'supplier quotation',
+    label: 'Supplier Quotation',                 applies: 'both',  gate: null },
+
+  // ── The sales order itself ────────────────────────────────────────────────
+  { stage: 'so_received', module: 'Sales Order',   type: 'client po',
+    label: "The client's Purchase Order",        applies: 'both',  gate: null },
+
+  // ── Purchase order to the supplier ────────────────────────────────────────
+  { stage: 'po_created',  module: 'Purchase Order', type: 'supplier quotation',
+    label: 'Supplier Quotation',                 applies: 'both',  gate: null },
+  { stage: 'proforma_received', module: 'Shipment', type: 'proforma_received',
+    label: 'Proforma Invoice or Order Confirmation', applies: 'intl', gate: 'pay' },
+
+  // ── Paying the supplier ───────────────────────────────────────────────────
+  { stage: 'tt_sent',     module: 'Shipment',      type: 'tt_sent',
+    label: 'TT form / bank remittance slip',     applies: 'intl',  gate: 'pay' },
+  { stage: 'payment',     module: 'Payment Request', type: 'proof of payment',
+    label: 'Proof of payment',                   applies: 'both',  gate: null },
+
+  // ── International shipping ────────────────────────────────────────────────
+  { stage: 'shipping_docs_received', module: 'Shipment', type: 'shipping_docs_received',
+    label: 'Packing list and commercial invoice', applies: 'intl', gate: 'receive' },
+  { stage: 'customs_clearance', module: 'Shipment', type: 'customs_clearance',
+    label: 'Customs / duties assessment',        applies: 'intl',  gate: 'receive' },
+  { stage: 'fan_sad_tan', module: 'Shipment',      type: 'fan_sad_tan',
+    label: 'FAN, SAD or TAN document',           applies: 'intl',  gate: 'receive' },
+  { stage: 'debit_memo',  module: 'Shipment',      type: 'debit_memo',
+    label: 'Bank debit memo',                    applies: 'intl',  gate: 'receive' },
+  { stage: 'forwarder_final_invoice', module: 'Shipment', type: 'forwarder_final_invoice',
+    label: "Forwarder's final invoice",          applies: 'intl',  gate: 'receive' },
+  { stage: 'local_charges', module: 'Shipment',   type: 'local_charges',
+    label: 'Local-charges document',             applies: 'intl',  gate: 'receive' },
+
+  // ── Goods reach our office ────────────────────────────────────────────────
+  { stage: 'delivered',   module: 'Shipment',      type: 'delivered',
+    label: 'Delivery receipt (goods received at our office)', applies: 'both', gate: 'receive' },
+  /* The local counterpart of the whole international document set: for a local purchase the supplier
+     invoice IS the shipping paperwork. Two real documents instead of seven impossible ones. */
+  { stage: 'delivered',   module: 'Shipment',      type: 'supplier sales invoice',
+    label: "Supplier's sales invoice",           applies: 'local', gate: 'receive' },
+
+  // ── Out to the customer ───────────────────────────────────────────────────
+  { stage: 'delivered_client', module: 'Shipment', type: 'delivered_client',
+    label: 'Signed delivery receipt (customer copy)', applies: 'both', gate: 'invoice' },
+
+  // ── Collection ────────────────────────────────────────────────────────────
+  { stage: 'collected',   module: 'Shipment',      type: 'collected',
+    label: 'Official receipt / proof of collection', applies: 'both', gate: 'collect' }
 ];
 
-/** Which required shipment documents are missing for this PO? Returns [] when receiving may proceed.
- *  Returns [] for a PO with no shipment at all — a rule can't bind a record that doesn't exist yet,
- *  and the 8 in-flight POs predate this (see the gap-list, not-retro-blocking, decision). */
-function _receivingDocGaps(poNo) {
-  var ship = _rows('Shipments').filter(function (s) {
-    return String(s['PO No'] || '') === String(poNo);
-  })[0];
-  if (!ship) return [];
-  var refNo = String(ship['Shipment ID'] || '');
-  if (!refNo) return [];
-  var docs = _rows('Documents').filter(function (d) {
-    return String(d['Module']) === 'Shipment' && String(d['Ref No']) === refNo && !_isGeneratedDoc(d);
+/* Doc Type is free text and 71 of 234 live rows are blank, so a rule that demanded an exact string
+   would ignore documents that are already attached. Everything is compared through this. */
+var _DOC_TYPE_ALIASES = {
+  'client purchase order': 'client po', 'client so': 'client po',
+  'client po (stamped)': 'client po', 'stamped client po': 'client po',
+  'so_received': 'client po',
+  'supplier invoice': 'supplier sales invoice', 'sales invoice': 'supplier sales invoice',
+  'supplier sales invoice': 'supplier sales invoice',
+  'official receipt': 'collected', 'collection receipt': 'collected',
+  'or': 'collected', 'proof of collection': 'collected',
+  'delivery receipt': 'delivered', 'dr': 'delivered',
+  'packing list': 'shipping_docs_received', 'commercial invoice': 'shipping_docs_received',
+  'proforma': 'proforma_received', 'proforma invoice': 'proforma_received',
+  'tt': 'tt_sent', 'telegraphic transfer': 'tt_sent', 'bank remittance': 'tt_sent',
+  'signed delivery receipt': 'delivered_client', 'customer delivery receipt': 'delivered_client'
+};
+
+function _docTypeKey(s) {
+  var t = String(s || '').trim().toLowerCase();
+  t = t.replace(/\s*\(superseded\)\s*$/, '');
+  t = t.replace(/\s+/g, ' ');
+  return _DOC_TYPE_ALIASES[t] || t;
+}
+
+/** International or local? From the SO's own label, falling back to the cost record's COGS Type —
+ *  which is the value that actually drives the money (_setSoSupplierType syncs the label from it).
+ *  '' when unclassified: 13 live orders are, and guessing would block them. */
+function _soSupplierKind(soNo) {
+  var so = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === String(soNo); })[0];
+  var t = so ? String(so['Supplier Type'] || '').trim().toLowerCase() : '';
+  if (t === 'international') return 'intl';
+  if (t === 'local') return 'local';
+  try {
+    var cd = _rows('SOCostDetails').filter(function (r) { return String(r['SO No']) === String(soNo); })[0];
+    var c = cd ? String(cd['COGS Type'] || '').trim().toLowerCase() : '';
+    if (c === 'international') return 'intl';
+    if (c === 'local') return 'local';
+  } catch (e) {}
+  return '';
+}
+
+/** Is this sales order old enough to be exempt? Rules bind new records only. */
+function _soPredatesRules(soNo) {
+  var so = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === String(soNo); })[0];
+  if (!so) return true;                                    // unknown order → never block
+  var created = _dateStr(so['Created At'] || so['Date'] || '');
+  if (!created) return true;
+  return created < _DOC_RULES_FROM;
+}
+
+/** The rules that apply to one order: the supplier kind filters them, and an unclassified order
+ *  gets only the 'both' rules (never the local- or intl-specific ones). */
+function _rulesFor(soNo, gate) {
+  var kind = _soSupplierKind(soNo);
+  return _DOC_RULES.filter(function (r) {
+    if (gate && r.gate !== gate) return false;
+    if (r.applies === 'both') return true;
+    return kind ? r.applies === kind : false;
   });
+}
+
+/** Every canonical doc-type key present anywhere on this sales order's lifecycle chain. */
+function _soDocTypesPresent(soNo) {
+  var refs = {};
+  try {
+    _soDocChain(soNo).forEach(function (x) { refs[String(x[0]) + '|' + String(x[1])] = true; });
+  } catch (e) {}
   var have = {};
-  docs.forEach(function (d) { have[String(d['Doc Type'] || '').trim().toLowerCase()] = true; });
-  // Report EVERY missing document at once — one round trip per missing file would be its own burden.
-  return _RECEIVING_REQUIRED_DOCS
-    .filter(function (r) { return !have[r.key]; })
-    .map(function (r) { return r.label; });
+  _rows('Documents').forEach(function (d) {
+    if (_isGeneratedDoc(d)) return;                        // a record's own PDF is not evidence
+    if (!refs[String(d['Module']) + '|' + String(d['Ref No'])]) return;
+    have[_docTypeKey(d['Doc Type'])] = true;
+  });
+  return have;
+}
+
+/** Which required documents are missing on this sales order for a given money step?
+ *  Returns [] when it may proceed. Reports EVERY gap at once — a round trip per missing file would
+ *  be its own burden. Never throws: filing must not be able to break a save. */
+function _docGaps(soNo, gate) {
+  try {
+    if (!soNo) return [];
+    if (_soPredatesRules(soNo)) return [];                 // advisory only for the existing book
+    var have = _soDocTypesPresent(soNo);
+    return _rulesFor(soNo, gate)
+      .filter(function (r) { return !have[_docTypeKey(r.type)]; })
+      .map(function (r) { return r.label; });
+  } catch (e) { return []; }
+}
+
+/** Read-only. The document contract for one sales order: what it needs, what it has, what is
+ *  missing, and whether the gaps are binding or merely advisory. Drives the checklist. */
+function getSODocCompliance(p) {
+  if (!p || !p.soNo) return { success: false, message: 'soNo required.' };
+  var soNo = String(p.soNo);
+  var kind = _soSupplierKind(soNo);
+  var advisory = _soPredatesRules(soNo);
+  var have = _soDocTypesPresent(soNo);
+  var rules = _rulesFor(soNo, null).map(function (r) {
+    var present = !!have[_docTypeKey(r.type)];
+    return { stage: r.stage, module: r.module, type: r.type, label: r.label,
+      applies: r.applies, gate: r.gate || '', present: present,
+      blocking: !present && !!r.gate && !advisory };
+  });
+  var missing = rules.filter(function (r) { return !r.present; });
+  return { success: true, soNo: soNo,
+    supplierKind: kind || 'unclassified', advisoryOnly: advisory, rulesFrom: _DOC_RULES_FROM,
+    total: rules.length, present: rules.length - missing.length, missing: missing.length,
+    blocking: rules.filter(function (r) { return r.blocking; }).length,
+    complete: missing.length === 0, items: rules };
+}
+
+/** Read-only. Every sales order's completeness, for back-filling the existing book. */
+function getDocComplianceReport(p) {
+  p = p || {};
+  var onlyGaps = !(p.all === true || String(p.all) === 'true');
+  var out = [];
+  _rows('SalesOrders').forEach(function (s) {
+    var soNo = String(s['SO No'] || '');
+    if (!soNo) return;
+    var r = getSODocCompliance({ soNo: soNo });
+    if (onlyGaps && r.complete) return;
+    out.push({ soNo: soNo, customer: s['Customer'], date: _dateStr(s['Date']),
+      supplierKind: r.supplierKind, advisoryOnly: r.advisoryOnly,
+      present: r.present, total: r.total, missing: r.missing, blocking: r.blocking,
+      missingLabels: r.items.filter(function (i) { return !i.present; }).map(function (i) { return i.label; }) });
+  });
+  out.sort(function (a, b) { return b.missing - a.missing; });
+  return { success: true, count: out.length, rulesFrom: _DOC_RULES_FROM, orders: out };
+}
+
+/** Read-only. The rule table itself, so the client's Doc Type selector is built from the SAME list
+ *  the server gates on and the two can never drift. */
+function getDocRules(p) {
+  return { success: true, rulesFrom: _DOC_RULES_FROM, rules: _DOC_RULES.map(function (r) {
+    return { stage: r.stage, module: r.module, type: r.type, label: r.label,
+      applies: r.applies, gate: r.gate || '' };
+  }) };
+}
+
+/** Receiving still takes a PO number. Resolve its sales order, then apply the contract.
+ *  A194/A195: this used to look the shipment up by Shipments['PO No'] — a column nothing ever
+ *  writes, blank on all 12 live rows — so the rule silently never bound. It goes through the PO's
+ *  SO No instead, which is populated. */
+function _receivingDocGaps(poNo) {
+  var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
+  var soNo = po ? String(po['SO No'] || '') : '';
+  if (!soNo) return [];                                    // a rule can't bind a record with no order
+  return _docGaps(soNo, 'receive');
 }
 
 function createReceiving(p) {
@@ -2326,6 +2525,15 @@ function createInvoice(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var dup = _refSeen('createInvoice', p.clientRef);
   if (dup) return { success: true, invNo: dup, duplicate: true, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
+
+  /* A195 — we cannot bill for goods with no signed proof the customer received them. Reports every
+     gap at once and, like the other money gates, names where to attach. */
+  var _invGaps = _docGaps(p.soNo, 'invoice');
+  if (_invGaps.length && !p.confirmNoDocs) {
+    return { success: false, missingDocs: _invGaps,
+      message: 'Before invoicing ' + p.soNo + ', attach: ' + _invGaps.join('; ') +
+               '. (Docs → the matching type on the shipment.)' };
+  }
 
   /* A158 — issuing more than is on hand booked full COGS while _applyInventory clamped the balance at
      zero, so the shortfall simply disappeared and the Inventory ledger and sheet diverged for good. */
@@ -2507,6 +2715,10 @@ var _SHIP_STAGES = ['so_received', 'po_created', 'po_approved', 'po_sent', 'prof
   'prf_created', 'prf_approved', 'tt_sent', 'tt_forwarded', 'shipping_docs_received', 'forwarder_quotes',
   'forwarder_approved', 'booked', 'pickup', 'in_transit', 'customs_clearance', 'fan_sad_tan',
   'debit_memo', 'forwarder_final_invoice', 'local_charges', 'delivered',
+  /* A195: 'delivered' is delivery to OUR office. The handover to the customer had no stage at all,
+     so the signed delivery receipt — the proof we may invoice — had nowhere to live. Stage state is
+     a JSON map keyed by name, so inserting here disturbs no existing record. */
+  'delivered_client',
   // A151: downstream lifecycle spine — the sales/receivables close after inbound delivery.
   'invoiced', 'ar_open', 'collected'];
 
@@ -2864,6 +3076,21 @@ function submitPaymentRequest(p) {
       && !_isGeneratedDoc(d);
   });
   if (!hasDoc) return { success: false, message: 'Attach a supporting document (the supplier invoice / proforma) before submitting — the request\'s own generated PDF does not count.' };
+  /* A195 — the untyped check above says "something is attached"; this says WHICH. For an
+     international order that means the proforma and the TT slip; a local one is asked for neither. */
+  var _paySo = String(r['SO No'] || '');
+  if (!_paySo && r['PO No']) {
+    var _payPo = _rows('PurchaseOrders').filter(function (x) {
+      return String(x['PO No']) === String(r['PO No']);
+    })[0];
+    _paySo = _payPo ? String(_payPo['SO No'] || '') : '';
+  }
+  var _payGaps = _docGaps(_paySo, 'pay');
+  if (_payGaps.length && !p.confirmNoDocs) {
+    return { success: false, missingDocs: _payGaps,
+      message: 'Before submitting this payment, attach: ' + _payGaps.join('; ') +
+               '. (Docs → the matching type on the shipment.)' };
+  }
   // A156: one chain for both types — Admin → Management → Director.
   // Admin also CREATES most requests, so requiring a second admin would deadlock whenever only one is
   // on duty. When an admin created it their creation IS the admin sign-off and it starts at management;
@@ -3702,7 +3929,10 @@ var _DOC_SUBFOLDER_BY_TYPE = {
   'supplier quotation': '01 Pricing Request', 'item photo': '02 Quotation',
   'quotation for client': '02 Quotation', 'client po': '03 Client PO',
   'client po (stamped)': '03 Client PO', 'client purchase order': '03 Client PO',
-  'client so': '03 Client PO', 'proof of payment': '05 Payments'
+  'client so': '03 Client PO', 'proof of payment': '05 Payments',
+  // A195 canonical types
+  'supplier sales invoice': '06 Receiving & Shipping', 'delivered': '06 Receiving & Shipping',
+  'delivered_client': '06 Receiving & Shipping', 'collected': '07 Invoices & Collections'
 };
 function _docSubfolder(module, docType) {
   var t = String(docType || '').trim().toLowerCase().replace(/\s*\(superseded\)\s*$/, '');
@@ -6202,6 +6432,9 @@ var HANDLERS = {
   // A151: lifecycle spine + document safety
   backfillShipments: backfillShipments, backfillPdfDocuments: backfillPdfDocuments,
   getSOLifecycle: getSOLifecycle, getDocumentsForSO: getDocumentsForSO,
+  // A195 — the document contract. All read-only: HANDLERS only, no MUTATIONS, no _SECURED.
+  getSODocCompliance: getSODocCompliance, getDocComplianceReport: getDocComplianceReport,
+  getDocRules: getDocRules,
   backfillMissingAR: backfillMissingAR, setFlowDriveFolder: setFlowDriveFolder,
   // A193: Drive filing — client / sales order / document type
   previewDriveMigration: previewDriveMigration, seedClientAliases: seedClientAliases,

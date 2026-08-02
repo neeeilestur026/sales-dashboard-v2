@@ -154,6 +154,14 @@ async function saveReceiving() {
   try {
     let res = await postFlow('createReceiving', payload);
     const extra = {};
+    /* A195: the document gate has existed since A171 but no client ever handled its refusal — it
+       surfaced as a bare error with no way to act on it and no override, unlike every other guard
+       here. Now it names what is missing and opens the Docs window on the shipment. */
+    if (!res.success && res.missingDocs && res.missingDocs.length) {
+      flowMsg('formMsg', res.message, false);
+      if (typeof flowOpenShipmentDocs === 'function') await flowOpenShipmentDocs(rcCurrent.poNo, res.missingDocs);
+      return;
+    }
     // A158: the PO was already received — confirm only if this is a genuine additional delivery.
     if (!res.success && res.alreadyReceived) {
       if (!confirm(res.message + '\n\nRecord this as an ADDITIONAL delivery?')) {

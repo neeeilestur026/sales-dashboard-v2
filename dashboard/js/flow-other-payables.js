@@ -195,7 +195,8 @@ async function prSubmit(no) {
   // A144: require a supporting document before the payment request advances to approval.
   if (typeof flowHasDoc === 'function' && !(await flowHasDoc('Payment Request', no))) {
     alert('Attach a supporting document before submitting ' + no + '. Opening the Docs window…');
-    openDocsModal('Payment Request', no, 'Supporting documents · ' + no);
+    // A195: preset the type — this prompt used to open the box untyped (see flow-purchase-orders.js).
+    openDocsModal('Payment Request', no, 'Supporting documents · ' + no, 'proof of payment');
     return;
   }
   if (confirm('Submit ' + no + ' for approval (Admin → Management → Director)?')) _prAct('submitPaymentRequest', no);

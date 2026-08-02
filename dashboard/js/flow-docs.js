@@ -24,7 +24,14 @@ function _docsModalEl() {
       <div class="group-title">Attach a document</div>
       <div class="flow-form">
         <div class="full"><label>Files (multiple allowed · max ${FLOW_DOC_MAX_MB}MB each)</label><input type="file" id="flowDocsFile" multiple></div>
-        <div class="full"><label>Type / label (optional)</label><input type="text" id="flowDocsType" placeholder="e.g. Proforma, Packing List, Commercial Invoice"></div>
+        <!-- A195: a picker, not free text. 71 of 234 stored documents had no type at all, which is
+             why nothing could be checked; and the gates' own "attach a document" prompts opened this
+             box untyped, so a compliance upload could not satisfy the rule that demanded it. The
+             options come from the server's own rule table, so the two can never disagree. -->
+        <div class="full"><label>Type <span style="font-weight:400;color:var(--text-muted,#64748b);">— pick the document this is</span></label>
+          <select id="flowDocsType" onchange="_flowDocsTypeChanged()"><option value="">— select —</option></select>
+          <input type="text" id="flowDocsTypeOther" placeholder="Describe the document" style="display:none;margin-top:0.35rem;">
+        </div>
       </div>
       <div id="flowDocsMsg" class="flow-msg" style="display:none;"></div>
       <div class="flow-modal-foot">
@@ -34,6 +41,57 @@ function _docsModalEl() {
     </div>`;
   document.body.appendChild(el);
   return el;
+}
+
+/* A195: the rule table, fetched once and shared. It is the SAME list the server gates on, so the
+   picker can never offer a type no rule recognises, nor omit one a gate demands. */
+let _flowDocRules = null;
+async function _flowDocRulesLoad() {
+  if (_flowDocRules) return _flowDocRules;
+  try {
+    const r = await fetchFlow('getDocRules', {});
+    _flowDocRules = (r && r.rules) || [];
+  } catch (e) { _flowDocRules = []; }   // a backend without the action must not block attaching
+  return _flowDocRules;
+}
+
+function _flowDocsTypeChanged() {
+  const sel = document.getElementById('flowDocsType');
+  const other = document.getElementById('flowDocsTypeOther');
+  if (!sel || !other) return;
+  const isOther = sel.value === '__other__';
+  other.style.display = isOther ? '' : 'none';
+  if (!isOther) other.value = '';
+  else other.focus();
+}
+
+/** The type the user actually chose — the picker, or the free-text box behind "Other". */
+function _flowDocsChosenType() {
+  const sel = document.getElementById('flowDocsType');
+  if (!sel) return '';
+  if (sel.value === '__other__') return (document.getElementById('flowDocsTypeOther') || {}).value || '';
+  return sel.value || '';
+}
+
+/** Fill the picker with the types that make sense for this record, plus Other. */
+async function _flowDocsFillTypes(module, presetType) {
+  const sel = document.getElementById('flowDocsType');
+  if (!sel) return;
+  const rules = await _flowDocRulesLoad();
+  const seen = {}, opts = [];
+  rules.forEach(r => {
+    if (module && r.module && r.module !== module) return;
+    if (seen[r.type]) return;
+    seen[r.type] = true;
+    opts.push({ v: r.type, l: r.label + (r.applies === 'intl' ? ' (international)' : r.applies === 'local' ? ' (local)' : '') });
+  });
+  // A preset the rules do not carry must still be selectable — never silently drop a gate's demand.
+  if (presetType && !seen[presetType]) opts.unshift({ v: presetType, l: presetType });
+  sel.innerHTML = '<option value="">— select —</option>' +
+    opts.map(o => `<option value="${flowEsc(o.v)}">${flowEsc(o.l)}</option>`).join('') +
+    '<option value="__other__">Other…</option>';
+  if (presetType) sel.value = presetType;
+  _flowDocsTypeChanged();
 }
 
 // presetType (optional): lock the Doc Type field to a controlled value (e.g. "Supplier Quotation")
@@ -47,13 +105,34 @@ function openDocsModal(module, refNo, title, presetType) {
     `${module ? module + ' · ' : ''}${title ? title : refNo}`;
   document.getElementById('flowDocsMsg').style.display = 'none';
   const f = document.getElementById('flowDocsFile'); if (f) f.value = '';
+  const other = document.getElementById('flowDocsTypeOther');
+  if (other) { other.value = ''; other.style.display = 'none'; }
   const t = document.getElementById('flowDocsType');
   if (t) {
-    if (presetType) { t.value = presetType; t.readOnly = true; t.style.background = 'var(--bg-inset,#eef2f6)'; }
-    else { t.value = ''; t.readOnly = false; t.style.background = ''; }
+    t.disabled = !!presetType;                       // a gate's demand is not up for negotiation
+    t.style.background = presetType ? 'var(--bg-inset,#eef2f6)' : '';
   }
+  _flowDocsFillTypes(module || '', presetType || '');
   el.classList.add('open');
   flowDocsRefresh();
+}
+
+/* A195: a money gate refused for want of a document. Take the user straight to the shipment's Docs
+   window with the first missing type preselected, instead of leaving them with an error to decode.
+   Shared, because receiving, invoicing and collection all refuse the same way. */
+async function flowOpenShipmentDocs(poNoOrSoNo, missingLabels) {
+  try {
+    const r = await fetchFlow('getShipments', {}, { fresh: true });
+    const rows = (r && r.data) || [];
+    const key = String(poNoOrSoNo || '');
+    const ship = rows.find(s => String(s.poNo || '') === key) || rows.find(s => String(s.soNo || '') === key);
+    if (!ship) { alert('Missing: ' + (missingLabels || []).join('; ')); return; }
+    // Map the first missing label back to its rule so the picker opens on the right type.
+    const rules = await _flowDocRulesLoad();
+    const first = (missingLabels || [])[0] || '';
+    const hit = rules.find(x => x.label === first);
+    openDocsModal('Shipment', ship.shipmentId, 'Shipment · ' + ship.shipmentId, hit ? hit.type : '');
+  } catch (e) { alert('Missing: ' + (missingLabels || []).join('; ')); }
 }
 
 // Reusable gate helper: does this record already carry a document (optionally of a given Doc Type,
@@ -116,7 +195,10 @@ async function flowDocsUpload() {
   if (!files.length) { flowMsg('flowDocsMsg', 'Choose at least one file.', false); return; }
   const tooBig = files.find(f => f.size > FLOW_DOC_MAX_MB * 1024 * 1024);
   if (tooBig) { flowMsg('flowDocsMsg', `"${tooBig.name}" is too large (max ${FLOW_DOC_MAX_MB}MB each).`, false); return; }
-  const docType = document.getElementById('flowDocsType').value.trim();
+  // A195: a typed document is the whole point — an untyped one satisfies no rule and is what
+  // produced 71 unclassifiable rows. Asked for, not silently accepted.
+  const docType = _flowDocsChosenType().trim();
+  if (!docType) { flowMsg('flowDocsMsg', 'Choose what this document is, so it counts towards the order\'s checklist.', false); return; }
   const btn = document.getElementById('flowDocsAddBtn');
   btn.disabled = true;
   let done = 0;

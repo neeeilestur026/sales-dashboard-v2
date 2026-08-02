@@ -651,7 +651,9 @@ function openSourcingEdit(no) {
   // Post-pricing stages get a one-click "save + send back to management" so the final price
   // is recomputed from the corrected costs (submitForPricing just flips the status back).
   foot.innerHTML = `<button class="btn btn-secondary" onclick="openPr('${flowEsc(no)}')">← Back</button>
-    <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}')">📎 Supplier Quotation (PDF)</button>
+    <!-- A195: this button was missing its presetType, so a quotation attached from the post-pricing
+         sourcing view did not satisfy the Supplier Quotation gate that demands one. -->
+    <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','supplier quotation')">📎 Supplier Quotation (PDF)</button>
     <button class="btn ${late ? 'btn-secondary' : 'btn-primary'}" onclick="saveSourcing(false)">Save Changes</button>
     ${late ? `<button class="btn btn-primary" onclick="saveSourcing(true)">Save &amp; Send for Re-pricing</button>` : ''}`;
 }

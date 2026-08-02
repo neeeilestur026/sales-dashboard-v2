@@ -313,7 +313,9 @@ async function submitPOAction(no) {
     const ok = await flowHasDoc('Purchase Order', no);
     if (!ok) {
       alert('Attach a supporting document before submitting ' + no + ' for approval. Opening the Docs window…');
-      openDocsModal('Purchase Order', no, 'Supporting documents · ' + no);
+      // A195: preset the type. This prompt used to open the box untyped, so the very upload made to
+      // satisfy the gate arrived unclassified — the largest source of the 71 untyped documents.
+      openDocsModal('Purchase Order', no, 'Supporting documents · ' + no, 'supplier quotation');
       return;
     }
   }

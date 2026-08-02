@@ -32,6 +32,9 @@ const _SM_LIFECYCLE_STAGES = [
   { key: 'forwarder_final_invoice', label: 'Forwarder Final Invoice',           owner: 'Forwarder',  autoDerive: false, docLabel: 'Final forwarder invoice' },
   { key: 'local_charges',           label: 'Local Charges',                     owner: 'Forwarder',  autoDerive: false, docLabel: 'Local charges document' },
   { key: 'delivered',               label: 'Delivered to Office',               owner: 'Admin',      autoDerive: true,  docLabel: 'Delivery photo or receipt' },
+  // A195: the handover to the CUSTOMER, which had no stage — 'delivered' above is only as far as our
+  // own office. Manual: nothing downstream can prove a customer signed for the goods.
+  { key: 'delivered_client',        label: 'Delivered to Customer',             owner: 'Admin',      autoDerive: false, docLabel: 'Signed delivery receipt (customer copy)' },
   // A151: downstream sales/receivables close (auto-derived from Invoices / ARAging).
   { key: 'invoiced',                label: 'Customer Invoiced',                 owner: 'Accounting', autoDerive: true,  docLabel: 'Customer Sales Invoice' },
   { key: 'ar_open',                 label: 'Receivable Booked (AR)',            owner: 'Accounting', autoDerive: true,  docLabel: null },
@@ -44,7 +47,7 @@ const _SM_PHASES = [
   { name: 'Payment',            stages: ['proforma_received','prf_created','prf_approved','tt_sent','tt_forwarded'] },
   { name: 'Documents',          stages: ['shipping_docs_received','forwarder_quotes','forwarder_approved'] },
   { name: 'Logistics',          stages: ['booked','pickup','in_transit','customs_clearance','fan_sad_tan'] },
-  { name: 'Delivery & Closing', stages: ['debit_memo','forwarder_final_invoice','local_charges','delivered'] },
+  { name: 'Delivery & Closing', stages: ['debit_memo','forwarder_final_invoice','local_charges','delivered','delivered_client'] },
   { name: 'Billing & Collection', stages: ['invoiced','ar_open','collected'] },
 ];
 
@@ -286,6 +289,17 @@ const _SM_STAGE_META = {
       { label: 'Delivery Receipt #', field: 'deliveryReceipt' },
     ],
     requires: ['local_charges'],
+    unlocks:  ['delivered_client'],
+  },
+
+  // A195: the customer handover. Its signed delivery receipt is what permits invoicing.
+  delivered_client: {
+    description: 'The goods have been delivered to the customer and their signed delivery receipt is on file. This is the proof that permits invoicing.',
+    fields: [
+      { label: 'Date Delivered',     field: 'dateDeliveredClient', format: 'date' },
+      { label: 'Delivery Receipt #', field: 'deliveryReceiptClient' },
+    ],
+    requires: ['delivered'],
     unlocks:  ['invoiced'],
   },
 
@@ -294,7 +308,7 @@ const _SM_STAGE_META = {
     fields: [
       { label: 'Customer', field: 'client' },
     ],
-    requires: ['delivered'],
+    requires: ['delivered_client'],
     unlocks:  ['ar_open'],
   },
 
