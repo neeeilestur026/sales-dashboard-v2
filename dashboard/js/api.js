@@ -1186,6 +1186,11 @@ function apiDeletePayrollEmployee(id) {
   return fetchFromAPI({ action: 'deletePayrollEmployee', id }, { noCache: true });
 }
 
+// A198 — read-only salary-change audit; optional employee filter ("Last, First").
+function apiGetPayrollRateHistory(employee) {
+  return fetchFromAPI({ action: 'getPayrollRateHistory', employee: employee || '' }, { noCache: true });
+}
+
 function apiGetPayrollHours(period) {
   return fetchFromAPI({ action: 'getPayrollHours', period }, { noCache: true });
 }

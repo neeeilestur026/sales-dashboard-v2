@@ -615,6 +615,9 @@ function doGet(e) {
       case 'get13thMonthPay':
         result = handleGet13thMonthPay(params);
         break;
+      case 'getPayrollRateHistory':               // A198 — read-only salary-change audit
+        result = handleGetPayrollRateHistory(params);
+        break;
       case 'getBankAccounts':
         result = handleGetBankAccounts();
         break;
@@ -11216,6 +11219,60 @@ function _payrollApprovalsSheet() {
   ]);
 }
 
+// A198 — append-only audit of every pay-rate change: when, old→new, who, and why. The employee
+// sheet only holds the CURRENT rate (overwritten on edit), so without this the prior value is lost.
+function _payrollRateHistorySheet() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  return _getOrCreateSheet(ss, 'Payroll Rate History', [
+    'Recorded At', 'Employee', 'Field', 'Old Value', 'New Value', 'Change',
+    'Effective Date', 'Reason', 'Changed By'
+  ]);
+}
+
+// A198 — record one pay-field change. Best-effort: a logging failure must never block the save.
+function _logPayrollRateChange(employee, field, oldVal, newVal, params, isInitial) {
+  try {
+    var sheet = _payrollRateHistorySheet();
+    var reason = String((params && params.reason) || '').trim() ||
+      (isInitial ? 'Initial rate' : '');
+    sheet.appendRow([
+      new Date().toISOString(),
+      String(employee || ''),
+      String(field || 'Daily Rate'),
+      isInitial ? '' : (parseFloat(oldVal) || 0),
+      parseFloat(newVal) || 0,
+      isInitial ? '' : ((parseFloat(newVal) || 0) - (parseFloat(oldVal) || 0)),
+      String((params && params.effectiveDate) || ''),
+      reason,
+      _resolveActor(params)
+    ]);
+  } catch (e) { /* swallow — history is an audit, not a gate */ }
+}
+
+function handleGetPayrollRateHistory(params) {
+  try {
+    var sheet = _payrollRateHistorySheet();
+    var data  = sheet.getDataRange().getValues();
+    if (data.length < 2) return { success: true, data: [] };
+    var wantEmp = params && params.employee ? String(params.employee).trim() : '';
+    var out = [];
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (!r[1]) continue;
+      if (wantEmp && String(r[1]).trim() !== wantEmp) continue;
+      out.push({
+        recordedAt: String(r[0] || ''), employee: String(r[1] || ''), field: String(r[2] || ''),
+        oldValue: (r[3] === '' ? '' : parseFloat(r[3]) || 0),
+        newValue: parseFloat(r[4]) || 0,
+        change: (r[5] === '' ? '' : parseFloat(r[5]) || 0),
+        effectiveDate: String(r[6] || ''), reason: String(r[7] || ''), changedBy: String(r[8] || '')
+      });
+    }
+    out.reverse();                       // newest first
+    return { success: true, data: out };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
 function handleGetPayrollEmployees() {
   try {
     var sheet = _payrollEmployeesSheet();
@@ -11241,11 +11298,27 @@ function handleSavePayrollEmployee(params) {
     var sheet = _payrollEmployeesSheet();
     var data  = sheet.getDataRange().getValues();
     var id    = parseInt(params.id) || 0;
+    var newRate  = parseFloat(params.dailyRate)||0,
+        newOther = parseFloat(params.otherIncome)||0,
+        newHdmf  = parseFloat(params.hdmfAmount)||0;
     var row   = [params.lastName||'', params.firstName||'',
-      parseFloat(params.dailyRate)||0, parseFloat(params.otherIncome)||0,
-      parseFloat(params.hdmfAmount)||0, params.status||'Active'];
-    if (id > 0 && id < data.length) sheet.getRange(id+1,1,1,row.length).setValues([row]);
-    else sheet.appendRow(row);
+      newRate, newOther, newHdmf, params.status||'Active'];
+    var empName = String(params.lastName||'') + ', ' + String(params.firstName||'');
+    var isEdit = (id > 0 && id < data.length);
+
+    // A198 — capture the change BEFORE the in-place overwrite loses the old value.
+    if (isEdit) {
+      var prev = data[id];                                // header is row 0, so employee id maps to data[id]
+      var oldRate = parseFloat(prev[2])||0, oldOther = parseFloat(prev[3])||0, oldHdmf = parseFloat(prev[4])||0;
+      if (newRate  !== oldRate)  _logPayrollRateChange(empName, 'Daily Rate',   oldRate,  newRate,  params, false);
+      if (newOther !== oldOther) _logPayrollRateChange(empName, 'Other Income', oldOther, newOther, params, false);
+      if (newHdmf  !== oldHdmf)  _logPayrollRateChange(empName, 'HDMF Amount',  oldHdmf,  newHdmf,  params, false);
+      sheet.getRange(id+1,1,1,row.length).setValues([row]);
+    } else {
+      sheet.appendRow(row);
+      // A new hire's starting rate is an initial record, not a "change".
+      if (newRate > 0) _logPayrollRateChange(empName, 'Daily Rate', 0, newRate, params, true);
+    }
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
 }

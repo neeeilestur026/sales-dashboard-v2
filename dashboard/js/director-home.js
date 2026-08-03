@@ -123,6 +123,7 @@ async function loadEmployees() {
     const res = await apiGetPayrollEmployees();
     _employees = (res.data || []).filter(e => e.status !== 'Inactive');
     renderEETable();
+    if (typeof loadRateChanges === 'function') loadRateChanges();   // A198 — refresh the recent-changes panel
     // Re-render grids in case period was already loaded (they need employee list)
     if (_currentYear && _currentMonth) {
       renderHoursGrid('A');
@@ -154,6 +155,7 @@ function renderEETable() {
       <td>${esc(e.status)}</td>
       <td>
         <button class="btn-sm" onclick="openEEModal(${i})">Edit</button>
+        <button class="btn-sm" onclick="openRateHistory(${i})" title="Salary change history">History</button>
         <button class="btn-sm danger" onclick="deleteEE(${e.id})">Del</button>
       </td>
     </tr>
@@ -161,9 +163,40 @@ function renderEETable() {
 }
 
 // ── EE Modal ──────────────────────────────────────────────────
+// A198 — the stored pay values when the modal opened, so we can tell whether the director actually
+// changed the rate (and only then ask for an effective date + reason).
+let _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null };
+
+function _eeToday() { return (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10); }
+// The logged-in director's name for the audit stamp — `session` is scoped to the init handler.
+function _eeActor() { try { return (JSON.parse(localStorage.getItem('session') || '{}').name) || ''; } catch (e) { return ''; } }
+
+/* Reveal the effective-date/reason block only when a PAY field differs from what was stored. Adding a
+   new employee (no original) never shows it — the starting rate is an initial record, not a change. */
+function _eeCheckPayChange() {
+  const block = document.getElementById('eePayChange');
+  if (!block) return;
+  if (_eeOrig.dailyRate === null) { block.style.display = 'none'; return; }
+  const dr = parseFloat(document.getElementById('eeDailyRate').value) || 0;
+  const oi = parseFloat(document.getElementById('eeOtherIncome').value) || 0;
+  const hd = parseFloat(document.getElementById('eeHdmf').value) || 0;
+  const changed = dr !== _eeOrig.dailyRate || oi !== _eeOrig.otherIncome || hd !== _eeOrig.hdmf;
+  block.style.display = changed ? '' : 'none';
+  if (changed) {
+    const parts = [];
+    if (dr !== _eeOrig.dailyRate) parts.push(`daily rate ${peso(_eeOrig.dailyRate)} → ${peso(dr)}`);
+    if (oi !== _eeOrig.otherIncome) parts.push(`other income ${peso(_eeOrig.otherIncome)} → ${peso(oi)}`);
+    if (hd !== _eeOrig.hdmf) parts.push(`HDMF ${peso(_eeOrig.hdmf)} → ${peso(hd)}`);
+    document.getElementById('eePayChangeMsg').textContent = 'Pay change (' + parts.join(', ') + ') — recorded in the salary history';
+  }
+}
+
 function openEEModal(idx) {
   const overlay = document.getElementById('eeOverlay');
+  document.getElementById('eeEffectiveDate').value = _eeToday();
+  document.getElementById('eeReason').value = '';
   if (idx === null) {
+    _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null };   // a new employee has no prior pay
     document.getElementById('eeModalTitle').textContent = 'Add Employee';
     document.getElementById('eeEditId').value     = '';
     document.getElementById('eeLastName').value   = '';
@@ -174,6 +207,7 @@ function openEEModal(idx) {
     document.getElementById('eeStatus').value     = 'Active';
   } else {
     const e = _employees[idx];
+    _eeOrig = { dailyRate: e.dailyRate || 0, otherIncome: e.otherIncome || 0, hdmf: e.hdmfAmount || 0 };
     document.getElementById('eeModalTitle').textContent = 'Edit Employee';
     document.getElementById('eeEditId').value     = e.id;
     document.getElementById('eeLastName').value   = e.lastName;
@@ -183,6 +217,11 @@ function openEEModal(idx) {
     document.getElementById('eeHdmf').value       = e.hdmfAmount;
     document.getElementById('eeStatus').value     = e.status;
   }
+  _eeCheckPayChange();
+  ['eeDailyRate', 'eeOtherIncome', 'eeHdmf'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.oninput = _eeCheckPayChange;
+  });
   overlay.classList.add('open');
 }
 
@@ -198,13 +237,76 @@ async function saveEE() {
     dailyRate:   document.getElementById('eeDailyRate').value,
     otherIncome: document.getElementById('eeOtherIncome').value,
     hdmfAmount:  document.getElementById('eeHdmf').value,
-    status:      document.getElementById('eeStatus').value
+    status:      document.getElementById('eeStatus').value,
+    // A198 — passed through so the backend stamps the history row; ignored when nothing pay-related changed.
+    effectiveDate: document.getElementById('eeEffectiveDate').value || _eeToday(),
+    reason:        document.getElementById('eeReason').value.trim(),
+    actorName:     _eeActor()   // `session` is scoped to init; read the actor from localStorage instead
   };
   if (!data.lastName || !data.firstName) { alert('Last name and first name are required.'); return; }
   const res = await apiSavePayrollEmployee(data);
   if (!res.success) { alert('Error: ' + res.message); return; }
   closeEEModal();
   await loadEmployees();
+  if (typeof loadRateChanges === 'function') loadRateChanges();
+}
+
+// ── A198: salary-change history ───────────────────────────────
+function closeRateHistory() { document.getElementById('rhOverlay').classList.remove('open'); }
+
+function _rhRowsHtml(rows) {
+  if (!rows.length) return '<div style="color:var(--text-muted);padding:0.6rem 0;">No changes recorded yet.</div>';
+  return `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+    <tr><th>Effective</th><th>Field</th><th class="num">Old</th><th class="num">New</th><th class="num">Change</th><th>Reason</th><th>By</th><th>Recorded</th></tr></thead><tbody>
+    ${rows.map(h => {
+      const chg = h.change === '' ? '—' : (h.change >= 0 ? '+' : '') + peso(h.change);
+      const chgCol = h.change === '' ? '' : (h.change >= 0 ? 'color:#15803d;' : 'color:#ef4444;');
+      return `<tr>
+        <td>${esc(h.effectiveDate || '—')}</td>
+        <td>${esc(h.field || 'Daily Rate')}</td>
+        <td class="num">${h.oldValue === '' ? '—' : peso(h.oldValue)}</td>
+        <td class="num">${peso(h.newValue)}</td>
+        <td class="num" style="${chgCol}">${chg}</td>
+        <td>${esc(h.reason || '')}</td>
+        <td>${esc(h.changedBy || '')}</td>
+        <td style="color:var(--text-muted);">${esc(String(h.recordedAt || '').slice(0, 10))}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function openRateHistory(idx) {
+  const e = _employees[idx];
+  const name = e.lastName + ', ' + e.firstName;
+  document.getElementById('rhTitle').textContent = 'Salary History — ' + name;
+  document.getElementById('rhBody').innerHTML = '<div style="color:var(--text-muted);padding:0.6rem 0;">Loading…</div>';
+  document.getElementById('rhOverlay').classList.add('open');
+  try {
+    const res = await apiGetPayrollRateHistory(name);
+    document.getElementById('rhBody').innerHTML = _rhRowsHtml((res && res.data) || []);
+  } catch (err) {
+    document.getElementById('rhBody').innerHTML = `<div style="color:#ef4444;">${esc(err.message)}</div>`;
+  }
+}
+
+/* The last few changes across everyone, so the raise is visible without opening each person. Mounted
+   into #rateChangesBox if the page provides it; silent if it does not (older markup). */
+async function loadRateChanges() {
+  const box = document.getElementById('rateChangesBox');
+  if (!box) return;
+  try {
+    const res = await apiGetPayrollRateHistory('');
+    const rows = ((res && res.data) || []).filter(h => h.oldValue !== '').slice(0, 12);   // real changes, not initial records
+    if (!rows.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No salary changes recorded yet.</div>'; return; }
+    box.innerHTML = `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+      <tr><th>Employee</th><th>Effective</th><th class="num">Old</th><th class="num">New</th><th class="num">Change</th><th>Reason</th><th>By</th></tr></thead><tbody>
+      ${rows.map(h => {
+        const chgCol = h.change >= 0 ? 'color:#15803d;' : 'color:#ef4444;';
+        return `<tr><td>${esc(h.employee)}</td><td>${esc(h.effectiveDate || '—')}</td>
+          <td class="num">${peso(h.oldValue)}</td><td class="num">${peso(h.newValue)}</td>
+          <td class="num" style="${chgCol}">${(h.change >= 0 ? '+' : '') + peso(h.change)}</td>
+          <td>${esc(h.reason || '')}</td><td>${esc(h.changedBy || '')}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  } catch (e) { box.innerHTML = ''; }
 }
 
 async function deleteEE(id) {
