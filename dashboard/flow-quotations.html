@@ -12,6 +12,9 @@
   /* A175 — the Quote Configurator is now the create surface on this page: form on the left,
      the REAL generated PDF on the right. The history below is untouched. */
   .qc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 1rem; align-items: start; }
+  /* A200 — let each grid child shrink to its track instead of its content's min-content, so the
+     item table can never push the builder column under the preview pane. */
+  .qc-wrap > div { min-width: 0; }
   @media (max-width: 1200px) { .qc-wrap { grid-template-columns: minmax(0, 1fr); } }
 
   .qc-pane { background: #fff; border: 1px solid var(--border, #e2e8f0); border-radius: 18px; padding: 1.1rem 1.2rem; }
@@ -25,7 +28,9 @@
   .qc-grid textarea { min-height: 66px; resize: vertical; }
 
   /* item rows */
-  #qcItems { width: 100%; border-collapse: collapse; }
+  /* A200 — fixed layout so the column widths below are honoured and a long description flexes into
+     the remaining space, instead of auto-layout widening the table under the preview pane. */
+  #qcItems { width: 100%; border-collapse: collapse; table-layout: fixed; }
   #qcItems th { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #64748b);
     text-align: left; padding: .35rem .3rem; border-bottom: 1px solid var(--border, #e2e8f0); }
   #qcItems td { padding: .3rem .25rem; vertical-align: middle; }
@@ -142,14 +147,18 @@
 
             <div class="qc-pane" style="margin-top:1rem;">
               <h3>Items</h3>
+              <!-- A200 — wrap like the sibling tables (#listContainer, #qrItems) so any residual width
+                   scrolls inside the pane instead of bleeding under the live PDF preview. -->
+              <div style="overflow-x:auto;">
               <table id="qcItems">
                 <thead><tr>
-                  <th style="width:22%;">Item No</th><th>Description</th>
-                  <th style="width:10%;">Qty</th><th style="width:18%;">Unit Price</th>
-                  <th style="width:16%;">Photo</th><th style="width:5%;"></th>
+                  <th style="width:16%;">Item No</th><th>Description</th>
+                  <th style="width:9%;">Qty</th><th style="width:15%;">Unit Price</th>
+                  <th style="width:16%;">Photo</th><th style="width:4%;"></th>
                 </tr></thead>
                 <tbody id="qcItemBody"></tbody>
               </table>
+              </div>
               <div class="qc-actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="qcAddBtn" onclick="qcAddRow()">+ Add item</button>
               </div>
