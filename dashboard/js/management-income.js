@@ -12,6 +12,7 @@ let miData = { invs: [], sos: [], pos: [], recs: [], exps: [] };
 let miMode = 'monthly';          // 'monthly' | 'yearly'
 let miModels = [];               // current per-SO models (for drilldown)
 let miNoteBySo = {};             // A191: soNo -> note text
+let miNoteMetaBySo = {};         // A198: soNo -> { updatedBy, updatedAt } for the notes panel attribution
 let miMonthsCache = [];
 
 function _ie(s) { return flowEsc(s); }
@@ -92,9 +93,14 @@ async function miLoad() {
       costDetails: (cds && cds.data) || [],
     };
     // A191 — soNo → the note accounting/admin wrote on the Revenue & Net Profit report.
+    // A198 — also keep who/when so the notes panel can attribute each one; same loop, no extra fetch.
     miNoteBySo = {};
+    miNoteMetaBySo = {};
     ((notes && notes.data) || []).forEach(n => {
-      if (n && n.soNo && n.notes) miNoteBySo[String(n.soNo)] = String(n.notes);
+      if (n && n.soNo && n.notes) {
+        miNoteBySo[String(n.soNo)] = String(n.notes);
+        miNoteMetaBySo[String(n.soNo)] = { updatedBy: n.updatedBy || '', updatedAt: n.updatedAt || '' };
+      }
     });
     miBuildYears();
     miRender();
@@ -212,6 +218,7 @@ function miRender() {
   if (!models.length) { body.innerHTML = '<div class="is-empty">No sales orders in this period.</div>'; return; }
 
   body.innerHTML = miMode === 'monthly' ? miRenderMonthly(models, expByMonth) : miRenderYearly(models, totExp, totRev);
+  miNotesPanelHtml();   // A198 — the consolidated notes panel, rebuilt on every render/year change
 }
 
 const _miPar = v => '(' + _im(v) + ')';
@@ -236,7 +243,7 @@ function miRenderMonthly(models, expByMonth) {
     const gpPct = rev > 0 ? (gp / rev * 100).toFixed(1) + '%' : '—';
     const netPct = rev > 0 ? (net / rev * 100).toFixed(1) + '%' : '—';
     const sumRow = `<tr class="is-mrow" onclick="miToggleMonth(${i})">
-      <td><span class="is-mname">${_ie(_miFmtMonth(ym))}</span><span class="is-sub">${list.length} SO${list.length !== 1 ? 's' : ''}</span></td>
+      <td><span class="is-mname">${_ie(_miFmtMonth(ym))}</span><span class="is-sub">${list.length} SO${list.length !== 1 ? 's' : ''}</span>${_miMonthNoteBadge(list)}</td>
       <td class="num">${rev ? _im(rev) : '—'}</td>
       <td class="num" style="color:#ef4444;">${cogs ? _miPar(cogs) : '—'}</td>
       <td class="num" style="color:${_miCol(gp)};font-weight:600;">${_im(gp)}<span class="is-sub">${gpPct}</span></td>
@@ -271,7 +278,7 @@ function miSoTable(list, periodExp, periodRev, tag) {
   const rows = list.slice().sort((a, b) => (_id(b.date) || '').localeCompare(_id(a.date) || '')).map((m, j) => {
     const rid = tag + '_' + j;
     const sumRow = `<tr class="is-sorow" onclick="miToggleSo('${rid}')">
-      <td><strong>${_ie(m.soNo)}</strong>${m.costNotSet ? ' <span class="is-warn" title="No cost recorded — click to open, then Edit costs">⚠ cost not set</span>' : ''}${m.date ? `<span class="is-sub2">${_ie(_id(m.date))}</span>` : ''}</td>
+      <td><strong>${_ie(m.soNo)}</strong>${_miNoteBadge(m.soNo)}${m.costNotSet ? ' <span class="is-warn" title="No cost recorded — click to open, then Edit costs">⚠ cost not set</span>' : ''}${m.date ? `<span class="is-sub2">${_ie(_id(m.date))}</span>` : ''}</td>
       <td>${_ie(m.customer) || '—'}</td>
       <td class="num">${_im(m.sales)}</td>
       <td class="num" style="color:#ef4444;">${m.cogs ? _miPar(m.cogs) : '—'}</td>
@@ -335,6 +342,89 @@ function miSoBreakdown(m) {
     ${miNoteHtml(m.soNo)}
     <p class="is-note" style="margin:0.5rem 0 0;">${note}</p>
   </div>`;
+}
+
+/* A198 — a small 📝 badge marking a sales order that carries a note, so a manager sees it without
+   drilling in. The full note is the hover title (attribute-escaped). Empty when the order has none. */
+function _miNoteBadge(soNo) {
+  const t = miNoteBySo[String(soNo)];
+  if (!t) return '';
+  return ` <span title="${_ie(t)}" style="cursor:help;font-size:0.82rem;" aria-label="has a note">📝</span>`;
+}
+
+/* A198 — the month-row badge: how many of that month's orders carry a note. */
+function _miMonthNoteBadge(list) {
+  const n = list.filter(m => miNoteBySo[String(m.soNo)]).length;
+  if (!n) return '';
+  return ` <span class="is-sub" title="${n} sales order${n !== 1 ? 's' : ''} with a note this month" style="color:#0f766e;">📝 ${n}</span>`;
+}
+
+/* A198 — the consolidated "Sales Order Notes" panel: every noted order in one place, with who wrote
+   it and when, so management never has to hunt for them. Read-only; clicking jumps to the order in
+   the report below. Built entirely from the maps already fetched — no extra request. */
+function miNotesPanelHtml() {
+  const el = document.getElementById('miNotesPanel');
+  if (!el) return;
+  const soNos = Object.keys(miNoteBySo);
+  if (!soNos.length) {
+    el.innerHTML = `<div class="card" style="margin-bottom:1rem;"><div class="card-title" style="display:flex;align-items:center;gap:0.5rem;">📝 Sales Order Notes</div>
+      <div class="is-empty" style="padding:0.6rem 0;">No notes yet. Accounting and Admin add these on the Revenue &amp; Net Profit report.</div></div>`;
+    return;
+  }
+  // Order by who has the freshest note first, then SO number, so the newest commentary sits on top.
+  soNos.sort((a, b) => {
+    const ma = miNoteMetaBySo[a] || {}, mb = miNoteMetaBySo[b] || {};
+    return String(mb.updatedAt || '').localeCompare(String(ma.updatedAt || '')) || String(a).localeCompare(String(b));
+  });
+  const custBySo = {};
+  (miData.sos || []).forEach(s => { custBySo[String(s.soNo)] = s.customer || ''; });
+  const rows = soNos.map(soNo => {
+    const meta = miNoteMetaBySo[soNo] || {};
+    const who = meta.updatedBy ? `${_ie(meta.updatedBy)}${meta.updatedAt ? ' · ' + _ie(_id(meta.updatedAt)) : ''}` : '';
+    const cust = custBySo[String(soNo)] || '';
+    return `<div class="mi-note-row" onclick="miJumpToSo('${_ie(String(soNo)).replace(/'/g, "\\'")}')" title="Open this order in the report below"
+        style="padding:0.55rem 0.65rem;border-left:3px solid #0f766e;background:var(--bg-inset,#f1f5f9);border-radius:0 6px 6px 0;margin-bottom:0.5rem;cursor:pointer;">
+      <div style="display:flex;gap:0.5rem;align-items:baseline;flex-wrap:wrap;">
+        <strong>${_ie(String(soNo))}</strong>
+        ${cust ? `<span style="color:var(--text-secondary,#475569);font-size:0.82rem;">${_ie(cust)}</span>` : ''}
+        ${who ? `<span style="margin-left:auto;font-size:0.72rem;color:var(--text-muted,#64748b);">— ${who}</span>` : ''}
+      </div>
+      <div style="white-space:pre-wrap;color:var(--text-primary,#0f172a);margin-top:0.2rem;font-size:0.86rem;">${_ie(miNoteBySo[soNo])}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="card" style="margin-bottom:1rem;">
+    <div class="card-title" style="display:flex;align-items:center;gap:0.5rem;">📝 Sales Order Notes <span class="is-sub" style="font-weight:400;">${soNos.length} order${soNos.length !== 1 ? 's' : ''} · from Accounting &amp; Admin</span></div>
+    <div style="margin-top:0.5rem;">${rows}</div></div>`;
+}
+
+/* A198 — from the notes panel, open the order in the income report: find its month, expand that
+   month, then expand the order and scroll to it. Works only in monthly mode; in yearly mode the
+   order is a top-level row already. */
+function miJumpToSo(soNo) {
+  const target = String(soNo);
+  const m = (miModels || []).find(x => String(x.soNo) === target);
+  if (!m) return;
+  if (miMode === 'monthly') {
+    const monthIdx = (miMonthsCache || []).indexOf(m.ym);
+    if (monthIdx >= 0) {
+      const mrow = document.getElementById('isMDetail' + monthIdx);
+      if (mrow && mrow.style.display === 'none') miToggleMonth(monthIdx);
+    }
+  }
+  // The SO row id embeds the model's position within its (sorted) list; let the month render, then find it.
+  setTimeout(() => {
+    const strong = Array.from(document.querySelectorAll('#isBody .is-sorow strong'))
+      .find(s => s.textContent.trim() === target);
+    if (!strong) return;
+    const rowEl = strong.closest('tr');
+    const btn = rowEl && rowEl.querySelector('.is-exp');
+    const rid = btn && btn.id.replace('isSBtn_', '');
+    if (rid) {
+      const det = document.getElementById('isSDetail_' + rid);
+      if (det && det.style.display === 'none') miToggleSo(rid);
+    }
+    if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
 }
 
 /* A191 — the sales-order note, written by accounting or admin on the Revenue & Net Profit report.
