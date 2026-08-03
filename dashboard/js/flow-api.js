@@ -123,7 +123,7 @@ function _flowIdempotentAction(action) {
 const FLOW_SECURED_ACTIONS = [
   'approveQuotation', 'rejectQuotation', 'approvePO', 'rejectPO',
   'approvePaymentRequest', 'rejectPaymentRequest', 'markPaymentRequestPaid',
-  'setMgmtPricing', 'verifyReturnToSales',
+  'setMgmtPricing', 'rejectMgmtPricing', 'verifyReturnToSales',
   'deleteQuotation', 'deleteSalesOrder', 'deletePurchaseOrder', 'deletePaymentRequest',
   'deleteAPEntry', 'updateAPAging', 'recordCollection', 'correctCollection',
   'voidCollection', 'voidInvoice',

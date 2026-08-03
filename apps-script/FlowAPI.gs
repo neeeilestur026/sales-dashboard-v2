@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 109;  // A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 110;  // A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -353,7 +353,7 @@ function _json(obj) {
 var _SECURED = {
   approveQuotation: 1, rejectQuotation: 1, approvePO: 1, rejectPO: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, markPaymentRequestPaid: 1,
-  setMgmtPricing: 1, verifyReturnToSales: 1,
+  setMgmtPricing: 1, rejectMgmtPricing: 1, verifyReturnToSales: 1,
   deleteQuotation: 1, deleteSalesOrder: 1, deletePurchaseOrder: 1, deletePaymentRequest: 1,
   deleteAPEntry: 1, updateAPAging: 1, recordCollection: 1, correctCollection: 1,
   voidCollection: 1, voidInvoice: 1,
@@ -5553,6 +5553,7 @@ var _MODULE_MAP = {
   saveQuotationPDF: ['Quotation', 'PDF Saved'], savePOPDF: ['Purchase Order', 'PDF Saved'],
   createPricingRequest: ['Pricing Request', 'Created'], updatePRSourcing: ['Pricing Request', 'Sourced'],
   submitForPricing: ['Pricing Request', 'Forwarded'], setMgmtPricing: ['Pricing Request', 'Priced'],
+  rejectMgmtPricing: ['Pricing Request', 'Pricing Rejected'],
   verifyReturnToSales: ['Pricing Request', 'Verified'], createQuotationFromPR: ['Pricing Request', 'Quoted'],
   savePRPDF: ['Pricing Request', 'PDF Saved'],
   addDocument: ['Document', 'Attached'], deleteDocument: ['Document', 'Removed'],
@@ -6214,6 +6215,45 @@ function _mergePricedItems(storedJson, incomingJson, excludedLinesJson) {
   return JSON.stringify(out);
 }
 
+/* A201 — management rejects a forwarded pricing. The request stays, but its whole sourcing is wiped
+   so admin must re-source from scratch before it can be forwarded again. Only a request currently
+   awaiting management pricing (For Mgmt Pricing) can be rejected. Secured, like setMgmtPricing. */
+function rejectMgmtPricing(p) {
+  if (!p.prNo) return { success: false, message: 'prNo required.' };
+  var hdr = _prHeaderRow(p.prNo);
+  if (!hdr) return { success: false, message: 'Pricing request not found.' };
+  var st = String(hdr['Status'] || '');
+  if (st !== 'For Mgmt Pricing') {
+    return { success: false, message: 'This request is "' + st + '" — only a request forwarded for ' +
+      'management pricing can be rejected.' };
+  }
+
+  // Clear the whole sourcing on every item: cols 9-14 (Supplier, Principal, Currency, Supplier Price
+  // (FC), CBM, Final Price) and the display-only Supplier Price VAT (17). `Included` (col 8) and the
+  // item No/Name are the client's request, not sourcing — left untouched.
+  var ish = _sheet('PricingRequestItems');
+  var vatCol = SCHEMA.PricingRequestItems.indexOf('Supplier Price VAT') + 1;
+  _rows('PricingRequestItems').forEach(function (r) {
+    if (String(r['PR No']) !== String(p.prNo)) return;
+    ish.getRange(r.rowIndex, 9, 1, 6).setValues([['', '', '', 0, 0, 0]]);
+    if (vatCol > 0) ish.getRange(r.rowIndex, vatCol, 1, 1).setValues([['']]);
+  });
+
+  // Drop management's stored breakdown (header col 15) so the engine's buy-price fallback can never
+  // re-show a stale figure on the next load after the price has been cleared.
+  var hsh = _sheet('PricingRequests');
+  _rows('PricingRequests').forEach(function (h) {
+    if (String(h['PR No']) === String(p.prNo)) hsh.getRange(h.rowIndex, 15, 1, 1).setValues([['']]);
+  });
+
+  var reason = String(p.reason || '').trim();
+  var note = 'Pricing rejected by management (' + (p.actorName || 'someone') + ', ' + _dateStr(_now()) + ')' +
+    (reason ? ': ' + reason : '') + ' — re-source and resubmit.';
+  _setPRStatus(p.prNo, 'Sourcing', note);
+  return { success: true, prNo: p.prNo, status: 'Sourcing',
+    message: 'Pricing rejected — the sourced prices were cleared and the request returned to admin for re-sourcing.' };
+}
+
 function verifyReturnToSales(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
   // A147 stage gate: only a management-priced request can be verified back to sales.
@@ -6423,6 +6463,7 @@ var HANDLERS = {
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
+  rejectMgmtPricing: rejectMgmtPricing,
   verifyReturnToSales: verifyReturnToSales, createQuotationFromPR: createQuotationFromPR, savePRPDF: savePRPDF,
   addDocument: addDocument, getDocuments: getDocuments, deleteDocument: deleteDocument,
   submitQuotationApproval: submitQuotationApproval, approveQuotation: approveQuotation,
@@ -6465,6 +6506,7 @@ var MUTATIONS = {
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
+  rejectMgmtPricing: 1,
   verifyReturnToSales: 1, createQuotationFromPR: 1, savePRPDF: 1,
   addDocument: 1, deleteDocument: 1,
   submitQuotationApproval: 1, approveQuotation: 1, rejectQuotation: 1, sendQuotation: 1, reviseQuotation: 1,

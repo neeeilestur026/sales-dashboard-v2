@@ -538,7 +538,7 @@ def payment_request_pdf():
 SECURED_ACTIONS = [
     "approveQuotation", "rejectQuotation", "approvePO", "rejectPO",
     "approvePaymentRequest", "rejectPaymentRequest", "markPaymentRequestPaid",
-    "setMgmtPricing", "verifyReturnToSales",
+    "setMgmtPricing", "rejectMgmtPricing", "verifyReturnToSales",
     "deleteQuotation", "deleteSalesOrder", "deletePurchaseOrder", "deletePaymentRequest",
     "deleteAPEntry", "updateAPAging", "recordCollection", "correctCollection",
     "voidCollection", "voidInvoice",

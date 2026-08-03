@@ -165,6 +165,11 @@ function setupRoleUI() {
     const eng = document.getElementById('mgmtEngineCard'), hist = document.getElementById('pricingHistoryCard');
     if (eng) eng.style.display = '';
     if (hist) hist.style.display = '';
+    // A201 — reveal Reject only when the backend supports rejectMgmtPricing (v110), so it can never
+    // be clicked against an older deployment that would answer "unknown action".
+    if (typeof flowVersionAtLeast === 'function') {
+      flowVersionAtLeast(110).then(ok => { const rb = document.getElementById('peRejectBtn'); if (rb && ok) rb.style.display = ''; });
+    }
     renderMgmtEngineShell();
   }
 }
@@ -967,6 +972,7 @@ function clearFlowPricing() {
   const ctx = document.getElementById('peContext'); if (ctx) ctx.style.display = 'none';   // A156
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = true;
   const db = document.getElementById('peDocsBtn'); if (db) db.disabled = true;
+  const rb = document.getElementById('peRejectBtn'); if (rb) rb.disabled = true;   // A201
   const msg = document.getElementById('peMsg'); if (msg) msg.style.display = 'none';
 }
 
@@ -1054,6 +1060,9 @@ function loadFlowPricing(prNo) {
   peRenderContext(r);
   const sb = document.getElementById('peSaveBtn'); if (sb) sb.disabled = false;
   const db = document.getElementById('peDocsBtn'); if (db) db.disabled = false;
+  // A201 — only a request still awaiting first-time pricing can be rejected; a re-price of an
+  // already-priced/quoted request cannot (mirrors the backend gate).
+  const rb = document.getElementById('peRejectBtn'); if (rb) rb.disabled = (r.status !== 'For Mgmt Pricing');
   recalcPricing();
   peRenderRepriceWarn(peRepriceGuard(r));   // A183: warn before a stray-margin re-price can inflate
   peLoadPriceHistory(r.customer);
@@ -1298,6 +1307,28 @@ async function savePricing() {
     if (usingEngine) { loadFlowPricingHistory(); setTimeout(clearFlowPricing, 900); }
     else { setTimeout(closePr, 800); }
   } catch (e) { flowMsg(msgEl, e.message, false); }
+}
+
+/* A201 — management rejects the forwarded sourcing. Clears the sourced prices and returns the request
+   to admin for re-sourcing; the request itself is kept. Only enabled for a For-Mgmt-Pricing request. */
+async function rejectPricing() {
+  if (!pePrNo) { flowMsg('peMsg', 'Load a request to reject first.', false); return; }
+  const reason = prompt('Reject this pricing and send it back to admin for re-sourcing?\n\n' +
+    'The sourced supplier prices will be CLEARED and admin must re-enter them. The request is kept.\n\n' +
+    'Reason (optional):');
+  if (reason === null) return;                          // cancelled
+  const rb = document.getElementById('peRejectBtn'); if (rb) rb.disabled = true;
+  try {
+    const res = await postFlow('rejectMgmtPricing', { prNo: pePrNo, reason: reason || '' });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not reject the pricing.');
+    flowMsg('peMsg', 'Pricing rejected — sent back to admin for re-sourcing.', true);
+    await loadRequests();
+    loadFlowPricingHistory();
+    setTimeout(clearFlowPricing, 900);
+  } catch (e) {
+    flowMsg('peMsg', e.message, false);
+    if (rb) rb.disabled = false;                        // let them retry
+  }
 }
 
 // ─── Pricing History (new-flow: priced + migrated requests) with reload-to-re-price ───
