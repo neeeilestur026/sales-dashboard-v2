@@ -227,7 +227,7 @@ function flowStockItems(items) {
   return typed ? a.filter(i => i && i.type === 'Stock') : a;
 }
 function flowMoney(v, cur) {
-  const sym = { PHP: '₱', USD: '$', EUR: '€', SGD: 'S$', AUD: 'A$', JPY: '¥', GBP: '£' };
+  const sym = { PHP: '₱', USD: '$', EUR: '€', SGD: 'S$', AUD: 'A$', JPY: '¥', GBP: '£', AED: 'AED ' };
   return (sym[cur] || (cur ? cur + ' ' : '')) + flowNum(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -259,7 +259,7 @@ function flowToday() {
   try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }
   catch (e) { return new Date().toISOString().slice(0, 10); }
 }
-const FLOW_CURRENCIES = ['PHP', 'USD', 'EUR', 'SGD', 'AUD', 'JPY', 'GBP'];
+const FLOW_CURRENCIES = ['PHP', 'USD', 'EUR', 'SGD', 'AUD', 'JPY', 'GBP', 'AED'];
 
 /** Map an approval/workflow status to a .flow-badge class + label. */
 function flowStatusBadge(status) {
