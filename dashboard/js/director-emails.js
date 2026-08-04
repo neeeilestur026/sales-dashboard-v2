@@ -5,6 +5,8 @@ let deSession = null;
 let deFolder = 'inbox';
 let deEmails = [];          // current folder's emails
 let deCat = '';            // active category filter (inbox/spam)
+let deDays = 14;           // lookback window; the route accepts up to 60
+let deFetchedAt = null;    // when the on-screen list was actually fetched
 
 const CAT_CLASS = {
   'Sales Inquiry/RFQ': 'cat-rfq', 'Purchase Order': 'cat-po', 'Supplier/Principal': 'cat-supplier',
@@ -29,6 +31,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('director-emails');
   document.getElementById('refreshBtn').addEventListener('click', () => loadFolder(deFolder, true));
   document.getElementById('search').addEventListener('input', renderList);
+  document.getElementById('daysSel').addEventListener('change', (ev) => {
+    deDays = parseInt(ev.target.value, 10) || 14;   // the route clamps to 1..60 server-side too
+    loadFolder(deFolder, true);
+  });
   document.querySelectorAll('.em-tab').forEach(t => t.addEventListener('click', () => {
     deFolder = t.getAttribute('data-folder');
     document.querySelectorAll('.em-tab').forEach(x => x.classList.toggle('active', x === t));
@@ -63,6 +69,33 @@ function showSetup() {
   </div>`;
 }
 
+/* A204: the newest message must be at the TOP. The backend now sorts (RFC 3501 lets a server return
+   FETCH responses in ascending-sequence order no matter which order the ids were asked for, which is
+   why the newest mail used to sit at the bottom of every folder). Sorting again here is deliberate
+   belt-and-braces: a future backend change cannot silently reintroduce it. Anything without a
+   parseable date keeps its server position rather than being dropped to the end. */
+function deSortNewestFirst(rows) {
+  const parse = (e) => { const n = Date.parse(e && e.date); return isNaN(n) ? null : n; };
+  const items = rows.map((e, i) => ({ e, i, t: parse(e) }));
+  /* Mirror the server's rule: a row whose date is missing or garbled inherits the timestamp of its
+     nearest neighbour in the order the server sent it, so it stays where it belongs. Comparing a
+     null date directly would be both an invalid comparator (Array.sort's result would be
+     implementation-defined) AND actively worse than the server's answer — it would drag the row to
+     the bottom, undoing the placement the backend already worked out. */
+  let carry = null;
+  items.forEach(x => { if (x.t !== null) carry = x.t; x.fill = x.t !== null ? x.t : carry; });
+  let next = null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i].fill !== null) next = items[i].fill;
+    else if (next !== null) items[i].fill = next;
+  }
+  // total order: filled time desc, then original server position — never returns 0 for distinct rows
+  return items
+    .sort((a, b) => ((b.fill === null ? -Infinity : b.fill) - (a.fill === null ? -Infinity : a.fill))
+                    || (a.i - b.i))
+    .map(x => x.e);
+}
+
 async function loadFolder(folder, force) {
   deFolder = folder;
   deCat = '';
@@ -70,10 +103,11 @@ async function loadFolder(folder, force) {
   box.innerHTML = '<div class="dr-empty">Loading ' + _esc(folder) + '…</div>';
   document.getElementById('catFilter').style.display = 'none';
   try {
-    const r = await apiFetchEmailFeed(folder, 14);
+    const r = await apiFetchEmailFeed(folder, deDays);
     if (r && r.needsSetup) { showSetup(); return; }
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not load mailbox.');
-    deEmails = r.emails || [];
+    deEmails = deSortNewestFirst(r.emails || []);
+    deFetchedAt = new Date();
     // tab counts
     const cntEl = { inbox: 'cntInbox', sent: 'cntSent', spam: 'cntSpam' }[folder];
     if (cntEl) document.getElementById(cntEl).textContent = '(' + deEmails.length + ')';
@@ -108,7 +142,12 @@ function renderList() {
   if (!isSent && deCat) rows = rows.filter(e => (e.category || 'Other') === deCat);
   if (q) rows = rows.filter(e => ((e.name || '') + ' ' + (e.from || e.recipient || '') + ' ' + (e.subject || '')).toLowerCase().includes(q));
 
-  document.getElementById('metaLine').textContent = `${rows.length} message${rows.length === 1 ? '' : 's'} · last 14 days`;
+  // /api/email/feed has no server cache, so the fetch time IS the freshness of what is on screen
+  const stamp = deFetchedAt
+    ? deFetchedAt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : '—';
+  document.getElementById('metaLine').textContent =
+    `${rows.length} message${rows.length === 1 ? '' : 's'} · last ${deDays} days · newest first · updated ${stamp}`;
 
   const box = document.getElementById('listBox');
   if (!rows.length) { box.innerHTML = '<div class="dr-empty">No messages.</div>'; return; }

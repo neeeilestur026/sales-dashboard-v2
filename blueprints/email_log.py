@@ -338,6 +338,61 @@ def _classify(from_addr: str, from_name: str, subject: str, my_domain: str) -> s
     return "Other"
 
 
+def _seq_of(part) -> int:
+    """The IMAP sequence number a FETCH response line belongs to.
+
+    A response looks like b'12 (BODY[HEADER.FIELDS (...)] {842}' — the leading integer is the
+    sequence number. It is the server's own arrival order, so it is the one ordering signal that is
+    always present and never forged, which is what makes it the right tie-breaker below."""
+    try:
+        return int(part[0].split(maxsplit=1)[0])
+    except (AttributeError, IndexError, ValueError, TypeError):
+        return 0
+
+
+def _order_newest_first(records: list[dict]) -> list[dict]:
+    """Sort message records newest-first on the Date header, using IMAP sequence order to place any
+    message whose Date is missing or unparseable.
+
+    Why this is needed at all: the caller asks for the newest ids first, but RFC 3501 lets a server
+    return FETCH responses in ITS own ascending-sequence order regardless of how the set was written,
+    and GoDaddy does exactly that — so the raw result arrives oldest-first.
+
+    Why Date rather than sequence alone: sequence is arrival order, which is usually right but is
+    wrong for imported/migrated mail. Why sequence at all: Date is sender-supplied and can be absent
+    or garbled. So a record with no usable Date inherits the timestamp of its nearest neighbour in
+    sequence order — it lands roughly where it belongs instead of being dumped at the bottom, which
+    is what would happen if it simply sorted as 'no date'."""
+    if not records:
+        return records
+    # Defensive, not redundant: a naive datetime mixed with aware ones raises TypeError inside sorted(),
+    # which would take out the whole feed. fetch_folder already pins naive values, but this function is
+    # shared, so it cannot assume its caller did.
+    for r in records:
+        dt = r.get("_dt")
+        if dt is not None and dt.tzinfo is None:
+            r["_dt"] = dt.replace(tzinfo=PH_TZ)
+    by_seq = sorted(records, key=lambda r: r.get("_seq") or 0)
+    # carry the last known timestamp forward, then the next known one backward for any leading gap
+    last = None
+    for r in by_seq:
+        if r["_dt"] is not None:
+            last = r["_dt"]
+        r["_sortdt"] = r["_dt"] or last
+    nxt = None
+    for r in reversed(by_seq):
+        if r["_sortdt"] is not None:
+            nxt = r["_sortdt"]
+        elif nxt is not None:
+            r["_sortdt"] = nxt
+    # a mailbox where nothing has a usable Date still orders correctly, on sequence alone
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    ordered = sorted(by_seq, key=lambda r: (r["_sortdt"] or floor, r.get("_seq") or 0), reverse=True)
+    for r in ordered:
+        r.pop("_seq", None); r.pop("_dt", None); r.pop("_sortdt", None)
+    return ordered
+
+
 def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250) -> list[dict]:
     """Fetch recent message headers from a logical folder (inbox/sent/spam) within `days`.
     Inbox/Spam messages are classified. Returns newest-first, capped at `cap`."""
@@ -372,7 +427,12 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
                 dt = parsedate_to_datetime(date_hdr) if date_hdr else None
             except (TypeError, ValueError):
                 dt = None
+            # A malformed header can still parse to a NAIVE datetime; mixing naive and aware blows up
+            # the sort with a TypeError, so pin anything naive to PH local before it goes near a key.
+            if dt is not None and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=PH_TZ)
             iso = dt.astimezone(PH_TZ).isoformat() if dt else date_hdr
+            seq = _seq_of(part)
 
             if kind == "sent":
                 raw = (_decode_mime(msg.get("To", "")) or _decode_mime(msg.get("Cc", "")))
@@ -385,6 +445,7 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
                     "name": pname or paddr, "recipient": paddr,
                     "company": _company_from_email(paddr),
                     "subject": subject, "date": iso, "messageId": message_id,
+                    "_seq": seq, "_dt": dt,
                 })
             else:
                 raw = _decode_mime(msg.get("From", ""))
@@ -398,9 +459,11 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
                     "company": _company_from_email(faddr),
                     "subject": subject, "date": iso, "messageId": message_id,
                     "category": _classify(faddr, fname, subject, my_domain),
+                    "_seq": seq, "_dt": dt,
                 })
-        # parsedate may be missing/garbled; keep server order (already newest-first by id).
-        return out
+        # The ids were requested newest-first, but RFC 3501 lets the server answer in its own
+        # ascending-sequence order — and GoDaddy does — so `out` is oldest-first here. Sort it.
+        return _order_newest_first(out)
     finally:
         try:
             conn.close()

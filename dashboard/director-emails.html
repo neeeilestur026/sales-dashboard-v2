@@ -82,6 +82,14 @@
           <div class="em-toolbar">
             <input type="text" id="search" placeholder="Search sender / subject…">
             <span class="spacer"></span>
+            <!-- Refresh already lives in the header (#refreshBtn); the feed has no server cache, so
+                 it genuinely re-reads the mailbox. This only adds the lookback window. -->
+            <select id="daysSel" title="How far back to read"
+                    style="padding:6px 9px;border:1px solid #d7dce3;border-radius:8px;font-size:0.8rem;background:#fff;">
+              <option value="7">Last 7 days</option>
+              <option value="14" selected>Last 14 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
             <span style="font-size:0.78rem;color:var(--text-muted,#64748b);" id="metaLine"></span>
           </div>
           <div class="em-cats" id="catFilter" style="display:none;"></div>
