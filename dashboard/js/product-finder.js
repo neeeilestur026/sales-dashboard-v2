@@ -12,12 +12,12 @@
 
 const PF_CONFIRM_MSG = 'Needs engineer confirmation — Hi-ESCORP will contact you.';
 const PF_DATA_FILES = ['products.json', 'synonyms.json', 'cross_reference.json', 'torque_chart.json',
-                       'bolt_dimensions.json'];
+                       'bolt_dimensions.json', 'wrench_torque_output.json'];
 const PF_INDUSTRIES = ['cement', 'mining', 'power', 'oil-gas', 'semiconductor', 'shipbuilding'];
 
 /* ─────────────────────────── Data loading (override-aware) ─────────────────────────── */
 
-let pfData = null;      // { products:[], synonyms:[], crossRef:[], torque:[], dims:[], bases:{}, loadErrors:[] }
+let pfData = null;      // { products, synonyms, crossRef, torque, dims, pressure, bases, loadErrors }
 let pfLoading = null;
 
 function pfOverride(file) {
@@ -43,7 +43,7 @@ async function pfFetchFile(file) {
    loadErrors so handlers can SHOW it instead of presenting it as a product miss. */
 const PF_FILE_KEYS = { 'products.json': 'products', 'synonyms.json': 'synonyms',
                        'cross_reference.json': 'rows', 'torque_chart.json': 'rows',
-                       'bolt_dimensions.json': 'rows' };
+                       'bolt_dimensions.json': 'rows', 'wrench_torque_output.json': 'rows' };
 
 async function pfLoadData(force) {
   if (pfData && !force && !(pfData.loadErrors || []).length) return pfData;
@@ -70,7 +70,7 @@ async function pfLoadData(force) {
     const bases = (settled[3].status === 'fulfilled' && settled[3].value
                    && settled[3].value._bases) || {};
     pfData = { products: arr(0), synonyms: arr(1), crossRef: arr(2), torque: arr(3),
-               dims: arr(4), bases, loadErrors };
+               dims: arr(4), pressure: arr(5), bases, loadErrors };
     pfLoading = null;                       // errors present → next call re-fetches (auto-retry)
     return pfData;
   })();
@@ -524,8 +524,15 @@ function pfValidateData(data) {
       if (!p.thread) warn('products.json', label + ': coupler/hose without a thread');
       if (typeof p.max_pressure_bar !== 'number') err('products.json', label + ': coupler/hose without max_pressure_bar — it can never be safety-matched');
     }
-    if (p && p.category === 'torque-wrench' && !(typeof p.torque_min_nm === 'number' && typeof p.torque_max_nm === 'number')) {
+    /* A203: a `series_overview` row is a family placeholder kept only so pairs_with references
+       resolve — it carries NO range on purpose, so it is never recommended in place of a specific
+       model. Anything else missing a range is still a real defect. */
+    if (p && p.category === 'torque-wrench' && !p.series_overview &&
+        !(typeof p.torque_min_nm === 'number' && typeof p.torque_max_nm === 'number')) {
       warn('products.json', label + ': torque wrench without a Nm range');
+    }
+    if (p && p.series_overview && (typeof p.torque_min_nm === 'number' || typeof p.torque_max_nm === 'number')) {
+      err('products.json', label + ': a series_overview row must carry no torque range, or it will be recommended instead of a real model');
     }
     /* A185: the Puller Selector sizes on tonnage alone (we hold no jaw geometry), so a puller with no
        rating can never be safety-matched — and a typo'd subtype silently drops out of PS_SUBTYPE_RANK
@@ -538,15 +545,37 @@ function pfValidateData(data) {
       }
     }
   });
+  /* A203: the wrench is no longer baked into torque_chart.json — it is derived from products.json at
+     render time — so what needs validating is the torque row itself and, separately, that the pump
+     chart and the catalogue still agree about each model's range. */
   ((data && data.torque) || []).forEach(r => {
     const label = (r.bolt || '?') + '/' + (r.grade || '?');
-    if (r.wrench_id) {
-      const w = products.find(p => p.id === r.wrench_id);
-      if (!w) err('torque_chart.json', label + ': wrench_id "' + r.wrench_id + '" does not exist');
-      else if (r.verified === true && typeof w.torque_min_nm === 'number' &&
-               (r.torque_min_nm < w.torque_min_nm || r.torque_max_nm > w.torque_max_nm)) {
-        err('torque_chart.json', label + ': torque ' + r.torque_min_nm + '–' + r.torque_max_nm +
-            ' Nm is OUTSIDE the ' + w.name + ' range (' + w.torque_min_nm + '–' + w.torque_max_nm + ' Nm)');
+    if (!(typeof r.torque_max_nm === 'number' && r.torque_max_nm > 0)) {
+      err('torque_chart.json', label + ': no usable torque figure');
+    } else if (r.torque_min_nm > r.torque_max_nm) {
+      err('torque_chart.json', label + ': min torque is above max');
+    }
+    if (r.basis && data.bases && !data.bases[r.basis]) {
+      err('torque_chart.json', label + ': basis "' + r.basis + '" is not defined in _bases — the figure would print with no stated basis');
+    }
+    if (typeof r.verified !== 'boolean') warn('torque_chart.json', label + ': no explicit verified flag');
+  });
+  /* The two files are written from the same charts and MUST NOT drift: products.json decides which
+     wrench is offered, wrench_torque_output.json decides what pressure we tell the operator to set.
+     A mismatch would have us recommend a tool at a pressure it cannot reach. */
+  ((data && data.pressure) || []).forEach(m => {
+    const pts = m.points || [];
+    const w = products.find(p => p.id === m.product_id);
+    if (!w) { err('wrench_torque_output.json', m.model + ': product_id "' + m.product_id + '" does not exist'); return; }
+    if (!pts.length) { err('wrench_torque_output.json', m.model + ': no pressure rows'); return; }
+    if (w.torque_min_nm !== pts[0].nm || w.torque_max_nm !== pts[pts.length - 1].nm) {
+      err('wrench_torque_output.json', m.model + ': chart says ' + pts[0].nm + '–' + pts[pts.length - 1].nm +
+          ' Nm but ' + w.name + ' claims ' + w.torque_min_nm + '–' + w.torque_max_nm + ' Nm');
+    }
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].nm <= pts[i - 1].nm) {
+        err('wrench_torque_output.json', m.model + ': torque does not rise at ' + pts[i].psi + ' psi');
+        break;
       }
     }
   });
@@ -1031,24 +1060,107 @@ function pfBasisHtml(row) {
   return text ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(text) + '</div>' : '';
 }
 
-/* The charts reach 361,484 Nm; the largest tool we carry stops at 39,000 Nm. Say so out loud
-   rather than silently omitting the wrench line. */
-function pfWrenchHtml(row, byId) {
-  const w = byId[row.wrench_id];
-  if (w) return '<div class="cr-rec-line"><b>Matching wrench:</b> ' + pfEsc(w.name) + ' ' + pfBadge(w.verified) + '</div>';
-  if (row.wrench_status === 'above_range')
-    return '<div class="cr-rec-line"><b>Matching wrench:</b> beyond our current tool range — the largest'
-      + ' we carry is the TWLC / TWHC hydraulic wrench at 39,000 Nm. The engineer will source a'
-      + ' tensioner or a larger tool.</div>';
-  if (row.wrench_status === 'below_range')
-    return '<div class="cr-rec-line"><b>Matching wrench:</b> below the range of our powered wrenches'
-      + ' — a hand torque wrench covers this.</div>';
-  return '';
+/* ── Which wrench, and at what pump pressure ──
+   Derived at render time from products.json rather than baked into torque_chart.json: the catalogue
+   is the single source of truth, so correcting a tool's range fixes every bolt at once. (The old
+   baked wrench_id went stale the moment the real TWHC ranges landed — it claimed 39,000 Nm was our
+   ceiling when TWHC50 reaches 71,816.)
+   Both bounds are checked, not just the ceiling: a tool must never be offered for a job BELOW its
+   minimum, where it cannot hold accuracy. Same rule as bsCandidates in bolting-survey.js. */
+function pfWrenchesFor(targetNm) {
+  return (pfData.products || [])
+    .filter(p => p.category === 'torque-wrench' && p.verified
+                 && typeof p.torque_min_nm === 'number' && typeof p.torque_max_nm === 'number'
+                 && p.torque_min_nm <= targetNm && targetNm <= p.torque_max_nm);
+}
+
+/* Hydraulic hollow leads: it is the flange and stud tool, and it is the only family we hold a
+   pump-pressure chart for, so it is the only one that can answer "what do I set the pump to".
+   This must stay byte-identical to BS_SUBTYPE_RANK in bolting-survey.js — the two files rank the
+   same tools and any drift between them shows up as the two pages naming different wrenches. */
+const PF_SUBTYPE_RANK = { 'hydraulic-hollow': 0, pneumatic: 1, battery: 2, 'hydraulic-square-drive': 3 };
+
+function pfWrenchFamily(p) {
+  const r = PF_SUBTYPE_RANK[p.subtype];
+  return r === undefined ? 9 : r;
+}
+
+/* The house wrench ranking, shared with bsCandidates in bolting-survey.js so the Match Finder and
+   the Bolting Survey can never name different tools for the same bolt.
+
+   Order of the three keys matters, and it was measured rather than guessed:
+   1. IN-BAND FIRST. Rank by where the target SITS in a tool's range, not by how tight the range is.
+      Tightest-fit-first reads sensibly and is wrong — it put M33/8.8 on a TWHC1 at 99% of its
+      ceiling, 43 of 179 bolts above 80% of range, which is where accuracy and headroom are worst.
+   2. THEN the family preference (hollow hydraulic leads). Putting the family ahead of the fit guard
+      instead pushed 31 bolts out of band and made the two tools disagree on 29% of them; this order
+      keeps the count at 25 — the best achievable — while still picking a TWHC 97% of the time.
+   3. THEN closeness to mid-range. A torque tool belongs in the middle of its span. */
+function pfRankWrenches(list, targetNm) {
+  const pos = p => (targetNm - p.torque_min_nm) / Math.max(1, p.torque_max_nm - p.torque_min_nm);
+  const inBand = p => pos(p) >= 0.2 && pos(p) <= 0.8;
+  return list.slice().sort((a, b) =>
+    (inBand(a) ? 0 : 1) - (inBand(b) ? 0 : 1)
+    || pfWrenchFamily(a) - pfWrenchFamily(b)
+    || Math.abs(pos(a) - 0.5) - Math.abs(pos(b) - 0.5));
+}
+
+/* The lowest PRINTED pressure row that reaches the target. Printed, not interpolated — the operator
+   sets the pump to a value off the chart, so quoting 3,412 psi would be an instruction they cannot
+   follow. */
+function pfPressureFor(model, targetNm) {
+  const m = (pfData.pressure || []).find(r => r.model === model);
+  if (!m) return null;
+  return (m.points || []).find(p => p.nm >= targetNm) || null;
+}
+
+/* The catalogue's true ceiling, so the "we don't cover that" message can't go stale again. */
+function pfWrenchCeiling() {
+  const all = (pfData.products || []).filter(p => p.category === 'torque-wrench' && p.verified
+                                                  && typeof p.torque_max_nm === 'number');
+  if (!all.length) return null;
+  const top = all.reduce((a, b) => (b.torque_max_nm > a.torque_max_nm ? b : a));
+  // the catalogue name already carries its range in brackets — strip it so the sentence that quotes
+  // the ceiling doesn't end up with parentheses inside parentheses
+  return { nm: top.torque_max_nm, name: String(top.name).replace(/\s*\([^()]*Nm\)\s*$/, '').trim() };
+}
+
+function pfWrenchHtml(targetNm) {
+  const covers = pfWrenchesFor(targetNm);
+  const line = (label, body) => '<div class="cr-rec-line"><b>' + label + ':</b> ' + body + '</div>';
+  if (!covers.length) {
+    const ceil = pfWrenchCeiling();
+    const floor = (pfData.products || []).filter(p => p.category === 'torque-wrench' && p.verified
+                    && typeof p.torque_min_nm === 'number')
+                    .reduce((a, p) => Math.min(a, p.torque_min_nm), Infinity);
+    if (ceil && targetNm > ceil.nm)
+      return line('Wrench', 'beyond our current tool range — the largest we carry reaches '
+        + pfNm(ceil.nm) + ' Nm (' + pfEsc(ceil.name) + '). The engineer will source a tensioner or a larger tool.');
+    if (isFinite(floor) && targetNm < floor)
+      return line('Wrench', 'below the range of our powered wrenches (from ' + pfNm(floor)
+        + ' Nm) — a hand torque wrench covers this.');
+    return line('Wrench', 'no tool in our catalogue brackets this torque — logged for the engineer.');
+  }
+  const sorted = pfRankWrenches(covers, targetNm);
+  const primary = sorted[0];
+  const alt = sorted.find(p => pfWrenchFamily(p) !== pfWrenchFamily(primary));
+  const model = (primary.series === 'TWHC' && primary.id !== 'pt-twhc') ? primary.id.replace(/^pt-/, '').toUpperCase() : null;
+  const pt = model ? pfPressureFor(model, targetNm) : null;
+  let html = line('Wrench', pfEsc(primary.name) + ' ' + pfBadge(primary.verified));
+  if (pt)
+    html += line('Pump pressure', 'set to <b>' + pfNm(pt.psi) + ' psi</b> (' + pfNm(pt.bar) + ' bar) → '
+      + pfNm(pt.nm) + ' Nm (' + pfNm(pt.ft_lb) + ' ft·lb) output'
+      + (pt.verified === false ? ' ' + pfBadge(false) : ''));
+  else if (model)
+    html += line('Pump pressure', 'not reachable on this model’s chart — the engineer will confirm.');
+  if (alt) html += line('Alternate', pfEsc(alt.name));
+  return html;
 }
 
 async function pfBoltMatch() {
   const box = document.getElementById('pfBoltResult');
-  if (!(await pfEnsureData(box, ['torque_chart.json', 'bolt_dimensions.json', 'products.json']))) return;
+  if (!(await pfEnsureData(box, ['torque_chart.json', 'bolt_dimensions.json', 'products.json',
+                                 'wrench_torque_output.json']))) return;
   const bolt = (document.getElementById('pfBolt') || {}).value || '';
   const grade = (document.getElementById('pfGrade') || {}).value || '';
   box.style.display = '';
@@ -1065,12 +1177,13 @@ async function pfBoltMatch() {
     box.innerHTML = dims + '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3>'
       + '<p class="cr-rec-line">Our chart prints ' + pfNm(row.torque_max_nm) + ' Nm for ' + pfEsc(row.bolt) + ' ' + pfEsc(gl)
       + ', but that figure is <b>disputed</b>'
-      + (byId[row.wrench_id] ? '; likely tool class: ' + pfEsc(byId[row.wrench_id].name) : '') + '. '
+      + '. '
       + 'Torque values are safety-critical, so the engineer must confirm before use.</p>'
       + (row.note ? '<p class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</p>' : '')
       + '</div>';
   } else {
-    const w = byId[row.wrench_id];
+    // same ranking the display uses, so the Purchase Request orders the wrench we just named
+    const w = pfRankWrenches(pfWrenchesFor(row.torque_max_nm), row.torque_max_nm)[0] || null;
     const nm = row.torque_min_nm === row.torque_max_nm
       ? '≈ ' + pfNm(row.torque_min_nm)
       : pfNm(row.torque_min_nm) + '–' + pfNm(row.torque_max_nm);
@@ -1079,7 +1192,7 @@ async function pfBoltMatch() {
     box.innerHTML = dims
       + '<div class="cr-rec"><div class="cr-rec-label">Torque ' + pfBadge(true) + '</div>'
       + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' ' + pfEsc(gl) + ' → ' + nm + ' Nm (≈ ' + ftlb + ' ft·lb)</div>'
-      + pfWrenchHtml(row, byId)
+      + pfWrenchHtml(row.torque_max_nm)
       + pfBasisHtml(row)
       + (row.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
       + '</div>'

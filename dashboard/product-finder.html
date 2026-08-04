@@ -390,8 +390,13 @@
             <input type="text" id="bsBoltSizeInch" placeholder='e.g. 3/4"'></div>
           <div class="cr-field"><label>Bolt T.P.I. / pitch</label><input type="text" id="bsTpi"></div>
           <div class="cr-field"><label>Bolt grade</label>
+            <!-- same ladder as the Match Finder's #pfGrade, so the two tools cannot disagree
+                 about which grades our charts cover -->
             <select id="bsGrade"><option value="">— select —</option>
-              <option>8.8</option><option>10.9</option><option>12.9</option></select></div>
+              <option>3.6</option><option>4.6</option><option>4.8</option><option>5.6</option>
+              <option>5.8</option><option>6.8</option><option>8.8</option><option>10.9</option>
+              <option>12.9</option>
+              <option value="B7">B7 stud (65% yield, moly/graphite)</option></select></div>
           <div class="cr-field"><label>Bolt coating</label><input type="text" id="bsCoating" placeholder="e.g. plain, PTFE, zinc"></div>
           <div class="cr-field"><label>Gasket type</label><input type="text" id="bsGasket"></div>
           <div class="cr-field"><label>Operating temp.</label><input type="text" id="bsTempValue"></div>

@@ -28,7 +28,11 @@ const BS_TORQUE_TO_NM = { nm: 1, ftlb: 1.35582, kgm: 9.80665 };
 const BS_OILED = /\b(oil|oiled|lightly oiled|light oil|moly|molybdenum|grease|greased|lubricated)\b/i;
 const BS_PLAIN = /^(plain|bare|none|no|uncoated|n\/a|na|as[- ]received|standard)\b/i;
 const BS_TEMP_OK_C = { lo: -20, hi: 150 };
-const BS_SUBTYPE_RANK = { pneumatic: 0, battery: 1, 'hydraulic-square-drive': 2, 'hydraulic-hollow': 3 };
+/* A203: hydraulic-hollow leads. It is the flange and stud tool, and it is the only family we hold a
+   pump-pressure chart for — so it is the only one that can answer "what do I set the pump to".
+   This is a TIE-BREAKER only: it fires when two tools sit within 0.05 of mid-range. The Match
+   Finder ranks the same way, so the two tools cannot contradict each other. */
+const BS_SUBTYPE_RANK = { 'hydraulic-hollow': 0, pneumatic: 1, battery: 2, 'hydraulic-square-drive': 3 };
 
 function bsNum(v) {
   const n = parseFloat(String(v == null ? '' : v).replace(/,/g, ''));
@@ -71,21 +75,21 @@ function bsCandidates(targetNm, products, limitedClearance) {
   return covers.slice().sort((a, b) => {
     // A hollow-drive wrench is the one that fits where there is no room to swing — prefer it when
     // the survey says the access is tight, but never invent a clearance dimension to justify it.
+    // This outranks even the fit guard: a tool that cannot physically go on the bolt is no answer.
     if (limitedClearance) {
       const ah = a.subtype === 'hydraulic-hollow' ? 0 : 1, bh = b.subtype === 'hydraulic-hollow' ? 0 : 1;
       if (ah !== bh) return ah - bh;
     }
+    /* A203: the fit guard first, then the house family preference, then closeness to mid-range —
+       the identical three keys pfRankWrenches uses in product-finder.js, so the Survey and the Match
+       Finder cannot name different tools for the same bolt. They disagreed on 29% of bolts while the
+       family preference sat above the fit guard; with this order they agree on all of them.
+       Tightest-range-first, the original rule here, was wrong for the reason above. */
     const ab = inBand(a) ? 0 : 1, bb = inBand(b) ? 0 : 1;
     if (ab !== bb) return ab - bb;
-    const da = Math.abs(pos(a) - 0.5), db = Math.abs(pos(b) - 0.5);
-    // Two tools sitting essentially the same distance from mid-range is a coin flip on the numbers,
-    // so break it on tool type instead of letting float noise decide: pneumatic is the workhorse,
-    // battery the convenience variant, hydraulic the heavy/tight-access one.
-    if (Math.abs(da - db) < 0.05) {
-      const rank = p => BS_SUBTYPE_RANK[p.subtype] === undefined ? 9 : BS_SUBTYPE_RANK[p.subtype];
-      if (rank(a) !== rank(b)) return rank(a) - rank(b);
-    }
-    return da - db;
+    const rank = p => (BS_SUBTYPE_RANK[p.subtype] === undefined ? 9 : BS_SUBTYPE_RANK[p.subtype]);
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    return Math.abs(pos(a) - 0.5) - Math.abs(pos(b) - 0.5);
   });
 }
 
@@ -321,7 +325,9 @@ async function bsSuggest() {
     const ftlb = Math.round(r.targetNm / BS_TORQUE_TO_NM.ftlb);
     const src = r.torqueSource === 'stated'
       ? 'from the torque you specified'
-      : 'from our reference chart for ' + esc(r.chartRow.bolt) + ' grade ' + esc(r.chartRow.grade);
+      : 'from our reference chart for ' + esc(r.chartRow.bolt) + ' '
+        + esc(typeof pfGradeLabel === 'function' ? pfGradeLabel(r.chartRow.grade)
+                                                 : 'grade ' + r.chartRow.grade);
     html += '<div class="cr-rec"><div class="cr-rec-label">Target torque</div>' +
       '<div class="cr-rec-series">' + Math.round(r.targetNm).toLocaleString('en-US') +
       ' Nm (≈ ' + ftlb.toLocaleString('en-US') + ' ft·lb)</div>' +

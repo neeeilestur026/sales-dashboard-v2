@@ -1,0 +1,1983 @@
+{
+ "_note": "Pump pressure → torque output for the TWHC hollow hydraulic torque wrenches, transcribed from the company charts. Use it to tell the operator WHICH wrench and WHAT pressure to set. Rows are the pressures actually printed on the chart, in 200 psi steps — quote a printed row rather than an interpolated figure, because that is what the pump is set to. TWLC (square drive) has no chart here and therefore no pressure guidance.",
+ "_source": "Company \"Pump Pressure / Torque Output\" charts for the TWHC series (TWHC1/3/6 and TWHC11/20/35/50), 83–689 bar / 1,200–10,000 psi.",
+ "_ftlb_factor": 0.738,
+ "rows": [
+  {
+   "model": "TWHC1",
+   "product_id": "pt-twhc1",
+   "torque_min_nm": 230,
+   "torque_max_nm": 1915,
+   "torque_min_ftlb": 170,
+   "torque_max_ftlb": 1413,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 230,
+     "ft_lb": 170
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 268,
+     "ft_lb": 198
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 306,
+     "ft_lb": 226
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 345,
+     "ft_lb": 254
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 383,
+     "ft_lb": 283
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 421,
+     "ft_lb": 311
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 460,
+     "ft_lb": 339
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 498,
+     "ft_lb": 367
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 536,
+     "ft_lb": 396
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 574,
+     "ft_lb": 424
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 613,
+     "ft_lb": 452
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 651,
+     "ft_lb": 480
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 689,
+     "ft_lb": 509
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 728,
+     "ft_lb": 537
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 766,
+     "ft_lb": 565
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 804,
+     "ft_lb": 593
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 842,
+     "ft_lb": 622
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 881,
+     "ft_lb": 650
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 919,
+     "ft_lb": 678
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 957,
+     "ft_lb": 707
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 996,
+     "ft_lb": 735
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 1034,
+     "ft_lb": 763
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 1072,
+     "ft_lb": 791
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 1110,
+     "ft_lb": 820
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 1149,
+     "ft_lb": 848
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 1187,
+     "ft_lb": 876
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 1225,
+     "ft_lb": 904
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 1264,
+     "ft_lb": 933
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 1302,
+     "ft_lb": 961
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 1340,
+     "ft_lb": 989
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 1379,
+     "ft_lb": 1017
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 1417,
+     "ft_lb": 1046
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 1455,
+     "ft_lb": 1074
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 1493,
+     "ft_lb": 1102
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 1532,
+     "ft_lb": 1130
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 1570,
+     "ft_lb": 1159
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 1608,
+     "ft_lb": 1187
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 1647,
+     "ft_lb": 1215
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 1685,
+     "ft_lb": 1243
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 1723,
+     "ft_lb": 1272
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 1761,
+     "ft_lb": 1300
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 1800,
+     "ft_lb": 1328
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 1838,
+     "ft_lb": 1356
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 1876,
+     "ft_lb": 1385
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 1915,
+     "ft_lb": 1413
+    }
+   ]
+  },
+  {
+   "model": "TWHC3",
+   "product_id": "pt-twhc3",
+   "torque_min_nm": 510,
+   "torque_max_nm": 4249,
+   "torque_min_ftlb": 376,
+   "torque_max_ftlb": 3136,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 510,
+     "ft_lb": 376
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 595,
+     "ft_lb": 439
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 680,
+     "ft_lb": 502
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 765,
+     "ft_lb": 564
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 850,
+     "ft_lb": 627
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 935,
+     "ft_lb": 690
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 1020,
+     "ft_lb": 753
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 1105,
+     "ft_lb": 815
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 1190,
+     "ft_lb": 878
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 1275,
+     "ft_lb": 941
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 1360,
+     "ft_lb": 1004
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 1445,
+     "ft_lb": 1066
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 1530,
+     "ft_lb": 1129
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 1615,
+     "ft_lb": 1192
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 1700,
+     "ft_lb": 1254
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 1785,
+     "ft_lb": 1317
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 1870,
+     "ft_lb": 1380
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 1955,
+     "ft_lb": 1443
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 2040,
+     "ft_lb": 1505
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 2125,
+     "ft_lb": 1568
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 2210,
+     "ft_lb": 1631
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 2295,
+     "ft_lb": 1693
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 2380,
+     "ft_lb": 1756
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 2465,
+     "ft_lb": 1819
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 2550,
+     "ft_lb": 1882
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 2635,
+     "ft_lb": 1944
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 2720,
+     "ft_lb": 2007
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 2805,
+     "ft_lb": 2070
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 2890,
+     "ft_lb": 2132
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 2975,
+     "ft_lb": 2195
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 3060,
+     "ft_lb": 2258
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 3144,
+     "ft_lb": 2321
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 3229,
+     "ft_lb": 2383
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 3314,
+     "ft_lb": 2446
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 3399,
+     "ft_lb": 2509
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 3484,
+     "ft_lb": 2572
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 3569,
+     "ft_lb": 2634
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 3654,
+     "ft_lb": 2697
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 3739,
+     "ft_lb": 2760
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 3824,
+     "ft_lb": 2822
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 3909,
+     "ft_lb": 2885
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 3994,
+     "ft_lb": 2948
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 4079,
+     "ft_lb": 3011
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 4164,
+     "ft_lb": 3073
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 4249,
+     "ft_lb": 3136
+    }
+   ]
+  },
+  {
+   "model": "TWHC6",
+   "product_id": "pt-twhc6",
+   "torque_min_nm": 984,
+   "torque_max_nm": 8198,
+   "torque_min_ftlb": 726,
+   "torque_max_ftlb": 6050,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 984,
+     "ft_lb": 726
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 1148,
+     "ft_lb": 847
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 1312,
+     "ft_lb": 968
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 1476,
+     "ft_lb": 1089
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 1640,
+     "ft_lb": 1210
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 1804,
+     "ft_lb": 1331
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 1967,
+     "ft_lb": 1452
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 2131,
+     "ft_lb": 1573
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 2295,
+     "ft_lb": 1694
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 2459,
+     "ft_lb": 1815
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 2623,
+     "ft_lb": 1936
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 2787,
+     "ft_lb": 2057
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 2951,
+     "ft_lb": 2178
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 3115,
+     "ft_lb": 2299
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 3279,
+     "ft_lb": 2420
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 3443,
+     "ft_lb": 2541
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 3607,
+     "ft_lb": 2662
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 3771,
+     "ft_lb": 2783
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 3935,
+     "ft_lb": 2904
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 4099,
+     "ft_lb": 3025
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 4263,
+     "ft_lb": 3146
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 4427,
+     "ft_lb": 3267
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 4591,
+     "ft_lb": 3388
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 4755,
+     "ft_lb": 3509
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 4919,
+     "ft_lb": 3630
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 5083,
+     "ft_lb": 3751
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 5247,
+     "ft_lb": 3872
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 5411,
+     "ft_lb": 3993
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 5575,
+     "ft_lb": 4114
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 5738,
+     "ft_lb": 4235
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 5902,
+     "ft_lb": 4356
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 6066,
+     "ft_lb": 4477
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 6230,
+     "ft_lb": 4598
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 6394,
+     "ft_lb": 4719
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 6558,
+     "ft_lb": 4840
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 6722,
+     "ft_lb": 4961
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 6886,
+     "ft_lb": 5082
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 7050,
+     "ft_lb": 5203
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 7214,
+     "ft_lb": 5324
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 7378,
+     "ft_lb": 5445
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 7542,
+     "ft_lb": 5566
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 7706,
+     "ft_lb": 5687
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 7870,
+     "ft_lb": 5808
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 8034,
+     "ft_lb": 5929
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 8198,
+     "ft_lb": 6050
+    }
+   ]
+  },
+  {
+   "model": "TWHC11",
+   "product_id": "pt-twhc11",
+   "torque_min_nm": 1810,
+   "torque_max_nm": 15087,
+   "torque_min_ftlb": 1336,
+   "torque_max_ftlb": 11134,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 1810,
+     "ft_lb": 1336
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 2112,
+     "ft_lb": 1559
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 2414,
+     "ft_lb": 1781
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 2716,
+     "ft_lb": 2004
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 3017,
+     "ft_lb": 2227
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 3319,
+     "ft_lb": 2449
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 3621,
+     "ft_lb": 2672
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 3923,
+     "ft_lb": 2895
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 4224,
+     "ft_lb": 3118
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 4526,
+     "ft_lb": 3340
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 4828,
+     "ft_lb": 3563
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 5129,
+     "ft_lb": 3786
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 5431,
+     "ft_lb": 4008
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 5733,
+     "ft_lb": 4231
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 6035,
+     "ft_lb": 4454
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 6336,
+     "ft_lb": 4676
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 6638,
+     "ft_lb": 4899
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 6940,
+     "ft_lb": 5122
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 7242,
+     "ft_lb": 5344
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 7543,
+     "ft_lb": 5567
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 7845,
+     "ft_lb": 5790
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 8147,
+     "ft_lb": 6012
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 8449,
+     "ft_lb": 6235
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 8750,
+     "ft_lb": 6458
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 9052,
+     "ft_lb": 6680
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 9354,
+     "ft_lb": 6903
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 9656,
+     "ft_lb": 7126
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 9957,
+     "ft_lb": 7348
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 10259,
+     "ft_lb": 7571
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 10561,
+     "ft_lb": 7794
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 10862,
+     "ft_lb": 8016
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 11164,
+     "ft_lb": 8239
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 11466,
+     "ft_lb": 8462
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 11768,
+     "ft_lb": 8685
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 12069,
+     "ft_lb": 8907
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 12371,
+     "ft_lb": 9130
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 12673,
+     "ft_lb": 9353
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 12975,
+     "ft_lb": 9575
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 13276,
+     "ft_lb": 9798
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 13578,
+     "ft_lb": 10021
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 13880,
+     "ft_lb": 10243
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 14182,
+     "ft_lb": 10466
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 14483,
+     "ft_lb": 10689
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 14785,
+     "ft_lb": 10911
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 15087,
+     "ft_lb": 11134
+    }
+   ]
+  },
+  {
+   "model": "TWHC20",
+   "product_id": "pt-twhc20",
+   "torque_min_nm": 3305,
+   "torque_max_nm": 27541,
+   "torque_min_ftlb": 2439,
+   "torque_max_ftlb": 20325,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 3305,
+     "ft_lb": 2439
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 3856,
+     "ft_lb": 2846
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 4407,
+     "ft_lb": 3252
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 4957,
+     "ft_lb": 3658,
+     "note": "The chart prints 3,859 ft-lb at 1,800 psi. Entered as 3,658: the column’s own linear step gives 3,658 and 4,957 Nm × 0.738 gives 3,658.3 — two independent checks agreeing to within 1. Almost certainly a 6 misread as an 8; worth confirming against the hard copy.",
+     "verified": false
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 5508,
+     "ft_lb": 4065
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 6059,
+     "ft_lb": 4472
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 6610,
+     "ft_lb": 4878
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 7161,
+     "ft_lb": 5285
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 7711,
+     "ft_lb": 5691
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 8262,
+     "ft_lb": 6098
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 8813,
+     "ft_lb": 6504
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 9364,
+     "ft_lb": 6911
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 9915,
+     "ft_lb": 7317
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 10465,
+     "ft_lb": 7724
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 11016,
+     "ft_lb": 8130
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 11567,
+     "ft_lb": 8537
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 12118,
+     "ft_lb": 8943
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 12669,
+     "ft_lb": 9350
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 13220,
+     "ft_lb": 9756
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 13770,
+     "ft_lb": 10163
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 14321,
+     "ft_lb": 10569
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 14872,
+     "ft_lb": 10976
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 15423,
+     "ft_lb": 11382
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 15974,
+     "ft_lb": 11789
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 16524,
+     "ft_lb": 12195
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 17075,
+     "ft_lb": 12602
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 17626,
+     "ft_lb": 13008
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 18177,
+     "ft_lb": 13415
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 18728,
+     "ft_lb": 13821
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 19278,
+     "ft_lb": 14228
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 19829,
+     "ft_lb": 14634
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 20380,
+     "ft_lb": 15041
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 20931,
+     "ft_lb": 15447
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 21482,
+     "ft_lb": 15854
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 22033,
+     "ft_lb": 16260
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 22583,
+     "ft_lb": 16667
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 23134,
+     "ft_lb": 17073
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 23685,
+     "ft_lb": 17480
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 24236,
+     "ft_lb": 17886
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 24787,
+     "ft_lb": 18293
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 25337,
+     "ft_lb": 18699
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 25888,
+     "ft_lb": 19106
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 26439,
+     "ft_lb": 19512
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 26990,
+     "ft_lb": 19919
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 27541,
+     "ft_lb": 20325
+    }
+   ]
+  },
+  {
+   "model": "TWHC35",
+   "product_id": "pt-twhc35",
+   "torque_min_nm": 5271,
+   "torque_max_nm": 43927,
+   "torque_min_ftlb": 3890,
+   "torque_max_ftlb": 32418,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 5271,
+     "ft_lb": 3890
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 6150,
+     "ft_lb": 4539
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 7028,
+     "ft_lb": 5187
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 7907,
+     "ft_lb": 5835
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 8785,
+     "ft_lb": 6484
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 9664,
+     "ft_lb": 7132
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 10542,
+     "ft_lb": 7780
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 11421,
+     "ft_lb": 8429
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 12300,
+     "ft_lb": 9077
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 13178,
+     "ft_lb": 9725
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 14057,
+     "ft_lb": 10374
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 14935,
+     "ft_lb": 11022
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 15814,
+     "ft_lb": 11670
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 16692,
+     "ft_lb": 12319
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 17571,
+     "ft_lb": 12967
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 18449,
+     "ft_lb": 13616
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 19328,
+     "ft_lb": 14264
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 20206,
+     "ft_lb": 14912
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 21085,
+     "ft_lb": 15561
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 21963,
+     "ft_lb": 16209
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 22842,
+     "ft_lb": 16857
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 23720,
+     "ft_lb": 17506
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 24599,
+     "ft_lb": 18154
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 25478,
+     "ft_lb": 18802
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 26356,
+     "ft_lb": 19451
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 27235,
+     "ft_lb": 20099
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 28113,
+     "ft_lb": 20748
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 28992,
+     "ft_lb": 21396
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 29870,
+     "ft_lb": 22044
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 30749,
+     "ft_lb": 22693
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 31627,
+     "ft_lb": 23341
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 32506,
+     "ft_lb": 23989
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 33384,
+     "ft_lb": 24638
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 34263,
+     "ft_lb": 25286
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 35141,
+     "ft_lb": 25934
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 36020,
+     "ft_lb": 26583
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 36899,
+     "ft_lb": 27231
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 37777,
+     "ft_lb": 27879
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 38656,
+     "ft_lb": 28528
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 39534,
+     "ft_lb": 29176
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 40413,
+     "ft_lb": 29825
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 41291,
+     "ft_lb": 30473
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 42170,
+     "ft_lb": 31121
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 43048,
+     "ft_lb": 31770
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 43927,
+     "ft_lb": 32418
+    }
+   ]
+  },
+  {
+   "model": "TWHC50",
+   "product_id": "pt-twhc50",
+   "torque_min_nm": 8618,
+   "torque_max_nm": 71816,
+   "torque_min_ftlb": 6360,
+   "torque_max_ftlb": 53000,
+   "verified": true,
+   "note": "Torque output rises linearly with pump pressure; every printed row was checked against that line and against ft-lb = Nm × 0.738 (the factor the chart uses).",
+   "points": [
+    {
+     "bar": 83,
+     "psi": 1200,
+     "nm": 8618,
+     "ft_lb": 6360
+    },
+    {
+     "bar": 97,
+     "psi": 1400,
+     "nm": 10054,
+     "ft_lb": 7420
+    },
+    {
+     "bar": 110,
+     "psi": 1600,
+     "nm": 11491,
+     "ft_lb": 8480
+    },
+    {
+     "bar": 124,
+     "psi": 1800,
+     "nm": 12927,
+     "ft_lb": 9540
+    },
+    {
+     "bar": 138,
+     "psi": 2000,
+     "nm": 14363,
+     "ft_lb": 10600
+    },
+    {
+     "bar": 152,
+     "psi": 2200,
+     "nm": 15799,
+     "ft_lb": 11660
+    },
+    {
+     "bar": 165,
+     "psi": 2400,
+     "nm": 17236,
+     "ft_lb": 12720
+    },
+    {
+     "bar": 179,
+     "psi": 2600,
+     "nm": 18672,
+     "ft_lb": 13780
+    },
+    {
+     "bar": 193,
+     "psi": 2800,
+     "nm": 20108,
+     "ft_lb": 14840
+    },
+    {
+     "bar": 207,
+     "psi": 3000,
+     "nm": 21545,
+     "ft_lb": 15900
+    },
+    {
+     "bar": 221,
+     "psi": 3200,
+     "nm": 22981,
+     "ft_lb": 16960
+    },
+    {
+     "bar": 234,
+     "psi": 3400,
+     "nm": 24417,
+     "ft_lb": 18020
+    },
+    {
+     "bar": 248,
+     "psi": 3600,
+     "nm": 25854,
+     "ft_lb": 19080
+    },
+    {
+     "bar": 262,
+     "psi": 3800,
+     "nm": 27290,
+     "ft_lb": 20140
+    },
+    {
+     "bar": 276,
+     "psi": 4000,
+     "nm": 28726,
+     "ft_lb": 21200
+    },
+    {
+     "bar": 290,
+     "psi": 4200,
+     "nm": 30163,
+     "ft_lb": 22260
+    },
+    {
+     "bar": 303,
+     "psi": 4400,
+     "nm": 31599,
+     "ft_lb": 23320
+    },
+    {
+     "bar": 317,
+     "psi": 4600,
+     "nm": 33035,
+     "ft_lb": 24380
+    },
+    {
+     "bar": 331,
+     "psi": 4800,
+     "nm": 34472,
+     "ft_lb": 25440
+    },
+    {
+     "bar": 345,
+     "psi": 5000,
+     "nm": 35908,
+     "ft_lb": 26500
+    },
+    {
+     "bar": 359,
+     "psi": 5200,
+     "nm": 37344,
+     "ft_lb": 27560
+    },
+    {
+     "bar": 372,
+     "psi": 5400,
+     "nm": 38780,
+     "ft_lb": 28620
+    },
+    {
+     "bar": 386,
+     "psi": 5600,
+     "nm": 40217,
+     "ft_lb": 29680
+    },
+    {
+     "bar": 400,
+     "psi": 5800,
+     "nm": 41653,
+     "ft_lb": 30740
+    },
+    {
+     "bar": 414,
+     "psi": 6000,
+     "nm": 43089,
+     "ft_lb": 31800
+    },
+    {
+     "bar": 427,
+     "psi": 6200,
+     "nm": 44526,
+     "ft_lb": 32860
+    },
+    {
+     "bar": 441,
+     "psi": 6400,
+     "nm": 45962,
+     "ft_lb": 33920
+    },
+    {
+     "bar": 455,
+     "psi": 6600,
+     "nm": 47398,
+     "ft_lb": 34980
+    },
+    {
+     "bar": 469,
+     "psi": 6800,
+     "nm": 48835,
+     "ft_lb": 36040
+    },
+    {
+     "bar": 483,
+     "psi": 7000,
+     "nm": 50271,
+     "ft_lb": 37100
+    },
+    {
+     "bar": 496,
+     "psi": 7200,
+     "nm": 51707,
+     "ft_lb": 38160
+    },
+    {
+     "bar": 510,
+     "psi": 7400,
+     "nm": 53144,
+     "ft_lb": 39220
+    },
+    {
+     "bar": 524,
+     "psi": 7600,
+     "nm": 54580,
+     "ft_lb": 40280
+    },
+    {
+     "bar": 538,
+     "psi": 7800,
+     "nm": 56016,
+     "ft_lb": 41340
+    },
+    {
+     "bar": 552,
+     "psi": 8000,
+     "nm": 57453,
+     "ft_lb": 42400
+    },
+    {
+     "bar": 565,
+     "psi": 8200,
+     "nm": 58889,
+     "ft_lb": 43460
+    },
+    {
+     "bar": 579,
+     "psi": 8400,
+     "nm": 60325,
+     "ft_lb": 44520
+    },
+    {
+     "bar": 593,
+     "psi": 8600,
+     "nm": 61762,
+     "ft_lb": 45580
+    },
+    {
+     "bar": 607,
+     "psi": 8800,
+     "nm": 63198,
+     "ft_lb": 46640
+    },
+    {
+     "bar": 621,
+     "psi": 9000,
+     "nm": 64634,
+     "ft_lb": 47700
+    },
+    {
+     "bar": 634,
+     "psi": 9200,
+     "nm": 66070,
+     "ft_lb": 48760
+    },
+    {
+     "bar": 648,
+     "psi": 9400,
+     "nm": 67507,
+     "ft_lb": 49820
+    },
+    {
+     "bar": 662,
+     "psi": 9600,
+     "nm": 68943,
+     "ft_lb": 50880
+    },
+    {
+     "bar": 676,
+     "psi": 9800,
+     "nm": 70379,
+     "ft_lb": 51940
+    },
+    {
+     "bar": 689,
+     "psi": 10000,
+     "nm": 71816,
+     "ft_lb": 53000
+    }
+   ]
+  }
+ ]
+}
