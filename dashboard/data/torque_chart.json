@@ -1,158 +1,2878 @@
 {
- "_note": "Reference tightening torques for metric coarse bolts (source: fractory.com metric bolt torque chart \u2014 lightly oiled threads, 85% proof load). Rows without a published reference stay unverified and always take the engineer-confirmation path. wrench_id is null when the torque falls below our smallest wrench's minimum.",
+ "_note": "Bolt tightening torques transcribed from the two reference charts the company works from: the grade table \"Torque chart in Nm with bolt grade\" (grades 3.6–12.9) and the SPX Bolting Systems stud chart (grade \"B7\"). Each row names its basis — the three sets assume different friction and stress ratios and are NOT interchangeable. Rows that disagree with their own neighbours are carried as printed but flagged unverified so they take the engineer-confirmation path. wrench_status is below_range when the torque falls under our smallest wrench and above_range when it exceeds our largest (39000 Nm).",
+ "_bases": {
+  "oiled-62": "Untreated, oil-smeared threads · friction coefficient μ = 0.125 · torque corresponds to approx. 62% of tensile bolt stress. Recommended maximum tightening torque, company torque chart.",
+  "oiled-90": "Untreated, oil-smeared threads · friction coefficient μ = 0.14 · torque corresponds to approx. 90% of tensile bolt stress. Starred large sizes on the company torque chart.",
+  "b7-65-moly": "ASTM A193 B7 stud at 65% of yield with molybdenum-disulphide / graphite lubricant — SPX Bolting Systems chart. Friction varies; in extreme cases check with the bolt manufacturer."
+ },
  "rows": [
   {
+   "bolt": "M4",
+   "grade": "3.6",
+   "torque_min_nm": 0.85,
+   "torque_max_nm": 0.85,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "4.6",
+   "torque_min_nm": 1.1,
+   "torque_max_nm": 1.1,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "4.8",
+   "torque_min_nm": 1.5,
+   "torque_max_nm": 1.5,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "5.6",
+   "torque_min_nm": 1.4,
+   "torque_max_nm": 1.4,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "5.8",
+   "torque_min_nm": 1.9,
+   "torque_max_nm": 1.9,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "6.8",
+   "torque_min_nm": 2.3,
+   "torque_max_nm": 2.3,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "8.8",
+   "torque_min_nm": 2.9,
+   "torque_max_nm": 2.9,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "10.9",
+   "torque_min_nm": 4.1,
+   "torque_max_nm": 4.1,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M4",
+   "grade": "12.9",
+   "torque_min_nm": 4.9,
+   "torque_max_nm": 4.9,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "3.6",
+   "torque_min_nm": 1.7,
+   "torque_max_nm": 1.7,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "4.6",
+   "torque_min_nm": 2.2,
+   "torque_max_nm": 2.2,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "4.8",
+   "torque_min_nm": 3,
+   "torque_max_nm": 3,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "5.6",
+   "torque_min_nm": 2.8,
+   "torque_max_nm": 2.8,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "5.8",
+   "torque_min_nm": 3.7,
+   "torque_max_nm": 3.7,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "6.8",
+   "torque_min_nm": 4.5,
+   "torque_max_nm": 4.5,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "8.8",
+   "torque_min_nm": 6,
+   "torque_max_nm": 6,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "10.9",
+   "torque_min_nm": 8.5,
+   "torque_max_nm": 8.5,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M5",
+   "grade": "12.9",
+   "torque_min_nm": 10,
+   "torque_max_nm": 10,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "3.6",
+   "torque_min_nm": 2.9,
+   "torque_max_nm": 2.9,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "4.6",
+   "torque_min_nm": 3.8,
+   "torque_max_nm": 3.8,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "4.8",
+   "torque_min_nm": 5.1,
+   "torque_max_nm": 5.1,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "5.6",
+   "torque_min_nm": 4.8,
+   "torque_max_nm": 4.8,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "5.8",
+   "torque_min_nm": 6.4,
+   "torque_max_nm": 6.4,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "6.8",
+   "torque_min_nm": 7.7,
+   "torque_max_nm": 7.7,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "8.8",
+   "torque_min_nm": 7,
+   "torque_max_nm": 7,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": false,
+   "note": "Printed as 7 Nm on the company chart, which is below the same row’s grade 6.8 figure (7.7 Nm) — the sequence says it should be nearer 10 Nm. Transcribed as printed; the engineer must confirm against the hard copy."
+  },
+  {
+   "bolt": "M6",
+   "grade": "10.9",
+   "torque_min_nm": 14,
+   "torque_max_nm": 14,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M6",
+   "grade": "12.9",
+   "torque_min_nm": 17,
+   "torque_max_nm": 17,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "3.6",
+   "torque_min_nm": 7,
+   "torque_max_nm": 7,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "4.6",
+   "torque_min_nm": 9.3,
+   "torque_max_nm": 9.3,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "4.8",
+   "torque_min_nm": 12,
+   "torque_max_nm": 12,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "5.6",
+   "torque_min_nm": 12,
+   "torque_max_nm": 12,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "5.8",
+   "torque_min_nm": 16,
+   "torque_max_nm": 16,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "6.8",
+   "torque_min_nm": 19,
+   "torque_max_nm": 19,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "8.8",
+   "torque_min_nm": 25,
+   "torque_max_nm": 25,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "10.9",
+   "torque_min_nm": 35,
+   "torque_max_nm": 35,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M8",
+   "grade": "12.9",
+   "torque_min_nm": 41,
+   "torque_max_nm": 41,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "3.6",
+   "torque_min_nm": 14,
+   "torque_max_nm": 14,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "4.6",
+   "torque_min_nm": 19,
+   "torque_max_nm": 19,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "4.8",
+   "torque_min_nm": 25,
+   "torque_max_nm": 25,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "5.6",
+   "torque_min_nm": 23,
+   "torque_max_nm": 23,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "5.8",
+   "torque_min_nm": 31,
+   "torque_max_nm": 31,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "6.8",
+   "torque_min_nm": 37,
+   "torque_max_nm": 37,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "8.8",
+   "torque_min_nm": 49,
+   "torque_max_nm": 49,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "10.9",
+   "torque_min_nm": 69,
+   "torque_max_nm": 69,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M10",
+   "grade": "12.9",
+   "torque_min_nm": 83,
+   "torque_max_nm": 83,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "3.6",
+   "torque_min_nm": 24,
+   "torque_max_nm": 24,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "4.6",
+   "torque_min_nm": 32,
+   "torque_max_nm": 32,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "4.8",
+   "torque_min_nm": 43,
+   "torque_max_nm": 43,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "5.6",
+   "torque_min_nm": 40,
+   "torque_max_nm": 40,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "5.8",
+   "torque_min_nm": 54,
+   "torque_max_nm": 54,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "6.8",
+   "torque_min_nm": 65,
+   "torque_max_nm": 65,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
    "bolt": "M12",
    "grade": "8.8",
-   "torque_min_nm": 99.8,
-   "torque_max_nm": 99.8,
+   "torque_min_nm": 86,
+   "torque_max_nm": 86,
    "wrench_id": null,
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M12",
    "grade": "10.9",
-   "torque_min_nm": 143,
-   "torque_max_nm": 143,
+   "torque_min_nm": 120,
+   "torque_max_nm": 120,
    "wrench_id": null,
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M12",
    "grade": "12.9",
-   "torque_min_nm": 167,
-   "torque_max_nm": 167,
+   "torque_min_nm": 145,
+   "torque_max_nm": 145,
    "wrench_id": null,
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "3.6",
+   "torque_min_nm": 39,
+   "torque_max_nm": 39,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "4.6",
+   "torque_min_nm": 51,
+   "torque_max_nm": 51,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "4.8",
+   "torque_min_nm": 68,
+   "torque_max_nm": 68,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "5.6",
+   "torque_min_nm": 64,
+   "torque_max_nm": 64,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "5.8",
+   "torque_min_nm": 86,
+   "torque_max_nm": 86,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "6.8",
+   "torque_min_nm": 105,
+   "torque_max_nm": 105,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "8.8",
+   "torque_min_nm": 135,
+   "torque_max_nm": 135,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "10.9",
+   "torque_min_nm": 190,
+   "torque_max_nm": 190,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M14",
+   "grade": "12.9",
+   "torque_min_nm": 230,
+   "torque_max_nm": 230,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M16",
+   "grade": "3.6",
+   "torque_min_nm": 59,
+   "torque_max_nm": 59,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M16",
+   "grade": "4.6",
+   "torque_min_nm": 79,
+   "torque_max_nm": 79,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M16",
+   "grade": "4.8",
+   "torque_min_nm": 105,
+   "torque_max_nm": 105,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M16",
+   "grade": "5.6",
+   "torque_min_nm": 98,
+   "torque_max_nm": 98,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M16",
+   "grade": "5.8",
+   "torque_min_nm": 130,
+   "torque_max_nm": 130,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M16",
+   "grade": "6.8",
+   "torque_min_nm": 155,
+   "torque_max_nm": 155,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M16",
    "grade": "8.8",
-   "torque_min_nm": 248,
-   "torque_max_nm": 248,
+   "torque_min_nm": 210,
+   "torque_max_nm": 210,
    "wrench_id": null,
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M16",
    "grade": "10.9",
-   "torque_min_nm": 354,
-   "torque_max_nm": 354,
+   "torque_min_nm": 295,
+   "torque_max_nm": 295,
    "wrench_id": "rad-1500nm",
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M16",
    "grade": "12.9",
-   "torque_min_nm": 413,
-   "torque_max_nm": 413,
+   "torque_min_nm": 355,
+   "torque_max_nm": 355,
    "wrench_id": "rad-1500nm",
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "3.6",
+   "torque_min_nm": 81,
+   "torque_max_nm": 81,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "4.6",
+   "torque_min_nm": 110,
+   "torque_max_nm": 110,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "4.8",
+   "torque_min_nm": 145,
+   "torque_max_nm": 145,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "5.6",
+   "torque_min_nm": 135,
+   "torque_max_nm": 135,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "5.8",
+   "torque_min_nm": 180,
+   "torque_max_nm": 180,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "6.8",
+   "torque_min_nm": 215,
+   "torque_max_nm": 215,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "8.8",
+   "torque_min_nm": 290,
+   "torque_max_nm": 290,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "10.9",
+   "torque_min_nm": 405,
+   "torque_max_nm": 405,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M18",
+   "grade": "12.9",
+   "torque_min_nm": 485,
+   "torque_max_nm": 485,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "3.6",
+   "torque_min_nm": 115,
+   "torque_max_nm": 115,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "4.6",
+   "torque_min_nm": 155,
+   "torque_max_nm": 155,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "4.8",
+   "torque_min_nm": 205,
+   "torque_max_nm": 205,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "5.6",
+   "torque_min_nm": 190,
+   "torque_max_nm": 190,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "5.8",
+   "torque_min_nm": 255,
+   "torque_max_nm": 255,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "6.8",
+   "torque_min_nm": 305,
+   "torque_max_nm": 305,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M20",
    "grade": "8.8",
-   "torque_min_nm": 500,
-   "torque_max_nm": 500,
+   "torque_min_nm": 410,
+   "torque_max_nm": 410,
    "wrench_id": "rad-1500nm",
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
   },
   {
    "bolt": "M20",
    "grade": "10.9",
+   "torque_min_nm": 580,
+   "torque_max_nm": 580,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M20",
+   "grade": "12.9",
    "torque_min_nm": 690,
    "torque_max_nm": 690,
    "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "3.6",
+   "torque_min_nm": 155,
+   "torque_max_nm": 155,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "4.6",
+   "torque_min_nm": 205,
+   "torque_max_nm": 205,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "4.8",
+   "torque_min_nm": 275,
+   "torque_max_nm": 275,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "5.6",
+   "torque_min_nm": 260,
+   "torque_max_nm": 260,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "5.8",
+   "torque_min_nm": 345,
+   "torque_max_nm": 345,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "6.8",
+   "torque_min_nm": 415,
+   "torque_max_nm": 415,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "8.8",
+   "torque_min_nm": 550,
+   "torque_max_nm": 550,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "10.9",
+   "torque_min_nm": 780,
+   "torque_max_nm": 780,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M22",
+   "grade": "12.9",
+   "torque_min_nm": 930,
+   "torque_max_nm": 930,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "3.6",
+   "torque_min_nm": 200,
+   "torque_max_nm": 200,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "4.6",
+   "torque_min_nm": 265,
+   "torque_max_nm": 265,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "4.8",
+   "torque_min_nm": 350,
+   "torque_max_nm": 350,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "5.6",
+   "torque_min_nm": 330,
+   "torque_max_nm": 330,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "5.8",
+   "torque_min_nm": 440,
+   "torque_max_nm": 440,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "6.8",
+   "torque_min_nm": 530,
+   "torque_max_nm": 530,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "8.8",
+   "torque_min_nm": 710,
+   "torque_max_nm": 710,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "10.9",
+   "torque_min_nm": 1000,
+   "torque_max_nm": 1000,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M24",
+   "grade": "12.9",
+   "torque_min_nm": 1200,
+   "torque_max_nm": 1200,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "3.6",
+   "torque_min_nm": 295,
+   "torque_max_nm": 295,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "4.6",
+   "torque_min_nm": 390,
+   "torque_max_nm": 390,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "4.8",
+   "torque_min_nm": 520,
+   "torque_max_nm": 520,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "5.6",
+   "torque_min_nm": 490,
+   "torque_max_nm": 490,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "5.8",
+   "torque_min_nm": 650,
+   "torque_max_nm": 650,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "6.8",
+   "torque_min_nm": 780,
+   "torque_max_nm": 780,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "8.8",
+   "torque_min_nm": 1050,
+   "torque_max_nm": 1050,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "10.9",
+   "torque_min_nm": 1500,
+   "torque_max_nm": 1500,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M27",
+   "grade": "12.9",
+   "torque_min_nm": 1800,
+   "torque_max_nm": 1800,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "3.6",
+   "torque_min_nm": 395,
+   "torque_max_nm": 395,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "4.6",
+   "torque_min_nm": 530,
+   "torque_max_nm": 530,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "4.8",
+   "torque_min_nm": 710,
+   "torque_max_nm": 710,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "5.6",
+   "torque_min_nm": 660,
+   "torque_max_nm": 660,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "5.8",
+   "torque_min_nm": 880,
+   "torque_max_nm": 880,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "6.8",
+   "torque_min_nm": 1050,
+   "torque_max_nm": 1050,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "8.8",
+   "torque_min_nm": 1450,
+   "torque_max_nm": 1450,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "10.9",
+   "torque_min_nm": 2000,
+   "torque_max_nm": 2000,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M30",
+   "grade": "12.9",
+   "torque_min_nm": 2400,
+   "torque_max_nm": 2400,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "3.6",
+   "torque_min_nm": 540,
+   "torque_max_nm": 540,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "4.6",
+   "torque_min_nm": 720,
+   "torque_max_nm": 720,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "4.8",
+   "torque_min_nm": 960,
+   "torque_max_nm": 960,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "5.6",
+   "torque_min_nm": 900,
+   "torque_max_nm": 900,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "5.8",
+   "torque_min_nm": 1200,
+   "torque_max_nm": 1200,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "6.8",
+   "torque_min_nm": 1450,
+   "torque_max_nm": 1450,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "8.8",
+   "torque_min_nm": 1900,
+   "torque_max_nm": 1900,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "10.9",
+   "torque_min_nm": 2700,
+   "torque_max_nm": 2700,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M33",
+   "grade": "12.9",
+   "torque_min_nm": 3250,
+   "torque_max_nm": 3250,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "3.6",
+   "torque_min_nm": 690,
+   "torque_max_nm": 690,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "4.6",
+   "torque_min_nm": 920,
+   "torque_max_nm": 920,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "4.8",
+   "torque_min_nm": 1250,
+   "torque_max_nm": 1250,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "5.6",
+   "torque_min_nm": 1150,
+   "torque_max_nm": 1150,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "5.8",
+   "torque_min_nm": 1550,
+   "torque_max_nm": 1550,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "6.8",
+   "torque_min_nm": 1850,
+   "torque_max_nm": 1850,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "8.8",
+   "torque_min_nm": 2450,
+   "torque_max_nm": 2450,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "10.9",
+   "torque_min_nm": 3450,
+   "torque_max_nm": 3450,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M36",
+   "grade": "12.9",
+   "torque_min_nm": 4150,
+   "torque_max_nm": 4150,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "3.6",
+   "torque_min_nm": 920,
+   "torque_max_nm": 920,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "4.6",
+   "torque_min_nm": 1200,
+   "torque_max_nm": 1200,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "4.8",
+   "torque_min_nm": 1600,
+   "torque_max_nm": 1600,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "5.6",
+   "torque_min_nm": 1500,
+   "torque_max_nm": 1500,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "5.8",
+   "torque_min_nm": 2000,
+   "torque_max_nm": 2000,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "6.8",
+   "torque_min_nm": 2400,
+   "torque_max_nm": 2400,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "8.8",
+   "torque_min_nm": 3200,
+   "torque_max_nm": 3200,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "10.9",
+   "torque_min_nm": 4500,
+   "torque_max_nm": 4500,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M39",
+   "grade": "12.9",
+   "torque_min_nm": 5400,
+   "torque_max_nm": 5400,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "3.6",
+   "torque_min_nm": 1100,
+   "torque_max_nm": 1100,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "4.6",
+   "torque_min_nm": 1500,
+   "torque_max_nm": 1500,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "4.8",
+   "torque_min_nm": 1950,
+   "torque_max_nm": 1950,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "5.6",
+   "torque_min_nm": 1850,
+   "torque_max_nm": 1850,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "5.8",
+   "torque_min_nm": 2450,
+   "torque_max_nm": 2450,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "6.8",
+   "torque_min_nm": 2950,
+   "torque_max_nm": 2950,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "8.8",
+   "torque_min_nm": 3950,
+   "torque_max_nm": 3950,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "10.9",
+   "torque_min_nm": 5550,
+   "torque_max_nm": 5550,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M42",
+   "grade": "12.9",
+   "torque_min_nm": 6650,
+   "torque_max_nm": 6650,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "3.6",
+   "torque_min_nm": 1400,
+   "torque_max_nm": 1400,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "4.6",
+   "torque_min_nm": 1850,
+   "torque_max_nm": 1850,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "4.8",
+   "torque_min_nm": 2450,
+   "torque_max_nm": 2450,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "5.6",
+   "torque_min_nm": 2300,
+   "torque_max_nm": 2300,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "5.8",
+   "torque_min_nm": 3100,
+   "torque_max_nm": 3100,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "6.8",
+   "torque_min_nm": 3700,
+   "torque_max_nm": 3700,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "8.8",
+   "torque_min_nm": 4950,
+   "torque_max_nm": 4950,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "10.9",
+   "torque_min_nm": 6950,
+   "torque_max_nm": 6950,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M45",
+   "grade": "12.9",
+   "torque_min_nm": 8350,
+   "torque_max_nm": 8350,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "3.6",
+   "torque_min_nm": 1700,
+   "torque_max_nm": 1700,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "4.6",
+   "torque_min_nm": 2250,
+   "torque_max_nm": 2250,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "4.8",
+   "torque_min_nm": 3000,
+   "torque_max_nm": 3000,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "5.6",
+   "torque_min_nm": 2800,
+   "torque_max_nm": 2800,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "5.8",
+   "torque_min_nm": 3750,
+   "torque_max_nm": 3750,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "6.8",
+   "torque_min_nm": 4450,
+   "torque_max_nm": 4450,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "8.8",
+   "torque_min_nm": 5950,
+   "torque_max_nm": 5950,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "10.9",
+   "torque_min_nm": 8400,
+   "torque_max_nm": 8400,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M48",
+   "grade": "12.9",
+   "torque_min_nm": 10100,
+   "torque_max_nm": 10100,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "3.6",
+   "torque_min_nm": 2150,
+   "torque_max_nm": 2150,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "4.6",
+   "torque_min_nm": 2900,
+   "torque_max_nm": 2900,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "4.8",
+   "torque_min_nm": 3850,
+   "torque_max_nm": 3850,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "5.6",
+   "torque_min_nm": 3600,
+   "torque_max_nm": 3600,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "5.8",
+   "torque_min_nm": 1800,
+   "torque_max_nm": 1800,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": false,
+   "note": "Printed as 1,800 Nm on the company chart, but its neighbours are 3,600 Nm (5.6) and 5,750 Nm (6.8) — the sequence says it should be nearer 4,800 Nm. Transcribed as printed; the engineer must confirm against the hard copy."
+  },
+  {
+   "bolt": "M52",
+   "grade": "6.8",
+   "torque_min_nm": 5750,
+   "torque_max_nm": 5750,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "8.8",
+   "torque_min_nm": 7650,
+   "torque_max_nm": 7650,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "10.9",
+   "torque_min_nm": 10800,
+   "torque_max_nm": 10800,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M52",
+   "grade": "12.9",
+   "torque_min_nm": 12900,
+   "torque_max_nm": 12900,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "3.6",
+   "torque_min_nm": 2700,
+   "torque_max_nm": 2700,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "4.6",
+   "torque_min_nm": 3600,
+   "torque_max_nm": 3600,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "4.8",
+   "torque_min_nm": 4800,
+   "torque_max_nm": 4800,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "5.6",
+   "torque_min_nm": 4500,
+   "torque_max_nm": 4500,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "5.8",
+   "torque_min_nm": 5950,
+   "torque_max_nm": 5950,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "6.8",
+   "torque_min_nm": 7150,
+   "torque_max_nm": 7150,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "8.8",
+   "torque_min_nm": 9550,
+   "torque_max_nm": 9550,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "10.9",
+   "torque_min_nm": 13400,
+   "torque_max_nm": 13400,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M56",
+   "grade": "12.9",
+   "torque_min_nm": 16100,
+   "torque_max_nm": 16100,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "3.6",
+   "torque_min_nm": 3350,
+   "torque_max_nm": 3350,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "4.6",
+   "torque_min_nm": 4450,
+   "torque_max_nm": 4450,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "4.8",
+   "torque_min_nm": 5950,
+   "torque_max_nm": 5950,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "5.6",
+   "torque_min_nm": 5550,
+   "torque_max_nm": 5550,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "5.8",
+   "torque_min_nm": 7400,
+   "torque_max_nm": 7400,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "6.8",
+   "torque_min_nm": 8900,
+   "torque_max_nm": 8900,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "8.8",
+   "torque_min_nm": 11900,
+   "torque_max_nm": 11900,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "10.9",
+   "torque_min_nm": 16700,
+   "torque_max_nm": 16700,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M60",
+   "grade": "12.9",
+   "torque_min_nm": 20000,
+   "torque_max_nm": 20000,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "3.6",
+   "torque_min_nm": 4000,
+   "torque_max_nm": 4000,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "4.6",
+   "torque_min_nm": 5350,
+   "torque_max_nm": 5350,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "4.8",
+   "torque_min_nm": 7150,
+   "torque_max_nm": 7150,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "5.6",
+   "torque_min_nm": 6700,
+   "torque_max_nm": 6700,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "5.8",
+   "torque_min_nm": 8950,
+   "torque_max_nm": 8950,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "6.8",
+   "torque_min_nm": 10700,
+   "torque_max_nm": 10700,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "8.8",
+   "torque_min_nm": 14300,
+   "torque_max_nm": 14300,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "10.9",
+   "torque_min_nm": 20100,
+   "torque_max_nm": 20100,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M64",
+   "grade": "12.9",
+   "torque_min_nm": 24100,
+   "torque_max_nm": 24100,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "3.6",
+   "torque_min_nm": 4850,
+   "torque_max_nm": 4850,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "4.6",
+   "torque_min_nm": 6500,
+   "torque_max_nm": 6500,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "4.8",
+   "torque_min_nm": 8650,
+   "torque_max_nm": 8650,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "5.6",
+   "torque_min_nm": 8100,
+   "torque_max_nm": 8100,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "5.8",
+   "torque_min_nm": 10800,
+   "torque_max_nm": 10800,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "6.8",
+   "torque_min_nm": 13000,
+   "torque_max_nm": 13000,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "8.8",
+   "torque_min_nm": 17300,
+   "torque_max_nm": 17300,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "10.9",
+   "torque_min_nm": 24300,
+   "torque_max_nm": 24300,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M68",
+   "grade": "12.9",
+   "torque_min_nm": 29100,
+   "torque_max_nm": 29100,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-62",
+   "verified": true
+  },
+  {
+   "bolt": "M72",
+   "grade": "8.8",
+   "torque_min_nm": 21945,
+   "torque_max_nm": 21945,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M72",
+   "grade": "10.9",
+   "torque_min_nm": 31256,
+   "torque_max_nm": 31256,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M72",
+   "grade": "12.9",
+   "torque_min_nm": 36574,
+   "torque_max_nm": 36574,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M76",
+   "grade": "8.8",
+   "torque_min_nm": 25953,
+   "torque_max_nm": 25953,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M76",
+   "grade": "10.9",
+   "torque_min_nm": 36984,
+   "torque_max_nm": 36984,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M76",
+   "grade": "12.9",
+   "torque_min_nm": 43269,
+   "torque_max_nm": 43269,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M80",
+   "grade": "8.8",
+   "torque_min_nm": 30437,
+   "torque_max_nm": 30437,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M80",
+   "grade": "10.9",
+   "torque_min_nm": 43347,
+   "torque_max_nm": 43347,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M80",
+   "grade": "12.9",
+   "torque_min_nm": 50737,
+   "torque_max_nm": 50737,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M90",
+   "grade": "8.8",
+   "torque_min_nm": 44214,
+   "torque_max_nm": 44214,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M90",
+   "grade": "10.9",
+   "torque_min_nm": 62970,
+   "torque_max_nm": 62970,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M90",
+   "grade": "12.9",
+   "torque_min_nm": 73690,
+   "torque_max_nm": 73690,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M100",
+   "grade": "8.8",
+   "torque_min_nm": 61462,
+   "torque_max_nm": 61462,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M100",
+   "grade": "10.9",
+   "torque_min_nm": 87527,
+   "torque_max_nm": 87527,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M100",
+   "grade": "12.9",
+   "torque_min_nm": 102431,
+   "torque_max_nm": 102431,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M110",
+   "grade": "8.8",
+   "torque_min_nm": 81845,
+   "torque_max_nm": 81845,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M110",
+   "grade": "10.9",
+   "torque_min_nm": 116567,
+   "torque_max_nm": 116567,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M110",
+   "grade": "12.9",
+   "torque_min_nm": 136408,
+   "torque_max_nm": 136408,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M120",
+   "grade": "8.8",
+   "torque_min_nm": 108448,
+   "torque_max_nm": 108448,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M120",
+   "grade": "10.9",
+   "torque_min_nm": 154443,
+   "torque_max_nm": 154443,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M120",
+   "grade": "12.9",
+   "torque_min_nm": 180712,
+   "torque_max_nm": 180712,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M125",
+   "grade": "8.8",
+   "torque_min_nm": 124327,
+   "torque_max_nm": 124327,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M125",
+   "grade": "10.9",
+   "torque_min_nm": 177099,
+   "torque_max_nm": 177099,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M125",
+   "grade": "12.9",
+   "torque_min_nm": 207233,
+   "torque_max_nm": 207233,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M130",
+   "grade": "8.8",
+   "torque_min_nm": 139572,
+   "torque_max_nm": 139572,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M130",
+   "grade": "10.9",
+   "torque_min_nm": 198770,
+   "torque_max_nm": 198770,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M130",
+   "grade": "12.9",
+   "torque_min_nm": 232620,
+   "torque_max_nm": 232620,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M140",
+   "grade": "8.8",
+   "torque_min_nm": 175561,
+   "torque_max_nm": 175561,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M140",
+   "grade": "10.9",
+   "torque_min_nm": 250056,
+   "torque_max_nm": 250056,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M140",
+   "grade": "12.9",
+   "torque_min_nm": 292817,
+   "torque_max_nm": 292817,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M150",
+   "grade": "8.8",
+   "torque_min_nm": 216875,
+   "torque_max_nm": 216875,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M150",
+   "grade": "10.9",
+   "torque_min_nm": 308960,
+   "torque_max_nm": 308960,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M150",
+   "grade": "12.9",
+   "torque_min_nm": 361484,
+   "torque_max_nm": 361484,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "oiled-90",
+   "verified": true
+  },
+  {
+   "bolt": "M12",
+   "grade": "B7",
+   "torque_min_nm": 161,
+   "torque_max_nm": 161,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "b7-65-moly",
    "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "torque_ftlb": 119
+  },
+  {
+   "bolt": "M16",
+   "grade": "B7",
+   "torque_min_nm": 201,
+   "torque_max_nm": 201,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 148
   },
   {
    "bolt": "M20",
-   "grade": "12.9",
-   "torque_min_nm": 809,
-   "torque_max_nm": 809,
-   "wrench_id": "rad-1500nm",
+   "grade": "B7",
+   "torque_min_nm": 242,
+   "torque_max_nm": 242,
+   "wrench_id": null,
+   "wrench_status": "below_range",
+   "basis": "b7-65-moly",
    "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "torque_ftlb": 178
   },
   {
    "bolt": "M24",
-   "grade": "8.8",
-   "torque_min_nm": 865,
-   "torque_max_nm": 865,
+   "grade": "B7",
+   "torque_min_nm": 389,
+   "torque_max_nm": 389,
    "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
    "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "torque_ftlb": 287
   },
   {
-   "bolt": "M24",
-   "grade": "10.9",
-   "torque_min_nm": 1195,
-   "torque_max_nm": 1195,
+   "bolt": "M27",
+   "grade": "B7",
+   "torque_min_nm": 584,
+   "torque_max_nm": 584,
    "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
    "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
-  },
-  {
-   "bolt": "M24",
-   "grade": "12.9",
-   "torque_min_nm": 1395,
-   "torque_max_nm": 1395,
-   "wrench_id": "rad-3000nm",
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "torque_ftlb": 430
   },
   {
    "bolt": "M30",
-   "grade": "8.8",
-   "torque_min_nm": 1719,
-   "torque_max_nm": 1719,
-   "wrench_id": "rad-3000nm",
+   "grade": "B7",
+   "torque_min_nm": 857,
+   "torque_max_nm": 857,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
    "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "torque_ftlb": 632
   },
   {
-   "bolt": "M30",
-   "grade": "10.9",
-   "torque_min_nm": 2377,
-   "torque_max_nm": 2377,
-   "wrench_id": "rad-3000nm",
+   "bolt": "M33",
+   "grade": "B7",
+   "torque_min_nm": 1204,
+   "torque_max_nm": 1204,
+   "wrench_id": "rad-1500nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
    "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
-  },
-  {
-   "bolt": "M30",
-   "grade": "12.9",
-   "torque_min_nm": 2774,
-   "torque_max_nm": 2774,
-   "wrench_id": "rad-3000nm",
-   "verified": true,
-   "note": "Standard reference value \u2014 metric coarse thread, lightly oiled, tension at 85% of proof load (fractory.com). Always confirm against the equipment maker's bolting spec."
+   "torque_ftlb": 888
   },
   {
    "bolt": "M36",
-   "grade": "8.8",
-   "torque_min_nm": 2190,
-   "torque_max_nm": 2430,
+   "grade": "B7",
+   "torque_min_nm": 1634,
+   "torque_max_nm": 1634,
    "wrench_id": "rad-3000nm",
-   "verified": false,
-   "note": "No published reference in our chart for M36 \u2014 engineer confirms."
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 1205
   },
   {
-   "bolt": "M36",
-   "grade": "10.9",
-   "torque_min_nm": 3100,
-   "torque_max_nm": 3450,
+   "bolt": "M39",
+   "grade": "B7",
+   "torque_min_nm": 2156,
+   "torque_max_nm": 2156,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 1590
+  },
+  {
+   "bolt": "M42",
+   "grade": "B7",
+   "torque_min_nm": 2779,
+   "torque_max_nm": 2779,
+   "wrench_id": "rad-3000nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 2049
+  },
+  {
+   "bolt": "M45",
+   "grade": "B7",
+   "torque_min_nm": 3511,
+   "torque_max_nm": 3511,
    "wrench_id": "rad-4600nm",
-   "verified": false,
-   "note": "No published reference in our chart for M36 \u2014 engineer confirms."
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 2589
+  },
+  {
+   "bolt": "M48",
+   "grade": "B7",
+   "torque_min_nm": 4361,
+   "torque_max_nm": 4361,
+   "wrench_id": "rad-4600nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 3216
+  },
+  {
+   "bolt": "M52",
+   "grade": "B7",
+   "torque_min_nm": 5339,
+   "torque_max_nm": 5339,
+   "wrench_id": "rad-6000nm",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 3937
+  },
+  {
+   "bolt": "M56",
+   "grade": "B7",
+   "torque_min_nm": 7712,
+   "torque_max_nm": 7712,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 5687
+  },
+  {
+   "bolt": "M60",
+   "grade": "B7",
+   "torque_min_nm": 9125,
+   "torque_max_nm": 9125,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 6729
+  },
+  {
+   "bolt": "M64",
+   "grade": "B7",
+   "torque_min_nm": 10700,
+   "torque_max_nm": 10700,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 7891
+  },
+  {
+   "bolt": "M72",
+   "grade": "B7",
+   "torque_min_nm": 13006,
+   "torque_max_nm": 13006,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 9592
+  },
+  {
+   "bolt": "M76",
+   "grade": "B7",
+   "torque_min_nm": 17016,
+   "torque_max_nm": 17016,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 12549
+  },
+  {
+   "bolt": "M80",
+   "grade": "B7",
+   "torque_min_nm": 21776,
+   "torque_max_nm": 21776,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 16059
+  },
+  {
+   "bolt": "M90",
+   "grade": "B7",
+   "torque_min_nm": 27349,
+   "torque_max_nm": 27349,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 20169
+  },
+  {
+   "bolt": "M95",
+   "grade": "B7",
+   "torque_min_nm": 33800,
+   "torque_max_nm": 33800,
+   "wrench_id": "pt-twlc",
+   "wrench_status": "in_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 24926
+  },
+  {
+   "bolt": "M100",
+   "grade": "B7",
+   "torque_min_nm": 39151,
+   "torque_max_nm": 39151,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 28873
+  },
+  {
+   "bolt": "M110",
+   "grade": "B7",
+   "torque_min_nm": 41193,
+   "torque_max_nm": 41193,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 30378
+  },
+  {
+   "bolt": "M115",
+   "grade": "B7",
+   "torque_min_nm": 46627,
+   "torque_max_nm": 46627,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 34386
+  },
+  {
+   "bolt": "M120",
+   "grade": "B7",
+   "torque_min_nm": 54999,
+   "torque_max_nm": 54999,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 40560
+  },
+  {
+   "bolt": "M125",
+   "grade": "B7",
+   "torque_min_nm": 64317,
+   "torque_max_nm": 64317,
+   "wrench_id": null,
+   "wrench_status": "above_range",
+   "basis": "b7-65-moly",
+   "verified": true,
+   "torque_ftlb": 47431
   }
  ]
 }

@@ -142,10 +142,12 @@
         </div>
         <div class="pf-mpane" id="mpane-bolt">
           <div class="cr-grid" style="margin-bottom:12px;">
+            <!-- Sizes and grades are exactly what the two company charts cover; a combination the
+                 charts do not print simply has no row and takes the engineer-confirmation path. -->
             <div class="cr-field"><label>Bolt size (metric coarse)</label>
-              <select id="pfBolt"><option>M12</option><option selected>M16</option><option>M20</option><option>M24</option><option>M30</option><option>M36</option></select></div>
+              <select id="pfBolt"><option>M4</option><option>M5</option><option>M6</option><option>M8</option><option>M10</option><option>M12</option><option>M14</option><option selected>M16</option><option>M18</option><option>M20</option><option>M22</option><option>M24</option><option>M27</option><option>M30</option><option>M33</option><option>M36</option><option>M39</option><option>M42</option><option>M45</option><option>M48</option><option>M52</option><option>M56</option><option>M60</option><option>M64</option><option>M68</option><option>M72</option><option>M76</option><option>M80</option><option>M90</option><option>M95</option><option>M100</option><option>M110</option><option>M115</option><option>M120</option><option>M125</option><option>M130</option><option>M140</option><option>M150</option></select></div>
             <div class="cr-field"><label>Grade</label>
-              <select id="pfGrade"><option>8.8</option><option>10.9</option><option>12.9</option></select></div>
+              <select id="pfGrade"><option>3.6</option><option>4.6</option><option>4.8</option><option>5.6</option><option>5.8</option><option>6.8</option><option selected>8.8</option><option>10.9</option><option>12.9</option><option value="B7">B7 stud (65% yield, moly/graphite)</option></select></div>
           </div>
           <div class="cr-actions"><button type="button" class="cr-btn" onclick="pfBoltMatch()">Find torque + wrench</button></div>
           <div id="pfBoltResult" style="display:none;margin-top:10px;"></div>
@@ -375,8 +377,14 @@
           <div class="cr-field" id="bsMetricSize"><label>Bolt diameter</label>
             <select id="bsBoltSize">
               <option value="">— select —</option>
-              <option>M12</option><option>M16</option><option>M20</option>
-              <option>M24</option><option>M30</option><option>M36</option>
+              <option>M4</option><option>M5</option><option>M6</option><option>M8</option><option>M10</option>
+              <option>M12</option><option>M14</option><option>M16</option><option>M18</option><option>M20</option>
+              <option>M22</option><option>M24</option><option>M27</option><option>M30</option><option>M33</option>
+              <option>M36</option><option>M39</option><option>M42</option><option>M45</option><option>M48</option>
+              <option>M52</option><option>M56</option><option>M60</option><option>M64</option><option>M68</option>
+              <option>M72</option><option>M76</option><option>M80</option><option>M90</option><option>M95</option>
+              <option>M100</option><option>M110</option><option>M115</option><option>M120</option><option>M125</option>
+              <option>M130</option><option>M140</option><option>M150</option>
             </select></div>
           <div class="cr-field" id="bsInchSize" style="display:none;"><label>Bolt diameter (inch)</label>
             <input type="text" id="bsBoltSizeInch" placeholder='e.g. 3/4"'></div>

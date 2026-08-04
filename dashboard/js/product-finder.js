@@ -11,12 +11,13 @@
    starts the real PR → sourcing → pricing → quotation flow) plus Copy details for anything else. */
 
 const PF_CONFIRM_MSG = 'Needs engineer confirmation — Hi-ESCORP will contact you.';
-const PF_DATA_FILES = ['products.json', 'synonyms.json', 'cross_reference.json', 'torque_chart.json'];
+const PF_DATA_FILES = ['products.json', 'synonyms.json', 'cross_reference.json', 'torque_chart.json',
+                       'bolt_dimensions.json'];
 const PF_INDUSTRIES = ['cement', 'mining', 'power', 'oil-gas', 'semiconductor', 'shipbuilding'];
 
 /* ─────────────────────────── Data loading (override-aware) ─────────────────────────── */
 
-let pfData = null;      // { products:[], synonyms:[], crossRef:[], torque:[], loadErrors:[] }
+let pfData = null;      // { products:[], synonyms:[], crossRef:[], torque:[], dims:[], bases:{}, loadErrors:[] }
 let pfLoading = null;
 
 function pfOverride(file) {
@@ -41,7 +42,8 @@ async function pfFetchFile(file) {
    failure never bricks the page (pfLoading is always cleared), and a data failure is recorded in
    loadErrors so handlers can SHOW it instead of presenting it as a product miss. */
 const PF_FILE_KEYS = { 'products.json': 'products', 'synonyms.json': 'synonyms',
-                       'cross_reference.json': 'rows', 'torque_chart.json': 'rows' };
+                       'cross_reference.json': 'rows', 'torque_chart.json': 'rows',
+                       'bolt_dimensions.json': 'rows' };
 
 async function pfLoadData(force) {
   if (pfData && !force && !(pfData.loadErrors || []).length) return pfData;
@@ -63,7 +65,12 @@ async function pfLoadData(force) {
       }
       return v;
     };
-    pfData = { products: arr(0), synonyms: arr(1), crossRef: arr(2), torque: arr(3), loadErrors };
+    /* The torque file also carries a _bases map — three different tightening bases now coexist
+       (oiled 62%, oiled 90%, B7 65% yield) and a torque figure is meaningless without its basis. */
+    const bases = (settled[3].status === 'fulfilled' && settled[3].value
+                   && settled[3].value._bases) || {};
+    pfData = { products: arr(0), synonyms: arr(1), crossRef: arr(2), torque: arr(3),
+               dims: arr(4), bases, loadErrors };
     pfLoading = null;                       // errors present → next call re-fetches (auto-retry)
     return pfData;
   })();
@@ -976,38 +983,108 @@ function pfRfqShareText(text, client, industry, qty, purpose, results) {
 }
 
 /* ── Feature 2: Match mode ── */
+
+/* Bolt / stud dimensions (SPX stud chart, topped up from the company torque chart's width across
+   flats). Deliberately independent of torque: the charts print sizes whose torque they do not
+   cover, and half an answer beats none — so the dimensions render on EVERY branch below. */
+function pfDimLookup(size, rows) {
+  return (rows || []).find(r => pfNorm(r.size) === pfNorm(size)) || null;
+}
+
+function pfDimBlockHtml(size) {
+  const d = pfDimLookup(size, pfData.dims);
+  if (!d) return '';                       // a dimension we do not hold is never guessed
+  const line = (label, value) => '<div class="cr-rec-line"><b>' + label + ':</b> ' + value + '</div>';
+  let out = '';
+  if (d.hex_af_mm != null)
+    out += line('Hex across flats', pfEsc(d.hex_af_mm) + ' mm (' + pfEsc(d.hex_af_in) + ' in)');
+  if (d.stud_size_in)
+    out += line('Stud size', pfEsc(d.size) + ' — ' + pfEsc(d.stud_size_in) + ' in'
+                + (d.pitch_mm ? ', ' + pfEsc(d.pitch_mm) + ' mm pitch' : ''));
+  else if (d.pitch_mm)
+    out += line('Thread pitch', pfEsc(d.pitch_mm) + ' mm (ISO 261 coarse)');
+  if (d.heavy_hex_in)
+    out += line('Heavy hex nut', pfEsc(d.heavy_hex_in) + ' in (' + pfEsc(d.heavy_hex_mm) + ' mm)');
+  if (d.regular_hex_in)
+    out += line('Regular hex nut', pfEsc(d.regular_hex_in) + ' in (' + pfEsc(d.regular_hex_mm) + ' mm)');
+  // only claim the stud half of the answer for sizes the stud chart actually covers
+  if (d.stud_size_in) out += line('Stud length', 'per flange spec');
+  return '<div class="cr-rec"><div class="cr-rec-label">Dimensions ' + pfBadge(d.verified) + '</div>'
+    + out
+    + (d.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(d.note) + '</div>' : '')
+    + '</div>';
+}
+
+function pfGradeLabel(g) { return pfNorm(g) === 'b7' ? 'ASTM A193 B7 stud' : 'grade ' + g; }
+
+/* The charts run from 0.85 Nm to 361,484 Nm — six digits without separators is unreadable and
+   easy to misread by a factor of ten, which is exactly the mistake this tool must not invite. */
+function pfNm(n) {
+  const v = Number(n);
+  return isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(n);
+}
+
+/* Three tightening bases now coexist (oiled 62%, oiled 90%, B7 at 65% yield) and they are NOT
+   interchangeable, so the basis travels with every figure we print. */
+function pfBasisHtml(row) {
+  const text = (pfData.bases || {})[row.basis];
+  return text ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(text) + '</div>' : '';
+}
+
+/* The charts reach 361,484 Nm; the largest tool we carry stops at 39,000 Nm. Say so out loud
+   rather than silently omitting the wrench line. */
+function pfWrenchHtml(row, byId) {
+  const w = byId[row.wrench_id];
+  if (w) return '<div class="cr-rec-line"><b>Matching wrench:</b> ' + pfEsc(w.name) + ' ' + pfBadge(w.verified) + '</div>';
+  if (row.wrench_status === 'above_range')
+    return '<div class="cr-rec-line"><b>Matching wrench:</b> beyond our current tool range — the largest'
+      + ' we carry is the TWLC / TWHC hydraulic wrench at 39,000 Nm. The engineer will source a'
+      + ' tensioner or a larger tool.</div>';
+  if (row.wrench_status === 'below_range')
+    return '<div class="cr-rec-line"><b>Matching wrench:</b> below the range of our powered wrenches'
+      + ' — a hand torque wrench covers this.</div>';
+  return '';
+}
+
 async function pfBoltMatch() {
   const box = document.getElementById('pfBoltResult');
-  if (!(await pfEnsureData(box, ['torque_chart.json', 'products.json']))) return;
+  if (!(await pfEnsureData(box, ['torque_chart.json', 'bolt_dimensions.json', 'products.json']))) return;
   const bolt = (document.getElementById('pfBolt') || {}).value || '';
   const grade = (document.getElementById('pfGrade') || {}).value || '';
   box.style.display = '';
   const row = pfTorqueLookup(bolt, grade, pfData.torque);
   const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
-  const inq = pfAddInquiry({ source: 'Match-bolt', client: '', industry: '', rawText: bolt + ' grade ' + grade,
+  const dims = pfDimBlockHtml(bolt);
+  const gl = pfGradeLabel(grade);
+  const inq = pfAddInquiry({ source: 'Match-bolt', client: '', industry: '', rawText: bolt + ' ' + gl,
     recommendation: row ? (row.verified ? 'torque row' : 'unverified row — confirmation') : PF_CONFIRM_MSG });
   if (!row) {
-    pfLogMiss('torque: ' + bolt + ' grade ' + grade);
-    box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">No torque data for ' + pfEsc(bolt) + ' grade ' + pfEsc(grade) + ' in our chart yet. Logged for the engineer.</p></div>';
+    pfLogMiss('torque: ' + bolt + ' ' + gl);
+    box.innerHTML = dims + '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3><p class="cr-rec-line">Our charts print no torque for ' + pfEsc(bolt) + ' ' + pfEsc(gl) + '. Logged for the engineer.</p></div>';
   } else if (!row.verified) {
-    box.innerHTML = '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3>'
-      + '<p class="cr-rec-line">Our chart holds only <b>sample</b> figures for ' + pfEsc(row.bolt) + ' grade ' + pfEsc(row.grade)
-      + ' (~' + pfEsc(row.torque_min_nm) + '–' + pfEsc(row.torque_max_nm) + ' Nm, unconfirmed'
-      + (byId[row.wrench_id] ? '; likely tool class: ' + pfEsc(byId[row.wrench_id].name) : '') + '). '
-      + 'Torque values are safety-critical, so the engineer must confirm before use.</p></div>';
+    box.innerHTML = dims + '<div class="cr-warn cr-sect"><h3>' + pfEsc(PF_CONFIRM_MSG) + '</h3>'
+      + '<p class="cr-rec-line">Our chart prints ' + pfNm(row.torque_max_nm) + ' Nm for ' + pfEsc(row.bolt) + ' ' + pfEsc(gl)
+      + ', but that figure is <b>disputed</b>'
+      + (byId[row.wrench_id] ? '; likely tool class: ' + pfEsc(byId[row.wrench_id].name) : '') + '. '
+      + 'Torque values are safety-critical, so the engineer must confirm before use.</p>'
+      + (row.note ? '<p class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</p>' : '')
+      + '</div>';
   } else {
     const w = byId[row.wrench_id];
     const nm = row.torque_min_nm === row.torque_max_nm
-      ? '≈ ' + pfEsc(row.torque_min_nm)
-      : pfEsc(row.torque_min_nm) + '–' + pfEsc(row.torque_max_nm);
-    const ftlb = Math.round(row.torque_max_nm * 0.7376);
-    box.innerHTML = '<div class="cr-rec"><div class="cr-rec-label">Torque ' + pfBadge(true) + '</div>'
-      + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' grade ' + pfEsc(row.grade) + ' → ' + nm + ' Nm (≈ ' + ftlb + ' ft·lb)</div>'
-      + (w ? '<div class="cr-rec-line"><b>Matching wrench:</b> ' + pfEsc(w.name) + ' ' + pfBadge(w.verified) + '</div>' : '')
+      ? '≈ ' + pfNm(row.torque_min_nm)
+      : pfNm(row.torque_min_nm) + '–' + pfNm(row.torque_max_nm);
+    // the B7 chart prints its own ft-lb column — use it rather than re-deriving it
+    const ftlb = pfNm(row.torque_ftlb != null ? row.torque_ftlb : Math.round(row.torque_max_nm * 0.7376));
+    box.innerHTML = dims
+      + '<div class="cr-rec"><div class="cr-rec-label">Torque ' + pfBadge(true) + '</div>'
+      + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' ' + pfEsc(gl) + ' → ' + nm + ' Nm (≈ ' + ftlb + ' ft·lb)</div>'
+      + pfWrenchHtml(row, byId)
+      + pfBasisHtml(row)
       + (row.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
       + '</div>'
       // the wrench IS the orderable product here — offer it straight to a Purchase Request
-      + pfActionBtns({ text: 'Bolt torque: ' + row.bolt + ' grade ' + row.grade + ' → ' + row.torque_max_nm + ' Nm' + (w ? '\nWrench: ' + w.name : ''),
+      + pfActionBtns({ text: 'Bolt torque: ' + row.bolt + ' ' + gl + ' → ' + pfNm(row.torque_max_nm) + ' Nm' + (w ? '\nWrench: ' + w.name : ''),
                        inquiryId: inq.id, qty: 1,
                        product: w ? { id: w.id, name: w.name, category: w.category } : null });
   }
