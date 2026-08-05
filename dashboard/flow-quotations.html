@@ -151,10 +151,13 @@
                    scrolls inside the pane instead of bleeding under the live PDF preview. -->
               <div style="overflow-x:auto;">
               <table id="qcItems">
+                <!-- A205 — the Option column is 8%, taken from Item No and Photo so the row still
+                     totals 100% and the photo button stays reachable (the A200 regression). -->
                 <thead><tr>
-                  <th style="width:16%;">Item No</th><th>Description</th>
+                  <th id="qcThOption" style="width:8%;display:none;" title="Blank = an ordinary line, always charged. A number makes this an alternative — the client picks one option, and options are never summed together.">Option</th>
+                  <th style="width:13%;">Item No</th><th>Description</th>
                   <th style="width:9%;">Qty</th><th style="width:15%;">Unit Price</th>
-                  <th style="width:16%;">Photo</th><th style="width:4%;"></th>
+                  <th style="width:13%;">Photo</th><th style="width:4%;"></th>
                 </tr></thead>
                 <tbody id="qcItemBody"></tbody>
               </table>

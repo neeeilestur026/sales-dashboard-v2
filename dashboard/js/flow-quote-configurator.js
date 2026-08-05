@@ -16,6 +16,13 @@
 
 let qcSession = null;
 let qcRole = '';
+let qcRecommended = '';        // A205 — which option the stored total is built from
+/* A205 — alternative offers stay INERT until the whole chain supports them: FlowAPI.gs v111 for the
+   Option No column, and a PDF generator that renders options as alternatives. Ungated, a user could
+   tag two options and get a document that quietly SUMS them — the exact overstatement this feature
+   exists to prevent, shipped as a feature. Off means the column is hidden and every line is an
+   ordinary charged item: precisely today's behaviour. */
+let qcOptionsEnabled = false;
 let qcItems = [];                 // [{ lineKey, itemNo, itemName, qty, price, uom, origItemNo, origItemName, itemId, vat, imageDataUrl }]
 let qcSeq = 0;                    // monotonic — a slow response from an older edit must never win
 let qcAbort = null;
@@ -216,10 +223,15 @@ function qcLoadExisting(q) {
     itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo || '',
     qty: num(it.qty), price: num(it.price), uom: it.uom || '',
     origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
-    itemId: it.itemId || '', vat: it.vat || '', imageDataUrl: ''
+    itemId: it.itemId || '', vat: it.vat || '', imageDataUrl: '',
+    optionNo: String(it.optionNo || '').trim()             // A205
   }));
+  // A205: restore which option the stored total was built from, so reopening and re-saving does not
+  // silently re-target the total to the cheapest.
+  qcRecommended = String(q.recommendedOption || '').trim();
+  if (qcRecommended && !qcItems.some(i => i.optionNo === qcRecommended)) qcRecommended = '';
   if (!qcItems.length) qcItems = [{ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0,
-    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '' }];
+    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '', optionNo: '' }];
   // Document mode locks the figures (items included) but leaves the photo buttons live, because the
   // document half of the builder is where photos are managed.
   qcLocked = (qcMode === 'document');
@@ -412,7 +424,7 @@ async function qcLoadFromPR(prNo) {
     } catch (e) { /* a PR without a doc block is fine */ }
 
     qcItems = included.map(i => ({
-      lineKey: qcLineKey(), itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
+      lineKey: qcLineKey(), optionNo: '', itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
       qty: (typeof flowNum === 'function' ? flowNum(i.qty) : +i.qty) || 0,
       price: (typeof flowNum === 'function' ? flowNum(i.finalPrice) : +i.finalPrice) || 0,
       uom: i.uom || '', origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',
@@ -453,7 +465,7 @@ function qcLineKey() {
 }
 
 function qcAddRow(item) {
-  qcItems.push(Object.assign({ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0,
+  qcItems.push(Object.assign({ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0, optionNo: '',
     uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '' }, item || {}));
   qcRenderItems();
   qcOnChange();
@@ -465,12 +477,51 @@ function qcRemoveRow(key) {
   if (!qcItems.length) qcAddRow(); else { qcRenderItems(); qcOnChange(); }
 }
 
+/** A205 — option groups present in the current draft, cheapest-first ordering handled by the caller. */
+function qcOptionGroups() {
+  if (!qcOptionsEnabled) return [];
+  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
+  const g = {};
+  qcItems.forEach(i => {
+    const k = String(i.optionNo || '').trim();
+    if (!k) return;
+    (g[k] = g[k] || { key: k, lines: [], gross: 0 }).lines.push(i);
+    g[k].gross += num(i.qty) * num(i.price);
+  });
+  return Object.keys(g).sort((a, b) => (num(a) - num(b)) || a.localeCompare(b)).map(k => g[k]);
+}
+
+function qcSetRecommended(key) {
+  if (qcLocked) return;
+  qcRecommended = String(key || '').trim();
+  qcRenderItems();
+  qcOnChange();
+}
+
 function qcRenderItems() {
   const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
   const ro = qcLocked ? ' disabled' : '';
   const title = qcLocked ? ' title="Set by management on the purchase request"' : '';
+  /* A205 — the Option cell. Blank keeps the line an ordinary charged item; a number puts it in a
+     mutually exclusive group. The ★ marks which option the stored total is built from, so it only
+     appears once a line is actually tagged. */
+  const optCell = (i) => {
+    if (!qcOptionsEnabled) return '';
+    const cur = String(i.optionNo || '').trim();
+    const opts = ['', '1', '2', '3', '4', '5']
+      .map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${v ? 'Opt ' + v : '—'}</option>`).join('');
+    const star = cur
+      ? `<button type="button" class="qc-del qc-rec${qcRecommended === cur ? ' on' : ''}"
+           style="margin-left:.25rem;${qcRecommended === cur ? 'color:#b45309;' : 'color:#cbd5e1;'}"
+           onclick="qcSetRecommended('${esc(cur)}')"
+           title="${qcRecommended === cur ? 'This option is the one the quotation total is built from' : 'Make this the recommended option'}">★</button>`
+      : '';
+    return `<td><select${ro}${title} onchange="qcSet('${esc(i.lineKey)}','optionNo',this.value)"
+              style="width:100%;box-sizing:border-box;">${opts}</select>${star}</td>`;
+  };
   document.getElementById('qcItemBody').innerHTML = qcItems.map(i => `
     <tr data-key="${esc(i.lineKey)}">
+      ${optCell(i)}
       <td><input type="text" list="qcInvList" value="${esc(i.itemNo)}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','itemNo',this.value)"></td>
       <td><input type="text" value="${esc(i.itemName)}"${ro}${title}
@@ -487,6 +538,10 @@ function qcRenderItems() {
             onclick="qcClearPhoto('${esc(i.lineKey)}')" title="Remove this photo">✕</button>` : ''}</td>
       <td>${qcLocked ? '' : `<button class="qc-del" onclick="qcRemoveRow('${esc(i.lineKey)}')" title="Remove line">✕</button>`}</td>
     </tr>`).join('');
+  /* A205 — the header cell has to follow the gate too. The <th> is static markup, so leaving it
+     visible while the body renders one fewer <td> shifts every cell under the wrong heading. */
+  const thOpt = document.getElementById('qcThOption');
+  if (thOpt) thOpt.style.display = qcOptionsEnabled ? '' : 'none';
   const add = document.getElementById('qcAddBtn');
   if (add) add.style.display = qcLocked ? 'none' : '';
 }
@@ -496,6 +551,13 @@ function qcSet(key, field, value) {
   const it = qcItems.find(i => i.lineKey === key);
   if (!it) return;
   it[field] = (field === 'qty' || field === 'price') ? (parseFloat(value) || 0) : value;
+  if (field === 'optionNo' && qcOptionsEnabled) {
+    it.optionNo = String(value || '').trim();
+    // A205: a recommendation pointing at a group that no longer exists would silently re-target the
+    // total, so drop it and let the guard ask again rather than pick for the user.
+    if (qcRecommended && !qcItems.some(x => String(x.optionNo || '').trim() === qcRecommended)) qcRecommended = '';
+    qcRenderItems();
+  }
   if (field === 'itemNo') {                       // A159: stamp the permanent id on an exact pick
     const inv = qcInventory.find(x => String(x.itemNo) === String(value));
     it.itemId = inv ? (inv.itemId || '') : '';
@@ -551,13 +613,26 @@ function qcDownscale(file, maxPx, quality) { return flowDownscaleImage(file, max
    net. Keep these in step if that ever changes. */
 function qcTotals() {
   const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
-  const gross = qcItems.reduce((s, i) => s + num(i.qty) * num(i.price), 0);
+  /* A205 — base lines + the recommended option only. Summing every alternative here would show the
+     person quoting a total the client can never be charged, and it is the figure that gets stored. */
+  const groups = qcOptionGroups();
+  const rec = (groups.length && !groups.some(g => g.key === qcRecommended))
+    ? groups.slice().sort((a, b) => a.gross - b.gross)[0].key   // same cheapest fallback as both engines
+    : qcRecommended;
+  /* The gate check is NOT redundant. With options off, qcOptionGroups() is empty so `rec` is '', and
+     a line still carrying a stale optionNo would fail the `k !== rec` test and be DROPPED from the
+     total — understating the quotation instead of overstating it. Off means every line is a base
+     line, full stop. */
+  const gross = qcItems.reduce((s, i) => {
+    const k = qcOptionsEnabled ? String(i.optionNo || '').trim() : '';
+    return (k && k !== rec) ? s : s + num(i.qty) * num(i.price);
+  }, 0);
   const pct = Math.min(100, Math.max(0, num(document.getElementById('qcDiscount').value)));
   const discount = gross * pct / 100;
   const net = gross - discount;
   const opt = document.getElementById('qcVat').value;
   const vat = opt === 'inclusive' ? net * QC_VAT_PCT : 0;
-  return { gross, pct, discount, net, vat, grand: net + vat, opt };
+  return { gross, pct, discount, net, vat, grand: net + vat, opt, groups, rec };
 }
 
 function qcRenderTotals() {
@@ -572,6 +647,30 @@ function qcRenderTotals() {
   }
   if (t.opt === 'inclusive') html += `<div class="row"><span>VAT (12%)</span><span class="v">${m(t.vat)}</span></div>`;
   html += `<div class="row grand"><span>${label}</span><span class="v">${m(t.grand)}</span></div>`;
+  /* A205 — the alternatives, each priced on its own. Shown BELOW the total so it is obvious the
+     total is one of them rather than all of them, which is the misreading that costs money. */
+  if (t.groups.length) {
+    html += `<div class="row" style="margin-top:.5rem;border-top:1px dashed #cbd5e1;padding-top:.4rem;">
+      <span style="font-weight:700;color:#b91c1c;">Alternative offers</span>
+      <span class="v" style="font-size:.72rem;color:#64748b;">client picks one · not cumulative</span></div>`;
+    t.groups.forEach(g => {
+      const vat = g.gross * QC_VAT_PCT;
+      const on = g.key === t.rec;
+      html += `<div class="row"><span>${on ? '★ ' : ''}Option ${g.key}${on ? ' (in the total above)' : ''}</span>
+        <span class="v">${m(g.gross)}</span></div>`;
+      html += `<div class="row" style="font-size:.72rem;color:#64748b;"><span>&nbsp;&nbsp;+ VAT 12% ${m(vat)} → VAT-inc</span>
+        <span class="v">${m(g.gross + vat)}</span></div>`;
+    });
+    if (!qcRecommended) {
+      html += `<div class="row" style="color:#b45309;font-size:.74rem;"><span>⚠ No option marked ★ —
+        the cheapest is being used. Pick one before finalising.</span><span class="v"></span></div>`;
+    }
+    const lonely = t.groups.filter(g => g.lines.length === 1 && t.groups.length === 1);
+    if (lonely.length) {
+      html += `<div class="row" style="color:#b45309;font-size:.74rem;"><span>⚠ Only one option group —
+        an alternative needs something to be an alternative to.</span><span class="v"></span></div>`;
+    }
+  }
   document.getElementById('qcTotals').innerHTML = html;
 }
 
@@ -599,9 +698,12 @@ function qcPayload(withImages) {
     // its multi-line descriptions. It now follows the selector, which defaults to Full.
     descMode: val('qcDescMode') || 'long',
     photos: showPhotos,
+    recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205
     items: qcItems.filter(i => (i.itemNo || i.itemName)).map(i => ({
       itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
       qty: num(i.qty), price: num(i.price),
+      optionNo: String(i.optionNo || '').trim(),           // A205
+
       description: i.itemName || '',
       uom: i.uom || '',                                  // A147: never force "pc(s)"
       origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',   // A86 pairing
@@ -734,6 +836,18 @@ async function qcFinalize() {
   if (!qcFromPr && !val('qcCustomer').trim()) { qcMsg('Customer is required.', false); return; }
   const priced = qcItems.filter(i => (i.itemNo || i.itemName));
   if (!priced.length) { qcMsg('Add at least one item.', false); return; }
+  /* A205 — with alternatives on the document, the stored total is base + ONE option, so which option
+     is not a detail the system may decide quietly: it changes the value carried into approval, the
+     sales order and the pipeline. Block rather than guess. */
+  const qcGroups = qcOptionGroups();
+  if (qcGroups.length && !qcRecommended) {
+    qcMsg('Mark one option with ★ — it decides the quotation total that goes to approval and the sales order.', false);
+    return;
+  }
+  if (qcGroups.length === 1) {
+    qcMsg('Option ' + qcGroups[0].key + ' is the only option — either add another alternative, or clear the Option tag so it is an ordinary line.', false);
+    return;
+  }
 
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -773,7 +887,8 @@ async function qcFinalize() {
         itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
         qty: num(i.qty), price: num(i.price), uom: i.uom || '',
         origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',
-        itemId: i.itemId || '', vat: i.vat || '', lineKey: i.lineKey
+        itemId: i.itemId || '', vat: i.vat || '', lineKey: i.lineKey,
+        optionNo: String(i.optionNo || '').trim()          // A205
       }));
       const common = {
         customer: val('qcCustomer').trim(), date: val('qcDate'), subject: val('qcSubject').trim(),
@@ -781,6 +896,7 @@ async function qcFinalize() {
         // A178: createQuotation already stores this in the Plant Site column; updateQuotation ignores
         // it today, which is why the read-back prefers the document's own stamp over the column.
         plantSite: val('qcPlantSite').trim(),
+        recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205 — decides the stored Total
         layoutJson: qcLayoutJson(), items: JSON.stringify(items)
       };
       if (qcQuotationNo) {
@@ -926,12 +1042,17 @@ async function qcSavePdf(no) {
     payload.date = dt(rec.date) || payload.date;
     payload.discountPct = num(rec.discountPct) || 0;
     payload.doc.subject = rec.subject || payload.doc.subject;
+    /* A205 — regenerating from the STORED record, so the options come from the record too. Miss this
+       and the filed PDF silently loses its alternative-offers layout, leaving the copy in Drive
+       different from the one the client was shown. */
+    payload.recommendedOption = String(rec.recommendedOption || '').trim();
     payload.items = (rec.items || []).map((it, i) => ({
       itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo,
       qty: num(it.qty) || 0,
       price: num(it.price) || 0,
       description: it.itemName || '',
       uom: it.uom || '',
+      optionNo: String(it.optionNo || '').trim(),           // A205
       // A86: the pairing the customer sees — what they asked for, then OUR OFFER
       origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
       imageDataUrl: photoByKey[String(it.lineKey)]
