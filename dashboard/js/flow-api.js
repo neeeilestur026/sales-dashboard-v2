@@ -632,11 +632,50 @@ function flowDeviationBanner(review) {
    which is why it could not be recognised there. Promoted here, where every page can reach it.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/** Gross ex-VAT subtotal (Σ qty×price), preferring the stored total but self-healing from the
- *  line items when it is 0/blank (legacy rows, or a create path that did not persist it). */
+/* ── A205: alternative offers ──
+   A line with a blank optionNo is a BASE line and is always charged. Lines sharing a non-blank
+   optionNo form one mutually exclusive group — the client picks a single option, so those lines are
+   never summed together. Every money figure below therefore means "base + the recommended option",
+   and a quotation with no tagged lines behaves exactly as it did before this existed.
+
+   Mirrors _quotationTotal / _quotationRecommended in FlowAPI.gs. The two must agree: the server
+   writes the stored Total, the client renders it, and a divergence would show one number in a list
+   and a different one on the document the client is holding. */
+function flowQuotationOptionKey(it) { return String((it && it.optionNo) || '').trim(); }
+
+/** { base:[], options:{ '1':[…] }, order:['1','2'], recommended:'1', hasOptions:bool } */
+function flowQuotationOptions(q) {
+  q = q || {};
+  const base = [], options = {}, order = [];
+  (q.items || []).forEach(it => {
+    const k = flowQuotationOptionKey(it);
+    if (!k) { base.push(it); return; }
+    if (!options[k]) { options[k] = []; order.push(k); }
+    options[k].push(it);
+  });
+  order.sort((a, b) => (flowNum(a) - flowNum(b)) || a.localeCompare(b));
+  const sum = k => options[k].reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+  let recommended = String(q.recommendedOption || '').trim();
+  // Same fallback as the server: cheapest, never the sum. Under-promising is the safe failure.
+  if (order.length && !options[recommended]) {
+    recommended = order.slice().sort((a, b) => sum(a) - sum(b))[0];
+  }
+  if (!order.length) recommended = '';
+  return { base, options, order, recommended, hasOptions: order.length > 0,
+           optionGross: k => (options[k] ? sum(k) : 0) };
+}
+
+/** Gross ex-VAT subtotal, preferring the stored total but self-healing from the line items when it
+ *  is 0/blank (legacy rows, or a create path that did not persist it). With alternative offers the
+ *  self-heal counts base lines + the recommended option ONLY — summing every option would report a
+ *  quotation offering either ₱7.2M or ₱5.1M as ₱12.3M in every list, in accounting and in approval. */
 function flowQuotationGross(q) {
   q = q || {};
-  return flowNum(q.total) || (q.items || []).reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+  const stored = flowNum(q.total);
+  if (stored) return stored;
+  const g = flowQuotationOptions(q);
+  return g.base.concat(g.hasOptions ? g.options[g.recommended] : [])
+          .reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
 }
 
 /** The discount percentage, clamped — a stored 120, -5 or 'abc' must never produce a negative
@@ -668,15 +707,33 @@ function flowQuotationDiscountTag(q) {
    Left unrounded the identity (Σ qty·price)·(1−d) === Σ qty·(price·(1−d)) holds exactly, so the sales
    order total always equals the quotation to the centavo. A sales order that agrees with the document
    the client holds matters more than a tidy-looking unit price. */
-function flowQuotationNetItems(q) {
+/* A205 — `optionNo` selects which alternative the client accepted. Omit it and the recommended one
+   is used, so every existing caller keeps working unchanged. Losing options are dropped here rather
+   than filtered by the caller: a sales order must never carry a line the client did not buy. */
+function flowQuotationNetItems(q, optionNo) {
   q = q || {};
   const pct = flowQuotationDiscountPct(q);
   const factor = 1 - pct / 100;
-  return (q.items || []).map(it => ({
+  const g = flowQuotationOptions(q);
+  const want = g.hasOptions
+    ? (g.options[String(optionNo || '').trim()] ? String(optionNo).trim() : g.recommended)
+    : '';
+  const chosen = (q.items || []).filter(it => {
+    const k = flowQuotationOptionKey(it);
+    return !k || k === want;
+  });
+  return chosen.map(it => ({
     itemNo: it.itemNo, itemName: it.itemName, itemId: it.itemId,
     qty: flowNum(it.qty),
     price: pct ? flowNum(it.price) * factor : flowNum(it.price),
   }));
+}
+
+/** Net ex-VAT for one specific option (base + that option), for the SO picker and the approval
+ *  view, where each alternative has to be priced on its own rather than blended. */
+function flowQuotationNetForOption(q, optionNo) {
+  return flowQuotationNetItems(q, optionNo)
+    .reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
 }
 
 

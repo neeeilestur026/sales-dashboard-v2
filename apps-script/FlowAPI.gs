@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 110;  // A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 111;  // A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -49,13 +49,19 @@ var SCHEMA = {
   //    stale-document stamp); overloading it would blur the freshness signal.
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %',
-                   'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No', 'Layout JSON'],
+                   'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No', 'Layout JSON',
+                   'Recommended Option'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   //    A172: 'Line Key' is a per-line id that survives reordering. Row position can't identify a line
   //    once lines move, and Item ID isn't unique when a quote carries two lines of the same product —
   //    so item photos key on this.
+  //    A205: 'Option No' is blank for an ordinary line. A non-blank value puts the line in a
+  //    MUTUALLY EXCLUSIVE group — the client picks one option, so those lines are NEVER summed
+  //    together. See _quotationTotal below; getting this wrong overstates the deal by the value of
+  //    every option the client will not buy.
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
-                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID', 'Line Key'],
+                   'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID', 'Line Key',
+                   'Option No'],
 
   // A186: 'Client PO Date' is the date printed on the customer's own PO; 'PO Received Date' is when
   // it actually reached us. They routinely differ by days, and only the second one is ours to know.
@@ -782,7 +788,13 @@ function getQuotations(p) {
     var its = items.filter(function (r) { return String(r['Quotation No']) === String(q['Quotation No']); });
     // Self-heal the total from the line items when the stored Total is 0/blank (legacy rows, or a create
     // path that didn't persist it) so both approval strips and the review modal show the real amount.
-    var itemsTotal = its.reduce(function (s, r) { return s + _num(r['Quoted Qty']) * _num(r['Quoted Price']); }, 0);
+    /* A205: the self-heal has to respect options too. Left as a plain sum, a quotation whose stored
+       Total is 0/blank would heal to the sum of every alternative — the precise overstatement this
+       addendum exists to prevent, arriving through the back door. */
+    var qRec = q['Recommended Option'] || '';
+    var itemsTotal = _quotationTotal(its.map(function (r) {
+      return { qty: r['Quoted Qty'], price: r['Quoted Price'], optionNo: r['Option No'] || '' };
+    }), qRec);
     return {
       quotationNo: q['Quotation No'], date: q['Date'], customer: q['Customer'], status: q['Status'] || 'Draft',
       total: _num(q['Total']) || itemsTotal, createdBy: q['Created By'], createdAt: q['Created At'],
@@ -792,12 +804,14 @@ function getQuotations(p) {
       pdfData: q['PDF Data JSON'] || '',
       plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '', prNo: q['PR No'] || '',
       layoutJson: q['Layout JSON'] || '',
+      recommendedOption: String(q['Recommended Option'] || '').trim(),   // A205
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
         origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
-        vat: r['Supplier VAT'] || '', uom: r['UOM'] || '', lineKey: r['Line Key'] || '' }; })
+        vat: r['Supplier VAT'] || '', uom: r['UOM'] || '', lineKey: r['Line Key'] || '',
+        optionNo: String(r['Option No'] || '').trim() }; })   // A205
     };
   }) };
 }
@@ -885,6 +899,47 @@ function reorderQuotationItems(p) {
   return { success: true, quotationNo: no, count: values.length, message: 'Item order updated.' };
 }
 
+/* A205 — the stored quotation Total, option-aware.
+
+   An item with a blank 'Option No' is a base line and is always charged. Items sharing a non-blank
+   Option No form ONE mutually exclusive alternative: the client picks a single option, so the total
+   is base + the RECOMMENDED option only. Summing them all would report a quotation offering either
+   7.2M or 5.1M as 12.3M, in every list, in accounting, and in what management approves.
+
+   With no options present this reduces exactly to the previous `sum of every line`, so the ~100
+   existing quotations are untouched. If options exist but none was marked recommended (only
+   reachable by a caller bypassing the form guard) the CHEAPEST option is used — under-promising is
+   the safer failure here, and _quotationRecommended reports what it chose so it is never silent. */
+function _quotationOptionKey(it) {
+  return String((it && (it.optionNo !== undefined ? it.optionNo : it['Option No'])) || '').trim();
+}
+
+function _quotationRecommended(items, recommended) {
+  var want = String(recommended || '').trim();
+  var groups = {};
+  (items || []).forEach(function (it) {
+    var k = _quotationOptionKey(it);
+    if (!k) return;
+    groups[k] = (groups[k] || 0) + _num(it.qty) * _num(it.price);
+  });
+  var keys = Object.keys(groups);
+  if (!keys.length) return '';
+  if (want && groups[want] !== undefined) return want;
+  keys.sort(function (a, b) { return groups[a] - groups[b]; });   // cheapest wins the fallback
+  return keys[0];
+}
+
+function _quotationTotal(items, recommended) {
+  var pick = _quotationRecommended(items, recommended);
+  var total = 0;
+  (items || []).forEach(function (it) {
+    var k = _quotationOptionKey(it);
+    if (k && k !== pick) return;              // a losing option is not part of the deal
+    total += _num(it.qty) * _num(it.price);
+  });
+  return total;
+}
+
 function _writeItems(sheetName, key, no, items, mapRow) {
   // remove existing rows for `no`, then append fresh ones (bottom-up delete preserves indices)
   var sh = _sheet(sheetName);
@@ -909,8 +964,9 @@ function createQuotation(p) {
     if (clash) return { success: false, message: 'Quotation No "' + p.quotationNo + '" already exists.' };
   }
   var no = p.quotationNo || _nextNumber('Quotations', 1, 'QTN');
-  var total = 0;
-  items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+  // A205: base lines + the recommended option only — never the sum of mutually exclusive options.
+  var recommended = _quotationRecommended(items, p.recommendedOption);
+  var total = _quotationTotal(items, recommended);
   // Auto-send for approval on create (no separate Submit step). Route by the creator's role:
   //   management/director → Approved (top tier); admin → Pending Management; else (sales/accounting) → Pending Admin.
   var creatorRole = p.actorRole || p.createdByRole || '';
@@ -918,11 +974,13 @@ function createQuotation(p) {
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
     creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
-    '', p.plantSite || '', p.clientRefNo || '', p.prNo || '', p.layoutJson || '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No / A172 Layout JSON
+    '', p.plantSite || '', p.clientRefNo || '', p.prNo || '', p.layoutJson || '',
+    recommended]);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No / A172 Layout JSON / A205 Recommended Option
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
-            it.itemId || '', it.lineKey || _lineKey()];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID, A172 Line Key
+            it.itemId || '', it.lineKey || _lineKey(),
+            _quotationOptionKey(it)];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID, A172 Line Key, A205 Option No
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -991,8 +1049,13 @@ function updateQuotation(p) {
       ' — use Revise to reopen it for editing.' };
   }
   var items = JSON.parse(p.items || '[]');
-  var total = 0;
-  items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+  /* A205: option-aware, matching createQuotation. `recommendedOption` may be absent on a partial
+     update (A174 — an unsent field is left alone, never blanked), so fall back to what is already
+     stored rather than silently clearing the recommendation and re-totalling the whole quotation. */
+  var storedRec = cur ? (cur['Recommended Option'] || '') : '';
+  var recommended = _quotationRecommended(
+    items, p.recommendedOption !== undefined ? p.recommendedOption : storedRec);
+  var total = _quotationTotal(items, recommended);
 
   // Optional RENAME: the user may replace the whole quotation number. Every reference
   // follows (header, items, the SO→quotation link, attached documents); the ActivityLog
@@ -1030,6 +1093,10 @@ function updateQuotation(p) {
   if (p.subject !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Subject', p.subject);
   // Discount % (off the pre-VAT total) — persist edits so the regenerated PDF uses it.
   if (p.discountPct !== undefined) _setCellByKey('Quotations', 'Quotation No', newNo, 'Discount %', _num(p.discountPct) || 0);
+  // A205: keep the stored recommendation in step with the total that was just written from it.
+  if (p.items !== undefined || p.recommendedOption !== undefined) {
+    _setCellByKey('Quotations', 'Quotation No', newNo, 'Recommended Option', recommended);
+  }
   // A172: layout was already written above (before the status gate). On a RENAME it must follow the
   // new number, since _setCellByKey keys on it.
   if (p.layoutJson !== undefined && newNo !== String(no)) {
@@ -1047,7 +1114,10 @@ function updateQuotation(p) {
         return { itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
                  price: _num(r['Quoted Price']), origItemNo: r['Orig Item No'] || '',
                  origItemName: r['Orig Item Name'] || '', vat: r['Supplier VAT'] || '',
-                 uom: r['UOM'] || '', itemId: r['Item ID'] || '', lineKey: r['Line Key'] || '' };
+                 uom: r['UOM'] || '', itemId: r['Item ID'] || '', lineKey: r['Line Key'] || '',
+                 // A205: omit this and a RENAME rewrites every line with a blank Option No,
+                 // silently collapsing an alternative-offers quotation into ordinary summed lines.
+                 optionNo: r['Option No'] || '' };
       });
   }
   if (p.items !== undefined || newNo !== String(no)) _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
@@ -1056,7 +1126,8 @@ function updateQuotation(p) {
     // A172: carry the line key through, or a photo loses the line it belongs to on every edit.
     return [newNo, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '', it.itemId || '',
-            it.lineKey || _lineKey()];
+            it.lineKey || _lineKey(),
+            _quotationOptionKey(it)];   // A205 Option No — widened in step with createQuotation
   });
   if (newNo !== String(no)) {
     // Sales orders built from this quotation keep their link.
