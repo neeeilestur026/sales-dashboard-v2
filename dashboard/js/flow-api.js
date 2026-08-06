@@ -560,14 +560,46 @@ function flowQuotationPricingReview(quotation, prRecord) {
 
   const prItems = prRecord.items || [];
   const included = prItems.filter(p => p.included === undefined || p.included === true || String(p.included) === 'true');
-  const pricedTotal = included.reduce((s, p) => s + flowNum(p.finalPrice) * flowNum(p.qty), 0);
   const quotedGross = flowQuotationGross(quotation);
-  const totalDelta = quotedGross - pricedTotal;
   const discountPct = flowQuotationDiscountPct(quotation);
+
+  /* A205 — with alternatives the quotation's value is base + ONE option, but the pricing request was
+     sourced for every line including the options the client will not take. Comparing the two whole
+     totals would flag a large deviation on every alternative-offers quotation and train approvers to
+     ignore the warning, which is worse than not having it. So the comparison is restricted to the
+     lines the quotation's total is actually built from, and each option is reported separately —
+     each alternative is a different deal and deserves its own margin. */
+  const optGroups = flowQuotationOptions(quotation);
+  const qItems = optGroups.hasOptions
+    ? (quotation.items || []).filter(it => {
+        const k = flowQuotationOptionKey(it);
+        return !k || k === optGroups.recommended;
+      })
+    : (quotation.items || []);
+
+  const _pricedFor = (lines) => {
+    const seen = new Set();
+    let sum = 0;
+    lines.forEach(qi => {
+      const src = _flowMatchPrItem(prItems, qi, seen);
+      if (src) sum += flowNum(src.finalPrice) * flowNum(src.qty);
+    });
+    return sum;
+  };
+  const pricedTotal = optGroups.hasOptions
+    ? _pricedFor(qItems)
+    : included.reduce((s, p) => s + flowNum(p.finalPrice) * flowNum(p.qty), 0);
+  const totalDelta = quotedGross - pricedTotal;
+
+  const optionReview = optGroups.order.map(k => {
+    const lines = optGroups.base.concat(optGroups.options[k]);
+    const quoted = lines.reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+    const priced = _pricedFor(lines);
+    return { key: k, recommended: k === optGroups.recommended, quoted, priced, delta: quoted - priced };
+  });
 
   const used = new Set();
   const perLine = [];
-  const qItems = quotation.items || [];
   qItems.forEach(qi => {
     const src = _flowMatchPrItem(prItems, qi, used);
     if (!src) return;
@@ -583,7 +615,41 @@ function flowQuotationPricingReview(quotation, prRecord) {
     pricedTotal, quotedGross, totalDelta, discountPct,
     flagged: Math.abs(totalDelta) > 0.5,
     perLine, matched, total: qItems.length,
+    hasOptions: optGroups.hasOptions, recommendedOption: optGroups.recommended,
+    optionReview,                                    // A205: one entry per alternative
   };
+}
+
+/* A205 — the alternatives, each priced on its own. An approver looking at a blended margin across
+   mutually exclusive offers is looking at a number that describes no deal that can actually happen,
+   so each option gets its own quoted / priced / margin line and the recommended one is named. Shared
+   by both approval surfaces so their wording cannot drift. */
+function flowOptionReviewHtml(review) {
+  review = review || {};
+  if (!review.hasOptions || !(review.optionReview || []).length) return '';
+  const money = v => flowMoney(v, 'PHP');
+  const rows = review.optionReview.map(o => {
+    const pct = o.quoted ? (o.delta / o.quoted) * 100 : 0;
+    return `<tr>
+        <td style="padding:.25rem .4rem;font-weight:700;">Option ${flowEsc(o.key)}${o.recommended ? ' <span style="font-weight:600;color:#b91c1c;">· recommended</span>' : ''}</td>
+        <td style="padding:.25rem .4rem;text-align:right;font-variant-numeric:tabular-nums;">${money(o.quoted)}</td>
+        <td style="padding:.25rem .4rem;text-align:right;font-variant-numeric:tabular-nums;">${money(o.priced)}</td>
+        <td style="padding:.25rem .4rem;text-align:right;font-variant-numeric:tabular-nums;${o.delta < 0 ? 'color:#b91c1c;' : ''}">${money(o.delta)}${o.quoted ? ` (${pct.toFixed(1)}%)` : ''}</td>
+      </tr>`;
+  }).join('');
+  return `<div style="margin:.5rem 0;padding:.5rem .6rem;border:1px solid #fca5a5;border-radius:10px;background:#fff7f7;">
+      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#b91c1c;margin-bottom:.3rem;">
+        Alternative offers — priced separately</div>
+      <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
+        <thead><tr style="color:#64748b;font-size:.7rem;text-transform:uppercase;">
+          <th style="text-align:left;padding:.2rem .4rem;">Option</th>
+          <th style="text-align:right;padding:.2rem .4rem;">Quoted</th>
+          <th style="text-align:right;padding:.2rem .4rem;">Sourced</th>
+          <th style="text-align:right;padding:.2rem .4rem;">Margin</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      <div style="font-size:.72rem;color:#64748b;margin-top:.3rem;">
+        The client picks one. The quotation total below is built from the recommended option.</div>
+    </div>`;
 }
 
 /** The loud banner for a review, or '' when there is nothing to flag. Shared by both approval surfaces

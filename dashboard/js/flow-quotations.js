@@ -391,7 +391,7 @@ function openReviewModal(no) {
     if (review && review.hasPr) {
       bd.innerHTML =
         `<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Pricing management set</div>` +
-        flowDeviationBanner(review) + review.breakdownHtml +
+        flowDeviationBanner(review) + flowOptionReviewHtml(review) + review.breakdownHtml +
         (needTick
           ? `<label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.6rem;font-size:0.82rem;font-weight:600;cursor:pointer;">
                <input type="checkbox" id="qrTick" onchange="qrSyncApprove()"> I've reviewed the pricing above and confirm it.</label>`

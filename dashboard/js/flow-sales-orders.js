@@ -32,10 +32,52 @@ async function loadQuotationOptions() {
       `<option value="${flowEsc(q.quotationNo)}">${flowEsc(q.quotationNo)} — ${flowEsc(q.customer)} · ${flowEsc(q.status)} (${flowMoney(flowQuotationNet(q), 'PHP')})${flowQuotationDiscountTag(q)}</option>`).join('');
 }
 
+/* A205 — when the source quotation carries alternatives, ASK which one the client accepted before
+   building the order. The document offered a choice; the sales order records a decision, and the
+   system cannot infer which was taken. Defaults to the recommended option (what the stored total was
+   built from) so the common case is one click. */
+let soChosenOption = '';
+
+function soOptionPickerHtml(q) {
+  const g = (typeof flowQuotationOptions === 'function') ? flowQuotationOptions(q) : { hasOptions: false };
+  if (!g.hasOptions) return '';
+  const rows = g.order.map(k => {
+    const net = flowQuotationNetForOption(q, k);
+    const on = k === (soChosenOption || g.recommended);
+    return `<label style="display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:8px;
+              ${on ? 'background:#eef2ff;' : ''}cursor:pointer;">
+        <input type="radio" name="soOpt" value="${flowEsc(k)}"${on ? ' checked' : ''}
+               onchange="soPickOption(this.value)">
+        <span><strong>Option ${flowEsc(k)}</strong>${k === g.recommended ? ' · recommended' : ''}</span>
+        <span style="margin-left:auto;font-variant-numeric:tabular-nums;">${flowMoney(net, 'PHP')}</span>
+      </label>`;
+  }).join('');
+  return `<div id="soOptWrap" style="margin:.5rem 0;padding:.6rem .7rem;border:1px solid #fca5a5;
+            border-radius:10px;background:#fff7f7;">
+      <div style="font-weight:700;color:#b91c1c;font-size:.82rem;margin-bottom:.35rem;">
+        This quotation offered alternatives — which did the client accept?</div>
+      ${rows}
+      <div style="font-size:.74rem;color:#64748b;margin-top:.3rem;">
+        Only the base items plus the option you pick are carried into this sales order.</div>
+    </div>`;
+}
+
+function soPickOption(k) {
+  soChosenOption = String(k || '').trim();
+  const no = document.getElementById('loadQuotation').value;
+  const q = soQuotations.find(x => x.quotationNo === no);
+  if (q) soApplyQuotation(q);
+}
+
 function loadFromQuotation() {
   const no = document.getElementById('loadQuotation').value;
   const q = soQuotations.find(x => x.quotationNo === no);
   if (!q) return;
+  soChosenOption = '';                       // a fresh quotation clears any previous pick
+  soApplyQuotation(q);
+}
+
+function soApplyQuotation(q) {
   document.getElementById('quotationNo').value = q.quotationNo;
   document.getElementById('customer').value = q.customer;
   document.getElementById('itemRows').innerHTML = '';
@@ -44,11 +86,33 @@ function loadFromQuotation() {
      sales order at ₱370,982.88 instead of ₱352,433.74 — overstating revenue, and profit with it,
      by ₱18,549.14. The sales order deliberately has no discount field of its own (a percentage
      stored beside already-discounted prices invites double-application), so the prices carry it. */
-  const netItems = flowQuotationNetItems(q);
+  const netItems = flowQuotationNetItems(q, soChosenOption);   // A205: base + the accepted option only
   netItems.forEach(it => addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, price: it.price, itemId: it.itemId }));
   if (!netItems.length) addRow();
   recalc();
+  soShowOptionPicker(q);
   soShowDiscountNotice(q);
+}
+
+function soShowOptionPicker(q) {
+  let el = document.getElementById('soOptHost');
+  if (!el) {
+    const anchor = document.getElementById('soDiscountNote');
+    if (!anchor || !anchor.parentNode) return;
+    el = document.createElement('div');
+    el.id = 'soOptHost';
+    anchor.parentNode.insertBefore(el, anchor);
+  }
+  el.innerHTML = soOptionPickerHtml(q);
+}
+
+/* A205 — the value of what is actually being ordered: base + the chosen option, discounted. Quoting
+   the whole document's total here would reassure the user against a number the order does not match
+   whenever alternatives are involved. */
+function soQuotedNet(q) {
+  const g = (typeof flowQuotationOptions === 'function') ? flowQuotationOptions(q) : { hasOptions: false };
+  if (!g.hasOptions) return flowQuotationNet(q);
+  return flowQuotationNetForOption(q, soChosenOption || g.recommended);
 }
 
 /** Say so when the loaded prices are not the quotation's printed unit prices — a silent price change
@@ -60,8 +124,8 @@ function soShowDiscountNotice(q) {
   if (!pct) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
   el.innerHTML = `ℹ Unit prices include this quotation's <strong>${pct}%</strong> discount, so the total ` +
-    `matches the quotation at <strong>${flowMoney(flowQuotationNet(q), 'PHP')}</strong> ` +
-    `(before discount ${flowMoney(flowQuotationGross(q), 'PHP')}). Do not deduct the discount again.`;
+    `matches the quotation at <strong>${flowMoney(soQuotedNet(q), 'PHP')}</strong> ` +
+    `(before discount ${flowMoney(soQuotedNet(q) / (1 - pct / 100), 'PHP')}). Do not deduct the discount again.`;
 }
 
 function addRow(item) {
