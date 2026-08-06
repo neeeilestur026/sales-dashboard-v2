@@ -19,6 +19,7 @@ from flask import Blueprint, request, jsonify, make_response
 from PyPDF2 import PdfReader, PdfWriter
 
 from pdf_generators.flow_quotation_pdf import build_quotation_pdf_bytes, build_summary_table
+from pdf_generators.quotation_parser import parse_quotation_pdf
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
@@ -674,135 +675,12 @@ def _pp_num(v):
         return 0.0
 
 
-def _parse_quotation_pdf(pdf_bytes):
-    """Best-effort scrape of a flow-layout quotation PDF via pdfplumber.
-
-    Returns (data_dict, warnings). Targets the item table header
-    Item No. | Description | Model No. | QTY (UOM) | Unit Price (PHP) | Total Amount (PHP)
-    and the header text (customer, date, subject, ref/RFQ, VAT)."""
-    warnings = []
-    try:
-        import pdfplumber
-    except Exception:
-        return None, ["pdfplumber is not installed on the server."]
-
-    items = []
-    full_text = ""
-    try:
-        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
-                full_text += "\n" + (page.extract_text() or "")
-                for table in (page.extract_tables() or []):
-                    if not table:
-                        continue
-                    header = [str(c or "").strip().lower() for c in table[0]]
-                    joined = " ".join(header)
-                    if "item no" not in joined or "description" not in joined:
-                        continue
-                    def _col(*names):
-                        for i, h in enumerate(header):
-                            if any(n in h for n in names):
-                                return i
-                        return None
-                    c_desc = _col("description")
-                    c_model = _col("model")
-                    c_itemno = _col("item no")
-                    c_qty = _col("qty", "uom")
-                    c_price = _col("unit price")
-                    for row in table[1:]:
-                        cells = [str(c or "").strip() for c in row]
-                        def _get(i):
-                            return cells[i] if (i is not None and i < len(cells)) else ""
-                        desc = _get(c_desc)
-                        model = _get(c_model)
-                        itemno = _get(c_itemno)
-                        qty = _pp_num(_get(c_qty))
-                        price = _pp_num(_get(c_price))
-                        if not desc and not model and not itemno:
-                            continue
-                        if not qty and not price and not desc:
-                            continue
-                        items.append({
-                            "itemNo": (model or itemno or "").replace("\n", " ").strip(),
-                            "itemName": desc.replace("\n", " ").strip(),
-                            "qty": qty,
-                            "price": price,
-                            "description": desc.replace("\n", " ").strip(),
-                        })
-    except Exception as e:
-        logger.warning("pdfplumber parse failed: %s", e)
-        return None, [f"Could not read the PDF: {e}"]
-
-    # Fallback: pdfplumber's table detection sometimes captures only the header row
-    # (the Description cell is a nested Paragraph). Scrape the item lines from the text.
-    # Line format: "<n> <Description...> <ModelNo> <qty> <unitPrice> <lineTotal>"
-    if not items:
-        row_re = re.compile(
-            r"^\s*(\d+)\s+(.+?)\s+(\S+)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$")
-        for ln in full_text.splitlines():
-            m = row_re.match(ln)
-            if not m:
-                continue
-            desc = m.group(2).strip()
-            model = m.group(3).strip()
-            qty = _pp_num(m.group(4))
-            price = _pp_num(m.group(5))
-            if not desc or (not qty and not price):
-                continue
-            items.append({
-                "itemNo": model, "itemName": desc, "qty": qty,
-                "price": price, "description": desc,
-            })
-
-    if not items:
-        warnings.append("No item table was recognized — add the items manually.")
-
-    def _find(pattern):
-        m = re.search(pattern, full_text, re.IGNORECASE)
-        return m.group(1).strip() if m else ""
-
-    subject = _find(r"Subject:\s*(.+)")
-    ref_no = _find(r"Ref\s*No:\s*(.+)")
-    rfq_no = _find(r"RFQ\s*No:\s*(.+)")
-    attention = _find(r"Attention:\s*(.+)")
-    designation = _find(r"Designation:\s*(.+)")
-    email = _find(r"Email:\s*(.+)")
-    date = _find(r"Date:\s*(.+)")
-    vat_option = "inclusive" if re.search(r"VAT\s*Inclusive", full_text, re.IGNORECASE) else "exclusive"
-
-    # Customer name: the bold line just before "Attention:" is hard to isolate from text;
-    # fall back to the first non-empty line if present. Admin edits this anyway.
-    customer = ""
-    if attention:
-        before = full_text.split("Attention:")[0].strip().splitlines()
-        _skip = ("quotation", "date:", "ref no", "rfq", "office address", "h.o estur",
-                 "blk", "district", "philippines", "san jose")
-        for ln in reversed(before):
-            ln = ln.strip()
-            low = ln.lower()
-            if not ln or any(s in low for s in _skip) or re.fullmatch(r"[\d,.\s]+", ln):
-                continue
-            customer = ln
-            break
-
-    data = {
-        "customer": customer,
-        "date": date,
-        "quotationNo": ref_no,
-        "vatOption": vat_option,
-        "items": items,
-        "doc": {
-            "attention": attention,
-            "designation": designation,
-            "email": email,
-            "subject": subject,
-            "rfqNo": rfq_no,
-        },
-    }
-    if not customer:
-        warnings.append("Customer name could not be detected — please fill it in.")
-    return data, warnings
-
+# A206 — the old text-scraping parser lived here. It targeted a different, older layout: it hunted
+# for 'Date:' / 'Subject:' / 'Ref No:' WITH colons and a table headed 'Item No. | Description |
+# Model No.', none of which this document has. Measured against the embedded payload of four real
+# quotations it scored 0/4 on customer, quotation no, date, subject and attention — and reported no
+# warnings while returning the address line ('City 1550') as the customer name. Replaced by
+# pdf_generators/quotation_parser.py, which reads the page geometry instead.
 
 @flow_bp.route("/flow/import-quotation-pdf", methods=["POST"])
 def import_quotation_pdf():
@@ -825,10 +703,14 @@ def import_quotation_pdf():
         exact.setdefault("doc", {})
         return jsonify({"success": True, "source": "exact", "warnings": [], **exact})
 
-    data, warnings = _parse_quotation_pdf(pdf_bytes)
+    # A206 — this PDF carries no embedded payload, so it is reconstructed from the page layout.
+    # `confidence` maps field -> bool: a field the parser could not read comes back EMPTY and is
+    # named in `warnings`, so the admin fills a blank box rather than trusting a wrong value.
+    data, warnings, confidence = parse_quotation_pdf(pdf_bytes)
     if data is None:
         return jsonify({"success": False, "message": (warnings or ["Could not parse PDF."])[0]}), 422
-    return jsonify({"success": True, "source": "parsed", "warnings": warnings, **data})
+    return jsonify({"success": True, "source": "parsed", "warnings": warnings,
+                    "confidence": confidence, **data})
 
 
 @flow_bp.errorhandler(413)
