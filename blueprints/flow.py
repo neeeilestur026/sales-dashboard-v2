@@ -226,6 +226,11 @@ def quotation_pdf():
     # than an ISO string, or admin-import-quotation cannot populate its date field from it.
     data["date"] = ph_date_ymd(data.get("date"), default=_s(data.get("date")))
 
+    # A205 — alternative offers. A blank option_no is an ordinary charged line; lines sharing a
+    # non-blank one are mutually exclusive, so only the recommended group counts toward the total.
+    # This is the THIRD total engine (after FlowAPI.gs and flow-api.js) and the only one whose output
+    # is printed on the document the client receives — so getting it wrong here is the version of
+    # this bug that actually reaches them.
     items, images, total_ex_vat = [], {}, 0.0
     for idx, it in enumerate(raw_items, start=1):
         # A173: a non-dict entry used to raise AttributeError HERE, outside the try that wraps the
@@ -234,7 +239,6 @@ def quotation_pdf():
             logger.warning("quotation_pdf: skipping non-dict item at position %s", idx)
             continue
         qty, price = _num(it.get("qty")), _num(it.get("price"))
-        total_ex_vat += qty * price
         items.append({
             "item_no": idx,
             "product_name": _s(it.get("itemName") or it.get("itemNo")),
@@ -248,6 +252,7 @@ def quotation_pdf():
             # replaced them with the supplier's own during sourcing
             "orig_code": _s(it.get("origItemNo")),
             "orig_name": _s(it.get("origItemName")),
+            "option_no": _s(it.get("optionNo")).strip(),   # A205
         })
         img = _decode_data_url(it.get("imageDataUrl"))
         if img:
@@ -278,6 +283,21 @@ def quotation_pdf():
         "payment": _s(doc.get("payment")),
         "warranty": _s(doc.get("warranty")) or "1 year warranty against factory defect",
     }
+    # A205: resolve the recommendation the same way both other engines do — an explicit choice when
+    # it names a real group, otherwise the CHEAPEST. Never the sum.
+    _groups: dict[str, float] = {}
+    for _it in items:
+        _k = _it.get("option_no") or ""
+        if _k:
+            _groups[_k] = _groups.get(_k, 0.0) + _num(_it.get("total_unit_price"))
+    _rec = _s(data.get("recommendedOption")).strip()
+    if _groups and _rec not in _groups:
+        _rec = min(_groups, key=lambda k: _groups[k])
+    if not _groups:
+        _rec = ""
+    total_ex_vat = sum(_num(i.get("total_unit_price")) for i in items
+                       if not i.get("option_no") or i.get("option_no") == _rec)
+
     summary = build_summary_table(total_ex_vat, data.get("vatOption", "inclusive"),
                                   _num(data.get("discountPct")))
 
@@ -286,7 +306,8 @@ def quotation_pdf():
                                               summary, desc_mode=desc_mode, note=_s(doc.get("note")),
                                               scope=_bullets(doc.get("scope")),
                                               exclusions=_bullets(doc.get("exclusions")),
-                                              options=_options(doc.get("options")))
+                                              options=_options(doc.get("options")),
+                                              recommended_option=_rec)
         pdf_bytes = _merge_brochures(pdf_bytes, data.get("brochures"))
         pdf_bytes = _embed_quo_data(pdf_bytes, data)
     except Exception as e:

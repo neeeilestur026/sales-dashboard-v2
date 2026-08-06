@@ -136,6 +136,14 @@ DISCLAIMER = ("This quotation was prepared electronically and is valid without a
               "Prices are quoted in Philippine Pesos unless otherwise stated.")
 
 
+def _num_key(v):
+    """A205 — order option keys numerically so 10 follows 2 rather than preceding it."""
+    try:
+        return float(str(v).strip())
+    except (TypeError, ValueError):
+        return float("inf")
+
+
 def _fmt(n):
     try:
         return f"{float(n):,.2f}"
@@ -408,6 +416,25 @@ class _QuoTemplate(BaseDocTemplate):
 
 
 # ── Public API (route contract unchanged) ─────────────────────────────────────
+def _alt_row_styles(span_rows):
+    """A205 — SPAN the banner and per-option subtotal rows across all five columns and tint them, so
+    they read as section furniture rather than as another priced line. ROWBACKGROUNDS zebra-stripes
+    every body row, so each of these needs its own BACKGROUND to override it; without that a subtotal
+    can land on a white stripe and look exactly like an item."""
+    out = []
+    for ri, kind in span_rows or []:
+        out.append(("SPAN", (0, ri), (-1, ri)))
+        # ACCENT_SOFT is the existing red-on-white tint used elsewhere for accent panels; the
+        # subtotal uses the neutral card tint so the eye reads banner > subtotal > item.
+        out.append(("BACKGROUND", (0, ri), (-1, ri),
+                    ACCENT_SOFT if kind == "banner" else CARD_A))
+        out.append(("TOPPADDING", (0, ri), (-1, ri), 7 * PX))
+        out.append(("BOTTOMPADDING", (0, ri), (-1, ri), 7 * PX))
+        if kind == "subtotal":
+            out.append(("LINEABOVE", (0, ri), (-1, ri), 0.6, HAIR_EC))
+    return out
+
+
 def build_summary_table(total_ex_vat, vat_option, discount_pct=0):
     """Totals for the summary block. Returns a dict the renderer interprets.
 
@@ -580,12 +607,20 @@ def _options_block(label, options, width):
 
 def build_quotation_pdf_bytes(items, images, client_details, terms_and_conditions,
                               summary_table_data, desc_mode="short", note="",
-                              scope=None, exclusions=None, options=None):
+                              scope=None, exclusions=None, options=None,
+                              recommended_option=""):
     """Render the quotation PDF (v2 layout) and return its bytes.
 
     `scope` / `exclusions` are lists of {"text", "bold"}; `options` a list of
     {"text", "price"}. Each renders only when non-empty, so callers that omit them
-    get byte-identical output to before."""
+    get byte-identical output to before.
+
+    A205 — an item may carry `option_no`. Blank means an ordinary charged line. Lines sharing a
+    non-blank value are MUTUALLY EXCLUSIVE alternatives: they print under an ALTERNATIVE OFFERS
+    banner, each group with its own VAT subtotal, and the client picks one. `recommended_option`
+    names the group the document total was built from. With no tagged items none of this engages and
+    the output is byte-identical to before — which matters, because ~100 live quotations depend on
+    that path being untouched."""
     cd = client_details or {}
     desc_mode = (desc_mode or "").strip().lower()          # "short" hides description sub-lines
     terms = terms_and_conditions or {}
@@ -680,12 +715,67 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     price_st = _ps("itPrice", 12.5, BODY2, align=2)
     amt_st = _ps("itAmt", 12.5, HEADING, LATO_B, align=2)
     offer_label_st = _ps("offerLb", 9.5, ACCENT_DARK, LATO_B, leading_mult=1.25)
+    # A205 — alternative-offer chrome
+    alt_banner_st = _ps("altBan", 11, ACCENT_DARK, ARCH_B, leading_mult=1.3)
+    alt_badge_st = _ps("altBadge", 9.5, ACCENT_DARK, LATO_B, align=1, leading_mult=1.2)
+    alt_sub_st = _ps("altSub", 11, HEADING, LATO_B, align=2, leading_mult=1.3)
+
+    # A205 — split base lines from the mutually exclusive alternatives, then lay the table out as
+    # base rows → banner → each option's rows → that option's own VAT subtotal. Markers are injected
+    # into the SAME row list so the existing column widths, header gradient and page-splitting all
+    # apply unchanged; a second table would have had to reproduce every one of them.
+    _opt_key = lambda x: str((x or {}).get("option_no") or "").strip()
+    base_items = [i for i in items if not _opt_key(i)]
+    opt_order, opt_map = [], {}
+    for i in items:
+        k = _opt_key(i)
+        if not k:
+            continue
+        if k not in opt_map:
+            opt_map[k] = []
+            opt_order.append(k)
+        opt_map[k].append(i)
+    opt_order.sort(key=lambda k: (_num_key(k), k))
+    rec_key = str(recommended_option or "").strip()
+    if opt_order and rec_key not in opt_map:
+        rec_key = min(opt_order, key=lambda k: sum(float(x.get("total_unit_price") or 0) for x in opt_map[k]))
+
+    ordered = list(base_items)
+    if opt_order:
+        ordered.append({"_marker": "banner"})
+        for k in opt_order:
+            ordered.extend(opt_map[k])
+            ordered.append({"_marker": "subtotal", "_key": k})
+    span_rows = []          # (row_index, kind) filled as the rows are appended
+    # The index column is sized for "01". An OPTION badge does not fit and silently CLIPS to "OPT",
+    # taking the ★ with it — so widen it, but only when options exist, so a quotation without them
+    # keeps the exact column geometry (and therefore the identical output) it has today.
+    if opt_order:
+        col_w[0] = 96 * PX
+        col_w[1] = CONTENT_W - col_w[0] - col_w[2] - col_w[3] - col_w[4]
 
     def model_line(code):
         return (f"<font color='{_hx(LABELB)}'>Model No.</font> "
                 f"<font color='{_hx(MUTED8)}'>{_esc(code)}</font>")
 
-    for it in items:
+    for it in ordered:
+        mk = it.get("_marker")
+        if mk == "banner":
+            span_rows.append((len(rows), "banner"))
+            rows.append([Paragraph(
+                "<b>ALTERNATIVE OFFERS</b> &nbsp;— the options below are alternatives; "
+                "please select one. Prices are not cumulative.", alt_banner_st), "", "", "", ""])
+            continue
+        if mk == "subtotal":
+            k = it.get("_key")
+            g_ex = sum(float(x.get("total_unit_price") or 0) for x in opt_map[k])
+            g_vat = g_ex * 0.12
+            span_rows.append((len(rows), "subtotal"))
+            rows.append([Paragraph(
+                f"Total (VAT Excl.) PHP {_fmt(g_ex)} &nbsp;·&nbsp; VAT (12%) PHP {_fmt(g_vat)}"
+                f" &nbsp;·&nbsp; <font color='{_hx(ACCENT_DARK)}'>Total (VAT Inc.) "
+                f"PHP {_fmt(g_ex + g_vat)}</font>", alt_sub_st), "", "", "", ""])
+            continue
         no = it.get("item_no")
         name = str(it.get("product_name") or "").strip()
         code = str(it.get("product_code") or "").strip()
@@ -757,7 +847,17 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             idx_txt = str(no)
         qty_cell = [Paragraph(f"{float(it.get('quantity') or 0):.1f}", qty_st),
                     Paragraph(str(it.get("uom") or "pc(s)"), uom_st)]
-        rows.append([Paragraph(idx_txt, idx_st), desc_cell, qty_cell,
+        _k = _opt_key(it)
+        if _k:
+            idx_cell = Paragraph(
+                # No ★ here: the glyph is absent from the Helvetica fallback used when Lato/Archivo
+                # are unavailable, and a missing glyph takes the whole <font> run with it — the label
+                # vanished entirely. Plain words render in every font this document can fall back to.
+                f"OPTION {_esc(_k)}" + ("<br/><font size='6.5'>RECOMMENDED</font>" if _k == rec_key else ""),
+                alt_badge_st)
+        else:
+            idx_cell = Paragraph(idx_txt, idx_st)
+        rows.append([idx_cell, desc_cell, qty_cell,
                      Paragraph(_fmt(it.get("total_amount")), price_st),
                      Paragraph(_fmt(it.get("total_unit_price")), amt_st)])
 
@@ -779,7 +879,8 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         ("LINEBELOW", (0, 1), (-1, -1), 1, HAIR_F0),
         ("LEFTPADDING", (0, 0), (-1, -1), 8 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 8 * PX),
         ("TOPPADDING", (0, 0), (-1, 0), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 10 * PX),
-        ("TOPPADDING", (0, 1), (-1, -1), 8 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 8 * PX)]))
+        ("TOPPADDING", (0, 1), (-1, -1), 8 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 8 * PX)]
+        + _alt_row_styles(span_rows)))
     story.append(items_tbl)
     story.append(Spacer(1, 10 * PX))
 
