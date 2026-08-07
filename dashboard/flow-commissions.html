@@ -86,7 +86,9 @@
 
     <div id="flowNav" class="flow-nav"></div>
 
-    <div class="kpi-row four">
+    <div id="cmComingSoon" style="display:none;"></div>
+
+    <div class="kpi-row four" id="cmKpis">
       <div class="kpi"><div class="top"><span class="l">Claimable now</span></div><div class="v sm" id="kpiClaimable">—</div><div class="d">collected, unclaimed cash</div></div>
       <div class="kpi"><div class="top"><span class="l">Awaiting approval</span></div><div class="v" id="kpiPending">—</div><div class="d">with the director / management</div></div>
       <div class="kpi"><div class="top"><span class="l">Approved</span></div><div class="v sm" id="kpiApproved">—</div><div class="d">due in a coming cutoff</div></div>
@@ -113,7 +115,7 @@
       <div id="claimMsg" class="flow-msg" style="display:none;"></div>
     </div>
 
-    <div class="chart-card">
+    <div class="chart-card" id="cmListCard">
       <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
         <h3>My commission requests</h3>
         <button class="btn btn-sm" onclick="cmLoadAll()">Refresh</button>

@@ -13,6 +13,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!crSession) return;
   renderNavbar('commission-rates');
 
+/* A209 — the feature is built but not open to users yet. Checked BEFORE the version gate, because
+   the version gate cannot answer this question: these pages want v112 and the A208 email tracker
+   wants 113, which is the same paste. Hiding the CARDS, not just their inner containers — the static
+   rate form — every input and the Save button — would otherwise stay live behind the message. */
+  if (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE) {
+    ['crIntroCard', 'crFormCard'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const panel = document.getElementById('crComingSoon');
+    if (panel) {
+      panel.style.display = '';
+      panel.innerHTML = flowComingSoonHtml('Commission rates',
+        'This is where the company percentage will be set — one rate for everyone, or different ' +
+        'rates per salesperson, per customer, or by claim size. Nothing can be approved until it is set.');
+    }
+    return;
+  }
+
   const ready = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(112) : false;
   if (!ready) {
     document.getElementById('crList').innerHTML =

@@ -239,6 +239,39 @@ function flowMoney(v, cur) {
 /** True when the DEPLOYED FlowAPI is at least version n. The Apps Script backend is redeployed by
  *  hand, so a feature can be live in the front-end before its actions exist — an unknown action
  *  answers HTTP 200 with {success:false}, never a throw. Memoized; false on any error. */
+/* ── A209: is the commission feature open to users yet? ─────────────────────
+   NOT a version gate, deliberately. The commission pages gate on flowVersionAtLeast(112) and the
+   email tracker needs 113 — the same paste — so deploying the tracker would have switched
+   commissions on with it, and every "not switched on yet" message in those files would have become
+   unreachable at exactly the moment it was needed. "Is this feature finished" and "which backend is
+   deployed" stopped being the same question, so they get different mechanisms.
+
+   Synchronous and local on purpose: no fetch, no promise, no window where half the page has decided
+   one way and half the other.
+
+   TO LAUNCH, both together:
+     1. set this to true
+     2. set `var _COMM_LIVE = true;` in apps-script/FlowAPI.gs, bump FLOW_VERSION, and paste it
+   The backend refuses every commission action on its own, so flipping only this one changes
+   nothing a user can reach — which is the intended failure direction. */
+const FLOW_COMMISSIONS_LIVE = false;
+
+/** The muted "Soon" tag on a menu entry for a feature that is visible but not open yet. */
+function flowSoonTag() {
+  return ' <span style="font-size:0.7em;font-weight:600;opacity:0.6;letter-spacing:0.03em;">SOON</span>';
+}
+
+/** One panel, used by all three commission screens, so the promise is worded once. */
+function flowComingSoonHtml(title, body) {
+  return `<div style="padding:1.6rem 1.4rem;border-radius:14px;background:#f8fafc;
+      border:1px solid var(--border,#e2e8f0);text-align:center;">
+      <div style="font:700 1rem/1.4 'Inter',system-ui,sans-serif;color:#1e293b;">${title} — coming soon</div>
+      <p style="margin:0.55rem auto 0;max-width:46ch;font:400 0.86rem/1.65 'Inter',system-ui,sans-serif;color:#64748b;">${body}</p>
+      <p style="margin:0.9rem 0 0;font:500 0.78rem 'Inter',system-ui,sans-serif;color:#94a3b8;">
+        We are still building this. Nothing you do elsewhere is affected.</p>
+    </div>`;
+}
+
 let _flowVerPromise = null;
 function flowVersionAtLeast(n) {
   if (!_flowVerPromise) {
@@ -356,8 +389,13 @@ function renderFlowNav(active) {
   ];
   const el = document.getElementById('flowNav');
   if (!el) return;
-  el.innerHTML = links.map(([href, label]) =>
-    `<a href="${href}" class="flow-tab${href === active ? ' active' : ''}">${label}</a>`).join('');
+  /* A209 — this strip is ROLE-BLIND and injected on 20 other flow pages, so an unmarked Commissions
+     pill here would look live to every role no matter what the role navbars say. Easiest leak to
+     miss in the whole feature. */
+  el.innerHTML = links.map(([href, label]) => {
+    const soon = (href === 'flow-commissions.html' && !FLOW_COMMISSIONS_LIVE) ? flowSoonTag() : '';
+    return `<a href="${href}" class="flow-tab${href === active ? ' active' : ''}">${label}${soon}</a>`;
+  }).join('');
 }
 
 /** Standard toast/message into an element. */

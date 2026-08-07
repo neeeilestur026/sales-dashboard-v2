@@ -23,6 +23,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-commissions');
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-commissions.html');
 
+/* A209 — the feature is built but not open to users yet. Checked BEFORE the version gate, because
+   the version gate cannot answer this question: these pages want v112 and the A208 email tracker
+   wants 113, which is the same paste. Hiding the CARDS, not just their inner containers — the static
+   KPI tiles would otherwise stay live behind the message. */
+  if (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE) {
+    ['cmKpis', 'claimCard', 'cmListCard', 'gateCard'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const panel = document.getElementById('cmComingSoon');
+    if (panel) {
+      panel.style.display = '';
+      panel.innerHTML = flowComingSoonHtml('Commission requests',
+        'You will be able to claim commission here on payments a client has actually made against ' +
+        'a sales order that came from one of your quotations. Each claim goes to the director, then ' +
+        'to management, and an approved claim is included in a salary cutoff.');
+    }
+    return;
+  }
+
   /* The Apps Script backend is pasted by hand, so the page can be live before its actions exist.
      An unknown action answers 200 with {success:false} rather than throwing, which would look like
      "you have no commissions" — say plainly what is going on instead. */

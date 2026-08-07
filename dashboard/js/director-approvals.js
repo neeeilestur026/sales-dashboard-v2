@@ -15,6 +15,10 @@
 
 let daItinByNo = {};
 let daCommByNo = {};   // A207
+/** A209 — is the commission feature open to users yet? Defended against load order. */
+function _daCommLive() {
+  return (typeof FLOW_COMMISSIONS_LIVE === 'undefined') || FLOW_COMMISSIONS_LIVE;
+}
 
 function _dae(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
 function _dam(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
@@ -34,7 +38,10 @@ async function daLoad() {
     const [itn, pr, cm] = await Promise.all([
       fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
-      fetchFlow('getCommissionRequests', { status: 'Pending Director' }).catch(() => ({ data: [] })),
+      /* A209 — commissions are not open yet, so do not even ask. Returns the same empty shape the
+         .catch would, which keeps everything downstream on one code path. */
+      (_daCommLive() ? fetchFlow('getCommissionRequests', { status: 'Pending Director' }).catch(() => ({ data: [] }))
+                     : Promise.resolve({ data: [] })),
     ]);
 
     // The director is the FIRST approver on an itinerary and the LAST on a payment request — hence
@@ -43,7 +50,7 @@ async function daLoad() {
     const itins = ((itn && itn.data) || []).filter(x => x.status === 'Pending Director');
     const prs = ((pr && pr.data) || []).filter(x => x.status === 'Pending Director');
     // A207 — the director is the FIRST approver on a commission too, same as an itinerary.
-    const comms = ((cm && cm.data) || []).filter(x => x.status === 'Pending Director');
+    const comms = _daCommLive() ? ((cm && cm.data) || []).filter(x => x.status === 'Pending Director') : [];
     daItinByNo = {}; itins.forEach(x => { daItinByNo[String(x.itineraryNo)] = x; });
     daCommByNo = {}; comms.forEach(x => { daCommByNo[String(x.commNo)] = x; });
 

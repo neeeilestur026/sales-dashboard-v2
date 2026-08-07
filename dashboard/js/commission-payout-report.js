@@ -22,6 +22,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   renderNavbar('commission-payout-report');
 
+/* A209 — the feature is built but not open to users yet. Checked BEFORE the version gate, because
+   the version gate cannot answer this question: these pages want v112 and the A208 email tracker
+   wants 113, which is the same paste. Hiding the CARDS, not just their inner containers — the static
+   period selector, Refresh and Print buttons and the payroll warning would otherwise stay live behind the message. */
+  if (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE) {
+    ['cpMainCard', 'cpAuditCard'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const panel = document.getElementById('cpComingSoon');
+    if (panel) {
+      panel.style.display = '';
+      panel.innerHTML = flowComingSoonHtml('Commissions for payroll',
+        'This will group approved sales commissions by salary cutoff, so you have one figure per ' +
+        'person to enter as Other Income while preparing payroll.');
+    }
+    return;
+  }
+
   const ready = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(112) : false;
   if (!ready) {
     document.getElementById('cpBody').innerHTML =
