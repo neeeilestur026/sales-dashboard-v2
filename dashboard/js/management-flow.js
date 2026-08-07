@@ -268,9 +268,10 @@ function mfViewCommission(no) {
     'Order value            ' + _mfm(x.soTotal) + '\n' +
     'Invoiced to date       ' + _mfm(x.invoicedToDate) + '\n' +
     'Already claimed        ' + _mfm(x.priorClaimed) + '\n' +
-    'This claim (net cash)  ' + _mfm(x.base) + '\n' +
-    'Rate                   ' + x.rate + '%   (' + x.rateBasis + ')\n' +
-    'Commission             ' + _mfm(x.netPayable) + '\n\n' +
+    '-'.repeat(56) + '\n' +
+    // A210: the SOA ladder, so this reads the same as the sheet accounting computes from.
+    (typeof flowCommissionLadder === 'function' ? flowCommissionLadder(x) : _mfm(x.netPayable)) + '\n' +
+    'Rate basis: ' + x.rateBasis + '\n\n' +
     'Approved by the director: ' + (x.dirApprovedBy || '—') + '\n\n' +
     x.coverageNote + '\n'
   );

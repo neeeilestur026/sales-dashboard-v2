@@ -137,9 +137,10 @@ function daViewCommission(no) {
     'Order value            ' + _dam(x.soTotal) + '\n' +
     'Invoiced to date       ' + _dam(x.invoicedToDate) + '\n' +
     'Already claimed        ' + _dam(x.priorClaimed) + '\n' +
-    'This claim (net cash)  ' + _dam(x.base) + '\n' +
-    'Rate                   ' + x.rate + '%   (' + x.rateBasis + ')\n' +
-    'Commission             ' + _dam(x.netPayable) + '\n\n' +
+    '-'.repeat(56) + '\n' +
+    // A210: the SOA ladder, so this reads the same as the sheet accounting computes from.
+    (typeof flowCommissionLadder === 'function' ? flowCommissionLadder(x) : _dam(x.netPayable)) + '\n' +
+    'Rate basis: ' + x.rateBasis + '\n\n' +
     x.coverageNote + '\n'
   );
 }

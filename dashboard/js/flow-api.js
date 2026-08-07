@@ -256,6 +256,33 @@ function flowMoney(v, cur) {
    nothing a user can reach — which is the intended failure direction. */
 const FLOW_COMMISSIONS_LIVE = false;
 
+/* A210 — the commission ladder, in the Statement of Account's own order and wording.
+   Printed identically on the rep's claim, both approval panels and the payout report, so the screen
+   and a printed SOA can be read side by side without translating between them. Plain text, because
+   three of the four callers are alert() panels. */
+function flowCommissionLadder(x, indent) {
+  const p = (v) => flowMoney(v, 'PHP');
+  const i = indent || '';
+  const L = [];
+  L.push(i + 'Collected Amount        ' + p(x.base));
+  if (flowNum(x.poAmount)) {
+    L.push(i + 'Less 12% VAT            −' + p(x.vatDeduction));
+    L.push(i + 'Less local tax 3%       −' + p(x.localTax));
+  }
+  L.push(i + 'Net of Taxes            ' + p(x.netOfTaxes));
+  L.push(i + 'Commission @ ' + flowNum(x.rate) + '%'.padEnd(4) + '     ' + p(x.amount));
+  if (flowNum(x.commissionEwt)) L.push(i + 'Less 1% withholding     −' + p(x.commissionEwt));
+  if (flowNum(x.adjustment)) {
+    const a = flowNum(x.adjustment);
+    L.push(i + 'Adjustment              ' + (a < 0 ? '\u2212' + p(-a) : p(a)));
+  }
+  L.push(i + 'NET PAYABLE             ' + p(x.netPayable));
+  if (x.ladderEstimated) {
+    L.push(i + '(the tax deductions were estimated — this sales order carries no value)');
+  }
+  return L.join('\n');
+}
+
 /** The muted "Soon" tag on a menu entry for a feature that is visible but not open yet. */
 function flowSoonTag() {
   return ' <span style="font-size:0.7em;font-weight:600;opacity:0.6;letter-spacing:0.03em;">SOON</span>';

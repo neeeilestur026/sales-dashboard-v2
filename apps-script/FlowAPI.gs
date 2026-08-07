@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 114;  // A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. To launch: _COMM_LIVE=true here AND FLOW_COMMISSIONS_LIVE=true in dashboard/js/flow-api.js · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 115;  // A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. To launch: _COMM_LIVE=true here AND FLOW_COMMISSIONS_LIVE=true in dashboard/js/flow-api.js · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -254,7 +254,13 @@ var SCHEMA = {
                        'Dir Approved By', 'Dir Approved At', 'Mgmt Approved By', 'Mgmt Approved At',
                        'Approval Note',
                        'Payout Period', 'Payout Period Basis', 'Released By', 'Released At',
-                       'Release Note', 'Integrity Flag'],
+                       'Release Note', 'Integrity Flag',
+                       // A210 — the SOA deduction ladder, stored rung by rung so a claim can be
+                       // audited against a printed Statement of Account line by line.
+                       // Base (PHP) stays the SOA's "Collected Amount"; the rate now multiplies
+                       // Net of Taxes (PHP), and Commission EWT is the sheet's final ×0.99.
+                       'PO Amount (PHP)', 'VAT Deduction (PHP)', 'Local Tax (PHP)',
+                       'Net of Taxes (PHP)', 'Commission EWT (PHP)'],
   // One row per claimed collection. 'Voided At Claim' starts 'false' and is flipped by the integrity
   // audit when accounting voids a collection that a claim already counted.
   CommissionRequestItems: ['Comm No', 'Collection No', 'AR No', 'INV No', 'SO No', 'Customer',
@@ -2052,7 +2058,7 @@ function voidCollection(p) {
      blocked: accounting has a legitimate correction to make and must be able to make it. */
   var claim = _commClaimHolding(p.collectionNo);
   if (claim && !p.confirmCommissionImpact) {
-    var hit = Math.round(claim.netCash * claim.rate) / 100;
+    var hit = _commValueOfCollection(claim);
     return { success: false, needsConfirm: 'commissionClaimed', commNo: claim.commNo,
       claimStatus: claim.status, salesperson: claim.salesperson, commissionImpact: hit,
       message: 'Collection ' + p.collectionNo + ' is claimed on commission ' + claim.commNo + ' (' +
@@ -2074,7 +2080,7 @@ function voidCollection(p) {
   var commMsg = '';
   if (claim) {
     var h = _commRow(claim.commNo);
-    var loss = Math.round(claim.netCash * claim.rate) / 100;
+    var loss = _commValueOfCollection(claim);
     _setCellByKey('CommissionRequestItems', 'Collection No', p.collectionNo, 'Voided At Claim', 'true');
     if (claim.status === 'Released') {
       _commSet(claim.commNo, { 'Integrity Flag': 'Collection ' + p.collectionNo + ' voided AFTER release on ' +
@@ -2082,10 +2088,10 @@ function voidCollection(p) {
       commMsg = ' Commission ' + claim.commNo + ' was already released: ' + _commMoney(loss) +
                 ' must be recovered in a later cutoff.';
     } else {
-      var adj = _num(h && h['Adjustment (PHP)']) - loss;
+      var adj = _commPeso(_num(h && h['Adjustment (PHP)']) - loss);
       _commSet(claim.commNo, {
         'Adjustment (PHP)': adj,
-        'Net Payable (PHP)': _num(h && h['Amount (PHP)']) + adj,
+        'Net Payable (PHP)': _commPeso(_num(h && h['Amount (PHP)']) - _num(h && h['Commission EWT (PHP)']) + adj),
         'Integrity Flag': 'Collection ' + p.collectionNo + ' voided on ' + _dateStr(_now()) + '.'
       });
       commMsg = ' Commission ' + claim.commNo + ' reduced by ' + _commMoney(loss) + '.';
@@ -5988,7 +5994,28 @@ function setFlowSettings(p) {
    by accident, and _commRate reports configured:false, which makes submitCommissionRequest refuse.
    To plug the real number in later: EITHER set this constant, OR add a CommissionRates row (a sheet
    row always wins). Nothing else in this module knows a percentage exists. */
-var _COMM_DEFAULT_RATE = 0;
+var _COMM_DEFAULT_RATE = 2.5;
+
+/* ── A210: the deduction ladder, taken from the real Statement of Account ──────────────────────
+   Source: 2026_003_SOA_GEL_Mincon.xlsx, the sheet Admin/Accounting actually computes commission on.
+   Commission is NOT the rate applied to collected cash — the sheet first strips 12% and 3% of the
+   PO amount, and then takes 1% off the commission itself. Skipping those overpays by ~19%.
+
+   The whole ladder collapses to one constant, which is the fastest way to check a claim by hand:
+
+       Net of Taxes = VAT-exclusive order value × 0.942          (1.11 − 0.168)
+                    = collected cash            × 0.942 / 1.11   (pro-rata)
+
+   _COMM_VAT_ON = 'inclusive' IS DELIBERATE AND IS NOT A BUG. The sheet computes the VAT deduction as
+   12% of the VAT-INCLUSIVE PO amount (PHP 5,188.91 on the sample row) rather than the VAT actually
+   charged (PHP 4,632.95) — about PHP 14 more per PHP 38.6k of sale, taken out of the rep's pay. It
+   was queried and kept as-is so new claims reconcile with historical SOAs. It looks exactly like a
+   slip, so DO NOT "correct" it without asking: doing so silently changes what every rep is paid. */
+var _COMM_VAT_PCT       = 12;            // deducted from the PO amount — see _COMM_VAT_ON
+var _COMM_LOCAL_TAX_PCT = 3;             // local tax, also on the PO amount
+var _COMM_EWT_PCT       = 1;             // withheld from the commission itself (the sheet's ×0.99)
+var _COMM_VAT_ON        = 'inclusive';   // 'inclusive' = 12% of PO amount · 'charged' = the real VAT
+var _COMM_VAT_RATE      = 12;            // the VAT actually added to a sale, for the 'charged' mode
 
 /* 'flat'     — the whole base is multiplied by the winning bracket's rate.
    'marginal' — each bracket's slice is multiplied by its own rate, like income tax.
@@ -6054,6 +6081,9 @@ function _commMap(r) {
     rate: _num(r['Commission Rate %']), rateBasis: String(r['Rate Basis'] || ''),
     amount: _num(r['Amount (PHP)']), adjustment: _num(r['Adjustment (PHP)']),
     netPayable: _num(r['Net Payable (PHP)']),
+    poAmount: _num(r['PO Amount (PHP)']), vatDeduction: _num(r['VAT Deduction (PHP)']),
+    localTax: _num(r['Local Tax (PHP)']), netOfTaxes: _num(r['Net of Taxes (PHP)']),
+    commissionEwt: _num(r['Commission EWT (PHP)']),
     claimedCollections: String(r['Claimed Collections'] || ''),
     collectionCount: _num(r['Collection Count']),
     priorClaimed: _num(r['Prior Claimed (PHP)']), coverageNote: String(r['Coverage Note'] || ''),
@@ -6136,7 +6166,54 @@ function _commClaimedIndex(excludeCommNo) {
 
 /** The base: cash actually received, net of withholding tax. `Amount (PHP)` is what was credited
  *  against the receivable; `EWT (PHP)` is the slice withheld at source. Only the difference is money
- *  in the bank — the same netCash getCollections already publishes. */
+ *  in the bank — the same netCash getCollections already publishes.
+ *  This equals the SOA's "Collected Amount" column exactly. */
+/** The SOA deduction ladder. `collected` is the cash in hand (the SOA's Collected Amount);
+ *  `soTotalExVat` is the order value BEFORE VAT — SalesOrders['Total'] is ex-VAT by A182, being the
+ *  sum of the quotation's already-discounted unit prices.
+ *
+ *  PRO-RATA: a part payment carries its share of the deductions, so three instalments on one order
+ *  sum to exactly the same commission as paying it in one go. Taking the full 15% against the first
+ *  instalment would make an early part payment produce almost nothing.
+ *
+ *  Returns every rung, because a claim has to be auditable against a printed SOA line by line. */
+function _commLadder(collected, soTotalExVat) {
+  var vatPct = _COMM_VAT_PCT / 100, taxPct = _COMM_LOCAL_TAX_PCT / 100, ewtPct = _COMM_EWT_PCT / 100;
+  var ex = _num(soTotalExVat);
+  var poAmount = ex * (1 + _COMM_VAT_RATE / 100);            // the VAT-inclusive order value
+  // What the client is expected to hand over in total: ex-VAT less 1% withholding, plus the VAT.
+  var expected = ex * (1 - ewtPct) + ex * (_COMM_VAT_RATE / 100);
+  var vatBase = (_COMM_VAT_ON === 'charged') ? (ex * _COMM_VAT_RATE / 100) : (poAmount * vatPct);
+  var fraction, basis;
+
+  if (expected > 0) {
+    fraction = _num(collected) / expected;
+    basis = 'pro-rata on the order value';
+  } else {
+    /* No order value on record, so the deductions cannot be apportioned. Fall back to the identity
+       above — exactly right when the payment is proportional, and reported rather than assumed. */
+    fraction = _num(collected) / ((1 - ewtPct) + _COMM_VAT_RATE / 100);
+    var perPeso = ((1 - ewtPct) + _COMM_VAT_RATE / 100 - (1 + _COMM_VAT_RATE / 100) * (vatPct + taxPct));
+    return {
+      poAmount: 0, fraction: 0,
+      vatDeduction: 0, localTax: 0,
+      netOfTaxes: _num(collected) * (perPeso / ((1 - ewtPct) + _COMM_VAT_RATE / 100)),
+      estimated: true,
+      basis: 'estimated — this sales order carries no value, so the tax deductions were apportioned ' +
+             'from the payment itself'
+    };
+  }
+
+  var vatDeduction = vatBase * fraction;
+  var localTax = poAmount * taxPct * fraction;
+  return {
+    poAmount: poAmount, fraction: fraction,
+    vatDeduction: vatDeduction, localTax: localTax,
+    netOfTaxes: _num(collected) - vatDeduction - localTax,
+    estimated: false, basis: basis
+  };
+}
+
 function _commBaseFor(collectionRows) {
   var gross = 0, ewt = 0;
   (collectionRows || []).forEach(function (c) {
@@ -6207,8 +6284,10 @@ function _commRate(ctx) {
   if (!chosen) {
     return {
       rate: _COMM_DEFAULT_RATE, amount: base * _COMM_DEFAULT_RATE / 100,
-      basis: 'Default ' + _COMM_DEFAULT_RATE + '% — no commission rate has been configured yet',
-      configured: false
+      basis: 'Company default ' + _COMM_DEFAULT_RATE + '%',
+      // A210: the rate is known (2.5%), so a claim no longer has to wait for a CommissionRates row.
+      // The guard existed only to stop anything being approved at 0% while the number was unknown.
+      configured: _COMM_DEFAULT_RATE > 0
     };
   }
   var rate = _num(chosen['Rate %']);
@@ -6415,16 +6494,36 @@ function _commDerive(soNo, collectionNos, excludeCommNo, ctx) {
   var soTotal = _num(so['Total']);
   var invoiced = _commInvoicedToDate(soNo, ctx);
   var prior = _commPriorClaimed(soNo, excludeCommNo);
-  var rate = _commRate({ salesperson: who.name, customer: so['Customer'], base: money.base, date: _now() });
+
+  /* A210 — the SOA ladder. The rate multiplies NET OF TAXES, not the collected cash: the sheet
+     strips 12% and 3% of the PO amount first. Rating the cash directly overpays by roughly 19%. */
+  var lad = _commLadder(money.base, soTotal);
+  var rate = _commRate({ salesperson: who.name, customer: so['Customer'],
+                         base: lad.netOfTaxes, date: _now() });
+  var amount = Math.round(rate.amount * 100) / 100;
+  var commEwt = Math.round(amount * (_COMM_EWT_PCT / 100) * 100) / 100;
+
+  var note = _commCoverageNote(soTotal, invoiced, prior, money.base);
+  if (lad.estimated) note += ' ' + lad.basis.charAt(0).toUpperCase() + lad.basis.slice(1) + '.';
 
   return {
     ok: true, so: so, salesperson: who.name, customer: String(so['Customer'] || ''),
     quotationNo: String(so['Quotation No'] || ''),
     soTotal: soTotal, invoiced: invoiced, prior: prior,
     gross: money.gross, ewt: money.ewt, base: money.base,
+    /* Deliberately UNROUNDED. These are the intermediate rungs, and rounding each one costs a
+       centavo per instalment — three part payments would then miss the single-payment figure. The
+       same reasoning as A182's unrounded net unit prices: the totals agreeing matters more than the
+       working looking tidy. Only the figures that are PAID (below) are rounded to the centavo. */
+    poAmount: lad.poAmount,
+    vatDeduction: lad.vatDeduction,
+    localTax: lad.localTax,
+    netOfTaxes: lad.netOfTaxes,
+    ladderBasis: lad.basis, ladderEstimated: !!lad.estimated,
     rate: rate.rate, rateBasis: rate.basis, rateConfigured: rate.configured,
-    amount: Math.round(rate.amount * 100) / 100,
-    coverageNote: _commCoverageNote(soTotal, invoiced, prior, money.base),
+    amount: amount, commissionEwt: commEwt,
+    netPayable: Math.round((amount - commEwt) * 100) / 100,
+    coverageNote: note,
     items: items
   };
 }
@@ -6574,8 +6673,12 @@ function getCommissionPreview(p) {
   if (!d.ok) return { success: false, message: d.message };
   return { success: true, salesperson: d.salesperson, customer: d.customer, soTotal: d.soTotal,
     invoicedToDate: d.invoiced, priorClaimed: d.prior, collectedGross: d.gross, ewt: d.ewt,
-    base: d.base, rate: d.rate, rateBasis: d.rateBasis, rateConfigured: d.rateConfigured,
-    amount: d.amount, coverageNote: d.coverageNote, collectionCount: d.items.length };
+    base: d.base,
+    poAmount: d.poAmount, vatDeduction: d.vatDeduction, localTax: d.localTax,
+    netOfTaxes: d.netOfTaxes, ladderEstimated: d.ladderEstimated,
+    rate: d.rate, rateBasis: d.rateBasis, rateConfigured: d.rateConfigured,
+    amount: d.amount, commissionEwt: d.commissionEwt, netPayable: d.netPayable,
+    coverageNote: d.coverageNote, collectionCount: d.items.length };
 }
 
 // ── Writes ──────────────────────────────────────────────────────────────────
@@ -6612,9 +6715,9 @@ function createCommissionRequest(p) {
     d.base,                               // Base (PHP)
     d.rate,                               // Commission Rate %
     d.rateBasis,                          // Rate Basis
-    d.amount,                             // Amount (PHP)
+    d.amount,                             // Amount (PHP)  — gross, the SOA's commission column
     0,                                    // Adjustment (PHP)
-    d.amount,                             // Net Payable (PHP)
+    d.netPayable,                         // Net Payable (PHP)  — after the 1% commission EWT
     d.items.map(function (c) { return String(c['Collection No']); }).join(', '),  // Claimed Collections
     d.items.length,                       // Collection Count
     '',                                   // Evidence JSON   (written at submit — the frozen snapshot)
@@ -6629,7 +6732,12 @@ function createCommissionRequest(p) {
     '',                                   // Approval Note
     '', '',                               // Payout Period · Payout Period Basis
     '', '', '',                           // Released By · Released At · Release Note
-    ''                                    // Integrity Flag   ← 37 values, last column
+    '',                                   // Integrity Flag
+    d.poAmount,                           // PO Amount (PHP)        ┐ A210 — the SOA ladder,
+    d.vatDeduction,                       // VAT Deduction (PHP)    │ stored rung by rung so a
+    d.localTax,                           // Local Tax (PHP)        │ claim reconciles with a
+    d.netOfTaxes,                         // Net of Taxes (PHP)     │ printed Statement of Account
+    d.commissionEwt                       // Commission EWT (PHP)   ┘ ← 42 values, last column
   ]);
   _commWriteItems(no, d.items);
   _refStore('createCommissionRequest', p.clientRef, no);
@@ -6655,8 +6763,11 @@ function updateCommissionRequest(p) {
     'Salesperson': d.salesperson,
     'SO Total (PHP)': d.soTotal, 'Invoiced To Date (PHP)': d.invoiced,
     'Collected Gross (PHP)': d.gross, 'EWT (PHP)': d.ewt, 'Base (PHP)': d.base,
+    'PO Amount (PHP)': d.poAmount, 'VAT Deduction (PHP)': d.vatDeduction,
+    'Local Tax (PHP)': d.localTax, 'Net of Taxes (PHP)': d.netOfTaxes,
     'Commission Rate %': d.rate, 'Rate Basis': d.rateBasis,
-    'Amount (PHP)': d.amount, 'Net Payable (PHP)': d.amount + _num(r['Adjustment (PHP)']),
+    'Amount (PHP)': d.amount, 'Commission EWT (PHP)': d.commissionEwt,
+    'Net Payable (PHP)': _commPeso(d.netPayable + _num(r['Adjustment (PHP)'])),
     'Claimed Collections': d.items.map(function (c) { return String(c['Collection No']); }).join(', '),
     'Collection Count': d.items.length,
     'Prior Claimed (PHP)': d.prior, 'Coverage Note': d.coverageNote
@@ -6716,8 +6827,11 @@ function submitCommissionRequest(p) {
     'Salesperson': d.salesperson, 'Customer': d.customer, 'Quotation No': d.quotationNo,
     'SO Total (PHP)': d.soTotal, 'Invoiced To Date (PHP)': d.invoiced,
     'Collected Gross (PHP)': d.gross, 'EWT (PHP)': d.ewt, 'Base (PHP)': d.base,
+    'PO Amount (PHP)': d.poAmount, 'VAT Deduction (PHP)': d.vatDeduction,
+    'Local Tax (PHP)': d.localTax, 'Net of Taxes (PHP)': d.netOfTaxes,
     'Commission Rate %': d.rate, 'Rate Basis': d.rateBasis,
-    'Amount (PHP)': d.amount, 'Net Payable (PHP)': d.amount + _num(r['Adjustment (PHP)']),
+    'Amount (PHP)': d.amount, 'Commission EWT (PHP)': d.commissionEwt,
+    'Net Payable (PHP)': _commPeso(d.netPayable + _num(r['Adjustment (PHP)'])),
     'Claimed Collections': nos.join(', '), 'Collection Count': d.items.length,
     'Evidence JSON': JSON.stringify(evidence),
     'Prior Claimed (PHP)': d.prior, 'Coverage Note': d.coverageNote,
@@ -6861,7 +6975,7 @@ function adjustCommissionRequest(p) {
   var note = String(r['Approval Note'] || '');
   _commSet(p.commNo, {
     'Adjustment (PHP)': adj,
-    'Net Payable (PHP)': _num(r['Amount (PHP)']) + adj,
+    'Net Payable (PHP)': _commPeso(_num(r['Amount (PHP)']) - _num(r['Commission EWT (PHP)']) + adj),
     'Approval Note': (note ? note + ' | ' : '') + 'Adjustment ' + _commMoney(adj) + ': ' + String(p.reason)
   });
   return { success: true, commNo: p.commNo, refNo: p.commNo,
@@ -6996,9 +7110,18 @@ function auditCommissionIntegrity() {
       findings.push({ level: 'error', commNo: no,
         message: 'Base is ' + _commMoney(r['Base (PHP)']) + ' but its collections come to ' + _commMoney(childSum) + '.' });
     }
-    if (Math.abs((_num(r['Amount (PHP)']) + _num(r['Adjustment (PHP)'])) - _num(r['Net Payable (PHP)'])) > 0.01) {
+    var expectNet = _num(r['Amount (PHP)']) - _num(r['Commission EWT (PHP)']) + _num(r['Adjustment (PHP)']);
+    if (Math.abs(expectNet - _num(r['Net Payable (PHP)'])) > 0.01) {
       findings.push({ level: 'error', commNo: no,
-        message: 'Net payable ' + _commMoney(r['Net Payable (PHP)']) + ' does not equal amount + adjustment.' });
+        message: 'Net payable ' + _commMoney(r['Net Payable (PHP)']) +
+                 ' does not equal commission less its 1% withholding, plus any adjustment.' });
+    }
+    var ladder = _num(r['Base (PHP)']) - _num(r['VAT Deduction (PHP)']) - _num(r['Local Tax (PHP)']);
+    if (String(r['Status'] || '') !== 'Draft' && _num(r['Net of Taxes (PHP)']) &&
+        Math.abs(ladder - _num(r['Net of Taxes (PHP)'])) > 0.01) {
+      findings.push({ level: 'error', commNo: no,
+        message: 'Net of taxes ' + _commMoney(r['Net of Taxes (PHP)']) + ' does not equal the collected ' +
+                 'cash less the VAT and local-tax deductions — the SOA ladder does not add up.' });
     }
   });
 
@@ -7016,12 +7139,36 @@ function _commClaimHolding(collectionNo) {
     if (String(i['Collection No']) !== String(collectionNo)) return;
     var h = headers[String(i['Comm No'])];
     if (!h || !_COMM_LOCKING[String(h['Status'] || '')]) return;
+    var so = _rows('SalesOrders').filter(function (x) {
+      return String(x['SO No']) === String(h['SO No']);
+    })[0];
     held = { commNo: String(i['Comm No']), status: String(h['Status'] || ''),
       salesperson: String(h['Salesperson'] || ''), netCash: _num(i['Net Cash (PHP)']),
-      rate: _num(h['Commission Rate %']) };
+      rate: _num(h['Commission Rate %']), soTotal: so ? _num(so['Total']) : 0,
+      claimBase: _num(h['Base (PHP)']), claimNetPayable: _num(h['Net Payable (PHP)']) };
   });
   return held;
 }
+
+/** A210 — what a single collection was actually WORTH to a claim, so a void claws back exactly what
+ *  was credited and not a centavo more.
+ *
+ *  Taken as that collection's SHARE OF THE STORED Net Payable, not re-derived from the ladder. Two
+ *  reasons. Multiplying raw cash by the rate — what this did before the ladder existed — reclaims
+ *  roughly 19% more than the rep was ever paid, because the commission was computed AFTER the 12%
+ *  and 3% deductions. And re-running the ladder, while close, rounds independently and lands a
+ *  centavo away from the figure on the record, leaving a claim that can never settle to zero.
+ *  Reversing the record itself is exact by construction. */
+function _commValueOfCollection(claim) {
+  var base = _num(claim.claimBase);
+  if (base <= 0) return 0;
+  var share = _num(claim.netCash) / base;
+  return _commPeso(_num(claim.claimNetPayable) * share);
+}
+
+/** Round to the centavo. Every money value written to a cell goes through this: float noise like
+ *  6553.2699999999995 displays fine but fails a reconciliation against a printed SOA by a hair. */
+function _commPeso(n) { return Math.round(_num(n) * 100) / 100; }
 
 // ════════════════════════════════════════════════════════════════════════════
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)

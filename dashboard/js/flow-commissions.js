@@ -311,11 +311,8 @@ function cmDetail(no) {
     `${r.commNo} — ${r.customer} (${r.soNo})\n` +
     `${'-'.repeat(52)}\n` +
     `Payments claimed:\n${lines.join('\n')}\n\n` +
-    `Claimed cash (net of tax)  ${flowMoney(r.base, 'PHP')}\n` +
-    `Rate                       ${flowNum(r.rate)}%  (${r.rateBasis})\n` +
-    `Commission                 ${flowMoney(r.amount, 'PHP')}\n` +
-    (flowNum(r.adjustment) ? `Adjustment                 ${flowMoney(r.adjustment, 'PHP')}\n` : '') +
-    `Net payable                ${flowMoney(r.netPayable, 'PHP')}\n\n` +
+    flowCommissionLadder(r) + '\n\n' +
+    `Rate basis: ${r.rateBasis}\n\n` +
     `${r.coverageNote}\n` +
     (r.payoutPeriodBasis ? `\n${r.payoutPeriodBasis}\n` : '') +
     (r.integrityFlag ? `\nNOTE: ${r.integrityFlag}\n` : '')

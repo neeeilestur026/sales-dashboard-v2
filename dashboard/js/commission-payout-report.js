@@ -108,7 +108,7 @@ function cpRender(res) {
   let html = '';
   if (payable.length) {
     html += `<table class="cp"><thead><tr>
-      <th>Salesperson</th><th class="num">Claims</th><th class="num">Collected cash</th>
+      <th>Salesperson</th><th class="num">Claims</th><th class="num">Net of taxes</th>
       <th class="num">Commission</th><th class="num">Adjustments</th>
       <th class="num">Enter as Other Income</th><th class="cp-noprint"></th></tr></thead><tbody>`;
     html += payable.map(cpPersonRow).join('');
@@ -142,10 +142,14 @@ function cpRender(res) {
 
 function cpPersonRow(g) {
   const claims = g.payableClaims || [];
-  const base = claims.reduce((s, r) => s + flowNum(r.base), 0);
+  const base = claims.reduce((s, r) => s + flowNum(r.netOfTaxes), 0);   // A210: what the rate multiplies
+  /* A210 — spell out the deductions, so a line here can be checked against a printed SOA without
+     anyone having to remember that the rate does not apply to the collected cash. */
   const detail = claims.map(r =>
     `${flowEsc(r.commNo)} · ${flowEsc(r.soNo)} ${flowEsc(r.customer)} · ` +
-    `${flowMoney(r.base, 'PHP')} @ ${flowNum(r.rate)}% = ${flowMoney(r.amount, 'PHP')}` +
+    `collected ${flowMoney(r.base, 'PHP')} − VAT ${flowMoney(r.vatDeduction, 'PHP')} − tax ${flowMoney(r.localTax, 'PHP')}` +
+    ` = ${flowMoney(r.netOfTaxes, 'PHP')} @ ${flowNum(r.rate)}% = ${flowMoney(r.amount, 'PHP')}` +
+    (flowNum(r.commissionEwt) ? ` − ${flowMoney(r.commissionEwt, 'PHP')} withheld` : '') +
     (flowNum(r.adjustment) ? ` <span class="cp-flag">adjusted ${flowMoney(r.adjustment, 'PHP')}</span>` : '') +
     (r.integrityFlag ? `<br><span class="cp-flag">⚠ ${flowEsc(r.integrityFlag)}</span>` : '')
   ).join('<br>');
@@ -156,7 +160,7 @@ function cpPersonRow(g) {
         <div class="cp-detail">${detail}</div></td>
     <td class="num">${claims.length}</td>
     <td class="num">${flowMoney(base, 'PHP')}</td>
-    <td class="num">${flowMoney(claims.reduce((s, r) => s + flowNum(r.amount), 0), 'PHP')}</td>
+    <td class="num">${flowMoney(claims.reduce((s, r) => s + flowNum(r.amount) - flowNum(r.commissionEwt), 0), 'PHP')}</td>
     <td class="num">${g.adjustments ? flowMoney(g.adjustments, 'PHP') : '—'}</td>
     <td class="num cp-key">${flowMoney(g.payable, 'PHP')}</td>
     <td class="num cp-noprint">${cpCanRelease()
