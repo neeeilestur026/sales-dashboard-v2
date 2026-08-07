@@ -22,6 +22,8 @@ let qDupPairs = [];      // A208: same document number + same customer on two ro
 let qLinks = {};         // A208: quotationNo → its email link rows
 let qCfg = null;         // A208: the follow-up thresholds (director-set, with built-in defaults)
 let qCanTrack = false;   // A208: the email/follow-up backend needs FlowAPI v113
+let qClientEmails = {}; // A208: customer -> the address on file, for the domain signal
+let qClientRefs = {};   // A208: customer -> their own RFQ reference
 
 /* A175 — one quotation page. The Quote Configurator (flow-quote-configurator.js) is the CREATE half
  * above; everything below — the list, review, approval, close/reopen — is this file's.
@@ -122,11 +124,12 @@ async function loadQuotations() {
     /* A208 — the email links and the follow-up thresholds ride along with the existing two fetches.
        Both degrade to empty: the tracker then measures purely on Quotations['Sent At'], which is
        still three of the four things it watches. No IMAP is touched here, ever. */
-    const [res, soRes, linkRes, cfgRes] = await Promise.all([
+    const [res, soRes, linkRes, cfgRes, cliRes] = await Promise.all([
       fetchFlow('getQuotations', params),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),   // A145: which quotations became SOs
       fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
       fetchFlow('getFlowSettings').catch(() => ({ data: null })),
+      fetchFlow('getClients').catch(() => ({ data: [] })),   // A208: the client's own email domain
     ]);
     qList = (res && res.data) || [];
     qHasSO = {};
@@ -137,6 +140,13 @@ async function loadQuotations() {
       if (k) (qLinks[k] = qLinks[k] || []).push(l);
     });
     qCfg = (cfgRes && cfgRes.data) || null;
+    qClientEmails = {}; qClientRefs = {};
+    ((cliRes && cliRes.data) || []).forEach(c => {
+      const k = String(c.customer || '').toLowerCase().trim();
+      if (!k) return;
+      if (c.email) qClientEmails[k] = c.email;
+      if (c.rfqRef) qClientRefs[k] = c.rfqRef;
+    });
     try { qCanClose = await flowVersionAtLeast(91); } catch (e) { qCanClose = false; }  // A152: Close/Reopen need v91
     try { qCanTrack = await flowVersionAtLeast(113); } catch (e) { qCanTrack = false; } // A208
     if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
@@ -393,6 +403,13 @@ function quotationActions(q) {
   if (qCanClose && canClose) {
     if (closed) a += B(`reopenQuotationAction("${no}")`, 'Reopen', 'reopen-btn');
     else if (!wonHasSO) a += B(`openCloseModal("${no}")`, 'Close', 'del-btn');
+  }
+  /* A208 — attach the GoDaddy message that carried this. Only from Approved onward: there is
+     nothing to have emailed before that, and the version gate keeps it hidden until the backend
+     that stores links is actually live. */
+  if (qCanTrack && (st === 'Approved' || st === 'Sent' || Q_CLOSED.indexOf(st) !== -1)) {
+    const n = (qLinks[String(q.quotationNo)] || []).filter(l => String(l.status || 'Active') === 'Active').length;
+    a += B(`qOpenEmailLink("${no}")`, n ? `Email (${n})` : 'Email');
   }
   return a;
 }
@@ -708,4 +725,200 @@ function qPdfSavedTotals(q) {
   }, 0);
   const d = Math.max(0, Math.min(100, flowNum(s.discountPct) || 0));
   return { gross, discountPct: d, net: gross * (1 - d / 100) };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   A208 — attach the email that carried a quotation.
+
+   The system cannot SEND mail (no SMTP anywhere in the repo), so this does not pretend to. The rep
+   sends from GoDaddy webmail as they always have; here they point at the message. That pointer is
+   the only durable record — /api/email/feed keeps nothing — and it is what makes "sent 9 days ago,
+   no reply" answerable.
+
+   The mailbox is read ONCE per modal open, from the cached feed. Nothing on the quotations page
+   touches IMAP on load.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let qeQuotationNo = '';
+let qeMail = [];          // the rep's sent messages
+let qeMailLoaded = false;
+let qeCtx = { clientDomains: {}, dismissed: {}, linked: {} };
+
+function qeClose() { const m = document.getElementById('qeModal'); if (m) m.style.display = 'none'; }
+
+async function qOpenEmailLink(no) {
+  qeQuotationNo = String(no);
+  const q = qList.filter(x => String(x.quotationNo) === qeQuotationNo)[0];
+  const m = document.getElementById('qeModal');
+  if (!m || !q) return;
+  document.getElementById('qeNo').textContent = qeQuotationNo;
+  const fu = flowFollowUp(q, qLinks[qeQuotationNo] || [], qCfg, qHasSO);
+  document.getElementById('qeSub').textContent =
+    `${q.customer} · ${flowMoney(flowQuotationNet(q), 'PHP')} · ${q.status}` +
+    (q.sentAt ? ` · sent ${flowDate(q.sentAt)}` : ' · not recorded as sent yet') +
+    (fu.label ? ` · ${fu.label}` : '');
+  m.style.display = 'flex';
+  flowMsg('qeMsg', '', true);
+  document.getElementById('qeMsg').style.display = 'none';
+  qeRenderLinked();
+  document.getElementById('qeSuggest').innerHTML =
+    '<div style="padding:1.2rem;color:var(--text-muted,#64748b);font-size:0.85rem;">Reading your sent mail…</div>';
+  await qeLoadMail(false);
+}
+
+/** Learned client domains + what is already linked or dismissed anywhere. */
+function qeBuildCtx() {
+  const byNo = {};
+  qList.forEach(q => { byNo[String(q.quotationNo)] = q; });
+  const all = [];
+  Object.keys(qLinks).forEach(k => (qLinks[k] || []).forEach(l => all.push(l)));
+  qeCtx = {
+    clientDomains: (typeof qemLearnDomains === 'function') ? qemLearnDomains(all, byNo) : {},
+    clientEmails: qClientEmails, clientRefs: qClientRefs,
+    dismissed: {}, linked: {}
+  };
+  all.forEach(l => {
+    const id = String(l.messageId || '').toLowerCase();
+    if (!id) return;
+    if (String(l.status) === 'Dismissed' && String(l.quotationNo) === qeQuotationNo) qeCtx.dismissed[id] = true;
+    if (String(l.status) === 'Active') qeCtx.linked[id] = String(l.quotationNo);
+  });
+}
+
+async function qeLoadMail(force) {
+  const box = document.getElementById('qeSuggest');
+  if (qeMailLoaded && !force) { qeRenderSuggest(); return; }
+  box.innerHTML = '<div style="padding:1.2rem;color:var(--text-muted,#64748b);font-size:0.85rem;">Reading your sent mail…</div>';
+  try {
+    const r = await apiFetchEmailFeed('sent', 60, !!force);
+    if (r && r.needsSetup) {
+      box.innerHTML = '<div style="padding:1rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;' +
+        'color:#92400e;font-size:0.85rem;">Your GoDaddy mailbox is not connected' +
+        (r.reconnect ? ' any more (the stored password could not be read)' : '') +
+        '. <a href="email-setup.html">Connect it</a> to attach the emails you sent.</div>';
+      return;
+    }
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not read your mailbox.');
+    qeMail = r.emails || [];
+    qeMailboxAddr = r.godaddyEmail || '';
+    qeMailLoaded = true;
+    qeFetchedAt = r.fetchedAt || '';
+    qeCached = !!r.cached;
+    qeRenderSuggest();
+  } catch (e) {
+    box.innerHTML = `<div style="padding:1rem;color:#b91c1c;font-size:0.85rem;">${flowEsc(e.message)}</div>`;
+  }
+}
+let qeFetchedAt = '', qeCached = false;
+
+function qeRenderLinked() {
+  const el = document.getElementById('qeLinked');
+  const links = (qLinks[qeQuotationNo] || []).filter(l => String(l.status || 'Active') === 'Active');
+  if (!links.length) {
+    el.innerHTML = '<div style="font-size:0.82rem;color:var(--text-muted,#64748b);padding:0.5rem 0;">' +
+      'No email attached yet.</div>';
+    return;
+  }
+  el.innerHTML = '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Attached</div>' +
+    links.map(l => `<div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.5rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:9px;margin-bottom:0.35rem;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.85rem;font-weight:600;">${flowEsc(l.subject || '(no subject)')}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted,#64748b);margin-top:0.15rem;">
+          ${flowEsc(l.to || '')} · ${flowEsc(flowDate(l.sentAt))} · ${flowEsc(l.kind || 'Initial')}
+          ${l.replyAt ? ` · <span style="color:#1d4ed8;font-weight:600;">client replied ${flowEsc(flowDate(l.replyAt))}</span>`
+            : (l.replyCheckedAt ? ' · no reply yet' : ' · reply not checked')}
+        </div>
+      </div>
+      <button class="link-btn del-btn" onclick='qeUnlink("${flowEsc(l.linkId)}")'>remove</button>
+    </div>`).join('');
+}
+
+function qeRenderSuggest() {
+  const box = document.getElementById('qeSuggest');
+  const q = qList.filter(x => String(x.quotationNo) === qeQuotationNo)[0];
+  if (!q || typeof qemRank !== 'function') return;
+  qeBuildCtx();
+  const term = (document.getElementById('qeSearch') || {}).value || '';
+  let pool = qeMail;
+  if (term.trim()) {
+    const t = term.trim().toLowerCase();
+    pool = pool.filter(m => (String(m.subject || '') + ' ' + String(m.recipient || '') +
+      ' ' + (m.recipients || []).map(r => r.addr).join(' ')).toLowerCase().includes(t));
+  }
+  const ranked = qemRank(q, pool, qeCtx).slice(0, term.trim() ? 40 : 8);
+  const confident = !term.trim() && qemIsConfident(qemRank(q, qeMail, qeCtx));
+
+  if (!ranked.length) {
+    box.innerHTML = '<div style="padding:1.2rem;color:var(--text-muted,#64748b);font-size:0.85rem;">' +
+      (qeMail.length ? 'Nothing matches that search.' : 'No sent mail in the last 60 days.') + '</div>';
+    return;
+  }
+  const stamp = qeFetchedAt
+    ? `<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:0.4rem;">Mailbox read ${flowEsc(String(qeFetchedAt).slice(11, 16))}${qeCached ? ' (cached — Refresh for live)' : ' (live)'}</div>`
+    : '';
+  box.innerHTML = stamp + ranked.map((r, i) => {
+    const m = r.msg, id = flowEsc(m.messageId || '');
+    const top = (i === 0 && confident);
+    const already = qeCtx.linked[String(m.messageId || '').toLowerCase()];
+    return `<div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.55rem 0.65rem;border:1px solid ${top ? 'var(--accent,#4f46e5)' : 'var(--border,#e2e8f0)'};border-radius:9px;margin-bottom:0.35rem;${top ? 'box-shadow:0 0 0 3px rgba(79,70,229,0.10);' : ''}">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.85rem;font-weight:600;">${flowEsc(m.subject || '(no subject)')}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted,#64748b);margin-top:0.15rem;">
+          ${flowEsc((m.recipients || []).map(x => x.addr).join(', ') || m.recipient || '')} · ${flowEsc(flowDate(m.sentAt || m.date))}
+        </div>
+        <div style="font-size:0.72rem;color:${already ? '#b45309' : '#475569'};margin-top:0.2rem;">
+          ${already ? 'already attached to ' + flowEsc(already) : flowEsc(r.reasons.join(' · ') || 'no strong signal')}
+        </div>
+      </div>
+      <div style="white-space:nowrap;">
+        <button class="link-btn" onclick='qeLink("${id}")'>${top ? 'Link (suggested)' : 'Link'}</button>
+        <button class="link-btn del-btn" onclick='qeDismiss("${id}")'>not this</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function qeFind(messageId) {
+  return qeMail.filter(m => String(m.messageId) === String(messageId))[0];
+}
+
+async function qeLink(messageId) {
+  const m = qeFind(messageId);
+  if (!m) return;
+  try {
+    const res = await postFlow('linkQuotationEmail', {
+      quotationNo: qeQuotationNo, messageId: m.messageId,
+      sentAt: m.sentAt || m.date || '', subject: m.subject || '',
+      to: (m.recipients || []).map(x => x.addr).join(', ') || m.recipient || '',
+      threadRoot: m.threadRoot || m.messageId, mailboxAddr: qeMailboxAddr || ''
+    });
+    if (!res.success) throw new Error(res.message);
+    flowMsg('qeMsg', res.message, true);
+    await loadQuotations();
+    qeRenderLinked(); qeRenderSuggest();
+  } catch (e) { flowMsg('qeMsg', e.message, false); }
+}
+let qeMailboxAddr = '';
+
+async function qeDismiss(messageId) {
+  const m = qeFind(messageId);
+  if (!m) return;
+  try {
+    const res = await postFlow('dismissQuotationEmail', {
+      quotationNo: qeQuotationNo, messageId: m.messageId,
+      subject: m.subject || '', sentAt: m.sentAt || m.date || ''
+    });
+    if (!res.success) throw new Error(res.message);
+    await loadQuotations();
+    qeRenderSuggest();
+  } catch (e) { flowMsg('qeMsg', e.message, false); }
+}
+
+async function qeUnlink(linkId) {
+  if (!confirm('Detach this email from ' + qeQuotationNo + '?')) return;
+  try {
+    const res = await postFlow('unlinkQuotationEmail', { linkId: linkId });
+    if (!res.success) throw new Error(res.message);
+    await loadQuotations();
+    qeRenderLinked(); qeRenderSuggest();
+  } catch (e) { flowMsg('qeMsg', e.message, false); }
 }

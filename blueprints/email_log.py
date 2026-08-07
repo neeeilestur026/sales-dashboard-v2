@@ -48,6 +48,17 @@ _creds_cache: dict[str, dict] = {}     # username -> { enc_blob, _ts }
 _users_cache: dict = {}                # { users: [...], _ts }
 _sent_mail_cache: dict = {}            # (username, date) -> { emails, meta, addr, _ts }
 
+# A208 — /api/email/feed had NO cache at all: every page load was a fresh IMAP login + SEARCH +
+# FETCH (2-6s), and render.yaml runs two gunicorn workers behind a 120s timeout, so two concurrent
+# mailbox loads could stall quotation saves for everyone. The follow-up tracker would have made that
+# routine. This is the same bounded-TTL dict /api/email/today has used since it was written.
+# The trade-off, stated plainly: a mail sent in the last two minutes may not appear yet. Refresh
+# sends force=true and bypasses it, so "I just sent it" is always one click from correct.
+_FEED_TTL = 120                        # inbox/sent — the folders that actually change
+_FEED_TTL_SPAM = 600                   # spam is not time-critical
+_FEED_CACHE_MAX = 200
+_feed_cache: dict = {}                 # (username, folder, days) -> { payload, _ts }
+
 
 def _email_config_problem() -> Optional[str]:
     """If the server can't do email at all (missing deploy config), return an actionable message.
@@ -180,6 +191,73 @@ def _company_from_email(addr: str) -> str:
         return ""
     base = domain.split(".")[0]
     return base
+
+
+def _norm_msgid(raw) -> str:
+    """'<AbC@Mail>' -> 'abc@mail'. A Message-ID is case-insensitive and half the world quotes it in
+    angle brackets, so every comparison in this file goes through here first."""
+    return str(raw or "").strip().strip("<>").strip().lower()
+
+
+def _msgid_list(raw) -> list[str]:
+    """The References header is a whitespace-separated chain of message-ids, oldest first."""
+    if not raw:
+        return []
+    return [_norm_msgid(t) for t in str(raw).replace(",", " ").split() if t.strip("<> ")]
+
+
+def _addr_list(msg, headers) -> list[dict]:
+    """Every addressee across the given headers, de-duplicated, order preserved.
+
+    A208: the previous code took only the FIRST address off To (or Cc if To was empty). A quotation
+    emailed to a buyer, their manager and a shared purchasing box recorded one of the three, which
+    weakened both the client-domain signal in the suggester and the sender match in reply detection.
+    """
+    seen, out = set(), []
+    for h in headers:
+        raw = _decode_mime(msg.get(h, ""))
+        if not raw:
+            continue
+        for n, a in getaddresses([raw]):
+            a = (a or "").strip().lower()
+            if not a or a in seen:
+                continue
+            seen.add(a)
+            out.append({"name": n or a, "addr": a})
+    return out
+
+
+_SUBJ_PREFIX_RE = re.compile(r"^\s*(?:re|fw|fwd|rv|aw|sv)\s*(?:\[\d+\])?\s*:\s*", re.IGNORECASE)
+
+
+def _norm_subject(s: str) -> str:
+    """Strip any number of Re:/Fw:/Fwd: prefixes and collapse whitespace, for the fallback match."""
+    t = str(s or "")
+    for _ in range(8):                       # bounded: 'Re: Fw: Re:' soup, never an unbounded loop
+        t2 = _SUBJ_PREFIX_RE.sub("", t)
+        if t2 == t:
+            break
+        t = t2
+    return re.sub(r"\s+", " ", t).strip().lower()
+
+
+# A208 — a reply that is not from a person. An out-of-office reading as "the client engaged" would
+# silence the follow-up nudge on a client who never actually replied, which is worse than no
+# detection at all. Auto-Submitted is not in the fetched header set, so this is the practical filter.
+_AUTO_SUBJECT_RE = re.compile(
+    r"out of (the )?office|automatic reply|auto[- ]?reply|autoresponse|undeliverable|"
+    r"delivery (status|has failed|failure)|mail delivery|returned mail|read receipt|"
+    r"vacation (reply|notice)",
+    re.IGNORECASE,
+)
+_AUTO_SENDERS = ("mailer-daemon", "postmaster", "noreply", "no-reply", "donotreply", "do-not-reply")
+
+
+def _is_auto_reply(subject: str, from_addr: str) -> bool:
+    if _AUTO_SUBJECT_RE.search(str(subject or "")):
+        return True
+    local = str(from_addr or "").split("@", 1)[0].lower()
+    return any(local.startswith(x) for x in _AUTO_SENDERS)
 
 
 def _imap_login(addr: str, pwd: str) -> imaplib.IMAP4_SSL:
@@ -412,7 +490,13 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
         # Newest first; cap to protect the gateway timeout on busy mailboxes.
         ids = ids[::-1][:cap]
         id_set = b",".join(ids)
-        typ, msg_data = conn.fetch(id_set, "(BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID)])")
+        # A208 — IN-REPLY-TO/REFERENCES are what make reply detection possible at all, and FLAGS
+        # rides along free in the same round trip.
+        typ, msg_data = conn.fetch(
+            id_set,
+            "(FLAGS BODY.PEEK[HEADER.FIELDS "
+            "(FROM TO CC BCC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])",
+        )
         if typ != "OK" or not msg_data:
             return []
         out = []
@@ -422,7 +506,11 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
             msg = email_pkg.message_from_bytes(part[1])
             subject = _decode_mime(msg.get("Subject", ""))
             date_hdr = msg.get("Date", "")
-            message_id = (msg.get("Message-ID", "") or "").strip("<>")
+            message_id = _norm_msgid(msg.get("Message-ID", ""))
+            in_reply_to = _norm_msgid(msg.get("In-Reply-To", ""))
+            refs = _msgid_list(msg.get("References", ""))
+            thread_root = refs[0] if refs else (in_reply_to or message_id)
+            answered = "\\Answered" in str(part[0])
             try:
                 dt = parsedate_to_datetime(date_hdr) if date_hdr else None
             except (TypeError, ValueError):
@@ -435,16 +523,18 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
             seq = _seq_of(part)
 
             if kind == "sent":
-                raw = (_decode_mime(msg.get("To", "")) or _decode_mime(msg.get("Cc", "")))
-                pname, paddr = "", ""
-                for n, a in (getaddresses([raw]) if raw else []):
-                    if a:
-                        pname, paddr = n, a
-                        break
+                people = _addr_list(msg, ("To", "Cc", "Bcc"))
+                pname = people[0]["name"] if people else ""
+                paddr = people[0]["addr"] if people else ""
                 out.append({
                     "name": pname or paddr, "recipient": paddr,
+                    "recipients": people,                    # A208: all of them, not just the first
                     "company": _company_from_email(paddr),
-                    "subject": subject, "date": iso, "messageId": message_id,
+                    # `sentAt` is an ALIAS of `date`. The two fetches disagreed on the key name and
+                    # existing consumers read `date`, so this adds rather than renames.
+                    "subject": subject, "date": iso, "sentAt": iso, "messageId": message_id,
+                    "inReplyTo": in_reply_to, "references": refs, "threadRoot": thread_root,
+                    "answered": answered,
                     "_seq": seq, "_dt": dt,
                 })
             else:
@@ -456,8 +546,11 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
                         break
                 out.append({
                     "name": fname or faddr, "from": faddr,
+                    "recipients": _addr_list(msg, ("To", "Cc")),
                     "company": _company_from_email(faddr),
-                    "subject": subject, "date": iso, "messageId": message_id,
+                    "subject": subject, "date": iso, "sentAt": iso, "messageId": message_id,
+                    "inReplyTo": in_reply_to, "references": refs, "threadRoot": thread_root,
+                    "answered": answered, "autoReply": _is_auto_reply(subject, faddr),
                     "category": _classify(faddr, fname, subject, my_domain),
                     "_seq": seq, "_dt": dt,
                 })
@@ -513,7 +606,11 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
         # over 50+ messages exceeds Render's gateway timeout (502). INTERNALDATE is a
         # reliable fallback when the Date header is missing/oddly-stamped by webmail.
         id_set = b",".join(ids)
-        typ, msg_data = conn.fetch(id_set, "(INTERNALDATE BODY.PEEK[HEADER.FIELDS (TO CC BCC SUBJECT DATE MESSAGE-ID)])")
+        typ, msg_data = conn.fetch(
+            id_set,
+            "(FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS "
+            "(FROM TO CC BCC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])",
+        )
         if typ != "OK" or not msg_data:
             return []
         out = []
@@ -525,7 +622,7 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
             msg = email_pkg.message_from_bytes(hdr_bytes)
             subject = _decode_mime(msg.get("Subject", ""))
             date_hdr = msg.get("Date", "")
-            message_id = (msg.get("Message-ID", "") or "").strip("<>")
+            message_id = _norm_msgid(msg.get("Message-ID", ""))
             # Prefer the Date header; fall back to the server INTERNALDATE when it's missing/unparseable.
             sent_dt = None
             try:
@@ -809,9 +906,30 @@ def email_feed():
                         "message": "Stored email credentials couldn't be read (the encryption key changed). "
                                    "Reconnect your mailbox."})
     addr, pwd = decrypted
+    # A208 — serve from the short-lived cache unless the caller explicitly asked for fresh. Two
+    # gunicorn workers keep independent copies, so a user can still get a live fetch on the other
+    # worker; that is a smaller problem than every page load being a login.
+    force = bool(body.get("force"))
+    ck = (session["username"], kind, days)
+    ttl = _FEED_TTL_SPAM if kind == "spam" else _FEED_TTL
+    if not force:
+        hit = _feed_cache.get(ck)
+        if hit and (time.time() - hit["_ts"]) < ttl:
+            out = dict(hit["payload"])
+            out["cached"] = True
+            out["fetchedAt"] = hit["fetchedAt"]
+            return jsonify(out)
     try:
         emails = fetch_folder(addr, pwd, kind, days=days)
-        return jsonify({"success": True, "folder": kind, "emails": emails, "godaddyEmail": addr, "days": days})
+        payload = {"success": True, "folder": kind, "emails": emails, "godaddyEmail": addr, "days": days}
+        fetched_at = datetime.now(PH_TZ).isoformat()
+        if len(_feed_cache) >= _FEED_CACHE_MAX:
+            _feed_cache.pop(next(iter(_feed_cache)), None)
+        _feed_cache[ck] = {"payload": payload, "_ts": time.time(), "fetchedAt": fetched_at}
+        out = dict(payload)
+        out["cached"] = False
+        out["fetchedAt"] = fetched_at
+        return jsonify(out)
     except imaplib.IMAP4.error as exc:
         _creds_cache.pop(session["username"], None)
         return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
@@ -819,6 +937,174 @@ def email_feed():
         # Transient IMAP/network failures are an expected condition, not a server fault —
         # return structured JSON (200) like /api/email/today so the UI shows the message cleanly.
         logger.warning("email_feed error: %s", exc)
+        return jsonify({"success": False, "message": str(exc)})
+
+
+def fetch_thread_state(addr: str, pwd: str, message_ids, days: int = 60) -> dict:
+    """Which of OUR sent messages the client has replied to.
+
+    ONE login, two folder selects — the sent copies live in the rep's Sent folder and the replies
+    land in their Inbox, so both are in the same mailbox and a second connection would be waste.
+
+    Matching, in order:
+      1. Strict RFC: our Message-ID appears in the reply's References chain or In-Reply-To.
+      2. Fallback: normalised subject equal, the sender is one of the people we wrote to (or shares
+         their domain), and the reply is LATER than what we sent. Plenty of corporate mailers strip
+         References, and without this they would all read as silence.
+
+    Auto-replies are excluded. An out-of-office counting as engagement would switch off the nudge on
+    a client who never actually replied — the one failure mode that makes the feature worse than
+    nothing. Returns { messageId: {repliedAt, repliedFrom, replySubject} } for matches only.
+    """
+    wanted = {_norm_msgid(m) for m in (message_ids or []) if _norm_msgid(m)}
+    if not wanted:
+        return {}
+    out: dict = {}
+    conn = _imap_login(addr, pwd)
+    try:
+        since = (datetime.now(PH_TZ) - timedelta(days=max(1, int(days)))).strftime("%d-%b-%Y")
+
+        # Our own sent copies first, so a subject/recipient fallback has something to compare with.
+        ours: dict = {}
+        if _select_sent(conn):
+            for m in _fetch_headers(conn, since):
+                mid = m["messageId"]
+                if mid in wanted:
+                    ours[mid] = m
+
+        if not _select_folder(conn, "inbox"):
+            return out
+        for r in _fetch_headers(conn, since):
+            if _is_auto_reply(r["subject"], r["from"]):
+                continue
+            chain = set(r["references"]) | ({r["inReplyTo"]} if r["inReplyTo"] else set())
+            hit = next((m for m in wanted if m in chain), None)
+            if hit is None:
+                hit = _subject_fallback(r, ours)
+            if hit is None:
+                continue
+            prev = out.get(hit)
+            if prev and str(prev.get("repliedAt") or "") <= str(r["date"] or ""):
+                continue            # keep the EARLIEST reply — that is when they came back
+            out[hit] = {"repliedAt": r["date"], "repliedFrom": r["from"], "replySubject": r["subject"]}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        try:
+            conn.logout()
+        except Exception:
+            pass
+    return out
+
+
+def _subject_fallback(reply: dict, ours: dict):
+    """Same conversation by subject + who it is from + it came after. Used only when the thread
+    headers are missing, which is common enough that omitting it would report false silence."""
+    rsub = _norm_subject(reply.get("subject"))
+    if not rsub:
+        return None
+    sender = str(reply.get("from") or "").lower()
+    sender_domain = sender.split("@", 1)[1] if "@" in sender else ""
+    for mid, m in ours.items():
+        if _norm_subject(m.get("subject")) != rsub:
+            continue
+        if str(reply.get("date") or "") <= str(m.get("date") or ""):
+            continue                       # a "reply" that predates the send is clock skew, not a reply
+        people = {p["addr"] for p in (m.get("recipients") or [])}
+        if sender in people:
+            return mid
+        if sender_domain and any(sender_domain == p.split("@", 1)[-1] for p in people):
+            return mid                     # a colleague of the person we wrote to still counts
+    return None
+
+
+def _fetch_headers(conn, since: str, cap: int = 400) -> list[dict]:
+    """Header-only sweep of the CURRENTLY SELECTED folder. Bodies and attachments are never
+    fetched — by design, and the privacy notice on the setup page says so."""
+    typ, data = conn.search(None, f"SINCE {since}")
+    if typ != "OK" or not data or not data[0]:
+        return []
+    ids = data[0].split()[::-1][:cap]
+    if not ids:
+        return []
+    typ, msg_data = conn.fetch(
+        b",".join(ids),
+        "(BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])",
+    )
+    if typ != "OK" or not msg_data:
+        return []
+    out = []
+    for part in msg_data:
+        if not isinstance(part, tuple) or len(part) < 2:
+            continue
+        msg = email_pkg.message_from_bytes(part[1])
+        date_hdr = msg.get("Date", "")
+        try:
+            dt = parsedate_to_datetime(date_hdr) if date_hdr else None
+        except (TypeError, ValueError):
+            dt = None
+        if dt is not None and dt.tzinfo is None:
+            dt = dt.replace(tzinfo=PH_TZ)
+        frm = ""
+        for _n, a in getaddresses([_decode_mime(msg.get("From", ""))] or []):
+            if a:
+                frm = a.lower()
+                break
+        out.append({
+            "messageId": _norm_msgid(msg.get("Message-ID", "")),
+            "inReplyTo": _norm_msgid(msg.get("In-Reply-To", "")),
+            "references": _msgid_list(msg.get("References", "")),
+            "subject": _decode_mime(msg.get("Subject", "")),
+            "from": frm,
+            "recipients": _addr_list(msg, ("To", "Cc")),
+            "date": dt.astimezone(PH_TZ).isoformat() if dt else date_hdr,
+        })
+    return out
+
+
+@email_log_bp.route("/api/email/quotation-threads", methods=["POST"])
+def email_quotation_threads():
+    """Has the client replied to any of these sent messages? Scoped to the caller's own mailbox,
+    exactly like /api/email/feed — there is deliberately no `user` parameter."""
+    _cfg = _email_config_problem()
+    if _cfg:
+        return jsonify({"success": False, "message": _cfg}), 503
+    body = request.get_json(silent=True) or {}
+    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
+    session = _validate_session(token)
+    if not session:
+        return jsonify({"success": False, "message": "Invalid session"}), 401
+    ids = body.get("messageIds") or []
+    if not isinstance(ids, list):
+        return jsonify({"success": False, "message": "messageIds must be a list"}), 400
+    ids = [str(x) for x in ids][:500]
+    if not ids:
+        return jsonify({"success": True, "replies": {}, "checkedAt": datetime.now(PH_TZ).isoformat()})
+    try:
+        days = max(1, min(180, int(body.get("days", 60))))
+    except (TypeError, ValueError):
+        days = 60
+    enc_blob = _get_enc_creds(session["username"])
+    if not enc_blob:
+        return jsonify({"success": True, "needsSetup": True, "replies": {}})
+    decrypted = _decrypt(enc_blob)
+    if not decrypted:
+        _creds_cache.pop(session["username"], None)
+        return jsonify({"success": True, "needsSetup": True, "reconnect": True, "replies": {},
+                        "message": "Stored email credentials couldn't be read. Reconnect your mailbox."})
+    addr, pwd = decrypted
+    try:
+        replies = fetch_thread_state(addr, pwd, ids, days=days)
+        return jsonify({"success": True, "replies": replies, "godaddyEmail": addr,
+                        "checkedAt": datetime.now(PH_TZ).isoformat()})
+    except imaplib.IMAP4.error as exc:
+        _creds_cache.pop(session["username"], None)
+        return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
+    except Exception as exc:
+        # A failure here must read as "we could not check", never as "there was no reply".
+        logger.warning("email_quotation_threads error: %s", exc)
         return jsonify({"success": False, "message": str(exc)})
 
 

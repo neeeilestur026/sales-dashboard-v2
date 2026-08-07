@@ -480,8 +480,10 @@ async function apiFetchEmailLogToday(user, date) {
 }
 
 /** Fetch a recent feed from a GoDaddy folder ('inbox' | 'sent' | 'spam'); inbox/spam classified. */
-async function apiFetchEmailFeed(folder, days) {
-  return _flaskFetch('/api/email/feed', { folder, days: days || 14 });
+async function apiFetchEmailFeed(folder, days, force) {
+  // A208: `force` bypasses the server's 2-minute feed cache — what the Refresh button sends, so
+  // "I sent it a minute ago" is always one click from being true.
+  return _flaskFetch('/api/email/feed', { folder, days: days || 14, force: !!force });
 }
 
 /** Oversight-only user roster [{username, fullName, role}] for the sent-email aggregation.

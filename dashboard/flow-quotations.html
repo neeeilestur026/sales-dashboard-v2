@@ -322,6 +322,28 @@
   </div>
 
   <!-- A152: close a not-pursued quotation (soft) -->
+  <!-- A208: attach the GoDaddy message that actually carried this quotation. -->
+  <div class="flow-modal-overlay" id="qeModal" style="display:none;align-items:center;justify-content:center;">
+    <div class="flow-modal" style="max-width:760px;">
+      <div class="flow-modal-head">
+        <h3 style="margin:0;">Email for <span id="qeNo" style="color:var(--accent,#4f46e5);"></span></h3>
+        <button class="link-btn" onclick="qeClose()" style="font-size:1.2rem;">&times;</button>
+      </div>
+      <div id="qeSub" style="font-size:0.8rem;color:var(--text-muted,#64748b);margin:-0.3rem 0 0.7rem;"></div>
+      <div id="qeLinked" style="margin-bottom:0.8rem;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+        <h4 style="margin:0;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);">From your sent mail</h4>
+        <div style="display:flex;gap:0.4rem;align-items:center;">
+          <input type="text" id="qeSearch" placeholder="search subject or address…" oninput="qeRenderSuggest()"
+                 style="padding:0.35rem 0.55rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);font-size:0.8rem;min-width:190px;">
+          <button class="btn btn-sm" onclick="qeLoadMail(true)">&#8635; Refresh from mailbox</button>
+        </div>
+      </div>
+      <div id="qeSuggest" style="margin-top:0.5rem;max-height:46vh;overflow-y:auto;"></div>
+      <div id="qeMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+  </div>
+
   <div class="flow-modal-overlay" id="qCloseModal" style="display:none;align-items:center;justify-content:center;">
     <div class="flow-modal" style="max-width:460px;">
       <div class="flow-modal-head"><h3 style="margin:0;">Close quotation <span id="qCloseNo" style="color:var(--accent,#4f46e5);"></span></h3></div>
@@ -348,6 +370,7 @@
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
+  <script src="js/quotation-email-match.js"></script>
   <script src="js/flow-quote-configurator.js"></script>
   <script src="js/flow-quotations.js"></script>
 
