@@ -876,6 +876,131 @@ function flowQuotationRollup(list, hasSO) {
   return out;
 }
 
+/* ── A208 follow-up ─────────────────────────────────────────────────────────
+   How long a quotation has been sitting with a client, and whether that is a problem yet.
+
+   THE CLOCK RUNS ON LAST CONTACT, NOT ON FIRST SEND. A rep who sent a chase this morning must not
+   still be told the quotation is nine days overdue — a tracker that nags about work you have just
+   done is one people stop reading within a week.
+
+   Three of the four things this drives need no mailbox at all: "approved but never sent",
+   "sent with no sales order", and "days since sent" all come from Quotations['Sent At'], which
+   sendQuotation stamps. Only reply detection needs IMAP, and when that is unavailable the state
+   degrades to 'unknown' — which SUPPRESSES the nudge rather than asserting "no reply". */
+const FLOW_FOLLOWUP_DEFAULTS = {
+  quotationFollowUpDays: 7,
+  quotationNoSODays: 14,
+  approvedNotSentDays: 2
+};
+
+/** Whole days between two 'yyyy-MM-dd' dates, Manila. Negative when `from` is in the future. */
+function flowDaysBetween(from, to) {
+  const a = flowDate(from), b = flowDate(to || flowToday());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b)) return null;
+  return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+}
+
+/** q + its email links -> { state, days, sentAt, lastContactAt, threshold, label, reason }
+ *
+ *  state:  'not-applicable' — draft/in-approval/closed/won: nothing to chase
+ *          'not-sent'       — approved and sitting unsent
+ *          'ok'             — sent recently enough
+ *          'due'            — past the threshold
+ *          'overdue'        — well past it
+ *          'replied'        — the client came back; it is the rep's move, not a chase
+ *          'unknown'        — we cannot see the mailbox, so we will not claim there was no reply
+ */
+function flowFollowUp(q, links, cfg, hasSO) {
+  const c = Object.assign({}, FLOW_FOLLOWUP_DEFAULTS, cfg || {});
+  const bucket = flowQuotationBucket(q, hasSO);
+  const out = { state: 'not-applicable', days: null, sentAt: '', lastContactAt: '',
+                threshold: flowNum((q || {}).followUpDays) || c.quotationFollowUpDays,
+                label: '', reason: '' };
+
+  if (bucket === 'closed' || bucket === 'won') return out;
+
+  if (bucket === 'approved') {
+    const age = flowDaysBetween(q.approvedAt || q.date, flowToday());
+    if (age !== null && age >= c.approvedNotSentDays) {
+      out.state = 'not-sent'; out.days = age;
+      out.label = `approved ${age}d ago, not sent`;
+      out.reason = 'Approved and ready, but it has not gone to the client yet.';
+    }
+    return out;
+  }
+  if (bucket !== 'sent') return out;                      // internal work is not chased
+
+  const live = (links || []).filter(l => String(l.status || 'Active') === 'Active');
+  out.sentAt = flowDate(q.sentAt) || (live.length ? flowDate(live[0].sentAt) : '');
+
+  /* Last contact = the most recent thing that happened either way. A chase we sent counts, and so
+     does a reply they sent — both mean the relationship is not stale right now. */
+  let last = out.sentAt, replied = null;
+  live.forEach(l => {
+    const s = flowDate(l.sentAt);
+    if (s && (!last || s > last)) last = s;
+    const r = flowDate(l.replyAt);
+    if (r && (!replied || r > replied)) replied = r;
+    if (r && (!last || r > last)) last = r;
+  });
+  out.lastContactAt = last || '';
+
+  if (!out.sentAt) {
+    // Marked Sent but with no date — an older record from before the stamp existed.
+    out.state = 'unknown';
+    out.label = 'sent date unknown';
+    out.reason = 'This was marked sent before the system recorded when — link its email to fix that.';
+    return out;
+  }
+
+  if (replied) {
+    out.state = 'replied';
+    out.days = flowDaysBetween(replied, flowToday());
+    out.label = `client replied ${out.days}d ago`;
+    out.reason = 'The client has come back — this needs your answer, not a chase.';
+    return out;
+  }
+
+  /* If the rep HAS linked an email but the reply check is stale — mailbox disconnected, password
+     rotated, key changed — say so instead of asserting silence. Claiming "no reply" when we simply
+     cannot see is how a tracker loses trust. */
+  const checked = live.map(l => flowDate(l.replyCheckedAt)).filter(Boolean).sort();
+  if (live.length && checked.length) {
+    const since = flowDaysBetween(checked[checked.length - 1], flowToday());
+    if (since !== null && since > 3) {
+      out.state = 'unknown'; out.days = flowDaysBetween(out.lastContactAt, flowToday());
+      out.label = 'reply state unknown';
+      out.reason = 'We have not been able to read the mailbox recently, so we cannot tell whether the client replied.';
+      return out;
+    }
+  }
+
+  out.days = flowDaysBetween(out.lastContactAt, flowToday());
+  if (out.days === null) { out.state = 'unknown'; return out; }
+  if (out.days < out.threshold) {
+    out.state = 'ok';
+    out.label = `${out.days}d, no reply`;
+  } else if (out.days < out.threshold * 2) {
+    out.state = 'due';
+    out.label = `${out.days}d, follow up`;
+    out.reason = `No contact for ${out.days} days — due a follow-up.`;
+  } else {
+    out.state = 'overdue';
+    out.label = `${out.days}d, no reply`;
+    out.reason = `No contact for ${out.days} days — well past the ${out.threshold}-day mark.`;
+  }
+  return out;
+}
+
+/** Sent long enough ago with still no sales order — chase it or close it as lost. */
+function flowNoOrderYet(q, cfg, hasSO) {
+  const c = Object.assign({}, FLOW_FOLLOWUP_DEFAULTS, cfg || {});
+  if (flowQuotationBucket(q, hasSO) !== 'sent') return null;
+  const days = flowDaysBetween(q.sentAt, flowToday());
+  if (days === null || days < c.quotationNoSODays) return null;
+  return { days: days, threshold: c.quotationNoSODays };
+}
+
 /* Two rows that look like the same deal recorded twice. The house numbering is
    YYYY-NNN-<initials>-<client>-<subject>, so the deal is the YYYY-NNN prefix — but two reps do
    sometimes take the same sequence number for genuinely different clients (six such pairs live

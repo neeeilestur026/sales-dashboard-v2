@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 112;  // A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 113;  // A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -50,7 +50,13 @@ var SCHEMA = {
   Quotations:     ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'PDF Link',
                    'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Subject', 'Discount %',
                    'PDF Data JSON', 'Plant Site', 'Client Ref No', 'PR No', 'Layout JSON',
-                   'Recommended Option'],
+                   'Recommended Option',
+                   // A208 follow-up tracking. 'Sent At' is stamped by sendQuotation and back-dated by
+                   // linkQuotationEmail when the linked email is older — reps routinely mail from
+                   // GoDaddy webmail first and press Send here afterwards. reviseQuotation CLEARS both,
+                   // or a superseded document keeps a follow-up clock running. 'Follow Up Days'
+                   // overrides the FlowSettings default for one deal (a tender may want 30).
+                   'Sent At', 'Sent To', 'Follow Up Days'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   //    A172: 'Line Key' is a per-line id that survives reordering. Row position can't identify a line
   //    once lines move, and Item ID isn't unique when a quote carries two lines of the same product —
@@ -200,6 +206,28 @@ var SCHEMA = {
                       'Approval Note'],
   ItineraryItems: ['Itinerary No', 'Seq', 'Day', 'Date', 'Planned Time', 'Company', 'Person To Meet',
                    'City Area', 'Purpose', 'Agenda', 'Expected Outcome'],
+
+  // ── A208 Quotation ↔ email links: which message actually carried the quotation ──
+  // The system CANNOT send mail — there is no SMTP anywhere — so the rep still sends from GoDaddy
+  // webmail and points at the message afterwards. This table is that pointer, and it is what makes
+  // "sent 9 days ago, no reply" possible: nothing about a fetched email persists anywhere else.
+  //
+  // Keyed on a synthetic Link ID because the relation is genuinely many-to-many: one quotation is
+  // emailed several times (initial, resend, chase) and one email can carry two quotations. The
+  // uniqueness constraint is the PAIR (Quotation No, Message ID), enforced in linkQuotationEmail.
+  //
+  // 'Status' carries Dismissed as well as Active/Unlinked — a dismissal is a link with a negative
+  // sign, so "stop suggesting this one" needs no second table.
+  QuotationEmails: ['Link ID', 'Quotation No', 'Message ID', 'Mailbox User', 'Mailbox Addr',
+                    'Direction', 'Sent At', 'Subject', 'To', 'Thread Root', 'Kind',
+                    'Linked By', 'Linked At',
+                    'Reply At', 'Reply From', 'Reply Checked At', 'Status', 'Note'],
+  // A208 metadata mirror. Flask writes it; the tracker reads it through fetchFlow and so touches no
+  // IMAP at all. SUBJECTS, RECIPIENTS AND DATES ONLY — never a message body, never an attachment.
+  MailIndex: ['Message ID', 'Mailbox User', 'Direction', 'Sent At', 'Subject', 'To',
+              'Thread Root', 'In Reply To', 'Company', 'Indexed At'],
+  // A208 small key/value config so a threshold is a screen, not a deploy.
+  FlowSettings: ['Key', 'Value', 'Updated By', 'Updated At'],
 
   // ── A207 Commission Requests: what a sales rep is owed on business they won ──
   // A claim CONSUMES SPECIFIC COLLECTION ROWS (see CommissionRequestItems), not a sales order. That
@@ -852,6 +880,8 @@ function getQuotations(p) {
       plantSite: q['Plant Site'] || '', clientRefNo: q['Client Ref No'] || '', prNo: q['PR No'] || '',
       layoutJson: q['Layout JSON'] || '',
       recommendedOption: String(q['Recommended Option'] || '').trim(),   // A205
+      sentAt: q['Sent At'] || '', sentTo: String(q['Sent To'] || ''),    // A208
+      followUpDays: _num(q['Follow Up Days']) || 0,                      // A208: 0 = use the default
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
@@ -1022,7 +1052,10 @@ function createQuotation(p) {
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
     creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
     '', p.plantSite || '', p.clientRefNo || '', p.prNo || '', p.layoutJson || '',
-    recommended]);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No / A172 Layout JSON / A205 Recommended Option
+    recommended,
+    '', '', '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No /
+                    // A172 Layout JSON / A205 Recommended Option / A208 Sent At · Sent To · Follow Up Days.
+                    // 23 values — this array MUST stay exactly SCHEMA.Quotations.length wide.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
@@ -1187,6 +1220,15 @@ function updateQuotation(p) {
     _rows('Documents').forEach(function (r) {
       if (String(r['Module']) === 'Quotation' && String(r['Ref No']) === String(no)) {
         docSh.getRange(r.rowIndex, 3, 1, 1).setValues([[newNo]]);
+      }
+    });
+    // A208: and so do the linked emails. Without this a rename orphans every email link on the
+    // record — the same failure the items and documents blocks above exist to prevent.
+    var qeSh = _sheet('QuotationEmails');
+    var qeCol = SCHEMA.QuotationEmails.indexOf('Quotation No') + 1;
+    _rows('QuotationEmails').forEach(function (r) {
+      if (String(r['Quotation No']) === String(no)) {
+        qeSh.getRange(r.rowIndex, qeCol, 1, 1).setValues([[newNo]]);
       }
     });
   }
@@ -5084,8 +5126,16 @@ function sendQuotation(p) {
   var q = _quotationRow(p.quotationNo);
   if (!q) return { success: false, message: 'Quotation not found.' };
   if (String(q['Status']) !== 'Approved') return { success: false, message: 'Only an Approved quotation can be sent.' };
-  _setQuotationCells(p.quotationNo, { 'Status': 'Sent' });
-  return { success: true, quotationNo: p.quotationNo, status: 'Sent', message: 'Quotation marked as sent to client.' };
+  /* A208 — stamp WHEN, and to whom if the rep says. This one line is what makes the whole follow-up
+     tracker work without touching a mailbox: days-since-sent, approved-but-never-sent and
+     sent-with-no-order all read this. Keep the earliest stamp — pressing Send twice must not
+     restart the clock and hide a quotation that has actually been sitting for three weeks. */
+  var patch = { 'Status': 'Sent' };
+  if (!q['Sent At']) patch['Sent At'] = _now();
+  if (p.sentTo) patch['Sent To'] = String(p.sentTo);
+  _setQuotationCells(p.quotationNo, patch);
+  return { success: true, quotationNo: p.quotationNo, status: 'Sent',
+    sentAt: patch['Sent At'] || q['Sent At'], message: 'Quotation marked as sent to client.' };
 }
 
 /** Reopen an Approved or Sent quotation for revision — the client asked for different pricing, or a
@@ -5102,8 +5152,13 @@ function reviseQuotation(p) {
   }
   var who = p.actorName || '';
   var note = 'Reopened for revision' + (who ? ' by ' + who : '') + (p.reason ? ' — ' + p.reason : '');
+  /* A208 — clear the sent stamp too. This document is going back to Draft and will be re-approved
+     and re-sent; leaving 'Sent At' would keep a follow-up clock running on a version the client is
+     never going to receive, and the rep would be chased about a quotation that no longer exists.
+     The email LINKS are deliberately kept — they are a true record of what was sent at the time. */
   _setQuotationCells(p.quotationNo, {
     'Status': 'Draft', 'Approved By': '', 'Approved At': '', 'Approval Note': note,
+    'Sent At': '', 'Sent To': '',
   });
   return { success: true, quotationNo: p.quotationNo, status: 'Draft', previousStatus: st,
     message: 'Quotation reopened for revision — it will need approval again before it can be sent.' };
@@ -5683,6 +5738,211 @@ function deleteWeeklyItinerary(p) {
   _writeItems('ItineraryItems', 'Itinerary No', p.itineraryNo, [], function (x) { return x; });
   _sheet('WeeklyItineraries').deleteRow(r.rowIndex);
   return { success: true, refNo: p.itineraryNo, message: 'Itinerary deleted.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  A208 QUOTATION ↔ EMAIL LINKS  —  which message actually carried the quotation
+// ════════════════════════════════════════════════════════════════════════════
+/* The system cannot send mail. The rep sends from GoDaddy webmail as they always have, then points
+   at the message here. That pointer is the only durable record: /api/email/feed holds nothing, so
+   without this table "sent 9 days ago, no reply" is unanswerable. */
+
+// Statuses that count as a live link. 'Dismissed' is a remembered "not this one" for the suggester.
+var _QE_ACTIVE = 'Active';
+
+function _qeRows(quotationNo) {
+  var rows = _rows('QuotationEmails');
+  if (!quotationNo) return rows;
+  return rows.filter(function (r) { return String(r['Quotation No']) === String(quotationNo); });
+}
+function _qeMap(r) {
+  return {
+    linkId: String(r['Link ID'] || ''), quotationNo: String(r['Quotation No'] || ''),
+    messageId: String(r['Message ID'] || ''), mailboxUser: String(r['Mailbox User'] || ''),
+    mailboxAddr: String(r['Mailbox Addr'] || ''), direction: String(r['Direction'] || 'Sent'),
+    sentAt: r['Sent At'] || '', subject: String(r['Subject'] || ''), to: String(r['To'] || ''),
+    threadRoot: String(r['Thread Root'] || ''), kind: String(r['Kind'] || ''),
+    linkedBy: String(r['Linked By'] || ''), linkedAt: r['Linked At'] || '',
+    replyAt: r['Reply At'] || '', replyFrom: String(r['Reply From'] || ''),
+    replyCheckedAt: r['Reply Checked At'] || '',
+    status: String(r['Status'] || _QE_ACTIVE), note: String(r['Note'] || ''),
+    rowIndex: r.rowIndex
+  };
+}
+/** Angle brackets off, lower-cased — a Message-ID is case-insensitive and half the world quotes it. */
+function _qeNormId(id) {
+  return String(id || '').trim().replace(/^</, '').replace(/>$/, '').toLowerCase();
+}
+function _qeSet(linkId, obj) {
+  Object.keys(obj).forEach(function (k) {
+    _setCellByKey('QuotationEmails', 'Link ID', linkId, k, obj[k]);
+  });
+}
+
+/** The earliest Active link on a quotation — what 'Sent At' should say.
+ *  Deliberately the EARLIEST, so "days since first sent" never jumps backwards when a rep links a
+ *  later chase email. The follow-up CLOCK uses the latest contact instead; two different questions,
+ *  two different answers, from one table. */
+function _qeEarliestSentAt(quotationNo) {
+  var best = null;
+  _qeRows(quotationNo).forEach(function (r) {
+    if (String(r['Status'] || _QE_ACTIVE) !== _QE_ACTIVE) return;
+    var d = r['Sent At'] ? new Date(r['Sent At']) : null;
+    if (d && !isNaN(d) && (!best || d < best)) best = d;
+  });
+  return best;
+}
+
+function getQuotationEmails(p) {
+  var rows = _rows('QuotationEmails').map(_qeMap);
+  if (p && p.quotationNo) rows = rows.filter(function (r) { return r.quotationNo === String(p.quotationNo); });
+  if (p && p.user) rows = rows.filter(function (r) { return r.mailboxUser === String(p.user); });
+  if (p && p.status) rows = rows.filter(function (r) { return r.status === String(p.status); });
+  if (p && !p.includeInactive && !(p && p.status)) {
+    rows = rows.filter(function (r) { return r.status === _QE_ACTIVE; });
+  }
+  rows.sort(function (a, b) { return new Date(b.sentAt) - new Date(a.sentAt); });
+  return { success: true, data: rows };
+}
+
+/** Attach an email to a quotation. Upsert on the PAIR (Quotation No, Message ID): re-linking a
+ *  message already attached to this quotation revives it rather than making a duplicate row. */
+function linkQuotationEmail(p) {
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  var msgId = _qeNormId(p.messageId);
+  if (!msgId) return { success: false, message: 'This email has no Message-ID, so it cannot be linked.' };
+  var q = _quotationRow(p.quotationNo);
+  if (!q) return { success: false, message: 'Quotation ' + p.quotationNo + ' not found.' };
+
+  var existing = _qeRows(p.quotationNo).filter(function (r) {
+    return _qeNormId(r['Message ID']) === msgId;
+  })[0];
+
+  // The first Active link is the Initial send; anything after it is a resend or a chase.
+  var priorActive = _qeRows(p.quotationNo).filter(function (r) {
+    return String(r['Status'] || _QE_ACTIVE) === _QE_ACTIVE &&
+           _qeNormId(r['Message ID']) !== msgId;
+  }).length;
+  var kind = p.kind || (priorActive ? 'Follow-up' : 'Initial');
+
+  var vals = {
+    'Quotation No': String(p.quotationNo), 'Message ID': msgId,
+    'Mailbox User': String(p.actorUsername || p.mailboxUser || ''),
+    'Mailbox Addr': String(p.mailboxAddr || ''),
+    'Direction': 'Sent', 'Sent At': p.sentAt || '', 'Subject': String(p.subject || ''),
+    'To': String(p.to || ''), 'Thread Root': _qeNormId(p.threadRoot || p.messageId),
+    'Kind': kind, 'Linked By': String(p.actorName || ''), 'Linked At': _now(),
+    'Status': _QE_ACTIVE, 'Note': String(p.note || '')
+  };
+
+  var linkId;
+  if (existing) {
+    linkId = String(existing['Link ID']);
+    _qeSet(linkId, vals);
+  } else {
+    linkId = _nextNumber('QuotationEmails', 1, 'QEL');
+    _append('QuotationEmails', [linkId, vals['Quotation No'], vals['Message ID'], vals['Mailbox User'],
+      vals['Mailbox Addr'], vals['Direction'], vals['Sent At'], vals['Subject'], vals['To'],
+      vals['Thread Root'], vals['Kind'], vals['Linked By'], vals['Linked At'],
+      '', '', '',                       // Reply At · Reply From · Reply Checked At — filled by the watcher
+      vals['Status'], vals['Note']]);   // 18 values — must equal SCHEMA.QuotationEmails.length
+  }
+
+  /* Back-date the quotation's Sent At when the linked email is older than what is stored. A rep who
+     mails from webmail on Monday and presses "Send to Client" on Thursday has been waiting since
+     MONDAY, and the follow-up clock has to agree with the client's experience, not ours. */
+  var earliest = _qeEarliestSentAt(p.quotationNo);
+  var patch = {};
+  var stored = q['Sent At'] ? new Date(q['Sent At']) : null;
+  if (earliest && (!stored || isNaN(stored) || earliest < stored)) patch['Sent At'] = earliest;
+  if (!String(q['Sent To'] || '').trim() && vals['To']) patch['Sent To'] = vals['To'];
+  if (Object.keys(patch).length) _setQuotationCells(p.quotationNo, patch);
+
+  return { success: true, linkId: linkId, refNo: p.quotationNo, quotationNo: p.quotationNo,
+    kind: kind, sentAt: patch['Sent At'] || q['Sent At'] || vals['Sent At'],
+    message: 'Email linked to ' + p.quotationNo + (kind === 'Initial' ? '.' : ' as a ' + kind.toLowerCase() + '.') };
+}
+
+/** Detach — soft, so the audit trail of what was once claimed survives. */
+function unlinkQuotationEmail(p) {
+  var r = _rows('QuotationEmails').filter(function (x) { return String(x['Link ID']) === String(p.linkId); })[0];
+  if (!r) return { success: false, message: 'Link not found.' };
+  _qeSet(p.linkId, { 'Status': 'Unlinked', 'Note': String(p.reason || r['Note'] || '') });
+  return { success: true, refNo: r['Quotation No'], message: 'Email unlinked.' };
+}
+
+/** "Not this one" — remembered, so the suggester stops offering it for this quotation. */
+function dismissQuotationEmail(p) {
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  var msgId = _qeNormId(p.messageId);
+  if (!msgId) return { success: false, message: 'messageId required.' };
+  var existing = _qeRows(p.quotationNo).filter(function (r) {
+    return _qeNormId(r['Message ID']) === msgId;
+  })[0];
+  if (existing) {
+    _qeSet(String(existing['Link ID']), { 'Status': 'Dismissed' });
+    return { success: true, refNo: p.quotationNo, message: 'Won\'t suggest that email again.' };
+  }
+  var linkId = _nextNumber('QuotationEmails', 1, 'QEL');
+  _append('QuotationEmails', [linkId, String(p.quotationNo), msgId,
+    String(p.actorUsername || ''), String(p.mailboxAddr || ''), 'Sent',
+    p.sentAt || '', String(p.subject || ''), String(p.to || ''),
+    _qeNormId(p.threadRoot || p.messageId), '', String(p.actorName || ''), _now(),
+    '', '', '', 'Dismissed', '']);   // 18 values
+  return { success: true, refNo: p.quotationNo, message: 'Won\'t suggest that email again.' };
+}
+
+/** Per-quotation follow-up window. 0 / blank falls back to the FlowSettings default. */
+function setQuotationFollowUp(p) {
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  if (!_quotationRow(p.quotationNo)) return { success: false, message: 'Quotation not found.' };
+  var d = Math.round(_num(p.days));
+  if (d < 0 || d > 365) return { success: false, message: 'Follow-up days must be between 0 and 365.' };
+  _setQuotationCells(p.quotationNo, { 'Follow Up Days': d || '' });
+  return { success: true, refNo: p.quotationNo, days: d,
+    message: d ? 'Follow-up set to ' + d + ' days for this quotation.' : 'Follow-up back to the default.' };
+}
+
+// ── Settings ────────────────────────────────────────────────────────────────
+var _FLOW_SETTING_DEFAULTS = {
+  quotationFollowUpDays: 7,     // no client contact for this long → chase it
+  quotationNoSODays: 14,        // sent this long ago with no sales order → chase or close it
+  approvedNotSentDays: 2        // approved and still sitting unsent → send it
+};
+function getFlowSettings() {
+  var out = {};
+  Object.keys(_FLOW_SETTING_DEFAULTS).forEach(function (k) { out[k] = _FLOW_SETTING_DEFAULTS[k]; });
+  try {
+    _rows('FlowSettings').forEach(function (r) {
+      var k = String(r['Key'] || '').trim();
+      if (!k) return;
+      var v = r['Value'];
+      out[k] = (v === '' || v === null || isNaN(parseFloat(v))) ? v : parseFloat(v);
+    });
+  } catch (e) { /* an unreachable sheet must not break every page that reads a threshold */ }
+  return { success: true, data: out, defaults: _FLOW_SETTING_DEFAULTS };
+}
+function setFlowSettings(p) {
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['director', 'management'].indexOf(role) < 0) {
+    return { success: false, message: 'Only the director or management can change these settings.' };
+  }
+  var patch = {};
+  try { patch = JSON.parse(p.settings || '{}'); } catch (e) { return { success: false, message: 'settings must be JSON.' }; }
+  var keys = Object.keys(patch);
+  if (!keys.length) return { success: false, message: 'Nothing to save.' };
+  var existing = {};
+  _rows('FlowSettings').forEach(function (r) { existing[String(r['Key'])] = r; });
+  keys.forEach(function (k) {
+    if (existing[k]) {
+      _setCellByKey('FlowSettings', 'Key', k, 'Value', patch[k]);
+      _setCellByKey('FlowSettings', 'Key', k, 'Updated By', String(p.actorName || ''));
+      _setCellByKey('FlowSettings', 'Key', k, 'Updated At', _now());
+    } else {
+      _append('FlowSettings', [k, patch[k], String(p.actorName || ''), _now()]);   // 4 values
+    }
+  });
+  return { success: true, refNo: keys.join(', '), message: keys.length + ' setting(s) saved.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6785,6 +7045,13 @@ var _MODULE_MAP = {
   rejectWeeklyItinerary: ['Weekly Itinerary', 'Rejected'],
   reviseWeeklyItinerary: ['Weekly Itinerary', 'Reopened'],
   deleteWeeklyItinerary: ['Weekly Itinerary', 'Deleted'],
+  // A208 — the email links. Who attached which message to which quotation is exactly the sort of
+  // claim that needs an audit row behind it.
+  linkQuotationEmail: ['Quotation', 'Email Linked'],
+  unlinkQuotationEmail: ['Quotation', 'Email Unlinked'],
+  dismissQuotationEmail: ['Quotation', 'Email Dismissed'],
+  setQuotationFollowUp: ['Quotation', 'Follow-up Set'],
+  setFlowSettings: ['Settings', 'Saved'],
   // A207 — every writer, deletes included. An action missing here leaves NO audit row at all
   // (the long-standing deleteSalesCall defect below), and commission is money.
   createCommissionRequest: ['Commission Request', 'Created'],
@@ -7659,6 +7926,11 @@ var HANDLERS = {
   submitWeeklyItinerary: submitWeeklyItinerary, approveWeeklyItinerary: approveWeeklyItinerary,
   rejectWeeklyItinerary: rejectWeeklyItinerary, reviseWeeklyItinerary: reviseWeeklyItinerary,
   deleteWeeklyItinerary: deleteWeeklyItinerary,
+  // A208 quotation ↔ email links + the shared threshold settings.
+  getQuotationEmails: getQuotationEmails, linkQuotationEmail: linkQuotationEmail,
+  unlinkQuotationEmail: unlinkQuotationEmail, dismissQuotationEmail: dismissQuotationEmail,
+  setQuotationFollowUp: setQuotationFollowUp,
+  getFlowSettings: getFlowSettings, setFlowSettings: setFlowSettings,
   // A207 commission requests. The five getters are read-only: HANDLERS only, no MUTATIONS,
   // no _SECURED. auditCommissionIntegrity writes only the 'Voided At Claim' marker it discovers.
   getCommissionRequests: getCommissionRequests, getCommissionClaimable: getCommissionClaimable,
@@ -7734,6 +8006,10 @@ var MUTATIONS = {
   logClientVisit: 1, deleteClientVisit: 1,   // A189
   saveWeeklyItinerary: 1, submitWeeklyItinerary: 1, approveWeeklyItinerary: 1,   // A190
   rejectWeeklyItinerary: 1, reviseWeeklyItinerary: 1, deleteWeeklyItinerary: 1,
+  // A208 — the link writers. Under the script lock like every other writer, so two tabs cannot
+  // create two rows for the same (quotation, message) pair.
+  linkQuotationEmail: 1, unlinkQuotationEmail: 1, dismissQuotationEmail: 1,
+  setQuotationFollowUp: 1, setFlowSettings: 1,
   // A207 — every commission writer runs under the script lock, which is what makes the
   // "one collection, one claim" check at submit atomic against two tabs racing each other.
   createCommissionRequest: 1, updateCommissionRequest: 1, deleteCommissionRequest: 1,

@@ -19,6 +19,9 @@ let qrGate = { block: false, needTick: false };   // A183: state the tick uses t
 const Q_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];   // A152 soft-close outcomes
 let qRoll = null;        // A208: the current flowQuotationRollup — tiles, counter and rep headers share it
 let qDupPairs = [];      // A208: same document number + same customer on two rows
+let qLinks = {};         // A208: quotationNo → its email link rows
+let qCfg = null;         // A208: the follow-up thresholds (director-set, with built-in defaults)
+let qCanTrack = false;   // A208: the email/follow-up backend needs FlowAPI v113
 
 /* A175 — one quotation page. The Quote Configurator (flow-quote-configurator.js) is the CREATE half
  * above; everything below — the list, review, approval, close/reopen — is this file's.
@@ -116,14 +119,26 @@ async function loadQuotations() {
   try {
     // Sales see only their own; oversight roles (admin/accounting/management/director) see all.
     const params = qIsOversight ? {} : { createdBy: qSession.name };
-    const [res, soRes] = await Promise.all([
+    /* A208 — the email links and the follow-up thresholds ride along with the existing two fetches.
+       Both degrade to empty: the tracker then measures purely on Quotations['Sent At'], which is
+       still three of the four things it watches. No IMAP is touched here, ever. */
+    const [res, soRes, linkRes, cfgRes] = await Promise.all([
       fetchFlow('getQuotations', params),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),   // A145: which quotations became SOs
+      fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
+      fetchFlow('getFlowSettings').catch(() => ({ data: null })),
     ]);
     qList = (res && res.data) || [];
     qHasSO = {};
     ((soRes && soRes.data) || []).forEach(s => { if (s.quotationNo) qHasSO[String(s.quotationNo)] = true; });
+    qLinks = {};
+    ((linkRes && linkRes.data) || []).forEach(l => {
+      const k = String(l.quotationNo || '');
+      if (k) (qLinks[k] = qLinks[k] || []).push(l);
+    });
+    qCfg = (cfgRes && cfgRes.data) || null;
     try { qCanClose = await flowVersionAtLeast(91); } catch (e) { qCanClose = false; }  // A152: Close/Reopen need v91
+    try { qCanTrack = await flowVersionAtLeast(113); } catch (e) { qCanTrack = false; } // A208
     if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
     qBuildMonthOptions();
     renderQuotationList();
@@ -132,6 +147,55 @@ async function loadQuotations() {
 
 /** 'yyyy-MM' of the month a quotation was created in. */
 function qMonthKey(q) { return String(flowDate(q.date) || '').slice(0, 7); }
+
+/* A208 — one colour per follow-up state. 'unknown' is deliberately grey, not red: we are saying we
+   cannot see, which is not the same as saying the client ignored us. */
+const QFU_STYLE = {
+  'not-sent': 'background:rgba(99,102,241,0.14);color:#4338ca;',
+  'ok':       'background:rgba(16,185,129,0.12);color:#047857;',
+  'due':      'background:rgba(245,158,11,0.16);color:#b45309;',
+  'overdue':  'background:rgba(239,68,68,0.14);color:#b91c1c;',
+  'replied':  'background:rgba(59,130,246,0.14);color:#1d4ed8;',
+  'unknown':  'background:rgba(100,116,139,0.12);color:#475569;'
+};
+
+/** The Follow-ups card — what needs chasing, worst first. Deliberately on this page rather than a
+ *  page of its own: a separate page would need its own copy of the money and bucket helpers, and
+ *  three copies of those is what A182 and A208 Part A were both written to undo. */
+function qRenderFollowUps(rows) {
+  const el = document.getElementById('qFollowUps');
+  if (!el || typeof flowFollowUp !== 'function') return;
+  const chase = [];
+  (rows || []).forEach(q => {
+    const fu = flowFollowUp(q, qLinks[String(q.quotationNo)] || [], qCfg, qHasSO);
+    if (fu.state === 'due' || fu.state === 'overdue' || fu.state === 'not-sent' || fu.state === 'replied') {
+      const noOrder = (typeof flowNoOrderYet === 'function') ? flowNoOrderYet(q, qCfg, qHasSO) : null;
+      chase.push({ q: q, fu: fu, noOrder: noOrder });
+    }
+  });
+  if (!chase.length) {
+    el.innerHTML = '<div style="padding:0.9rem 0;color:var(--text-muted,#64748b);font-size:0.86rem;">' +
+      '✓ Nothing needs chasing right now.</div>';
+    return;
+  }
+  const RANK = { 'not-sent': 0, 'overdue': 1, 'due': 2, 'replied': 3 };
+  chase.sort((a, b) => (RANK[a.fu.state] - RANK[b.fu.state]) || (flowNum(b.fu.days) - flowNum(a.fu.days)));
+  el.innerHTML = `<table class="flow-table"><thead><tr>
+      <th>Quotation</th><th>Customer</th><th class="num">Value</th><th>What is happening</th><th></th>
+    </tr></thead><tbody>` + chase.map(x => {
+    const no = flowEsc(x.q.quotationNo);
+    return `<tr>
+      <td>${no}<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${flowEsc(x.q.createdBy || '')}</div></td>
+      <td>${flowEsc(x.q.customer)}</td>
+      <td class="num">${flowMoney(flowQuotationNet(x.q), 'PHP')}</td>
+      <td><span class="flow-badge" style="${QFU_STYLE[x.fu.state] || ''}">${flowEsc(x.fu.label)}</span>
+        <div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin-top:0.2rem;">${flowEsc(x.fu.reason || '')}${
+          x.noOrder ? ` No sales order after ${x.noOrder.days} days.` : ''}</div></td>
+      <td style="white-space:nowrap;">${(qCanTrack && typeof qOpenEmailLink === 'function')
+        ? `<button class="link-btn" onclick='qOpenEmailLink("${no}")'>Emails</button>` : ''}</td>
+    </tr>`;
+  }).join('') + '</tbody></table>';
+}
 
 /** Narrow to the selected period. 'last90' is Manila-explicit at both ends — flowToday()/flowDate()
  *  rather than a naive ISO slice, which shifts the boundary by a day for an evening page load. */
@@ -275,6 +339,7 @@ function renderQuotationList() {
   qRoll = flowQuotationRollup(rows, qHasSO);
   qDupPairs = flowQuotationDupPairs(rows);
   qRenderKpiTiles(qRoll, rows.length, month, sview, flowQuotationRollup(periodRows, qHasSO));
+  qRenderFollowUps(rows);
 
   const count = document.getElementById('qListCount');
   if (count) {
@@ -354,7 +419,10 @@ function quotationRow(q) {
         dupPair.rows.filter(r => String(r.quotationNo) !== String(q.quotationNo))
           .map(r => r.quotationNo + ' — ' + r.status + ' — ' + flowMoney(flowQuotationNet(r), 'PHP')).join(' · ')
       )}">dup?</span>` : '';
-  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
+  // A208: how long this has been sitting with the client, on the row itself.
+  const fu = (typeof flowFollowUp === 'function') ? flowFollowUp(q, qLinks[String(q.quotationNo)] || [], qCfg, qHasSO) : null;
+  const fuBadge = (fu && fu.label) ? ` <span class="flow-badge" style="${QFU_STYLE[fu.state] || ''}" title="${flowEsc(fu.reason || fu.label)}">${flowEsc(fu.label)}</span>` : '';
+  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}${fuBadge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn"${qPdfState(q) === 'fresh'

@@ -984,6 +984,30 @@ async function flowComputeActions(session) {
     }).catch(() => {}));
   }
 
+  /* A208 — the same picture across the team, for the two tiers who chase it. One fetch, no mailbox. */
+  if (isMgmt || isDir) {
+    jobs.push(Promise.all([
+      fetchFlow('getQuotations').catch(() => ({ data: [] })),
+      fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
+      fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
+      fetchFlow('getFlowSettings').catch(() => ({ data: null })),
+    ]).then(([q, so, le, cf]) => {
+      if (typeof flowFollowUp !== 'function') return;
+      const rows = (q && q.data) || [];
+      const hasSO = {}; ((so && so.data) || []).forEach(s => { if (s.quotationNo) hasSO[String(s.quotationNo)] = true; });
+      const cfg = (cf && cf.data) || null;
+      const links = {};
+      ((le && le.data) || []).forEach(l => { const k = String(l.quotationNo || ''); if (k) (links[k] = links[k] || []).push(l); });
+      let chase = 0, value = 0;
+      rows.forEach(x => {
+        const fu = flowFollowUp(x, links[String(x.quotationNo)] || [], cfg, hasSO);
+        if (fu.state === 'due' || fu.state === 'overdue') { chase++; value += (typeof flowQuotationNet === 'function' ? flowQuotationNet(x) : 0); }
+      });
+      if (chase) add('report', '#b45309', chase + ' quotation(s) across the team past follow-up' +
+        (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''), 'flow-quotations.html');
+    }).catch(() => {}));
+  }
+
   // Purchase orders awaiting management/director approval.
   if (isMgmt || isDir) {
     jobs.push(fetchFlow('getPurchaseOrders').then(r => {
@@ -1130,15 +1154,38 @@ async function flowComputeActions(session) {
     jobs.push(Promise.all([
       fetchFlow('getQuotations', { createdBy: session.name }).catch(() => ({ data: [] })),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
-    ]).then(([q, so]) => {
+      fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),   // A208
+      fetchFlow('getFlowSettings').catch(() => ({ data: null })),    // A208
+    ]).then(([q, so, le, cf]) => {
       const mine = (q && q.data) || [];
-      const approved = mine.filter(x => x.status === 'Approved').length;
       const rejected = mine.filter(x => x.status === 'Rejected');
-      if (approved) add('report', '#22c55e', approved + ' quotation(s) approved — ready to send', 'flow-quotations.html');
       if (rejected.length) add('urgent', '#ef4444', rejected.length + ' quotation(s) rejected — fix & resubmit' + (rejected[0].approvalNote ? ' (' + rejected[0].approvalNote + ')' : ''), 'flow-quotations.html');
       const hasSO = {}; ((so && so.data) || []).forEach(s => { if (s.quotationNo) hasSO[String(s.quotationNo)] = true; });
-      const sentNoSO = mine.filter(x => x.status === 'Sent' && !hasSO[String(x.quotationNo)]).length;
-      if (sentNoSO) add('report', '#b45309', sentNoSO + ' sent quotation(s) with no sales order yet', 'flow-sales-orders.html');
+      const cfg = (cf && cf.data) || null;
+      const links = {};
+      ((le && le.data) || []).forEach(l => { const k = String(l.quotationNo || ''); if (k) (links[k] = links[k] || []).push(l); });
+
+      /* A208 — these two nudges used to fire the INSTANT a quotation was approved or sent, which
+         made them noise: "12 sent quotations with no sales order" on the day you sent them tells
+         nobody anything. They now wait for the configured age, so when one appears it is genuinely
+         something that has been left. Same two nudges, given a threshold — not four nudges. */
+      let notSent = 0, chase = 0, replied = 0, noOrder = 0;
+      if (typeof flowFollowUp === 'function') {
+        mine.forEach(x => {
+          const fu = flowFollowUp(x, links[String(x.quotationNo)] || [], cfg, hasSO);
+          if (fu.state === 'not-sent') notSent++;
+          else if (fu.state === 'due' || fu.state === 'overdue') chase++;
+          else if (fu.state === 'replied') replied++;
+          if (typeof flowNoOrderYet === 'function' && flowNoOrderYet(x, cfg, hasSO)) noOrder++;
+        });
+      } else {
+        notSent = mine.filter(x => x.status === 'Approved').length;
+        noOrder = mine.filter(x => x.status === 'Sent' && !hasSO[String(x.quotationNo)]).length;
+      }
+      if (notSent) add('report', '#22c55e', notSent + ' approved quotation(s) still not sent to the client', 'flow-quotations.html');
+      if (replied) add('report', '#1d4ed8', replied + ' client repl' + (replied === 1 ? 'y' : 'ies') + ' waiting on you', 'flow-quotations.html');
+      if (chase) add('report', '#b45309', chase + ' quotation(s) with no client reply — due a follow-up', 'flow-quotations.html');
+      if (noOrder) add('report', '#f97316', noOrder + ' sent quotation(s) still with no sales order', 'flow-sales-orders.html');
     }).catch(() => {}));
   }
 
