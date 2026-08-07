@@ -140,7 +140,14 @@ const FLOW_SECURED_ACTIONS = [
   // paid and takes exclusive hold of the collections behind the claim.
   'submitCommissionRequest', 'approveCommissionRequest', 'rejectCommissionRequest',
   'adjustCommissionRequest', 'markCommissionReleased',
-  'setCommissionRate', 'deleteCommissionRate', 'deleteCommissionRequest'
+  'setCommissionRate', 'deleteCommissionRate', 'deleteCommissionRequest',
+  // A211 — the rest of the commission surface. The two getters break the "reads stay direct and
+  // cached" rule on purpose: getCommissionRequests with no salesperson returns every claim in the
+  // company, and the only honest way to scope it is to know who is asking. A name the browser sent
+  // is not that. They lose the 60s cache; the page is opened a few times a day.
+  'createCommissionRequest', 'updateCommissionRequest', 'reviseCommissionRequest',
+  'getCommissionRequests', 'getCommissionClaimable',
+  'seedCommissionDemo', 'clearCommissionDemo'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
@@ -172,7 +179,10 @@ async function _postFlowSecured(action, params) {
   try { data = await res.json(); }
   catch (e) { throw new Error('The server returned an unreadable response — refresh and check the record.'); }
   if (!res.ok && data && data.message) throw new Error(data.message);
-  _flowCacheClear();
+  /* A211 — a secured READ changes nothing, so it must not wipe everyone else's cache. The Action
+     Center fires three commission reads while a dozen other jobs are filling that cache; clearing it
+     on each one made the page refetch itself. Writes still clear, as they always did. */
+  if (!/^get/.test(action)) _flowCacheClear();
   return data;
 }
 
@@ -239,22 +249,38 @@ function flowMoney(v, cur) {
 /** True when the DEPLOYED FlowAPI is at least version n. The Apps Script backend is redeployed by
  *  hand, so a feature can be live in the front-end before its actions exist — an unknown action
  *  answers HTTP 200 with {success:false}, never a throw. Memoized; false on any error. */
-/* ── A209: is the commission feature open to users yet? ─────────────────────
+/* ── A209/A211: WHO is the commission feature open to yet? ──────────────────
    NOT a version gate, deliberately. The commission pages gate on flowVersionAtLeast(112) and the
    email tracker needs 113 — the same paste — so deploying the tracker would have switched
    commissions on with it, and every "not switched on yet" message in those files would have become
    unreachable at exactly the moment it was needed. "Is this feature finished" and "which backend is
    deployed" stopped being the same question, so they get different mechanisms.
 
+   A211 turns A209's boolean into a ROLE LIST. Launching a feature that decides what people are paid
+   should not be all-or-nothing: the two people validating it use it for real while sales keep the
+   coming-soon panel. An EMPTY array is A209's full hold, one edit away; adding 'sales' is the launch.
+
    Synchronous and local on purpose: no fetch, no promise, no window where half the page has decided
    one way and half the other.
 
    TO LAUNCH, both together:
-     1. set this to true
-     2. set `var _COMM_LIVE = true;` in apps-script/FlowAPI.gs, bump FLOW_VERSION, and paste it
-   The backend refuses every commission action on its own, so flipping only this one changes
-   nothing a user can reach — which is the intended failure direction. */
-const FLOW_COMMISSIONS_LIVE = false;
+     1. add 'sales' here
+     2. add it to `var _COMM_ROLES` in apps-script/FlowAPI.gs, bump FLOW_VERSION, and paste it
+   The backend refuses every commission action on its own, so changing only this one exposes nothing
+   a user can act on — which is the intended failure direction. */
+const FLOW_COMMISSIONS_ROLES = ['director', 'management'];
+
+/** Is the commission feature open to this role? Mirrors _COMM_ROLES in FlowAPI.gs. */
+function flowCommissionsLiveFor(role) {
+  return FLOW_COMMISSIONS_ROLES.indexOf(String(role || '').trim().toLowerCase()) !== -1;
+}
+
+/** The same question where no session object is to hand — renderFlowNav is injected on 20 pages and
+ *  knows nothing about who is looking at it. Reads the stored session directly. */
+function flowCommissionsLive() {
+  try { return flowCommissionsLiveFor(JSON.parse(localStorage.getItem('session') || '{}').role); }
+  catch (e) { return false; }
+}
 
 /* A210 — the commission ladder, in the Statement of Account's own order and wording.
    Printed identically on the rep's claim, both approval panels and the payout report, so the screen
@@ -420,7 +446,7 @@ function renderFlowNav(active) {
      pill here would look live to every role no matter what the role navbars say. Easiest leak to
      miss in the whole feature. */
   el.innerHTML = links.map(([href, label]) => {
-    const soon = (href === 'flow-commissions.html' && !FLOW_COMMISSIONS_LIVE) ? flowSoonTag() : '';
+    const soon = (href === 'flow-commissions.html' && !flowCommissionsLive()) ? flowSoonTag() : '';
     return `<a href="${href}" class="flow-tab${href === active ? ' active' : ''}">${label}${soon}</a>`;
   }).join('');
 }

@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 115;  // A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. To launch: _COMM_LIVE=true here AND FLOW_COMMISSIONS_LIVE=true in dashboard/js/flow-api.js · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 116;  // A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -448,6 +448,19 @@ var _SECURED = {
   submitCommissionRequest: 1, approveCommissionRequest: 1, rejectCommissionRequest: 1,
   adjustCommissionRequest: 1, markCommissionReleased: 1,
   setCommissionRate: 1, deleteCommissionRate: 1, deleteCommissionRequest: 1,
+  /* A211 — the rest of the commission surface, including two READS.
+     The writers were the obvious gap: createCommissionRequest's "you can only claim on your own
+     quotations" guard read p.actorRole, which the browser supplies, so the guard answered to the
+     attacker. updateCommissionRequest had no ownership test at all and accepted a new SO No, which
+     re-points a draft at anybody's order without needing to spoof anything.
+
+     The two reads are here for a different reason and break the "reads stay direct and cached" rule
+     deliberately: getCommissionRequests with no salesperson returns EVERY claim in the company, and
+     the only way to scope it honestly is to know who is asking. A browser-supplied name is not that.
+     Cost: these two lose the 60s fetchFlow cache, on a page opened a few times a day. */
+  createCommissionRequest: 1, updateCommissionRequest: 1, reviseCommissionRequest: 1,
+  getCommissionRequests: 1, getCommissionClaimable: 1,
+  seedCommissionDemo: 1, clearCommissionDemo: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -457,7 +470,8 @@ var _SECURED = {
   cleanupLegacyFolders: 1, cleanupLegacyFoldersApply: 1
 };
 
-/* A209 — commission requests are built but NOT open to users yet.
+/* A209 — commission requests are built but NOT open to everyone yet.
+   A211 — and "everyone" is now the point: this is a ROLE LIST, not a boolean.
 
    This is a feature flag, not a version gate, and deliberately so: the commission pages gate on
    flowVersionAtLeast(112) while the A208 email tracker needs 113 — one paste — so shipping the
@@ -466,9 +480,18 @@ var _SECURED = {
    Blocking here rather than only in the browser means a typed URL, a browser tab left open from
    testing, or a direct call to the /exec endpoint all get the same plain refusal.
 
-   TO LAUNCH: set this to true, bump FLOW_VERSION, paste — and set FLOW_COMMISSIONS_LIVE = true in
+   A list beats a boolean because launching stops being all-or-nothing: the two people validating
+   the feature can use it for real while sales still see the coming-soon panel. An EMPTY array is
+   A209's full hold, one edit away, and adding 'sales' is the launch.
+
+   This is a ROLLOUT gate, NOT the security boundary. For a secured action the role in `params` was
+   stamped by Flask from the login session and is real; for an unsecured one the browser supplied it
+   and could say anything. What actually protects the money is _SECURED plus _commMayActOn below —
+   never this list.
+
+   TO LAUNCH: add 'sales' here, bump FLOW_VERSION, paste — and add it to FLOW_COMMISSIONS_ROLES in
    dashboard/js/flow-api.js. Either one alone leaves the feature closed, which is the safe direction. */
-var _COMM_LIVE = false;
+var _COMM_ROLES = ['director', 'management'];
 
 var _COMM_ACTIONS = {
   getCommissionRequests: 1, getCommissionClaimable: 1, getCommissionPreview: 1,
@@ -476,12 +499,15 @@ var _COMM_ACTIONS = {
   createCommissionRequest: 1, updateCommissionRequest: 1, deleteCommissionRequest: 1,
   submitCommissionRequest: 1, approveCommissionRequest: 1, rejectCommissionRequest: 1,
   reviseCommissionRequest: 1, adjustCommissionRequest: 1, markCommissionReleased: 1,
-  setCommissionRate: 1, deleteCommissionRate: 1
+  setCommissionRate: 1, deleteCommissionRate: 1,
+  seedCommissionDemo: 1, clearCommissionDemo: 1              // A211
 };
 
-/** Refuse an action belonging to a feature that is not open yet. Returns null when it may proceed. */
-function _featureBlocked(action) {
-  if (_COMM_LIVE || !_COMM_ACTIONS[action]) return null;
+/** Refuse an action belonging to a feature this role cannot reach yet. Null when it may proceed. */
+function _featureBlocked(action, params) {
+  if (!_COMM_ACTIONS[action]) return null;
+  var role = String((params && params.actorRole) || '').toLowerCase();
+  if (_COMM_ROLES.indexOf(role) !== -1) return null;
   return { success: false, comingSoon: true,
     message: 'Commission requests are not available yet — this feature is still being built.' };
 }
@@ -501,7 +527,7 @@ function _dispatch(params) {
   try {
     var handler = HANDLERS[action];
     if (!handler) return _json({ success: false, message: 'Unknown action: ' + action });
-    var closed = _featureBlocked(action);          // A209 — feature not open to users yet
+    var closed = _featureBlocked(action, params);  // A209/A211 — feature not open to this role yet
     if (closed) return _json(closed);
     var blocked = _securedBlocked(action, params);
     if (blocked) return _json(blocked);
@@ -5990,10 +6016,11 @@ function setFlowSettings(p) {
    `outstanding`, SalesOrders['Status'], or _shipAutoDerive — every one of them would be wrong. */
 
 // ── Config ──────────────────────────────────────────────────────────────────
-/* THE COMPANY PERCENTAGE IS NOT YET CONFIRMED. It ships at 0 so a mis-wired deploy cannot pay anyone
-   by accident, and _commRate reports configured:false, which makes submitCommissionRequest refuse.
-   To plug the real number in later: EITHER set this constant, OR add a CommissionRates row (a sheet
-   row always wins). Nothing else in this module knows a percentage exists. */
+/* THE COMPANY PERCENTAGE. A210 set it to the confirmed 2.5% taken from the real Statement of Account;
+   it shipped at 0 before that, which made _commRate report configured:false and submitCommissionRequest
+   refuse, so a mis-wired deploy could not pay anyone by accident. Overriding it later does NOT mean
+   editing this line: add a CommissionRates row (a sheet row always wins), which is a one-screen job
+   with no deploy. Nothing else in this module knows a percentage exists. */
 var _COMM_DEFAULT_RATE = 2.5;
 
 /* ── A210: the deduction ladder, taken from the real Statement of Account ──────────────────────
@@ -6149,6 +6176,48 @@ function _commSalesperson(so, quoteByNo) {
   return { name: by, reason: '' };
 }
 
+/* ── A211: who may see, and who may act ────────────────────────────────────────────────────────
+   Two lists, not one, because they answer different questions and the wider one is read-only.
+
+   READ  — may see claims that are not theirs. Admin is here because getCommissionClaimable's
+           exception buckets (money that resolves to no salesperson) are an admin data-quality job.
+   ACT   — may submit, edit, delete or reopen a claim that is not theirs. Admin is NOT here: admin
+           has no part in the approval chain, and nothing about fixing a broken AR row requires
+           touching somebody's pay.
+
+   POSITIVE lists on purpose. The A207 guards tested `role === 'sales'` and let every other role
+   through by accident — a negative test has to enumerate everyone it excludes, and it never does. */
+var _COMM_OVERSIGHT_READ = { director: 1, management: 1, admin: 1 };
+var _COMM_OVERSIGHT_ACT  = { director: 1, management: 1 };
+
+function _commMaySeeAll(role) { return !!_COMM_OVERSIGHT_READ[String(role || '').toLowerCase()]; }
+function _commMayActForAll(role) { return !!_COMM_OVERSIGHT_ACT[String(role || '').toLowerCase()]; }
+
+/** Whose claims is this caller allowed to read? Oversight may name anyone (or nobody, for all of
+ *  them); everybody else is pinned to their own session name — never to a name the browser sent.
+ *  Returns '' for "no restriction", or a refusal object when the caller cannot be identified. */
+function _commReadScope(p) {
+  var role = String((p && p.actorRole) || '');
+  if (_commMaySeeAll(role)) return { scope: String((p && p.salesperson) || '') };
+  var me = String((p && p.actorName) || '').trim();
+  if (!me) {
+    return { blocked: { success: false, message:
+      'Commission requests can only be read while signed in.' } };
+  }
+  return { scope: me };
+}
+
+/** May this actor act on this claim? Null when yes, a refusal object when no.
+ *  Called from submit, update, delete and revise — every writer that takes an existing Comm No and
+ *  is not already restricted to an approver. */
+function _commMayActOn(row, actorName, actorRole) {
+  if (_commMayActForAll(actorRole)) return null;
+  var owner = String((row && row['Salesperson']) || '');
+  if (owner && String(actorName || '').trim() === owner) return null;
+  return { success: false, message: 'Commission request ' + String((row && row['Comm No']) || '') +
+    ' belongs to ' + (owner || 'another salesperson') + ' — you can only act on your own claims.' };
+}
+
 /** Collection No → Comm No, for every claim currently HOLDING it. Pass a Comm No to exclude the
  *  claim being edited, so a claim never collides with itself. */
 function _commClaimedIndex(excludeCommNo) {
@@ -6177,12 +6246,19 @@ function _commClaimedIndex(excludeCommNo) {
  *  instalment would make an early part payment produce almost nothing.
  *
  *  Returns every rung, because a claim has to be auditable against a printed SOA line by line. */
+/** The cash a fully-paid order actually produces: ex-VAT, less the client's 1% withholding, plus the
+ *  VAT they hand over. NOT the same number as SalesOrders['Total'] — that is ex-VAT (A182) — and
+ *  confusing the two makes every complete claim look 11% over-collected. */
+function _commExpectedCash(soTotalExVat) {
+  return _num(soTotalExVat) * ((1 - _COMM_EWT_PCT / 100) + _COMM_VAT_RATE / 100);
+}
+
 function _commLadder(collected, soTotalExVat) {
   var vatPct = _COMM_VAT_PCT / 100, taxPct = _COMM_LOCAL_TAX_PCT / 100, ewtPct = _COMM_EWT_PCT / 100;
   var ex = _num(soTotalExVat);
   var poAmount = ex * (1 + _COMM_VAT_RATE / 100);            // the VAT-inclusive order value
   // What the client is expected to hand over in total: ex-VAT less 1% withholding, plus the VAT.
-  var expected = ex * (1 - ewtPct) + ex * (_COMM_VAT_RATE / 100);
+  var expected = _commExpectedCash(ex);
   var vatBase = (_COMM_VAT_ON === 'charged') ? (ex * _COMM_VAT_RATE / 100) : (poAmount * vatPct);
   var fraction, basis;
 
@@ -6440,16 +6516,23 @@ function _commCoverageNote(soTotal, invoiced, prior, thisBase) {
   if (total <= 0) {
     return 'Sales order carries no value on record — judge this claim on the collections listed.';
   }
-  var pct = Math.round(claimedAfter / total * 1000) / 10;
+  /* A211 — CASH IS COMPARED TO CASH. This used to measure claimed cash against SalesOrders['Total'],
+     which is VAT-EXCLUSIVE (A182), while the cash includes the VAT the client handed over. Every
+     fully-paid VAT order therefore came out at ~111% and printed "OVER-COLLECTED — verify before
+     approving" on a perfectly ordinary complete claim. That is precisely the cry-wolf failure the
+     comment on _commPriorClaimed warns about, and it would have fired on the very first real claim.
+     The invoiced line below still compares ex-VAT to ex-VAT, which is its own consistent pair. */
+  var cashDue = _commExpectedCash(total);
+  var pct = Math.round(claimedAfter / cashDue * 1000) / 10;
   var note = 'Claimed cash after this request: ' + _commMoney(claimedAfter) + ' of ' +
-             _commMoney(total) + ' order value (' + pct + '%).';
+             _commMoney(cashDue) + ' collectible on a ' + _commMoney(total) + ' order (' + pct + '%).';
   if (_num(prior) > 0) note += ' ' + _commMoney(prior) + ' was already claimed on this order.';
   if (_num(invoiced) > 0 && _num(invoiced) < total - 0.005) {
     note += ' Only ' + _commMoney(invoiced) + ' has been invoiced so far.';
   }
-  if (claimedAfter > total + 0.005) {
-    note += ' OVER-COLLECTED: claimed cash exceeds the order value by ' +
-            _commMoney(claimedAfter - total) + ' — verify before approving.';
+  if (claimedAfter > cashDue + 0.005) {
+    note += ' OVER-COLLECTED: claimed cash exceeds what this order can produce by ' +
+            _commMoney(claimedAfter - cashDue) + ' — verify before approving.';
   } else if (pct < 99.5) {
     note += ' PARTIAL — the order is not fully collected.';
   }
@@ -6540,9 +6623,15 @@ function _commWriteItems(no, collectionRows) {
 
 // ── Reads ───────────────────────────────────────────────────────────────────
 function getCommissionRequests(p) {
+  /* A211 — with no `salesperson` this used to return EVERY claim in the company to an unauthenticated
+     GET. The filter is now decided here, from the session Flask stamped, and a name the browser sent
+     is only honoured for a caller who is allowed to name anyone. */
+  var sc = _commReadScope(p);
+  if (sc.blocked) return sc.blocked;
+
   var rows = _rows('CommissionRequests').map(_commMap);
-  if (p && p.salesperson) {
-    rows = rows.filter(function (r) { return String(r.salesperson) === String(p.salesperson); });
+  if (sc.scope) {
+    rows = rows.filter(function (r) { return String(r.salesperson) === String(sc.scope); });
   }
   if (p && p.status) rows = rows.filter(function (r) { return String(r.status) === String(p.status); });
   if (p && p.soNo) rows = rows.filter(function (r) { return String(r.soNo) === String(p.soNo); });
@@ -6579,10 +6668,14 @@ function getCommissionRates() {
    verification harness asserts it to the peso.
    The exception buckets go ONLY to an oversight caller — a rep has no business seeing them. */
 function getCommissionClaimable(p) {
-  var want = String((p && p.salesperson) || '').trim();
+  /* A211 — same rule as getCommissionRequests: oversight may name anyone, everybody else is pinned
+     to their own session name. The old code took `salesperson` from the request for every caller,
+     so one rep could read another's claimable cash by typing their name. */
+  var sc = _commReadScope(p);
+  if (sc.blocked) return sc.blocked;
+  var want = String(sc.scope || '').trim();
   var role = String((p && p.actorRole) || '').toLowerCase();
-  var oversight = (role === 'director' || role === 'management' || role === 'admin');
-  if (!want && !oversight) return { success: false, message: 'salesperson is required.' };
+  var oversight = _commMaySeeAll(role);
 
   var ctx = _commContext();
   var claimed = _commClaimedIndex(null);
@@ -6692,10 +6785,13 @@ function createCommissionRequest(p) {
   if (!d.ok) return { success: false, message: d.message };
 
   /* A rep files for themselves and nobody else. The salesperson is taken from the QUOTATION, never
-     from the request, so this compares the server-resolved owner against the signed-in actor. */
+     from the request, so this compares the server-resolved owner against the signed-in actor.
+     A211 — the actor now arrives from the Flask session (this action joined _SECURED), and the test
+     is a POSITIVE oversight list: `role === 'sales'` let accounting, HR and marketing file against
+     anybody's order, because a negative test has to name everyone it excludes and never does. */
   var role = String(p.actorRole || '').toLowerCase();
   var actor = String(p.actorName || '');
-  if (role === 'sales' && actor !== d.salesperson) {
+  if (!_commMayActForAll(role) && actor !== d.salesperson) {
     return { success: false, message: 'Sales order ' + p.soNo + ' belongs to ' + d.salesperson +
              ' — you can only claim commission on your own quotations.' };
   }
@@ -6752,11 +6848,29 @@ function updateCommissionRequest(p) {
     return { success: false, message: 'Only a draft or rejected request can be edited (this one is ' +
              r['Status'] + ').' };
   }
+  /* A211 — this had NO ownership test at all, and it accepts a new SO No: the shortest path to
+     another rep's money was to save a draft of your own and then re-point it. Two checks, because
+     they fail differently — one for the claim you are holding, one for where you are aiming it. */
+  var owns = _commMayActOn(r, p.actorName, p.actorRole);
+  if (owns) return owns;
+
   var nos = [];
   try { nos = JSON.parse(p.collectionNos || '[]'); } catch (e) { nos = []; }
   var soNo = p.soNo || r['SO No'];
   var d = _commDerive(soNo, nos, p.commNo, null);
   if (!d.ok) return { success: false, message: d.message };
+
+  /* Re-pointing a draft must not silently change who gets paid. Oversight may do it deliberately;
+     for everybody else the new order has to be their own. */
+  if (!_commMayActForAll(p.actorRole) && String(d.salesperson) !== String(p.actorName || '')) {
+    return { success: false, message: 'Sales order ' + soNo + ' belongs to ' + d.salesperson +
+             ' — you can only claim commission on your own quotations.' };
+  }
+  if (String(d.salesperson) !== String(r['Salesperson'] || '')) {
+    return { success: false, message: 'Sales order ' + soNo + ' would move this claim from ' +
+             (String(r['Salesperson'] || '') || 'nobody') + ' to ' + d.salesperson +
+             '. File a separate request instead of re-pointing this one.' };
+  }
 
   _commSet(p.commNo, {
     'SO No': String(soNo), 'Quotation No': d.quotationNo, 'Customer': d.customer,
@@ -6784,6 +6898,8 @@ function deleteCommissionRequest(p) {
     return { success: false, message: 'Only a draft or rejected request can be deleted (this one is ' +
              r['Status'] + ').' };
   }
+  var owns = _commMayActOn(r, p.actorName, p.actorRole);   // A211
+  if (owns) return owns;
   _writeItems('CommissionRequestItems', 'Comm No', p.commNo, [], function (x) { return x; });
   _sheet('CommissionRequests').deleteRow(r.rowIndex);
   return { success: true, refNo: p.commNo, message: 'Commission request ' + p.commNo + ' deleted.' };
@@ -6798,6 +6914,8 @@ function submitCommissionRequest(p) {
   if (!_commEditable(r['Status'])) {
     return { success: false, message: 'This request has already been submitted (it is ' + r['Status'] + ').' };
   }
+  var owns = _commMayActOn(r, p.actorName, p.actorRole);   // A211
+  if (owns) return owns;
   var nos = _commItems(p.commNo).map(function (i) { return String(i['Collection No']); });
   if (!nos.length) return { success: false, message: 'This request claims no collections.' };
 
@@ -6926,6 +7044,16 @@ function reviseCommissionRequest(p) {
              'Correct it with an adjustment instead of reopening it.' };
   }
   if (_commEditable(st)) return { success: false, message: 'This request is already editable.' };
+  /* A211 — this had no check of any kind: anyone reaching the endpoint could reopen an approved
+     claim and wipe both signatures. Ownership first, then a second, tighter rule — a rep may
+     withdraw their own claim only while NOTHING has been signed. Once the director has signed,
+     discarding that signature is an approver's decision, not the claimant's. */
+  var owns = _commMayActOn(r, p.actorName, p.actorRole);
+  if (owns) return owns;
+  if (!_commMayActForAll(p.actorRole) && st !== _COMM_STAGES[0].status) {
+    return { success: false, message: 'This claim has already been approved by the director — ask ' +
+             'an approver to reopen it, or file an adjustment.' };
+  }
   _commSet(p.commNo, {
     'Status': 'Draft', 'Dir Approved By': '', 'Dir Approved At': '',
     'Mgmt Approved By': '', 'Mgmt Approved At': '', 'Approval Note': '',
@@ -7170,6 +7298,125 @@ function _commValueOfCollection(claim) {
  *  6553.2699999999995 displays fine but fails a reconciliation against a printed SOA by a hair. */
 function _commPeso(n) { return Math.round(_num(n) * 100) / 100; }
 
+/* ── A211: removable demo data ───────────────────────────────────────────────────────────────────
+   Nothing on the live sheets is claimable. 43 collections resolve to zero salespeople — 21 carry no
+   SO number, 21 point at an order with no quotation behind it, 1 at an order that does not exist —
+   and the 6 orders that DO carry a quotation have no collections at all. The two halves never meet,
+   so the page is empty for everybody and there is nothing to test the approval chain with.
+
+   The figures are the real ones from 2026_003_SOA_GEL_Mincon.xlsx, so filing this claim is also a
+   live check of the arithmetic: the ladder must print 42,854.80 → 36,368.67 → 909.22 → 900.13.
+
+   Every row is DEMO- prefixed and clearCommissionDemo removes all of them from all nine sheets, so
+   this never contaminates a real report. Seeding is idempotent: it clears first, so pressing the
+   button twice leaves one demo order, not two. */
+var _COMM_DEMO_PREFIX = 'DEMO-';
+var _COMM_DEMO = {
+  quotationNo: 'DEMO-QTN-001', soNo: 'DEMO-SO-001', invNo: 'DEMO-INV-001',
+  arNo: 'DEMO-AR-001', collectionNo: 'DEMO-COL-001',
+  customer: 'DEMO — Mincon Philippines Inc.',
+  subject: 'DEMO — commission walk-through (figures from SOA 2026-003)',
+  itemNo: 'DEMO-ITEM', itemName: 'DEMO — hydraulic torque wrench kit',
+  exVat: 38607.93,      // SalesOrders['Total'] is VAT-EXCLUSIVE (A182)
+  gross: 43240.88,      // what the client is billed: ex-VAT + 12% VAT
+  ewt: 386.08           // 1% withheld at source on the ex-VAT amount
+};
+
+/* Which columns to test for a DEMO- value, per sheet. A commission request has no DEMO- number of
+   its own — it is a real COMM-nnn — so it is recognised by the order it was filed against. */
+var _COMM_DEMO_SHEETS = [
+  ['Quotations',              ['Quotation No']],
+  ['QuotationItems',          ['Quotation No']],
+  ['SalesOrders',             ['SO No', 'Quotation No']],
+  ['SalesOrderItems',         ['SO No']],
+  ['Invoices',                ['INV No', 'SO No']],
+  ['ARAging',                 ['AR No', 'INV No', 'SO No']],
+  ['Collections',             ['Collection No', 'AR No', 'INV No', 'SO No']],
+  ['CommissionRequests',      ['SO No', 'Quotation No']],
+  ['CommissionRequestItems',  ['SO No', 'Collection No']]
+];
+
+function _commDemoRow(r, cols) {
+  for (var i = 0; i < cols.length; i++) {
+    if (String(r[cols[i]] || '').indexOf(_COMM_DEMO_PREFIX) === 0) return true;
+  }
+  return false;
+}
+
+function seedCommissionDemo(p) {
+  if (String((p && p.actorRole) || '').toLowerCase() !== 'director') {
+    return { success: false, message: 'Only the director can create the commission demo order.' };
+  }
+  /* Attribution is the whole point: commission follows Quotations['Created By']. Defaults to the
+     person pressing the button so they can walk their own claim through; name a rep to watch it
+     from the other side. */
+  var who = String((p && p.salesperson) || (p && p.actorName) || '').trim();
+  if (!who) return { success: false, message: 'Cannot tell who to attribute the demo order to.' };
+
+  clearCommissionDemo(p);                       // idempotent — never two demo orders
+
+  var d = _COMM_DEMO, today = _dateStr(_now()), now = _now();
+
+  _append('Quotations', [
+    d.quotationNo, today, d.customer, 'Approved', d.exVat, who, now, '',
+    'sales', '', who, now, d.subject, 0, '', '', '', '', '', '',
+    now, 'demo@example.invalid', ''                                        // 23 values
+  ]);
+  _append('QuotationItems', [
+    d.quotationNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat,
+    d.itemNo, d.itemName, 'VAT Excl', 'unit', '', 'DEMO-LINE-1', ''        // 13 values
+  ]);
+  _append('SalesOrders', [
+    d.soNo, d.quotationNo, today, d.customer, 'Delivered', d.exVat, who, now,
+    'Local', today, today, ''                                              // 12 values
+  ]);
+  _append('SalesOrderItems', [
+    d.soNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat, ''                  // 7 values
+  ]);
+  _append('Invoices', [
+    d.invNo, d.soNo, today, d.customer, d.exVat, 0, who, now, '', ''       // 10 values
+  ]);
+  _append('ARAging', [
+    d.arNo, d.invNo, d.soNo, d.customer, d.gross, d.gross, 'Paid',
+    today, 'DEMO — remove with Clear demo order.', now, now                // 11 values
+  ]);
+  _append('Collections', [
+    d.collectionNo, d.arNo, d.invNo, d.soNo, d.customer, today, d.gross,
+    'Bank Transfer', 'DEMO-REF-001', 'DEMO — remove with Clear demo order.',
+    now, d.ewt, '', ''                                                     // 14 values
+  ]);
+
+  var lad = _commLadder(d.gross - d.ewt, d.exVat);
+  return { success: true, refNo: d.soNo, soNo: d.soNo, salesperson: who,
+    collectionNo: d.collectionNo,
+    base: _commPeso(d.gross - d.ewt), netOfTaxes: _commPeso(lad.netOfTaxes),
+    message: 'Demo sales order ' + d.soNo + ' created for ' + who + ' — one collection of ' +
+             _commMoney(d.gross - d.ewt) + ' is now claimable. Remove it with Clear demo order.' };
+}
+
+function clearCommissionDemo(p) {
+  if (String((p && p.actorRole) || '').toLowerCase() !== 'director') {
+    return { success: false, message: 'Only the director can remove the commission demo order.' };
+  }
+  var removed = 0, detail = [];
+  _COMM_DEMO_SHEETS.forEach(function (spec) {
+    var name = spec[0], cols = spec[1], sh, rows;
+    try { sh = _sheet(name); rows = _rows(name); } catch (e) { return; }
+    var kill = [];
+    rows.forEach(function (r) { if (_commDemoRow(r, cols)) kill.push(r.rowIndex); });
+    if (!kill.length) return;
+    /* Bottom-up: deleting row 5 renumbers everything below it, so a top-down loop deletes the
+       wrong rows from the second one onwards. */
+    kill.sort(function (a, b) { return b - a; });
+    kill.forEach(function (ix) { sh.deleteRow(ix); });
+    removed += kill.length;
+    detail.push(name + ' (' + kill.length + ')');
+  });
+  return { success: true, refNo: _COMM_DEMO.soNo, removed: removed, sheets: detail,
+    message: removed ? 'Removed ' + removed + ' demo row(s): ' + detail.join(', ') + '.'
+                     : 'No demo rows were found — nothing to remove.' };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
@@ -7243,6 +7490,11 @@ var _MODULE_MAP = {
   deleteCommissionRequest: ['Commission Request', 'Deleted'],
   setCommissionRate: ['Commission Rate', 'Saved'],
   deleteCommissionRate: ['Commission Rate', 'Removed'],
+  // A211 — the demo writes to Quotations, SalesOrders, Invoices, ARAging and Collections. Rows
+  // appearing and disappearing from the real ledgers with no audit trail is exactly what an
+  // audit row is for, even when they are labelled DEMO-.
+  seedCommissionDemo: ['Sales Order', 'Demo Seeded'],
+  clearCommissionDemo: ['Sales Order', 'Demo Cleared'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
@@ -8121,6 +8373,9 @@ var HANDLERS = {
   reviseCommissionRequest: reviseCommissionRequest, adjustCommissionRequest: adjustCommissionRequest,
   markCommissionReleased: markCommissionReleased,
   setCommissionRate: setCommissionRate, deleteCommissionRate: deleteCommissionRate,
+  // A211 — removable demo data, so the approval chain can be walked end to end on sheets where
+  // nothing real is claimable yet.
+  seedCommissionDemo: seedCommissionDemo, clearCommissionDemo: clearCommissionDemo,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -8194,6 +8449,7 @@ var MUTATIONS = {
   submitCommissionRequest: 1, approveCommissionRequest: 1, rejectCommissionRequest: 1,
   reviseCommissionRequest: 1, adjustCommissionRequest: 1, markCommissionReleased: 1,
   setCommissionRate: 1, deleteCommissionRate: 1,
+  seedCommissionDemo: 1, clearCommissionDemo: 1,   // A211 — both write rows; both take the lock
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,

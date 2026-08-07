@@ -14,9 +14,10 @@ function _mfn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 let mfPrByNo = {};   // A183: prNo → pricing record, for the quotation approval review
 let mfQByNo = {};    // A183: quotationNo → quotation
 let mfCommByNo = {}; // A207: commNo → commission request, for the "View payments" panel
-/** A209 — is the commission feature open to users yet? Defended against load order. */
+/** A209/A211 — is the commission feature open to the person looking at this page? Defended
+ *  against load order. This is the management dashboard, so it asks about management. */
 function _mfCommLive() {
-  return (typeof FLOW_COMMISSIONS_LIVE === 'undefined') || FLOW_COMMISSIONS_LIVE;
+  return (typeof flowCommissionsLiveFor !== 'function') || flowCommissionsLiveFor('management');
 }
 let mfrGate = { needTick: false };   // A183: whether the review tick gates Approve
 
@@ -121,7 +122,7 @@ async function mfLoadApprovals() {
       fetchFlow('getPricingRequests').catch(() => ({ data: [] })),   // A183: pricing behind each quotation
       fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),  // A190: reps' weekly plans
       // A209 — commissions are not open yet; same empty shape, one code path downstream.
-      (_mfCommLive() ? fetchFlow('getCommissionRequests', { status: 'Pending Management' }).catch(() => ({ data: [] }))
+      (_mfCommLive() ? postFlow('getCommissionRequests', { status: 'Pending Management' }).catch(() => ({ data: [] }))
                      : Promise.resolve({ data: [] })),  // A207
     ]);
     // A183: prNo → pricing record + quotationNo → quotation, so the review modal can join them.

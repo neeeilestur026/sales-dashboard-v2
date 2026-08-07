@@ -383,9 +383,11 @@ function logout() {
  */
 /* A209 — a menu entry for something that is visible but not open yet. Kept visible rather than
    hidden so people can see the feature is being built; the page behind it explains what it will do
-   and does nothing else. flow-api.js owns the flag, and defends against load order. */
-function _soon() {
-  return (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE
+   and does nothing else. flow-api.js owns the flag, and defends against load order.
+   A211 — asked per role: the tag disappears for the roles the feature is actually open to, and the
+   three navbars below each pass their own session's role rather than sharing one global answer. */
+function _soon(role) {
+  return (typeof flowCommissionsLiveFor === 'function' && !flowCommissionsLiveFor(role)
     && typeof flowSoonTag === 'function') ? flowSoonTag() : '';
 }
 
@@ -580,7 +582,7 @@ function renderNavbar(activePage) {
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Pricing Requests</a>
           <a href="management-leave.html" class="${activePage === 'management-leave' ? 'active' : ''}">Leave Approvals</a>
-          <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions${_soon()}</a>
+          <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions${_soon(session.role)}</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -658,8 +660,8 @@ function renderNavbar(activePage) {
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="director-expenses.html" class="${activePage === 'director-expenses' ? 'active' : ''}">Expenses</a>
-          <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Commissions for Payroll${_soon()}</a>
-          <a href="commission-rates.html" class="${activePage === 'commission-rates' ? 'active' : ''}">Commission Rates${_soon()}</a>
+          <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Commissions for Payroll${_soon(session.role)}</a>
+          <a href="commission-rates.html" class="${activePage === 'commission-rates' ? 'active' : ''}">Commission Rates${_soon(session.role)}</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -788,7 +790,7 @@ function renderNavbar(activePage) {
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="weekly-itinerary.html" class="${activePage === 'weekly-itinerary' ? 'active' : ''}">Weekly Itinerary</a>
-          <a href="flow-commissions.html" class="${activePage === 'flow-commissions' ? 'active' : ''}">Commission Requests${_soon()}</a>
+          <a href="flow-commissions.html" class="${activePage === 'flow-commissions' ? 'active' : ''}">Commission Requests${_soon(session.role)}</a>
           <a href="sales-emails.html" class="${activePage === 'sales-emails' ? 'active' : ''}">My Emails</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
@@ -993,10 +995,13 @@ async function flowComputeActions(session) {
     }).catch(() => {}));
   }
 
-  /* A209 — commissions are not open to users yet, so no nudge and no bell count. Deliberately
+  /* A209 — for a role commissions are not open to yet, no nudge and no bell count. Deliberately
      SILENT rather than marked "Soon": a nudge saying "3 requests awaiting your approval" is about
-     real pending work, and there cannot be any. It would also still increment the bell. */
-  const _commLive = (typeof FLOW_COMMISSIONS_LIVE === 'undefined') || FLOW_COMMISSIONS_LIVE;
+     real pending work, and there cannot be any. It would also still increment the bell.
+     A211 — now asked per role, so the director and management nudges below come alive while sales
+     stay silent. The three reads are POSTs from here on: getCommissionRequests is secured, and the
+     rep's `salesperson` filter is applied server-side from the session, not from this name. */
+  const _commLive = (typeof flowCommissionsLiveFor !== 'function') || flowCommissionsLiveFor(session.role);
 
   /* A208 — the same picture across the team, for the two tiers who chase it. One fetch, no mailbox. */
   if (isMgmt || isDir) {
@@ -1058,7 +1063,7 @@ async function flowComputeActions(session) {
      queue is what trains people to ignore the list. */
   if (_commLive && (isDir || isMgmt)) {
     const mine = isDir ? 'Pending Director' : 'Pending Management';
-    jobs.push(fetchFlow('getCommissionRequests', { status: mine }).then(r => {
+    jobs.push(postFlow('getCommissionRequests', { status: mine }).then(r => {
       const rows = (r && r.data) || [];
       if (rows.length) {
         const value = rows.reduce((t, x) => t + (parseFloat(x.netPayable) || 0), 0);
@@ -1071,7 +1076,7 @@ async function flowComputeActions(session) {
   /* The director again, wearing the payroll hat: approved commissions still to be keyed into a
      cutoff. Without this an approved claim can sit unpaid indefinitely — nothing else chases it. */
   if (_commLive && isDir) {
-    jobs.push(fetchFlow('getCommissionRequests', { status: 'Approved' }).then(r => {
+    jobs.push(postFlow('getCommissionRequests', { status: 'Approved' }).then(r => {
       const rows = ((r && r.data) || []).filter(x => !x.releasedAt);
       if (rows.length) {
         const value = rows.reduce((t, x) => t + (parseFloat(x.netPayable) || 0), 0);
@@ -1083,7 +1088,7 @@ async function flowComputeActions(session) {
   }
   /* The rep: a rejected claim is a dead end unless someone tells them. Scoped to their own name. */
   if (_commLive && isSales) {
-    jobs.push(fetchFlow('getCommissionRequests', { salesperson: session.name, status: 'Rejected' }).then(r => {
+    jobs.push(postFlow('getCommissionRequests', { status: 'Rejected' }).then(r => {
       const rows = (r && r.data) || [];
       if (rows.length) add('report', '#b45309', rows.length + ' commission request(s) sent back to you',
                            'flow-commissions.html');

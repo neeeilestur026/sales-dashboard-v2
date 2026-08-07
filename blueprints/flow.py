@@ -578,6 +578,15 @@ SECURED_ACTIONS = [
     "submitCommissionRequest", "approveCommissionRequest", "rejectCommissionRequest",
     "adjustCommissionRequest", "markCommissionReleased",
     "setCommissionRate", "deleteCommissionRate", "deleteCommissionRequest",
+    # A211 — the rest of the commission surface, including two READS, which is the one place this
+    # file deliberately breaks its own "reads stay direct and cached" rule. getCommissionRequests
+    # with no salesperson returns every claim in the company; the only honest way to scope it is to
+    # know who is asking, and a name the browser sent is not that. createCommissionRequest's
+    # "you can only claim on your own quotations" guard read the browser's own actorRole, so it
+    # answered to whoever it was defending against.
+    "createCommissionRequest", "updateCommissionRequest", "reviseCommissionRequest",
+    "getCommissionRequests", "getCommissionClaimable",
+    "seedCommissionDemo", "clearCommissionDemo",
 ]
 
 

@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    the version gate cannot answer this question: these pages want v112 and the A208 email tracker
    wants 113, which is the same paste. Hiding the CARDS, not just their inner containers — the static
    rate form — every input and the Save button — would otherwise stay live behind the message. */
-  if (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE) {
+  if (typeof flowCommissionsLiveFor === 'function' && !flowCommissionsLiveFor(crSession.role)) {
     ['crIntroCard', 'crFormCard'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
@@ -66,7 +66,7 @@ async function crLoad() {
   const el = document.getElementById('crList');
   el.innerHTML = '<div class="cp-empty">Loading…</div>';
   try {
-    const res = await fetchFlow('getCommissionRates', {}, { fresh: true });
+    const res = await fetchFlow('getCommissionRates', { actorRole: String(crSession.role || '') }, { fresh: true });
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not load the rates.');
     crRates = res.data || [];
     document.getElementById('crNone').style.display = crRates.length ? 'none' : '';

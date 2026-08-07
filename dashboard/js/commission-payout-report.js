@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    the version gate cannot answer this question: these pages want v112 and the A208 email tracker
    wants 113, which is the same paste. Hiding the CARDS, not just their inner containers — the static
    period selector, Refresh and Print buttons and the payroll warning would otherwise stay live behind the message. */
-  if (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE) {
+  if (typeof flowCommissionsLiveFor === 'function' && !flowCommissionsLiveFor(role)) {
     ['cpMainCard', 'cpAuditCard'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
@@ -58,7 +58,11 @@ async function cpLoad() {
   body.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div>';
   try {
     const sel = document.getElementById('cpPeriod');
-    const wanted = sel && sel.value ? { payoutPeriod: sel.value } : {};
+    /* A211 — the rollout gate on the backend reads actorRole, and a GET does not carry one. Not a
+       security check: this read is unsecured, and what it returns is already director/management
+       territory. Sending it stops the page refusing itself. */
+    const wanted = { actorRole: String(cpSession.role || '') };
+    if (sel && sel.value) wanted.payoutPeriod = sel.value;
     const res = await fetchFlow('getCommissionPayoutReport', wanted, { fresh: true });
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not load the report.');
     cpReport = res;
@@ -208,7 +212,7 @@ async function cpAudit() {
   const card = document.getElementById('cpAuditCard');
   const el = document.getElementById('cpAudit');
   try {
-    const res = await fetchFlow('auditCommissionIntegrity', {}, { fresh: true });
+    const res = await fetchFlow('auditCommissionIntegrity', { actorRole: String(cpSession.role || '') }, { fresh: true });
     if (!res || !res.success) return;
     if (res.clean) {
       card.style.display = '';

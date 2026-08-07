@@ -15,9 +15,10 @@
 
 let daItinByNo = {};
 let daCommByNo = {};   // A207
-/** A209 — is the commission feature open to users yet? Defended against load order. */
+/** A209/A211 — is the commission feature open to the person looking at this page? Defended
+ *  against load order. This is the director's own queue, so it asks about the director. */
 function _daCommLive() {
-  return (typeof FLOW_COMMISSIONS_LIVE === 'undefined') || FLOW_COMMISSIONS_LIVE;
+  return (typeof flowCommissionsLiveFor !== 'function') || flowCommissionsLiveFor('director');
 }
 
 function _dae(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
@@ -40,7 +41,7 @@ async function daLoad() {
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
       /* A209 — commissions are not open yet, so do not even ask. Returns the same empty shape the
          .catch would, which keeps everything downstream on one code path. */
-      (_daCommLive() ? fetchFlow('getCommissionRequests', { status: 'Pending Director' }).catch(() => ({ data: [] }))
+      (_daCommLive() ? postFlow('getCommissionRequests', { status: 'Pending Director' }).catch(() => ({ data: [] }))
                      : Promise.resolve({ data: [] })),
     ]);
 

@@ -99,6 +99,28 @@
       <div class="cm-gate" id="gateMsg"></div>
     </div>
 
+    <!-- A211 — director only, and hidden until the JS confirms it. Nothing on the live sheets is
+         claimable (43 collections resolve to no salesperson; the 6 orders that carry a quotation
+         have no collections), so without this the approval chain cannot be walked at all. The
+         figures are the real ones from SOA 2026-003, which makes the walk-through double as a check
+         of the arithmetic. -->
+    <div class="chart-card" id="cmDemoCard" style="display:none;">
+      <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
+        <h3>Demo order (testing)</h3>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-primary" onclick="cmSeedDemo()">Create demo order</button>
+          <button class="btn btn-sm" onclick="cmClearDemo()">Clear demo order</button>
+        </div>
+      </div>
+      <p style="font:400 12px/1.6 'Inter',sans-serif;color:var(--ink2);margin:6px 0 0;">
+        Adds one <b>DEMO-</b> prefixed quotation, sales order, invoice, receivable and collection
+        attributed to you, using the figures from the real Statement of Account &mdash; collected
+        &#8369;42,854.80, commission &#8369;909.22, net &#8369;900.13 at 2.5%. Clearing removes every
+        DEMO- row from all nine sheets, so nothing is left in your real records.
+      </p>
+      <div id="cmDemoMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
     <div class="chart-card" id="claimCard">
       <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
         <h3 id="claimTitle">Collected payments you can claim</h3>

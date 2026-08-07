@@ -16,6 +16,10 @@ let cmPicked = {};         // soNo -> { collectionNo: true }
 let cmReady = false;       // backend v112 present?
 
 const CM_MIN_FLOW_VERSION = 112;
+/* A211 — the demo actions arrived in 116, four versions after the page itself. Gating them on
+   CM_MIN_FLOW_VERSION would offer a button that answers "Unknown action" on any backend from 112 to
+   115, which reads to the user as the feature being broken rather than not yet deployed. */
+const CM_DEMO_FLOW_VERSION = 116;
 
 document.addEventListener('DOMContentLoaded', async () => {
   cmSession = requireAuth();
@@ -23,12 +27,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-commissions');
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-commissions.html');
 
-/* A209 — the feature is built but not open to users yet. Checked BEFORE the version gate, because
-   the version gate cannot answer this question: these pages want v112 and the A208 email tracker
-   wants 113, which is the same paste. Hiding the CARDS, not just their inner containers — the static
-   KPI tiles would otherwise stay live behind the message. */
-  if (typeof FLOW_COMMISSIONS_LIVE !== 'undefined' && !FLOW_COMMISSIONS_LIVE) {
-    ['cmKpis', 'claimCard', 'cmListCard', 'gateCard'].forEach(id => {
+/* A209 — the feature is built but not open to this role yet. Checked BEFORE the version gate,
+   because the version gate cannot answer this question: these pages want v112 and the A208 email
+   tracker wants 113, which is the same paste. Hiding the CARDS, not just their inner containers —
+   the static KPI tiles would otherwise stay live behind the message.
+   A211 — asked per role, so director and management get the working page while sales still see this. */
+  if (typeof flowCommissionsLiveFor === 'function' && !flowCommissionsLiveFor(cmSession.role)) {
+    ['cmKpis', 'claimCard', 'cmListCard', 'gateCard', 'cmDemoCard'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
@@ -57,11 +62,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('listContainer').innerHTML = '<div class="cm-empty">Waiting for the backend.</div>';
     return;
   }
+  /* A211 — the demo controls exist only for the director, and only once the backend is known to
+     carry them. Shown after the version gate so it cannot offer a button that answers "unknown
+     action". */
+  if (String(cmSession.role || '').toLowerCase() === 'director'
+      && typeof flowVersionAtLeast === 'function' && await flowVersionAtLeast(CM_DEMO_FLOW_VERSION)) {
+    const card = document.getElementById('cmDemoCard');
+    if (card) card.style.display = '';
+  }
   await cmLoadAll();
 });
 
 /** The name a commission is attributed to. Quotations record the rep's FULL NAME, so that is the key. */
 function cmWho() { return String((cmSession && cmSession.name) || ''); }
+
+/* ── A211: the removable demo order ──────────────────────────────────────────
+   Both are secured POSTs, so the director's identity comes from the session — the button cannot be
+   replayed by anyone else even with the URL. */
+async function cmSeedDemo() {
+  if (!confirm('Create a DEMO sales order attributed to you?\n\n' +
+               'It writes one DEMO- prefixed row to Quotations, Sales Orders, Invoices, AR Aging ' +
+               'and Collections. "Clear demo order" removes all of them.')) return;
+  try {
+    const res = await postFlow('seedCommissionDemo', {});
+    if (!res.success) throw new Error(res.message);
+    flowMsg('cmDemoMsg', res.message, true);
+    await cmLoadAll();
+  } catch (e) { flowMsg('cmDemoMsg', e.message, false); }
+}
+
+async function cmClearDemo() {
+  if (!confirm('Remove every DEMO- row from all nine sheets?\n\n' +
+               'Any commission request filed against the demo order goes with it.')) return;
+  try {
+    const res = await postFlow('clearCommissionDemo', {});
+    if (!res.success) throw new Error(res.message);
+    flowMsg('cmDemoMsg', res.message, true);
+    await cmLoadAll();
+  } catch (e) { flowMsg('cmDemoMsg', e.message, false); }
+}
 
 async function cmLoadAll() {
   await Promise.all([cmLoadClaimable(), cmLoadRequests()]);
@@ -72,7 +111,7 @@ async function cmLoadClaimable() {
   const el = document.getElementById('claimContainer');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div>';
   try {
-    const res = await fetchFlow('getCommissionClaimable', { salesperson: cmWho() }, { fresh: true });
+    const res = await postFlow('getCommissionClaimable', { salesperson: cmWho() });
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not load your collected payments.');
     cmClaimable = res.data || [];
     cmRenderClaimable();
@@ -85,7 +124,7 @@ async function cmLoadRequests() {
   const el = document.getElementById('listContainer');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div>';
   try {
-    const res = await fetchFlow('getCommissionRequests', { salesperson: cmWho() }, { fresh: true });
+    const res = await postFlow('getCommissionRequests', { salesperson: cmWho() });
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not load your commission requests.');
     cmRequests = res.data || [];
     cmRenderRequests();
