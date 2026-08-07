@@ -101,12 +101,17 @@
         </nav>
         <div class="flow-nav" id="flowNav" hidden></div>
 
+      <!-- A208: every tile shows the NET value of its bucket and a subtitle that describes exactly
+           the rows it counts. The old set mixed counts and money, and its "Open Value" tile summed
+           four statuses its own subtitle did not mention. -->
       <div class="kpi-row">
-        <div class="kpi"><div class="top"><span class="l">Draft</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></div><div class="v" id="kqDraft">—</div><div class="d">not yet submitted</div></div>
-        <div class="kpi"><div class="top"><span class="l">Sent</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span></div><div class="v" id="kqSent">—</div><div class="d">with the client</div></div>
-        <div class="kpi"><div class="top"><span class="l">Approved</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span></div><div class="v" id="kqApproved">—</div><div class="d">ready to send</div></div>
-        <div class="kpi spot"><div class="top"><span class="l">Open Value</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div><div class="v sm" id="kqValue">—</div><div class="d">draft + in-approval</div></div>
+        <div class="kpi"><div class="top"><span class="l">Internal</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></div><div class="v sm" id="kqInternal">—</div><div class="d" id="kqInternalN">drafting, in approval, or sent back for rework</div></div>
+        <div class="kpi"><div class="top"><span class="l">Ready to send</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span></div><div class="v sm" id="kqApproved">—</div><div class="d" id="kqApprovedN">approved, not yet sent to the client</div></div>
+        <div class="kpi spot"><div class="top"><span class="l">With the client</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span></div><div class="v sm" id="kqSent">—</div><div class="d" id="kqSentN">sent, awaiting their decision</div><div class="d" id="kqSentNote" style="margin-top:2px;"></div></div>
+        <div class="kpi"><div class="top"><span class="l">Lost / not pursued</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></div><div class="v sm" id="kqClosed">—</div><div class="d" id="kqClosedN">closed without an order</div></div>
       </div>
+      <div id="kqScope" class="no-print" style="font-size:0.76rem;color:var(--text-muted,#64748b);margin:-0.5rem 0 0.9rem 0.15rem;"></div>
+      <div id="kqDup" class="no-print" style="display:none;font-size:0.78rem;font-weight:600;color:#92400e;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:8px;padding:0.55rem 0.7rem;margin:0 0 0.9rem;"></div>
 
     <!-- ═══ Create: the Quote Configurator (form left, the real PDF right) ═══ -->
     <div class="chart-card" style="margin-bottom:1.25rem;">
@@ -274,12 +279,20 @@
         <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#475569);">Month</label>
         <select id="qMonthFilter" onchange="renderQuotationList()"
                 style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;min-width:150px;">
-          <option value="">All months</option>
+          <!-- A208: a rolling default, so this figure cannot quietly become an all-time number
+               next year. On today's data all 77 quotations are inside 90 days, so it changes
+               nothing yet — that is the point. -->
+          <option value="last90">Last 90 days</option>
+          <option value="">All time</option>
         </select>
         <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#475569);">Show</label>
         <select id="qStatusFilter" onchange="renderQuotationList()"
                 style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);font-size:0.85rem;">
           <option value="active">Active</option>
+          <!-- A208: 'Rejected' is an INTERNAL approval refusal — the row is editable again and the
+               button says Re-submit. It stays inside Active because someone still has to fix it;
+               this option only isolates it in one click. -->
+          <option value="rework">Rejected (needs rework)</option>
           <option value="closed">Closed (Not Pursued / Lost / Cancelled)</option>
           <option value="all">All</option>
         </select>
@@ -347,25 +360,19 @@
       if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
       if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
     })();
-    // KPI cards — quotation counts by status; scoped to the rep when the viewer is sales.
-    window.flowRefreshKpis = async function () {
-      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
-      try {
-        var s = {}; try { s = JSON.parse(localStorage.getItem('session') || '{}'); } catch (e) {}
-        var params = s.role === 'sales' ? { createdBy: s.name } : {};
-        var res = await fetchFlow('getQuotations', params), list = (res && res.data) || [];
-        var st = function (q) { return String(q.status || '').toLowerCase(); };
-        var open = list.filter(function (q) { return st(q) !== 'sent' && st(q) !== 'rejected'; });
-        var val = 0; open.forEach(function (q) {
-          var t = flowNum(q.total) * (1 - (flowNum(q.discountPct) || 0) / 100); val += t;
-        });
-        set('kqDraft', list.filter(function (q) { return st(q) === 'draft' || st(q) === 'rejected'; }).length);
-        set('kqSent', list.filter(function (q) { return st(q) === 'sent'; }).length);
-        set('kqApproved', list.filter(function (q) { return st(q) === 'approved'; }).length);
-        set('kqValue', flowMoney(val, 'PHP'));
-      } catch (e) { /* leave the em dashes */ }
+    /* A208 — the tiles used to be computed HERE, from their own fetchFlow('getQuotations') with their
+       own arithmetic off the raw `total` column, no sales-order join and no awareness of the page's
+       filters. That is why this screen showed PHP 10.7M in the Open Value tile and PHP 18.4M in the
+       counter directly beneath it for the same rep, and why the tile's "draft + in-approval" subtitle
+       described a filter it did not apply.
+
+       The tiles, the counter and the per-rep headers are now three renderings of ONE
+       flowQuotationRollup over the SAME filtered rows (qRefreshKpis in js/flow-quotations.js), so
+       they cannot disagree again. This shim only exists because four call sites already say
+       flowRefreshKpis() after a save. */
+    window.flowRefreshKpis = function () {
+      if (typeof qRefreshKpis === 'function') qRefreshKpis();
     };
-    flowRefreshKpis();   // A157: named so a save can re-run it — it used to fire once and go stale
   </script>
 </body>
 </html>

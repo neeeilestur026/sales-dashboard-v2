@@ -17,6 +17,8 @@ let qCanClose = false;      // A152: the Close/Reopen actions need FlowAPI v91
 let qPrByNo = {};           // A183: prNo → pricing-request record, for the approval pricing review
 let qrGate = { block: false, needTick: false };   // A183: state the tick uses to re-enable Approve
 const Q_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];   // A152 soft-close outcomes
+let qRoll = null;        // A208: the current flowQuotationRollup — tiles, counter and rep headers share it
+let qDupPairs = [];      // A208: same document number + same customer on two rows
 
 /* A175 — one quotation page. The Quote Configurator (flow-quote-configurator.js) is the CREATE half
  * above; everything below — the list, review, approval, close/reopen — is this file's.
@@ -131,6 +133,95 @@ async function loadQuotations() {
 /** 'yyyy-MM' of the month a quotation was created in. */
 function qMonthKey(q) { return String(flowDate(q.date) || '').slice(0, 7); }
 
+/** Narrow to the selected period. 'last90' is Manila-explicit at both ends — flowToday()/flowDate()
+ *  rather than a naive ISO slice, which shifts the boundary by a day for an evening page load. */
+function qFilterPeriod(list, month) {
+  if (month === 'last90') {
+    const cut = qDaysAgo(90);
+    return list.filter(q => String(flowDate(q.date) || '') >= cut);
+  }
+  if (month) return list.filter(q => qMonthKey(q) === month);
+  return list;
+}
+
+/** 'yyyy-MM-dd' N days before today, Manila. */
+function qDaysAgo(n) {
+  const t = flowToday();                       // 'yyyy-MM-dd' in Asia/Manila
+  const d = new Date(t + 'T00:00:00Z');        // parse as UTC so the arithmetic cannot drift a day
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/* A208 — the tiles. Every figure comes from the rollup over the SAME filtered rows the list shows,
+   so what the tiles say and what the table below contains are the same thing. The previous tiles
+   ran their own unfiltered fetch, which is how the screen ended up reporting two different numbers
+   for one rep. */
+function qRenderKpiTiles(roll, shown, month, sview, periodRoll) {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  if (!roll) return;
+  const M = (v) => flowMoney(v, 'PHP');
+  const N = (b, noun) => `${roll[b].n} ${noun}${roll[b].n === 1 ? '' : 's'}`;
+
+  set('kqInternal', M(roll.internal.value));
+  set('kqInternalN', `${N('internal', 'quotation')} · drafting, in approval, or sent back for rework`);
+  set('kqApproved', M(roll.approved.value));
+  set('kqApprovedN', `${N('approved', 'quotation')} · approved, not yet sent to the client`);
+  set('kqSent', M(roll.sent.value));
+  set('kqSentN', `${N('sent', 'quotation')} · sent, awaiting their decision`);
+  set('kqClosed', M(roll.closed.value));
+  /* When the Show filter is hiding closed rows, say so on the tile rather than showing a bare zero
+     that looks like "nothing was ever lost". */
+  const hiddenClosed = periodRoll ? periodRoll.closed.n - roll.closed.n : 0;
+  set('kqClosedN', hiddenClosed > 0
+    ? `${hiddenClosed} hidden by the “${sview === 'active' ? 'Active' : sview}” filter — worth ${M(periodRoll.closed.value)}`
+    : `${N('closed', 'quotation')} · closed without an order`);
+
+  /* Two honesty notes under the headline figure.
+     The won count is deliberately NOT its own tile: only ~6% of sales orders record which quotation
+     they came from, so any "won" figure is a floor, and a tile beside the others would read as a
+     conversion rate that the data cannot support. */
+  const note = document.getElementById('kqSentNote');
+  if (note) {
+    const bits = [];
+    if (roll.won.n) {
+      bits.push(`${roll.won.n} became an order (${M(roll.won.value)}) — undercounts, few orders record their quotation`);
+    }
+    if (roll.top && roll.top.share >= 0.4) {
+      bits.push(`top deal ${M(roll.top.value)} is ${Math.round(roll.top.share * 100)}% of this`);
+    }
+    note.textContent = bits.join(' · ');
+    note.title = (roll.top && roll.top.share >= 0.4)
+      ? `${roll.top.quotationNo} — ${roll.top.customer}` : '';
+  }
+
+  // Say in words exactly what is being counted, so no one has to infer it from the controls.
+  const scope = document.getElementById('kqScope');
+  if (scope) {
+    const period = month === 'last90' ? 'Last 90 days'
+      : (month ? qMonthLabel(month) : 'All time');
+    const show = sview === 'closed' ? 'closed only'
+      : (sview === 'rework' ? 'rejected, needing rework' : (sview === 'all' ? 'every status' : 'active'));
+    const who = qIsOversight ? 'all reps' : 'your quotations';
+    scope.textContent = `Showing ${shown} of ${qList.length} · ${period} · ${show} · ${who}` +
+      ` · values are net of discount`;
+  }
+
+  // Same document number AND same customer on two rows. Reported, never merged.
+  const dup = document.getElementById('kqDup');
+  if (dup) {
+    if (!qDupPairs.length) { dup.style.display = 'none'; dup.textContent = ''; }
+    else {
+      dup.style.display = '';
+      dup.textContent = `${qDupPairs.length} possible duplicate${qDupPairs.length === 1 ? '' : 's'} — ` +
+        qDupPairs.map(p => `${p.prefix} (${p.customer}) appears on ${p.rows.length} rows`).join('; ') +
+        ` · both are still counted; check whether it is one deal or a re-quote.`;
+    }
+  }
+}
+
+/** Public entry point for the four post-save call sites that say flowRefreshKpis(). */
+function qRefreshKpis() { renderQuotationList(); }
+
 const Q_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 function qMonthLabel(key) {
@@ -146,9 +237,10 @@ function qBuildMonthOptions() {
   qList.forEach(q => { const k = qMonthKey(q); if (k) counts[k] = (counts[k] || 0) + 1; });
   const keys = Object.keys(counts).sort().reverse();
   const keep = sel.value;
-  sel.innerHTML = `<option value="">All months</option>` +
+  // A208: 'Last 90 days' is the default so the headline cannot silently become an all-time number.
+  sel.innerHTML = `<option value="last90">Last 90 days</option><option value="">All time</option>` +
     keys.map(k => `<option value="${k}">${qMonthLabel(k)} (${counts[k]})</option>`).join('');
-  if (keep && keys.indexOf(keep) >= 0) sel.value = keep;    // survive a refresh
+  sel.value = (keep && (keep === '' || keep === 'last90' || keys.indexOf(keep) >= 0)) ? keep : 'last90';
 }
 
 /** Filter by month + free text, then render. Old quotations keep every action — the filter only
@@ -161,9 +253,15 @@ function renderQuotationList() {
   // A152: status filter — Active (default, hides closed), Closed (win/loss review), or All.
   const sview = (document.getElementById('qStatusFilter') || {}).value || 'active';
   let rows = qList;
+  /* A208 — keep a copy filtered by PERIOD only, before the status filter narrows it. The tiles
+     describe the rows actually listed (so nothing on screen disagrees), but a "Lost" tile that
+     always reads zero under the default Active filter is dead furniture — this is what lets it say
+     how many it is hiding instead. */
+  const periodRows = qFilterPeriod(qList, month);
   if (sview === 'active') rows = rows.filter(q => Q_CLOSED.indexOf(String(q.status)) === -1);
   else if (sview === 'closed') rows = rows.filter(q => Q_CLOSED.indexOf(String(q.status)) !== -1);
-  if (month) rows = rows.filter(q => qMonthKey(q) === month);
+  else if (sview === 'rework') rows = rows.filter(q => String(q.status) === 'Rejected');
+  rows = qFilterPeriod(rows, month);
   if (term) {
     rows = rows.filter(q => [q.quotationNo, q.customer, q.subject, q.createdBy]
       .some(v => String(v == null ? '' : v).toLowerCase().includes(term)));
@@ -172,11 +270,17 @@ function renderQuotationList() {
   rows = rows.slice().sort((a, b) => String(flowDate(b.date)).localeCompare(String(flowDate(a.date))) ||
     String(b.quotationNo).localeCompare(String(a.quotationNo)));
 
+  /* A208 — ONE rollup drives the tiles, this counter and the per-rep headers. They used to be three
+     separate computations and they disagreed by 8 million pesos on the same screen. */
+  qRoll = flowQuotationRollup(rows, qHasSO);
+  qDupPairs = flowQuotationDupPairs(rows);
+  qRenderKpiTiles(qRoll, rows.length, month, sview, flowQuotationRollup(periodRows, qHasSO));
+
   const count = document.getElementById('qListCount');
   if (count) {
-    const total = rows.reduce((s, q) => s + qtnTotal(q), 0);
     count.textContent = rows.length
-      ? `${rows.length} of ${qList.length} quotation(s) · ${flowMoney(total, 'PHP')}`
+      ? `${rows.length} of ${qList.length} · with client ${flowMoney(qRoll.sent.value, 'PHP')}` +
+        ` · ready ${flowMoney(qRoll.approved.value, 'PHP')}`
       : `0 of ${qList.length} quotation(s)`;
   }
   if (!rows.length) {
@@ -241,7 +345,16 @@ function quotationRow(q) {
   // A145: a Sent quotation with no sales order yet — nudge to create the SO.
   const soNudge = (st === 'Sent' && !qHasSO[String(q.quotationNo)])
     ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="Sent to the client but no sales order created yet">no SO</span>` : '';
-  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
+  // A208: the same document number AND the same customer on another row. Flagged, never merged —
+  // the two rows differ in amount and status and may be a legitimate re-quote by a second rep.
+  const dupPair = (qDupPairs || []).filter(p =>
+    p.rows.some(r => String(r.quotationNo) === String(q.quotationNo)))[0];
+  const dupBadge = dupPair
+    ? ` <span class="flow-badge" style="background:rgba(239,68,68,0.12);color:#b91c1c;" title="${flowEsc(
+        dupPair.rows.filter(r => String(r.quotationNo) !== String(q.quotationNo))
+          .map(r => r.quotationNo + ' — ' + r.status + ' — ' + flowMoney(flowQuotationNet(r), 'PHP')).join(' · ')
+      )}">dup?</span>` : '';
+  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn"${qPdfState(q) === 'fresh'
@@ -459,10 +572,15 @@ function renderGroupedByRep(rows) {
   const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   return names.map((name, i) => {
     const rows = groups[name];
-    const total = rows.reduce((s, q) => s + qtnTotal(q), 0);
+    // A208: the same rollup the tiles use, over this rep's slice. A single undifferentiated total
+    // here is what read as "Crystal has 18 million" when 10.7M of it had never been sent.
+    const r = flowQuotationRollup(rows, qHasSO);
+    const conc = (r.top && r.top.share >= 0.4)
+      ? ` · top deal ${Math.round(r.top.share * 100)}%` : '';
     return `<details class="rep-group"${i === 0 ? ' open' : ''}>
       <summary><span class="rep-name">${flowEsc(name)}</span>
-        <span class="rep-meta">${rows.length} quotation(s) · ${flowMoney(total, 'PHP')}</span></summary>
+        <span class="rep-meta">${rows.length} quotation(s) · with client ${flowMoney(r.sent.value, 'PHP')}` +
+        ` · ready ${flowMoney(r.approved.value, 'PHP')}${conc}</span></summary>
       <div style="overflow-x:auto;margin-top:0.5rem;">${renderQuotationTable(rows)}</div>
     </details>`;
   }).join('');

@@ -817,6 +817,99 @@ function flowQuotationDiscountTag(q) {
   return d > 0 ? ` · −${d}% disc` : '';
 }
 
+/* ── A208 quotation buckets ─────────────────────────────────────────────────
+   ONE definition of what a pile of quotations is worth, because there were three and they disagreed:
+   the KPI tile said PHP 10.7M while the counter directly below it said PHP 18.4M for the same rep on
+   the same screen. The tile summed every status except Sent and Rejected — including Not Pursued,
+   Lost and Cancelled — under a subtitle reading "draft + in-approval", off the raw `total` column so
+   it also lost the discount clamp and A205 option-awareness. Everything now comes from
+   flowQuotationRollup, so the tile, the counter and the per-rep headers are three renderings of one
+   number and cannot drift apart again.
+
+   On the status vocabulary — 'Rejected' here does NOT mean the client said no. rejectQuotation
+   (FlowAPI.gs) is only reachable from Pending Admin / Pending Management, the row becomes editable
+   again, and the button says "Re-submit". It is internal rework, so it belongs with the other
+   not-yet-with-the-client work, never in a "lost" figure. */
+const FLOW_Q_CLOSED_STATUSES = ['Not Pursued', 'Lost', 'Cancelled'];
+const FLOW_Q_SENT_STATUSES = ['Sent'];
+const FLOW_Q_APPROVED_STATUSES = ['Approved'];
+
+/** q -> 'won' | 'closed' | 'sent' | 'approved' | 'internal'.
+ *  `hasSO` is a { quotationNo: true } map built from getSalesOrders — "won" is not a status and
+ *  never has been; it is only knowable from the sales orders. Precedence matters: an order beats
+ *  whatever the quotation's own status still says.
+ *  An UNRECOGNISED or blank status falls through to 'internal' on purpose — a status this code has
+ *  never seen must never be counted as live pipeline. */
+function flowQuotationBucket(q, hasSO) {
+  const no = String((q || {}).quotationNo || '');
+  if (hasSO && hasSO[no]) return 'won';
+  const st = String((q || {}).status || '');
+  if (FLOW_Q_CLOSED_STATUSES.indexOf(st) !== -1) return 'closed';
+  if (FLOW_Q_SENT_STATUSES.indexOf(st) !== -1) return 'sent';
+  if (FLOW_Q_APPROVED_STATUSES.indexOf(st) !== -1) return 'approved';
+  return 'internal';
+}
+
+const FLOW_Q_BUCKETS = ['internal', 'approved', 'sent', 'won', 'closed'];
+
+/** The single source for every quotation money figure on screen.
+ *  Returns { internal, approved, sent, won, closed, all } as { n, value }, plus `top` — the largest
+ *  single quotation in the `sent` bucket and its share of it, because one deal is currently 62% of
+ *  the company total and a headline that hides that invites a wrong conclusion. */
+function flowQuotationRollup(list, hasSO) {
+  const out = { all: { n: 0, value: 0 }, top: null };
+  FLOW_Q_BUCKETS.forEach(b => { out[b] = { n: 0, value: 0 }; });
+  let biggest = null;
+  (list || []).forEach(q => {
+    const v = flowQuotationNet(q);
+    const b = flowQuotationBucket(q, hasSO);
+    out[b].n++; out[b].value += v;
+    out.all.n++; out.all.value += v;
+    if (b === 'sent' && (!biggest || v > biggest.value)) {
+      biggest = { quotationNo: String(q.quotationNo || ''), customer: String(q.customer || ''), value: v };
+    }
+  });
+  if (biggest && out.sent.value > 0) {
+    biggest.share = biggest.value / out.sent.value;
+    out.top = biggest;
+  }
+  return out;
+}
+
+/* Two rows that look like the same deal recorded twice. The house numbering is
+   YYYY-NNN-<initials>-<client>-<subject>, so the deal is the YYYY-NNN prefix — but two reps do
+   sometimes take the same sequence number for genuinely different clients (six such pairs live
+   today), so the customer must match as well. On live data this returns exactly one pair:
+   2026-273 Aboitiz hydraulic pump, once under -ADM- and once under -GL-.
+   Reported only, never merged and never removed from a total — the two rows differ in amount and
+   status and may be a legitimate re-quote. A person decides. */
+function flowQuotationDupPairs(list) {
+  const norm = (s) => String(s || '').toLowerCase()
+    .replace(/[.,\-]/g, ' ')
+    .replace(/\b(inc|corp|corporation|co|ltd|company|philippines|phils?)\b/g, '')
+    .replace(/\s+/g, ' ').trim();
+  const groups = {};
+  (list || []).forEach(q => {
+    const m = /^(\d{4})-(\d{1,4})\b/.exec(String(q.quotationNo || '').trim());
+    if (!m) return;
+    const key = m[1] + '-' + m[2];
+    (groups[key] = groups[key] || []).push(q);
+  });
+  const pairs = [];
+  Object.keys(groups).forEach(key => {
+    const byCustomer = {};
+    groups[key].forEach(q => {
+      const c = norm(q.customer);
+      if (!c) return;
+      (byCustomer[c] = byCustomer[c] || []).push(q);
+    });
+    Object.keys(byCustomer).forEach(c => {
+      if (byCustomer[c].length > 1) pairs.push({ prefix: key, customer: byCustomer[c][0].customer, rows: byCustomer[c] });
+    });
+  });
+  return pairs;
+}
+
 /* Unit prices with the quotation's discount folded in, for handing to a sales order.
    A182: the sales order carries no discount field — by decision, since a percentage stored alongside
    already-discounted prices invites double-application — so the prices themselves must be net.
