@@ -13,6 +13,7 @@ function _mfn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
 let mfPrByNo = {};   // A183: prNo → pricing record, for the quotation approval review
 let mfQByNo = {};    // A183: quotationNo → quotation
+let mfCommByNo = {}; // A207: commNo → commission request, for the "View payments" panel
 let mfrGate = { needTick: false };   // A183: whether the review tick gates Approve
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -109,12 +110,13 @@ async function mfLoadApprovals() {
   const c = document.getElementById('mgmtApprovals');
   c.innerHTML = '<div class="mf-empty">Loading approvals…</div>';
   try {
-    const [q, po, pr, prq, itn] = await Promise.all([
+    const [q, po, pr, prq, itn, cm] = await Promise.all([
       fetchFlow('getQuotations').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
       fetchFlow('getPricingRequests').catch(() => ({ data: [] })),   // A183: pricing behind each quotation
       fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),  // A190: reps' weekly plans
+      fetchFlow('getCommissionRequests', { status: 'Pending Management' }).catch(() => ({ data: [] })),  // A207
     ]);
     // A183: prNo → pricing record + quotationNo → quotation, so the review modal can join them.
     mfPrByNo = {}; ((prq && prq.data) || []).forEach(p => { if (p && p.prNo) mfPrByNo[String(p.prNo)] = p; });
@@ -132,7 +134,10 @@ async function mfLoadApprovals() {
        so anything still at Pending Director is not management's to act on yet and is deliberately
        not listed here. */
     const itins = ((itn && itn.data) || []).filter(x => x.status === 'Pending Management');
-    if (!quotes.length && !pos.length && !prs.length && !itins.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
+    /* A207 — commissions. Management is the SECOND approver here too: the director signs first, so
+       anything still at Pending Director is not management's to act on and is not listed. */
+    const comms = ((cm && cm.data) || []).filter(x => x.status === 'Pending Management');
+    if (!quotes.length && !pos.length && !prs.length && !itins.length && !comms.length) { c.innerHTML = '<div class="mf-empty">✓ Nothing pending your approval.</div>'; return; }
     const qTot = x => _mfn(x.total) || (x.items || []).reduce((s, it) => s + _mfn(it.qty) * _mfn(it.price), 0);
     const qRows = quotes.map(x => `<tr>
       <td><span class="flow-badge b-pending">Quotation</span></td>
@@ -163,10 +168,23 @@ async function mfLoadApprovals() {
         <button class="link-btn" onclick="mfViewItinerary('${_mfe(x.itineraryNo)}')">View plan</button>
         <button class="link-btn" onclick="mfApprove('approveWeeklyItinerary','${_mfe(x.itineraryNo)}','itineraryNo')">Approve</button>
         <button class="link-btn del-btn" onclick="mfReject('rejectWeeklyItinerary','${_mfe(x.itineraryNo)}','itineraryNo')">Reject</button></td></tr>`).join('');
+    /* The coverage sentence rides in the row, not behind a button: whether an order is collected
+       enough to pay commission on is exactly the judgement being asked for. */
+    const cRows = comms.map(x => `<tr>
+      <td><span class="flow-badge b-pending">Commission</span></td>
+      <td>${_mfe(x.commNo)}</td><td>${_mfe(x.salesperson)}<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_mfe(x.soNo)} · ${_mfe(x.customer)}</div></td>
+      <td class="num">${_mfm(x.netPayable)}<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">on ${_mfm(x.base)} collected · director ✓</div>
+        <div style="font-size:0.7rem;margin-top:2px;text-align:left;${/OVER-COLLECTED/.test(x.coverageNote || '') ? 'color:#b91c1c;font-weight:600;'
+          : (/PARTIAL/.test(x.coverageNote || '') ? 'color:#b45309;font-weight:600;' : 'color:var(--text-muted,#64748b);')}">${_mfe(x.coverageNote)}</div></td>
+      <td class="num" style="white-space:nowrap;">
+        <button class="link-btn" onclick="mfViewCommission('${_mfe(x.commNo)}')">View payments</button>
+        <button class="link-btn" onclick="mfApprove('approveCommissionRequest','${_mfe(x.commNo)}','commNo')">Approve</button>
+        <button class="link-btn del-btn" onclick="mfReject('rejectCommissionRequest','${_mfe(x.commNo)}','commNo')">Reject</button></td></tr>`).join('');
     mfItinByNo = {}; itins.forEach(x => { mfItinByNo[String(x.itineraryNo)] = x; });
+    mfCommByNo = {}; comms.forEach(x => { mfCommByNo[String(x.commNo)] = x; });
     c.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table">
       <thead><tr><th>Type</th><th>No</th><th>Party</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody>${qRows}${pRows}${prRows}${iRows}</tbody></table></div>`;
+      <tbody>${qRows}${pRows}${prRows}${iRows}${cRows}</tbody></table></div>`;
   } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
 }
 
@@ -217,10 +235,41 @@ async function mfApprove(action, no, key, extra) {
       if (!confirm(r.message)) return;
       r = await postFlow(action, Object.assign({ [key]: no, acknowledgeDeviation: true }, extra || {}));
     }
+    /* A207 — a claimed collection can be voided or corrected between the director's signature and
+       management's. The server refuses rather than approving a figure that has gone stale. */
+    if (!r.success && r.needsConfirm === 'evidenceChanged') {
+      if (!confirm(r.message)) return;
+      r = await postFlow(action, Object.assign({ [key]: no, confirmEvidenceChanged: true }, extra || {}));
+    }
     if (!r.success) throw new Error(r.message);
     mfLoadApprovals(); mfLoadKpis();
+    if (r.message && /commission/i.test(String(action))) alert(r.message);
   } catch (e) { alert(e.message); }
 }
+/** The payments behind a commission claim — management signs for this cash, so it must be readable. */
+function mfViewCommission(no) {
+  const x = mfCommByNo[String(no)];
+  if (!x) return;
+  const lines = (x.items || []).map(i =>
+    '  ' + i.collectionNo + '   ' + (typeof flowDate === 'function' ? flowDate(i.date) : i.date) +
+    '   received ' + _mfm(i.amount) + (i.ewt ? '   less tax ' + _mfm(i.ewt) : '') +
+    '   counts as ' + _mfm(i.netCash) + (i.voidedAtClaim ? '   [VOIDED SINCE]' : ''));
+  alert(
+    x.commNo + ' — ' + x.salesperson + '\n' +
+    x.soNo + '  ' + x.customer + (x.quotationNo ? '  (from quotation ' + x.quotationNo + ')' : '') + '\n' +
+    '-'.repeat(56) + '\n' +
+    'Payments claimed:\n' + lines.join('\n') + '\n\n' +
+    'Order value            ' + _mfm(x.soTotal) + '\n' +
+    'Invoiced to date       ' + _mfm(x.invoicedToDate) + '\n' +
+    'Already claimed        ' + _mfm(x.priorClaimed) + '\n' +
+    'This claim (net cash)  ' + _mfm(x.base) + '\n' +
+    'Rate                   ' + x.rate + '%   (' + x.rateBasis + ')\n' +
+    'Commission             ' + _mfm(x.netPayable) + '\n\n' +
+    'Approved by the director: ' + (x.dirApprovedBy || '—') + '\n\n' +
+    x.coverageNote + '\n'
+  );
+}
+
 async function mfReject(action, no, key) {
   const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
   if (reason === null) return;

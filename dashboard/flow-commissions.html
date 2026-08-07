@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commission Requests</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <style>
+    /* ══ Bento reference design — self-contained (mirrors flow-payment-requests) ══ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    :root{--ac:#4f46e5;--acd:#3730a3;--soft:#e0e7ff;--card:#fff;--tile2:#eef2f6;--line:#d7dce3;--ink:#111827;--ink2:#8b93a1;
+      --accent:#4f46e5;--accent-hover:#4338ca;--accent-dark:#3730a3;--accent-light:#e0e7ff;--accent-ring:rgba(79,70,229,.18);}
+    body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:radial-gradient(1100px 560px at 12% -8%,#eef1f5,#e6e9ee 60%) !important;}
+    .main-content{max-width:1200px;margin:0 auto;padding:104px 24px 40px !important;}
+    .flow-nav{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:1rem;}
+    .flow-nav a,.flow-nav span{padding:8px 13px;border-radius:999px;font:600 12.5px 'Inter',sans-serif;color:#475569;background:#fff;border:1px solid var(--line);text-decoration:none;}
+    .flow-nav a.active,.flow-nav .active{background:linear-gradient(180deg,#6a63ea,#4f46e5);color:#fff;border-color:#4f46e5;}
+    .chart-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:1rem;box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35);}
+    .chart-card h3{font:700 15px 'Inter',sans-serif;color:var(--ink);margin:0;}
+    .flow-actions{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:16px;}
+    .btn{border-radius:999px;padding:11px 20px;font:600 13px 'Inter',sans-serif;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .18s cubic-bezier(.4,0,.2,1);}
+    .btn:hover{background:#f1f5f9;transform:translateY(-1px);}
+    .btn-primary{background:linear-gradient(180deg,#6a63ea,#4f46e5);color:#fff;border:none;box-shadow:0 6px 16px -8px rgba(79,70,229,.7);}
+    .btn-primary:hover{filter:brightness(1.06);}
+    .btn-sm{padding:8px 15px;font-size:12.5px;}
+    .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+    .flow-msg{margin-top:.6rem;font:500 13px 'Inter',sans-serif;}
+    .loading-overlay{display:flex;align-items:center;justify-content:center;gap:.6rem;padding:2rem;color:var(--ink2);font:500 13px 'Inter',sans-serif;}
+    .spinner{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    /* ── Claimable order cards ─────────────────────────────────────────── */
+    .cm-order{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px;background:#fff;}
+    .cm-order.picked{border-color:var(--ac);box-shadow:0 0 0 3px rgba(79,70,229,.12);}
+    .cm-order-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+    .cm-order-head .who{font:700 14px 'Inter',sans-serif;color:var(--ink);}
+    .cm-order-head .sub{font:400 12px 'Inter',sans-serif;color:var(--ink2);margin-top:3px;}
+    .cm-order-head .amt{font:700 15px 'Inter',sans-serif;color:var(--ink);text-align:right;white-space:nowrap;}
+    .cm-order-head .amt small{display:block;font:400 11px 'Inter',sans-serif;color:var(--ink2);margin-top:2px;}
+    /* The coverage sentence is the thing an approver actually reads — give it room. */
+    .cm-cov{margin-top:10px;padding:9px 11px;border-radius:9px;font:500 12px/1.5 'Inter',sans-serif;
+      background:#f1f5f9;color:#475569;border-left:3px solid #94a3b8;}
+    .cm-cov.warn{background:#fffbeb;color:#92400e;border-left-color:#f59e0b;}
+    .cm-cov.over{background:#fef2f2;color:#991b1b;border-left-color:#ef4444;}
+    .cm-cols{width:100%;border-collapse:collapse;margin-top:10px;font:400 12.5px 'Inter',sans-serif;}
+    .cm-cols th{text-align:left;font:600 10.5px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+      color:var(--ink2);padding:6px 8px;border-bottom:1px solid var(--line);}
+    .cm-cols td{padding:7px 8px;border-bottom:1px solid #eef2f6;color:var(--ink);}
+    .cm-cols td.num,.cm-cols th.num{text-align:right;}
+    .cm-cols tr.taken td{color:#9aa3b0;background:#fafbfc;}
+    .cm-cols tr.taken .why{font:500 11px 'Inter',sans-serif;color:#b45309;}
+    .cm-badge{display:inline-block;padding:2px 8px;border-radius:999px;font:600 10.5px 'Inter',sans-serif;
+      background:#eef2f6;color:#475569;border:1px solid var(--line);}
+    .cm-empty{padding:2rem;text-align:center;color:var(--ink2);font:500 13px 'Inter',sans-serif;}
+    .cm-gate{padding:1.4rem;border-radius:12px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;
+      font:500 13px/1.6 'Inter',sans-serif;}
+    .cm-sum{display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
+    .cm-sum div{font:400 12px 'Inter',sans-serif;color:var(--ink2);}
+    .cm-sum b{display:block;font:700 17px 'Inter',sans-serif;color:var(--ink);margin-top:2px;}
+    .flow-table{width:100%;border-collapse:collapse;font:400 13px 'Inter',sans-serif;}
+    .flow-table th{text-align:left;font:600 10.5px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+      color:var(--ink2);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+    .flow-table td{padding:10px;border-bottom:1px solid #eef2f6;color:var(--ink);vertical-align:top;}
+    .flow-table td.num,.flow-table th.num{text-align:right;white-space:nowrap;}
+    .link-btn{background:none;border:none;color:var(--ac);font:600 12px 'Inter',sans-serif;cursor:pointer;padding:0;}
+    .link-btn:hover{text-decoration:underline;}
+    .link-btn.del-btn{color:#dc2626;}
+  </style>
+</head>
+<body class="flow-screen">
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div>
+          <div class="eyebrow">Sales · My Earnings</div>
+          <h1>Commission Requests</h1>
+          <p>Claim commission on collected payments against your own quotations · approval Director &rarr; Management.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="flowNav" class="flow-nav"></div>
+
+    <div class="kpi-row four">
+      <div class="kpi"><div class="top"><span class="l">Claimable now</span></div><div class="v sm" id="kpiClaimable">—</div><div class="d">collected, unclaimed cash</div></div>
+      <div class="kpi"><div class="top"><span class="l">Awaiting approval</span></div><div class="v" id="kpiPending">—</div><div class="d">with the director / management</div></div>
+      <div class="kpi"><div class="top"><span class="l">Approved</span></div><div class="v sm" id="kpiApproved">—</div><div class="d">due in a coming cutoff</div></div>
+      <div class="kpi spot"><div class="top"><span class="l">Released to payroll</span></div><div class="v sm" id="kpiReleased">—</div><div class="d">paid out to date</div></div>
+    </div>
+
+    <div id="gateCard" class="chart-card" style="display:none;">
+      <div class="cm-gate" id="gateMsg"></div>
+    </div>
+
+    <div class="chart-card" id="claimCard">
+      <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
+        <h3 id="claimTitle">Collected payments you can claim</h3>
+        <button class="btn btn-sm" onclick="cmLoadAll()">Refresh</button>
+      </div>
+      <p style="font:400 12px/1.6 'Inter',sans-serif;color:var(--ink2);margin:6px 0 0;">
+        A claim is made against the actual payments received, less withholding tax. Tick the payments you
+        are claiming for and file the request — the director and management see the same figures you do,
+        including how much of the order has been collected so far.
+      </p>
+      <div id="claimContainer" style="margin-top:14px;">
+        <div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div>
+      </div>
+      <div id="claimMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
+        <h3>My commission requests</h3>
+        <button class="btn btn-sm" onclick="cmLoadAll()">Refresh</button>
+      </div>
+      <div id="listContainer" style="overflow-x:auto;margin-top:12px;">
+        <div class="loading-overlay"><div class="spinner"></div><span>Loading...</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-ledger-view.js"></script>
+  <script src="js/flow-commissions.js"></script>
+
+  <script>
+    // Header date pill
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+  </script>
+</body>
+</html>

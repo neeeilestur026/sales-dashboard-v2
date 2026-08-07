@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 111;  // A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 112;  // A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -140,6 +140,10 @@ var SCHEMA = {
   // ── Sales pricing-request flow (PR → sourcing → pricing → verify → sales → quotation) ──
   //    A144: 'Plant Site' (required delivery/plant destination captured at sourcing, distinct from the
   //    freight 'Destination'). Appended at END — positional writes elsewhere must not shift.
+  //    A207 NAMING: 'Commission %' here is a MARGIN COMPONENT priced into the selling price — a company
+  //    cost, not anyone's entitlement. A sales rep's actual commission is CommissionRequests
+  //    ['Commission Rate %'] further down. The two are one hop apart via Quotations['PR No']; do not
+  //    read one where the other is meant.
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
                     'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref', 'Plant Site'],
@@ -196,6 +200,43 @@ var SCHEMA = {
                       'Approval Note'],
   ItineraryItems: ['Itinerary No', 'Seq', 'Day', 'Date', 'Planned Time', 'Company', 'Person To Meet',
                    'City Area', 'Purpose', 'Agenda', 'Expected Outcome'],
+
+  // ── A207 Commission Requests: what a sales rep is owed on business they won ──
+  // A claim CONSUMES SPECIFIC COLLECTION ROWS (see CommissionRequestItems), not a sales order. That
+  // single decision is what makes the money safe here: ARAging['Collected (PHP)'] is gross of EWT,
+  // over-collected legacy rows drive `outstanding` negative (one AR row can mask an unpaid sibling on
+  // the same SO), AR amount is the INVOICE total not the SO total, and two different definitions of
+  // "fully collected" already disagree in this file (_shipAutoDerive wants every AR 'Paid';
+  // flow-lifecycle.js buildModels wants outstanding <= 0.5). Keying on Collection No means NONE of
+  // those are ever read — and a collection held by a live claim cannot be claimed twice.
+  //
+  // 'Commission Rate %' is NOT PricingRequests['Commission %']. That one is a margin component priced
+  // into the deal — a company cost, sitting one hop away on the same quotation via Quotations['PR No'].
+  // This one is what a named person gets paid. Never conflate them.
+  //
+  // Approved DIRECTOR FIRST then management, like WeeklyItineraries above and unlike PaymentRequests.
+  CommissionRequests: ['Comm No', 'Date', 'Salesperson', 'SO No', 'Quotation No', 'Customer',
+                       'SO Total (PHP)', 'Invoiced To Date (PHP)',
+                       'Collected Gross (PHP)', 'EWT (PHP)', 'Base (PHP)',
+                       'Commission Rate %', 'Rate Basis', 'Amount (PHP)',
+                       'Adjustment (PHP)', 'Net Payable (PHP)',
+                       'Claimed Collections', 'Collection Count', 'Evidence JSON',
+                       'Prior Claimed (PHP)', 'Coverage Note',
+                       'Status', 'Created By', 'Created By Role', 'Created At', 'Updated At',
+                       'Dir Approved By', 'Dir Approved At', 'Mgmt Approved By', 'Mgmt Approved At',
+                       'Approval Note',
+                       'Payout Period', 'Payout Period Basis', 'Released By', 'Released At',
+                       'Release Note', 'Integrity Flag'],
+  // One row per claimed collection. 'Voided At Claim' starts 'false' and is flipped by the integrity
+  // audit when accounting voids a collection that a claim already counted.
+  CommissionRequestItems: ['Comm No', 'Collection No', 'AR No', 'INV No', 'SO No', 'Customer',
+                           'Collection Date', 'Amount (PHP)', 'EWT (PHP)', 'Net Cash (PHP)',
+                           'Method', 'Reference No', 'Voided At Claim'],
+  // The rate table. Ships EMPTY and the module refuses to submit until a rate exists, so nothing can
+  // reach an approver at 0% before the company percentage is confirmed. A single flat scheme is one
+  // row with blank Min/Max; brackets cost nothing extra.
+  CommissionRates: ['Rate Key', 'Scope', 'Scope Value', 'Min Base (PHP)', 'Max Base (PHP)', 'Rate %',
+                    'Effective From', 'Effective To', 'Notes', 'Updated By', 'Updated At'],
 
   // ── Balance Sheet opening balances (Cash, Inventory) — editable config ──
   OpeningBalances: ['Key', 'Amount (PHP)', 'Updated By', 'Updated At'],
@@ -367,6 +408,12 @@ var _SECURED = {
   // the server, not the browser. All three secured lists have to agree; missing one re-opens the
   // actorRole spoof the A188 review flagged on createQuotation.
   approveWeeklyItinerary: 1, rejectWeeklyItinerary: 1,
+  // A207 — these decide what a named person is PAID. submitCommissionRequest is secured too, unlike
+  // submitWeeklyItinerary: submitting is the act that freezes the payable figure and seizes the
+  // collections, so the browser must not be able to claim it is someone else while doing it.
+  submitCommissionRequest: 1, approveCommissionRequest: 1, rejectCommissionRequest: 1,
+  adjustCommissionRequest: 1, markCommissionReleased: 1,
+  setCommissionRate: 1, deleteCommissionRate: 1, deleteCommissionRequest: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -1927,14 +1974,55 @@ function voidCollection(p) {
   if (String(col['Voided'] || '') === 'true') return { success: false, message: 'This collection is already voided.' };
   if (!p.reason) return { success: false, message: 'A reason is required to void a collection.' };
 
+  /* A207 — this cash may already be counted in someone's commission. Say so before reversing it,
+     with the peso impact, rather than letting a claim quietly become wrong. The void is never
+     blocked: accounting has a legitimate correction to make and must be able to make it. */
+  var claim = _commClaimHolding(p.collectionNo);
+  if (claim && !p.confirmCommissionImpact) {
+    var hit = Math.round(claim.netCash * claim.rate) / 100;
+    return { success: false, needsConfirm: 'commissionClaimed', commNo: claim.commNo,
+      claimStatus: claim.status, salesperson: claim.salesperson, commissionImpact: hit,
+      message: 'Collection ' + p.collectionNo + ' is claimed on commission ' + claim.commNo + ' (' +
+               claim.status + ', ' + claim.salesperson + '). Voiding it reduces that commission by ' +
+               _commMoney(hit) + '. Continue?' };
+  }
+
   _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Voided', 'true');
   _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Void Reason',
     String(p.reason) + ' — voided by ' + (p.actorName || 'unknown') + ' on ' + _dateStr(_now()));
 
   var arNo = String(col['AR No'] || '');
   var rec = arNo ? _arRecomputeFromCollections(arNo, null) : { collected: 0, status: '' };
+
+  /* A207 — the claim's approved Amount is NEVER rewritten; the loss goes into Adjustment so the
+     record keeps saying what the director actually signed. If it has already been released, the
+     recovery belongs in a later cutoff, so the released row is left completely alone and flagged
+     for the director instead. */
+  var commMsg = '';
+  if (claim) {
+    var h = _commRow(claim.commNo);
+    var loss = Math.round(claim.netCash * claim.rate) / 100;
+    _setCellByKey('CommissionRequestItems', 'Collection No', p.collectionNo, 'Voided At Claim', 'true');
+    if (claim.status === 'Released') {
+      _commSet(claim.commNo, { 'Integrity Flag': 'Collection ' + p.collectionNo + ' voided AFTER release on ' +
+        _dateStr(_now()) + ' — recover ' + _commMoney(loss) + ' in a later cutoff.' });
+      commMsg = ' Commission ' + claim.commNo + ' was already released: ' + _commMoney(loss) +
+                ' must be recovered in a later cutoff.';
+    } else {
+      var adj = _num(h && h['Adjustment (PHP)']) - loss;
+      _commSet(claim.commNo, {
+        'Adjustment (PHP)': adj,
+        'Net Payable (PHP)': _num(h && h['Amount (PHP)']) + adj,
+        'Integrity Flag': 'Collection ' + p.collectionNo + ' voided on ' + _dateStr(_now()) + '.'
+      });
+      commMsg = ' Commission ' + claim.commNo + ' reduced by ' + _commMoney(loss) + '.';
+    }
+  }
+
   return { success: true, collectionNo: p.collectionNo, arNo: arNo, collected: rec.collected, status: rec.status,
-    message: 'Collection ' + p.collectionNo + ' voided' + (arNo ? '; ' + arNo + ' is now ' + rec.status + '.' : '.') };
+    commNo: claim ? claim.commNo : '',
+    message: 'Collection ' + p.collectionNo + ' voided' +
+             (arNo ? '; ' + arNo + ' is now ' + rec.status + '.' : '.') + commMsg };
 }
 
 /* A158 — reverse an invoice issued in error. Refused once any money has been collected against it,
@@ -5598,6 +5686,1053 @@ function deleteWeeklyItinerary(p) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  A207 COMMISSION REQUESTS  —  what a sales rep is owed on business they won
+// ════════════════════════════════════════════════════════════════════════════
+/* A claim consumes SPECIFIC COLLECTION ROWS. Everything below follows from that; see the SCHEMA
+   comment for why. In particular NOTHING here reads ARAging['Collected (PHP)'], ARAging['Status'],
+   `outstanding`, SalesOrders['Status'], or _shipAutoDerive — every one of them would be wrong. */
+
+// ── Config ──────────────────────────────────────────────────────────────────
+/* THE COMPANY PERCENTAGE IS NOT YET CONFIRMED. It ships at 0 so a mis-wired deploy cannot pay anyone
+   by accident, and _commRate reports configured:false, which makes submitCommissionRequest refuse.
+   To plug the real number in later: EITHER set this constant, OR add a CommissionRates row (a sheet
+   row always wins). Nothing else in this module knows a percentage exists. */
+var _COMM_DEFAULT_RATE = 0;
+
+/* 'flat'     — the whole base is multiplied by the winning bracket's rate.
+   'marginal' — each bracket's slice is multiplied by its own rate, like income tax.
+   Both are implemented; if the company scheme turns out tiered this is a one-word change. */
+var _COMM_TIER_MODE = 'flat';
+
+/* Which salary cutoff an approved commission is paid in.
+   'containing' — the cutoff window the approval date falls into.
+   'next-B'     — round forward to the next 2nd cutoff. THIS IS THE DEFAULT AND IT IS LOAD-BEARING:
+                  the payroll calculator applies Other Income ONLY in cutoff B
+                  (dashboard/js/director-home.js:499, :828, :913, :955 — `cutoff === 'B' ? … : 0`).
+                  A commission bucketed into an 'A' cutoff and keyed into Other Income would pay ZERO,
+                  with no error anywhere. Do not switch to 'containing' without changing payroll. */
+var _COMM_PERIOD_MODE = 'next-B';
+
+/* Statuses that HOLD their collections. Draft deliberately does NOT — otherwise a rep's own stale
+   draft blocks the corrected claim they file to replace it. Rejected releases: management refused
+   that claim, not the cash itself. */
+var _COMM_LOCKING = { 'Pending Director': 1, 'Pending Management': 1, 'Approved': 1, 'Released': 1 };
+
+var _COMM_STAGES = [
+  { status: 'Pending Director',   role: 'director',   by: 'Dir Approved By',  at: 'Dir Approved At',
+    next: 'Pending Management', who: 'the director' },
+  { status: 'Pending Management', role: 'management', by: 'Mgmt Approved By', at: 'Mgmt Approved At',
+    next: 'Approved',           who: 'management' }
+];
+function _commStage(status) {
+  for (var i = 0; i < _COMM_STAGES.length; i++) {
+    if (_COMM_STAGES[i].status === String(status)) return _COMM_STAGES[i];
+  }
+  return null;
+}
+function _commEditable(status) {
+  var s = String(status || '');
+  return s === 'Draft' || s === 'Rejected' || s === '';
+}
+
+// ── Row access ──────────────────────────────────────────────────────────────
+function _commRow(no) {
+  return _rows('CommissionRequests').filter(function (r) {
+    return String(r['Comm No']) === String(no);
+  })[0];
+}
+function _commItems(no) {
+  return _rows('CommissionRequestItems').filter(function (r) {
+    return String(r['Comm No']) === String(no);
+  });
+}
+/** Patch named cells + stamp Updated At. Never a positional write — see the width trap on
+ *  updateSalesOrder, which has bitten this file three times. */
+function _commSet(no, obj) {
+  Object.keys(obj).forEach(function (k) {
+    _setCellByKey('CommissionRequests', 'Comm No', no, k, obj[k]);
+  });
+  _setCellByKey('CommissionRequests', 'Comm No', no, 'Updated At', _now());
+}
+function _commMap(r) {
+  return {
+    commNo: r['Comm No'], date: r['Date'], salesperson: r['Salesperson'],
+    soNo: String(r['SO No'] || ''), quotationNo: String(r['Quotation No'] || ''), customer: r['Customer'],
+    soTotal: _num(r['SO Total (PHP)']), invoicedToDate: _num(r['Invoiced To Date (PHP)']),
+    collectedGross: _num(r['Collected Gross (PHP)']), ewt: _num(r['EWT (PHP)']), base: _num(r['Base (PHP)']),
+    rate: _num(r['Commission Rate %']), rateBasis: String(r['Rate Basis'] || ''),
+    amount: _num(r['Amount (PHP)']), adjustment: _num(r['Adjustment (PHP)']),
+    netPayable: _num(r['Net Payable (PHP)']),
+    claimedCollections: String(r['Claimed Collections'] || ''),
+    collectionCount: _num(r['Collection Count']),
+    priorClaimed: _num(r['Prior Claimed (PHP)']), coverageNote: String(r['Coverage Note'] || ''),
+    status: String(r['Status'] || 'Draft'), createdBy: r['Created By'], createdByRole: r['Created By Role'],
+    createdAt: r['Created At'], updatedAt: r['Updated At'],
+    dirApprovedBy: String(r['Dir Approved By'] || ''), dirApprovedAt: r['Dir Approved At'],
+    mgmtApprovedBy: String(r['Mgmt Approved By'] || ''), mgmtApprovedAt: r['Mgmt Approved At'],
+    approvalNote: String(r['Approval Note'] || ''),
+    payoutPeriod: String(r['Payout Period'] || ''), payoutPeriodBasis: String(r['Payout Period Basis'] || ''),
+    releasedBy: String(r['Released By'] || ''), releasedAt: r['Released At'],
+    releaseNote: String(r['Release Note'] || ''), integrityFlag: String(r['Integrity Flag'] || ''),
+    rowIndex: r.rowIndex
+  };
+}
+function _commItemMap(r) {
+  return {
+    commNo: r['Comm No'], collectionNo: String(r['Collection No'] || ''), arNo: String(r['AR No'] || ''),
+    invNo: String(r['INV No'] || ''), soNo: String(r['SO No'] || ''), customer: r['Customer'],
+    date: r['Collection Date'], amount: _num(r['Amount (PHP)']), ewt: _num(r['EWT (PHP)']),
+    netCash: _num(r['Net Cash (PHP)']), method: String(r['Method'] || ''),
+    reference: String(r['Reference No'] || ''),
+    voidedAtClaim: String(r['Voided At Claim'] || '') === 'true'
+  };
+}
+
+// ── The joins ───────────────────────────────────────────────────────────────
+/** Which SO a collection belongs to. Collections['SO No'] is frequently blank on legacy imports, so
+ *  fall back through the AR row and then the invoice — the same rescue chain flow-lifecycle.js
+ *  buildModels does client-side, but explicit about WHICH hop answered.
+ *  Returns {soNo, via}; soNo '' means unresolved, which is reported, never guessed by customer. */
+function _commSoForCollection(col, arByNo, invByNo) {
+  var s = String(col['SO No'] || '').trim();
+  if (s) return { soNo: s, via: 'collection' };
+  var ar = arByNo[String(col['AR No'] || '')];
+  if (ar && String(ar['SO No'] || '').trim()) return { soNo: String(ar['SO No']).trim(), via: 'ar' };
+  var invNo = String((ar && ar['INV No']) || col['INV No'] || '').trim();
+  var inv = invNo ? invByNo[invNo] : null;
+  if (inv && String(inv['SO No'] || '').trim()) return { soNo: String(inv['SO No']).trim(), via: 'invoice' };
+  return { soNo: '', via: '' };
+}
+
+/** Server-side twin of _isMigrated (dashboard/js/flow-lifecycle.js). Imported rows carry a literal
+ *  string where a person's name belongs — 'Migrated (legacy)', 'Backfill (lifecycle)',
+ *  'Manual (edited)'. Nobody is owed commission on those. */
+function _commIsMigratedName(by) {
+  var s = String(by || '').toLowerCase();
+  return s.indexOf('migrat') !== -1 || s.indexOf('backfill') !== -1 || s.indexOf('manual (edited)') !== -1;
+}
+
+/** Who sold this order. A sales order has NO salesperson column — attribution exists only as
+ *  SalesOrders['Quotation No'] → Quotations['Created By'], and that is a Full Name string.
+ *  Every failure returns a reason so it lands on the exception report instead of vanishing. */
+function _commSalesperson(so, quoteByNo) {
+  var qn = String((so && so['Quotation No']) || '').trim();
+  if (!qn) return { name: '', reason: 'Sales order has no quotation linked — nobody to attribute it to.' };
+  var q = quoteByNo[qn];
+  if (!q) return { name: '', reason: 'Quotation ' + qn + ' not found.' };
+  var by = String(q['Created By'] || '').trim();
+  if (!by) return { name: '', reason: 'Quotation ' + qn + ' has no Created By.' };
+  if (_commIsMigratedName(by)) {
+    return { name: '', reason: 'Quotation ' + qn + ' is an imported record (' + by + ') — no real salesperson.' };
+  }
+  return { name: by, reason: '' };
+}
+
+/** Collection No → Comm No, for every claim currently HOLDING it. Pass a Comm No to exclude the
+ *  claim being edited, so a claim never collides with itself. */
+function _commClaimedIndex(excludeCommNo) {
+  var held = {};
+  _rows('CommissionRequests').forEach(function (r) {
+    if (excludeCommNo && String(r['Comm No']) === String(excludeCommNo)) return;
+    if (_COMM_LOCKING[String(r['Status'] || '')]) held[String(r['Comm No'])] = 1;
+  });
+  var out = {};
+  _rows('CommissionRequestItems').forEach(function (i) {
+    if (held[String(i['Comm No'])]) out[String(i['Collection No'])] = String(i['Comm No']);
+  });
+  return out;
+}
+
+/** The base: cash actually received, net of withholding tax. `Amount (PHP)` is what was credited
+ *  against the receivable; `EWT (PHP)` is the slice withheld at source. Only the difference is money
+ *  in the bank — the same netCash getCollections already publishes. */
+function _commBaseFor(collectionRows) {
+  var gross = 0, ewt = 0;
+  (collectionRows || []).forEach(function (c) {
+    gross += _num(c['Amount (PHP)']);
+    ewt += _num(c['EWT (PHP)']);
+  });
+  var base = gross - ewt;
+  return { gross: gross, ewt: ewt, base: base < 0 ? 0 : base };
+}
+
+// ── The rate ────────────────────────────────────────────────────────────────
+function _commRateRows() {
+  try { return _rows('CommissionRates'); } catch (e) { return []; }
+}
+function _commDateOnly(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Manila', 'yyyy-MM-dd');
+  var s = String(v).trim();
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+function _commRateEffective(r, ymd) {
+  var from = _commDateOnly(r['Effective From']);
+  var to = _commDateOnly(r['Effective To']);
+  if (from && ymd && ymd < from) return false;
+  if (to && ymd && ymd > to) return false;
+  return true;
+}
+/** ctx = {salesperson, customer, base, date} → {rate, amount, basis, configured}
+ *  Most specific scope wins: salesperson → customer → default. Within the winning scope, the bracket
+ *  whose [Min Base, Max Base] contains the base (blank max = unbounded). */
+function _commRate(ctx) {
+  ctx = ctx || {};
+  var base = _num(ctx.base);
+  var ymd = _commDateOnly(ctx.date) || Utilities.formatDate(new Date(), 'Asia/Manila', 'yyyy-MM-dd');
+  var rows = _commRateRows().filter(function (r) { return _commRateEffective(r, ymd); });
+
+  var scopes = [
+    { key: 'salesperson', val: String(ctx.salesperson || '') },
+    { key: 'customer', val: String(ctx.customer || '') },
+    { key: 'default', val: '' }
+  ];
+  var chosen = null, chosenScope = '';
+  for (var s = 0; s < scopes.length && !chosen; s++) {
+    var sc = scopes[s];
+    var band = rows.filter(function (r) {
+      if (String(r['Scope'] || '').toLowerCase() !== sc.key) return false;
+      if (sc.key === 'default') return true;
+      return String(r['Scope Value'] || '').trim() === sc.val.trim();
+    });
+    if (!band.length) continue;
+    chosenScope = sc.key;
+    // Brackets, ascending. A blank Max Base is the unbounded top tier.
+    band.sort(function (a, b) { return _num(a['Min Base (PHP)']) - _num(b['Min Base (PHP)']); });
+    if (_COMM_TIER_MODE === 'marginal') return _commRateMarginal(band, base, chosenScope, ymd);
+    /* HALF-OPEN: [Min, Max) — Max Base is EXCLUSIVE. Written 0–1,000,000 then 1,000,000–5,000,000,
+       a base of exactly 1,000,000 sits in BOTH under inclusive bounds and the answer would depend on
+       row order. Half-open makes it the second bracket, always, and matches how the marginal branch
+       already slices. Blank Max = the unbounded top tier. */
+    for (var i = 0; i < band.length; i++) {
+      var min = _num(band[i]['Min Base (PHP)']);
+      var maxRaw = String(band[i]['Max Base (PHP)'] || '').trim();
+      var max = maxRaw === '' ? Infinity : _num(band[i]['Max Base (PHP)']);
+      if (base >= min && base < max) { chosen = band[i]; break; }
+    }
+    if (!chosen && band.length) chosen = band[band.length - 1];   // above every bracket → top tier
+  }
+
+  if (!chosen) {
+    return {
+      rate: _COMM_DEFAULT_RATE, amount: base * _COMM_DEFAULT_RATE / 100,
+      basis: 'Default ' + _COMM_DEFAULT_RATE + '% — no commission rate has been configured yet',
+      configured: false
+    };
+  }
+  var rate = _num(chosen['Rate %']);
+  return {
+    rate: rate, amount: base * rate / 100,
+    basis: _commRateBasisText(chosen, chosenScope, 'flat', ymd), configured: true
+  };
+}
+function _commRateMarginal(band, base, scopeKey, ymd) {
+  var amount = 0, left = base, parts = [];
+  for (var i = 0; i < band.length && left > 0; i++) {
+    var min = _num(band[i]['Min Base (PHP)']);
+    var maxRaw = String(band[i]['Max Base (PHP)'] || '').trim();
+    var max = maxRaw === '' ? Infinity : _num(band[i]['Max Base (PHP)']);
+    if (base <= min) break;
+    var slice = Math.min(base, max) - min;
+    if (slice <= 0) continue;
+    var rate = _num(band[i]['Rate %']);
+    amount += slice * rate / 100;
+    left -= slice;
+    parts.push(slice.toFixed(2) + ' @ ' + rate + '%');
+  }
+  var eff = base > 0 ? (amount / base * 100) : 0;
+  return {
+    rate: Math.round(eff * 10000) / 10000, amount: amount,
+    basis: 'Marginal (' + parts.join(' + ') + ') · scope ' + scopeKey + ' · as at ' + ymd,
+    configured: true
+  };
+}
+function _commRateBasisText(r, scopeKey, mode, ymd) {
+  var minRaw = String(r['Min Base (PHP)'] || '').trim();
+  var maxRaw = String(r['Max Base (PHP)'] || '').trim();
+  var band = (minRaw === '' && maxRaw === '')
+    ? 'all values'
+    : ((minRaw === '' ? '0' : minRaw) + (maxRaw === '' ? ' and above' : ' to under ' + maxRaw));
+  var scopeVal = String(r['Scope Value'] || '').trim();
+  return String(r['Rate Key'] || 'rate') + ' (' + band + ') @ ' + _num(r['Rate %']) + '% · ' + mode +
+         ' · scope ' + scopeKey + (scopeVal ? ' "' + scopeVal + '"' : '') + ' · as at ' + ymd;
+}
+
+// ── The salary cutoff ───────────────────────────────────────────────────────
+/* Manila-explicit ON PURPOSE. _dateStr uses Session.getScriptTimeZone(); at the 25th/26th boundary an
+   hour of drift moves a payout a whole cutoff, so this never touches the script timezone. */
+function _commPHParts(d) {
+  var s = Utilities.formatDate(d || new Date(), 'Asia/Manila', 'yyyy-MM-dd');
+  return { y: parseInt(s.slice(0, 4), 10), m: parseInt(s.slice(5, 7), 10),
+           d: parseInt(s.slice(8, 10), 10), ymd: s };
+}
+function _commKey(y, m, half) { return y + '-' + ('0' + m).slice(-2) + '-' + half; }
+
+/** The cutoff window a date falls INTO.
+ *  Cutoff A of month M = 26th of M-1 … 10th of M   |   Cutoff B of M = 11th … 25th of M
+ *  (definition mirrored from dashboard/js/director-home.js _buildDateRange). */
+function _commContainingCutoff(d) {
+  var p = _commPHParts(d), y = p.y, m = p.m;
+  if (p.d >= 26) { m += 1; if (m === 13) { m = 1; y += 1; } return _commKey(y, m, 'A'); }
+  if (p.d <= 10) return _commKey(y, m, 'A');
+  return _commKey(y, m, 'B');
+}
+/** The cutoff a commission approved on `d` is actually PAID in, plus the reason in words. */
+function _commPayoutPeriod(d) {
+  var containing = _commContainingCutoff(d);
+  var ymd = _commPHParts(d).ymd;
+  if (_COMM_PERIOD_MODE !== 'next-B' || containing.slice(-1) === 'B') {
+    return { period: containing,
+             basis: 'Cutoff ' + containing + ' · approved ' + ymd + ' · the window the approval falls in.' };
+  }
+  var period = containing.slice(0, -1) + 'B';
+  return {
+    period: period,
+    basis: 'Cutoff ' + period + ' · approved ' + ymd + ' · moved forward from ' + containing +
+           ' because payroll applies Other Income in the 2nd cutoff only.'
+  };
+}
+/** '2026-08-B' → {from, to, label}. The report shows this so the director can see the window. */
+function _commPeriodRange(period) {
+  var m = /^(\d{4})-(\d{2})-([AB])$/.exec(String(period || ''));
+  if (!m) return { from: '', to: '', label: String(period || '') };
+  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), half = m[3];
+  var name = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+              'September', 'October', 'November', 'December'][mo - 1];
+  if (half === 'B') {
+    return { from: _commKey(y, mo, '').slice(0, 7) + '-11', to: _commKey(y, mo, '').slice(0, 7) + '-25',
+             label: '2nd Cutoff — ' + name + ' ' + y };
+  }
+  var py = y, pm = mo - 1;
+  if (pm === 0) { pm = 12; py -= 1; }
+  var daysInPrev = new Date(py, pm, 0).getDate();
+  return { from: py + '-' + ('0' + pm).slice(-2) + '-26',
+           to: y + '-' + ('0' + mo).slice(-2) + '-10',
+           label: '1st Cutoff — ' + name + ' ' + y + ' (from ' + daysInPrev + ' ' + py + '-' +
+                  ('0' + pm).slice(-2) + ')' };
+}
+
+// ── Shared read context ─────────────────────────────────────────────────────
+/** Every index the joins need, read once. Six sheet reads; callers pass it around. */
+function _commContext() {
+  var ctx = { quoteByNo: {}, soByNo: {}, invByNo: {}, arByNo: {}, invBySo: {}, collections: [] };
+  _rows('Quotations').forEach(function (q) { ctx.quoteByNo[String(q['Quotation No'])] = q; });
+  _rows('SalesOrders').forEach(function (s) { ctx.soByNo[String(s['SO No'])] = s; });
+  _rows('Invoices').forEach(function (v) {
+    if (String(v['Voided'] || '') === 'true') return;
+    ctx.invByNo[String(v['INV No'])] = v;
+    var so = String(v['SO No'] || '').trim();
+    if (so) (ctx.invBySo[so] = ctx.invBySo[so] || []).push(v);
+  });
+  _rows('ARAging').forEach(function (a) { ctx.arByNo[String(a['AR No'])] = a; });
+  ctx.collections = _rows('Collections').filter(function (c) {
+    return String(c['Voided'] || '') !== 'true';
+  });
+  return ctx;
+}
+function _commCollectionByNo(no) {
+  return _rows('Collections').filter(function (c) {
+    return String(c['Collection No']) === String(no);
+  })[0];
+}
+function _commInvoicedToDate(soNo, ctx) {
+  return (ctx.invBySo[String(soNo)] || []).reduce(function (s, v) {
+    return s + _num(v['Total Sales']);
+  }, 0);
+}
+/** What this SO has already had claimed.
+ *
+ *  Counts ONLY claims in a LOCKING status — exactly the same set that holds collections. It has to be
+ *  the same set: a Draft does not lock, so its collections are still offered as available, and
+ *  counting the draft here as well would count the same peso twice. A ₱200,000 payment on a
+ *  ₱200,000 order then reads as "₱400,000 of ₱200,000 (200%) — OVER-COLLECTED", which is a false
+ *  alarm on a perfectly ordinary claim, and a warning that cries wolf is worse than no warning.
+ *  Money is either already claimed or still available, never both. */
+function _commPriorClaimed(soNo, excludeCommNo) {
+  return _rows('CommissionRequests').reduce(function (s, r) {
+    if (String(r['SO No']) !== String(soNo)) return s;
+    if (excludeCommNo && String(r['Comm No']) === String(excludeCommNo)) return s;
+    if (!_COMM_LOCKING[String(r['Status'] || '')]) return s;
+    return s + _num(r['Base (PHP)']);
+  }, 0);
+}
+function _commMoney(n) {
+  var v = Math.round(_num(n) * 100) / 100;
+  var neg = v < 0; v = Math.abs(v);
+  var parts = v.toFixed(2).split('.');
+  return (neg ? '-' : '') + 'PHP ' + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + parts[1];
+}
+/** The sentence the approver reads. This is the whole point of "the rep can request anytime, but it
+ *  depends on management when they approve, because of the instance of partly collected". */
+function _commCoverageNote(soTotal, invoiced, prior, thisBase) {
+  var total = _num(soTotal);
+  var claimedAfter = _num(prior) + _num(thisBase);
+  if (total <= 0) {
+    return 'Sales order carries no value on record — judge this claim on the collections listed.';
+  }
+  var pct = Math.round(claimedAfter / total * 1000) / 10;
+  var note = 'Claimed cash after this request: ' + _commMoney(claimedAfter) + ' of ' +
+             _commMoney(total) + ' order value (' + pct + '%).';
+  if (_num(prior) > 0) note += ' ' + _commMoney(prior) + ' was already claimed on this order.';
+  if (_num(invoiced) > 0 && _num(invoiced) < total - 0.005) {
+    note += ' Only ' + _commMoney(invoiced) + ' has been invoiced so far.';
+  }
+  if (claimedAfter > total + 0.005) {
+    note += ' OVER-COLLECTED: claimed cash exceeds the order value by ' +
+            _commMoney(claimedAfter - total) + ' — verify before approving.';
+  } else if (pct < 99.5) {
+    note += ' PARTIAL — the order is not fully collected.';
+  }
+  return note;
+}
+
+/** Derive everything about a claim from an SO and a list of collection numbers.
+ *  Returns {ok, message, ...figures, items[]}. Used live for a draft and again at submit to freeze. */
+function _commDerive(soNo, collectionNos, excludeCommNo, ctx) {
+  ctx = ctx || _commContext();
+  var so = ctx.soByNo[String(soNo)];
+  if (!so) return { ok: false, message: 'Sales order ' + soNo + ' not found.' };
+  var who = _commSalesperson(so, ctx.quoteByNo);
+  if (!who.name) return { ok: false, message: who.reason };
+
+  var claimed = _commClaimedIndex(excludeCommNo);
+  var wanted = {}, order = [];
+  (collectionNos || []).forEach(function (n) {
+    var k = String(n).trim();
+    if (k && !wanted[k]) { wanted[k] = 1; order.push(k); }
+  });
+  if (!order.length) return { ok: false, message: 'Select at least one collection to claim.' };
+
+  var items = [], problems = [];
+  for (var i = 0; i < order.length; i++) {
+    var no = order[i];
+    var c = _commCollectionByNo(no);
+    if (!c) { problems.push('Collection ' + no + ' no longer exists.'); continue; }
+    if (String(c['Voided'] || '') === 'true') { problems.push('Collection ' + no + ' has been voided.'); continue; }
+    if (claimed[no]) { problems.push('Collection ' + no + ' is already claimed on ' + claimed[no] + '.'); continue; }
+    var res = _commSoForCollection(c, ctx.arByNo, ctx.invByNo);
+    if (String(res.soNo) !== String(soNo)) {
+      problems.push('Collection ' + no + ' does not belong to ' + soNo +
+                    (res.soNo ? ' (it belongs to ' + res.soNo + ').' : ' — its sales order cannot be resolved.'));
+      continue;
+    }
+    items.push(c);
+  }
+  if (problems.length) return { ok: false, message: problems.join(' '), problems: problems };
+
+  var money = _commBaseFor(items);
+  var soTotal = _num(so['Total']);
+  var invoiced = _commInvoicedToDate(soNo, ctx);
+  var prior = _commPriorClaimed(soNo, excludeCommNo);
+  var rate = _commRate({ salesperson: who.name, customer: so['Customer'], base: money.base, date: _now() });
+
+  return {
+    ok: true, so: so, salesperson: who.name, customer: String(so['Customer'] || ''),
+    quotationNo: String(so['Quotation No'] || ''),
+    soTotal: soTotal, invoiced: invoiced, prior: prior,
+    gross: money.gross, ewt: money.ewt, base: money.base,
+    rate: rate.rate, rateBasis: rate.basis, rateConfigured: rate.configured,
+    amount: Math.round(rate.amount * 100) / 100,
+    coverageNote: _commCoverageNote(soTotal, invoiced, prior, money.base),
+    items: items
+  };
+}
+function _commWriteItems(no, collectionRows) {
+  _writeItems('CommissionRequestItems', 'Comm No', no, collectionRows, function (c) {
+    return [no, String(c['Collection No']), String(c['AR No'] || ''), String(c['INV No'] || ''),
+            String(c['SO No'] || ''), c['Customer'], c['Date'],
+            _num(c['Amount (PHP)']), _num(c['EWT (PHP)']),
+            _num(c['Amount (PHP)']) - _num(c['EWT (PHP)']),
+            String(c['Method'] || ''), String(c['Reference No'] || ''),
+            'false'];   // 13 values — last column is 'Voided At Claim'
+  });
+}
+
+// ── Reads ───────────────────────────────────────────────────────────────────
+function getCommissionRequests(p) {
+  var rows = _rows('CommissionRequests').map(_commMap);
+  if (p && p.salesperson) {
+    rows = rows.filter(function (r) { return String(r.salesperson) === String(p.salesperson); });
+  }
+  if (p && p.status) rows = rows.filter(function (r) { return String(r.status) === String(p.status); });
+  if (p && p.soNo) rows = rows.filter(function (r) { return String(r.soNo) === String(p.soNo); });
+  if (p && p.payoutPeriod) {
+    rows = rows.filter(function (r) { return String(r.payoutPeriod) === String(p.payoutPeriod); });
+  }
+  if (p && p.commNo) rows = rows.filter(function (r) { return String(r.commNo) === String(p.commNo); });
+  var byNo = {};
+  rows.forEach(function (r) { r.items = []; byNo[String(r.commNo)] = r; });
+  _rows('CommissionRequestItems').forEach(function (i) {
+    var h = byNo[String(i['Comm No'])];
+    if (h) h.items.push(_commItemMap(i));
+  });
+  rows.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  return { success: true, data: rows };
+}
+
+function getCommissionRates() {
+  return { success: true, defaultRate: _COMM_DEFAULT_RATE, tierMode: _COMM_TIER_MODE,
+    periodMode: _COMM_PERIOD_MODE,
+    data: _commRateRows().map(function (r) {
+      return { rateKey: String(r['Rate Key'] || ''), scope: String(r['Scope'] || ''),
+        scopeValue: String(r['Scope Value'] || ''),
+        minBase: String(r['Min Base (PHP)'] || ''), maxBase: String(r['Max Base (PHP)'] || ''),
+        rate: _num(r['Rate %']), effectiveFrom: _commDateOnly(r['Effective From']),
+        effectiveTo: _commDateOnly(r['Effective To']), notes: String(r['Notes'] || ''),
+        updatedBy: String(r['Updated By'] || ''), updatedAt: r['Updated At'], rowIndex: r.rowIndex };
+    }) };
+}
+
+/* Every non-voided peso of collected cash, partitioned into exactly four buckets:
+     available · alreadyClaimed · unresolved (no SO can be found) · unattributed (no salesperson).
+   The four must sum to the whole. That identity is the proof the join loses nothing, and the
+   verification harness asserts it to the peso.
+   The exception buckets go ONLY to an oversight caller — a rep has no business seeing them. */
+function getCommissionClaimable(p) {
+  var want = String((p && p.salesperson) || '').trim();
+  var role = String((p && p.actorRole) || '').toLowerCase();
+  var oversight = (role === 'director' || role === 'management' || role === 'admin');
+  if (!want && !oversight) return { success: false, message: 'salesperson is required.' };
+
+  var ctx = _commContext();
+  var claimed = _commClaimedIndex(null);
+  var groups = {}, unresolved = [], unattributed = [], totals = {
+    available: 0, alreadyClaimed: 0, unresolved: 0, unattributed: 0, allNetCash: 0
+  };
+
+  ctx.collections.forEach(function (c) {
+    var net = _num(c['Amount (PHP)']) - _num(c['EWT (PHP)']);
+    totals.allNetCash += net;
+    var line = {
+      collectionNo: String(c['Collection No']), arNo: String(c['AR No'] || ''),
+      invNo: String(c['INV No'] || ''), customer: String(c['Customer'] || ''),
+      date: c['Date'], amount: _num(c['Amount (PHP)']), ewt: _num(c['EWT (PHP)']), netCash: net,
+      method: String(c['Method'] || ''), reference: String(c['Reference No'] || '')
+    };
+
+    var res = _commSoForCollection(c, ctx.arByNo, ctx.invByNo);
+    if (!res.soNo) {
+      totals.unresolved += net;
+      unresolved.push(_commExtend(line, { reason: 'No sales order can be resolved from this collection, its AR row, or its invoice.' }));
+      return;
+    }
+    var so = ctx.soByNo[res.soNo];
+    if (!so) {
+      totals.unresolved += net;
+      unresolved.push(_commExtend(line, { soNo: res.soNo, via: res.via, reason: 'Sales order ' + res.soNo + ' does not exist.' }));
+      return;
+    }
+    var who = _commSalesperson(so, ctx.quoteByNo);
+    if (!who.name) {
+      totals.unattributed += net;
+      unattributed.push(_commExtend(line, { soNo: res.soNo, via: res.via, reason: who.reason }));
+      return;
+    }
+    if (want && who.name !== want) return;              // another rep's money — silently not ours
+
+    var g = groups[res.soNo];
+    if (!g) {
+      g = groups[res.soNo] = {
+        soNo: res.soNo, quotationNo: String(so['Quotation No'] || ''),
+        customer: String(so['Customer'] || ''), soDate: so['Date'], soTotal: _num(so['Total']),
+        salesperson: who.name, invoicedToDate: _commInvoicedToDate(res.soNo, ctx),
+        priorClaimed: _commPriorClaimed(res.soNo, null),
+        available: [], alreadyClaimed: [], availableBase: 0
+      };
+    }
+    line.via = res.via;
+    if (claimed[line.collectionNo]) {
+      line.claimedOn = claimed[line.collectionNo];
+      g.alreadyClaimed.push(line);
+      totals.alreadyClaimed += net;
+    } else {
+      g.available.push(line);
+      g.availableBase += net;
+      totals.available += net;
+    }
+  });
+
+  var out = [];
+  Object.keys(groups).forEach(function (k) { out.push(groups[k]); });
+  out.sort(function (a, b) { return new Date(b.soDate) - new Date(a.soDate); });
+  out.forEach(function (g) {
+    g.availableBase = Math.round(g.availableBase * 100) / 100;
+    g.coveragePreview = _commCoverageNote(g.soTotal, g.invoicedToDate, g.priorClaimed, g.availableBase);
+  });
+
+  var res = { success: true, salesperson: want, data: out, totals: totals };
+  if (oversight) { res.unresolved = unresolved; res.unattributed = unattributed; }
+  return res;
+}
+function _commExtend(a, b) {
+  var o = {};
+  Object.keys(a).forEach(function (k) { o[k] = a[k]; });
+  Object.keys(b).forEach(function (k) { o[k] = b[k]; });
+  return o;
+}
+
+/** Live recompute for one draft/pending claim, so the UI can show the approver whether the frozen
+ *  figures have gone stale since submission. */
+function getCommissionPreview(p) {
+  var nos = [];
+  try { nos = JSON.parse(p.collectionNos || '[]'); } catch (e) { nos = []; }
+  if (p.commNo && !nos.length) {
+    nos = _commItems(p.commNo).map(function (i) { return String(i['Collection No']); });
+  }
+  var d = _commDerive(p.soNo, nos, p.commNo || null, null);
+  if (!d.ok) return { success: false, message: d.message };
+  return { success: true, salesperson: d.salesperson, customer: d.customer, soTotal: d.soTotal,
+    invoicedToDate: d.invoiced, priorClaimed: d.prior, collectedGross: d.gross, ewt: d.ewt,
+    base: d.base, rate: d.rate, rateBasis: d.rateBasis, rateConfigured: d.rateConfigured,
+    amount: d.amount, coverageNote: d.coverageNote, collectionCount: d.items.length };
+}
+
+// ── Writes ──────────────────────────────────────────────────────────────────
+function createCommissionRequest(p) {
+  var dup = _refSeen('createCommissionRequest', p.clientRef);
+  if (dup) return { success: true, commNo: dup, duplicate: true, message: 'Commission request created.' };
+
+  var nos = [];
+  try { nos = JSON.parse(p.collectionNos || '[]'); } catch (e) { nos = []; }
+  var d = _commDerive(p.soNo, nos, null, null);
+  if (!d.ok) return { success: false, message: d.message };
+
+  /* A rep files for themselves and nobody else. The salesperson is taken from the QUOTATION, never
+     from the request, so this compares the server-resolved owner against the signed-in actor. */
+  var role = String(p.actorRole || '').toLowerCase();
+  var actor = String(p.actorName || '');
+  if (role === 'sales' && actor !== d.salesperson) {
+    return { success: false, message: 'Sales order ' + p.soNo + ' belongs to ' + d.salesperson +
+             ' — you can only claim commission on your own quotations.' };
+  }
+
+  var no = _nextNumber('CommissionRequests', 1, 'COMM');
+  _append('CommissionRequests', [
+    no,                                   // Comm No
+    _dateStr(_now()),                     // Date
+    d.salesperson,                        // Salesperson  (from the quotation, never the browser)
+    String(p.soNo),                       // SO No
+    d.quotationNo,                        // Quotation No
+    d.customer,                           // Customer
+    d.soTotal,                            // SO Total (PHP)
+    d.invoiced,                           // Invoiced To Date (PHP)
+    d.gross,                              // Collected Gross (PHP)
+    d.ewt,                                // EWT (PHP)
+    d.base,                               // Base (PHP)
+    d.rate,                               // Commission Rate %
+    d.rateBasis,                          // Rate Basis
+    d.amount,                             // Amount (PHP)
+    0,                                    // Adjustment (PHP)
+    d.amount,                             // Net Payable (PHP)
+    d.items.map(function (c) { return String(c['Collection No']); }).join(', '),  // Claimed Collections
+    d.items.length,                       // Collection Count
+    '',                                   // Evidence JSON   (written at submit — the frozen snapshot)
+    d.prior,                              // Prior Claimed (PHP)
+    d.coverageNote,                       // Coverage Note
+    'Draft',                              // Status
+    actor,                                // Created By
+    role,                                 // Created By Role
+    _now(),                               // Created At
+    _now(),                               // Updated At
+    '', '', '', '',                       // Dir Approved By/At · Mgmt Approved By/At
+    '',                                   // Approval Note
+    '', '',                               // Payout Period · Payout Period Basis
+    '', '', '',                           // Released By · Released At · Release Note
+    ''                                    // Integrity Flag   ← 37 values, last column
+  ]);
+  _commWriteItems(no, d.items);
+  _refStore('createCommissionRequest', p.clientRef, no);
+  return { success: true, commNo: no, refNo: no, base: d.base, amount: d.amount,
+    rateConfigured: d.rateConfigured, message: 'Commission request ' + no + ' saved as a draft.' };
+}
+
+function updateCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  if (!_commEditable(r['Status'])) {
+    return { success: false, message: 'Only a draft or rejected request can be edited (this one is ' +
+             r['Status'] + ').' };
+  }
+  var nos = [];
+  try { nos = JSON.parse(p.collectionNos || '[]'); } catch (e) { nos = []; }
+  var soNo = p.soNo || r['SO No'];
+  var d = _commDerive(soNo, nos, p.commNo, null);
+  if (!d.ok) return { success: false, message: d.message };
+
+  _commSet(p.commNo, {
+    'SO No': String(soNo), 'Quotation No': d.quotationNo, 'Customer': d.customer,
+    'Salesperson': d.salesperson,
+    'SO Total (PHP)': d.soTotal, 'Invoiced To Date (PHP)': d.invoiced,
+    'Collected Gross (PHP)': d.gross, 'EWT (PHP)': d.ewt, 'Base (PHP)': d.base,
+    'Commission Rate %': d.rate, 'Rate Basis': d.rateBasis,
+    'Amount (PHP)': d.amount, 'Net Payable (PHP)': d.amount + _num(r['Adjustment (PHP)']),
+    'Claimed Collections': d.items.map(function (c) { return String(c['Collection No']); }).join(', '),
+    'Collection Count': d.items.length,
+    'Prior Claimed (PHP)': d.prior, 'Coverage Note': d.coverageNote
+  });
+  _commWriteItems(p.commNo, d.items);
+  return { success: true, commNo: p.commNo, refNo: p.commNo, base: d.base, amount: d.amount,
+    rateConfigured: d.rateConfigured, message: 'Commission request updated.' };
+}
+
+function deleteCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  if (!_commEditable(r['Status'])) {
+    return { success: false, message: 'Only a draft or rejected request can be deleted (this one is ' +
+             r['Status'] + ').' };
+  }
+  _writeItems('CommissionRequestItems', 'Comm No', p.commNo, [], function (x) { return x; });
+  _sheet('CommissionRequests').deleteRow(r.rowIndex);
+  return { success: true, refNo: p.commNo, message: 'Commission request ' + p.commNo + ' deleted.' };
+}
+
+/* Submitting is the act that FREEZES a payable number and seizes the collections. Everything is
+   re-derived server-side here — a browser that has been open for an hour cannot be trusted, and the
+   money may well have moved underneath it. */
+function submitCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  if (!_commEditable(r['Status'])) {
+    return { success: false, message: 'This request has already been submitted (it is ' + r['Status'] + ').' };
+  }
+  var nos = _commItems(p.commNo).map(function (i) { return String(i['Collection No']); });
+  if (!nos.length) return { success: false, message: 'This request claims no collections.' };
+
+  var d = _commDerive(r['SO No'], nos, p.commNo, null);
+  if (!d.ok) return { success: false, message: d.message };
+  if (d.base <= 0) return { success: false, message: 'The claimed collections come to nothing after withholding tax.' };
+  if (!d.rateConfigured) {
+    return { success: false, message: 'The commission rate has not been set up yet — ask the director ' +
+             'to configure it before submitting.' };
+  }
+  if (Math.abs(d.base - _num(r['Base (PHP)'])) > 0.01 && !p.confirmBaseChanged) {
+    return { success: false, needsConfirm: 'baseChanged', storedBase: _num(r['Base (PHP)']), liveBase: d.base,
+      message: 'The collections behind this claim have changed since you saved it: it was ' +
+               _commMoney(r['Base (PHP)']) + ' and is now ' + _commMoney(d.base) +
+               '. Submit the current figure?' };
+  }
+
+  var evidence = d.items.map(function (c) {
+    return { collectionNo: String(c['Collection No']), arNo: String(c['AR No'] || ''),
+      invNo: String(c['INV No'] || ''), date: _dateStr(c['Date']),
+      amount: _num(c['Amount (PHP)']), ewt: _num(c['EWT (PHP)']),
+      netCash: _num(c['Amount (PHP)']) - _num(c['EWT (PHP)']),
+      reference: String(c['Reference No'] || '') };
+  });
+
+  _commSet(p.commNo, {
+    'Salesperson': d.salesperson, 'Customer': d.customer, 'Quotation No': d.quotationNo,
+    'SO Total (PHP)': d.soTotal, 'Invoiced To Date (PHP)': d.invoiced,
+    'Collected Gross (PHP)': d.gross, 'EWT (PHP)': d.ewt, 'Base (PHP)': d.base,
+    'Commission Rate %': d.rate, 'Rate Basis': d.rateBasis,
+    'Amount (PHP)': d.amount, 'Net Payable (PHP)': d.amount + _num(r['Adjustment (PHP)']),
+    'Claimed Collections': nos.join(', '), 'Collection Count': d.items.length,
+    'Evidence JSON': JSON.stringify(evidence),
+    'Prior Claimed (PHP)': d.prior, 'Coverage Note': d.coverageNote,
+    'Approval Note': '', 'Status': _COMM_STAGES[0].status
+  });
+  _commWriteItems(p.commNo, d.items);
+  return { success: true, commNo: p.commNo, refNo: p.commNo, status: _COMM_STAGES[0].status,
+    base: d.base, amount: d.amount,
+    message: 'Submitted for approval — with the director first.' };
+}
+
+function approveCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  var st = String(r['Status'] || '');
+  var stage = _commStage(st);
+  if (!stage) return { success: false, message: 'Not awaiting approval at this stage (' + st + ').' };
+  var role = String(p.actorRole || '').toLowerCase();
+  if (role !== stage.role) {
+    return { success: false, message: 'Only ' + stage.who + ' can approve at this stage.' };
+  }
+
+  /* Never approve blind: a collection can be voided or corrected between submission and signature. */
+  var drift = _commEvidenceDrift(p.commNo);
+  if (drift.length && !p.confirmEvidenceChanged) {
+    return { success: false, needsConfirm: 'evidenceChanged', findings: drift,
+      message: 'The collection evidence behind this claim has changed since it was submitted: ' +
+               drift.join(' ') + ' Approve anyway?' };
+  }
+
+  var patch = { 'Status': stage.next };
+  patch[stage.by] = String(p.actorName || '');
+  patch[stage.at] = _now();
+  var msg = 'Approved — now with management.';
+  if (stage.next === 'Approved') {
+    var period = _commPayoutPeriod(_now());
+    patch['Payout Period'] = period.period;
+    patch['Payout Period Basis'] = period.basis;
+    var rng = _commPeriodRange(period.period);
+    msg = 'Commission approved — it falls in ' + rng.label + ' (' + rng.from + ' to ' + rng.to + ').';
+  }
+  _commSet(p.commNo, patch);
+  return { success: true, commNo: p.commNo, refNo: p.commNo, status: stage.next,
+    payoutPeriod: patch['Payout Period'] || '', message: msg };
+}
+
+/** Has anything moved under a submitted claim? Compares the frozen child rows against the live
+ *  Collections sheet. Returns human sentences, not codes — an approver has to read them. */
+function _commEvidenceDrift(commNo) {
+  var out = [];
+  _commItems(commNo).forEach(function (i) {
+    var no = String(i['Collection No']);
+    var c = _commCollectionByNo(no);
+    if (!c) { out.push('Collection ' + no + ' no longer exists.'); return; }
+    if (String(c['Voided'] || '') === 'true') { out.push('Collection ' + no + ' has been voided.'); return; }
+    var liveNet = _num(c['Amount (PHP)']) - _num(c['EWT (PHP)']);
+    if (Math.abs(liveNet - _num(i['Net Cash (PHP)'])) > 0.01) {
+      out.push('Collection ' + no + ' was ' + _commMoney(i['Net Cash (PHP)']) +
+               ' and is now ' + _commMoney(liveNet) + '.');
+    }
+  });
+  return out;
+}
+
+function rejectCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  var st = String(r['Status'] || '');
+  if (st.indexOf('Pending') !== 0) {
+    return { success: false, message: 'Only a pending request can be rejected (this one is ' + st + ').' };
+  }
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['management', 'director'].indexOf(role) < 0) {
+    return { success: false, message: 'You are not an approver for commission requests.' };
+  }
+  /* Rejecting RELEASES the collections — management refused this claim, not the cash. The rep can
+     file a corrected one. */
+  _commSet(p.commNo, { 'Status': 'Rejected', 'Approval Note': String(p.reason || '') });
+  return { success: true, commNo: p.commNo, refNo: p.commNo, status: 'Rejected',
+    message: 'Commission request rejected — the collections are claimable again.' };
+}
+
+/** Reopen for editing. Clears BOTH stamp pairs and the payout bucket — an approval must never survive
+ *  a change to the claim it was given for. Refused once released: money has left, and the fix for
+ *  that is an adjustment, not a rewrite of a paid period. */
+function reviseCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  var st = String(r['Status'] || '');
+  if (st === 'Released') {
+    return { success: false, message: 'This commission has already been released for payroll. ' +
+             'Correct it with an adjustment instead of reopening it.' };
+  }
+  if (_commEditable(st)) return { success: false, message: 'This request is already editable.' };
+  _commSet(p.commNo, {
+    'Status': 'Draft', 'Dir Approved By': '', 'Dir Approved At': '',
+    'Mgmt Approved By': '', 'Mgmt Approved At': '', 'Approval Note': '',
+    'Payout Period': '', 'Payout Period Basis': ''
+  });
+  return { success: true, commNo: p.commNo, refNo: p.commNo, status: 'Draft',
+    message: 'Reopened as a draft — every approval on it has been cleared.' };
+}
+
+/** The director marks a cutoff's commissions as keyed into payroll. Idempotent by refusal, so the
+ *  same commission can never be paid into two cutoffs. */
+function markCommissionReleased(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  var role = String(p.actorRole || '').toLowerCase();
+  if (role !== 'director') return { success: false, message: 'Only the director can release a commission for payroll.' };
+  /* This check comes FIRST so a second release attempt names the date and the releaser. Behind the
+     status test it would be unreachable, and "this one is Released" tells the director nothing. */
+  if (r['Released At']) {
+    return { success: false, message: 'Already released by ' + String(r['Released By'] || 'someone') +
+             ' on ' + _dateStr(r['Released At']) + ' for ' + String(r['Payout Period'] || 'an earlier cutoff') + '.' };
+  }
+  if (String(r['Status'] || '') !== 'Approved') {
+    return { success: false, message: 'Only a fully approved commission can be released (this one is ' +
+             String(r['Status'] || '') + ').' };
+  }
+  if (!String(r['Payout Period'] || '').trim()) {
+    return { success: false, message: 'This commission has no payout period — it cannot be released.' };
+  }
+  _commSet(p.commNo, { 'Status': 'Released', 'Released By': String(p.actorName || ''),
+    'Released At': _now(), 'Release Note': String(p.note || '') });
+  return { success: true, commNo: p.commNo, refNo: p.commNo, status: 'Released',
+    message: 'Released for ' + String(r['Payout Period']) + '.' };
+}
+
+/** Post-approval correction. The approved Amount is never rewritten — the delta lands here, so the
+ *  record keeps saying what the director actually signed. */
+function adjustCommissionRequest(p) {
+  var r = _commRow(p.commNo);
+  if (!r) return { success: false, message: 'Commission request not found.' };
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['director', 'management'].indexOf(role) < 0) {
+    return { success: false, message: 'Only the director or management can adjust a commission.' };
+  }
+  if (!p.reason) return { success: false, message: 'A reason is required for an adjustment.' };
+  var adj = _num(p.adjustment);
+  var note = String(r['Approval Note'] || '');
+  _commSet(p.commNo, {
+    'Adjustment (PHP)': adj,
+    'Net Payable (PHP)': _num(r['Amount (PHP)']) + adj,
+    'Approval Note': (note ? note + ' | ' : '') + 'Adjustment ' + _commMoney(adj) + ': ' + String(p.reason)
+  });
+  return { success: true, commNo: p.commNo, refNo: p.commNo,
+    netPayable: _num(r['Amount (PHP)']) + adj,
+    message: 'Adjustment recorded — net payable is now ' + _commMoney(_num(r['Amount (PHP)']) + adj) + '.' };
+}
+
+function setCommissionRate(p) {
+  if (!p.rateKey) return { success: false, message: 'A rate key is required.' };
+  var scope = String(p.scope || 'default').toLowerCase();
+  if (['default', 'salesperson', 'customer'].indexOf(scope) < 0) {
+    return { success: false, message: 'Scope must be default, salesperson or customer.' };
+  }
+  var rate = _num(p.rate);
+  if (rate < 0 || rate > 100) return { success: false, message: 'A commission rate must be between 0 and 100 percent.' };
+  var minRaw = String(p.minBase === undefined || p.minBase === null ? '' : p.minBase).trim();
+  var maxRaw = String(p.maxBase === undefined || p.maxBase === null ? '' : p.maxBase).trim();
+  if (minRaw !== '' && maxRaw !== '' && _num(maxRaw) <= _num(minRaw)) {
+    return { success: false, message: 'The bracket ceiling must be above its floor.' };
+  }
+  var existing = _commRateRows().filter(function (r) {
+    return String(r['Rate Key']) === String(p.rateKey);
+  })[0];
+  var vals = {
+    'Rate Key': String(p.rateKey), 'Scope': scope, 'Scope Value': String(p.scopeValue || ''),
+    'Min Base (PHP)': minRaw, 'Max Base (PHP)': maxRaw, 'Rate %': rate,
+    'Effective From': String(p.effectiveFrom || ''), 'Effective To': String(p.effectiveTo || ''),
+    'Notes': String(p.notes || ''), 'Updated By': String(p.actorName || ''), 'Updated At': _now()
+  };
+  if (existing) {
+    Object.keys(vals).forEach(function (k) {
+      _setCellByKey('CommissionRates', 'Rate Key', p.rateKey, k, vals[k]);
+    });
+    return { success: true, refNo: p.rateKey, message: 'Commission rate ' + p.rateKey + ' updated.' };
+  }
+  _append('CommissionRates', SCHEMA.CommissionRates.map(function (h) { return vals[h]; }));
+  return { success: true, refNo: p.rateKey, message: 'Commission rate ' + p.rateKey + ' added.' };
+}
+
+function deleteCommissionRate(p) {
+  var r = _commRateRows().filter(function (x) { return String(x['Rate Key']) === String(p.rateKey); })[0];
+  if (!r) return { success: false, message: 'Rate ' + p.rateKey + ' not found.' };
+  _sheet('CommissionRates').deleteRow(r.rowIndex);
+  return { success: true, refNo: p.rateKey, message: 'Commission rate ' + p.rateKey + ' removed.' };
+}
+
+// ── The cutoff report ───────────────────────────────────────────────────────
+/** Approved commissions grouped by payout period and salesperson — what the director reads while
+ *  preparing payroll. Names come out exactly as the flow sheets hold them; matching them to the
+ *  payroll register is a human job, deliberately (three unlinked name namespaces, and a silent
+ *  mis-match pays the wrong person). */
+function getCommissionPayoutReport(p) {
+  var period = String((p && p.payoutPeriod) || '').trim();
+  var rows = _rows('CommissionRequests').map(_commMap).filter(function (r) {
+    return r.status === 'Approved' || r.status === 'Released';
+  });
+  var periods = {};
+  rows.forEach(function (r) { if (r.payoutPeriod) periods[r.payoutPeriod] = 1; });
+  var periodList = Object.keys(periods).sort();
+  if (!period) period = periodList.length ? periodList[periodList.length - 1] : _commPayoutPeriod(_now()).period;
+
+  var inPeriod = rows.filter(function (r) { return r.payoutPeriod === period; });
+  var people = {};
+  inPeriod.forEach(function (r) {
+    var k = String(r.salesperson || '(unattributed)');
+    var g = people[k] || (people[k] = {
+      salesperson: k, payableClaims: [], releasedClaims: [],
+      payable: 0, released: 0, adjustments: 0
+    });
+    if (r.status === 'Released') { g.releasedClaims.push(r); g.released += r.netPayable; }
+    else { g.payableClaims.push(r); g.payable += r.netPayable; g.adjustments += r.adjustment; }
+  });
+  var out = [];
+  Object.keys(people).sort().forEach(function (k) {
+    var g = people[k];
+    g.payable = Math.round(g.payable * 100) / 100;
+    g.released = Math.round(g.released * 100) / 100;
+    out.push(g);
+  });
+  var rng = _commPeriodRange(period);
+  return { success: true, payoutPeriod: period, periodLabel: rng.label, periodFrom: rng.from,
+    periodTo: rng.to, periodMode: _COMM_PERIOD_MODE, periods: periodList, data: out,
+    totalPayable: Math.round(out.reduce(function (s, g) { return s + g.payable; }, 0) * 100) / 100,
+    totalReleased: Math.round(out.reduce(function (s, g) { return s + g.released; }, 0) * 100) / 100 };
+}
+
+/** Read-only reconciliation. Run it before every cutoff — it answers "is anything about to pay the
+ *  wrong number", which no individual screen can. */
+function auditCommissionIntegrity() {
+  var findings = [];
+  var seen = {};
+  var headers = {};
+  _rows('CommissionRequests').forEach(function (r) { headers[String(r['Comm No'])] = r; });
+
+  _rows('CommissionRequestItems').forEach(function (i) {
+    var commNo = String(i['Comm No']), colNo = String(i['Collection No']);
+    var h = headers[commNo];
+    if (!h) { findings.push({ level: 'error', commNo: commNo, message: 'Orphan item row for a request that no longer exists.' }); return; }
+    if (_COMM_LOCKING[String(h['Status'] || '')]) {
+      if (seen[colNo]) {
+        findings.push({ level: 'error', commNo: commNo,
+          message: 'Collection ' + colNo + ' is held by BOTH ' + seen[colNo] + ' and ' + commNo + ' — the claim lock failed.' });
+      } else { seen[colNo] = commNo; }
+    }
+    var c = _commCollectionByNo(colNo);
+    if (!c) {
+      findings.push({ level: 'error', commNo: commNo, message: 'Collection ' + colNo + ' no longer exists.' });
+      return;
+    }
+    if (String(c['Voided'] || '') === 'true' && String(i['Voided At Claim'] || '') !== 'true') {
+      findings.push({ level: 'warn', commNo: commNo,
+        message: 'Collection ' + colNo + ' has been voided since it was claimed (' + _commMoney(i['Net Cash (PHP)']) + ').' });
+      _setCellByKey('CommissionRequestItems', 'Collection No', colNo, 'Voided At Claim', 'true');
+    }
+    var liveNet = _num(c['Amount (PHP)']) - _num(c['EWT (PHP)']);
+    if (Math.abs(liveNet - _num(i['Net Cash (PHP)'])) > 0.01) {
+      findings.push({ level: 'warn', commNo: commNo,
+        message: 'Collection ' + colNo + ' was ' + _commMoney(i['Net Cash (PHP)']) + ' when claimed and is now ' + _commMoney(liveNet) + '.' });
+    }
+  });
+
+  _rows('CommissionRequests').forEach(function (r) {
+    var no = String(r['Comm No']), st = String(r['Status'] || '');
+    if (st === 'Approved' && !String(r['Payout Period'] || '').trim()) {
+      findings.push({ level: 'error', commNo: no, message: 'Approved but has no payout period — it will not appear on any cutoff.' });
+    }
+    if (st === 'Released' && (!String(r['Payout Period'] || '').trim() || !String(r['Released By'] || '').trim())) {
+      findings.push({ level: 'error', commNo: no, message: 'Released without a payout period or a releaser.' });
+    }
+    var childSum = _commItems(no).reduce(function (s, i) { return s + _num(i['Net Cash (PHP)']); }, 0);
+    if (st !== 'Draft' && Math.abs(childSum - _num(r['Base (PHP)'])) > 0.01) {
+      findings.push({ level: 'error', commNo: no,
+        message: 'Base is ' + _commMoney(r['Base (PHP)']) + ' but its collections come to ' + _commMoney(childSum) + '.' });
+    }
+    if (Math.abs((_num(r['Amount (PHP)']) + _num(r['Adjustment (PHP)'])) - _num(r['Net Payable (PHP)'])) > 0.01) {
+      findings.push({ level: 'error', commNo: no,
+        message: 'Net payable ' + _commMoney(r['Net Payable (PHP)']) + ' does not equal amount + adjustment.' });
+    }
+  });
+
+  return { success: true, findings: findings, clean: findings.length === 0,
+    message: findings.length ? findings.length + ' finding(s).' : 'Nothing wrong found.' };
+}
+
+/** Which live claim, if any, is holding a collection. Used by voidCollection so accounting is told
+ *  what their correction costs before they make it. */
+function _commClaimHolding(collectionNo) {
+  var held = null;
+  var headers = {};
+  _rows('CommissionRequests').forEach(function (r) { headers[String(r['Comm No'])] = r; });
+  _rows('CommissionRequestItems').forEach(function (i) {
+    if (String(i['Collection No']) !== String(collectionNo)) return;
+    var h = headers[String(i['Comm No'])];
+    if (!h || !_COMM_LOCKING[String(h['Status'] || '')]) return;
+    held = { commNo: String(i['Comm No']), status: String(h['Status'] || ''),
+      salesperson: String(h['Salesperson'] || ''), netCash: _num(i['Net Cash (PHP)']),
+      rate: _num(h['Commission Rate %']) };
+  });
+  return held;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
 var _MODULE_MAP = {
@@ -5650,6 +6785,19 @@ var _MODULE_MAP = {
   rejectWeeklyItinerary: ['Weekly Itinerary', 'Rejected'],
   reviseWeeklyItinerary: ['Weekly Itinerary', 'Reopened'],
   deleteWeeklyItinerary: ['Weekly Itinerary', 'Deleted'],
+  // A207 — every writer, deletes included. An action missing here leaves NO audit row at all
+  // (the long-standing deleteSalesCall defect below), and commission is money.
+  createCommissionRequest: ['Commission Request', 'Created'],
+  updateCommissionRequest: ['Commission Request', 'Updated'],
+  submitCommissionRequest: ['Commission Request', 'Submitted'],
+  approveCommissionRequest: ['Commission Request', 'Approved'],
+  rejectCommissionRequest: ['Commission Request', 'Rejected'],
+  reviseCommissionRequest: ['Commission Request', 'Reopened'],
+  adjustCommissionRequest: ['Commission Request', 'Adjusted'],
+  markCommissionReleased: ['Commission Request', 'Released'],
+  deleteCommissionRequest: ['Commission Request', 'Deleted'],
+  setCommissionRate: ['Commission Rate', 'Saved'],
+  deleteCommissionRate: ['Commission Rate', 'Removed'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
@@ -6511,6 +7659,18 @@ var HANDLERS = {
   submitWeeklyItinerary: submitWeeklyItinerary, approveWeeklyItinerary: approveWeeklyItinerary,
   rejectWeeklyItinerary: rejectWeeklyItinerary, reviseWeeklyItinerary: reviseWeeklyItinerary,
   deleteWeeklyItinerary: deleteWeeklyItinerary,
+  // A207 commission requests. The five getters are read-only: HANDLERS only, no MUTATIONS,
+  // no _SECURED. auditCommissionIntegrity writes only the 'Voided At Claim' marker it discovers.
+  getCommissionRequests: getCommissionRequests, getCommissionClaimable: getCommissionClaimable,
+  getCommissionPreview: getCommissionPreview, getCommissionRates: getCommissionRates,
+  getCommissionPayoutReport: getCommissionPayoutReport,
+  auditCommissionIntegrity: auditCommissionIntegrity,
+  createCommissionRequest: createCommissionRequest, updateCommissionRequest: updateCommissionRequest,
+  deleteCommissionRequest: deleteCommissionRequest, submitCommissionRequest: submitCommissionRequest,
+  approveCommissionRequest: approveCommissionRequest, rejectCommissionRequest: rejectCommissionRequest,
+  reviseCommissionRequest: reviseCommissionRequest, adjustCommissionRequest: adjustCommissionRequest,
+  markCommissionReleased: markCommissionReleased,
+  setCommissionRate: setCommissionRate, deleteCommissionRate: deleteCommissionRate,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -6574,6 +7734,12 @@ var MUTATIONS = {
   logClientVisit: 1, deleteClientVisit: 1,   // A189
   saveWeeklyItinerary: 1, submitWeeklyItinerary: 1, approveWeeklyItinerary: 1,   // A190
   rejectWeeklyItinerary: 1, reviseWeeklyItinerary: 1, deleteWeeklyItinerary: 1,
+  // A207 — every commission writer runs under the script lock, which is what makes the
+  // "one collection, one claim" check at submit atomic against two tabs racing each other.
+  createCommissionRequest: 1, updateCommissionRequest: 1, deleteCommissionRequest: 1,
+  submitCommissionRequest: 1, approveCommissionRequest: 1, rejectCommissionRequest: 1,
+  reviseCommissionRequest: 1, adjustCommissionRequest: 1, markCommissionReleased: 1,
+  setCommissionRate: 1, deleteCommissionRate: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,

@@ -319,29 +319,44 @@ async function deleteEE(id) {
 // ── Hours grid ───────────────────────────────────────────────
 // 1st cutoff (A): 26th of PREVIOUS month → 10th of SELECTED month
 // 2nd cutoff (B): 11th → 25th of SELECTED month
+//
+// A207: those four boundary numbers used to be literals here, and this was the ONLY place in the
+// codebase that knew them. Commission payouts have to land in the same windows, so the definition
+// now lives in flowCutoffRange() (js/flow-api.js) and is read back here. The grid itself — the day
+// labels and the 'p'/'c' uniqueKeys the hours data is keyed on — is deliberately unchanged.
 function _buildDateRange(cutoff) {
   const year  = _currentYear;
   const month = parseInt(_currentMonth);
   const dates = [];
+  // Read the boundaries from the shared definition, falling back to the literals if flow-api.js
+  // somehow has not loaded — payroll must never render a blank grid.
+  let firstDay = (cutoff === 'A') ? 26 : 11, lastDay = (cutoff === 'A') ? 10 : 25;
+  if (typeof flowCutoffRange === 'function' && typeof flowCutoffKey === 'function') {
+    const rng = flowCutoffRange(flowCutoffKey(year, month, cutoff === 'A' ? 'A' : 'B'));
+    if (rng && rng.from && rng.to) {
+      firstDay = parseInt(rng.from.slice(8, 10), 10);
+      lastDay  = parseInt(rng.to.slice(8, 10), 10);
+    }
+  }
 
   if (cutoff === 'A') {
     let prevMonth = month - 1, prevYear = year;
     if (prevMonth === 0) { prevMonth = 12; prevYear--; }
     const daysInPrev = new Date(prevYear, prevMonth, 0).getDate();
-    for (let d = 26; d <= daysInPrev; d++) {
+    for (let d = firstDay; d <= daysInPrev; d++) {
       const dt = new Date(prevYear, prevMonth - 1, d);
       dates.push({ label: d + ' ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()],
         dateStr: prevYear + '-' + String(prevMonth).padStart(2,'0') + '-' + String(d).padStart(2,'0'),
         isSunday: dt.getDay() === 0, uniqueKey: 'p' + d });
     }
-    for (let d = 1; d <= 10; d++) {
+    for (let d = 1; d <= lastDay; d++) {
       const dt = new Date(year, month - 1, d);
       dates.push({ label: d + ' ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()],
         dateStr: year + '-' + String(month).padStart(2,'0') + '-' + String(d).padStart(2,'0'),
         isSunday: dt.getDay() === 0, uniqueKey: 'c' + d });
     }
   } else {
-    for (let d = 11; d <= 25; d++) {
+    for (let d = firstDay; d <= lastDay; d++) {
       const dt = new Date(year, month - 1, d);
       dates.push({ label: d + ' ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()],
         dateStr: year + '-' + String(month).padStart(2,'0') + '-' + String(d).padStart(2,'0'),

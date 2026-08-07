@@ -135,7 +135,12 @@ const FLOW_SECURED_ACTIONS = [
   // A194 run-it-all wrappers + the folder setup call. The three preview/verify actions stay out:
   // they are read-only.
   'buildDriveSkeletonAll', 'runDriveMigrationAll', 'setupFlowDrive',
-  'cleanupLegacyFolders', 'cleanupLegacyFoldersApply'
+  'cleanupLegacyFolders', 'cleanupLegacyFoldersApply',
+  // A207 — commission actions. submitCommissionRequest is secured too: it freezes what someone gets
+  // paid and takes exclusive hold of the collections behind the claim.
+  'submitCommissionRequest', 'approveCommissionRequest', 'rejectCommissionRequest',
+  'adjustCommissionRequest', 'markCommissionReleased',
+  'setCommissionRate', 'deleteCommissionRate', 'deleteCommissionRequest'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
@@ -259,6 +264,55 @@ function flowToday() {
   try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }
   catch (e) { return new Date().toISOString().slice(0, 10); }
 }
+/* ── A207 salary cutoffs ────────────────────────────────────────────────────
+   THE definition, hoisted here from director-home.js so there is one copy rather than two that can
+   drift. _buildDateRange and _payslipPeriod there now derive from these.
+
+     Cutoff A (1st) = 26th of the PREVIOUS month → 10th of the month
+     Cutoff B (2nd) = 11th → 25th of the month
+
+   Period keys are 'YYYY-MM-A' / 'YYYY-MM-B'. Note the authoritative bucket for a commission is
+   stamped SERVER-side at approval (FlowAPI.gs _commPayoutPeriod) — these are for display and for
+   the payroll grid, and the two must agree to the day. */
+function flowCutoffKeyFor(d) {
+  const ymd = flowDate(d || new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
+  let y = parseInt(ymd.slice(0, 4), 10), m = parseInt(ymd.slice(5, 7), 10);
+  const day = parseInt(ymd.slice(8, 10), 10);
+  if (day >= 26) { m += 1; if (m === 13) { m = 1; y += 1; } return flowCutoffKey(y, m, 'A'); }
+  if (day <= 10) return flowCutoffKey(y, m, 'A');
+  return flowCutoffKey(y, m, 'B');
+}
+function flowCutoffKey(year, month, half) {
+  return year + '-' + String(month).padStart(2, '0') + '-' + half;
+}
+/** 'YYYY-MM-A|B' → {year, month, half, from, to, label}; nulls out on anything malformed. */
+function flowCutoffRange(key) {
+  const m = /^(\d{4})-(\d{2})-([AB])$/.exec(String(key || ''));
+  if (!m) return { year: 0, month: 0, half: '', from: '', to: '', label: String(key || '') };
+  const y = parseInt(m[1], 10), mo = parseInt(m[2], 10), half = m[3];
+  const name = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+    'September', 'October', 'November', 'December'][mo - 1];
+  const pad = (n) => String(n).padStart(2, '0');
+  if (half === 'B') {
+    return { year: y, month: mo, half: half, from: y + '-' + pad(mo) + '-11', to: y + '-' + pad(mo) + '-25',
+      label: '2nd Cutoff — ' + name + ' ' + y };
+  }
+  let py = y, pm = mo - 1;
+  if (pm === 0) { pm = 12; py -= 1; }
+  return { year: y, month: mo, half: half, from: py + '-' + pad(pm) + '-26', to: y + '-' + pad(mo) + '-10',
+    label: '1st Cutoff — ' + name + ' ' + y };
+}
+/** The cutoff after this one. '2026-08-A' → '2026-08-B' → '2026-09-A'. */
+function flowCutoffNext(key) {
+  const r = flowCutoffRange(key);
+  if (!r.half) return '';
+  if (r.half === 'A') return flowCutoffKey(r.year, r.month, 'B');
+  let y = r.year, m = r.month + 1;
+  if (m === 13) { m = 1; y += 1; }
+  return flowCutoffKey(y, m, 'A');
+}
+
 const FLOW_CURRENCIES = ['PHP', 'USD', 'EUR', 'SGD', 'AUD', 'JPY', 'GBP', 'AED'];
 
 /** Map an approval/workflow status to a .flow-badge class + label. */
@@ -286,6 +340,7 @@ function renderFlowNav(active) {
     ['flow-sales-orders.html', 'Sales Orders'],
     ['flow-purchase-orders.html', 'Purchase Orders'],
     ['flow-payment-requests.html', 'Payment Requests'],
+    ['flow-commissions.html', 'Commissions'],
     ['flow-ap-aging.html', 'AP Aging'],
     ['flow-other-payables.html', 'Other Payables'],
     ['flow-receiving.html', 'Receiving'],

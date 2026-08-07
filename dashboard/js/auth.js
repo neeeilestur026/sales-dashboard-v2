@@ -548,7 +548,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'management') {
-    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave'];
+    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report'];   // A207
     const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle'];
     const mAcctPages = ['leave-request', 'change-password'];
     const mApprActive = mApprPages.includes(activePage) ? 'active' : '';
@@ -572,6 +572,7 @@ function renderNavbar(activePage) {
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Pricing Requests</a>
           <a href="management-leave.html" class="${activePage === 'management-leave' ? 'active' : ''}">Leave Approvals</a>
+          <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -614,7 +615,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'director') {
-    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses'].includes(activePage);
+    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates'].includes(activePage);   // A207
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-performance'].includes(activePage);
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
@@ -649,6 +650,8 @@ function renderNavbar(activePage) {
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="director-expenses.html" class="${activePage === 'director-expenses' ? 'active' : ''}">Expenses</a>
+          <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Commissions for Payroll</a>
+          <a href="commission-rates.html" class="${activePage === 'commission-rates' ? 'active' : ''}">Commission Rates</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -756,7 +759,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary'].includes(activePage);   // A190
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary', 'flow-commissions'].includes(activePage);   // A190 · A207
     const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -777,6 +780,7 @@ function renderNavbar(activePage) {
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="weekly-itinerary.html" class="${activePage === 'weekly-itinerary' ? 'active' : ''}">Weekly Itinerary</a>
+          <a href="flow-commissions.html" class="${activePage === 'flow-commissions' ? 'active' : ''}">Commission Requests</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
       </div>
@@ -1009,6 +1013,42 @@ async function flowComputeActions(session) {
          nudge for the ones raised in their name. */
       const rts = rows.filter(p => p.status === 'Returned to Sales').length;
       if (rts) add('report', '#22c55e', rts + ' priced request(s) still waiting to be quoted', 'flow-pricing-request.html');
+    }).catch(() => {}));
+  }
+  /* A207 commissions. Three separate nudges because three different people have three different
+     jobs here, and each is shown only the one they can actually act on — surfacing the other tier's
+     queue is what trains people to ignore the list. */
+  if (isDir || isMgmt) {
+    const mine = isDir ? 'Pending Director' : 'Pending Management';
+    jobs.push(fetchFlow('getCommissionRequests', { status: mine }).then(r => {
+      const rows = (r && r.data) || [];
+      if (rows.length) {
+        const value = rows.reduce((t, x) => t + (parseFloat(x.netPayable) || 0), 0);
+        add('report', '#f97316', rows.length + ' commission request(s) awaiting your approval'
+            + (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''),
+            isDir ? 'director-home.html' : 'management-home.html');
+      }
+    }).catch(() => {}));
+  }
+  /* The director again, wearing the payroll hat: approved commissions still to be keyed into a
+     cutoff. Without this an approved claim can sit unpaid indefinitely — nothing else chases it. */
+  if (isDir) {
+    jobs.push(fetchFlow('getCommissionRequests', { status: 'Approved' }).then(r => {
+      const rows = ((r && r.data) || []).filter(x => !x.releasedAt);
+      if (rows.length) {
+        const value = rows.reduce((t, x) => t + (parseFloat(x.netPayable) || 0), 0);
+        add('urgent', '#ef4444', rows.length + ' approved commission(s) to include in the next cutoff'
+            + (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''),
+            'commission-payout-report.html');
+      }
+    }).catch(() => {}));
+  }
+  /* The rep: a rejected claim is a dead end unless someone tells them. Scoped to their own name. */
+  if (isSales) {
+    jobs.push(fetchFlow('getCommissionRequests', { salesperson: session.name, status: 'Rejected' }).then(r => {
+      const rows = (r && r.data) || [];
+      if (rows.length) add('report', '#b45309', rows.length + ' commission request(s) sent back to you',
+                           'flow-commissions.html');
     }).catch(() => {}));
   }
   // A156: one chain for both types — Admin → Management → Director → Approved → Paid.

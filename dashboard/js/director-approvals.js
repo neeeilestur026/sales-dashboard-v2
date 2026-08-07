@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════ */
 
 let daItinByNo = {};
+let daCommByNo = {};   // A207
 
 function _dae(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
 function _dam(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
@@ -30,9 +31,10 @@ async function daLoad() {
   if (!c) return;
   c.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div>';
   try {
-    const [itn, pr] = await Promise.all([
+    const [itn, pr, cm] = await Promise.all([
       fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
+      fetchFlow('getCommissionRequests', { status: 'Pending Director' }).catch(() => ({ data: [] })),
     ]);
 
     // The director is the FIRST approver on an itinerary and the LAST on a payment request — hence
@@ -40,9 +42,12 @@ async function daLoad() {
     // work that is not theirs yet.
     const itins = ((itn && itn.data) || []).filter(x => x.status === 'Pending Director');
     const prs = ((pr && pr.data) || []).filter(x => x.status === 'Pending Director');
+    // A207 — the director is the FIRST approver on a commission too, same as an itinerary.
+    const comms = ((cm && cm.data) || []).filter(x => x.status === 'Pending Director');
     daItinByNo = {}; itins.forEach(x => { daItinByNo[String(x.itineraryNo)] = x; });
+    daCommByNo = {}; comms.forEach(x => { daCommByNo[String(x.commNo)] = x; });
 
-    if (!itins.length && !prs.length) {
+    if (!itins.length && !prs.length && !comms.length) {
       c.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">✓ Nothing waiting on you.</div>';
       return;
     }
@@ -66,20 +71,70 @@ async function daLoad() {
         <button class="link-btn" onclick="daApprove('approvePaymentRequest','${_dae(x.prNo)}','prNo')">Approve</button>
         <button class="link-btn del-btn" onclick="daReject('rejectPaymentRequest','${_dae(x.prNo)}','prNo')">Reject</button></td></tr>`).join('');
 
+    /* A207 — the whole reason a rep can file "any time" is that the DIRECTOR judges whether the
+       order is collected enough to pay on. So the coverage sentence is in the row itself, not
+       hidden behind the View button, and View opens the individual payments being claimed. */
+    const cRows = comms.map(x => `<tr>
+      <td><span class="flow-badge b-pending">Commission</span></td>
+      <td>${_dae(x.commNo)}</td>
+      <td>${_dae(x.salesperson)}</td>
+      <td>${_dam(x.netPayable)} <span style="color:var(--text-muted,#64748b);">on ${_dam(x.base)} collected</span>
+        <div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_dae(x.soNo)} · ${_dae(x.customer)}</div>
+        <div style="font-size:0.7rem;margin-top:2px;${/OVER-COLLECTED/.test(x.coverageNote || '') ? 'color:#b91c1c;font-weight:600;'
+          : (/PARTIAL/.test(x.coverageNote || '') ? 'color:#b45309;font-weight:600;' : 'color:var(--text-muted,#64748b);')}">${_dae(x.coverageNote)}</div></td>
+      <td style="white-space:nowrap;">
+        <button class="link-btn" onclick="daViewCommission('${_dae(x.commNo)}')">View payments</button>
+        <button class="link-btn" onclick="daApprove('approveCommissionRequest','${_dae(x.commNo)}','commNo')">Approve</button>
+        <button class="link-btn del-btn" onclick="daReject('rejectCommissionRequest','${_dae(x.commNo)}','commNo')">Reject</button></td></tr>`).join('');
+
     c.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table">
       <thead><tr><th>Type</th><th>No</th><th>Who</th><th>Detail</th><th></th></tr></thead>
-      <tbody>${iRows}${pRows}</tbody></table></div>`;
+      <tbody>${iRows}${pRows}${cRows}</tbody></table></div>`;
   } catch (e) {
     c.innerHTML = `<div style="color:#ef4444;font-size:0.85rem;">${_dae(e.message)}</div>`;
   }
 }
 
-async function daApprove(action, no, key) {
+async function daApprove(action, no, key, extra) {
   try {
-    const r = await postFlow(action, { [key]: no });
-    if (!r || !r.success) throw new Error((r && r.message) || 'Could not approve.');
+    const r = await postFlow(action, Object.assign({ [key]: no }, extra || {}));
+    if (!r || !r.success) {
+      /* A207 — a collection can be voided or corrected between submission and signature. The server
+         refuses rather than approving a figure that has quietly gone stale; show what moved and let
+         the director decide. */
+      if (r && r.needsConfirm === 'evidenceChanged') {
+        if (confirm(r.message)) return daApprove(action, no, key, { confirmEvidenceChanged: true });
+        return;
+      }
+      throw new Error((r && r.message) || 'Could not approve.');
+    }
     daLoad();
+    if (r.message) alert(r.message);
   } catch (e) { alert(e.message); }
+}
+
+/** The payments behind a commission claim. The director is being asked to sign for this cash, so it
+ *  has to be readable before they do — the same principle as daViewItinerary below. */
+function daViewCommission(no) {
+  const x = daCommByNo[String(no)];
+  if (!x) return;
+  const lines = (x.items || []).map(i =>
+    '  ' + i.collectionNo + '   ' + (typeof flowDate === 'function' ? flowDate(i.date) : i.date) +
+    '   received ' + _dam(i.amount) + (i.ewt ? '   less tax ' + _dam(i.ewt) : '') +
+    '   counts as ' + _dam(i.netCash) + (i.voidedAtClaim ? '   [VOIDED SINCE]' : ''));
+  alert(
+    x.commNo + ' — ' + x.salesperson + '\n' +
+    x.soNo + '  ' + x.customer + (x.quotationNo ? '  (from quotation ' + x.quotationNo + ')' : '') + '\n' +
+    '-'.repeat(56) + '\n' +
+    'Payments claimed:\n' + lines.join('\n') + '\n\n' +
+    'Order value            ' + _dam(x.soTotal) + '\n' +
+    'Invoiced to date       ' + _dam(x.invoicedToDate) + '\n' +
+    'Already claimed        ' + _dam(x.priorClaimed) + '\n' +
+    'This claim (net cash)  ' + _dam(x.base) + '\n' +
+    'Rate                   ' + x.rate + '%   (' + x.rateBasis + ')\n' +
+    'Commission             ' + _dam(x.netPayable) + '\n\n' +
+    x.coverageNote + '\n'
+  );
 }
 
 async function daReject(action, no, key) {

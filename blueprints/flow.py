@@ -572,6 +572,12 @@ SECURED_ACTIONS = [
     # previewDriveMigrationReport and verifyDriveIntegrity stay out: all three are read-only.
     "buildDriveSkeletonAll", "runDriveMigrationAll", "setupFlowDrive",
     "cleanupLegacyFolders", "cleanupLegacyFoldersApply",
+    # A207 — commission decides what a named person is PAID, so identity must come from the session.
+    # submitCommissionRequest is here too: submitting freezes the payable figure and takes exclusive
+    # hold of the collections behind it.
+    "submitCommissionRequest", "approveCommissionRequest", "rejectCommissionRequest",
+    "adjustCommissionRequest", "markCommissionReleased",
+    "setCommissionRate", "deleteCommissionRate", "deleteCommissionRequest",
 ]
 
 
