@@ -5291,7 +5291,12 @@ function rejectQuotation(p) {
   var st = String(q['Status'] || ''), role = p.actorRole || '';
   var canReject = (st === 'Pending Admin' && _isAdminTier(role)) || (st === 'Pending Management' && _isMgmtTier(role));
   if (!canReject) return { success: false, message: 'You cannot reject this quotation at its current stage.' };
-  _setQuotationCells(p.quotationNo, { 'Status': 'Rejected', 'Approval Note': p.reason || '' });
+  /* A215 — stamp WHO and WHEN, exactly as approveQuotation does. The decision columns record the
+     last decision either way and the status says which way it went; leaving them blank on a
+     rejection meant a quotation could be sent back and the record could never say when, or by whom.
+     A rep looking at "fix this" three days later had no idea what had happened or when. */
+  _setQuotationCells(p.quotationNo, { 'Status': 'Rejected', 'Approval Note': p.reason || '',
+    'Approved By': p.actorName || '', 'Approved At': _now() });
   return { success: true, quotationNo: p.quotationNo, status: 'Rejected', message: 'Quotation rejected.' };
 }
 
