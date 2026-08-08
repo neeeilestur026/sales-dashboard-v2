@@ -587,6 +587,11 @@ SECURED_ACTIONS = [
     "createCommissionRequest", "updateCommissionRequest", "reviseCommissionRequest",
     "getCommissionRequests", "getCommissionClaimable",
     "seedCommissionDemo", "clearCommissionDemo",
+    # A212 — the travel surface. The READ is here for the same reason as the commission reads:
+    # getTravelReplenishments with no `user` returns everybody's weeks, and scoping it honestly
+    # means knowing who is asking. saveTravelReplenishment decides whose name a claim is banked
+    # under, so identity cannot come from the browser either.
+    "getTravelReplenishments", "saveTravelReplenishment", "deleteTravelReplenishment",
 ]
 
 

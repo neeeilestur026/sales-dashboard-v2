@@ -514,6 +514,11 @@ var _SECURED = {
   createCommissionRequest: 1, updateCommissionRequest: 1, reviseCommissionRequest: 1,
   getCommissionRequests: 1, getCommissionClaimable: 1,
   seedCommissionDemo: 1, clearCommissionDemo: 1,
+  /* A212 — the travel surface, READ included for the same reason as the commission reads:
+     getTravelReplenishments with no `user` returns everybody's weeks, and the only honest way to
+     scope it is to know who is asking. saveTravelReplenishment decides whose name a claim is banked
+     under, so identity cannot come from the browser either. */
+  getTravelReplenishments: 1, saveTravelReplenishment: 1, deleteTravelReplenishment: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -7703,6 +7708,165 @@ function _travItemMap(i) {
   };
 }
 
+// ── Handlers ────────────────────────────────────────────────────────────────
+/* Scoped from the SESSION, never from a name the browser sent — the A211 lesson. A rep asking for
+   somebody else's weeks is silently answered with their own rather than refused, because the filter
+   is not theirs to choose in the first place. */
+function getTravelReplenishments(p) {
+  var sc = _travReadScope(p);
+  if (sc.blocked) return sc.blocked;
+
+  var rows = _rows('TravelReplenishments');
+  if (sc.scope) rows = rows.filter(function (r) { return String(r['User']) === String(sc.scope); });
+  if (p && p.weekStart) {
+    var wk = _dateStr(p.weekStart);
+    rows = rows.filter(function (r) { return _dateStr(r['Week Start']) === wk; });
+  }
+  if (p && p.status) rows = rows.filter(function (r) { return String(r['Status']) === String(p.status); });
+  if (p && p.travNo) rows = rows.filter(function (r) { return String(r['Trav No']) === String(p.travNo); });
+
+  var all = _rows('TravelReplenishmentItems');
+  rows.sort(function (a, b) { return String(b['Week Start']).localeCompare(String(a['Week Start'])); });
+  return { success: true, data: rows.map(function (r) {
+    var its = all.filter(function (i) { return String(i['Trav No']) === String(r['Trav No']); })
+      .sort(function (a, b) { return _num(a['Seq']) - _num(b['Seq']); });
+    return _travMap(r, its);
+  }) };
+}
+
+/** Upsert a DRAFT. One replenishment per (user, week) — a second report for the same week is an edit
+ *  of the first, never a rival record, or two claims would chase the same cash.
+ *  SAVE IS NEVER BLOCKED by the itinerary or the float. A draft must always be possible: those are
+ *  submit-time conditions, and refusing a save would leave a rep who genuinely travelled with nowhere
+ *  to write down what they spent. */
+function saveTravelReplenishment(p) {
+  var user = String(p.user || p.actorName || '').trim();
+  var role = String(p.actorRole || '').toLowerCase();
+  /* Only oversight may file on someone else's behalf; a rep is always themselves. Taking `user` from
+     the request for everybody would let one rep bank a claim in another's name. */
+  if (!_travMayActForAll(role)) user = String(p.actorName || '').trim();
+  if (!user) return { success: false, message: 'Cannot tell whose travel this is — sign in again.' };
+
+  var weekStart = _travMonday(p.weekStart || _now());
+  if (!weekStart) return { success: false, message: 'A valid week is required (YYYY-MM-DD).' };
+  /* The browser sends the Monday it computed; we recompute and compare rather than trusting it. A
+     mismatch is a timezone bug, not a user error, so it is reported plainly. */
+  if (p.weekStart && _dateStr(p.weekStart) !== weekStart) {
+    return { success: false, message: 'That week starts on ' + weekStart +
+             ' — refresh the page, its calendar is out of step with the server.' };
+  }
+
+  var items = [];
+  try { items = JSON.parse(p.items || '[]'); } catch (e) {
+    return { success: false, message: 'items must be JSON.' };
+  }
+  var bad = items.filter(function (it) {
+    return it.kind && _TRAV_KINDS.indexOf(String(it.kind)) === -1;
+  });
+  if (bad.length) {
+    return { success: false, message: 'Unknown expense kind "' + bad[0].kind + '". Use one of: ' +
+             _TRAV_KINDS.join(', ') + '.' };
+  }
+
+  var existing = _rows('TravelReplenishments').filter(function (r) {
+    return String(r['User']) === user && _dateStr(r['Week Start']) === weekStart;
+  })[0];
+  if (existing) {
+    var owns = _travMayActOn(existing, p.actorName, p.actorRole);
+    if (owns) return owns;
+    if (!_travEditable(existing['Status'])) {
+      return { success: false, message: 'This week is ' + existing['Status'] +
+               ' — use Reopen before editing it.' };
+    }
+  }
+
+  /* Written on EVERY save so a draft always shows honest running totals; frozen for good at submit. */
+  var rows = items.map(function (it, idx) {
+    return { 'Kind': String(it.kind || 'Transport'), 'Amount': _num(it.amount),
+             'Has Receipt': it.hasReceipt ? 'Yes' : 'No', 'Date': _dateStr(it.date || '') };
+  });
+  var d = _travDerive(rows);
+  var flt = _travFloatFor(user, weekStart);
+  var no = existing ? String(existing['Trav No']) : _nextNumber('TravelReplenishments', 1, 'TRAV');
+  var now = _now();
+
+  var patch = {
+    'Week End': _travWeekEnd(weekStart),
+    'Position': String(p.position || (existing && existing['Position']) || ''),
+    'Duration Label': _travDurationLabel(rows),
+    'Purpose': String(p.purpose || ''),
+    'Total Spent': d.total, 'Transport Total': d.transport,
+    'No Receipt Total': d.noReceipt, 'Receipted Total': d.receipted,
+    'Item Count': d.count,
+    'Overspend Reason': String(p.overspendReason || (existing && existing['Overspend Reason']) || ''),
+    'Updated At': now
+  };
+  /* The float is re-snapshotted while the record is still a DRAFT — a raise that lands mid-week
+     should reach an unsubmitted report. Once submitted it is frozen, because the cover sheet has
+     been signed and must stay reproducible. */
+  if (!existing || _travEditable(existing['Status'])) patch['Float Amount'] = flt.amount;
+
+  if (existing) {
+    _travSet(no, patch);
+  } else {
+    _append('TravelReplenishments', [
+      no,                                   // Trav No
+      _dateStr(now),                        // Date  (when it was filed — the cover sheet's Date:)
+      weekStart, patch['Week End'],         // Week Start · Week End
+      user, String(p.actorRole || 'sales'), // User · User Role
+      patch['Position'],                    // Position
+      patch['Duration Label'],              // Duration Label
+      patch['Purpose'],                     // Purpose
+      '', '',                               // Itinerary No · Itinerary Status At Submit (set at submit)
+      '', '',                               // Waiver By · Waiver Reason
+      flt.amount,                           // Float Amount
+      d.total, d.transport, d.noReceipt, d.receipted,   // the one total + the three projections
+      patch['Overspend Reason'],            // Overspend Reason
+      d.count,                              // Item Count
+      'Draft',                              // Status
+      String(p.actorName || user), String(p.actorRole || 'sales'),   // Created By · Created By Role
+      now, now,                             // Created At · Updated At
+      '',                                   // Submitted At
+      '', '', '', '',                       // Acct/Dir Approved By/At
+      '',                                   // Approval Note
+      '',                                   // Payment Request No
+      ''                                    // PDF Link                       ← 33 values
+    ]);
+  }
+
+  _travWriteItems(no, items);
+  return { success: true, travNo: no, refNo: no, weekStart: weekStart,
+    totalSpent: d.total, floatAmount: flt.amount,
+    remaining: _travPeso(Math.max(0, flt.amount - d.total)),
+    advanced: _travPeso(Math.max(0, d.total - flt.amount)),
+    floatConfigured: flt.configured,
+    message: 'Travel report saved as a draft.' };
+}
+
+function _travWriteItems(no, items) {
+  _writeItems('TravelReplenishmentItems', 'Trav No', no, items || [], function (it, idx) {
+    return [no, _num(it.seq) || (idx + 1), _dateStr(it.date || ''),
+            String(it.kind || 'Transport'), String(it.description || ''),
+            String(it.departureTime || ''), String(it.arrivalTime || ''), String(it.means || ''),
+            _travPeso(it.amount), it.hasReceipt ? 'Yes' : 'No',
+            String(it.receiptDocId || ''), String(it.visitNo || ''), String(it.notes || '')];
+  });                                                                          // ← 13 values
+}
+
+function deleteTravelReplenishment(p) {
+  var r = _travRow(p.travNo);
+  if (!r) return { success: false, message: 'Travel report not found.' };
+  if (!_travEditable(r['Status'])) {
+    return { success: false, message: 'Only a draft or rejected report can be deleted (this one is ' +
+             r['Status'] + ').' };
+  }
+  var owns = _travMayActOn(r, p.actorName, p.actorRole);
+  if (owns) return owns;
+  _writeItems('TravelReplenishmentItems', 'Trav No', p.travNo, [], function (x) { return x; });
+  _sheet('TravelReplenishments').deleteRow(r.rowIndex);
+  return { success: true, refNo: p.travNo, message: 'Travel report ' + p.travNo + ' deleted.' };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
@@ -7781,6 +7945,9 @@ var _MODULE_MAP = {
   // audit row is for, even when they are labelled DEMO-.
   seedCommissionDemo: ['Sales Order', 'Demo Seeded'],
   clearCommissionDemo: ['Sales Order', 'Demo Cleared'],
+  // A212 — every writer, deletes included. This is money leaving the company every week.
+  saveTravelReplenishment: ['Travel Allowance', 'Saved'],
+  deleteTravelReplenishment: ['Travel Allowance', 'Deleted'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
@@ -8662,6 +8829,10 @@ var HANDLERS = {
   // A211 — removable demo data, so the approval chain can be walked end to end on sheets where
   // nothing real is claimable yet.
   seedCommissionDemo: seedCommissionDemo, clearCommissionDemo: clearCommissionDemo,
+  // A212 travel allowance.
+  getTravelReplenishments: getTravelReplenishments,
+  saveTravelReplenishment: saveTravelReplenishment,
+  deleteTravelReplenishment: deleteTravelReplenishment,
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -8736,6 +8907,9 @@ var MUTATIONS = {
   reviseCommissionRequest: 1, adjustCommissionRequest: 1, markCommissionReleased: 1,
   setCommissionRate: 1, deleteCommissionRate: 1,
   seedCommissionDemo: 1, clearCommissionDemo: 1,   // A211 — both write rows; both take the lock
+  // A212 — under the script lock like every other writer, so two tabs cannot create two reports for
+  // the same (user, week) pair.
+  saveTravelReplenishment: 1, deleteTravelReplenishment: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,

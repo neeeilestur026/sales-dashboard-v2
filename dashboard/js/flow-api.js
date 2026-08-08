@@ -147,7 +147,10 @@ const FLOW_SECURED_ACTIONS = [
   // is not that. They lose the 60s cache; the page is opened a few times a day.
   'createCommissionRequest', 'updateCommissionRequest', 'reviseCommissionRequest',
   'getCommissionRequests', 'getCommissionClaimable',
-  'seedCommissionDemo', 'clearCommissionDemo'
+  'seedCommissionDemo', 'clearCommissionDemo',
+  // A212 — the travel surface, READ included: getTravelReplenishments with no `user` returns
+  // everybody's weeks, and saveTravelReplenishment decides whose name a claim is banked under.
+  'getTravelReplenishments', 'saveTravelReplenishment', 'deleteTravelReplenishment'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
