@@ -436,6 +436,7 @@ function renderFlowNav(active) {
     ['flow-purchase-orders.html', 'Purchase Orders'],
     ['flow-payment-requests.html', 'Payment Requests'],
     ['flow-commissions.html', 'Commissions'],
+    ['flow-travel.html', 'Travel'],
     ['flow-ap-aging.html', 'AP Aging'],
     ['flow-other-payables.html', 'Other Payables'],
     ['flow-receiving.html', 'Receiving'],

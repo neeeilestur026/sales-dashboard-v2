@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Travel Allowance</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+<style>
+  /* A214 — form on the left, the REAL generated pack on the right. The layout, the state dot and the
+     never-blank busy behaviour are lifted from the Quote Configurator deliberately: a rep who has
+     used one should not have to learn the other. */
+  .tv-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 1rem; align-items: start; }
+  .tv-wrap > div { min-width: 0; }
+  @media (max-width: 1200px) { .tv-wrap { grid-template-columns: minmax(0, 1fr); } }
+
+  .tv-pane { background: #fff; border: 1px solid var(--border, #e2e8f0); border-radius: 18px; padding: 1.1rem 1.2rem; }
+  .tv-pane h3 { margin: 0 0 .75rem; font-size: .95rem; font-weight: 800; letter-spacing: .02em; }
+  .tv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem .9rem; }
+  .tv-grid .full { grid-column: 1 / -1; }
+  .tv-grid label { display: block; font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted, #64748b); margin-bottom: .25rem; }
+  .tv-grid input, .tv-grid select, .tv-grid textarea { width: 100%; padding: .5rem .6rem;
+    border: 1px solid var(--border, #e2e8f0); border-radius: 9px; font: inherit; font-size: .86rem; background: #fff; }
+
+  /* the week bar */
+  .tv-weekbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .8rem; }
+  .tv-weekbar .rng { font-weight: 700; font-size: .9rem; }
+  .tv-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font: 600 10.5px 'Inter', sans-serif;
+    background: #eef2f6; color: #475569; border: 1px solid var(--border, #e2e8f0); }
+  .tv-chip.draft { background: #f1f5f9; }
+  .tv-chip.pending { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+  .tv-chip.approved { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+  .tv-chip.rejected { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+
+  /* leg rows */
+  #tvLegs { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  #tvLegs th { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #64748b);
+    text-align: left; padding: .35rem .25rem; border-bottom: 1px solid var(--border, #e2e8f0); }
+  #tvLegs td { padding: .28rem .2rem; vertical-align: middle; }
+  #tvLegs input, #tvLegs select { width: 100%; padding: .38rem .45rem; border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px; font: inherit; font-size: .8rem; }
+  #tvLegs td.num input { text-align: right; }
+  .tv-del { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1rem; line-height: 1; padding: .2rem .3rem; }
+  .tv-rcpt { font-size: .68rem; padding: .22rem .4rem; white-space: nowrap; }
+  .tv-rcpt.on { color: #16a34a; font-weight: 700; }
+
+  .tv-tot { margin-top: .9rem; border-top: 1px solid var(--border, #e2e8f0); padding-top: .7rem; }
+  .tv-tot .row { display: flex; justify-content: space-between; gap: 1rem; font-size: .86rem; padding: .18rem 0; }
+  .tv-tot .row.grand { font-weight: 800; font-size: 1rem; border-top: 1px solid var(--border, #e2e8f0);
+    margin-top: .35rem; padding-top: .45rem; }
+  .tv-tot .row .v { font-variant-numeric: tabular-nums; }
+  .tv-tot .row.over .v { color: #ef4444; }
+
+  /* preview pane — same shape as the configurator's, prefix aside */
+  .tv-prevwrap { position: sticky; top: 84px; }
+  .tv-prevhead { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+  .tv-prevstate { font-size: .74rem; color: var(--text-muted, #64748b); display: flex; align-items: center; gap: .4rem; }
+  .tv-dot { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; display: inline-block; }
+  .tv-dot.busy { background: #f59e0b; animation: tvPulse 1s ease-in-out infinite; }
+  .tv-dot.err { background: #ef4444; }
+  @keyframes tvPulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .tv-frame { position: relative; width: 100%; height: calc(100vh - 240px); min-height: 480px;
+    border: 1px solid var(--border, #e2e8f0); border-radius: 12px; overflow: hidden; background: #f8fafc; }
+  .tv-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+  /* the previous document stays visible while the next renders — never a blank flash */
+  .tv-frame.busy iframe { opacity: .45; transition: opacity .18s ease; }
+  .tv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 2rem; color: var(--text-muted, #64748b); font-size: .86rem; }
+  .tv-wake { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: #1e293b; color: #fff;
+    font-size: .74rem; padding: .4rem .7rem; border-radius: 999px; }
+  .tv-note { font: 400 11.5px/1.6 'Inter', sans-serif; color: var(--text-muted, #64748b); margin-top: .6rem; }
+  .tv-gate { padding: 1.4rem; border-radius: 12px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;
+    font: 500 13px/1.6 'Inter', sans-serif; }
+</style>
+</head>
+<body class="flow-screen">
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div>
+          <div class="eyebrow">Sales · Travel</div>
+          <h1>Travel Allowance</h1>
+          <p>Report what you spent getting to your client visits · the company pays it back into your float.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="flowNav" class="flow-nav"></div>
+
+    <div id="tvGateCard" class="tv-pane" style="display:none;margin-bottom:1rem;">
+      <div class="tv-gate" id="tvGateMsg"></div>
+    </div>
+
+    <div class="tv-wrap" id="tvWrap">
+      <!-- ── left: the form ─────────────────────────────────────────── -->
+      <div>
+        <div class="tv-pane">
+          <div class="tv-weekbar">
+            <button class="btn btn-sm" id="tvPrev">&#9664;</button>
+            <span class="rng" id="tvRange">—</span>
+            <button class="btn btn-sm" id="tvNext">&#9654;</button>
+            <button class="btn btn-sm" id="tvLast">Last week</button>
+            <span class="tv-chip draft" id="tvStatus">Draft</span>
+            <span style="flex:1;"></span>
+            <button class="btn btn-sm btn-primary" id="tvSave">Save draft</button>
+          </div>
+
+          <div class="tv-grid">
+            <div>
+              <label for="tvPosition">Your position</label>
+              <input id="tvPosition" placeholder="e.g. Sales Engineer">
+            </div>
+            <div>
+              <label for="tvFloat">Float held</label>
+              <input id="tvFloat" type="number" step="0.01" placeholder="2000.00">
+            </div>
+            <div class="full">
+              <label for="tvPurpose">Purpose of the travel</label>
+              <input id="tvPurpose" placeholder="e.g. Client visit in Makati, City">
+            </div>
+          </div>
+          <div id="tvMsg" class="flow-msg" style="display:none;margin-top:.6rem;"></div>
+        </div>
+
+        <div class="tv-pane" style="margin-top:1rem;">
+          <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
+            <h3 style="margin:0;">Where you went</h3>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" id="tvPrefill">Fill from my visits</button>
+              <button class="btn btn-sm btn-primary" id="tvAdd">Add a leg</button>
+            </div>
+          </div>
+          <p class="tv-note" style="margin-top:.2rem;">
+            One line per hop — residence to terminal, terminal to the city, and the journey home. Attach the
+            receipt where there is one; a tricycle or jeepney usually has none, and those go on the
+            certification page instead.
+          </p>
+          <div style="overflow-x:auto;margin-top:.6rem;">
+            <table id="tvLegs">
+              <colgroup>
+                <col style="width:96px;"><col><col style="width:74px;"><col style="width:74px;">
+                <col style="width:104px;"><col style="width:86px;"><col style="width:76px;"><col style="width:30px;">
+              </colgroup>
+              <thead><tr>
+                <th>Date</th><th>Description</th><th>Depart</th><th>Arrive</th>
+                <th>Transport</th><th style="text-align:right;">Amount</th><th>Receipt</th><th></th>
+              </tr></thead>
+              <tbody id="tvLegBody"></tbody>
+            </table>
+          </div>
+          <div class="tv-tot" id="tvTotals"></div>
+          <input type="file" id="tvRcptInput" accept="image/png,image/jpeg" style="display:none;">
+        </div>
+      </div>
+
+      <!-- ── right: the real document ───────────────────────────────── -->
+      <div class="tv-prevwrap">
+        <div class="tv-pane">
+          <div class="tv-prevhead">
+            <h3 style="margin:0;">Live document</h3>
+            <div class="tv-prevstate"><span class="tv-dot" id="tvDot"></span><span id="tvState">ready</span></div>
+          </div>
+          <div class="tv-frame" id="tvFrameWrap">
+            <iframe id="tvFrame" title="Travel allowance preview"></iframe>
+            <div class="tv-empty" id="tvEmpty">Preparing the document…</div>
+          </div>
+          <div class="tv-note">This is the actual PDF from the same generator that produces the signed copy,
+            so what you see here is what accounting and the director will see — page breaks included.
+            Receipt photos are left out of the preview to keep it quick; their pages still appear.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-travel.js"></script>
+
+  <script>
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+  </script>
+</body>
+</html>
