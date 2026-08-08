@@ -93,6 +93,18 @@ def ph_date_long(value, default=""):
     return d.strftime("%B %d, %Y") if d else default
 
 
+def ph_date_slash(value, default=""):
+    """Form field: Manila-correct '07/30/2026' — the travel-allowance forms are laid out for it.
+
+    NOT idempotent in the way ph_date_long is: its own output re-parses as MONTH/day/year, which is
+    what it wrote, so a double format is harmless here — but a European 'dd/mm/yyyy' string fed in
+    would be read the American way round. Everything upstream stores ISO, so that path does not exist
+    today; do not start feeding it slash dates from a user field without deciding the order first.
+    """
+    d = ph_date(value)
+    return d.strftime("%m/%d/%Y") if d else default
+
+
 def safe_replace(src, dst, retries=3, delay=0.25):
     """Replace src -> dst robustly: try os.replace, then fallback to copy+unlink with retries."""
     last_exc = None
