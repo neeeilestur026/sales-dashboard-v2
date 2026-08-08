@@ -150,7 +150,9 @@ const FLOW_SECURED_ACTIONS = [
   'seedCommissionDemo', 'clearCommissionDemo',
   // A212 — the travel surface, READ included: getTravelReplenishments with no `user` returns
   // everybody's weeks, and saveTravelReplenishment decides whose name a claim is banked under.
-  'getTravelReplenishments', 'saveTravelReplenishment', 'deleteTravelReplenishment'
+  'getTravelReplenishments', 'saveTravelReplenishment', 'deleteTravelReplenishment',
+  // A214 — the receipt photographs of somebody's week, keyed by a guessable TRAV number.
+  'getTravelReceipts'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

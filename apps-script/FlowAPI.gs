@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 117;  // A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 118;  // A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -519,6 +519,9 @@ var _SECURED = {
      scope it is to know who is asking. saveTravelReplenishment decides whose name a claim is banked
      under, so identity cannot come from the browser either. */
   getTravelReplenishments: 1, saveTravelReplenishment: 1, deleteTravelReplenishment: 1,
+  /* A214 — getTravelReceipts returns the PHOTOGRAPHS attached to a claim. Unsecured it would hand
+     anybody who knows a TRAV number the images of somebody else's week. */
+  getTravelReceipts: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -4267,6 +4270,12 @@ function _docSubfolder(module, docType) {
   return _DOC_SUBFOLDER_BY_MODULE[String(module || '').trim()] || '99 Other';
 }
 
+/* A214 — modules that belong to no client at all. A travel receipt has neither a customer nor a
+   sales order, so the client tree would file it under _Unknown Client, where it would sit among
+   genuinely mis-filed client documents and be swept along by every future migration. These get their
+   own branch, one folder per record. Nothing that existed before A214 reaches this map. */
+var _DOC_INTERNAL_MODULES = { 'Travel Replenishment': ['_Internal', 'Travel Allowance'] };
+
 // ── Which sales order, and therefore which client ────────────────────────────
 /* _soDocChain() walks SO -> documents; this walks it back. Targeted lookups rather than a full index,
    because the save path resolves exactly one document. */
@@ -4375,6 +4384,9 @@ function _docDateFor(module, refNo, soNo, hint) {
   if (m === 'Collection')      { var c = _memoField('Collections', 'Collection No', ref, 'Date'); if (c) return c; }
   if (m === 'Purchase Order')  { var o = _memoField('PurchaseOrders', 'PO No', ref, 'Date');    if (o) return o; }
   if (m === 'Receiving')       { var r = _memoField('MaterialsReceiving', 'MR No', ref, 'Date'); if (r) return r; }
+  // A214 — the WEEK the travel happened, not the day the photo was uploaded: a Monday-to-Sunday week
+  // that straddles a month boundary must still file every one of its receipts together.
+  if (m === 'Travel Replenishment') { var t = _memoField('TravelReplenishments', 'Trav No', ref, 'Week Start'); if (t) return t; }
   return hint || '';   // last resort: when the file was uploaded
 }
 
@@ -4390,6 +4402,15 @@ function _docFolderInfo(module, refNo, docType, dateHint) {
   try { customer = soNo ? _memoField('SalesOrders', 'SO No', soNo, 'Customer') : _customerForDoc(module, refNo); } catch (e) {}
   var when = [_FLOW_UNDATED];
   try { when = _ymSegments(_docDateFor(module, refNo, soNo, dateHint)); } catch (e) {}
+
+  // A214 — an internal document has no client to file under; see _DOC_INTERNAL_MODULES.
+  var internal = _DOC_INTERNAL_MODULES[String(module || '').trim()];
+  if (internal) {
+    return { year: when[0], month: when.length > 1 ? when[1] : '', sub: sub,
+      client: '', order: String(refNo || ''), unknownClient: false, preSalesOrder: false,
+      segments: when.concat(internal).concat([String(refNo || '') || 'Unfiled']) };
+  }
+
   var c = _canonClient(customer);
   var info = { year: when[0], month: when.length > 1 ? when[1] : '', sub: sub,
     client: c.key ? c.display : _FLOW_UNKNOWN_CLIENT, order: '',
@@ -7867,6 +7888,86 @@ function deleteTravelReplenishment(p) {
   return { success: true, refNo: p.travNo, message: 'Travel report ' + p.travNo + ' deleted.' };
 }
 
+/* ── A214: the receipt photos ────────────────────────────────────────────────────────────────────
+   One image per itinerary leg that issued one — the bus and the MRT do; the tricycle does not, and
+   those legs go on the certification page instead. They are stored as ordinary Documents rows so the
+   registry, the migration and the deleter all keep working; nothing here is a private store.
+
+   The key is (Module, Ref No, file name) and NOT the Doc Type, which is free text on 234 live rows
+   and ranges from blank to 'Original quotation (June 24, 2026)': a receipt attached through the
+   generic Documents panel would otherwise be invisible to the pack it belongs to. */
+var _TRAV_DOC_MODULE = 'Travel Replenishment';
+
+/** The leg a receipt belongs to, read off its FILE NAME rather than the Receipt Doc ID column.
+ *  That is deliberate and matches A178's photo-<lineKey> decision: _travWriteItems deletes and
+ *  re-appends every item row on every save, so a write-back that fails after the upload succeeded
+ *  leaves the column blank for good while the Drive file survives. Naming the file receipt-<seq>.jpg
+ *  makes the column an optimisation and the name the source of truth. 0 = unattributable. */
+function _travReceiptSeq(fileName) {
+  var m = /receipt-(\d+)\./i.exec(String(fileName || ''));
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/** A214 — receipts for one travel report, as base64.
+ *  BYTES, not a Drive link, for the reason getVisitPhotos already documents: a /view or /preview URL
+ *  serves an HTML page, so it renders as a broken image in an <img> and as nothing at all in the PDF.
+ *  The approver's path is getTravelReceipts -> data URLs -> the same PDF route the rep's preview uses,
+ *  which is what keeps the generator pure and Drive-free. */
+function getTravelReceipts(p) {
+  var no = String((p && p.travNo) || '').trim();
+  if (!no) return { success: false, message: 'travNo is required.' };
+
+  var sc = _travReadScope(p);
+  if (sc.blocked) return sc.blocked;
+
+  var row = _travRow(no);
+  if (!row) return { success: false, message: 'Travel report ' + no + ' not found.' };
+  /* Scoped from the SESSION exactly like the list read. A rep asking for another rep's receipts is
+     refused rather than quietly answered, because unlike a filter there is no honest substitute. */
+  if (!_travMaySeeAll(p && p.actorRole) && String(row['User']) !== String(sc.scope)) {
+    return { success: false, message: 'Travel report ' + no + ' belongs to another employee.' };
+  }
+
+  var want = (p && p.seq) ? _num(p.seq) : 0;
+
+  /* One row per leg. The uploader adds before it deletes — deliberately, so a half-failed replacement
+     leaves a duplicate rather than nothing — which means two rows can share a seq until the next save
+     sweeps the loser. The NEWEST wins, or the annex would print the photo the rep replaced. Seq 0 is
+     unattributable and every one of them is kept, because there is nothing to choose between them. */
+  var pick = [];
+  var bySeq = {};
+  _rows('Documents').forEach(function (d) {
+    if (String(d['Module']) !== _TRAV_DOC_MODULE) return;
+    if (String(d['Ref No']) !== no) return;
+    if (!d['File ID']) return;
+    var seq = _travReceiptSeq(d['File Name']);
+    if (want && seq !== want) return;
+    if (!seq) { pick.push(d); return; }
+    var prev = bySeq[seq];
+    if (!prev || new Date(d['Uploaded At']) >= new Date(prev['Uploaded At'])) bySeq[seq] = d;
+  });
+  Object.keys(bySeq).forEach(function (k) { pick.push(bySeq[k]); });
+
+  var out = [];
+  pick.forEach(function (d) {
+    var seq = _travReceiptSeq(d['File Name']);
+    try {
+      var blob = DriveApp.getFileById(d['File ID']).getBlob();
+      out.push({ travNo: no, seq: seq, docId: String(d['Doc ID']),
+                 fileName: String(d['File Name'] || ''),
+                 mimeType: blob.getContentType(),
+                 base64: Utilities.base64Encode(blob.getBytes()) });
+    } catch (e) {
+      /* Trashed or unreadable. Report it as a hole rather than dropping it silently — an approval
+         pack that is quietly one receipt short is the worst outcome available here. */
+      out.push({ travNo: no, seq: seq, docId: String(d['Doc ID']),
+                 fileName: String(d['File Name'] || ''), missing: true });
+    }
+  });
+  out.sort(function (a, b) { return a.seq - b.seq; });
+  return { success: true, travNo: no, data: out };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
@@ -8833,6 +8934,7 @@ var HANDLERS = {
   getTravelReplenishments: getTravelReplenishments,
   saveTravelReplenishment: saveTravelReplenishment,
   deleteTravelReplenishment: deleteTravelReplenishment,
+  getTravelReceipts: getTravelReceipts,                                                             // A214
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,

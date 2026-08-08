@@ -593,6 +593,8 @@ SECURED_ACTIONS = [
     # means knowing who is asking. saveTravelReplenishment decides whose name a claim is banked
     # under, so identity cannot come from the browser either.
     "getTravelReplenishments", "saveTravelReplenishment", "deleteTravelReplenishment",
+    # A214 — the receipt photographs of somebody's week, keyed by a guessable TRAV number.
+    "getTravelReceipts",
 ]
 
 

@@ -31,10 +31,14 @@ let tvLastUrl = '';
    so a render aborted by the next keystroke does not consume the one chance to show it. */
 let tvPreviewReceipts = false;
 let tvRcptTarget = null;
+/* seq -> Doc ID, read back from Drive at load. The item row's Receipt Doc ID column is the same
+   information, but this map is what the sweep acts on: it only ever holds ids this session actually
+   SAW, so a failed read can never make the sweep delete something. */
+let tvReceiptDocs = {};
 
 const TV_DEBOUNCE = 500;
 const TV_WAKE_AFTER = 4000;
-const TV_MIN_FLOW_VERSION = 117;
+const TV_MIN_FLOW_VERSION = 118;   // A214 — getTravelReceipts arrived with 118
 const TV_KINDS = ['Transport', 'Meals', 'Load', 'Tips/Porterage', 'Parking/Toll', 'Other'];
 /* The sum of every attached receipt, not each one. FLOW_DOC_MAX_MB caps a single file and nothing
    caps the total — but the 16MB limit is on the WHOLE request and base64 inflates by a third, so
@@ -90,6 +94,7 @@ async function tvLoad() {
   tvRecord = null;
   tvLegs = [];
   tvSeqCounter = 0;
+  tvReceiptDocs = {};
   if (tvReady && wk.length) {
     try {
       const res = await postFlow('getTravelReplenishments', { weekStart: wk[0] });
@@ -108,14 +113,45 @@ async function tvLoad() {
     document.getElementById('tvPosition').value = tvRecord.position || '';
     document.getElementById('tvPurpose').value = tvRecord.purpose || '';
     document.getElementById('tvFloat').value = tvRecord.floatAmount || '';
-    if (tvRecord.receipts) tvRecord.receipts.forEach(r => {
-      const l = tvLegs.filter(x => String(x.seq) === String(r.seq))[0];
-      if (l && r.base64) l.dataUrl = 'data:' + (r.mimeType || 'image/jpeg') + ';base64,' + r.base64;
-    });
+    await tvLoadReceipts();
   }
   tvChip();
   tvRenderLegs();
   tvSchedulePreview();
+}
+
+/* A214 — the photographs, as BYTES. getDocuments would be one call cheaper and would hand back a
+   Drive link, which serves HTML and renders as a broken image — the dead end getVisitPhotos records.
+   A report still has to open when this fails, so every path here is swallowed: the rep sees "attach"
+   on a leg whose photo could not be read, which is honest and recoverable. */
+async function tvLoadReceipts() {
+  if (!tvReady || !tvRecord || !tvRecord.travNo) return;
+  let rows = [];
+  try {
+    const rp = await postFlow('getTravelReceipts', { travNo: tvRecord.travNo });
+    rows = (rp && rp.data) || [];
+  } catch (e) { return; }
+
+  let painted = false;
+  rows.forEach(r => {
+    const seq = tvNum(r.seq);
+    if (!seq) return;                                   // unattributable — leave it for the sweep
+    const l = tvLegs.filter(x => tvNum(x.seq) === seq)[0];
+    tvReceiptDocs[seq] = r.docId;
+    if (r.missing) {
+      /* The Documents row survives but the file behind it does not. Clear the leg so the rep is
+         asked for it again, and leave the id in the map so the next save clears the dead row. */
+      if (l) { l.dataUrl = ''; l.receiptDocId = ''; l.hasReceipt = false; }
+      return;
+    }
+    if (!l || !r.base64) return;
+    l.dataUrl = 'data:' + (r.mimeType || 'image/jpeg') + ';base64,' + r.base64;
+    l.receiptDocId = r.docId;
+    l.rcptDirty = false;
+    painted = true;
+  });
+  // The first preview of a reopened week should show its photographs, not their placeholders.
+  if (painted) tvPreviewReceipts = true;
 }
 
 function tvChip() {
@@ -251,9 +287,10 @@ async function tvReceiptChosen(ev) {
        is legible as a thumbnail but not as a document. */
     l.dataUrl = await flowDownscaleImage(file, 1400, 0.72);
     l.hasReceipt = true;
+    l.rcptDirty = true;          // only a dirty leg is re-uploaded; a read-back one is left alone
     const total = tvLegs.reduce((s, x) => s + (x.dataUrl ? x.dataUrl.length : 0), 0);
     if (total > TV_MAX_TOTAL_MB * 1024 * 1024) {
-      l.dataUrl = ''; l.hasReceipt = false;
+      l.dataUrl = ''; l.hasReceipt = false; l.rcptDirty = false;
       flowMsg('tvMsg', 'Those receipts come to more than ' + TV_MAX_TOTAL_MB + 'MB together, which ' +
         'the server will refuse. Remove one before adding this.', false);
       tvRenderLegs();
@@ -351,23 +388,94 @@ async function tvRenderPreview() {
   }
 }
 
+function tvWriteRecord(wk) {
+  return postFlow('saveTravelReplenishment', {
+    weekStart: wk[0],
+    position: document.getElementById('tvPosition').value || '',
+    purpose: document.getElementById('tvPurpose').value || '',
+    items: JSON.stringify(tvLegs.map(l => ({
+      seq: l.seq, date: l.date, kind: l.kind || 'Transport', description: l.description,
+      departureTime: l.departureTime, arrivalTime: l.arrivalTime, means: l.means,
+      amount: tvNum(l.amount), hasReceipt: !!(l.dataUrl || l.receiptDocId),
+      receiptDocId: l.receiptDocId || ''
+    })))
+  });
+}
+
 async function tvSave(quiet) {
   if (!tvReady || !tvEditable()) return;
   const wk = tvWeek();
   try {
-    const res = await postFlow('saveTravelReplenishment', {
-      weekStart: wk[0],
-      position: document.getElementById('tvPosition').value || '',
-      purpose: document.getElementById('tvPurpose').value || '',
-      items: JSON.stringify(tvLegs.map(l => ({
-        seq: l.seq, date: l.date, kind: l.kind || 'Transport', description: l.description,
-        departureTime: l.departureTime, arrivalTime: l.arrivalTime, means: l.means,
-        amount: tvNum(l.amount), hasReceipt: !!(l.dataUrl || l.receiptDocId),
-        receiptDocId: l.receiptDocId || ''
-      })))
-    });
+    const res = await tvWriteRecord(wk);
     if (!res.success) throw new Error(res.message);
-    if (!quiet) flowMsg('tvMsg', res.message, true);
+
+    /* The photographs are filed AFTER the record, so a Drive hiccup can never cost the rep what they
+       typed — the A178 ordering. A failure here is reported, not thrown: the week is already saved. */
+    const warn = await tvSyncReceipts(res.travNo);
+
+    /* The Doc IDs only exist once the upload has happened, so the column is written back in a second
+       pass. It is an optimisation either way — getTravelReceipts reads the FILE NAME — which is
+       exactly why this pass is allowed to fail quietly. */
+    let rewrite = false;
+    tvLegs.forEach(l => {
+      const id = tvReceiptDocs[tvNum(l.seq)] || '';
+      if (String(l.receiptDocId || '') !== String(id)) { l.receiptDocId = id; rewrite = true; }
+      l.rcptDirty = false;
+    });
+    if (rewrite) { try { await tvWriteRecord(wk); } catch (e) {} }
+
+    if (!quiet) flowMsg('tvMsg', res.message + (warn ? ' — ' + warn : ''), !warn);
     await tvLoad();
   } catch (e) { flowMsg('tvMsg', e.message, false); }
+}
+
+/* A214 — keep Drive in step with the legs.
+   Keyed on the leg SEQ through the file name receipt-<seq>.jpg, which is what getTravelReceipts
+   parses back out. Idempotent by construction: a photo read back from Drive and not touched this
+   session is neither dirty nor unseen, so a save with no photo changes performs zero Drive writes. */
+async function tvSyncReceipts(travNo) {
+  if (!travNo) return '';
+  let warn = '';
+  const seen = {};
+  const jobs = [];
+
+  tvLegs.forEach(l => {
+    const seq = tvNum(l.seq);
+    if (!seq) return;                       // an unnumbered leg has nothing to file the photo under
+    if (!l.dataUrl && !l.receiptDocId) return;
+    seen[seq] = true;
+    if (l.dataUrl && l.rcptDirty) jobs.push({ put: seq, dataUrl: l.dataUrl, old: tvReceiptDocs[seq] });
+  });
+
+  /* A leg whose photo was replaced, or that was deleted outright, would otherwise leave its file on
+     Drive forever with nothing able to reach it. This is the only branch here that deletes anything,
+     and it can only ever act on ids THIS session read back — see tvReceiptDocs. */
+  Object.keys(tvReceiptDocs).forEach(k => {
+    if (!seen[k]) jobs.push({ del: k, old: tvReceiptDocs[k] });
+  });
+  if (!jobs.length) return '';
+
+  for (let n = 0; n < jobs.length; n++) {
+    const j = jobs[n];
+    try {
+      if (j.put) {
+        const mime = (String(j.dataUrl).match(/^data:([^;]+);/) || [])[1] || 'image/jpeg';
+        const b64 = String(j.dataUrl).split(',')[1] || '';
+        const r = await postFlow('addDocument', {
+          module: 'Travel Replenishment', refNo: travNo, docType: 'Travel Receipt',
+          fileName: 'receipt-' + j.put + '.' + (mime === 'image/png' ? 'png' : 'jpg'),
+          fileBase64: b64, mimeType: mime
+        });
+        if (!r || !r.success) { warn = 'a receipt photo could not be filed'; continue; }
+        tvReceiptDocs[j.put] = r.docId;
+        // Add first, delete second — never the reverse. The worst case is a duplicate, which
+        // getTravelReceipts collapses to the newest and the next save sweeps.
+        if (j.old) await postFlow('deleteDocument', { docId: j.old });
+      } else {
+        await postFlow('deleteDocument', { docId: j.old });
+        delete tvReceiptDocs[j.del];
+      }
+    } catch (e) { warn = 'a receipt photo could not be filed'; }
+  }
+  return warn;
 }
