@@ -601,6 +601,8 @@ SECURED_ACTIONS = [
     "submitTravelReplenishment", "approveTravelReplenishment",
     "rejectTravelReplenishment", "reviseTravelReplenishment",
     "getTravelFloats", "setTravelFloat", "requestTravelFloatCash",
+    # A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
+    "runQuotationSentAtBackfill",
 ]
 
 

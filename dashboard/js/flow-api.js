@@ -156,7 +156,9 @@ const FLOW_SECURED_ACTIONS = [
   // A212-3/4/5 — the approval chain and the float: what leaves, how much, and to whom.
   'submitTravelReplenishment', 'approveTravelReplenishment',
   'rejectTravelReplenishment', 'reviseTravelReplenishment',
-  'getTravelFloats', 'setTravelFloat', 'requestTravelFloatCash'
+  'getTravelFloats', 'setTravelFloat', 'requestTravelFloatCash',
+  // A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
+  'runQuotationSentAtBackfill'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

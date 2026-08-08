@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 119;  // A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 120;  // A215 track quotations by WHAT IS NEXT, not by date. Quotations gains 'Sent At Basis' (blank = the date was recorded as it happened; anything else = ESTIMATED by the backfill, and every surface showing it must say so) plus 'Snooze Until' / 'Snooze Reason'. Parking is NOT the same as 'Follow Up Days': a threshold is a property of the deal ("this client always takes three weeks"), parking is a decision just made ("not now, ask me in October") - folding them together would let a rep quietly change how every future follow-up on a deal is judged. previewQuotationSentAt / runQuotationSentAtBackfill estimate the send date from 'Approved At' for the 60 quotations marked Sent before the stamp existed, because flowFollowUp returns 'unknown' for all of them and goes silent, leaving the worklist blind to nearly the whole pipeline. Preview and apply are separate handlers - nothing writes until somebody has read what would change - and the run is idempotent: a quotation that already has a real date is never touched. BOTH positional Quotations writers widened 23 -> 26 in step (the width trap). runQuotationSentAtBackfill is _SECURED because it decides who may rewrite 60 send dates off a browser-supplied actorRole; snoozeQuotation is deliberately not, matching setQuotationFollowUp beside it · 119: A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -56,7 +56,16 @@ var SCHEMA = {
                    // GoDaddy webmail first and press Send here afterwards. reviseQuotation CLEARS both,
                    // or a superseded document keeps a follow-up clock running. 'Follow Up Days'
                    // overrides the FlowSettings default for one deal (a tender may want 30).
-                   'Sent At', 'Sent To', 'Follow Up Days'],
+                   'Sent At', 'Sent To', 'Follow Up Days',
+                   // A215. 'Sent At Basis' says HOW the send date was arrived at. Blank means it was
+                   // recorded as it happened. Anything else means it was ESTIMATED by the backfill,
+                   // and every surface that shows the date must say so — 60 of 85 live quotations
+                   // were marked Sent before the stamp existed, and an inferred date that looks
+                   // identical to a real one is how a follow-up clock starts lying.
+                   // 'Snooze Until' / 'Snooze Reason' park a deal off the worklist until a date. NOT
+                   // the same thing as 'Follow Up Days', which widens the threshold for a slow client
+                   // — parking is "not now", a threshold is "this one always takes three weeks".
+                   'Sent At Basis', 'Snooze Until', 'Snooze Reason'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   //    A172: 'Line Key' is a per-line id that survives reordering. Row position can't identify a line
   //    once lines move, and Item ID isn't unique when a quote carries two lines of the same product —
@@ -529,6 +538,11 @@ var _SECURED = {
   submitTravelReplenishment: 1, approveTravelReplenishment: 1,
   rejectTravelReplenishment: 1, reviseTravelReplenishment: 1,
   getTravelFloats: 1, setTravelFloat: 1, requestTravelFloatCash: 1,
+  /* A215 — runQuotationSentAtBackfill decides who may rewrite the send date on up to 60 quotations
+     off a browser-supplied actorRole. Unsecured, the role check answers to whoever it is defending
+     against — the A211 lesson. snoozeQuotation is deliberately NOT here: it reads no role, is
+     reversible, requires a reason, and matches setQuotationFollowUp beside it. */
+  runQuotationSentAtBackfill: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -1018,6 +1032,10 @@ function getQuotations(p) {
       recommendedOption: String(q['Recommended Option'] || '').trim(),   // A205
       sentAt: q['Sent At'] || '', sentTo: String(q['Sent To'] || ''),    // A208
       followUpDays: _num(q['Follow Up Days']) || 0,                      // A208: 0 = use the default
+      // A215 — blank basis means the date was recorded as it happened. Anything else means it was
+      // ESTIMATED, and every surface showing the date has to say so.
+      sentAtBasis: String(q['Sent At Basis'] || ''),
+      snoozeUntil: q['Snooze Until'] || '', snoozeReason: String(q['Snooze Reason'] || ''),
       rowIndex: q.rowIndex,
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
@@ -1189,9 +1207,11 @@ function createQuotation(p) {
     creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
     '', p.plantSite || '', p.clientRefNo || '', p.prNo || '', p.layoutJson || '',
     recommended,
-    '', '', '']);   // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No /
-                    // A172 Layout JSON / A205 Recommended Option / A208 Sent At · Sent To · Follow Up Days.
-                    // 23 values — this array MUST stay exactly SCHEMA.Quotations.length wide.
+    '', '', '',     // A208 Sent At · Sent To · Follow Up Days
+    '', '', '']);   // A215 Sent At Basis · Snooze Until · Snooze Reason
+                    // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No /
+                    // A172 Layout JSON / A205 Recommended Option / A208 x3 / A215 x3.
+                    // 26 values — this array MUST stay exactly SCHEMA.Quotations.length wide.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
@@ -6048,6 +6068,7 @@ function dismissQuotationEmail(p) {
 
 /** Per-quotation follow-up window. 0 / blank falls back to the FlowSettings default. */
 function setQuotationFollowUp(p) {
+  p = p || {};
   if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
   if (!_quotationRow(p.quotationNo)) return { success: false, message: 'Quotation not found.' };
   var d = Math.round(_num(p.days));
@@ -6055,6 +6076,114 @@ function setQuotationFollowUp(p) {
   _setQuotationCells(p.quotationNo, { 'Follow Up Days': d || '' });
   return { success: true, refNo: p.quotationNo, days: d,
     message: d ? 'Follow-up set to ' + d + ' days for this quotation.' : 'Follow-up back to the default.' };
+}
+
+/* ── A215: park a quotation off the worklist until a date ────────────────────────────────────────
+   NOT the same thing as Follow Up Days, and the difference matters. A threshold says "this client
+   always takes three weeks, stop nagging me at seven days" — it is a property of the deal. Parking
+   says "not now, ask me again in October" — it is a decision the rep just made, with a reason.
+   Folding them together would mean a rep who parks one deal quietly changes how every future
+   follow-up on it is judged. */
+function snoozeQuotation(p) {
+  p = p || {};
+  if (!p.quotationNo) return { success: false, message: 'quotationNo required.' };
+  var q = _quotationRow(p.quotationNo);
+  if (!q) return { success: false, message: 'Quotation not found.' };
+
+  var until = _dateStr(p.until || '');
+  if (!until) {   // no date = un-park, which must always be one action away
+    _setQuotationCells(p.quotationNo, { 'Snooze Until': '', 'Snooze Reason': '' });
+    return { success: true, refNo: p.quotationNo, until: '',
+      message: 'Back on your list.' };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) {
+    return { success: false, message: 'Give a date as YYYY-MM-DD.' };
+  }
+  if (until <= _dateStr(_now())) {
+    return { success: false, message: 'Park it until a date in the future — ' + until + ' has passed.' };
+  }
+  /* A reason is required. Six weeks later "why is this parked?" is the only question anybody asks,
+     and a blank answer makes the park indistinguishable from a deal somebody forgot. */
+  var why = String(p.reason || '').trim();
+  if (!why) return { success: false, message: 'Say why you are parking it — future you will want to know.' };
+
+  _setQuotationCells(p.quotationNo, { 'Snooze Until': until, 'Snooze Reason': why });
+  return { success: true, refNo: p.quotationNo, until: until, reason: why,
+    message: 'Parked until ' + until + '.' };
+}
+
+/* ── A215: the send-date backfill ────────────────────────────────────────────────────────────────
+   sendQuotation stamps 'Sent At' only going forward, so every quotation marked Sent before that
+   existed has none — 60 of 85 live rows. The follow-up engine returns 'unknown' for all of them and
+   goes quiet, which means the worklist is blind to almost the whole pipeline.
+
+   The estimate is deliberately crude and deliberately LABELLED. 'Approved At' is the best proxy
+   there is: a rep sends a quotation when it is approved, usually the same day. But an estimate that
+   looks identical to a recorded date is how a follow-up clock starts lying, so every row written
+   here carries its basis, and every surface that shows the date says "estimated".
+
+   Preview and apply are separate handlers, the A193 pattern: nothing writes until somebody has read
+   the list of what would change. */
+var _QSA_BASIS = { approved: 'Estimated from approval', created: 'Estimated from quotation date' };
+/* Mirrors FLOW_Q_SENT_STATUSES in dashboard/js/flow-api.js — the statuses that mean "it is with the
+   client", and therefore the only ones a send date belongs on. */
+var _QSA_SENT_STATUSES = { 'Sent': 1 };
+
+/** What would the backfill do? Read-only, writes nothing. */
+function previewQuotationSentAt(p) {
+  p = p || {};
+  var rows = [], skipped = 0, noBasis = 0;
+  _rows('Quotations').forEach(function (q) {
+    if (!_QSA_SENT_STATUSES[String(q['Status'] || '')]) return;
+    if (String(q['Sent At'] || '').trim()) { skipped++; return; }        // already recorded — never touched
+    var basis = '', src = q['Approved At'] || '';
+    if (src) basis = _QSA_BASIS.approved;
+    else { src = q['Date'] || ''; basis = _QSA_BASIS.created; }
+    var est = _dateStr(src);
+    if (!est) { noBasis++; return; }                                     // nothing to estimate FROM
+    rows.push({ quotationNo: String(q['Quotation No']), customer: String(q['Customer'] || ''),
+      createdBy: String(q['Created By'] || ''), status: String(q['Status'] || ''),
+      estimatedSentAt: est, basis: basis, ageDays: _qsaAge(est) });
+  });
+  rows.sort(function (a, b) { return b.ageDays - a.ageDays; });
+  return { success: true, data: rows, count: rows.length,
+    alreadyRecorded: skipped, cannotEstimate: noBasis,
+    message: rows.length
+      ? rows.length + ' quotation(s) would get an ESTIMATED send date. ' + skipped +
+        ' already have a real one and are left alone.'
+      : 'Nothing to estimate — every sent quotation already has a date.' };
+}
+function _qsaAge(ymd) {
+  var d = new Date(_dateStr(ymd) + 'T00:00:00'), t = new Date(_dateStr(_now()) + 'T00:00:00');
+  if (isNaN(d.getTime())) return 0;
+  return Math.round((t - d) / 86400000);
+}
+
+/** Apply it. Idempotent by construction: a quotation that already has a Sent At is skipped, so a
+ *  second run writes nothing. Optionally limited to `quotationNos` so it can be applied in batches. */
+function runQuotationSentAtBackfill(p) {
+  p = p || {};
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['director', 'management', 'admin', 'accounting'].indexOf(role) < 0) {
+    return { success: false, message: 'Only management, the director or admin can backfill send dates.' };
+  }
+  var only = null;
+  if (p.quotationNos) {
+    try { only = {}; (JSON.parse(p.quotationNos) || []).forEach(function (n) { only[String(n)] = 1; }); }
+    catch (e) { return { success: false, message: 'quotationNos must be JSON.' }; }
+  }
+  var plan = previewQuotationSentAt(p);
+  var done = [], failed = 0;
+  plan.data.forEach(function (r) {
+    if (only && !only[r.quotationNo]) return;
+    try {
+      _setQuotationCells(r.quotationNo, { 'Sent At': r.estimatedSentAt, 'Sent At Basis': r.basis });
+      done.push(r.quotationNo);
+    } catch (e) { failed++; }
+  });
+  return { success: true, updated: done.length, failed: failed, refNo: done[0] || '',
+    message: 'Estimated a send date for ' + done.length + ' quotation(s)' +
+      (failed ? ', ' + failed + ' failed' : '') + '. Each is marked as an estimate, not a record.' };
 }
 
 // ── Settings ────────────────────────────────────────────────────────────────
@@ -7451,7 +7580,8 @@ function seedCommissionDemo(p) {
   _append('Quotations', [
     d.quotationNo, today, d.customer, 'Approved', d.exVat, who, now, '',
     'sales', '', who, now, d.subject, 0, '', '', '', '', '', '',
-    now, 'demo@example.invalid', ''                                        // 23 values
+    now, 'demo@example.invalid', '',
+    '', '', ''                                                             // 26 values
   ]);
   _append('QuotationItems', [
     d.quotationNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat,
@@ -8563,6 +8693,8 @@ var _MODULE_MAP = {
   unlinkQuotationEmail: ['Quotation', 'Email Unlinked'],
   dismissQuotationEmail: ['Quotation', 'Email Dismissed'],
   setQuotationFollowUp: ['Quotation', 'Follow-up Set'],
+  snoozeQuotation: ['Quotation', 'Parked'],                                         // A215
+  runQuotationSentAtBackfill: ['Quotation', 'Send Dates Estimated'],
   setFlowSettings: ['Settings', 'Saved'],
   // A207 — every writer, deletes included. An action missing here leaves NO audit row at all
   // (the long-standing deleteSalesCall defect below), and commission is money.
@@ -9456,6 +9588,9 @@ var HANDLERS = {
   getQuotationEmails: getQuotationEmails, linkQuotationEmail: linkQuotationEmail,
   unlinkQuotationEmail: unlinkQuotationEmail, dismissQuotationEmail: dismissQuotationEmail,
   setQuotationFollowUp: setQuotationFollowUp,
+  snoozeQuotation: snoozeQuotation,                                                 // A215
+  previewQuotationSentAt: previewQuotationSentAt,
+  runQuotationSentAtBackfill: runQuotationSentAtBackfill,
   getFlowSettings: getFlowSettings, setFlowSettings: setFlowSettings,
   // A207 commission requests. The five getters are read-only: HANDLERS only, no MUTATIONS,
   // no _SECURED. auditCommissionIntegrity writes only the 'Voided At Claim' marker it discovers.
@@ -9550,6 +9685,9 @@ var MUTATIONS = {
   // create two rows for the same (quotation, message) pair.
   linkQuotationEmail: 1, unlinkQuotationEmail: 1, dismissQuotationEmail: 1,
   setQuotationFollowUp: 1, setFlowSettings: 1,
+  // A215 — snoozeQuotation and the backfill both write to Quotations rows; the backfill rewrites
+  // history across up to 60 of them, so it takes the lock like every other writer.
+  snoozeQuotation: 1, runQuotationSentAtBackfill: 1,
   // A207 — every commission writer runs under the script lock, which is what makes the
   // "one collection, one claim" check at submit atomic against two tabs racing each other.
   createCommissionRequest: 1, updateCommissionRequest: 1, deleteCommissionRequest: 1,
