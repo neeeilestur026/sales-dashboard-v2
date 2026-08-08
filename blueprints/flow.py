@@ -23,6 +23,7 @@ from pdf_generators.quotation_parser import parse_quotation_pdf
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
+from pdf_generators.travel_allowance_pdf import build_travel_allowance_pdf_bytes
 from pdf_generators.utils import sanitize_filename, ph_date_ymd, ph_date_long
 from blueprints.session_auth import validate_session, display_name_for, INTERNAL_SHARED_SECRET
 
@@ -739,10 +740,22 @@ def _upload_too_large(_e):
 
     The stamping UI reads `message` off the response; without this the rep sees a bare browser
     error and has no idea the file was simply too big.
+
+    A214 — the wording is now route-aware. This handler is app-wide, and the PO-stamp copy ("attach
+    the original unstamped") is nonsense under a travel preview where the rep has attached four
+    receipts. The limit is on the WHOLE request, and base64 inflates by a third, so the advice that
+    actually helps differs by what they were doing.
     """
-    return jsonify({"success": False, "reason": "too-large",
-                    "message": "That file is larger than 16 MB. Attach the original unstamped, or "
-                               "ask the client for a smaller copy."}), 413
+    path = str(getattr(request, "path", "") or "")
+    if "travel" in path:
+        msg = ("Those receipts come to more than 16 MB in total. Remove one and attach it "
+               "separately, or retake it at a lower resolution.")
+    elif "quotation" in path:
+        msg = ("That upload is larger than 16 MB. Attach fewer brochures, or a smaller copy.")
+    else:
+        msg = ("That file is larger than 16 MB. Attach the original unstamped, or "
+               "ask the client for a smaller copy.")
+    return jsonify({"success": False, "reason": "too-large", "message": msg}), 413
 
 
 @flow_bp.route("/flow/stamp-po-received", methods=["POST"])
@@ -807,3 +820,41 @@ def stamp_po_received():
 
     return jsonify({"success": True, "report": report,
                     "pdf": base64.b64encode(stamped).decode("ascii")})
+
+
+# ── A214: the travel-allowance pack ───────────────────────────────────────────
+@flow_bp.route("/flow/travel-allowance-pdf", methods=["POST"])
+def travel_allowance_pdf():
+    """Render a travel replenishment as its three-page pack (+ receipt annex).
+
+    DELIBERATELY PURE: it reads no sheet, calls no Apps Script and needs no Trav No. That is the
+    whole reason the rep's page can show a live preview of a claim that has not been saved yet —
+    the same property that makes the Quote Configurator's preview work.
+
+    Two callers, one generator: the rep previewing a draft, and an approver rendering a submitted
+    claim with its receipts fetched from Drive. Identical output from identical input.
+    """
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+
+        # Receipts arrive as [{seq, dataUrl}]. A PREVIEW sends the seq with no dataUrl, so the annex
+        # still draws the slot and the caption and the page count stays honest, without shipping
+        # megabytes on every keystroke.
+        receipts = []
+        for r in (data.get("receipts") or []):
+            if not isinstance(r, dict):
+                logger.warning("travel_allowance_pdf: skipping non-dict receipt")
+                continue
+            raw = _decode_data_url(r.get("dataUrl")) if r.get("dataUrl") else None
+            receipts.append({"seq": r.get("seq"), "bytes": raw})
+
+        pdf_bytes = build_travel_allowance_pdf_bytes(data, receipts=receipts)
+    except Exception as e:
+        # EVERYTHING defensive lives inside this try. A173: a non-dict item raised outside it once
+        # and the caller got Flask's HTML 500 page instead of this envelope — and the live preview
+        # reads `message` off the JSON, so it would have shown a bare "HTTP 500".
+        logger.exception("Travel allowance PDF failed")
+        return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
+
+    stem = sanitize_filename(_s(data.get("travNo")) or "Draft")
+    return _pdf_response(pdf_bytes, f"Travel_Allowance_{stem}.pdf")
