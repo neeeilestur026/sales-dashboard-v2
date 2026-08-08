@@ -180,3 +180,15 @@ def get_static_path(*parts):
     """Get the absolute path to a file in the static directory."""
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, "static", *parts)
+
+
+# ── A213: the scope-of-supply heading, printed INSIDE the items table ─────────
+# It lives here because two modules need the same string and must not drift: flow_quotation_pdf.py
+# prints it, and quotation_parser.py has to recognise it to know that the rows below belong to no
+# item. Before this constant the renderer's headings and the parser's terminators were two
+# independent copies of the same knowledge — which is the bug class, not just the bug.
+#
+# CAREFUL if you rename it. quotation_parser._ITEM_STOP holds prefixes that END the item table
+# ("SCOPEOFSUPPLY", "EXCLUSIONS", …). This heading must NOT start with any of them, or the importer
+# will stop reading items at the first one. The parser asserts exactly that next to _ITEM_STOP.
+QUO_SCOPE_INTABLE_HEADING = "INCLUSIONS — SCOPE OF SUPPLY"

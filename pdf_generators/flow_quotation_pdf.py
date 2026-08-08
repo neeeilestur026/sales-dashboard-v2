@@ -33,6 +33,10 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, KeepTogether,
 from reportlab.platypus import Image as RLImage
 from PIL import Image as PILImage
 
+# A213 — shared with quotation_parser.py, which has to recognise this heading to know that the rows
+# under it belong to no item. One constant, so the two cannot drift.
+from pdf_generators.utils import QUO_SCOPE_INTABLE_HEADING
+
 logger = logging.getLogger(__name__)
 
 # ── Page metrics ──────────────────────────────────────────────────────────────
@@ -174,6 +178,21 @@ def _ps(name, size_px, color=TEXT, font=None, align=0, leading_mult=1.45, **kw):
 
 
 # ── Custom flowables ──────────────────────────────────────────────────────────
+def _desc_indent():
+    """Width of the thumbnail gutter — where the description text starts inside its column."""
+    return _Thumb.SIZE + 10 * PX
+
+
+def _desc_text_width(col_w1):
+    """Usable width of the description TEXT, inside the item column and beside the thumbnail.
+
+    A213 — the scope block prints under this text and must line up with it exactly, so both callers
+    take the width from here rather than repeating the arithmetic. ~219pt on an ordinary quotation;
+    ~176pt once alternative offers widen the index column, which is why the scope drops to one
+    column there (see _scope_rows)."""
+    return col_w1 - _desc_indent() - 10 * PX
+
+
 class _Thumb(Flowable):
     """66px product thumbnail, rounded, strictly boxed; striped placeholder when no image."""
     SIZE = 66 * PX
@@ -502,6 +521,87 @@ def _cap_name(name, limit=600, token=40):
     )
 
 
+def _scope_rows(bullets, width):
+    """A213 — the scope of supply, as rows for the ITEMS TABLE rather than a card after the totals.
+
+    Returns a list of flowable-lists, one per table row, all sized to `width` (the description text
+    width). The caller drops each into the description column of its own row, leaving QTY / UNIT
+    PRICE / AMOUNT blank.
+
+    WHY ROWS AND NOT ONE CELL. A table row cannot split across pages and a nested table cannot split
+    at all, so any single-cell layout is capped by the frame height — which is how the old
+    _bullet_block ends up printing "… +N more (shortened to fit the page)". Inclusions are
+    contractual: silently dropping one drops a commitment. Rows split between each other, so the
+    block flows onto the next page instead, losing nothing.
+
+    ONE BULLET PAIR PER ROW, not N. With N pairs a row's height is a sum, and bounding it needs a
+    bound on the pair count AND on every bullet's line count. With one pair the bound depends only on
+    the single worst bullet, which _cap_name already guarantees:
+
+        frame 773.65 − repeated header 26.10 − row padding 11.62 = 735.93pt available
+        one bullet capped at 320 chars ÷ 25 chars/line (the narrow, alternative-offers case)
+          = 13 lines × 8.62pt leading                            = 112.1pt
+        → 6.6x margin, so LayoutError here is unreachable rather than unlikely.
+
+    A **bold** entry becomes a SUB-HEADING (the mock-up's Features / Standard Accessories /
+    Additional Inclusions). It is full width, carries no bullet glyph, and flushes any half-finished
+    pair so a heading never sits beside a bullet. This overloads the `**bold**` syntax that
+    _bullets() already parses — deliberately, to avoid inventing a second one — which means a rep
+    bolding a single bullet for emphasis now creates a heading. The configurator copy says so."""
+    rows = [b for b in (bullets or []) if str((b or {}).get("text") or "").strip()]
+    if not rows:
+        return []
+
+    # Two columns at ~105pt is what the mock-up shows and what the median inclusion needs (1-2
+    # lines). Once alternative offers widen the index column the text drops to ~176pt and each
+    # column to ~83pt, where the same bullets need three lines and read as a mess — one column there.
+    columns = 2 if width >= 200 else 1
+    size = 9.5
+    body_st = _ps("scpB", size, BODY2, leading_mult=1.25)
+    head_st = _ps("scpH", 10, ACCENT_DARK, ARCH_B, leading_mult=1.3)
+    sub_st = _ps("scpS", 10, HEADING, LATO_B, leading_mult=1.3)
+
+    out = [[Paragraph(_esc(QUO_SCOPE_INTABLE_HEADING), head_st)]]
+    gutter = 14 * PX
+    col_w = (width - gutter) / 2.0 if columns == 2 else width
+
+    def bullet(entry):
+        return _bullet_para(_cap_name(str(entry.get("text") or ""), limit=320, token=24), body_st)
+
+    def pair_row(left, right):
+        """One row holding up to two bullets side by side, at the column width they were measured at."""
+        cells = [bullet(left), bullet(right) if right else ""]
+        t = Table([cells], colWidths=[col_w, col_w], hAlign="LEFT")
+        t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LEFTPADDING", (0, 0), (0, 0), 0),
+                               ("LEFTPADDING", (1, 0), (1, 0), gutter),
+                               ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 1 * PX),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * PX)]))
+        return [t]
+
+    pending = None
+    for b in rows:
+        text = str(b.get("text") or "").strip()
+        if b.get("bold"):
+            if pending is not None:                 # never leave a heading beside a stray bullet
+                out.append(pair_row(pending, None))
+                pending = None
+            out.append([Spacer(1, 3 * PX),
+                        Paragraph(_esc(_cap_name(text, limit=320, token=24)), sub_st)])
+            continue
+        if columns == 1:
+            out.append(pair_row(b, None))
+        elif pending is None:
+            pending = b
+        else:
+            out.append(pair_row(pending, b))
+            pending = None
+    if pending is not None:
+        out.append(pair_row(pending, None))
+    return out
+
+
 def _bullet_block(heading, bullets, edge, width, columns=1, size=11.5, leading=1.7):
     """Uppercase heading + hairline rule, then a bordered card with a 3px left edge.
 
@@ -747,6 +847,17 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             ordered.extend(opt_map[k])
             ordered.append({"_marker": "subtotal", "_key": k})
     span_rows = []          # (row_index, kind) filled as the rows are appended
+    item_rows = []          # A213 — indices of REAL item rows, for the zebra band counter
+    scope_row_idx = []      # A213 — indices of the scope rows, so they share item 01's band
+    # A213 — scope prints inside the table, under the first BASE item. With no base item there is
+    # nothing to hang it on: if every line carries an option_no, ordered[0] is the ALTERNATIVE OFFERS
+    # banner, and scope placed there reads as belonging to option 1 — which it does not. Same when
+    # items is empty. Both cases fall back to the pre-A213 full-width card after the totals, which is
+    # why _bullet_block and the post-totals path are kept rather than deleted.
+    scope_in_table = bool(scope) and bool(base_items)
+    scope_rows_pending = _scope_rows(scope, _desc_text_width(col_w[1])) if scope_in_table else None
+    if not scope_rows_pending:
+        scope_in_table = False
     # The index column is sized for "01". An OPTION badge does not fit and silently CLIPS to "OPT",
     # taking the ★ with it — so widen it, but only when options exist, so a quotation without them
     # keeps the exact column geometry (and therefore the identical output) it has today.
@@ -834,8 +945,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
 
         img_bytes = (images or {}).get(no)
         desc_cell = Table([[_Thumb(img_bytes), text_col]],
-                          colWidths=[_Thumb.SIZE + 10 * PX,
-                                     col_w[1] - _Thumb.SIZE - 10 * PX - 10 * PX])
+                          colWidths=[_desc_indent(), _desc_text_width(col_w[1])])
         desc_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
                                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
@@ -857,9 +967,20 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                 alt_badge_st)
         else:
             idx_cell = Paragraph(idx_txt, idx_st)
+        item_rows.append(len(rows))
         rows.append([idx_cell, desc_cell, qty_cell,
                      Paragraph(_fmt(it.get("total_amount")), price_st),
                      Paragraph(_fmt(it.get("total_unit_price")), amt_st)])
+
+        # A213 — the scope of supply hangs off the FIRST base item, right under its description.
+        # Appended INSIDE this loop on purpose: span_rows records `len(rows)` as it goes, so rows
+        # added here shift every later index correctly. Building them in a second pass and
+        # inserting would silently break every A205 span index.
+        if scope_rows_pending and not _k:
+            for cell in scope_rows_pending:
+                scope_row_idx.append(len(rows))
+                rows.append(["", cell, "", "", ""])
+            scope_rows_pending = None
 
     items_tbl = Table(rows, colWidths=col_w, repeatRows=1)
     # Header: ONE continuous blue→red fade across all columns — each cell gets a horizontal
@@ -872,14 +993,61 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         c_end = _mix(ACCENT_G1, ACCENT_G2, (xpos + cw) / total_w)
         header_grads.append(("BACKGROUND", (ci, 0), (ci, 0), ["HORIZONTAL", c_start, c_end]))
         xpos += cw
-    items_tbl.setStyle(TableStyle(header_grads + [
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, CARD_B]),
+    # A213 — the zebra and the rules are now PER ROW, not blanket commands.
+    #
+    # ROWBACKGROUNDS cycles on row index from where it starts, so inserting scope rows after item 01
+    # flips the stripe for every later item. It cannot be patched over either: backgrounds are drawn
+    # before lines and before content, and _alt_row_styles already needs a per-row BACKGROUND to
+    # defeat the same cycle — a third layer on top of two is how this file becomes unreadable.
+    # So the phase is driven by a LOGICAL band counter over real item rows, and item 01's scope rows
+    # take its colour, which is what makes them read as the single continuous band the client's
+    # mock-up shows.
+    #
+    # LINEBELOW is the same story with one extra twist: a line command cannot be cancelled. The old
+    # blanket ("LINEBELOW", (0,1), (-1,-1), …) would draw a rule under every scope row, chopping the
+    # block into stripes. Per-row commands instead: under every ordinary item row, and under the LAST
+    # scope row (that rule is what separates item 01's band from item 02), never in between.
+    scope_set = set(scope_row_idx)
+    if not scope_set:
+        # No scope rows — keep the original blanket commands EXACTLY. The per-row rewrite below is
+        # only needed to stop inserted rows shifting the stripe, so a quotation without scope must
+        # not pay for it: ~100 live quotations render through here and their output stays byte for
+        # byte what it was, which tests/flow/quotation-baseline.py asserts.
+        zebra = [("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, CARD_B])]
+        rules = [("LINEBELOW", (0, 1), (-1, -1), 1, HAIR_F0)]
+    else:
+        # The cycle must advance exactly as ROWBACKGROUNDS would — once per body row — EXCEPT on a
+        # scope row, which takes the colour of the item it belongs to and does not advance. That is
+        # what makes an item and its inclusions read as one continuous band rather than a stripe
+        # every third line, and it keeps every later item on the stripe it would have had.
+        zebra, rules, phase = [], [], 0
+        last_scope = scope_row_idx[-1]
+        for ri in range(1, len(rows)):
+            if ri in scope_set:
+                fill = [colors.white, CARD_B][(phase - 1) % 2]
+            else:
+                fill = [colors.white, CARD_B][phase % 2]
+                phase += 1
+            zebra.append(("BACKGROUND", (0, ri), (-1, ri), fill))
+            # A rule under every row EXCEPT inside the scope block. The one under item 01 moves to
+            # the foot of its inclusions, which is what separates item 01's band from item 02's.
+            if ri not in scope_set or ri == last_scope:
+                if not (ri + 1 in scope_set):
+                    rules.append(("LINEBELOW", (0, ri), (-1, ri), 1, HAIR_F0))
+
+    # Command ORDER is preserved exactly — zebra where ROWBACKGROUNDS sat, rules where LINEBELOW sat.
+    # ReportLab emits its content stream in command order, so merely hoisting the rules above BOX
+    # changes the bytes of every quotation ever rendered. The baseline caught precisely that.
+    items_tbl.setStyle(TableStyle(header_grads + zebra + [
         ("BOX", (0, 0), (-1, -1), 1, HAIR_EC),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 1), (-1, -1), 1, HAIR_F0),
+        ("VALIGN", (0, 0), (-1, -1), "TOP")] + rules + [
         ("LEFTPADDING", (0, 0), (-1, -1), 8 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 8 * PX),
         ("TOPPADDING", (0, 0), (-1, 0), 10 * PX), ("BOTTOMPADDING", (0, 0), (-1, 0), 10 * PX),
         ("TOPPADDING", (0, 1), (-1, -1), 8 * PX), ("BOTTOMPADDING", (0, 1), (-1, -1), 8 * PX)]
+        # A213 — a scope row's own padding lives inside its nested table, so the outer 8px top and
+        # bottom on every row would treble the gaps between bullet pairs. Tighten them here only.
+        + [("TOPPADDING", (0, ri), (-1, ri), 0) for ri in scope_row_idx]
+        + [("BOTTOMPADDING", (0, ri), (-1, ri), 0) for ri in scope_row_idx]
         + _alt_row_styles(span_rows)))
     story.append(items_tbl)
     story.append(Spacer(1, 10 * PX))
@@ -927,7 +1095,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     story.append(Spacer(1, 8 * PX))
 
     # ── Scope of Supply / Exclusions / Options (each omitted when empty) ──
-    for blk in (_bullet_block("SCOPE OF SUPPLY — INCLUDED", scope, ACCENT_G1, CONTENT_W),
+    # A213 — scope normally prints INSIDE the items table now, under the first item's description,
+    # so it is dropped from here. The card survives as the fallback for a quotation with no base
+    # item to hang it on (see scope_in_table). Exclusions and options do NOT move: they are about
+    # the whole quotation, not about one line, and under an item they would read wrongly.
+    for blk in (None if scope_in_table else
+                _bullet_block("SCOPE OF SUPPLY — INCLUDED", scope, ACCENT_G1, CONTENT_W),
                 _bullet_block("EXCLUSIONS — UNLESS OTHERWISE STATED IN WRITING", exclusions,
                               ACCENT, CONTENT_W, columns=2, size=11, leading=1.6),
                 _options_block("AVAILABLE AS OPTIONS — PRICED SEPARATELY UPON REQUEST",
