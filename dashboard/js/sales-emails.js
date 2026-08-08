@@ -209,6 +209,18 @@ function seQuotationCell(e) {
   return `<button class="link-btn" onclick='seAttach("${_esc(e.messageId)}")'>Attach…</button>`;
 }
 
+/* ── The attach picker ──────────────────────────────────────────────────────────────────────────
+   The ranking is the whole point of this feature, and a native prompt() could only show it as a
+   numbered list to read and a digit to type. The same ranked list is now a list of choices, with
+   the reasons behind each one shown as chips — the rep sees WHY a quotation is being suggested and
+   can disagree with it, which they cannot do with a number.
+
+   Nothing is pre-selected unless qemIsConfident says the top match is both strong and unambiguous;
+   a merely least-bad guess must not arrive looking like an answer. */
+let atRanked = [];
+let atPick = -1;
+let atMsg = null;
+
 /** The same scorer as the quotation-side modal, arguments reversed: message fixed, quotations ranked. */
 function seAttach(messageId) {
   const m = deEmails.filter(x => String(x.messageId) === String(messageId))[0];
@@ -222,25 +234,101 @@ function seAttach(messageId) {
     const id = String(l.messageId || '').toLowerCase();
     if (id && String(l.status) === 'Active') ctx.linked[id] = String(l.quotationNo);
   });
-  const ranked = qemRankQuotations(m, seQuotes.filter(q => {
+  atRanked = qemRankQuotations(m, seQuotes.filter(q => {
     const st = String(q.status || '');
     return st === 'Approved' || st === 'Sent' || ['Not Pursued', 'Lost', 'Cancelled'].indexOf(st) !== -1;
   }), ctx).slice(0, 6);
-  if (!ranked.length) { alert('No approved or sent quotations to attach this to.'); return; }
-
-  const lines = ranked.map((r, i) =>
-    `${i + 1}. ${r.quotation.quotationNo}  —  ${r.quotation.customer}` +
-    (r.reasons.length ? `\n     ${r.reasons.join(' · ')}` : '\n     no strong signal'));
-  const pick = prompt(
-    'Attach this email to which quotation?\n\n' +
-    (m.subject || '(no subject)') + '\nto ' + ((m.recipients || []).map(x => x.addr).join(', ') || m.recipient || '') +
-    '\n' + '-'.repeat(52) + '\n' + lines.join('\n') + '\n\nType a number (1-' + ranked.length + '), or Cancel:', '1');
-  if (pick === null) return;
-  const idx = parseInt(pick, 10) - 1;
-  if (!(idx >= 0 && idx < ranked.length)) return;
-  seDoLink(ranked[idx].quotation.quotationNo, m);
+  atMsg = m;
+  /* Only pre-select a genuinely confident top match — see qemIsConfident. */
+  atPick = (typeof qemIsConfident === 'function' && qemIsConfident(atRanked)) ? 0 : -1;
+  atRender();
+  atOpen(true);
 }
 
+function atOpen(on) {
+  const ov = document.getElementById('atOverlay');
+  if (!ov) return;
+  ov.classList.toggle('open', !!on);
+  if (on) {
+    const first = ov.querySelector('.at-opt');
+    if (first) first.focus();
+  } else { atRanked = []; atPick = -1; atMsg = null; }
+}
+
+function atRender() {
+  const m = atMsg || {};
+  const to = (m.recipients || []).map(x => x.addr).join(', ') || m.recipient || '';
+  document.getElementById('atMail').innerHTML =
+    `<div class="s">${_esc(m.subject || '(no subject)')}</div>` +
+    `<div class="m">to ${_esc(to || '—')}${m.date ? ' · ' + _esc(_when(m.date)) : ''}</div>`;
+
+  const list = document.getElementById('atList');
+  if (!atRanked.length) {
+    list.innerHTML = '<div class="at-empty">No approved or sent quotation to attach this to.<br>' +
+      'A quotation becomes attachable once it has been approved.</div>';
+    document.getElementById('atNote').textContent = '';
+    document.getElementById('atConfirm').disabled = true;
+    return;
+  }
+  list.innerHTML = atRanked.map((r, i) => {
+    const q = r.quotation;
+    const why = r.reasons.length
+      ? r.reasons.map(x => `<span>${_esc(x)}</span>`).join('')
+      : '<span class="none">no strong signal — check this one</span>';
+    const value = (typeof flowQuotationNet === 'function' && typeof flowMoney === 'function')
+      ? flowMoney(flowQuotationNet(q), q.currency || 'PHP') : '';
+    return `<button type="button" class="at-opt${i === atPick ? ' on' : ''}" data-i="${i}"
+              onclick="atSelect(${i})" onkeydown="atKey(event,${i})">
+        <span class="tick">${i === atPick ? '&#10003;' : ''}</span>
+        <span class="body">
+          <span class="no">${_esc(q.quotationNo)}</span>
+          <span class="cust">${_esc(q.customer || '—')}</span>
+          <span class="meta">${_esc(q.status || '')}${q.date ? ' · ' + _esc(String(q.date).slice(0, 10)) : ''}${value ? ' · ' + _esc(value) : ''}</span>
+          <span class="at-why">${why}</span>
+        </span>
+        ${i === 0 && atPick === 0 ? '<span class="at-best">best match</span>' : ''}
+      </button>`;
+  }).join('');
+  document.getElementById('atNote').textContent = atPick < 0
+    ? 'No single quotation stands out, so none is pre-selected — pick the right one.'
+    : '';
+  document.getElementById('atConfirm').disabled = atPick < 0;
+}
+
+function atSelect(i) { atPick = i; atRender(); document.querySelectorAll('.at-opt')[i].focus(); }
+
+/** Arrow keys move through the list, Enter attaches. A picker you have to reach for the mouse to
+ *  use is slower than the prompt() it replaced. */
+function atKey(ev, i) {
+  const n = atRanked.length;
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    const next = (i + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+    document.querySelectorAll('.at-opt')[next].focus();
+  } else if (ev.key === 'Enter' || ev.key === ' ') {
+    ev.preventDefault(); atSelect(i);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const cancel = document.getElementById('atCancel'), ok = document.getElementById('atConfirm'),
+        ov = document.getElementById('atOverlay');
+  if (cancel) cancel.addEventListener('click', () => atOpen(false));
+  if (ov) ov.addEventListener('click', (e) => { if (e.target === ov) atOpen(false); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && ov && ov.classList.contains('open')) atOpen(false);
+  });
+  if (ok) ok.addEventListener('click', async () => {
+    if (atPick < 0 || !atMsg) return;
+    ok.disabled = true; ok.textContent = 'Attaching…';
+    const done = await seDoLink(atRanked[atPick].quotation.quotationNo, atMsg);
+    ok.textContent = 'Attach';
+    if (done) atOpen(false); else ok.disabled = false;
+  });
+});
+
+/** Returns true when the link was made. The caller keeps the dialog open on a refusal so the rep can
+ *  read it and try another quotation, rather than losing their place to a dismissed alert. */
 async function seDoLink(quotationNo, m) {
   try {
     const res = await postFlow('linkQuotationEmail', {
@@ -252,6 +340,29 @@ async function seDoLink(quotationNo, m) {
     if (!res.success) throw new Error(res.message);
     await seLoadQuotations();
     renderList();
-    alert(res.message);
-  } catch (e) { alert(e.message); }
+    seToast(res.message, true);
+    return true;
+  } catch (e) {
+    seToast(e.message, false);
+    return false;
+  }
+}
+
+/** A message that does not need dismissing. The page has no flow-msg element and one banner at the
+ *  top would be invisible with the dialog open over it. */
+function seToast(text, ok) {
+  let t = document.getElementById('seToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'seToast';
+    t.style.cssText = 'position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:1200;' +
+      'padding:.6rem 1rem;border-radius:10px;font:600 .82rem/1.5 Inter,sans-serif;color:#fff;' +
+      'box-shadow:0 8px 26px rgba(15,23,42,.28);max-width:min(520px,92vw);text-align:center;';
+    document.body.appendChild(t);
+  }
+  t.style.background = ok ? '#0f766e' : '#b91c1c';
+  t.textContent = text;
+  t.style.display = '';
+  clearTimeout(t._h);
+  t._h = setTimeout(() => { t.style.display = 'none'; }, ok ? 3200 : 6000);
 }

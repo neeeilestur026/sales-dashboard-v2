@@ -52,6 +52,53 @@
     .em-setup .ic { font-size: 2.4rem; }
     .em-setup h2 { margin: 0.5rem 0 0.3rem; font-size: 1.1rem; }
     .em-setup p { color: var(--text-secondary, #475569); font-size: 0.88rem; margin: 0 0 1rem; }
+
+    /* ── The attach picker ──────────────────────────────────────────────────────────────────────
+       Built on .flow-modal-overlay / .flow-modal from flow.css so it reads as part of the app
+       rather than a second modal language. It replaces a native prompt() that asked the rep to
+       read a numbered list and type a digit — the ranking work was already being done and then
+       thrown away into plain text. */
+    .at-mail { background: var(--bg-inset, #f8fafc); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 10px; padding: .7rem .85rem; margin-bottom: 1rem; }
+    .at-mail .s { font-weight: 700; font-size: .88rem; color: var(--text-primary, #0f172a);
+      overflow-wrap: anywhere; }
+    .at-mail .m { font-size: .76rem; color: var(--text-muted, #64748b); margin-top: .2rem;
+      overflow-wrap: anywhere; }
+
+    .at-list { display: flex; flex-direction: column; gap: .5rem; max-height: 46vh; overflow-y: auto;
+      padding: 2px; margin: 0 -2px; }
+    .at-opt { display: flex; gap: .8rem; align-items: flex-start; text-align: left; width: 100%;
+      padding: .7rem .85rem; border: 1px solid var(--border, #e2e8f0); border-radius: 11px;
+      background: var(--bg-card, #fff); cursor: pointer; font: inherit;
+      transition: border-color .14s ease, box-shadow .14s ease, background .14s ease; }
+    .at-opt:hover { border-color: var(--accent, #0d9488); background: var(--accent-light, #f0fdfa); }
+    .at-opt.on { border-color: var(--accent, #0d9488); background: var(--accent-light, #f0fdfa);
+      box-shadow: 0 0 0 3px var(--accent-ring, rgba(13,148,136,.18)); }
+    .at-opt:focus-visible { outline: none; border-color: var(--accent, #0d9488);
+      box-shadow: 0 0 0 3px var(--accent-ring, rgba(13,148,136,.18)); }
+    .at-opt .tick { flex: none; width: 18px; height: 18px; border-radius: 50%; margin-top: 2px;
+      border: 2px solid var(--border, #cbd5e1); display: grid; place-items: center;
+      font-size: 11px; color: #fff; line-height: 1; }
+    .at-opt.on .tick { border-color: var(--accent, #0d9488); background: var(--accent, #0d9488); }
+    /* Everything inside .at-opt is a <span>: a <button>'s content model is phrasing content, so a
+       <div> in there is invalid markup that browsers merely tolerate. */
+    .at-opt .body { flex: 1; min-width: 0; }
+    .at-opt .body > span { display: block; }
+    .at-opt .no { font: 700 .82rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--text-primary, #0f172a); overflow-wrap: anywhere; }
+    .at-opt .cust { font-size: .84rem; font-weight: 600; color: var(--text-secondary, #475569);
+      margin-top: .1rem; overflow-wrap: anywhere; }
+    .at-opt .meta { font-size: .74rem; color: var(--text-muted, #64748b); margin-top: .25rem; }
+    .at-why { display: flex !important; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+    .at-why span { font-size: .68rem; font-weight: 600; padding: .12rem .5rem; border-radius: 999px;
+      background: var(--bg-inset, #f1f5f9); color: var(--text-secondary, #475569); }
+    .at-why span.none { font-style: italic; font-weight: 500; }
+    .at-best { flex: none; font-size: .64rem; font-weight: 800; letter-spacing: .04em;
+      text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; align-self: flex-start;
+      background: rgba(13,148,136,.16); color: #0f766e; }
+    .at-note { font-size: .74rem; color: var(--text-muted, #64748b); margin-top: .9rem; line-height: 1.6; }
+    .at-empty { padding: 1.6rem; text-align: center; color: var(--text-muted, #64748b); font-size: .86rem; }
+    @media (max-width: 560px) { .at-opt { padding: .6rem .65rem; gap: .6rem; } }
   </style>
 </head>
 <body>
@@ -105,6 +152,22 @@
       </div>
     </div>
   </main>
+
+  <!-- A208 — attach an email to the quotation it carried. -->
+  <div class="flow-modal-overlay" id="atOverlay">
+    <div class="flow-modal" role="dialog" aria-modal="true" aria-labelledby="atTitle" style="width:min(560px,100%);">
+      <h3 id="atTitle">Attach to a quotation</h3>
+      <div class="sub">Pick the quotation this message carried. Best guesses first — nothing is linked
+        until you choose.</div>
+      <div class="at-mail" id="atMail"></div>
+      <div class="at-list" id="atList"></div>
+      <div class="at-note" id="atNote"></div>
+      <div class="flow-modal-foot">
+        <button class="btn btn-sm" id="atCancel">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="atConfirm" disabled>Attach</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
