@@ -516,6 +516,7 @@ function renderNavbar(activePage) {
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
+          <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Receiving</a>
           <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
@@ -625,7 +626,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'director') {
-    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates'].includes(activePage);   // A207
+    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel'].includes(activePage);   // A207 · A212
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-performance'].includes(activePage);
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
@@ -660,6 +661,7 @@ function renderNavbar(activePage) {
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="director-expenses.html" class="${activePage === 'director-expenses' ? 'active' : ''}">Expenses</a>
+          <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Commissions for Payroll${_soon(session.role)}</a>
           <a href="commission-rates.html" class="${activePage === 'commission-rates' ? 'active' : ''}">Commission Rates${_soon(session.role)}</a>
         </div>
@@ -1085,6 +1087,29 @@ async function flowComputeActions(session) {
             + (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''),
             'commission-payout-report.html');
       }
+    }).catch(() => {}));
+  }
+  /* A212 — travel allowance. The approver sees only what is at THEIR stage: a week sitting with the
+     other signatory is not theirs to chase, and counting it would make the badge permanently wrong.
+     getTravelReplenishments is session-scoped server-side, so a rep asking gets only their own. */
+  if (isAcct || isDir) {
+    const myStage = isAcct ? 'Pending Accounting' : 'Pending Director';
+    jobs.push(postFlow('getTravelReplenishments', { status: myStage }).then(r => {
+      const rows = (r && r.data) || [];
+      if (rows.length) {
+        const value = rows.reduce((t, x) => t + (parseFloat(x.totalSpent) || 0), 0);
+        add('urgent', '#ef4444', rows.length + ' travel report(s) waiting for your signature'
+            + (value ? ' (₱' + Math.round(value).toLocaleString() + ')' : ''),
+            'flow-travel.html');
+      }
+    }).catch(() => {}));
+  }
+  /* The rep: a week sent back is a dead end unless somebody says so. */
+  if (isSales) {
+    jobs.push(postFlow('getTravelReplenishments', { status: 'Rejected' }).then(r => {
+      const rows = (r && r.data) || [];
+      if (rows.length) add('report', '#b45309', rows.length + ' travel report(s) sent back to you',
+                           'flow-travel.html');
     }).catch(() => {}));
   }
   /* The rep: a rejected claim is a dead end unless someone tells them. Scoped to their own name. */

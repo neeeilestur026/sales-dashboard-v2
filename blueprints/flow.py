@@ -595,6 +595,12 @@ SECURED_ACTIONS = [
     "getTravelReplenishments", "saveTravelReplenishment", "deleteTravelReplenishment",
     # A214 — the receipt photographs of somebody's week, keyed by a guessable TRAV number.
     "getTravelReceipts",
+    # A212-3/4/5 — the approval chain and the float. Each of these decides whether cash leaves, how
+    # much and to whom, off an actorRole the browser supplies. getTravelFloats with no `user` lists
+    # what every rep is holding, so it is a read that has to know who is asking.
+    "submitTravelReplenishment", "approveTravelReplenishment",
+    "rejectTravelReplenishment", "reviseTravelReplenishment",
+    "getTravelFloats", "setTravelFloat", "requestTravelFloatCash",
 ]
 
 

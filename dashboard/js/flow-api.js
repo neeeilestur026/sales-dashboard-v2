@@ -152,7 +152,11 @@ const FLOW_SECURED_ACTIONS = [
   // everybody's weeks, and saveTravelReplenishment decides whose name a claim is banked under.
   'getTravelReplenishments', 'saveTravelReplenishment', 'deleteTravelReplenishment',
   // A214 — the receipt photographs of somebody's week, keyed by a guessable TRAV number.
-  'getTravelReceipts'
+  'getTravelReceipts',
+  // A212-3/4/5 — the approval chain and the float: what leaves, how much, and to whom.
+  'submitTravelReplenishment', 'approveTravelReplenishment',
+  'rejectTravelReplenishment', 'reviseTravelReplenishment',
+  'getTravelFloats', 'setTravelFloat', 'requestTravelFloatCash'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

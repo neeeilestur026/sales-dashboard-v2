@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 118;  // A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 119;  // A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -522,6 +522,13 @@ var _SECURED = {
   /* A214 — getTravelReceipts returns the PHOTOGRAPHS attached to a claim. Unsecured it would hand
      anybody who knows a TRAV number the images of somebody else's week. */
   getTravelReceipts: 1,
+  /* A212-3/4/5 — the approval chain and the float. Every one of these decides whether cash leaves,
+     how much, and to whom, off an actorRole the browser supplies; unsecured, the role check on
+     approveTravelReplenishment answers to the person it is defending against. getTravelFloats is
+     here for the read reason: with no `user` it lists what every rep is holding. */
+  submitTravelReplenishment: 1, approveTravelReplenishment: 1,
+  rejectTravelReplenishment: 1, reviseTravelReplenishment: 1,
+  getTravelFloats: 1, setTravelFloat: 1, requestTravelFloatCash: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -7620,12 +7627,20 @@ function _travDurationLabel(items) {
 /** The float this person is entitled to hold on `ymd`. Effective-dated; the newest row that has
  *  started and has not ended wins. Falls back to the company default so a rep who has never been
  *  issued a float still sees a sensible figure on a DRAFT — submit refuses without an Active float. */
+/* Statuses that mean "this person genuinely held this float". ENDED COUNTS — inside its own window.
+   Filtering on Active alone made a superseded float invisible to the weeks it actually covered: a
+   draft for an old week fell through to the company default and, worse, reported floatConfigured
+   false, so submit refused a week that had been perfectly well funded at the time. The DATE WINDOW
+   is the real test; the status only distinguishes an entitlement from a request for one.
+   SUPERSEDED does not count: that row was replaced on its own effective date and never applied. */
+var _TRAV_FLOAT_HELD = { 'Active': 1, 'Ended': 1 };
+
 function _travFloatFor(user, ymd) {
   var day = _dateStr(ymd || _now());
   var best = null;
   _rows('TravelFloats').forEach(function (r) {
     if (String(r['User']) !== String(user)) return;
-    if (String(r['Status'] || '') !== 'Active') return;
+    if (!_TRAV_FLOAT_HELD[String(r['Status'] || '')]) return;
     var from = _dateStr(r['Effective From']), to = _dateStr(r['Effective To']);
     if (from && from > day) return;
     if (to && to < day) return;
@@ -7761,6 +7776,7 @@ function getTravelReplenishments(p) {
  *  submit-time conditions, and refusing a save would leave a rep who genuinely travelled with nowhere
  *  to write down what they spent. */
 function saveTravelReplenishment(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
   var user = String(p.user || p.actorName || '').trim();
   var role = String(p.actorRole || '').toLowerCase();
   /* Only oversight may file on someone else's behalf; a rep is always themselves. Taking `user` from
@@ -7875,6 +7891,7 @@ function _travWriteItems(no, items) {
 }
 
 function deleteTravelReplenishment(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
   var r = _travRow(p.travNo);
   if (!r) return { success: false, message: 'Travel report not found.' };
   if (!_travEditable(r['Status'])) {
@@ -7904,6 +7921,507 @@ function _travTrashReceipts(travNo) {
     try { if (deleteDocument({ docId: id }).success) n++; } catch (e) { /* one bad file, not a failed delete */ }
   });
   return n;
+}
+
+/* ══ A212 steps 3–6: submit, approve, and the money ════════════════════════════════════════════
+   Everything below turns a saved week into cash in the rep's hand. Three separate facts, written in
+   this order, and the order is the design:
+
+     1. the SIGNATURE   — a human act, stamped first and never lost to a downstream failure;
+     2. the PAYABLE     — a Type 'Other' payment request, already Approved, payee = the TRAVELLER;
+     3. the EXPENSE     — one Expenses row, so the cash appears in the P&L rather than only leaving.
+
+   If 2 or 3 fails the approval still stands and says so, and calling approve again retries only the
+   missing part. The alternative — refusing the whole approval on a Drive or sheet hiccup — throws
+   away a signature that was genuinely given, which is worse and harder to explain.
+
+   THE PAYABLE IS ALWAYS `Total Spent`. Not the float, not float − spent. Restoring an imprest float
+   to its target costs exactly what came out of it, and that identity survives an overspend: a rep who
+   spent 2,300 out of a 2,000 float is owed 2,300, of which 300 was their own money. */
+
+/** Everything that must be true before a week can be submitted. Returns null when it may go. */
+function _travSubmitBlockers(row, items, actorRole) {
+  var d = _travDerive(items);
+  if (!items.length) {
+    return { success: false, message: 'This week has no legs — add where you went before submitting.' };
+  }
+  if (d.total <= 0) {
+    return { success: false, message: 'Nothing was spent on this week, so there is nothing to replenish.' };
+  }
+  /* A float must have been ISSUED. A replenishment tops up a standing float; with no float there is
+     nothing to top up, and the cash would be an advance nobody approved. The message names the fix
+     rather than saying "not configured", because the rep cannot perform it. */
+  var flt = _travFloatFor(row['User'], row['Week Start']);
+  if (!flt.configured) {
+    return { success: false, needsFloat: true,
+      message: 'No travel float has been issued to ' + String(row['User']) + ' yet — the director sets ' +
+               'this up once, under Travel → Floats, before any week can be claimed.' };
+  }
+  return null;
+}
+
+/** The approved itinerary covering this week, if there is one. A213-era reality check: no rep has
+ *  ever filed one, so this cannot be a hard precondition without blocking everybody on day one —
+ *  hence the waiver below, which is load-bearing rather than an escape hatch. */
+function _travItineraryFor(user, weekStart) {
+  var wk = _dateStr(weekStart);
+  var found = null;
+  _rows('WeeklyItineraries').forEach(function (r) {
+    if (String(r['User']) !== String(user)) return;
+    if (_dateStr(r['Week Start']) !== wk) return;
+    if (!found || String(r['Status']) === 'Approved') found = r;
+  });
+  return found;
+}
+
+/** Draft/Rejected → Pending Accounting.
+ *
+ *  The itinerary rule: an APPROVED itinerary for the same week lets this through on its own. Anything
+ *  else needs a waiver, and a waiver can only be given by somebody who could approve the claim —
+ *  never by the traveller, whatever their role. That is the whole point of it. */
+function submitTravelReplenishment(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
+  var r = _travRow(p.travNo);
+  if (!r) return { success: false, message: 'Travel report not found.' };
+  if (!_travEditable(r['Status'])) {
+    return { success: false, message: 'This week has already been submitted (it is ' + r['Status'] + ').' };
+  }
+  var owns = _travMayActOn(r, p.actorName, p.actorRole);
+  if (owns) return owns;
+
+  var items = _travItems(p.travNo);
+  var blocked = _travSubmitBlockers(r, items, p.actorRole);
+  if (blocked) return blocked;
+
+  var itin = _travItineraryFor(r['User'], r['Week Start']);
+  var itinStatus = itin ? String(itin['Status'] || '') : '';
+  var waiverBy = '', waiverReason = '';
+  if (itinStatus !== 'Approved') {
+    var canWaive = _travMayActForAll(p.actorRole) &&
+                   String(p.actorName || '').trim() !== String(r['User'] || '').trim();
+    if (!String(p.waiverReason || '').trim() || !canWaive) {
+      return { success: false, needsWaiver: true, itineraryStatus: itinStatus || 'none',
+        message: itin
+          ? 'The weekly itinerary for this week is ' + itinStatus + ', not Approved. Accounting or the ' +
+            'director can still let this week through by recording a reason.'
+          : 'There is no approved weekly itinerary for this week. Accounting or the director can still ' +
+            'let it through by recording a reason.' };
+    }
+    waiverBy = String(p.actorName || '');
+    waiverReason = String(p.waiverReason || '').trim();
+  }
+
+  /* Re-derived at submit and frozen from here: the cover sheet is about to be signed, and every
+     figure on it has to stay reproducible even if a leg is edited later by some other path. */
+  var d = _travDerive(items);
+  var flt = _travFloatFor(r['User'], r['Week Start']);
+  _travSet(p.travNo, {
+    'Status': _TRAV_STAGES[0].status,
+    'Itinerary No': itin ? String(itin['Itinerary No']) : '',
+    'Itinerary Status At Submit': itinStatus || 'none',
+    'Waiver By': waiverBy, 'Waiver Reason': waiverReason,
+    'Float Amount': flt.amount,
+    'Total Spent': d.total, 'Transport Total': d.transport,
+    'No Receipt Total': d.noReceipt, 'Receipted Total': d.receipted,
+    'Item Count': d.count, 'Submitted At': _now(), 'Approval Note': '', 'Updated At': _now()
+  });
+  return { success: true, travNo: p.travNo, refNo: p.travNo, status: _TRAV_STAGES[0].status,
+    totalSpent: d.total, waived: !!waiverBy,
+    message: 'Submitted — with accounting first.' };
+}
+
+/** Advance one stage. On the LAST stage this is also what raises the money.
+ *
+ *  Re-entrant on purpose: an already-Approved week with no payment request against it can be
+ *  approved again, which retries the payable and the expense and touches nothing else. That is how a
+ *  transient failure in step 2 or 3 is repaired, and it is why neither of them may create anything
+ *  that is not idempotent. */
+function approveTravelReplenishment(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
+  var r = _travRow(p.travNo);
+  if (!r) return { success: false, message: 'Travel report not found.' };
+  var st = String(r['Status'] || '');
+
+  if (st === 'Approved') {
+    /* The stored PR number only counts if the row is still THERE. A payment request deleted after the
+       fact would otherwise leave a record that says it was paid, a rep who never was, and no way back
+       — the retry would look at the column, believe it, and refuse. */
+    if (_travLivePayable(r) && _travExpenseRow(p.travNo)) {
+      return { success: false, message: 'This week is already approved and paid out on ' +
+               String(r['Payment Request No']) + '.' };
+    }
+    if (!_travMayActForAll(p.actorRole)) {
+      return { success: false, message: 'Only accounting or the director can retry the payout.' };
+    }
+    var retry = _travRaiseMoney(_travRow(p.travNo), p);
+    return { success: true, travNo: p.travNo, refNo: p.travNo, status: 'Approved',
+      prNo: retry.prNo, expNo: retry.expNo, payableFailed: retry.failed,
+      message: retry.failed ? 'Retried, and it failed again: ' + retry.failed
+                            : 'Payout raised — ' + retry.prNo + '.' };
+  }
+
+  var refuse = _travMayApprove(r, p.actorName, p.actorRole);
+  if (refuse) return refuse;
+  var stage = _travStage(st);
+
+  /* Never sign blind. The items can be edited by no path once submitted, but the FLOAT can be raised
+     or ended underneath a pending claim, and the cover sheet prints it. */
+  var flt = _travFloatFor(r['User'], r['Week Start']);
+  if (Math.abs(flt.amount - _num(r['Float Amount'])) > 0.005 && !p.confirmFloatChanged) {
+    return { success: false, needsConfirm: 'floatChanged',
+      storedFloat: _num(r['Float Amount']), liveFloat: flt.amount,
+      message: 'The float behind this claim has changed since it was submitted: it was ' +
+               _travPeso(_num(r['Float Amount'])) + ' and is now ' + _travPeso(flt.amount) +
+               '. Approve against the figure on the signed sheet?' };
+  }
+
+  var patch = { 'Status': stage.next, 'Updated At': _now() };
+  patch[stage.by] = String(p.actorName || '');
+  patch[stage.at] = _now();
+  if (String(p.note || '').trim()) patch['Approval Note'] = String(p.note || '').trim();
+  _travSet(p.travNo, patch);
+
+  if (stage.next !== 'Approved') {
+    return { success: true, travNo: p.travNo, refNo: p.travNo, status: stage.next,
+      message: 'Approved — now with the director.' };
+  }
+
+  var money = _travRaiseMoney(_travRow(p.travNo), p);
+  return { success: true, travNo: p.travNo, refNo: p.travNo, status: 'Approved',
+    prNo: money.prNo, expNo: money.expNo, payableFailed: money.failed,
+    amount: _num(r['Total Spent']),
+    message: money.failed
+      ? 'Approved, BUT the payout could not be raised (' + money.failed + '). The signature stands — ' +
+        'use Approve again to retry it.'
+      : 'Approved — payment request ' + money.prNo + ' is ready to pay to ' + String(r['User']) + '.' };
+}
+
+/** Steps 5 and 6, together, both idempotent. Never throws: a failure is reported so the caller can
+ *  say the payout did not happen rather than implying it did. */
+/** The payment request this record points at, but only if it still exists. Blank means "nothing has
+ *  been raised", whatever the column says — see approveTravelReplenishment. */
+function _travLivePayable(row) {
+  var no = String((row && row['Payment Request No']) || '').trim();
+  if (!no) return '';
+  try { return _prRow(no) ? no : ''; } catch (e) { return ''; }
+}
+
+function _travRaiseMoney(row, p) {
+  var out = { prNo: _travLivePayable(row), expNo: '', failed: '' };
+  try {
+    if (!out.prNo) out.prNo = _travMintPayable(row, p);
+  } catch (e) {
+    out.failed = e.message || 'the payment request could not be created';
+    return out;
+  }
+  try {
+    out.expNo = _travPostExpense(row, p);
+  } catch (e) {
+    out.failed = e.message || 'the expense could not be posted';
+  }
+  return out;
+}
+
+/** The payable. Type 'Other', payee the TRAVELLER, amount `Total Spent`, minted already Approved.
+ *
+ *  Payee comes from the record, never from p.actorName — the actor here is the approver, and paying
+ *  the person who signed instead of the person who travelled is the one mistake in this file that
+ *  moves money to the wrong human. Same rule as _commSalesperson.
+ *
+ *  Already-Approved is the decision the walk-through settled: the travel chain has already collected
+ *  accounting's and the director's signatures against the same figure, and sending it back through
+ *  Admin → Management → Director would ask two of them to sign the identical claim twice. The stamps
+ *  are COPIED ACROSS rather than invented, so the PRF prints who really signed. */
+function _travMintPayable(row, p) {
+  var no = String(row['Trav No']);
+  var payee = String(row['User'] || '').trim();
+  var amount = _travPeso(row['Total Spent']);
+  if (!payee) throw new Error('the record does not say who travelled');
+  if (!(amount > 0)) throw new Error('the claim comes to nothing');
+
+  var spec = {
+    type: 'Other', payee: payee, currency: 'PHP', amount: amount,
+    purpose: 'Travel allowance replenishment · ' + _dateStr(row['Week Start']) + ' to ' +
+             _dateStr(row['Week End']) + ' · ' + no,
+    department: 'Sales', paymentMethod: 'Cash',
+    remarks: 'Raised automatically on approval of ' + no + '. Reimburses the imprest float.',
+    createdBy: String(row['User'] || ''), actorRole: String(row['User Role'] || 'sales'),
+    clientRef: 'trav-' + no                      // A145 idempotency: a retry returns the same PR
+  };
+  var made = createPaymentRequest(spec);
+  /* _refSeen remembers the clientRef in script properties, so once a PR has been raised for this week
+     the call returns that number without creating anything. If the row behind it has since been
+     deleted, obeying that memory would hand back a dead number and leave the rep unpaid — so on a
+     duplicate that resolves to nothing, mint properly. The record's own Payment Request No column,
+     checked under the script lock before we get here, is what stops this double-paying. */
+  if (made && made.success && made.duplicate && !_prRow(made.prNo)) {
+    delete spec.clientRef;
+    made = createPaymentRequest(spec);
+  }
+  if (!made || !made.success) throw new Error(made && made.message ? made.message : 'payment request refused');
+
+  /* The signatures the travel chain actually collected, carried onto the payable. Admin is stamped
+     with accounting's name because accounting IS the admin-equivalent stage on this chain — the PRF
+     prints three blocks and a blank one on a cash-out document invites a fourth signature. */
+  var acct = String(row['Acct Approved By'] || ''), dir = String(row['Dir Approved By'] || '');
+  _prSet(made.prNo, {
+    'Status': 'Approved',
+    'Admin Approved By': acct, 'Admin Approved At': row['Acct Approved At'] || _now(),
+    'Acct Approved By': acct, 'Acct Approved At': row['Acct Approved At'] || _now(),
+    'Mgmt Approved By': acct, 'Mgmt Approved At': row['Acct Approved At'] || _now(),
+    'Dir Approved By': dir, 'Dir Approved At': row['Dir Approved At'] || _now(),
+    'Approval Note': 'Approved on the travel allowance chain (' + no + ').'
+  });
+  _travSet(no, { 'Payment Request No': made.prNo, 'Updated At': _now() });
+  return made.prNo;
+}
+
+/** The Expenses row already posted for this week, if any. Legacy Key is the idempotency key and the
+ *  only one: an Exp No is minted per call and cannot be compared against. */
+function _travExpenseRow(travNo) {
+  var key = _travExpenseKey(travNo);
+  return _rows('Expenses').filter(function (r) { return String(r['Legacy Key'] || '') === key; })[0] || null;
+}
+function _travExpenseKey(travNo) { return 'TRAV:' + String(travNo); }
+
+/** One Expenses row per approved week. Without it the cash leaves the company and never reaches the
+ *  P&L: a Type 'Other' payment request marked Paid touches no ledger at all — see markPaymentRequestPaid,
+ *  which posts a journal only on the PO path.
+ *
+ *  The component columns are filled from the KINDS so the expense report can break a week down, and
+ *  they sum to Amount exactly — a mismatch there reads as a data-entry error to anyone auditing it. */
+function _travPostExpense(row, p) {
+  var no = String(row['Trav No']);
+  var existing = _travExpenseRow(no);
+  if (existing) return String(existing['Exp No']);
+
+  var buckets = { toll: 0, fuel: 0, meals: 0, load: 0, other: 0 };
+  _travItems(no).forEach(function (i) {
+    var amt = _travPeso(i['Amount']);
+    var kind = String(i['Kind'] || 'Transport');
+    if (kind === 'Parking/Toll') buckets.toll += amt;
+    else if (kind === 'Meals') buckets.meals += amt;
+    else if (kind === 'Load') buckets.load += amt;
+    else buckets.other += amt;                       // Transport · Tips/Porterage · Other
+  });
+  var total = _travPeso(row['Total Spent']);
+  /* Round every bucket before comparing. Accumulating 200 legs of 13.37 leaves float dust
+     (2673.999999999998), and writing that to a sheet cell is the kind of figure someone screenshots.
+     Any residual drift then lands in `other`, so the parts always add to the whole exactly. */
+  ['toll', 'fuel', 'meals', 'load', 'other'].forEach(function (k) { buckets[k] = _travPeso(buckets[k]); });
+  var parts = _travPeso(buckets.toll + buckets.fuel + buckets.meals + buckets.load + buckets.other);
+  if (Math.abs(parts - total) > 0.0001) buckets.other = _travPeso(buckets.other + (total - parts));
+
+  var made = addExpense({
+    date: _dateStr(row['Week End']) || _dateStr(row['Date']),
+    category: 'Transportation and Travel',
+    voucherNo: String(row['Payment Request No'] || no),
+    description: 'Travel allowance replenishment · ' + String(row['User'] || '') + ' · ' +
+                 _dateStr(row['Week Start']) + ' to ' + _dateStr(row['Week End']),
+    toll: buckets.toll, fuel: buckets.fuel, meals: buckets.meals,
+    loadBalance: buckets.load, other: buckets.other, amount: total,
+    notes: String(row['Purpose'] || ''),
+    createdBy: String(p && p.actorName || ''), legacyKey: _travExpenseKey(no)
+  });
+  if (!made || !made.success) throw new Error('the expense row was refused');
+  return made.expNo;
+}
+
+/** Any pending stage → Rejected, with a reason. Rejecting releases nothing and costs nothing: no
+ *  money has been raised at this point, by construction. */
+function rejectTravelReplenishment(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
+  var r = _travRow(p.travNo);
+  if (!r) return { success: false, message: 'Travel report not found.' };
+  var st = String(r['Status'] || '');
+  if (st.indexOf('Pending') !== 0) {
+    return { success: false, message: 'Only a pending week can be rejected (this one is ' + st + ').' };
+  }
+  if (!_travMayActForAll(p.actorRole)) {
+    return { success: false, message: 'You are not an approver for travel replenishments.' };
+  }
+  if (!String(p.reason || '').trim()) {
+    return { success: false, message: 'Give a reason — the rep has to know what to correct.' };
+  }
+  _travSet(p.travNo, { 'Status': 'Rejected', 'Approval Note': String(p.reason).trim(),
+                       'Updated At': _now() });
+  return { success: true, travNo: p.travNo, refNo: p.travNo, status: 'Rejected',
+    message: 'Sent back to ' + String(r['User'] || 'the rep') + ' for correction.' };
+}
+
+/** Reopen for editing, clearing every stamp — an approval must never survive a change to the claim it
+ *  was given for.
+ *
+ *  REFUSED once a payment request exists. That is the dead end that matters: reopening would leave an
+ *  approved payable for a figure the rep is now free to edit, and nothing downstream would notice.
+ *  Cancel or reject the payment request first, and the way back is deliberately manual. */
+function reviseTravelReplenishment(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
+  var r = _travRow(p.travNo);
+  if (!r) return { success: false, message: 'Travel report not found.' };
+  var st = String(r['Status'] || '');
+  if (_travEditable(st)) return { success: false, message: 'This week is already editable.' };
+
+  var prNo = String(r['Payment Request No'] || '').trim();
+  if (prNo) {
+    var pr = _prRow(prNo);
+    var prStatus = pr ? String(pr['Status'] || '') : 'missing';
+    if (pr && prStatus !== 'Rejected' && prStatus !== 'Cancelled') {
+      return { success: false, message: 'Payment request ' + prNo + ' has already been raised for this ' +
+               'week (it is ' + prStatus + '). Reject or cancel it first — reopening now would leave ' +
+               'money approved against a claim that can then be edited.' };
+    }
+  }
+  var owns = _travMayActOn(r, p.actorName, p.actorRole);
+  if (owns) return owns;
+  /* A rep may withdraw their own week only while NOTHING has been signed. Once accounting has signed,
+     discarding that signature is an approver's decision, not the claimant's. */
+  if (!_travMayActForAll(p.actorRole) && st !== _TRAV_STAGES[0].status) {
+    return { success: false, message: 'Accounting has already signed this week — ask them to reopen it.' };
+  }
+  _travSet(p.travNo, {
+    'Status': 'Draft', 'Acct Approved By': '', 'Acct Approved At': '',
+    'Dir Approved By': '', 'Dir Approved At': '', 'Approval Note': '', 'Submitted At': '',
+    'Waiver By': '', 'Waiver Reason': '', 'Payment Request No': '', 'Updated At': _now()
+  });
+  return { success: true, travNo: p.travNo, refNo: p.travNo, status: 'Draft',
+    message: 'Reopened as a draft — every signature on it has been cleared.' };
+}
+
+/* ── A212 step 4: the float itself ───────────────────────────────────────────────────────────────
+   The float is an ENTITLEMENT — how much cash this person is trusted to hold — and the cash handed
+   over to start it is a separate fact, raised through the ordinary payment-request chain like any
+   other disbursement. Keeping them apart is what makes a raise possible without moving money, and a
+   replacement of lost cash possible without changing the entitlement. */
+
+/** Director-only. Effective-dated: a raise ENDS the current row the day before and opens a new one,
+ *  so _travFloatFor keeps answering correctly for weeks that have already been signed. */
+function setTravelFloat(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
+  if (String(p.actorRole || '').toLowerCase() !== 'director') {
+    return { success: false, message: 'Only the director sets travel floats.' };
+  }
+  var user = String(p.user || '').trim();
+  if (!user) return { success: false, message: 'Whose float is this?' };
+  var amount = _travPeso(p.amount);
+  if (!(amount > 0)) return { success: false, message: 'A float has to be worth something.' };
+  var from = _dateStr(p.effectiveFrom || _now());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return { success: false, message: 'A valid effective date is required.' };
+
+  var current = _travFloatFor(user, from);
+  if (current.row && String(current.row['Amount']) === String(amount) &&
+      String(current.row['Status']) === 'Active') {
+    return { success: true, floatKey: String(current.row['Float Key']), unchanged: true,
+      message: user + ' already holds a ' + _travPeso(amount) + ' float.' };
+  }
+  var key = _nextNumber('TravelFloats', 1, 'TF');
+  _append('TravelFloats', [key, user, amount, from, '', '', 'Active',
+    String(p.note || ''), String(p.actorName || ''), _now()]);          // ← 10 values
+  _travNormaliseFloats(user);
+  return { success: true, floatKey: key, user: user, amount: amount, effectiveFrom: from,
+    replaced: current.row ? String(current.row['Float Key']) : '',
+    message: user + ' now holds a ' + _travPeso(amount) + ' travel float from ' + from + '.' };
+}
+
+/** One person's floats made into a clean timeline: each row ends the day before the next one starts,
+ *  and only the last is Active.
+ *
+ *  Closing "the current row" at the point of insert is not enough, and that is not hypothetical — a
+ *  float BACKDATED before an existing one leaves both open-ended, because at the backdated date the
+ *  later row has not started and so is not "current". Two open-ended Active rows make _travFloatFor's
+ *  answer depend on the order the sheet happens to be in, which is the kind of bug that shows up as a
+ *  cover sheet printing the wrong float months later. Normalising the whole timeline is the only
+ *  version of this that holds for every insertion order. */
+function _travNormaliseFloats(user) {
+  var rows = _rows('TravelFloats').filter(function (r) {
+    return String(r['User']) === String(user) && String(r['Status'] || '') !== 'Cancelled';
+  });
+  /* By date, then by position on the sheet, so two rows carrying the SAME effective date resolve to
+     the later-written one. That is not hypothetical: the director correcting a figure they just
+     entered produces exactly this, and naively ending each row the day before the next one starts
+     would then give the first a window that closes before it opens. */
+  rows.sort(function (a, b) {
+    var d = String(_dateStr(a['Effective From'])).localeCompare(String(_dateStr(b['Effective From'])));
+    return d !== 0 ? d : (a.rowIndex - b.rowIndex);
+  });
+  for (var i = 0; i < rows.length; i++) {
+    var from = _dateStr(rows[i]['Effective From']);
+    /* The next row that starts on a LATER day. Anything starting on the same day supersedes this one
+       outright rather than shortening it — it never applied for a single day. */
+    var nextFrom = '';
+    var superseded = false;
+    for (var j = i + 1; j < rows.length; j++) {
+      var f = _dateStr(rows[j]['Effective From']);
+      if (f === from) { superseded = true; break; }
+      nextFrom = f; break;
+    }
+    var wantTo = superseded ? '' : (nextFrom ? _travDayBefore(nextFrom) : '');
+    var wantStatus = superseded ? 'Superseded' : (nextFrom ? 'Ended' : 'Active');
+    var key = String(rows[i]['Float Key']);
+    if (String(_dateStr(rows[i]['Effective To']) || '') !== String(wantTo || '')) {
+      _setCellByKey('TravelFloats', 'Float Key', key, 'Effective To', wantTo);
+    }
+    if (String(rows[i]['Status'] || '') !== wantStatus) {
+      _setCellByKey('TravelFloats', 'Float Key', key, 'Status', wantStatus);
+    }
+  }
+}
+
+function _travDayBefore(ymd) {
+  var parts = String(ymd).split('-');
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() - 1);
+  return Utilities.formatDate(d, 'Asia/Manila', 'yyyy-MM-dd');
+}
+
+/** The cash that STARTS a float, raised as an ordinary Draft payment request so it collects the
+ *  normal three signatures. Unlike a replenishment this is not a reimbursement of money already
+ *  spent — it is an advance — so it is emphatically NOT auto-approved.
+ *  Idempotent on the Float Key: one issuance per float, and the row records which. */
+function requestTravelFloatCash(p) {
+  p = p || {};   // hand-callable from the Apps Script editor; _dispatch always passes an object
+  if (['director', 'accounting'].indexOf(String(p.actorRole || '').toLowerCase()) < 0) {
+    return { success: false, message: 'Only the director or accounting can request float cash.' };
+  }
+  var key = String(p.floatKey || '').trim();
+  var f = _rows('TravelFloats').filter(function (r) { return String(r['Float Key']) === key; })[0];
+  if (!f) return { success: false, message: 'Float not found.' };
+  if (String(f['Issue PR No'] || '').trim()) {
+    return { success: false, message: 'The cash for this float was already requested on ' +
+             String(f['Issue PR No']) + '.' };
+  }
+  var made = createPaymentRequest({
+    type: 'Other', payee: String(f['User']), currency: 'PHP', amount: _travPeso(f['Amount']),
+    purpose: 'Travel allowance float · ' + String(f['User']) + ' · effective ' + _dateStr(f['Effective From']),
+    department: 'Sales', paymentMethod: 'Cash',
+    remarks: 'Imprest float advance (' + key + '). Replenished weekly against approved travel reports.',
+    createdBy: String(p.actorName || ''), actorRole: String(p.actorRole || ''),
+    clientRef: 'travfloat-' + key
+  });
+  if (!made || !made.success) return made || { success: false, message: 'Payment request refused.' };
+  _setCellByKey('TravelFloats', 'Float Key', key, 'Issue PR No', made.prNo);
+  _setCellByKey('TravelFloats', 'Float Key', key, 'Updated At', _now());
+  return { success: true, floatKey: key, prNo: made.prNo, refNo: made.prNo,
+    message: 'Payment request ' + made.prNo + ' created as a draft — submit it for the usual approvals.' };
+}
+
+/** Every float on file, newest first. Oversight sees everyone's; a rep sees their own. */
+function getTravelFloats(p) {
+  var sc = _travReadScope(p);
+  if (sc.blocked) return sc.blocked;
+  var rows = _rows('TravelFloats');
+  if (sc.scope) rows = rows.filter(function (r) { return String(r['User']) === String(sc.scope); });
+  rows.sort(function (a, b) {
+    return String(b['Effective From']).localeCompare(String(a['Effective From']));
+  });
+  return { success: true, data: rows.map(function (r) {
+    return { floatKey: String(r['Float Key']), user: String(r['User'] || ''),
+      amount: _num(r['Amount']), effectiveFrom: _dateStr(r['Effective From']),
+      effectiveTo: _dateStr(r['Effective To']), issuePrNo: String(r['Issue PR No'] || ''),
+      status: String(r['Status'] || ''), note: String(r['Note'] || ''),
+      updatedBy: String(r['Updated By'] || ''), updatedAt: r['Updated At'], rowIndex: r.rowIndex };
+  }) };
 }
 
 /* ── A214: the receipt photos ────────────────────────────────────────────────────────────────────
@@ -8067,6 +8585,12 @@ var _MODULE_MAP = {
   // A212 — every writer, deletes included. This is money leaving the company every week.
   saveTravelReplenishment: ['Travel Allowance', 'Saved'],
   deleteTravelReplenishment: ['Travel Allowance', 'Deleted'],
+  submitTravelReplenishment: ['Travel Allowance', 'Submitted'],
+  approveTravelReplenishment: ['Travel Allowance', 'Approved'],
+  rejectTravelReplenishment: ['Travel Allowance', 'Rejected'],
+  reviseTravelReplenishment: ['Travel Allowance', 'Reopened'],
+  setTravelFloat: ['Travel Allowance', 'Float Set'],
+  requestTravelFloatCash: ['Travel Allowance', 'Float Cash Requested'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
@@ -8952,6 +9476,12 @@ var HANDLERS = {
   getTravelReplenishments: getTravelReplenishments,
   saveTravelReplenishment: saveTravelReplenishment,
   deleteTravelReplenishment: deleteTravelReplenishment,
+  submitTravelReplenishment: submitTravelReplenishment,                                             // A212-3
+  approveTravelReplenishment: approveTravelReplenishment,
+  rejectTravelReplenishment: rejectTravelReplenishment,
+  reviseTravelReplenishment: reviseTravelReplenishment,
+  getTravelFloats: getTravelFloats, setTravelFloat: setTravelFloat,                                 // A212-4
+  requestTravelFloatCash: requestTravelFloatCash,
   getTravelReceipts: getTravelReceipts,                                                             // A214
   getReceiving: getReceiving, createReceiving: createReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
@@ -9030,6 +9560,12 @@ var MUTATIONS = {
   // A212 — under the script lock like every other writer, so two tabs cannot create two reports for
   // the same (user, week) pair.
   saveTravelReplenishment: 1, deleteTravelReplenishment: 1,
+  /* A212-3/4/5 — approveTravelReplenishment mints a payment request AND an Expenses row, so two tabs
+     racing it would raise the cash twice. Both halves are idempotent as well; the lock is what makes
+     the idempotency check and the write one atomic step rather than two. */
+  submitTravelReplenishment: 1, approveTravelReplenishment: 1,
+  rejectTravelReplenishment: 1, reviseTravelReplenishment: 1,
+  setTravelFloat: 1, requestTravelFloatCash: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,

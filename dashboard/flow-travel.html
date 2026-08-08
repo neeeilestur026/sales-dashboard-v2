@@ -36,10 +36,14 @@
   .tv-chip.rejected { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
 
   /* leg rows */
-  #tvLegs { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  #tvLegs th { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #64748b);
+  #tvLegs, #tvQueue { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  #tvLegs th, #tvQueue th { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #64748b);
     text-align: left; padding: .35rem .25rem; border-bottom: 1px solid var(--border, #e2e8f0); }
-  #tvLegs td { padding: .28rem .2rem; vertical-align: middle; }
+  #tvLegs td, #tvQueue td { padding: .28rem .2rem; vertical-align: middle; }
+  #tvQueue { table-layout: auto; }
+  #tvQueue td { font-size: .84rem; padding: .45rem .3rem; border-bottom: 1px solid var(--border, #e2e8f0); }
+  #tvQueue td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #tvQueue tr.on td { background: #eef2ff; }
   #tvLegs input, #tvLegs select { width: 100%; padding: .38rem .45rem; border: 1px solid var(--border, #e2e8f0);
     border-radius: 8px; font: inherit; font-size: .8rem; }
   #tvLegs td.num input { text-align: right; }
@@ -96,6 +100,33 @@
       <div class="tv-gate" id="tvGateMsg"></div>
     </div>
 
+    <!-- A212-9 · the approver's queue. Hidden entirely for a rep; the same page, because the
+         document an approver signs is the one this page already renders live. -->
+    <div class="tv-pane" id="tvQueueCard" style="display:none;margin-bottom:1rem;">
+      <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
+        <h3 style="margin:0;">Waiting for you</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="tv-chip" id="tvQueueCount">—</span>
+          <!-- The workbook's own sample traveller is the accounting staffer, so an approver needs a
+               way into their own week as well as everybody else's. -->
+          <button class="btn btn-sm" id="tvMine">File my own week</button>
+        </div>
+      </div>
+      <p class="tv-note" style="margin-top:.2rem;">
+        Open one to read the document before you sign it — the pack on the right is the same one that
+        gets filed. Approving at the last stage raises the payment request automatically.
+      </p>
+      <div style="overflow-x:auto;margin-top:.6rem;">
+        <table id="tvQueue">
+          <thead><tr>
+            <th>Report</th><th>Who</th><th>Week</th><th style="text-align:right;">Claim</th>
+            <th>Stage</th><th></th>
+          </tr></thead>
+          <tbody id="tvQueueBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="tv-wrap" id="tvWrap">
       <!-- ── left: the form ─────────────────────────────────────────── -->
       <div>
@@ -107,8 +138,15 @@
             <button class="btn btn-sm" id="tvLast">Last week</button>
             <span class="tv-chip draft" id="tvStatus">Draft</span>
             <span style="flex:1;"></span>
+            <button class="btn btn-sm" id="tvReopen" style="display:none;">Reopen</button>
+            <button class="btn btn-sm" id="tvReject" style="display:none;">Send back</button>
+            <button class="btn btn-sm btn-primary" id="tvApprove" style="display:none;">Approve</button>
+            <button class="btn btn-sm btn-primary" id="tvSubmit" style="display:none;">Submit</button>
             <button class="btn btn-sm btn-primary" id="tvSave">Save draft</button>
           </div>
+
+          <!-- What happened to this week: who signed, when, and where the money went. -->
+          <div id="tvTrail" class="tv-note" style="display:none;margin-bottom:.7rem;"></div>
 
           <div class="tv-grid">
             <div>

@@ -35,10 +35,16 @@ let tvRcptTarget = null;
    information, but this map is what the sweep acts on: it only ever holds ids this session actually
    SAW, so a failed read can never make the sweep delete something. */
 let tvReceiptDocs = {};
+/* A212-9 — the approver's half. An approver reads OTHER people's weeks, so the page needs a second
+   identity: whose week is on screen (tvViewUser) as distinct from who is looking at it. A rep never
+   leaves their own name and never sees the queue. */
+let tvQueue = [];
+let tvViewUser = '';
+let tvViewNo = '';
 
 const TV_DEBOUNCE = 500;
 const TV_WAKE_AFTER = 4000;
-const TV_MIN_FLOW_VERSION = 118;   // A214 — getTravelReceipts arrived with 118
+const TV_MIN_FLOW_VERSION = 119;   // A212-3/4/5 — the chain and the money arrived with 119
 const TV_KINDS = ['Transport', 'Meals', 'Load', 'Tips/Porterage', 'Parking/Toll', 'Other'];
 /* The sum of every attached receipt, not each one. FLOW_DOC_MAX_MB caps a single file and nothing
    caps the total — but the 16MB limit is on the WHOLE request and base64 inflates by a third, so
@@ -51,13 +57,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-travel');
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-travel.html');
 
-  document.getElementById('tvPrev').addEventListener('click', () => { tvOffset--; tvLoad(); });
-  document.getElementById('tvNext').addEventListener('click', () => { tvOffset++; tvLoad(); });
-  document.getElementById('tvLast').addEventListener('click', () => { tvOffset = -1; tvLoad(); });
+  /* Moving off the week a queue row was opened for stops pinning to that report — otherwise the range
+     in the bar says one week while the form below still shows another one's legs. */
+  const week = (fn) => () => { tvViewNo = ''; fn(); tvLoad(); };
+  document.getElementById('tvPrev').addEventListener('click', week(() => tvOffset--));
+  document.getElementById('tvNext').addEventListener('click', week(() => tvOffset++));
+  document.getElementById('tvLast').addEventListener('click', week(() => { tvOffset = -1; }));
   document.getElementById('tvAdd').addEventListener('click', tvAddLeg);
   document.getElementById('tvSave').addEventListener('click', () => tvSave(false));
   document.getElementById('tvPrefill').addEventListener('click', tvPrefill);
   document.getElementById('tvRcptInput').addEventListener('change', tvReceiptChosen);
+  document.getElementById('tvSubmit').addEventListener('click', tvSubmit);
+  document.getElementById('tvApprove').addEventListener('click', () => tvApprove(null));
+  document.getElementById('tvReject').addEventListener('click', tvReject);
+  document.getElementById('tvReopen').addEventListener('click', tvReopen);
+  document.getElementById('tvMine').addEventListener('click', async () => {
+    tvViewNo = ''; tvViewUser = ''; tvOffset = -1;
+    document.querySelector('.tv-wrap').style.display = '';
+    await tvLoad();
+    tvRenderQueue();
+  });
   ['tvPosition', 'tvFloat', 'tvPurpose'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.addEventListener('input', tvOnChange); el.addEventListener('change', tvOnChange); }
@@ -77,8 +96,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('tvSave').disabled = true;
     document.getElementById('tvPrefill').disabled = true;
   }
+  if (tvIsApprover()) {
+    document.getElementById('tvQueueCard').style.display = '';
+    /* An approver arriving here has no week of their own to file. Starting on somebody else's blank
+       week would be a confusing page, so the form waits for a queue row to be opened. */
+    document.querySelector('.tv-wrap').style.display = 'none';
+    await tvLoadQueue();
+  }
   await tvLoad();
 });
+
+/* Accounting and the director SIGN; admin and management may read but never act — the same positive
+   allow-lists as _TRAV_OVERSIGHT_READ / _TRAV_OVERSIGHT_ACT, which are the real boundary. This is
+   only what the page shows. */
+function tvRole() { return String((tvSession && tvSession.role) || '').toLowerCase(); }
+function tvIsApprover() { return ['accounting', 'director'].indexOf(tvRole()) >= 0; }
+function tvIsOversight() { return ['accounting', 'director', 'management', 'admin'].indexOf(tvRole()) >= 0; }
 
 function tvWeek() {
   return (typeof flowWeekDates === 'function') ? flowWeekDates(flowToday(), tvOffset) : [];
@@ -97,9 +130,13 @@ async function tvLoad() {
   tvReceiptDocs = {};
   if (tvReady && wk.length) {
     try {
-      const res = await postFlow('getTravelReplenishments', { weekStart: wk[0] });
+      /* `user` is only honoured for oversight — the server pins a rep to their own name whatever is
+         sent, so passing it is safe and passing nothing would give an approver every rep's week. */
+      const res = await postFlow('getTravelReplenishments',
+        tvViewUser ? { weekStart: wk[0], user: tvViewUser } : { weekStart: wk[0] });
       const rows = (res && res.data) || [];
       tvRecord = rows.filter(r => String(r.weekStart) === wk[0])[0] || null;
+      if (tvViewNo) tvRecord = rows.filter(r => String(r.travNo) === tvViewNo)[0] || tvRecord;
     } catch (e) { /* a page that cannot read still has to let the rep type */ }
   }
   if (tvRecord) {
@@ -154,6 +191,78 @@ async function tvLoadReceipts() {
   if (painted) tvPreviewReceipts = true;
 }
 
+/* ── A212-9: the approver's queue ──────────────────────────────────────────────────────────────── */
+
+/** Which stage is this role's to sign? Mirrors _TRAV_STAGES; the server decides, this only filters
+ *  what is worth showing. Both stages are listed for both roles so an approver can still SEE what is
+ *  sitting with the other one — a queue that hides the other half makes a stalled week invisible. */
+function tvMyStage() {
+  return tvRole() === 'accounting' ? 'Pending Accounting'
+       : tvRole() === 'director' ? 'Pending Director' : '';
+}
+
+async function tvLoadQueue() {
+  if (!tvReady) { tvQueueMsg('The backend has not been updated yet, so there is nothing to sign.'); return; }
+  try {
+    const r = await postFlow('getTravelReplenishments', {});
+    tvQueue = ((r && r.data) || []).filter(x => String(x.status || '').indexOf('Pending') === 0);
+  } catch (e) { tvQueue = []; tvQueueMsg('Could not read the queue — ' + e.message); return; }
+  tvRenderQueue();
+}
+
+function tvQueueMsg(text) {
+  document.getElementById('tvQueueBody').innerHTML =
+    '<tr><td colspan="6" style="padding:1rem;color:#64748b;">' + flowEsc(text) + '</td></tr>';
+  document.getElementById('tvQueueCount').textContent = '—';
+}
+
+function tvRenderQueue() {
+  const mine = tvMyStage();
+  const body = document.getElementById('tvQueueBody');
+  const waiting = tvQueue.filter(x => x.status === mine);
+  document.getElementById('tvQueueCount').textContent =
+    waiting.length ? waiting.length + ' to sign' : 'nothing to sign';
+  if (!tvQueue.length) {
+    tvQueueMsg('No travel reports are waiting. They appear here the moment a rep submits one.');
+    return;
+  }
+  /* Yours first, then the ones sitting with the other approver — visible, but not actionable. */
+  const rows = tvQueue.slice().sort((a, b) =>
+    (a.status === mine ? 0 : 1) - (b.status === mine ? 0 : 1) ||
+    String(a.weekStart).localeCompare(String(b.weekStart)));
+  body.innerHTML = rows.map(x => {
+    const isMine = x.status === mine;
+    return `<tr class="${x.travNo === tvViewNo ? 'on' : ''}">
+      <td>${flowEsc(x.travNo)}</td>
+      <td>${flowEsc(x.user)}</td>
+      <td>${flowEsc(x.weekStart)} – ${flowEsc(x.weekEnd)}</td>
+      <td class="num">${flowMoney(x.totalSpent, 'PHP')}</td>
+      <td><span class="tv-chip pending">${flowEsc(x.status)}</span></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-sm" onclick="tvOpen('${flowEsc(x.travNo)}')">${isMine ? 'Review &amp; sign' : 'Read'}</button>
+      </td></tr>`;
+  }).join('');
+}
+
+/** Open somebody else's week in the form beside the document. Read-only by construction: tvEditable
+ *  is false for anything past Draft, so every input is already disabled. */
+async function tvOpen(travNo) {
+  const rec = tvQueue.filter(x => String(x.travNo) === String(travNo))[0];
+  if (!rec) return;
+  tvViewNo = String(travNo);
+  tvViewUser = String(rec.user || '');
+  document.querySelector('.tv-wrap').style.display = '';
+  /* Jump the week selector to the week this report is FOR, so the range in the bar is not a lie. */
+  const wk = (typeof flowWeekDates === 'function') ? flowWeekDates(flowToday(), 0) : [];
+  if (wk.length) {
+    const days = Math.round((new Date(rec.weekStart) - new Date(wk[0])) / 86400000);
+    tvOffset = Math.round(days / 7);
+  }
+  await tvLoad();
+  tvRenderQueue();
+  document.querySelector('.tv-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function tvChip() {
   const c = document.getElementById('tvStatus');
   const st = (tvRecord && tvRecord.status) || 'Draft';
@@ -161,10 +270,119 @@ function tvChip() {
   c.className = 'tv-chip ' + (st === 'Approved' ? 'approved'
     : st === 'Rejected' ? 'rejected' : st.indexOf('Pending') === 0 ? 'pending' : 'draft');
   const locked = !!(tvRecord && ['Draft', 'Rejected', ''].indexOf(st) < 0);
+  const mine = !tvViewUser || tvViewUser === tvWho();
   ['tvAdd', 'tvSave', 'tvPrefill'].forEach(id => {
     const b = document.getElementById(id);
-    if (b) b.disabled = locked || !tvReady;
+    if (b) b.disabled = locked || !tvReady || !mine;
   });
+
+  /* Which of the five buttons make sense right now. Every one of these is re-checked on the server —
+     this only spares people from pressing something that will be refused. */
+  const saved = !!(tvRecord && tvRecord.travNo);
+  const pending = st.indexOf('Pending') === 0;
+  const isMyStage = pending && st === tvMyStage() &&
+                    String(tvRecord.user || '') !== tvWho();     // never your own claim
+  const show = (id, on) => {
+    const b = document.getElementById(id);
+    if (b) { b.style.display = on ? '' : 'none'; b.disabled = !tvReady; }
+  };
+  show('tvSubmit', tvReady && saved && mine && !locked && flowNum(tvRecord.totalSpent) > 0);
+  show('tvApprove', tvReady && isMyStage);
+  show('tvReject', tvReady && pending && tvIsApprover());
+  /* An approver may reopen at any stage — including an approved week, where the server refuses while
+     a live payment request stands and the refusal is how they learn why. A REP may only withdraw
+     before anyone has signed, so past that point the button is hidden rather than shown to fail. */
+  show('tvReopen', tvReady && saved &&
+       (tvIsApprover() ? (pending || st === 'Approved')
+                       : (mine && st === 'Pending Accounting')));
+  document.getElementById('tvSave').style.display = (locked || !mine) ? 'none' : '';
+
+  tvRenderTrail();
+}
+
+/** Who signed, when, and where the money went. Only ever states what the record actually says. */
+function tvRenderTrail() {
+  const el = document.getElementById('tvTrail');
+  if (!el) return;
+  const r = tvRecord;
+  if (!r || !r.travNo) { el.style.display = 'none'; return; }
+  const bits = [];
+  bits.push('<b>' + flowEsc(r.travNo) + '</b>');
+  if (tvViewUser && tvViewUser !== tvWho()) bits.push('filed by ' + flowEsc(r.user));
+  if (r.submittedAt) bits.push('submitted ' + flowEsc(flowDate(r.submittedAt)));
+  if (r.acctApprovedBy) bits.push('accounting ✓ ' + flowEsc(r.acctApprovedBy));
+  if (r.dirApprovedBy) bits.push('director ✓ ' + flowEsc(r.dirApprovedBy));
+  if (r.waiverBy) bits.push('itinerary waived by ' + flowEsc(r.waiverBy) +
+                            ' (' + flowEsc(r.waiverReason) + ')');
+  if (r.prNo) bits.push('paid on <b>' + flowEsc(r.prNo) + '</b>');
+  if (r.status === 'Rejected' && r.approvalNote) {
+    bits.push('<span style="color:#b91c1c;">sent back: ' + flowEsc(r.approvalNote) + '</span>');
+  }
+  el.innerHTML = bits.join(' &nbsp;·&nbsp; ');
+  el.style.display = '';
+}
+
+/* ── The four actions. Each one re-reads from the server afterwards rather than patching the local
+      record: the server may have done more than was asked (raised a payable, posted an expense), and
+      guessing at that is how a screen starts disagreeing with the sheet. ─────────────────────────── */
+
+async function tvSubmit() {
+  if (!tvRecord || !tvRecord.travNo) return;
+  const spent = flowMoney(tvRecord.totalSpent, 'PHP');
+  if (!confirm('Submit this week for ' + spent + '?\n\nOnce accounting signs it you will not be able ' +
+               'to edit it without asking them to reopen it.')) return;
+  await tvAct('submitTravelReplenishment', { travNo: tvRecord.travNo }, async (res) => {
+    if (res.needsWaiver && tvIsApprover()) {
+      const why = prompt('There is no approved weekly itinerary for this week (' +
+        (res.itineraryStatus || 'none') + ').\n\nYou can still let it through — record why:');
+      if (!why || !why.trim()) return false;
+      return { travNo: tvRecord.travNo, waiverReason: why.trim() };
+    }
+    return false;
+  });
+}
+
+async function tvApprove(travNo) {
+  const no = travNo || (tvRecord && tvRecord.travNo);
+  if (!no) return;
+  await tvAct('approveTravelReplenishment', { travNo: no }, async (res) => {
+    if (res.needsConfirm === 'floatChanged') {
+      return confirm(res.message) ? { travNo: no, confirmFloatChanged: true } : false;
+    }
+    return false;
+  });
+}
+
+async function tvReject() {
+  if (!tvRecord || !tvRecord.travNo) return;
+  const why = prompt('Send this back to ' + (tvRecord.user || 'the rep') + '. What needs correcting?');
+  if (!why || !why.trim()) return;
+  await tvAct('rejectTravelReplenishment', { travNo: tvRecord.travNo, reason: why.trim() });
+}
+
+async function tvReopen() {
+  if (!tvRecord || !tvRecord.travNo) return;
+  if (!confirm('Reopen this week as a draft?\n\nEvery signature on it will be cleared.')) return;
+  await tvAct('reviseTravelReplenishment', { travNo: tvRecord.travNo });
+}
+
+/** One place where a travel action is sent, its answer read, and the page put back in step.
+ *  `onRetry` gets the refusal and may return a NEW parameter set to try once — that is how the
+ *  waiver and the changed-float confirmations work without three copies of this function. */
+async function tvAct(action, params, onRetry) {
+  try {
+    let res = await postFlow(action, params);
+    if (!res.success && onRetry) {
+      const retry = await onRetry(res);
+      if (retry) res = await postFlow(action, retry);
+    }
+    if (!res.success) { flowMsg('tvMsg', res.message, false); return; }
+    /* payableFailed is a SUCCESS that did not do everything it says on the tin. Saying so plainly
+       beats a green message that quietly leaves nobody paid. */
+    flowMsg('tvMsg', res.message, !res.payableFailed);
+    if (tvIsApprover()) await tvLoadQueue();
+    await tvLoad();
+  } catch (e) { flowMsg('tvMsg', e.message, false); }
 }
 
 function tvEditable() {
@@ -404,6 +622,10 @@ function tvWriteRecord(wk) {
 
 async function tvSave(quiet) {
   if (!tvReady || !tvEditable()) return;
+  /* An approver reading somebody else's week must not be able to write to it, even though the server
+     would let oversight through — saving here would silently rewrite the rep's legs from a form the
+     approver never filled in. */
+  if (tvViewUser && tvViewUser !== tvWho()) return;
   const wk = tvWeek();
   try {
     const res = await tvWriteRecord(wk);
