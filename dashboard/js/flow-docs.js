@@ -15,7 +15,9 @@ function _docsModalEl() {
   if (el) return el;
   el = document.createElement('div');
   el.id = 'flowDocsModal';
-  el.className = 'flow-modal-overlay';
+  /* flow.css:49-50 makes .flow-modal-overlay display:none and only .open reveals it, so the
+     class alone builds an invisible modal. */
+  el.className = 'flow-modal-overlay open';
   el.innerHTML = `
     <div class="flow-modal" style="max-width:620px;">
       <h3>Documents</h3>

@@ -5803,7 +5803,8 @@ function getWeeklyItineraries(p) {
     var its = allItems.filter(function (i) { return String(i['Itinerary No']) === String(r['Itinerary No']); })
       .sort(function (a, b) { return _num(a['Seq']) - _num(b['Seq']); })
       .map(function (i) {
-        return { seq: _num(i['Seq']), day: i['Day'], date: _dateStr(i['Date']), plannedTime: i['Planned Time'],
+        return { seq: _num(i['Seq']), day: i['Day'], date: _dateStr(i['Date']),
+                 plannedTime: _timeOfDay(i['Planned Time']),
                  company: i['Company'], personToMeet: i['Person To Meet'], cityArea: i['City Area'],
                  purpose: i['Purpose'], agenda: i['Agenda'], expectedOutcome: i['Expected Outcome'] };
       });
@@ -8753,6 +8754,32 @@ function _dateStr(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var s = String(v || '');
   return s.length >= 10 ? s.substring(0, 10) : s;
+}
+
+/** A215 — a TIME-OF-DAY cell as something a person can read.
+ *
+ *  Sheets stores a time-only value as a fraction of a day anchored to 1899-12-30, so Apps Script
+ *  hands it back as a Date and JSON.stringify sends the browser '1899-12-30T02:00:00.000Z'. That
+ *  string was going straight into the itinerary table, where the planned time of a client visit
+ *  read as an 1899 timestamp.
+ *
+ *  The +8 is applied to the UTC parts DIRECTLY rather than through the timezone database, because
+ *  Manila's 1899 offset in tzdata is Local Mean Time (+08:04), which would shift every time by four
+ *  minutes. The rest of this system treats Manila as exactly +8 and so does this.
+ *
+ *  A value the user typed as text ('9:00 AM', 'after lunch') is returned untouched — it is already
+ *  what they meant. */
+function _timeOfDay(v) {
+  /* Duck-typed rather than `instanceof Date`: that test compares constructors, so it answers false
+     for a Date built in another realm — which is exactly what happens under the test harness, and
+     would have let this ship looking fixed while still printing an 1899 timestamp. */
+  var isDate = v && typeof v.getUTCHours === 'function' && typeof v.getTime === 'function';
+  if (isDate) { if (isNaN(v.getTime())) return ''; }      // a broken cell prints nothing, not "Invalid Date"
+  else return String(v == null ? '' : v).trim();
+  var h = (v.getUTCHours() + 8) % 24, m = v.getUTCMinutes();
+  var ampm = h < 12 ? 'AM' : 'PM';
+  var h12 = h % 12; if (h12 === 0) h12 = 12;
+  return h12 + ':' + (m < 10 ? '0' + m : m) + ' ' + ampm;
 }
 
 function _logAmount(params) {

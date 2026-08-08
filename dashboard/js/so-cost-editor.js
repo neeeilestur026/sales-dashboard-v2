@@ -26,7 +26,9 @@ function _sceEl() {
   if (el) return el;
   el = document.createElement('div');
   el.id = 'soCostEditorModal';
-  el.className = 'flow-modal-overlay';
+  /* flow.css:49-50 makes .flow-modal-overlay display:none and only .open reveals it, so the
+     class alone builds an invisible modal. */
+  el.className = 'flow-modal-overlay open';
   el.innerHTML = `
     <div class="flow-modal" style="max-width:640px;">
       <h3>Edit SO Costs</h3>

@@ -649,8 +649,12 @@ function mfViewItinerary(no) {
     : '<tr><td colspan="7" style="text-align:center;padding:1rem;color:#64748b;">No planned visits.</td></tr>';
 
   const el = document.createElement('div');
-  el.className = 'flow-modal-overlay';
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:2rem 1rem;';
+  /* `.flow-modal-overlay` is display:none in flow.css and only `.open` reveals it (flow.css:49-50).
+     Without the second class this modal was built correctly — six visits, all the right data — and
+     then never shown: "View plan" looked like a dead button. The inline cssText below does not set
+     `display`, so the stylesheet won. */
+  el.className = 'flow-modal-overlay open';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:2rem 1rem;display:flex;align-items:flex-start;justify-content:center;';
   el.innerHTML = `<div class="flow-modal" style="max-width:1000px;margin:0 auto;background:#fff;border-radius:12px;padding:1.2rem 1.4rem;">
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;">
       <h3 style="margin:0;font-size:1rem;">${_mfe(it.itineraryNo)} — ${_mfe(it.user)}</h3>
@@ -659,7 +663,8 @@ function mfViewItinerary(no) {
     </div>
     ${it.objectives ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;"><strong>Objectives:</strong> ${_mfe(it.objectives)}</p>` : ''}
     ${it.notes ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;color:#64748b;">${_mfe(it.notes)}</p>` : ''}
-    <p style="margin:0 0 0.7rem;font-size:0.78rem;color:#15803d;">Director approved${it.dirApprovedBy ? ' by ' + _mfe(it.dirApprovedBy) : ''}${it.dirApprovedAt ? ' on ' + _mfe(it.dirApprovedAt) : ''}.</p>
+    <p style="margin:0 0 0.7rem;font-size:0.78rem;color:#15803d;">Director approved${it.dirApprovedBy ? ' by ' + _mfe(it.dirApprovedBy) : ''}${
+      it.dirApprovedAt ? ' on ' + _mfe(typeof flowDate === 'function' ? flowDate(it.dirApprovedAt) : it.dirApprovedAt) : ''}.</p>
     <div style="overflow-x:auto;"><table class="flow-table"><thead><tr>
       <th>Day</th><th>Time</th><th>Company / who</th><th>City / area</th><th>Purpose</th><th>Agenda</th><th>Expected outcome</th>
     </tr></thead><tbody>${body}</tbody></table></div>
