@@ -30,7 +30,7 @@ import logging
 import re
 from io import BytesIO
 
-from .utils import ph_date_ymd
+from .utils import ph_date_ymd, QUO_SCOPE_INTABLE_HEADING
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,15 @@ _INDEX_RE = re.compile(r"^\d{1,3}$")
 def _flat(s):
     """'P R E P A R E D  F O R' -> 'PREPAREDFOR'. The anchor form for every label test."""
     return re.sub(r"\s+", "", str(s or "")).upper()
+
+# A213 — the scope of supply now prints INSIDE the item table, so the parser has to recognise its
+# heading to know the rows below belong to no item. The string is shared with the renderer so the two
+# cannot drift; this assertion is the other half of that contract. If the heading were ever renamed
+# to something starting with an _ITEM_STOP prefix, the importer would stop reading items at it and
+# silently return fewer lines — the failure that is hardest to notice because it looks like a short
+# quotation rather than a broken one.
+assert not any(_flat(QUO_SCOPE_INTABLE_HEADING).startswith(s) for s in _ITEM_STOP), (
+    "QUO_SCOPE_INTABLE_HEADING must not start with an _ITEM_STOP prefix — it would end the item table")
 
 
 def _num(s):
@@ -299,6 +308,7 @@ def parse_quotation_pdf(pdf_bytes):
 
     # ── items ─────────────────────────────────────────────────────────────────────────────────
     items, cols, in_items = [], None, False
+    in_scope = False                                            # A213
     printed_ex_vat = None
     for pi, (_w, prows) in enumerate(pages):
         for r in prows:
@@ -308,7 +318,38 @@ def parse_quotation_pdf(pdf_bytes):
                     cols, in_items = c, True
                     continue
                 continue
+            # A213 — the table header is REDRAWN at the top of every continuation page (repeatRows=1).
+            # Reaching here means cols is already set, so without this the header is parsed as a body
+            # row: its text lands in the last item's description, and because _num("QTY") is None the
+            # UOM column silently becomes the literal "QTY". Latent before scope moved into the table;
+            # routine now that a one-item quotation can span two pages.
+            # NOTE it does NOT clear in_scope: a long scope block spans the page break, so the
+            # header is an interruption in the middle of the region, not the end of it. Clearing it
+            # here let every bullet after the first page break resume being absorbed into item 01.
+            if _columns(r):
+                continue
             flat_all = _flat(_text(r))
+            # A213 — the scope of supply prints INSIDE the item table now, under the first item's
+            # description. Its rows belong to NO item: without this state machine every bullet falls
+            # into the `elif items:` branch below and is concatenated onto item 01's name, turning a
+            # 40-bullet scope into a ~1,500-character product name on re-import. A missing item is
+            # visible; a poisoned name is not.
+            # A REGION, not a single line: skipping only the heading still absorbs every bullet.
+            if in_items and flat_all.startswith(_flat(QUO_SCOPE_INTABLE_HEADING)):
+                in_scope = True
+                continue
+            if in_scope:
+                # The block ends at the next item line — nothing separates them — or at any of the
+                # ordinary terminators, which are then handled by the tests below as usual.
+                first = r[0] if r else None
+                ftxt = str(first["text"]) if first else ""
+                _d, _q, _p, _a = _split_row(r, cols)
+                next_item = bool(first and (_INDEX_RE.match(ftxt) or _OPTION_RE.match(ftxt))
+                                 and (_q or _p))
+                if next_item or any(flat_all.startswith(s) for s in _ITEM_STOP + _ALT_SKIP):
+                    in_scope = False
+                else:
+                    continue
             if in_items and any(flat_all.startswith(x) for x in _ALT_SKIP):
                 continue                                        # furniture inside the table
             if in_items and any(flat_all.startswith(s) for s in _ITEM_STOP):
