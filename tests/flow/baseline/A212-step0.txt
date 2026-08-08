@@ -1,0 +1,11 @@
+# A212 step-0 baseline — taken 2026-08-08 08:43 PST
+# Live FlowAPI version: 116 (A207-A211 are deployed)
+# Re-run at the end: Other Payables +n exactly, Expenses +n exactly, everything else unchanged.
+
+getPaymentRequests_ALL       20
+getPaymentRequests_Other     11
+getPaymentRequests_PO        9
+getExpenses                  924
+getWeeklyItineraries         0
+getClientVisits              10
+getDocuments                 362

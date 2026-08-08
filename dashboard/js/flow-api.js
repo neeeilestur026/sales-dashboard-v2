@@ -263,12 +263,18 @@ function flowMoney(v, cur) {
    Synchronous and local on purpose: no fetch, no promise, no window where half the page has decided
    one way and half the other.
 
+   A212 — back to EMPTY. Director and management walked the whole chain on demo data and the feature
+   is fine; it goes back behind the hold until launch, because a half-open feature that decides pay
+   is worse than a closed one. Nothing else from A211 was rolled back — every access-control fix
+   stays, and re-opening is one word in this array plus one in _COMM_ROLES.
+
+   TO OPEN FOR TESTING AGAIN: ['director', 'management'].
    TO LAUNCH, both together:
      1. add 'sales' here
      2. add it to `var _COMM_ROLES` in apps-script/FlowAPI.gs, bump FLOW_VERSION, and paste it
    The backend refuses every commission action on its own, so changing only this one exposes nothing
    a user can act on — which is the intended failure direction. */
-const FLOW_COMMISSIONS_ROLES = ['director', 'management'];
+const FLOW_COMMISSIONS_ROLES = [];
 
 /** Is the commission feature open to this role? Mirrors _COMM_ROLES in FlowAPI.gs. */
 function flowCommissionsLiveFor(role) {

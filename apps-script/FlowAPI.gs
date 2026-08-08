@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 116;  // A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 117;  // A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -272,6 +272,59 @@ var SCHEMA = {
   CommissionRates: ['Rate Key', 'Scope', 'Scope Value', 'Min Base (PHP)', 'Max Base (PHP)', 'Rate %',
                     'Effective From', 'Effective To', 'Notes', 'Updated By', 'Updated At'],
 
+  /* ── A212 TRAVEL ALLOWANCE — an IMPREST FLOAT, replenished weekly ─────────────────────────────
+     Source: Travel Allowance DocReq.xlsx, three printed pages that travel together. The cover
+     sheet's arithmetic is the whole model:
+         TOTAL SPENT · INITIAL AMOUNT (2,000) · REMAINING = INITIAL − SPENT
+     The rep holds ₱2,000 in cash. They spend some, report it, and the company pays back exactly what
+     was spent to restore the float. So THE PAYABLE IS ALWAYS `Total Spent` — never 2,000, and never
+     2,000 − spent. That identity holds through an overspend too: restoring a float to its target
+     costs Float − (Float − spent) = spent, unconditionally. See _travDerive; do not add special-case
+     arithmetic for the overspend, only an honest label. */
+  TravelReplenishments: ['Trav No', 'Date', 'Week Start', 'Week End', 'User', 'User Role', 'Position',
+                         'Duration Label', 'Purpose', 'Itinerary No', 'Itinerary Status At Submit',
+                         'Waiver By', 'Waiver Reason',
+                         // 'Float Amount' is a SNAPSHOT taken at submit, never a live read. The cover
+                         // sheet prints INITIAL and REMAINING and is then SIGNED; reading the float at
+                         // render time would retroactively rewrite every past signed document the day
+                         // the company raises it. Same reason as PaymentRequests['PO Total (PHP)'].
+                         'Float Amount', 'Total Spent', 'Transport Total', 'No Receipt Total',
+                         'Receipted Total', 'Overspend Reason', 'Item Count',
+                         // Remaining and Employee Advanced are DELIBERATELY ABSENT — pure functions of
+                         // Float Amount − Total Spent, computed in _travMap. And there is NO 'Paid'
+                         // status: whether the money moved is a fact about the payment request, read
+                         // through 'Payment Request No'. A second copy would drift, which is exactly
+                         // what ARAging['Collected (PHP)'] is the standing cautionary tale for.
+                         'Status', 'Created By', 'Created By Role', 'Created At', 'Updated At',
+                         'Submitted At',
+                         'Acct Approved By', 'Acct Approved At', 'Dir Approved By', 'Dir Approved At',
+                         'Approval Note', 'Payment Request No', 'PDF Link'],   // ← 33 columns
+
+  /* ONE table, TWO printed pages. 'Kind' drives the Travel Itinerary page; 'Has Receipt' drives the
+     COENRR (Certification of Expenses Not Requiring Receipts).
+
+     THE TWO SETS OVERLAP — they are not a partition. A tricycle fare is a trip AND has no receipt, so
+     it prints on both pages. The claim is SUM(all items) and the two page subtotals are NEVER added
+     together: the workbook's own sample is ₱35 + ₱70, each page totals ₱105, and the claim is ₱105,
+     not ₱210. Two separate tables could disagree with each other and nobody would notice; one table
+     with two projections cannot.
+
+     'Visit No' links a leg back to the photo-verified ClientVisits row it was prefilled from. Blank
+     for a leg the rep typed themselves — the journey home always is. */
+  TravelReplenishmentItems: ['Trav No', 'Seq', 'Date', 'Kind', 'Description', 'Departure Time',
+                             'Arrival Time', 'Means', 'Amount', 'Has Receipt', 'Receipt Doc ID',
+                             'Visit No', 'Notes'],                            // ← 13 columns
+
+  /* WHO IS ENTITLED to hold how much — the policy, never the balance. Effective-dated rows, never
+     edited in place, modelled on CommissionRates.
+     'Issue PR No' is load-bearing: cash on hand is only real once that payment request is Paid, and
+     that is what makes the position derivable without ever storing a mutable balance.
+     NOT FlowSettings — that store has no per-rep dimension, returns the whole flat object to every
+     caller, and setFlowSettings gates on a browser-supplied actorRole while sitting in none of the
+     three _SECURED lists, so a rep could set their own float. */
+  TravelFloats: ['Float Key', 'User', 'Amount', 'Effective From', 'Effective To',
+                 'Issue PR No', 'Status', 'Note', 'Updated By', 'Updated At'],  // ← 10 columns
+
   // ── Balance Sheet opening balances (Cash, Inventory) — editable config ──
   OpeningBalances: ['Key', 'Amount (PHP)', 'Updated By', 'Updated At'],
 
@@ -489,9 +542,14 @@ var _SECURED = {
    and could say anything. What actually protects the money is _SECURED plus _commMayActOn below —
    never this list.
 
+   A212 — back to EMPTY. Director and management walked the whole chain on demo data and the feature
+   is fine; it goes back behind the hold until launch, because a half-open feature that decides pay is
+   worse than a closed one. Nothing else from A211 was rolled back — every access-control fix stays.
+
+   TO OPEN FOR TESTING AGAIN: ['director', 'management'].
    TO LAUNCH: add 'sales' here, bump FLOW_VERSION, paste — and add it to FLOW_COMMISSIONS_ROLES in
    dashboard/js/flow-api.js. Either one alone leaves the feature closed, which is the safe direction. */
-var _COMM_ROLES = ['director', 'management'];
+var _COMM_ROLES = [];
 
 var _COMM_ACTIONS = {
   getCommissionRequests: 1, getCommissionClaimable: 1, getCommissionPreview: 1,
@@ -7415,6 +7473,234 @@ function clearCommissionDemo(p) {
   return { success: true, refNo: _COMM_DEMO.soNo, removed: removed, sheets: detail,
     message: removed ? 'Removed ' + removed + ' demo row(s): ' + detail.join(', ') + '.'
                      : 'No demo rows were found — nothing to remove.' };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  A212 TRAVEL ALLOWANCE  —  the weekly imprest float, and its replenishment
+// ════════════════════════════════════════════════════════════════════════════
+/* Read the SCHEMA comment above TravelReplenishments first; the money model is stated there and
+   everything below follows from it. In one line: THE PAYABLE IS ALWAYS `Total Spent`. */
+
+/* The chain is REP → ACCOUNTING → DIRECTOR, matching the cover sheet's three signature blocks:
+   "Correctness of the above data" (the filer — a declaration, not an approval),
+   "Supporting documents complete & proper" (accounting),
+   "The overall purpose is approve" (the director).
+   MANAGEMENT IS NOT IN THIS CHAIN. That is a decision, not an omission, and it differs from BOTH
+   _PR_STAGES (Admin → Management → Director) and _ITIN_STAGES (Director → Management) — read this
+   table rather than assuming it matches either of its neighbours.
+   There is no 'Paid' stage: the money is a fact about the payment request this approval mints. */
+var _TRAV_STAGES = [
+  { status: 'Pending Accounting', role: 'accounting', by: 'Acct Approved By', at: 'Acct Approved At',
+    next: 'Pending Director', who: 'accounting' },
+  { status: 'Pending Director',   role: 'director',   by: 'Dir Approved By',  at: 'Dir Approved At',
+    next: 'Approved',         who: 'the director' }
+];
+function _travStage(status) {
+  for (var i = 0; i < _TRAV_STAGES.length; i++) {
+    if (_TRAV_STAGES[i].status === String(status)) return _TRAV_STAGES[i];
+  }
+  return null;
+}
+function _travEditable(status) {
+  var s = String(status || 'Draft');
+  return s === 'Draft' || s === 'Rejected' || s === '';
+}
+/* Statuses that HOLD their receipts, so the same photo cannot be claimed in two different weeks.
+   Draft deliberately does NOT hold — otherwise a rep's own abandoned draft blocks the corrected
+   claim they file to replace it. Same reasoning as _COMM_LOCKING. */
+var _TRAV_LOCKING = { 'Pending Accounting': 1, 'Pending Director': 1, 'Approved': 1 };
+
+/* The COENRR carries genuinely non-trip lines — porterage, prepaid load, a meal from a vendor who
+   issues nothing — so a two-value Transport/Other enum would make 'Other' a dumping ground and the
+   printed certification unreadable. These strings overlap deliberately with the existing
+   EXP_CATEGORIES vocabulary (dashboard/js/flow-expenses.js) rather than inventing a second one. */
+var _TRAV_KINDS = ['Transport', 'Meals', 'Load', 'Tips/Porterage', 'Parking/Toll', 'Other'];
+var _TRAV_DEFAULT_FLOAT = 2000;
+
+/** The Monday of the week containing `ymd`, as YYYY-MM-DD. Server-side twin of flowWeekDates.
+ *  RECOMPUTED, never trusted from the browser: flowWeekDates runs in the client's timezone, and a
+ *  rep travelling with a laptop still on another clock would otherwise mint a second record for the
+ *  same week keyed on the Sunday. */
+function _travMonday(ymd) {
+  var s = _dateStr(ymd);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
+  var parts = s.split('-');
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));            // Mon = 0 … Sun = 6
+  return Utilities.formatDate(d, 'Asia/Manila', 'yyyy-MM-dd');
+}
+function _travWeekEnd(monday) {
+  var parts = String(monday).split('-');
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + 6);
+  return Utilities.formatDate(d, 'Asia/Manila', 'yyyy-MM-dd');
+}
+
+function _travRow(no) {
+  return _rows('TravelReplenishments').filter(function (r) {
+    return String(r['Trav No']) === String(no);
+  })[0];
+}
+/** Patch by HEADER NAME, never by position — the width-trap-immune update, same as _itinSet. */
+function _travSet(no, patch) {
+  Object.keys(patch).forEach(function (k) {
+    _setCellByKey('TravelReplenishments', 'Trav No', no, k, patch[k]);
+  });
+}
+function _travItems(no) {
+  return _rows('TravelReplenishmentItems').filter(function (i) {
+    return String(i['Trav No']) === String(no);
+  }).sort(function (a, b) { return _num(a['Seq']) - _num(b['Seq']); });
+}
+
+/** Round to the centavo. Every money value written to a cell goes through this. */
+function _travPeso(n) { return Math.round(_num(n) * 100) / 100; }
+
+/* THE THREE PROJECTIONS, and the one total.
+   `total` is the claim and the payable. `transport` and `noReceipt` are what the two printed pages
+   sum to — SUBTOTALS, overlapping, never added to each other. `receipted` is the fourth quadrant
+   (has a receipt, is not a trip) which appears on neither printed page, which is why the cover sheet
+   prints all three: without that line the pack cannot be reconciled without fanning out the paper. */
+function _travDerive(items) {
+  var total = 0, transport = 0, noReceipt = 0, receipted = 0;
+  (items || []).forEach(function (i) {
+    var amt = _num(i['Amount']);
+    total += amt;
+    if (String(i['Kind'] || '') === 'Transport') transport += amt;
+    if (String(i['Has Receipt'] || '') === 'Yes') { receipted += amt; } else { noReceipt += amt; }
+  });
+  return { total: _travPeso(total), transport: _travPeso(transport),
+           noReceipt: _travPeso(noReceipt), receipted: _travPeso(receipted),
+           count: (items || []).length };
+}
+
+/** The label the printed itinerary carries — the days actually travelled, not the week bounds.
+ *  The sample reads "July 27-31, 2026" for a Mon–Sun week, because nobody travelled at the weekend. */
+function _travDurationLabel(items) {
+  var ds = (items || []).map(function (i) { return _dateStr(i['Date']); })
+    .filter(function (s) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }).sort();
+  if (!ds.length) return '';
+  var a = ds[0], b = ds[ds.length - 1];
+  var pa = a.split('-'), pb = b.split('-');
+  var da = new Date(Number(pa[0]), Number(pa[1]) - 1, Number(pa[2]));
+  var db = new Date(Number(pb[0]), Number(pb[1]) - 1, Number(pb[2]));
+  var mA = Utilities.formatDate(da, 'Asia/Manila', 'MMMM');
+  var mB = Utilities.formatDate(db, 'Asia/Manila', 'MMMM');
+  if (a === b) return mA + ' ' + Number(pa[2]) + ', ' + pa[0];
+  if (mA === mB && pa[0] === pb[0]) return mA + ' ' + Number(pa[2]) + '-' + Number(pb[2]) + ', ' + pa[0];
+  return mA + ' ' + Number(pa[2]) + ' – ' + mB + ' ' + Number(pb[2]) + ', ' + pb[0];
+}
+
+/** The float this person is entitled to hold on `ymd`. Effective-dated; the newest row that has
+ *  started and has not ended wins. Falls back to the company default so a rep who has never been
+ *  issued a float still sees a sensible figure on a DRAFT — submit refuses without an Active float. */
+function _travFloatFor(user, ymd) {
+  var day = _dateStr(ymd || _now());
+  var best = null;
+  _rows('TravelFloats').forEach(function (r) {
+    if (String(r['User']) !== String(user)) return;
+    if (String(r['Status'] || '') !== 'Active') return;
+    var from = _dateStr(r['Effective From']), to = _dateStr(r['Effective To']);
+    if (from && from > day) return;
+    if (to && to < day) return;
+    if (!best || _dateStr(best['Effective From']) <= from) best = r;
+  });
+  return best ? { amount: _num(best['Amount']), row: best, configured: true }
+              : { amount: _TRAV_DEFAULT_FLOAT, row: null, configured: false };
+}
+
+/* ── Who may see, and who may act ────────────────────────────────────────────────────────────────
+   Copied in shape from A211's commission guards, for the same reason: POSITIVE allow-lists, because
+   a negative `role === 'sales'` test has to enumerate everyone it excludes and never does. */
+var _TRAV_OVERSIGHT_READ = { director: 1, accounting: 1, management: 1, admin: 1 };
+var _TRAV_OVERSIGHT_ACT  = { director: 1, accounting: 1 };
+
+function _travMaySeeAll(role) { return !!_TRAV_OVERSIGHT_READ[String(role || '').toLowerCase()]; }
+function _travMayActForAll(role) { return !!_TRAV_OVERSIGHT_ACT[String(role || '').toLowerCase()]; }
+
+/** Whose replenishments may this caller read? Oversight may name anyone; everybody else is pinned to
+ *  their own session name, never to a name the browser sent. */
+function _travReadScope(p) {
+  var role = String((p && p.actorRole) || '');
+  if (_travMaySeeAll(role)) return { scope: String((p && p.user) || '') };
+  var me = String((p && p.actorName) || '').trim();
+  if (!me) {
+    return { blocked: { success: false, message:
+      'Travel replenishments can only be read while signed in.' } };
+  }
+  return { scope: me };
+}
+
+/** May this actor edit/submit/delete this record? Null when yes, a refusal when no. */
+function _travMayActOn(row, actorName, actorRole) {
+  if (_travMayActForAll(actorRole)) return null;
+  var owner = String((row && row['User']) || '');
+  if (owner && String(actorName || '').trim() === owner) return null;
+  return { success: false, message: 'Travel replenishment ' + String((row && row['Trav No']) || '') +
+    ' belongs to ' + (owner || 'another employee') + ' — you can only act on your own.' };
+}
+
+/** May this actor APPROVE this record at its current stage?
+ *  Refuses self-approval BY NAME whatever the role — and that is not hypothetical. In the workbook's
+ *  own sample the traveller is the accounting staffer who signs the middle block, so the person
+ *  certifying that the supporting documents are complete would be certifying their own. */
+function _travMayApprove(row, actorName, actorRole) {
+  var st = String((row && row['Status']) || '');
+  var stage = _travStage(st);
+  if (!stage) return { success: false, message: 'Not awaiting approval at this stage (' + st + ').' };
+  if (String(actorRole || '').toLowerCase() !== stage.role) {
+    return { success: false, message: 'Only ' + stage.who + ' can approve at this stage.' };
+  }
+  if (String(actorName || '').trim() === String((row && row['User']) || '').trim()) {
+    return { success: false, message: 'This is your own travel claim — someone else has to approve it.' };
+  }
+  return null;
+}
+
+/** The DTO. `remaining` and `advanced` are computed here and stored nowhere: they are pure functions
+ *  of the two figures above them, and a stored copy would be a second source of truth for the same
+ *  number. A negative remaining is reported as zero-plus-advanced, because "remaining: −₱300" is a
+ *  lie about what the rep is holding — the ₱300 is the rep's own money sitting in the float. */
+function _travMap(r, items) {
+  var floatAmt = _num(r['Float Amount']), spent = _num(r['Total Spent']);
+  return {
+    travNo: String(r['Trav No']), date: _dateStr(r['Date']),
+    weekStart: _dateStr(r['Week Start']), weekEnd: _dateStr(r['Week End']),
+    user: String(r['User'] || ''), userRole: String(r['User Role'] || ''),
+    position: String(r['Position'] || ''),
+    durationLabel: String(r['Duration Label'] || ''), purpose: String(r['Purpose'] || ''),
+    itineraryNo: String(r['Itinerary No'] || ''),
+    itineraryStatusAtSubmit: String(r['Itinerary Status At Submit'] || ''),
+    waiverBy: String(r['Waiver By'] || ''), waiverReason: String(r['Waiver Reason'] || ''),
+    floatAmount: floatAmt, totalSpent: spent,
+    transportTotal: _num(r['Transport Total']), noReceiptTotal: _num(r['No Receipt Total']),
+    receiptedTotal: _num(r['Receipted Total']),
+    remaining: _travPeso(Math.max(0, floatAmt - spent)),
+    advanced: _travPeso(Math.max(0, spent - floatAmt)),
+    overspent: spent > floatAmt + 0.005,
+    overspendReason: String(r['Overspend Reason'] || ''),
+    itemCount: _num(r['Item Count']),
+    status: String(r['Status'] || ''), createdBy: String(r['Created By'] || ''),
+    createdByRole: String(r['Created By Role'] || ''),
+    createdAt: r['Created At'], updatedAt: r['Updated At'], submittedAt: r['Submitted At'],
+    acctApprovedBy: String(r['Acct Approved By'] || ''), acctApprovedAt: r['Acct Approved At'],
+    dirApprovedBy: String(r['Dir Approved By'] || ''), dirApprovedAt: r['Dir Approved At'],
+    approvalNote: String(r['Approval Note'] || ''),
+    prNo: String(r['Payment Request No'] || ''), pdfLink: String(r['PDF Link'] || ''),
+    rowIndex: r.rowIndex,
+    items: (items || []).map(_travItemMap)
+  };
+}
+function _travItemMap(i) {
+  return {
+    travNo: String(i['Trav No']), seq: _num(i['Seq']), date: _dateStr(i['Date']),
+    kind: String(i['Kind'] || ''), description: String(i['Description'] || ''),
+    departureTime: String(i['Departure Time'] || ''), arrivalTime: String(i['Arrival Time'] || ''),
+    means: String(i['Means'] || ''), amount: _num(i['Amount']),
+    hasReceipt: String(i['Has Receipt'] || '') === 'Yes',
+    receiptDocId: String(i['Receipt Doc ID'] || ''), visitNo: String(i['Visit No'] || ''),
+    notes: String(i['Notes'] || '')
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
