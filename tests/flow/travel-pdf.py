@@ -81,9 +81,17 @@ for label, rec, rcp in [("sample", SAMPLE, None),
     ok("%s: nothing drawn outside the frame" % label, not out, out[:4])
 
 print("\n== 2. THE PESO GLYPH — present, and never .notdef ==")
-for pi, p in enumerate(pages(render(SAMPLE))):
-    ok("page %d has the peso sign" % (pi + 1), "₱" in p["text"], p["text"][:60])
-    ok("page %d has no .notdef box" % (pi + 1), "\x00" not in p["text"])
+# The ANNEX is rendered too, not just the three-page core. It was left out of this loop once, and the
+# receipt captions — set in Lato, which has no peso glyph — drew a .notdef box on every annex page
+# while pages 1 to 3 printed the symbol correctly. That is exactly the failure this section exists
+# to catch, and a three-page render cannot see it.
+for label, rcp in [("core", None),
+                   ("with the annex", [{"seq": 1, "dataUrl": a_jpeg()},
+                                       {"seq": 2, "dataUrl": a_jpeg()},
+                                       {"seq": 3, "dataUrl": a_jpeg()}])]:
+    for pi, p in enumerate(pages(render(SAMPLE, rcp))):
+        ok("%s · page %d has the peso sign" % (label, pi + 1), "₱" in p["text"], p["text"][:60])
+        ok("%s · page %d has no .notdef box" % (label, pi + 1), "\x00" not in p["text"])
 eq("PESO resolved to the real glyph, not the PHP fallback", PESO, "₱")
 
 print("\n== 3. NON-ADDITIVITY — the three pages are projections, not parts ==")

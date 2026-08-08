@@ -7884,8 +7884,26 @@ function deleteTravelReplenishment(p) {
   var owns = _travMayActOn(r, p.actorName, p.actorRole);
   if (owns) return owns;
   _writeItems('TravelReplenishmentItems', 'Trav No', p.travNo, [], function (x) { return x; });
+  /* A214 — the photographs go with it. Nothing else can reach them once the report is gone: they are
+     keyed on the Trav No, and the next TRAV number is minted from a counter that never reuses one. */
+  var swept = _travTrashReceipts(p.travNo);
   _sheet('TravelReplenishments').deleteRow(r.rowIndex);
-  return { success: true, refNo: p.travNo, message: 'Travel report ' + p.travNo + ' deleted.' };
+  return { success: true, refNo: p.travNo, receiptsRemoved: swept,
+           message: 'Travel report ' + p.travNo + ' deleted.' };
+}
+
+/** Trash every receipt filed against a Trav No. deleteDocument is called rather than reimplemented,
+ *  so the Drive file and the registry row can never fall out of step; it re-reads the sheet on each
+ *  call, which is what makes deleting by rowIndex in a loop safe. */
+function _travTrashReceipts(travNo) {
+  var ids = _rows('Documents').filter(function (d) {
+    return String(d['Module']) === _TRAV_DOC_MODULE && String(d['Ref No']) === String(travNo);
+  }).map(function (d) { return String(d['Doc ID']); });
+  var n = 0;
+  ids.forEach(function (id) {
+    try { if (deleteDocument({ docId: id }).success) n++; } catch (e) { /* one bad file, not a failed delete */ }
+  });
+  return n;
 }
 
 /* ── A214: the receipt photos ────────────────────────────────────────────────────────────────────

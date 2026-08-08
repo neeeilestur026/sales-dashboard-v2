@@ -156,6 +156,38 @@ console.log('\n== the read is scoped from the SESSION ==');
   eq('and it says why', /signed in/.test(anon.message), true);
 }
 
+console.log('\n== deleting the report takes its photographs with it ==');
+{
+  const h = load(null, store());
+  const HFILES = {};
+  h.DriveApp.getFileById = (id) => {
+    if (!HFILES[id]) throw new Error('gone');
+    HFILES[id].trashed = false;
+    return { setTrashed: (v) => { HFILES[id].trashed = v; },
+             getBlob: () => ({ getContentType: () => 'image/jpeg', getBytes: () => Buffer.from('X') }) };
+  };
+  const made = h.saveTravelReplenishment(with_(GAYLE, { weekStart: '2026-07-27', items: SAMPLE }));
+  HFILES['f1'] = { trashed: false };
+  HFILES['f2'] = { trashed: false };
+  h.__store.Documents.push(
+    { 'Doc ID': 'D1', 'Module': 'Travel Replenishment', 'Ref No': made.travNo,
+      'File Name': 'receipt-1.jpg', 'File ID': 'f1', 'Uploaded At': '2026-07-28' },
+    { 'Doc ID': 'D2', 'Module': 'Travel Replenishment', 'Ref No': made.travNo,
+      'File Name': 'receipt-2.jpg', 'File ID': 'f2', 'Uploaded At': '2026-07-28' },
+    { 'Doc ID': 'D3', 'Module': 'Quotation', 'Ref No': made.travNo,
+      'File Name': 'photo-a1.jpg', 'File ID': 'f2', 'Uploaded At': '2026-07-28' });
+
+  const del = h.deleteTravelReplenishment(with_(GAYLE, { travNo: made.travNo }));
+  eq('the report went', del.success, true);
+  eq('and both receipts with it', del.receiptsRemoved, 2);
+  eq('the registry rows are gone', h.__store.Documents.filter(d =>
+     String(d['Module']) === 'Travel Replenishment').length, 0);
+  eq('the Drive files were trashed, not merely unlinked',
+     [HFILES.f1.trashed, HFILES.f2.trashed], [true, true]);
+  eq('a quotation photo that happened to share the ref was left alone',
+     h.__store.Documents.length, 1);
+}
+
 console.log('\n== registration ==');
 ok('getTravelReceipts is in HANDLERS', typeof c.HANDLERS.getTravelReceipts === 'function');
 ok('but NOT in MUTATIONS — a read takes no lock', !c.MUTATIONS.getTravelReceipts);

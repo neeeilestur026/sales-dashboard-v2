@@ -262,15 +262,19 @@ def _duration_text(rec):
 
 
 def _receipt_caption(rec, item):
-    """What prints under an annex photo, so a loose printed page still identifies itself."""
+    """What prints under an annex photo, so a loose printed page still identifies itself.
+
+    Returns PARAGRAPH MARKUP, already escaped — the caller must not escape it again or the font tag
+    would print as literal text. The amount carries that tag because the caption is set in Lato,
+    which has no peso glyph: bare money() here drew a .notdef box on every annex page while the same
+    figure printed correctly on pages 1 to 3. See money_inline."""
     bits = [rec["travNo"] or "DRAFT", "Leg %d" % item["seq"]]
     if item["date"]:
         bits.append(ph_date_slash(item["date"], item["date"]))
     who = ", ".join(x for x in (item["means"], item["description"]) if x)
     if who:
         bits.append(who)
-    bits.append(money(item["amount"]))
-    return "  ·  ".join(bits)
+    return "  ·  ".join(_esc(b) for b in bits) + "  ·  " + money_inline(item["amount"])
 
 
 def _signers(rec):
@@ -782,7 +786,7 @@ def _annex(rec, receipts):
         else:
             running += len(raw)
         cells.append((_Receipt(raw, CONTENT_W, slot_h, note),
-                      Paragraph(_esc(_receipt_caption(rec, item)), cap_st)))
+                      Paragraph(_receipt_caption(rec, item), cap_st)))   # already escaped markup
 
     out = []
     for idx in range(0, len(cells), 2):
