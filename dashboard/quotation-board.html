@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Quotation Board</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+<style>
+  /* A217 — the pipeline as a place, not a list. The columns scroll horizontally as one unit and each
+     column scrolls vertically on its own, so the 72-card "With the client" column cannot push the
+     other six off the bottom of the page. */
+  .qb-wrap { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(216px, 1fr);
+             gap: .7rem; overflow-x: auto; padding-bottom: .5rem; align-items: start; }
+  .qb-col { background: var(--bg-inset, #f8fafc); border: 1px solid var(--border, #e2e8f0);
+            border-radius: 14px; display: flex; flex-direction: column; min-width: 0; }
+  .qb-col.over { background: #eef2ff; box-shadow: inset 0 0 0 2px #c7d2fe; }
+  .qb-col.no { background: #fef2f2; box-shadow: inset 0 0 0 2px #fecaca; }
+
+  .qb-head { padding: .6rem .7rem .5rem; border-bottom: 1px solid var(--border, #e2e8f0); }
+  .qb-head .l { font: 800 .74rem 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .04em;
+                color: var(--text-primary, #0f172a); }
+  .qb-head .s { font-size: .66rem; color: var(--text-muted, #94a3b8); margin-top: .05rem; }
+  .qb-head .n { display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; }
+  .qb-head .n b { font: 800 1.05rem 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+  .qb-head .n span { font-size: .72rem; color: var(--text-secondary, #475569);
+                     font-variant-numeric: tabular-nums; }
+
+  .qb-cards { padding: .45rem; display: flex; flex-direction: column; gap: .4rem;
+              max-height: calc(100vh - 340px); overflow-y: auto; min-height: 60px; }
+
+  .qb-card { background: #fff; border: 1px solid var(--border, #e2e8f0); border-left: 3px solid #cbd5e1;
+             border-radius: 10px; padding: .45rem .55rem; cursor: grab; font-family: 'Inter', sans-serif; }
+  .qb-card:hover { box-shadow: 0 4px 14px -6px rgba(15,23,42,.35); }
+  .qb-card.dragging { opacity: .45; }
+  .qb-card .cust { font-weight: 700; font-size: .78rem; color: var(--text-primary, #0f172a);
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qb-card .no { font: 400 .64rem ui-monospace, SFMono-Regular, Menlo, monospace;
+                 color: var(--text-muted, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qb-card .foot { display: flex; align-items: baseline; gap: .4rem; margin-top: .28rem; }
+  .qb-card .val { font: 700 .74rem 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+  .qb-card .age { margin-left: auto; font-size: .66rem; font-weight: 700; }
+  .qb-card .who { font-size: .64rem; color: var(--text-muted, #94a3b8); margin-top: .18rem; }
+
+  /* Age is the whole point of a board: the card that has sat longest should look like it has. */
+  .qb-card.a0 { border-left-color: #cbd5e1; } .qb-card.a0 .age { color: #94a3b8; }
+  .qb-card.a1 { border-left-color: #f59e0b; } .qb-card.a1 .age { color: #b45309; }
+  .qb-card.a2 { border-left-color: #ef4444; } .qb-card.a2 .age { color: #b91c1c; }
+  .qb-card.a3 { border-left-color: #991b1b; background: #fef2f2; } .qb-card.a3 .age { color: #991b1b; }
+  .qb-card.parked { border-left-color: #94a3b8; opacity: .72; }
+
+  .qb-empty { padding: .8rem .5rem; text-align: center; color: var(--text-muted, #94a3b8);
+              font-size: .72rem; font-style: italic; }
+  .qb-more { padding: .3rem; text-align: center; font-size: .7rem; }
+  .qb-more button { background: none; border: 0; color: var(--accent-dark, #0f766e); cursor: pointer;
+                    font: 700 .7rem 'Inter', sans-serif; }
+
+  .qb-note { font-size: .76rem; color: var(--text-secondary, #475569); line-height: 1.6;
+             padding: .55rem .75rem; border-radius: 10px; background: var(--bg-inset, #f8fafc);
+             border-left: 3px solid #94a3b8; margin-bottom: .8rem; }
+
+  @media print {
+    .navbar, .no-print { display: none !important; }
+    body { background: #fff; }
+    .main-content { padding: 0 !important; }
+    .qb-wrap { overflow: visible; }
+    .qb-cards { max-height: none; overflow: visible; }
+    .qb-col { break-inside: avoid; }
+  }
+</style>
+</head>
+<body class="flow-screen">
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div>
+          <div class="eyebrow">Sales · Pipeline</div>
+          <h1>Quotation Board</h1>
+          <p>Where every quotation stands right now — and which ones have been standing there too long.</p>
+        </div>
+      </div>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="qbRep" class="form-input" title="Filter by rep" style="max-width:170px;"></select>
+        <select id="qbAge" class="form-input" title="Filter by age" style="max-width:150px;">
+          <option value="">Any age</option>
+          <option value="7">Sitting 7+ days</option>
+          <option value="14">Sitting 14+ days</option>
+          <option value="30">Sitting 30+ days</option>
+        </select>
+        <input type="text" id="qbSearch" class="form-input" placeholder="Client or number…" style="max-width:180px;">
+        <button class="btn btn-sm btn-secondary" id="qbRefresh">Refresh</button>
+        <button class="btn btn-sm btn-secondary" id="qbPrint">Print</button>
+      </div>
+    </div>
+
+    <div id="qbMsg" class="flow-msg" style="display:none;"></div>
+    <div id="qbNote"></div>
+    <div id="qbWrap" class="qb-wrap">
+      <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/quotation-worklist.js"></script>
+  <script src="js/quotation-board-model.js"></script>
+  <script src="js/quotation-board.js"></script>
+  <script>
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+  </script>
+</body>
+</html>
