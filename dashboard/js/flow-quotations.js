@@ -848,7 +848,8 @@ function renderQuotationTable(rows) {
 // Oversight: group the (filtered) quotations into collapsible sections (one per Created By).
 function renderGroupedByRep(rows) {
   const groups = {};
-  (rows || qList).forEach(q => { const k = q.createdBy || 'Unassigned'; (groups[k] = groups[k] || []).push(q); });
+  // A218 — grouped by whose deal it is, not who typed it.
+  (rows || qList).forEach(q => { const k = flowQuotationOwner(q) || 'Unassigned'; (groups[k] = groups[k] || []).push(q); });
   const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   return names.map((name, i) => {
     const rows = groups[name];

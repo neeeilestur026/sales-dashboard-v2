@@ -191,6 +191,10 @@ async function seLoadQuotations() {
     if (!seReady) return;
     seReplyReady = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(122) : false;
     const [q, l] = await Promise.all([
+      /* A218 — scope by OWNER. Scoped by creator, a rep could not attach the email they actually
+         sent whenever somebody else had typed the quotation for them: the message sits in the
+         OWNER's Sent folder, and the owner is who must be offered it. The parameter name is
+         unchanged; getQuotations now resolves it through _quoOwner. */
       fetchFlow('getQuotations', deSession.role === 'sales' ? { createdBy: deSession.name } : {}).catch(() => ({ data: [] })),
       fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
     ]);
@@ -234,6 +238,9 @@ function seRankFor(m) {
   const byNo = {}; seQuotes.forEach(q => { byNo[String(q.quotationNo)] = q; });
   const ctx = {
     clientDomains: (typeof qemLearnDomains === 'function') ? qemLearnDomains(seLinks, byNo) : {},
+    // A218 — these messages all come from ONE person's Sent folder, so a quotation that person owns
+    // is a likelier match. The matcher had no notion of a rep before this.
+    mailboxOwner: (deSession && deSession.name) || '',
     dismissed: {}, linked: {}
   };
   seLinks.forEach(l => {

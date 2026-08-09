@@ -110,6 +110,7 @@ function qcResetForm() {
   set('qcNo', ''); set('qcCustomer', ''); set('qcSubject', ''); set('qcDiscount', 0);
   set('qcDate', (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
   set('qcNote', ''); set('qcPlantSite', '');
+  qcFillSalespeople();
   /* A178 — these three selects are RESTORED by qcLoadExisting but were never reset, so they leaked
      into the next quotation: after viewing one saved with photos off, every later save silently
      blanked its images. qcVat leaking matters most — it is inside the A123 freshness stamp, so the
@@ -217,6 +218,9 @@ function qcLoadExisting(q) {
      (updateQuotation does not write the Plant Site column), so preferring the column would silently
      revert a rep's correction the next time they opened the quotation. */
   if (!document.getElementById('qcPlantSite').value && q.plantSite) set('qcPlantSite', q.plantSite);
+  // A218 — show whose deal it is. `salesperson` is resolved server-side (the column, then the
+  // initials in the number, then the creator), so a legacy quotation already reads correctly.
+  qcFillSalespeople(q.salesperson || q.createdBy || '');
 
   qcItems = (q.items || []).map(it => ({
     lineKey: it.lineKey || qcLineKey(),
@@ -897,7 +901,10 @@ async function qcFinalize() {
         // it today, which is why the read-back prefers the document's own stamp over the column.
         plantSite: val('qcPlantSite').trim(),
         recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205 — decides the stored Total
-        layoutJson: qcLayoutJson(), items: JSON.stringify(items)
+        layoutJson: qcLayoutJson(), items: JSON.stringify(items),
+        // A218 — WHOSE deal. Sent on both paths; createQuotation stores it, and an edit can correct
+        // an attribution that was wrong (there was no correction path at all before this).
+        salesperson: (val('qcSalesperson') || qcSession.name)
       };
       if (qcQuotationNo) {
         res = await postFlow('updateQuotation', Object.assign({ quotationNo: qcQuotationNo,
@@ -1212,4 +1219,30 @@ async function qcEnsureLineKeys() {
     }
     return true;
   } catch (e) { return false; }
+}
+
+
+/* A218 — who can a quotation belong to.
+ *
+ * The roster comes from the user directory rather than a hard-coded list, so a new hire needs no
+ * code change. `pick` is the owner to select; the signed-in user is the default, which is right for
+ * the common case of filing your own deal. The current value is always present as an option even if
+ * the roster call fails or that person has since left — otherwise opening an old quotation would
+ * silently reassign it to whoever happens to be first in the list on the next save. */
+async function qcFillSalespeople(pick) {
+  const sel = document.getElementById('qcSalesperson');
+  if (!sel) return;
+  const want = String(pick || qcSession.name || '');
+  let names = [];
+  try {
+    const r = await apiGetUsers();
+    names = ((r && r.data) || [])
+      .filter(u => ['sales', 'admin', 'director', 'management'].indexOf(String(u.role || '').toLowerCase()) !== -1)
+      .map(u => String(u.name || u.fullName || u.username || '').trim())
+      .filter(Boolean);
+  } catch (e) { names = []; }
+  [qcSession.name, want].forEach(n => { if (n && names.indexOf(n) === -1) names.push(n); });
+  names = Array.from(new Set(names)).sort();
+  sel.innerHTML = names.map(n =>
+    `<option value="${flowEsc(n)}"${n === want ? ' selected' : ''}>${flowEsc(n)}</option>`).join('');
 }

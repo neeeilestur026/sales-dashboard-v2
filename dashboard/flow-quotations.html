@@ -266,6 +266,10 @@
                 <!-- Prints in the same meta card as RFQ No, so it sits beside it here too. Carried from
                      the pricing request on the ?fromPR path, and typeable on a direct quotation. -->
                 <div><label>Plant Site</label><input type="text" id="qcPlantSite" placeholder="delivery destination"></div>
+                <!-- A218: whose deal this is, which is not always who is typing it. -->
+                <div><label>Salesperson</label><select id="qcSalesperson"></select>
+                  <div style="font-size:.68rem;color:var(--text-muted,#94a3b8);margin-top:.15rem;">
+                    Whose deal this is. Change it if you are filing on someone else's behalf.</div></div>
                 <div><label>Validity</label><input type="text" id="qcValidity" placeholder="30 days"></div>
                 <div><label>Delivery</label><input type="text" id="qcDelivery" placeholder="1-3 weeks upon receipt of order"></div>
                 <div><label>Payment</label><input type="text" id="qcPayment" placeholder="30 days upon delivery"></div>

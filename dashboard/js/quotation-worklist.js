@@ -197,7 +197,11 @@ function quotationWorklist(quotations, linksByNo, cfg, hasSO, today) {
 function quotationWorklistByRep(list) {
   const by = {};
   (list.rows || []).forEach(r => {
-    const who = String(r.quotation.createdBy || '—');
+    /* A218 — group by the OWNER. Grouping by who typed a quotation put another rep's deals in
+       somebody's column and hid their own, which on a management screen reads as a performance
+       difference that never happened. */
+    const who = (typeof flowQuotationOwner === 'function'
+      ? flowQuotationOwner(r.quotation) : String(r.quotation.createdBy || '')) || '—';
     (by[who] = by[who] || { rep: who, now: [], waiting: [], done: [], nowValue: 0 });
     by[who][r.group].push(r);
     if (r.group === 'now') by[who].nowValue += r.value;

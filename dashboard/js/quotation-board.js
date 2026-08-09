@@ -86,7 +86,8 @@ async function qbLoad(fresh) {
     /* A rep sees their own book by default; oversight sees everyone. The filter is applied to the
        ROWS rather than to the fetch, so switching rep does not cost a round trip. */
     qbRows = quotationWorklist(q, qbLinks, qbCfg, qbHasSO).rows;
-    qbReps = Array.from(new Set(q.map(x => String(x.createdBy || '—')))).sort();
+    // A218 — the rep list is OWNERS, not typists.
+    qbReps = Array.from(new Set(q.map(x => flowQuotationOwner(x) || '—'))).sort();
     qbFillRepFilter();
     qbRender();
   } catch (e) {
@@ -116,7 +117,7 @@ function qbFiltered() {
   const term = String(document.getElementById('qbSearch').value || '').toLowerCase().trim();
   return qbRows.filter(r => {
     const q = r.quotation || {};
-    if (rep && String(q.createdBy || '—') !== rep) return false;
+    if (rep && (flowQuotationOwner(q) || '—') !== rep) return false;
     if (minAge && !(Number(r.days) >= minAge)) return false;
     if (term) {
       const hay = (String(q.customer || '') + ' ' + String(q.quotationNo || '') + ' ' +
@@ -203,7 +204,7 @@ function qbCard(r) {
         <span class="val">${flowMoney(r.value, 'PHP')}</span>
         <span class="age">${_qbe(age)}</span>
       </div>
-      <div class="who">${_qbe(q.createdBy || '')}${r.line ? ' · ' + _qbe(r.line) : ''}</div>
+      <div class="who">${_qbe(flowQuotationOwner(q))}${r.line ? ' · ' + _qbe(r.line) : ''}</div>
     </div>`;
 }
 

@@ -916,6 +916,19 @@ function flowQuotationDiscountPct(q) {
 
 /** Net after the discount, before VAT — what the client actually pays ex-VAT, and the figure the
  *  quotation PDF prints (pdf_generators/flow_quotation_pdf.py build_summary_table). */
+/* A218 — WHOSE DEAL IS IT. `createdBy` is who TYPED the quotation; on the live book one person typed
+   46 of 85 while owning 27, because creating quotations is her job. The server resolves the owner
+   (SCHEMA 'Salesperson' → the initials in the number → the creator) and ships it as `salesperson`.
+   Read it through here so a page never re-derives ownership from a number: the browser would be
+   guessing where the sheet already knows, and the two would drift.
+
+   Falls back to `createdBy` so a page still renders against a backend older than FLOW_VERSION 123 —
+   the deploy trails this repo by design, and the fallback is exactly the old behaviour. */
+function flowQuotationOwner(q) {
+  const o = q || {};
+  return String(o.salesperson || o.createdBy || '').trim();
+}
+
 function flowQuotationNet(q) {
   return flowQuotationGross(q) * (1 - flowQuotationDiscountPct(q) / 100);
 }

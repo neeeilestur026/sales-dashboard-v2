@@ -151,6 +151,25 @@ function qemScore(quotation, msg, ctx) {
     else if (gap <= 7) { score += 6; reasons.push('sent within a week'); }
     else if (gap <= 14) { score += 2; }
   }
+
+  /* 6. A218 — WHOSE QUOTATION IS IT, against whose mailbox this message came from.
+   *
+   *  The messages being ranked all come from one person's Sent folder, so a quotation that person
+   *  owns is a likelier match than one they do not. Until A218 the matcher had no notion of a rep at
+   *  all; the candidate list was narrowed by who TYPED the quotation, which is a different person
+   *  here — one rep types quotations for the others as part of her job.
+   *
+   *  Weighted well below the quotation number (+60), which stays decisive on its own: somebody who
+   *  writes the number in the subject has told us the answer, and they may legitimately be sending on
+   *  a colleague's behalf. The penalty is deliberately gentle for the same reason — it reorders, it
+   *  does not veto. */
+  const owner = String(c.mailboxOwner || '').trim();
+  if (owner) {
+    const qOwner = String(q.salesperson || q.createdBy || '').trim();
+    if (qOwner && qOwner === owner) { score += 18; reasons.push('your quotation'); }
+    else if (qOwner) { score -= 8; reasons.push(qOwner + '’s quotation'); }
+  }
+
   return { score: score, reasons: reasons };
 }
 
