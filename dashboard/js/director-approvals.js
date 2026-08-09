@@ -165,7 +165,7 @@ function daViewItinerary(no) {
     String(a.plannedTime || '').localeCompare(String(b.plannedTime || '')));
   const body = rows.length ? rows.map(r => `<tr>
       <td>${_dae(r.day || '')}<div style="font-size:0.7rem;color:#64748b;">${_dae(r.date || '')}</div></td>
-      <td>${_dae(r.plannedTime || '—')}</td>
+      <td>${_dae((typeof iwTime12 === 'function' ? iwTime12(r.plannedTime) : r.plannedTime) || '—')}</td>
       <td><strong>${_dae(r.company || '—')}</strong><div style="font-size:0.72rem;color:#64748b;">${_dae(r.personToMeet || '')}</div></td>
       <td>${_dae(r.cityArea || '—')}</td>
       <td>${_dae(r.purpose || '')}</td>
@@ -174,8 +174,13 @@ function daViewItinerary(no) {
     : '<tr><td colspan="7" style="text-align:center;padding:1rem;color:#64748b;">No planned visits.</td></tr>';
 
   const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:2rem 1rem;';
-  el.innerHTML = `<div style="max-width:1000px;margin:0 auto;background:#fff;border-radius:12px;padding:1.2rem 1.4rem;">
+  /* Matches its management twin (mfViewItinerary) rather than relying on an accident: this overlay
+     worked only because it carried NO class and so matched no stylesheet rule. The moment it gains
+     `.flow-modal-overlay` it must also carry `.open`, or flow.css:49-50 hides it — which is exactly
+     how "View plan" became a dead button on the management side. */
+  el.className = 'flow-modal-overlay open';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:2rem 1rem;display:flex;align-items:flex-start;justify-content:center;';
+  el.innerHTML = `<div class="flow-modal" style="max-width:1000px;margin:0 auto;background:#fff;border-radius:12px;padding:1.2rem 1.4rem;">
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;">
       <h3 style="margin:0;font-size:1rem;">${_dae(it.itineraryNo)} — ${_dae(it.user)}</h3>
       <span style="font-size:0.8rem;color:#64748b;">${_dae(it.weekStart)} – ${_dae(it.weekEnd)}</span>

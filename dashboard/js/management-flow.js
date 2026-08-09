@@ -640,7 +640,7 @@ function mfViewItinerary(no) {
     String(a.plannedTime || '').localeCompare(String(b.plannedTime || '')));
   const body = rows.length ? rows.map(r => `<tr>
       <td>${_mfe(r.day || '')}<div style="font-size:0.7rem;color:#64748b;">${_mfe(r.date || '')}</div></td>
-      <td>${_mfe(r.plannedTime || '—')}</td>
+      <td>${_mfe((typeof iwTime12 === 'function' ? iwTime12(r.plannedTime) : r.plannedTime) || '—')}</td>
       <td><strong>${_mfe(r.company || '—')}</strong><div style="font-size:0.72rem;color:#64748b;">${_mfe(r.personToMeet || '')}</div></td>
       <td>${_mfe(r.cityArea || '—')}</td>
       <td>${_mfe(r.purpose || '')}</td>
