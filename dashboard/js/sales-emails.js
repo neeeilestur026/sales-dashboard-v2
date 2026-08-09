@@ -159,6 +159,9 @@ function renderList() {
   const box = document.getElementById('listBox');
   if (!rows.length) { box.innerHTML = '<div class="dr-empty">No messages.</div>'; return; }
 
+  /* A217 — Sent is a SPLIT VIEW, not a table. See seRenderSplit. */
+  if (isSent && seReady) { seRenderSplit(rows, box); return; }
+
   // A208: the Sent tab gains a Quotation column, so a message can be attached from this end too.
   const head = isSent
     ? '<th>To</th><th>Subject</th><th>Sent</th><th>Quotation</th>'
@@ -209,6 +212,147 @@ function seQuotationCell(e) {
   return `<button class="link-btn" onclick='seAttach("${_esc(e.messageId)}")'>Attach…</button>`;
 }
 
+/* ── A217: the split view ────────────────────────────────────────────────────────────────────────
+   Messages on the left, the quotation each one most likely carried on the right.
+
+   Zero links have ever been made on the live book. The scorer that ranks these candidates has
+   existed since A208 and is good — quotation number in the subject is +60, a confirmed client domain
+   +35, same-day +20 — but it only ever ran INSIDE a dialog the rep had to think to open, from a page
+   that is not the one the mail is on. Nothing about the ranking changes here. The only change is that
+   nobody has to go looking for it: select a message and the answer is already beside it.
+
+   The dialog is kept for the long tail — "see all candidates" — so the two paths agree and neither
+   is dead code. */
+
+let seSelected = null;      // messageId of the message whose candidates are on screen
+
+/** The ranking, shared by the side pane and the dialog so they can never disagree. */
+function seRankFor(m) {
+  if (!m || typeof qemRankQuotations !== 'function') return [];
+  const byNo = {}; seQuotes.forEach(q => { byNo[String(q.quotationNo)] = q; });
+  const ctx = {
+    clientDomains: (typeof qemLearnDomains === 'function') ? qemLearnDomains(seLinks, byNo) : {},
+    dismissed: {}, linked: {}
+  };
+  seLinks.forEach(l => {
+    const id = String(l.messageId || '').toLowerCase();
+    if (id && String(l.status) === 'Active') ctx.linked[id] = String(l.quotationNo);
+  });
+  /* Only a quotation that has actually gone out can have been carried by a sent message. The same
+     filter the dialog uses. */
+  return qemRankQuotations(m, seQuotes.filter(q => {
+    const st = String(q.status || '');
+    return st === 'Approved' || st === 'Sent' || ['Not Pursued', 'Lost', 'Cancelled'].indexOf(st) !== -1;
+  }), ctx);
+}
+
+function seRenderSplit(rows, box) {
+  if (!seSelected || !rows.some(r => String(r.messageId) === String(seSelected))) {
+    // Open on the first message that is NOT yet linked — that is the one with work on it.
+    const first = rows.filter(r => r.messageId && !seLinkByMsg[String(r.messageId).toLowerCase()])[0]
+               || rows.filter(r => r.messageId)[0];
+    seSelected = first ? String(first.messageId) : null;
+  }
+
+  box.innerHTML = `<div class="se-split">
+      <div class="se-msgs">${rows.map(seMsgRow).join('')}</div>
+      <div class="se-side" id="seSide"></div>
+    </div>`;
+
+  box.querySelectorAll('.se-msg').forEach(b => b.addEventListener('click', () => {
+    seSelected = b.getAttribute('data-id');
+    renderList();
+  }));
+  seRenderSide();
+}
+
+function seMsgRow(e) {
+  const id = String(e.messageId || '');
+  const hit = id && seLinkByMsg[id.toLowerCase()];
+  const to = (e.recipients || []).map(x => x.addr).join(', ') || e.recipient || e.name || '—';
+  return `<button class="se-msg${id && id === seSelected ? ' on' : ''}" data-id="${_esc(id)}">
+      <span class="top"><span class="to">${_esc(to)}</span><span class="dt">${_when(e.date)}</span></span>
+      <span class="sj">${_esc(e.subject || '(no subject)')}</span>
+      ${hit ? `<span class="tag linked">✓ ${_esc(hit.quotationNo)}</span>`
+            : (id ? '<span class="tag none">not attached</span>'
+                  : '<span class="tag none" title="No Message-ID — it cannot be attached">no id</span>')}
+    </button>`;
+}
+
+function seRenderSide() {
+  const side = document.getElementById('seSide');
+  if (!side) return;
+  const m = deEmails.filter(x => String(x.messageId) === String(seSelected))[0];
+  if (!m) { side.innerHTML = '<div class="m">Pick a message on the left.</div>'; return; }
+
+  const to = (m.recipients || []).map(x => x.addr).join(', ') || m.recipient || '';
+  const head = `<h4>${_esc(m.subject || '(no subject)')}</h4>
+    <div class="m">to ${_esc(to || '—')}${m.date ? ' · ' + _esc(_when(m.date)) : ''}</div>`;
+
+  const hit = seLinkByMsg[String(m.messageId || '').toLowerCase()];
+  if (hit) {
+    side.innerHTML = head + `<div class="hint">Attached to
+      <a href="flow-quotations.html?review=${encodeURIComponent(hit.quotationNo)}"><b>${_esc(hit.quotationNo)}</b></a>.
+      The follow-up clock for that quotation runs from this message.</div>
+      <button class="btn btn-sm btn-secondary" onclick="seUnlink('${_esc(hit.quotationNo)}','${_esc(m.messageId)}')">Detach</button>`;
+    return;
+  }
+
+  const ranked = seRankFor(m);
+  if (!ranked.length) {
+    side.innerHTML = head + `<div class="hint">There is no approved or sent quotation this could
+      belong to. A quotation becomes attachable once it has been approved.</div>`;
+    return;
+  }
+
+  /* Confidence decides EMPHASIS, never the action. qemIsConfident wants a strong top score and a
+     clear gap; without it nothing is highlighted, because a merely least-bad guess arriving as "the
+     answer" is how a link register fills up with wrong links. */
+  const sure = (typeof qemIsConfident === 'function') && qemIsConfident(ranked);
+  const top = ranked.slice(0, 3);
+  side.innerHTML = head +
+    `<div class="hint">${sure
+      ? 'The first one below matches strongly — attach it and this quotation starts being tracked.'
+      : 'Nothing matches strongly enough to be sure, so nothing is highlighted. Pick the right one, or leave it.'}</div>` +
+    top.map((r, i) => {
+      const q = r.quotation;
+      const why = r.reasons.length ? r.reasons.map(x => `<span>${_esc(x)}</span>`).join('')
+                                   : '<span class="none">no strong signal</span>';
+      const value = (typeof flowQuotationNet === 'function' && typeof flowMoney === 'function')
+        ? flowMoney(flowQuotationNet(q), q.currency || 'PHP') : '';
+      return `<div class="se-cand${sure && i === 0 ? ' best' : ''}">
+          <div class="b">
+            <span class="no">${_esc(q.quotationNo)}</span>
+            <span class="cu">${_esc(q.customer || '—')}</span>
+            <span class="me">${_esc(q.status || '')}${q.date ? ' · ' + _esc(String(q.date).slice(0, 10)) : ''}${value ? ' · ' + _esc(value) : ''}</span>
+            <div class="why">${why}</div>
+          </div>
+          <button class="btn btn-sm ${sure && i === 0 ? 'btn-primary' : 'btn-secondary'}"
+                  onclick="seLinkNow('${_esc(q.quotationNo)}')">Attach</button>
+        </div>`;
+    }).join('') +
+    (ranked.length > top.length
+      ? `<button class="link-btn" onclick='seAttach("${_esc(m.messageId)}")'>See all ${ranked.length} candidates…</button>`
+      : '');
+}
+
+async function seLinkNow(quotationNo) {
+  const m = deEmails.filter(x => String(x.messageId) === String(seSelected))[0];
+  if (!m) return;
+  await seDoLink(quotationNo, m);
+}
+
+async function seUnlink(quotationNo, messageId) {
+  if (!confirm(`Detach this message from ${quotationNo}?\n\nThe quotation keeps its send date; only the link goes.`)) return;
+  try {
+    const res = await postFlow('unlinkQuotationEmail', { quotationNo: quotationNo, messageId: messageId });
+    if (!res.success) throw new Error(res.message);
+    await seLoadQuotations();
+    renderList();
+    seToast(res.message || 'Detached.', true);
+  } catch (e) { seToast(e.message, false); }
+}
+
 /* ── The attach picker ──────────────────────────────────────────────────────────────────────────
    The ranking is the whole point of this feature, and a native prompt() could only show it as a
    numbered list to read and a digit to type. The same ranked list is now a list of choices, with
@@ -225,19 +369,9 @@ let atMsg = null;
 function seAttach(messageId) {
   const m = deEmails.filter(x => String(x.messageId) === String(messageId))[0];
   if (!m || typeof qemRankQuotations !== 'function') return;
-  const byNo = {}; seQuotes.forEach(q => { byNo[String(q.quotationNo)] = q; });
-  const ctx = {
-    clientDomains: (typeof qemLearnDomains === 'function') ? qemLearnDomains(seLinks, byNo) : {},
-    dismissed: {}, linked: {}
-  };
-  seLinks.forEach(l => {
-    const id = String(l.messageId || '').toLowerCase();
-    if (id && String(l.status) === 'Active') ctx.linked[id] = String(l.quotationNo);
-  });
-  atRanked = qemRankQuotations(m, seQuotes.filter(q => {
-    const st = String(q.status || '');
-    return st === 'Approved' || st === 'Sent' || ['Not Pursued', 'Lost', 'Cancelled'].indexOf(st) !== -1;
-  }), ctx).slice(0, 6);
+  // A217: one ranking, shared with the side pane — two copies would eventually rank differently and
+  // the dialog would contradict the list the rep is looking at.
+  atRanked = seRankFor(m).slice(0, 6);
   atMsg = m;
   /* Only pre-select a genuinely confident top match — see qemIsConfident. */
   atPick = (typeof qemIsConfident === 'function' && qemIsConfident(atRanked)) ? 0 : -1;

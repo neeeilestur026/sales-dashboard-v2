@@ -103,11 +103,17 @@ async function loadFolder(folder, force) {
   box.innerHTML = '<div class="dr-empty">Loading ' + _esc(folder) + '…</div>';
   document.getElementById('catFilter').style.display = 'none';
   try {
-    const r = await apiFetchEmailFeed(folder, deDays);
+    /* A217 — `force` was being dropped here. loadFolder takes it and the Refresh button passes true
+       (line 32), but the call omitted it, so Refresh silently re-served the server's 2-minute cache:
+       the director pressed it, the list did not change, and nothing said why. sales-emails.js has
+       always passed it. */
+    const r = await apiFetchEmailFeed(folder, deDays, !!force);
     if (r && r.needsSetup) { showSetup(); return; }
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not load mailbox.');
     deEmails = deSortNewestFirst(r.emails || []);
-    deFetchedAt = new Date();
+    /* The SERVER's fetch time, not ours. With a cache in play "when was the mailbox last actually
+       read" is the honest question, and it is not the same as "when did I click". */
+    deFetchedAt = r.fetchedAt ? new Date(r.fetchedAt) : new Date();
     // tab counts
     const cntEl = { inbox: 'cntInbox', sent: 'cntSent', spam: 'cntSpam' }[folder];
     if (cntEl) document.getElementById(cntEl).textContent = '(' + deEmails.length + ')';
