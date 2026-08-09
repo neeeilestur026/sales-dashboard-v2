@@ -20,6 +20,13 @@ let ctSeq = 0;
 
 function _cte(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
 
+/** The same rule as the board and the quotation list (flow-quotations.js:41): everyone but a sales
+ *  rep sees the whole book. Three copies of this test would eventually disagree, and the most
+ *  permissive one would quietly become the policy — so it is written the same way in each. */
+function qctIsOversight() {
+  return String((ctSession || {}).role || '').toLowerCase() !== 'sales';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   ctSession = requireQuotationAccess();
   if (!ctSession) return;
@@ -47,10 +54,17 @@ async function ctLoad(fresh) {
        call per day for ever. Unfiltered it returns every visit in the company — 10 rows today, and
        the same call the A216 page already makes. If that ever grows, this is the first place to feel
        it, and the fix is a date-range filter on the handler rather than a cache here. */
+    /* Same rule as the board and the quotation list (flow-quotations.js:41): everyone but a sales
+       rep sees the whole book; a rep sees their own quotations and their own visits. Their client
+       list is therefore their clients — which is the useful view anyway, not a consolation prize.
+       Sales orders stay unscoped: an order has no salesperson of its own, and seeing what a client
+       they quote actually ordered is the point of the page. */
+    const mine = qctIsOversight() ? {} : { createdBy: ctSession.name };
+    const mineVisits = qctIsOversight() ? {} : { user: ctSession.name };
     const [q, so, cv, le] = await Promise.all([
-      fetchFlow('getQuotations', {}, opt).then(r => (r && r.data) || []),
+      fetchFlow('getQuotations', mine, opt).then(r => (r && r.data) || []),
       fetchFlow('getSalesOrders', {}, opt).then(r => (r && r.data) || []).catch(() => []),
-      fetchFlow('getClientVisits', {}, opt).then(r => (r && r.data) || []).catch(() => []),
+      fetchFlow('getClientVisits', mineVisits, opt).then(r => (r && r.data) || []).catch(() => []),
       fetchFlow('getQuotationEmails', {}, opt).then(r => (r && r.data) || []).catch(() => [])
     ]);
     if (seq !== ctSeq) return;

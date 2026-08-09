@@ -44,9 +44,18 @@ document.addEventListener('DOMContentLoaded', () => {
   qbLoad();
 });
 
+/* WHO SEES EVERYONE'S QUOTATIONS.
+ *
+ * Exactly the rule the quotation list already uses (flow-quotations.js:41) — management, director,
+ * admin and accounting see the whole book; a sales rep sees their own. Restating it as a different
+ * set here would mean the board and the list disagreed about what a rep is allowed to look at, and
+ * the more permissive of the two would silently become the real policy.
+ *
+ * It scopes the FETCH, not the filter. The first version of this page loaded every quotation and
+ * merely pre-selected the rep's name in a dropdown they could change back to "Everyone" — the rows
+ * were already in the browser. */
 function qbIsOversight() {
-  const r = String(qbSession.role || '').toLowerCase();
-  return r === 'management' || r === 'director' || r === 'admin' || r === 'accounting';
+  return String(qbSession.role || '').toLowerCase() !== 'sales';
 }
 
 async function qbLoad(fresh) {
@@ -55,8 +64,13 @@ async function qbLoad(fresh) {
   wrap.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   const opt = fresh ? { fresh: true } : {};
   try {
+    /* A sales rep's request carries their name, so the rows for other reps never reach the browser.
+       getQuotations is not _SECURED, so this scoping is advisory at the API level — the same
+       limitation the quotation list has always had, and the fix belongs in the backend rather than
+       in a second place here. */
+    const scope = qbIsOversight() ? {} : { createdBy: qbSession.name };
     const [q, so, le, cf] = await Promise.all([
-      fetchFlow('getQuotations', {}, opt).then(r => (r && r.data) || []),
+      fetchFlow('getQuotations', scope, opt).then(r => (r && r.data) || []),
       fetchFlow('getSalesOrders', {}, opt).then(r => (r && r.data) || []).catch(() => []),
       fetchFlow('getQuotationEmails', {}, opt).then(r => (r && r.data) || []).catch(() => []),
       fetchFlow('getFlowSettings', {}, opt).then(r => (r && r.data) || null).catch(() => null)
@@ -82,11 +96,16 @@ async function qbLoad(fresh) {
 
 function qbFillRepFilter() {
   const sel = document.getElementById('qbRep');
+  /* A rep has nobody to filter between — the only rows they can load are their own. The control is
+     removed rather than disabled, because a greyed-out "Everyone" invites the question of what is
+     behind it. */
+  // Set BOTH ways round, never just the hiding one: a function that can only hide leaves the control
+  // invisible for the next caller, and "it works because the page reloads" is not a reason.
+  sel.style.display = qbIsOversight() ? '' : 'none';
+  if (!qbIsOversight()) return;
   if (sel.options.length) return;                       // keep the reader's choice across refreshes
-  const mine = String(qbSession.name || '');
   sel.innerHTML = '<option value="">Everyone</option>' +
     qbReps.map(r => `<option value="${_qbe(r)}">${_qbe(r)}</option>`).join('');
-  if (!qbIsOversight() && qbReps.indexOf(mine) !== -1) sel.value = mine;
 }
 
 /* ── drawing ────────────────────────────────────────────────────────────────────────────────── */
