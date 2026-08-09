@@ -141,6 +141,15 @@
     <script>document.addEventListener('DOMContentLoaded', function () { if (typeof quotationTeamWorklist === 'function') setTimeout(function () { quotationTeamWorklist('qtwPanel'); }, 500); });</script>
 
 
+    <!-- A216 — this week's field plans. The director approves an itinerary FIRST, so a plan waiting
+         on them belongs here; and the queue below can only show what was submitted, so it is
+         structurally unable to show the rep who submitted nothing. That rep is the point. -->
+    <div class="chart-card" id="iwpCard" style="margin:0 0 1.1rem;padding:1rem 1.2rem;background:#fff;border:1px solid var(--border,#e2e8f0);border-radius:14px;">
+      <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;">🗺 Field plans this week</h3>
+      <div id="iwpPanel"></div>
+    </div>
+    <script>document.addEventListener('DOMContentLoaded', function () { if (typeof itineraryWeekPanel === 'function') setTimeout(function () { itineraryWeekPanel('iwpPanel'); }, 700); });</script>
+
     <!-- A190 — the director's approvals queue. This page had none: it is a payroll dashboard, and a
          director's only acting surface was the payment-requests page reached from the navbar. The
          weekly itinerary is approved DIRECTOR FIRST, so without this there would be nowhere to do
@@ -329,7 +338,8 @@
   <script src="js/quotation-worklist.js"></script>
   <script src="js/quotation-team-worklist.js"></script>
   <script src="js/director-home.js"></script>
-  <script src="js/itinerary-week.js"></script>       <!-- A216: iwTime12, so a planned time reads as 3:30 PM -->
+  <script src="js/itinerary-week.js"></script>       <!-- A216: iwTime12 + the engine the panel shares with the full page -->
+  <script src="js/itinerary-week-panel.js"></script> <!-- A216 -->
   <script src="js/director-approvals.js"></script>   <!-- A190 -->
   <script>
     // Date pill in the header band
