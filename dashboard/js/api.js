@@ -486,6 +486,23 @@ async function apiFetchEmailFeed(folder, days, force) {
   return _flaskFetch('/api/email/feed', { folder, days: days || 14, force: !!force });
 }
 
+/** A217 — has the client replied to any of these sent messages?
+ *
+ *  This route (blueprints/email_log.py:1067) was written for A208, does real RFC References /
+ *  In-Reply-To matching with a normalised-subject fallback, and HAD NO CALLER ANYWHERE. It is the
+ *  reason flowFollowUp's `replied` state has never fired in production.
+ *
+ *  Scoped to the caller's own mailbox by design — there is deliberately no `user` parameter, so an
+ *  oversight role cannot read someone else's inbox through it. The server caps at 500 ids.
+ *
+ *  Returns { replies: { messageId: {repliedAt, repliedFrom, replySubject} }, checkedAt }. A message
+ *  with no reply is simply ABSENT from `replies`; a failure returns success:false rather than an
+ *  empty map, because "we could not check" must never read as "there was no reply". */
+async function apiFetchQuotationThreads(messageIds, days) {
+  return _flaskFetch('/api/email/quotation-threads',
+                     { messageIds: messageIds || [], days: days || 60 });
+}
+
 /** Oversight-only user roster [{username, fullName, role}] for the sent-email aggregation.
  *  Proxied through Flask (POST) because the production Code.gs deployment 404s on GET getUsers. */
 async function apiFetchEmailUsers() {

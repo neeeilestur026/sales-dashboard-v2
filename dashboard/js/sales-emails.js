@@ -182,12 +182,14 @@ function renderList() {
 /* ── A208: attach a sent message to a quotation, from the message end ────────────────────────── */
 let deCached = false, deMailbox = '';
 let seQuotes = [], seLinks = [], seLinkByMsg = {}, seReady = false;
+let seReplyReady = false;      // A217: setQuotationEmailReply exists on the deployed backend
 
 /** Loaded once, alongside the mailbox. Both degrade to empty — the mailbox still lists. */
 async function seLoadQuotations() {
   try {
     seReady = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(113) : false;
     if (!seReady) return;
+    seReplyReady = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(122) : false;
     const [q, l] = await Promise.all([
       fetchFlow('getQuotations', deSession.role === 'sales' ? { createdBy: deSession.name } : {}).catch(() => ({ data: [] })),
       fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
@@ -254,7 +256,21 @@ function seRenderSplit(rows, box) {
     seSelected = first ? String(first.messageId) : null;
   }
 
-  box.innerHTML = `<div class="se-split">
+  const linked = rows.filter(r => r.messageId && seLinkByMsg[String(r.messageId).toLowerCase()]).length;
+  /* setQuotationEmailReply arrives with FLOW_VERSION 122. Offering the button against an older
+     backend would dispatch an unknown action and fail after two round trips — the deploy trails this
+     repo by design, so the control simply is not drawn until it would work. */
+  const canCheck = linked && seReplyReady;
+  box.innerHTML =
+    `<div style="margin:0 0 .5rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+       ${seReplyReady ? `<button class="btn btn-sm btn-secondary" id="seCheckReplies" ${linked ? '' : 'disabled'}>
+         Check for replies${linked ? ' (' + linked + ')' : ''}</button>` : ''}
+       <span style="font-size:.74rem;color:var(--text-muted,#64748b);">
+         ${canCheck ? 'Asks the mailbox whether the client answered any attached message.'
+          : linked ? 'Reply checking arrives with the next backend update.'
+                   : 'Attach a message to a quotation first — replies are tracked per attached message.'}</span>
+     </div>
+     <div class="se-split">
       <div class="se-msgs">${rows.map(seMsgRow).join('')}</div>
       <div class="se-side" id="seSide"></div>
     </div>`;
@@ -263,7 +279,49 @@ function seRenderSplit(rows, box) {
     seSelected = b.getAttribute('data-id');
     renderList();
   }));
+  const chk = document.getElementById('seCheckReplies');
+  if (chk) chk.addEventListener('click', seCheckReplies);
   seRenderSide();
+}
+
+/** A217 — ask the mailbox whether the client answered, and write down what it said.
+ *
+ *  Two halves that both already existed and had never been joined: /api/email/quotation-threads does
+ *  the RFC thread matching (and had no caller at all), and QuotationEmails has had Reply At / Reply
+ *  From / Reply Checked At since A208 with nothing ever writing them.
+ *
+ *  THE SUBTLE PART: Flask returns only the messages that DID get a reply — a message with no answer
+ *  is simply absent from the map. But "we looked on Tuesday and there was nothing" is a different
+ *  fact from "nobody has ever looked", and flowFollowUp already tells them apart. So every id we
+ *  checked is sent back, the un-replied ones as an empty object, and the handler stamps the check
+ *  date on all of them. Sending only the hits would leave every un-replied quotation permanently
+ *  indistinguishable from an unchecked one — which is exactly the state the whole feature is in
+ *  today. */
+async function seCheckReplies() {
+  const btn = document.getElementById('seCheckReplies');
+  const ids = deEmails.map(e => String(e.messageId || ''))
+                      .filter(id => id && seLinkByMsg[id.toLowerCase()]);
+  if (!ids.length) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  try {
+    const r = await apiFetchQuotationThreads(ids, deDays > 60 ? 60 : Math.max(deDays, 30));
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not read the mailbox.');
+    if (r.needsSetup) throw new Error('Reconnect your mailbox first.');
+
+    const replies = {};
+    ids.forEach(id => { replies[id] = (r.replies && r.replies[id]) || {}; });
+
+    const res = await postFlow('setQuotationEmailReply',
+                               { replies: JSON.stringify(replies), checkedAt: r.checkedAt || '' });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not record the result.');
+    await seLoadQuotations();
+    renderList();
+    seToast(res.message, true);
+  } catch (e) {
+    seToast(e.message, false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Check for replies'; }
+  }
 }
 
 function seMsgRow(e) {
