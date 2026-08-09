@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Client Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+<style>
+  /* A217 — one client, one timeline. Same rail-and-pane split as the itinerary page (A216): the rail
+     is the roster, the pane is the one you picked. A reader who has used one already knows this. */
+  .ct-wrap { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 1rem; align-items: start; }
+  .ct-wrap > * { min-width: 0; }
+  @media (max-width: 1000px) { .ct-wrap { grid-template-columns: minmax(0, 1fr); } }
+
+  .ct-rail { background:#fff; border:1px solid var(--border,#e2e8f0); border-radius:18px; padding:.4rem;
+             position: sticky; top: 96px; max-height: calc(100vh - 130px); overflow-y: auto; }
+  @media (max-width: 1000px) { .ct-rail { position: static; max-height: none; } }
+  .ct-search { width: 100%; margin: .35rem 0 .5rem; }
+
+  .ct-who { display:block; width:100%; text-align:left; border:0; background:none; cursor:pointer;
+            padding:.5rem .6rem; border-radius:12px; font-family:'Inter',sans-serif; }
+  .ct-who:hover { background: var(--bg-inset,#f1f5f9); }
+  .ct-who.on { background:#eef2ff; box-shadow: inset 0 0 0 1px #c7d2fe; }
+  .ct-who .n { font-weight:700; font-size:.8rem; color:var(--text-primary,#0f172a);
+               overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ct-who .c { font-size:.7rem; color:var(--text-muted,#64748b); margin-top:.12rem;
+               font-variant-numeric: tabular-nums; }
+  .ct-who .warn { color:#b45309; font-weight:700; }
+
+  .ct-pane { background:#fff; border:1px solid var(--border,#e2e8f0); border-radius:18px; padding:1.1rem 1.2rem; }
+  .ct-head { border-bottom:1px solid var(--border,#e2e8f0); padding-bottom:.8rem; margin-bottom:.9rem; }
+  .ct-head h2 { margin:0; font-size:1.12rem; font-weight:800; }
+  .ct-head .alias { font-size:.72rem; color:var(--text-muted,#94a3b8); margin-top:.15rem; }
+  .ct-stats { display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:.5rem; }
+  .ct-stats div { font-size:.72rem; color:var(--text-muted,#8b93a1); text-transform:uppercase;
+                  letter-spacing:.04em; font-weight:700; }
+  .ct-stats b { display:block; font:800 1.15rem 'Inter',sans-serif; color:var(--text-primary,#0f172a);
+                text-transform:none; letter-spacing:0; font-variant-numeric: tabular-nums; }
+
+  .ct-note { padding:.6rem .8rem; border-radius:11px; font-size:.78rem; line-height:1.6;
+             border-left:3px solid; margin-bottom:.8rem; }
+  .ct-note.warn { background:#fffbeb; border-color:#f59e0b; color:#92400e; }
+  .ct-note.info { background:var(--bg-inset,#f8fafc); border-color:#94a3b8; color:var(--text-secondary,#475569); }
+  .ct-note table { width:100%; border-collapse:collapse; margin-top:.4rem; font-size:.74rem; }
+  .ct-note td { padding:.16rem .4rem .16rem 0; vertical-align:top; }
+  .ct-note .num { text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap; }
+
+  /* The timeline: a spine with a dot per event, so a year of a relationship reads top to bottom. */
+  .ct-tl { position:relative; padding-left:1.15rem; }
+  .ct-tl::before { content:''; position:absolute; left:5px; top:.4rem; bottom:.4rem; width:2px;
+                   background:var(--border,#e2e8f0); }
+  .ct-ev { position:relative; padding:.4rem 0 .5rem; }
+  .ct-ev::before { content:''; position:absolute; left:-1.15rem; top:.62rem; width:9px; height:9px;
+                   border-radius:50%; background:#cbd5e1; box-shadow:0 0 0 3px #fff; }
+  .ct-ev.quotation::before { background:#6366f1; }
+  .ct-ev.sent::before      { background:#0ea5e9; }
+  .ct-ev.visit::before     { background:#10b981; }
+  .ct-ev.order::before     { background:#f59e0b; }
+  .ct-ev .top { display:flex; gap:.5rem; align-items:baseline; flex-wrap:wrap; }
+  .ct-ev .d { font:700 .7rem 'Inter',sans-serif; color:var(--text-muted,#94a3b8);
+              font-variant-numeric: tabular-nums; min-width:74px; }
+  .ct-ev .t { font-weight:700; font-size:.82rem; color:var(--text-primary,#0f172a); }
+  .ct-ev .v { margin-left:auto; font:700 .8rem 'Inter',sans-serif; font-variant-numeric: tabular-nums; }
+  .ct-ev .sub { font-size:.74rem; color:var(--text-secondary,#475569); margin-top:.14rem;
+                padding-left:74px; }
+  @media (max-width:640px) { .ct-ev .sub { padding-left:0; } }
+  .ct-kind { display:inline-block; padding:.04rem .38rem; border-radius:999px;
+             font:700 .62rem 'Inter',sans-serif; text-transform:uppercase; letter-spacing:.03em;
+             background:var(--bg-inset,#f1f5f9); color:var(--text-secondary,#475569); }
+  .ct-photo { height:44px; border-radius:6px; border:1px solid var(--border,#e2e8f0);
+              cursor:zoom-in; margin-top:.3rem; }
+  .ct-empty { padding:1rem 0; color:var(--text-muted,#94a3b8); font-size:.85rem; font-style:italic; }
+
+  @media print {
+    .navbar, .no-print, .ct-rail { display:none !important; }
+    body { background:#fff; }
+    .main-content { padding:0 !important; }
+    .ct-wrap { grid-template-columns: minmax(0,1fr) !important; }
+    .ct-pane { border:none; box-shadow:none; padding:0; }
+    .ct-ev { break-inside: avoid; }
+  }
+</style>
+</head>
+<body class="flow-screen">
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div>
+          <div class="eyebrow">Sales · Clients</div>
+          <h1>Client Tracker</h1>
+          <p>Everything about one client in one place — quotations, visits, orders, on one timeline.</p>
+        </div>
+      </div>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-sm btn-secondary" id="ctRefresh">Refresh</button>
+        <button class="btn btn-sm btn-secondary" id="ctPrint">Print</button>
+      </div>
+    </div>
+
+    <div id="ctMsg" class="flow-msg" style="display:none;"></div>
+    <div class="ct-wrap">
+      <aside class="ct-rail no-print">
+        <input type="text" id="ctSearch" class="form-input ct-search" placeholder="Find a client…">
+        <div id="ctRail"></div>
+      </aside>
+      <section class="ct-pane" id="ctPane">
+        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/client-rollup.js"></script>
+  <script src="js/client-tracker.js"></script>
+  <script>
+    (function () {
+      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
+      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
+    })();
+  </script>
+</body>
+</html>
