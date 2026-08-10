@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 123;  // A218 WHOSE quotation is it. 'Created By' is who TYPED it, and the system was treating it as whose deal it is - creating quotations is one person's job here, so she is Created By on 46 of 85 while owning 27. The real owner existed ONLY as initials inside the quotation number (2026-404-NEIL-ECC-GENSET is Crystal's, typed by Kimberlyn, and at P74.2M it is the largest deal in the book); flowQuotationDupPairs documents that format and deliberately throws the segment away, and nothing else ever parsed it. Quotations gains 'Salesperson' 26 -> 27, BOTH positional writers widened in step (the width trap, asserted first in tests/flow/quotation-owner.js). _quoOwner is the ONE answer to 'whose deal is this': the column, then the initials via _QUO_INITIALS, then the creator. _QUO_INITIALS IS A MIGRATION AID - after runQuotationOwnerBackfill the column is the fact, and a new hire must never need a code change. previewQuotationOwners / runQuotationOwnerBackfill are preview-then-apply and idempotent, and REPORT any number whose initials nobody recognises rather than defaulting it to the typist - silently assuming is how the wrong name got attached in the first place. updateQuotation can now correct 'Salesperson', which is the first correction path attribution has ever had ('Created By' is written once by createQuotation and no code could change it). closeQuotation/reopenQuotation guards WIDENED to owner OR creator, never moved: moving them would lock the typist out of quotations she maintains. _commSalesperson resolves through _quoOwner - that single line selects the commission RATE, decides who may file the claim at all, and is frozen onto the payable at submit, so a misattribution paid the wrong person AND refused the right one. previewCommissionOwnerShift reports what moves BEFORE the rule is trusted; on today's data it is empty - all 7 linked orders already agree, so this is protection for future claims, not a restatement of past ones · 122: A217 the quotation TRACKER: a pipeline board (dashboard/quotation-board.html), a per-client timeline (client-tracker.html), and the Sent mailbox as a SPLIT VIEW so attaching a message to a quotation is one click on a row already on screen. Zero links had ever been made - the scorer was fine, it just lived inside a dialog nobody thought to open, on the wrong page. ONE new handler: setQuotationEmailReply, which is the MISSING HALF OF A208. 'Reply At' / 'Reply From' / 'Reply Checked At' have been in the schema since 113, are read by _qeMap, and were written by NOTHING - so flowFollowUp's `replied` branch has never fired in production and the worklist's top-priority step 'They replied' was unreachable. The thread matching itself was ALSO already finished and callerless (/api/email/quotation-threads, blueprints/email_log.py:1067, real References/In-Reply-To walking with a normalised-subject fallback); this handler only writes down what it found. checkedAt is stamped EVEN WHEN NO REPLY WAS FOUND, because 'we looked and there was nothing' is a different fact from 'nobody has ever looked' and flowFollowUp already tells them apart - and Flask omits the misses, so the CLIENT sends an entry for every id it checked. A recorded reply is never erased by a later empty sweep. NOT _SECURED, matching its three A208 siblings - linkQuotationEmail is strictly more powerful (it back-dates 'Sent At') and is unsecured too, so securing one of four would add inconsistency rather than raise the floor; secure the QuotationEmails write group together, as its own change · 121: A216 the weekly itinerary reaches the people who approve it: dashboard/management-itinerary.html shows one Mon-Sun week per rep, planned stops with the visits actually logged underneath them, plus every rep who filed NOTHING - the live week has a rep with five client visits and no plan, and until now no screen anywhere said so. Backend change is ONE function: _timeOfDay now returns 24-hour 'HH:mm' instead of '3:30 PM', because the rep's planner renders it into <input type="time"> (weekly-itinerary.js:156) which accepts only that format - given anything else the browser BLANKS the control and the next Save writes the blank back, so opening a plan and saving it destroyed every planned time on it. Whatever a human reads is formatted at the point of display (iwTime12). No new handler, no new column: getWeeklyItineraries with no params already returns every rep's plan with items, getClientVisits returns the visits, and approve/rejectWeeklyItinerary already exist and are already _SECURED. The plan-vs-actual JOIN is the part that can lie, so it lives in a pure table-tested module (dashboard/js/itinerary-week.js): an EXACT link - ClientVisits '<Itinerary No>#<Seq>', which nothing in the repo had ever parsed - is the only thing counted as matched; a same-week company-NAME agreement is reported separately as 'likely' and never added to it; and a link whose Seq no longer exists (a revise re-appends every item row) degrades to 'stop deleted' rather than quietly becoming an unplanned visit. On today's data every match is 'likely' and matched is honestly ZERO, because the visit picker offers Approved plans only (report.js:359) and no plan has ever been approved · 120: A215 track quotations by WHAT IS NEXT, not by date. Quotations gains 'Sent At Basis' (blank = the date was recorded as it happened; anything else = ESTIMATED by the backfill, and every surface showing it must say so) plus 'Snooze Until' / 'Snooze Reason'. Parking is NOT the same as 'Follow Up Days': a threshold is a property of the deal ("this client always takes three weeks"), parking is a decision just made ("not now, ask me in October") - folding them together would let a rep quietly change how every future follow-up on a deal is judged. previewQuotationSentAt / runQuotationSentAtBackfill estimate the send date from 'Approved At' for the 60 quotations marked Sent before the stamp existed, because flowFollowUp returns 'unknown' for all of them and goes silent, leaving the worklist blind to nearly the whole pipeline. Preview and apply are separate handlers - nothing writes until somebody has read what would change - and the run is idempotent: a quotation that already has a real date is never touched. BOTH positional Quotations writers widened 23 -> 26 in step (the width trap). runQuotationSentAtBackfill is _SECURED because it decides who may rewrite 60 send dates off a browser-supplied actorRole; snoozeQuotation is deliberately not, matching setQuotationFollowUp beside it · 119: A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 124;  // A219 the peso side of a foreign payable. AP-202607-006 showed USD 202 as P310,895.71 (implied P1,539/USD) - a figure byte-identical to AP-202607-005's Paid, pasted into the wrong row. getAPAging does NO arithmetic, so it was a stored cell. All four bad rows were already NAMED in c34f99b (A171 W2, 2026-07-29 12:36); AP-006 was last written 2026-07-28 01:38, ~35h BEFORE that guard existed, and A171's checks are write-time only - nothing has ever re-read an existing row. THERE IS NO EXCHANGE RATE TO VALIDATE AGAINST: the rate is whatever the bank gives on the day, which is why three of four foreign POs store rate 0 - honest, not missing. So the primary rule uses no rate at all: A PAYABLE MARKED PAID CANNOT EXCEED WHAT WAS ACTUALLY PAID FOR IT, reconciled against the approved PaymentRequests via _poRequestedPHP (deliberately NOT _poPayablePHP/_poRemainingPayable, which derive from APAging's own Amount and would be circular). That catches both errors (10x and 25x) and clears AP-202607-007 with no special case - the VAT is on the payment request too. The 20-200 FX band survives only as a typo net for rows with no payment yet. _apAmountProblem finally USES the poNo it always took and ignored, and now receives the status. THE ORDER OF TWO STATEMENTS IN updateAPAging WAS A BUG: the Status=Paid reconcile overwrote the payable with the paid figure BEFORE validation, so the paid-exceeds-payable branch could never fire on a Paid row - validate first, reconcile second. updatePurchaseOrder gained the _poFxProblem call it never had (create was guarded, update was not, and update writes both the rate and the AP peso amount). previewAPAgingAnomalies is the sweep the guards never had - read-only, names WHICH FIELD is wrong, and refuses to erase a probable BANK CHARGE: two USD wires show paid slightly above the payable (P2,070.60 and P465.77), which is a fee with nowhere to be recorded, not a typo. It reports the residual a correction would throw away rather than dropping it silently · 123: A218 WHOSE quotation is it. 'Created By' is who TYPED it, and the system was treating it as whose deal it is - creating quotations is one person's job here, so she is Created By on 46 of 85 while owning 27. The real owner existed ONLY as initials inside the quotation number (2026-404-NEIL-ECC-GENSET is Crystal's, typed by Kimberlyn, and at P74.2M it is the largest deal in the book); flowQuotationDupPairs documents that format and deliberately throws the segment away, and nothing else ever parsed it. Quotations gains 'Salesperson' 26 -> 27, BOTH positional writers widened in step (the width trap, asserted first in tests/flow/quotation-owner.js). _quoOwner is the ONE answer to 'whose deal is this': the column, then the initials via _QUO_INITIALS, then the creator. _QUO_INITIALS IS A MIGRATION AID - after runQuotationOwnerBackfill the column is the fact, and a new hire must never need a code change. previewQuotationOwners / runQuotationOwnerBackfill are preview-then-apply and idempotent, and REPORT any number whose initials nobody recognises rather than defaulting it to the typist - silently assuming is how the wrong name got attached in the first place. updateQuotation can now correct 'Salesperson', which is the first correction path attribution has ever had ('Created By' is written once by createQuotation and no code could change it). closeQuotation/reopenQuotation guards WIDENED to owner OR creator, never moved: moving them would lock the typist out of quotations she maintains. _commSalesperson resolves through _quoOwner - that single line selects the commission RATE, decides who may file the claim at all, and is frozen onto the payable at submit, so a misattribution paid the wrong person AND refused the right one. previewCommissionOwnerShift reports what moves BEFORE the rule is trusted; on today's data it is empty - all 7 linked orders already agree, so this is protection for future claims, not a restatement of past ones · 122: A217 the quotation TRACKER: a pipeline board (dashboard/quotation-board.html), a per-client timeline (client-tracker.html), and the Sent mailbox as a SPLIT VIEW so attaching a message to a quotation is one click on a row already on screen. Zero links had ever been made - the scorer was fine, it just lived inside a dialog nobody thought to open, on the wrong page. ONE new handler: setQuotationEmailReply, which is the MISSING HALF OF A208. 'Reply At' / 'Reply From' / 'Reply Checked At' have been in the schema since 113, are read by _qeMap, and were written by NOTHING - so flowFollowUp's `replied` branch has never fired in production and the worklist's top-priority step 'They replied' was unreachable. The thread matching itself was ALSO already finished and callerless (/api/email/quotation-threads, blueprints/email_log.py:1067, real References/In-Reply-To walking with a normalised-subject fallback); this handler only writes down what it found. checkedAt is stamped EVEN WHEN NO REPLY WAS FOUND, because 'we looked and there was nothing' is a different fact from 'nobody has ever looked' and flowFollowUp already tells them apart - and Flask omits the misses, so the CLIENT sends an entry for every id it checked. A recorded reply is never erased by a later empty sweep. NOT _SECURED, matching its three A208 siblings - linkQuotationEmail is strictly more powerful (it back-dates 'Sent At') and is unsecured too, so securing one of four would add inconsistency rather than raise the floor; secure the QuotationEmails write group together, as its own change · 121: A216 the weekly itinerary reaches the people who approve it: dashboard/management-itinerary.html shows one Mon-Sun week per rep, planned stops with the visits actually logged underneath them, plus every rep who filed NOTHING - the live week has a rep with five client visits and no plan, and until now no screen anywhere said so. Backend change is ONE function: _timeOfDay now returns 24-hour 'HH:mm' instead of '3:30 PM', because the rep's planner renders it into <input type="time"> (weekly-itinerary.js:156) which accepts only that format - given anything else the browser BLANKS the control and the next Save writes the blank back, so opening a plan and saving it destroyed every planned time on it. Whatever a human reads is formatted at the point of display (iwTime12). No new handler, no new column: getWeeklyItineraries with no params already returns every rep's plan with items, getClientVisits returns the visits, and approve/rejectWeeklyItinerary already exist and are already _SECURED. The plan-vs-actual JOIN is the part that can lie, so it lives in a pure table-tested module (dashboard/js/itinerary-week.js): an EXACT link - ClientVisits '<Itinerary No>#<Seq>', which nothing in the repo had ever parsed - is the only thing counted as matched; a same-week company-NAME agreement is reported separately as 'likely' and never added to it; and a link whose Seq no longer exists (a revise re-appends every item row) degrades to 'stop deleted' rather than quietly becoming an unplanned visit. On today's data every match is 'likely' and matched is honestly ZERO, because the visit picker offers Approved plans only (report.js:359) and no plan has ever been approved · 120: A215 track quotations by WHAT IS NEXT, not by date. Quotations gains 'Sent At Basis' (blank = the date was recorded as it happened; anything else = ESTIMATED by the backfill, and every surface showing it must say so) plus 'Snooze Until' / 'Snooze Reason'. Parking is NOT the same as 'Follow Up Days': a threshold is a property of the deal ("this client always takes three weeks"), parking is a decision just made ("not now, ask me in October") - folding them together would let a rep quietly change how every future follow-up on a deal is judged. previewQuotationSentAt / runQuotationSentAtBackfill estimate the send date from 'Approved At' for the 60 quotations marked Sent before the stamp existed, because flowFollowUp returns 'unknown' for all of them and goes silent, leaving the worklist blind to nearly the whole pipeline. Preview and apply are separate handlers - nothing writes until somebody has read what would change - and the run is idempotent: a quotation that already has a real date is never touched. BOTH positional Quotations writers widened 23 -> 26 in step (the width trap). runQuotationSentAtBackfill is _SECURED because it decides who may rewrite 60 send dates off a browser-supplied actorRole; snoozeQuotation is deliberately not, matching setQuotationFollowUp beside it · 119: A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -1858,6 +1858,17 @@ function updatePurchaseOrder(p) {
   var currency = p.currency || 'PHP';
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+
+  /* A219 — the A171 hole that was left open on the UPDATE path.
+     _poFxProblem was wired into createPurchaseOrder only, yet this function writes BOTH the exchange
+     rate and, further down, APAging['Amount (PHP)'] — the number that becomes landed cost and COGS.
+     Every guard A171 put on create could be walked straight past by editing the PO afterwards. */
+  var _poFx = _poFxProblem(currency, total, _num(p.exchangeRate), _num(p.totalPHP));
+  if (_poFx && !p.confirmAmount) {
+    return { success: false, needsConfirm: 'poAmount', impliedFx: _poFx.impliedFx,
+             message: _poFx.message };
+  }
+
   var sh = _sheet('PurchaseOrders');
   var poRateCol = SCHEMA.PurchaseOrders.indexOf('Exchange Rate') + 1;
   _rows('PurchaseOrders').forEach(function (r) {
@@ -1955,12 +1966,60 @@ function getAPAging() {
    two live errors implied ₱620 and ₱1,539 per USD; every real rate in the system sits near ₱60. */
 var _FX_BAND = { min: 20, max: 200 };
 
+/** A219 — what has actually been ASKED FOR in pesos against this PO, from the payment requests.
+ *
+ *  This is the one peso figure the company genuinely holds. THERE IS NO EXCHANGE RATE TO VALIDATE
+ *  AGAINST: the rate is whatever the bank gives on the day of the transfer, which is why
+ *  PurchaseOrders['Exchange Rate'] is 0 on three of the four foreign POs — that is honest, not
+ *  missing. What is known is the foreign amount owed and the pesos that left the account.
+ *
+ *  Deliberately NOT _poPayablePHP or _poRemainingPayable: both of those derive from APAging's own
+ *  'Amount (PHP)', so checking the payable with either would be circular. This reads
+ *  PaymentRequests, which is independent evidence.
+ *
+ *  Only Approved and Paid requests count. A Draft or Rejected request is not evidence of anything. */
+function _poRequestedPHP(poNo) {
+  var po = String(poNo || '').trim();
+  if (!po) return 0;
+  return _rows('PaymentRequests').reduce(function (s, r) {
+    if (String(r['PO No'] || '').trim() !== po) return s;
+    var st = String(r['Status'] || '');
+    return (st === 'Approved' || st === 'Paid') ? s + _num(r['Amount']) : s;
+  }, 0);
+}
+
 /** Is this AP amount impossible? Returns null when fine, else {block, message, impliedFx}.
  *  `block` is false for things that are merely worth saying out loud (the VAT ratio) — per the
- *  standing decision, VAT is warned about, never enforced. */
-function _apAmountProblem(poNo, currency, amountFC, amountPHP, paidPHP) {
+ *  standing decision, VAT is warned about, never enforced.
+ *
+ *  A219 — `status` is new and `poNo` is finally USED. It was accepted and ignored, while the comment
+ *  at the call site claimed this checked against the PO. */
+function _apAmountProblem(poNo, currency, amountFC, amountPHP, paidPHP, status) {
   var cur = String(currency || 'PHP').toUpperCase();
   var msg = [];
+
+  /* THE PRIMARY CHECK, and it needs no exchange rate at all.
+   *
+   * A payable marked Paid cannot exceed what was actually paid for it — that is double entry, not an
+   * opinion about the peso. It catches both live errors outright (AP-202607-001 at 10x its payments,
+   * AP-202607-006 at 25x) and, just as importantly, clears the rows a rate-based rule would have
+   * argued with:
+   *   · AP-202607-007 is a PHP order of ₱27,000 with a ₱30,240 payable — the VAT is on the payment
+   *     request too, so the ratio needs no special case whatsoever;
+   *   · a PART payment is legitimately less than the payable, so the rule applies to Paid rows only.
+   *
+   * Skipped when no approved request exists: a payable settled outside the system has nothing to
+   * reconcile against, and refusing it would block honest work. */
+  if (String(status || '').toLowerCase() === 'paid' && amountPHP > 0) {
+    var requested = _poRequestedPHP(poNo);
+    var tol = Math.max(1, requested * 0.005);
+    if (requested > 0 && amountPHP > requested + tol) {
+      return { block: true, impliedFx: 0,
+        message: 'This payable is ₱' + amountPHP.toFixed(2) + ' but the approved payment requests on ' +
+                 poNo + ' come to ₱' + requested.toFixed(2) + '. A payable marked Paid cannot be more ' +
+                 'than what was paid for it — check for a figure copied from another row.' };
+    }
+  }
 
   // Paid more than the payable — AP-202607-005 is ₱465.77 over. The payment-request path already
   // caps this; the AP row edit did not.
@@ -1995,6 +2054,133 @@ function _apAmountProblem(poNo, currency, amountFC, amountPHP, paidPHP) {
                ' figure copied from another payable.' };
   }
   return null;
+}
+
+/* A219 — the sweep the guards never had.
+ *
+ * A171's checks are WRITE-TIME ONLY. They stop a bad payable being saved; they have never once looked
+ * at a row that was already there. AP-202607-006 was last written 2026-07-28 01:38 and the guard
+ * landed 2026-07-29 12:36 — about 35 hours later — so the value sailed straight past it and has sat
+ * on the screen ever since, inflating payables by ₱700,519 and the paid total by ₱300,985.
+ *
+ * Read-only, and deliberately separate from any correction: these rows have already survived one
+ * round of guards and deserve a human decision, not a migration. Run it whenever; it writes nothing.
+ */
+/** Which FIELD is wrong, and what should it be? Two different faults arrive here:
+ *   · the payable exceeds its payments  -> the AMOUNT is wrong (AP-001, AP-006);
+ *   · the paid exceeds the payable      -> the PAID is wrong  (AP-005, where the payable is right
+ *                                          and only the ₱465.77 on top is not).
+ *  When the amount comes down, the paid must come down with it or it immediately exceeds the
+ *  corrected payable — AP-006 needs BOTH, and a report that fixed only one would leave the row
+ *  failing the very check that flagged it. */
+function _apSuggest(g, php, requested) {
+  if (!g || !g.block) return { amount: null, paid: null };
+  if (requested > 0 && php > requested) return { amount: requested, paid: requested };
+  return { amount: null, paid: php };
+}
+
+/* A219 — is this excess a MISTAKE, or the bank's fee?
+ *
+ * Two live rows have `Paid (PHP)` slightly above their payable, and both are USD wire transfers:
+ *   AP-202607-001  ₱46,393.80 paid on a ₱44,323.20 payable  -> ₱2,070.60 over
+ *   AP-202607-005  ₱310,895.71 paid on a ₱310,429.94 payable ->   ₱465.77 over
+ * That is a pattern, not two coincidences: an international transfer costs the invoice plus a fee,
+ * and there is nowhere in the schema to record one, so it gets folded into what was "paid".
+ *
+ * A sweep that proposed reducing these to the invoice amount would ERASE A REAL COST from the books.
+ * So a small positive excess on a foreign payable is reported as a probable bank charge with no
+ * correction offered — the honest answer is "this needs somewhere to live", not "delete it".
+ *
+ * The ceiling is deliberately tight. A fee is small next to the transfer; the two errors this change
+ * exists to catch are 10x and 25x, nowhere near it. */
+function _apLikelyBankCharge(currency, php, paid) {
+  if (String(currency || 'PHP').toUpperCase() === 'PHP') return false;   // no wire, no wire fee
+  var over = paid - php;
+  if (!(over > 0.005)) return false;
+  return over <= 5000 && over <= php * 0.05;
+}
+
+function previewAPAgingAnomalies(p) {
+  p = p || {};
+  var out = [], clean = 0;
+  _rows('APAging').forEach(function (r) {
+    var apNo = String(r['AP No'] || '');
+    if (!apNo) return;
+    var poNo = String(r['PO No'] || '');
+    var cur = String(r['Currency'] || 'PHP').toUpperCase();
+    var fc = _num(r['Amount (FC)']), php = _num(r['Amount (PHP)']), paid = _num(r['Paid (PHP)']);
+    var status = String(r['Status'] || '');
+    var g = _apAmountProblem(poNo, cur, fc, php, paid, status);
+    if (!g) { clean++; return; }
+    var requested = _poRequestedPHP(poNo);
+    out.push({
+      apNo: apNo, poNo: poNo, supplier: r['Supplier'] || '', currency: cur, status: status,
+      amountFC: fc, amountPHP: php, paidPHP: paid,
+      requestedPHP: requested,
+      impliedRate: fc > 0 ? Math.round((php / fc) * 100) / 100 : null,
+      /* The correction is only ever PROPOSED, and only where the payment requests actually say what
+         it should be. Where they do not, the row is still reported — with no suggestion — because
+         "we cannot tell" is a useful answer and a guess is not.
+
+         AND IT MUST NAME THE RIGHT FIELD. Two different faults reach this point: a payable larger
+         than its payments (fix the AMOUNT), and a paid figure larger than its payable (fix the PAID
+         — AP-202607-005, where the payable is already correct and only the ₱465.77 on top is wrong).
+         An earlier version suggested the amount in both cases, which told the reader to change
+         AP-005's payable to the value it already held. */
+      suggestedPHP: _apSuggest(g, php, requested).amount,
+      /* A probable bank charge is never "corrected" away — see _apLikelyBankCharge. */
+      likelyBankCharge: _apLikelyBankCharge(cur, php, paid),
+      bankChargePHP: _apLikelyBankCharge(cur, php, paid) ? Math.round((paid - php) * 100) / 100 : null,
+      suggestedPaidPHP: _apLikelyBankCharge(cur, php, paid) ? null
+        : (_apSuggest(g, php, requested).paid === null ? null
+           : Math.min(paid, _apSuggest(g, php, requested).paid)),
+      blocking: !!g.block,
+      why: g.message
+    });
+  });
+  /* Drop the no-op suggestions the raw comparison produces. AP-202607-005's payable is
+     ₱310,429.944 against a request of ₱310,429.94 — a 0.4-centavo float residue from
+     5035.36 x 61.65, not an error. Suggesting a "correction" of four tenths of a centavo would put
+     a real row on a list of things to fix and teach people to skim it. */
+  out.forEach(function (x) {
+    if (x.suggestedPHP !== null && Math.abs(x.amountPHP - x.suggestedPHP) < 0.01) x.suggestedPHP = null;
+    if (x.suggestedPaidPHP !== null && Math.abs(x.paidPHP - x.suggestedPaidPHP) < 0.01) x.suggestedPaidPHP = null;
+
+    /* WHAT WOULD BE THROWN AWAY BY THE CORRECTION.
+       AP-202607-001 is paid ₱46,393.80 against a real payable of ₱44,323.20. Bringing the paid
+       figure down to settle the payable leaves ₱2,070.60 with nowhere to go — and on a USD wire that
+       is almost certainly the bank's fee, i.e. a real cost. Reporting the residual is the difference
+       between correcting a row and quietly destroying an expense; the sweep proposes nothing for it,
+       it just refuses to pretend it is not there. */
+    if (x.suggestedPaidPHP !== null && x.paidPHP > x.suggestedPaidPHP) {
+      var residual = Math.round((x.paidPHP - x.suggestedPaidPHP) * 100) / 100;
+      var small = _apLikelyBankCharge(x.currency, x.suggestedPaidPHP, x.paidPHP);
+      x.unaccountedAfterFix = residual;
+      x.unaccountedLooksLikeBankCharge = small;
+      if (small) {
+        x.why += ' Correcting it leaves ₱' + residual.toFixed(2) +
+                 ' unaccounted — on a foreign transfer that is most likely the bank charge, which has' +
+                 ' nowhere to be recorded today.';
+      }
+    } else {
+      x.unaccountedAfterFix = null;
+      x.unaccountedLooksLikeBankCharge = false;
+    }
+  });
+  out.sort(function (a, b) { return (b.blocking - a.blocking) || (b.amountPHP - a.amountPHP); });
+  var moving = out.filter(function (x) { return x.suggestedPHP !== null; });
+  return { success: true, checked: out.length + clean, flagged: out.length,
+    blocking: out.filter(function (x) { return x.blocking; }).length,
+    correctable: moving.length,
+    paidCorrectable: out.filter(function (x) { return x.suggestedPaidPHP !== null; }).length,
+    likelyBankCharges: out.filter(function (x) { return x.likelyBankCharge; }).length,
+    bankChargeTotal: Math.round(out.reduce(function (s2, x) { return s2 + (x.bankChargePHP || 0); }, 0) * 100) / 100,
+    overstatedBy: Math.round(moving.reduce(function (s, x) { return s + (x.amountPHP - x.suggestedPHP); }, 0) * 100) / 100,
+    data: out,
+    message: out.length
+      ? out.length + ' payable(s) do not reconcile with their payments; ' + moving.length +
+        ' have a payment request that says what the payable should be.'
+      : 'Every payable reconciles with its payment requests.' };
 }
 
 /** A171 — a PO's peso total and its exchange rate must tell the same story. Returns null when fine. */
@@ -2043,20 +2229,26 @@ function updateAPAging(p) {
   setText(7, p.dueDate);                                             // Due Date (clearable)
   set(8, p.paidPHP !== undefined ? _num(p.paidPHP) : undefined);     // Paid (PHP)
   setText(9, p.notes);                                               // Notes (clearable)
+  /* A171 — the payable is the number that becomes landed cost, COGS and gross profit, and until now
+     this function accepted it as a bare number with no idea what the PO was. That is how a 202-USD
+     order came to be recorded at ₱310,895 and a 720-USD order at ₱446,393.
+
+     A219 — THIS NOW RUNS BEFORE THE RECONCILE BELOW, AND THE ORDER IS THE POINT. The reconcile
+     overwrites the payable with the paid figure whenever the row is Paid, so with the old ordering
+     the two were equal by construction by the time the guard saw them, and the `paid > payable`
+     branch inside _apAmountProblem could NEVER fire on a Paid row — the rows where it matters most.
+     Validate what the user actually sent, then reconcile. */
+  var _apGuard = _apAmountProblem(cur[1], cur[3], _num(cur[4]), _num(cur[5]), _num(cur[8]), cur[6]);
+  if (_apGuard && _apGuard.block && !p.confirmAmount) {
+    return { success: false, needsConfirm: 'apAmount', impliedFx: _apGuard.impliedFx,
+             message: _apGuard.message };
+  }
+
   // A145: once the row is marked Paid with an actual Paid (PHP), the ACTUAL disbursed pesos become the
   // payable so downstream (payment request amount, receiving landed cost) use the real figure, not the
   // stale PO-time estimate. (The AP form always sends Amount (PHP), so this is the effective reconcile.)
   if (String(cur[6]).toLowerCase() === 'paid' && _num(cur[8]) > 0) {
     cur[5] = _num(cur[8]);
-  }
-
-  /* A171 — the payable is the number that becomes landed cost, COGS and gross profit, and until now
-     this function accepted it as a bare number with no idea what the PO was. That is how a 202-USD
-     order came to be recorded at ₱310,895 and a 720-USD order at ₱446,393. Check it against the PO. */
-  var _apGuard = _apAmountProblem(cur[1], cur[3], _num(cur[4]), _num(cur[5]), _num(cur[8]));
-  if (_apGuard && _apGuard.block && !p.confirmAmount) {
-    return { success: false, needsConfirm: 'apAmount', impliedFx: _apGuard.impliedFx,
-             message: _apGuard.message };
   }
 
   cur[11] = _now();                                                  // Updated At
@@ -9878,7 +10070,7 @@ var HANDLERS = {
   updateSalesOrder: updateSalesOrder, deleteSalesOrder: deleteSalesOrder, importSalesOrders: importSalesOrders,
   getPurchaseOrders: getPurchaseOrders, createPurchaseOrder: createPurchaseOrder,
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
-  getAPAging: getAPAging, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
+  getAPAging: getAPAging, previewAPAgingAnomalies: previewAPAgingAnomalies, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
   voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
   correctCollection: correctCollection,

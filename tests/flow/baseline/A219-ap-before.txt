@@ -1,0 +1,42 @@
+A219 baseline — every APAging row as it stands BEFORE any change.
+Captured from the live sheet via getAPAging / getPurchaseOrders / getPaymentRequests.
+
+Nothing in A219 may alter a row without this file showing what it was. The four bad rows were first
+named in commit c34f99b (A171 W2, 2026-07-29 12:36); AP-202607-006 was last written 2026-07-28 01:38,
+about 35 hours before that guard existed, which is why it survived it.
+
+apNo            cur  amountFC     amountPHP    paidPHP      status   poCur poTotal      poRate  approvedPRsum  prCount  impliedRate
+AP-202607-001   USD  720          446393.8     46393.8      Paid     USD   720          0       44323.2        1        619.99
+AP-202607-002   PHP  43500        43500        43500        Paid     PHP   43500        0       43500          1        1
+AP-202607-005   USD  5035.36      310429.944   310895.71    Paid     USD   5035.36      0       310429.94      1        61.65
+AP-202607-006   USD  202          310895.71    310895.71    Paid     USD   202          0       12447.24       1        1539.09
+AP-202607-007   PHP  27000        30240        30240        Paid     PHP   27000        0       30240          1        1.12
+AP-202607-009   PHP  34146        34146        17073        Partial  PHP   34146        1       17073          1        1
+AP-202607-011   PHP  139372       139372       69686        Partial  PHP   139372       1       69686          1        1
+AP-202607-012   PHP  54400        54400        0            Unpaid   PHP   54400        1       0              1        1
+AP-202607-013   PHP  250560       250560       0            Unpaid   PHP   250560       1       0              0        1
+AP-202607-014   SGD  2493.9       119083.725   0            Unpaid   SGD   2493.9       47.75   119083.73      1        47.75
+
+TOTALS AS SHOWN     amountPHP 1,739,021.18     paidPHP 828,684.22
+TOTALS CORRECTED    amountPHP 1,038,502.11     paidPHP   527,699.38
+                    (AP-001 -> 44,323.20 · AP-006 -> 12,447.24 · AP-005 paid -> 310,429.94)
+
+WHAT THIS TABLE DECIDED ABOUT THE RULE
+--------------------------------------
+The `approvedPRsum` column is the fact the company actually has — no exchange rate is involved.
+Reading it against `amountPHP` gives a rule that needs no rate at all:
+
+    A payable marked Paid cannot exceed what was actually paid for it.
+
+  · AP-001 Paid, 446,393.80 vs 44,323.20 paid  -> FLAG (10x)
+  · AP-006 Paid, 310,895.71 vs 12,447.24 paid  -> FLAG (25x)
+  · AP-007 Paid, 30,240 vs 30,240              -> passes. The VAT is on the PR too, so the
+                                                  12% uplift needs no special case whatsoever.
+  · AP-009 / AP-011 Partial                    -> rule does not apply; a part payment is
+                                                  legitimately less than the payable.
+  · AP-012 / AP-013 Unpaid                     -> rule does not apply.
+  · AP-014 Unpaid (SGD)                        -> rule does not apply; its rate is stored and right.
+
+That is exactly the two known-bad rows and nothing else, from double-entry alone rather than from any
+opinion about what an exchange rate should be. The 20-200 FX band survives only as a weak typo net
+for rows that have no payment yet, where there is nothing better to check against.
