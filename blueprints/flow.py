@@ -521,6 +521,9 @@ def payment_request_pdf():
         "payment_method": _s(data.get("paymentMethod")),
         "currency": _s(data.get("currency")) or "PHP",
         "amount": _s(data.get("amount")),
+        # A222 — the peso estimate beneath a foreign obligation. Blank on a PHP request, which the
+        # renderer then leaves out entirely, so the legacy output is unchanged byte for byte.
+        "amount_php_est": _s(data.get("amountPHPEst")),
         "due_date": ph_date_ymd(data.get("dueDate"), default=_s(data.get("dueDate"))),
         "remarks": _s(data.get("remarks")),
         # A180: which slice of the PO this is, plus the payable snapshot it was measured against.
@@ -561,12 +564,23 @@ def payment_request_pdf():
 SECURED_ACTIONS = [
     "approveQuotation", "rejectQuotation", "approvePO", "rejectPO",
     "approvePaymentRequest", "rejectPaymentRequest", "markPaymentRequestPaid",
+    # A225 — raising/editing a PO payment request is now role-gated (admin or accounting only), so
+    # the role has to come from the session rather than the payload. Must stay in step with _SECURED
+    # in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
+    "createPaymentRequest", "updatePaymentRequest",
     "setMgmtPricing", "rejectMgmtPricing", "verifyReturnToSales",
     "deleteQuotation", "deleteSalesOrder", "deletePurchaseOrder", "deletePaymentRequest",
+    # A220 — a rename re-keys fourteen sheets and every money record on the order.
+    "renameSalesOrder",
     "deleteAPEntry", "updateAPAging", "recordCollection", "correctCollection",
     "voidCollection", "voidInvoice",
     # A190 — must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
     "approveWeeklyItinerary", "rejectWeeklyItinerary",
+    # A220 — reclassifying International <-> Local rewrites the document contract at four money
+    # gates. Must match _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
+    "setSOSupplierType",
+    # A222-U — rewrites stock valuation and deletes a journal; no undo.
+    "reverseReceiving",
     # A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
     "seedClientAliases", "runDriveMigration", "buildDriveSkeleton",
     # A194 run-it-all wrappers + the folder setup call. previewDriveMigration,
@@ -603,6 +617,9 @@ SECURED_ACTIONS = [
     "getTravelFloats", "setTravelFloat", "requestTravelFloatCash",
     # A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
     "runQuotationSentAtBackfill",
+    # A226 — reattributing a purchase request decides whose tracker it appears in, so the role has to
+    # come from the session. Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS.
+    "runPricingRequestOwnerBackfill", "setPricingRequestSalesperson",
 ]
 
 

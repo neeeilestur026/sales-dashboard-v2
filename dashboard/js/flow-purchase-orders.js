@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
     document.getElementById('currency').addEventListener('change', recalc);
     await Promise.all([loadSOOptions(), loadInventory(), loadPricingSourcing()]);
+    poSyncCurrencyOptions();          // A224: the sales orders are loaded, so the rule can be applied
     addRow();
   }
   await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
@@ -87,17 +88,71 @@ async function loadPricingSourcing() {
   } catch (e) { /* prefill is best-effort; falls back to price 0 */ }
 }
 
+/* A224 — the currency list follows the sales order's supplier type.
+ *
+ * International offers the foreign currencies and not PHP; Local offers PHP alone; an unclassified
+ * order (13 live ones) or a restock PO with no sales order keeps the full list, with the note saying
+ * why. The server applies the same rule in _poCurrencyProblem and IS the rule — this only shapes the
+ * dropdown so the refusal is rare rather than routine.
+ *
+ * One honest asymmetry: the server resolves the kind from the SO label OR, when that is blank, from
+ * SOCostDetails['COGS Type']; getSalesOrders only carries the label. So an order classified solely by
+ * its cost record shows the full list here and is refused on save, with a message naming both fixes.
+ * The client being the MORE permissive of the two is the safe direction for that gap. */
+function poSyncCurrencyOptions(keep) {
+  const sel = document.getElementById('currency');
+  if (!sel) return;
+  const soNo = String((document.getElementById('soNo') || {}).value || '');
+  const so = poSOs.find(x => String(x.soNo) === soNo);
+  const kind = (typeof flowSupplierKind === 'function') ? flowSupplierKind(so && so.supplierType) : '';
+  const allowed = (typeof flowCurrenciesFor === 'function') ? flowCurrenciesFor(kind) : FLOW_CURRENCIES.slice();
+  const stored = keep !== undefined && keep !== null;         // a value from a RECORD, not the select
+  const want = String(stored ? keep : (sel.value || ''));
+  /* An EXISTING order whose currency the narrowed list no longer allows keeps its own value, shown and
+     labelled. Dropping it silently would make the form display a currency the order is not in, and the
+     next Save would then change the order's currency as a side effect of opening it. Zero live POs are
+     in this state — this is what keeps it that way rather than what fixes it.
+     `stored` is what makes that safe: without it, picking an international sales order on a FRESH form
+     kept the PHP the select happened to be showing and re-offered it as "not allowed", so a new
+     international order opened on the one currency it may not use. */
+  const stale = stored && want && allowed.indexOf(want) === -1;
+  sel.innerHTML = allowed.map(c => `<option>${c}</option>`).join('')
+    + (stale ? `<option value="${flowEsc(want)}">${flowEsc(want)} — not allowed on this order</option>` : '');
+  sel.value = stale ? want : (allowed.indexOf(want) !== -1 ? want : allowed[0]);
+
+  const note = document.getElementById('curNote');
+  if (note) {
+    note.innerHTML = (
+      !soNo ? 'Restock PO — no sales order, so every currency is available.'
+      : kind === 'intl' ? `<b>${flowEsc(soNo)}</b> is an <b>International</b> order, so this purchase is stated in the supplier's own currency. The peso figure is an estimate until the bank executes.`
+      : kind === 'local' ? `<b>${flowEsc(soNo)}</b> is a <b>Local</b> order, so this purchase is in pesos.`
+      : `<b>${flowEsc(soNo)}</b> has no supplier type, so every currency is offered. Set it on Shipment Monitoring and this narrows to the right list.`
+    ) + (stale ? ` <span style="color:#b91c1c;">This order is stored as ${flowEsc(want)}, which that rule does not allow — saving will be refused until it is changed here or the supplier type is corrected.</span>` : '');
+    note.style.display = '';
+  }
+  recalc();
+}
+
 function loadFromSO() {
   const no = document.getElementById('loadSO').value;
   const s = poSOs.find(x => String(x.soNo) === String(no));   // migrated SOs may have numeric ids
-  if (!s) return;
+  /* A224: picking "— none (Restock PO) —" after an order was loaded used to leave the old SO No
+     sitting in the read-only field, so the PO was still filed against it. That was cosmetic before;
+     now it also decides the currency, so the field is cleared and the rule re-applied. */
+  if (!s) {
+    if (!no) { document.getElementById('soNo').value = ''; poSyncCurrencyOptions(); }
+    return;
+  }
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('itemRows').innerHTML = '';
   // A145: prefill supplier + currency + per-item FC price from the originating pricing request's sourcing
   // (matched via the SO's quotation number), so the buyer isn't re-typing every price from 0.
   const src = poPricingByQuote[String(s.quotationNo || '').toLowerCase()] || {};
   if (src._supplier && !document.getElementById('supplier').value) document.getElementById('supplier').value = src._supplier;
-  if (src._currency) { const cs = document.getElementById('currency'); if (cs) { cs.value = src._currency; recalc(); } }
+  /* A224: narrow the list FIRST, then let the sourced currency win only if the supplier type allows
+     it. The sourcing prefill predates the rule and could otherwise re-select a currency the order may
+     not be raised in — a value the dropdown no longer offers, which the server would then refuse. */
+  poSyncCurrencyOptions(src._currency || undefined);
   (s.items || []).forEach(it => {
     const p = src[String(it.itemNo).toLowerCase()] || 0;   // sourced FC price, else 0 (editable)
     addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: p });
@@ -163,6 +218,9 @@ function recalc() {
   // Show the FX-rate field + PHP total only for foreign currencies.
   const fxWrap = document.getElementById('fxRateWrap');
   if (fxWrap) fxWrap.style.display = isFx ? '' : 'none';
+  // A222: the basis note travels with the rate — both are about the ESTIMATE, neither is the cost.
+  const fxBasisWrap = document.getElementById('fxBasisWrap');
+  if (fxBasisWrap) fxBasisWrap.style.display = isFx ? '' : 'none';
   const phpWrap = document.getElementById('grandTotalPHPwrap');
   if (phpWrap) phpWrap.style.display = isFx ? '' : 'none';
   const rate = poFxRate();
@@ -227,6 +285,9 @@ async function savePO() {
     poNo, soNo: document.getElementById('soNo').value, supplier,
     currency: document.getElementById('currency').value, date: document.getElementById('date').value,
     exchangeRate: poFxRate(), totalPHP: poTotalPHP(),
+    // A222 - the peso total is now STORED on the order (it was computed, used and discarded), and
+    // the basis records where the rate came from.
+    fxBasis: (document.getElementById('fxBasis') || {}).value || '',
     createdBy: poSession.name, items: JSON.stringify(items)
   };
   if (!editingNo) payload.clientRef = flowClientRef();     // idempotent create (safe retry)
@@ -251,9 +312,11 @@ function resetForm() {
   document.getElementById('supplier').value = '';
   document.getElementById('date').value = flowToday();
   const fx = document.getElementById('fxRate'); if (fx) fx.value = '';
+  const fb = document.getElementById('fxBasis'); if (fb) fb.value = '';
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formTitle').textContent = 'New Purchase Order';
   document.getElementById('formMsg').style.display = 'none';
+  poSyncCurrencyOptions('PHP');    // A224: back to a restock PO — the full list, and the note says so
   addRow();
 }
 
@@ -336,9 +399,13 @@ function editPO(no) {
   const pn = document.getElementById('poNoInput'); if (pn) { pn.value = p.poNo; pn.readOnly = true; } // PK — not renamable when editing
   document.getElementById('soNo').value = p.soNo || '';
   document.getElementById('supplier').value = p.supplier;
-  document.getElementById('currency').value = p.currency || 'PHP';
+  // A224: soNo is set, so the list can narrow before the stored currency is restored. Passing it as
+  // `keep` means an existing order that predates the rule still shows its own currency rather than
+  // silently becoming a different one — the save is where the disagreement is raised, and named.
+  poSyncCurrencyOptions(p.currency || 'PHP');
   // A145: restore the persisted exchange rate (was dropped before, forcing re-entry on every edit).
   const fx = document.getElementById('fxRate'); if (fx) fx.value = p.exchangeRate > 0 ? p.exchangeRate : '';
+  const fb = document.getElementById('fxBasis'); if (fb) fb.value = p.fxBasis || '';
   document.getElementById('date').value = flowDate(p.date);
   document.getElementById('formTitle').textContent = 'Edit ' + p.poNo;
   document.getElementById('itemRows').innerHTML = '';

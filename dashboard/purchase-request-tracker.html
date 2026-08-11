@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Purchase Request Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+<style>
+  /* A226 — one request, one story. The same rail-and-pane split as the client tracker (A217) and the
+     management itinerary (A216): the rail is the worklist, the pane is the one you picked. A reader
+     who has used either already knows this page.
+
+     NOTE this is NOT pr-tracker.html. That name belongs to the old pre-flow admin page on the legacy
+     Code.gs backend, which this change does not touch. */
+  .prt-wrap { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: .9rem; align-items: start; }
+  .prt-wrap > * { min-width: 0; }
+  @media (max-width: 1000px) { .prt-wrap { grid-template-columns: minmax(0, 1fr); } }
+
+  /* A228 — THE VIEW SWITCHER, and it was broken.
+   *
+   * `.seg` is defined in NONE of the four stylesheets this page loads. The only rule in the codebase
+   * lives inside flow-pricing-request.html:28-30 — a page that does not load flow-screen.css — and it
+   * keys on `.active`, while this page has always toggled `.on`. So these four buttons have been raw
+   * unstyled browser buttons since the page shipped. Defining it here fixes that.
+   *
+   * Written against `.on` deliberately: `.on` is already this page's own idiom (`.prt-row.on`), and
+   * switching to `.active` would mean touching four call sites for no gain. Kept page-local rather
+   * than promoted to flow-screen.css because the only other `.seg` user cannot see that sheet — so
+   * promoting would ship dead CSS to 28 pages and STILL not unify the two.
+   *
+   * Same pill treatment flow-screen.css:200-208 already gives `.flow-nav a.active`, so the page reads
+   * as one design rather than two. */
+  .seg { display:flex; gap:7px; flex-wrap:wrap; margin:16px 0 14px; }
+  .seg button { padding:9px 16px; border-radius:999px; font:600 12.5px 'Inter',sans-serif;
+                border:1px solid #d7dce3; background:#fff; color:#64748b; cursor:pointer;
+                transition:background .15s, color .15s; }
+  .seg button:hover { background:#f8fafc; color:#111827; }
+  .seg button.on { background:linear-gradient(180deg,#6a63ea,#4f46e5); border-color:#4f46e5;
+                   color:#fff; box-shadow:0 6px 14px -8px rgba(79,70,229,.7); }
+  .seg button.on:hover { color:#fff; }
+
+  /* THE ONE SENTENCE. When a single step holds most of what is open, saying so once beats leaving
+     the rep to infer it from 58 identical rows. Rendered only when prwConcentration finds one. */
+  .prt-finding { display:flex; gap:10px; align-items:flex-start; margin-top:14px; padding:12px 15px;
+                 border:1px solid #fde68a; background:linear-gradient(180deg,#fffdf5,#fffbeb);
+                 border-radius:14px; }
+  .prt-finding .ic { flex-shrink:0; margin-top:1px; line-height:0; }
+  .prt-finding .tx { font:400 12.5px/1.55 'Inter',sans-serif; color:#78350f; }
+  .prt-finding b { font-weight:800; }
+  .prt-finding a { color:#92400e; text-decoration:underline; cursor:pointer; }
+
+  /* The rail and the pane are cards that sit above the page, not panels cut into it — the lift is
+     what separates them from the tinted background flow-screen.css paints. */
+  .prt-card-lift { box-shadow:0 1px 2px rgba(15,23,42,.05), 0 12px 30px -20px rgba(15,23,42,.4); }
+  .prt-rail { background:#fff; border:1px solid #e2e6ec; border-radius:18px; padding:8px;
+              box-shadow:0 1px 2px rgba(15,23,42,.05), 0 12px 30px -20px rgba(15,23,42,.4);
+              position: sticky; top: 96px; max-height: calc(100vh - 130px); overflow-y: auto; }
+  @media (max-width: 1000px) { .prt-rail { position: static; max-height: none; } }
+
+  /* A pill search field rather than a bare input. `.prt-search` had no border rule of its own — it
+     was picking up only the skin's radius — so the icon needed a styled field to sit inside. */
+  .prt-searchbox { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #d7dce3;
+                   border-radius:999px; padding:0 13px; margin:6px 6px 10px; color:#94a3b8; }
+  .prt-searchbox svg { flex-shrink:0; }
+  .prt-search { flex:1; min-width:0; border:0; background:none; outline:none; padding:8px 0;
+                font:400 12.5px 'Inter',sans-serif; color:#111827; }
+  .prt-search::placeholder { color:#94a3b8; }
+  /* Safari draws its own clear button on type=search; it collides with the pill's right edge. */
+  .prt-search::-webkit-search-decoration, .prt-search::-webkit-search-cancel-button { -webkit-appearance:none; }
+
+  /* One group per worklist bucket. `now` is open; the rest start shut so the first thing a rep sees
+     is the work, not the archive. */
+  .prt-grp { margin-bottom:.35rem; }
+  .prt-grp > summary { cursor:pointer; list-style:none; padding:.42rem .6rem; border-radius:10px;
+                       font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+                       color:var(--text-muted,#64748b); display:flex; align-items:center; gap:.45rem; }
+  .prt-grp > summary::-webkit-details-marker { display:none; }
+  .prt-grp > summary:hover { background:var(--bg-inset,#f1f5f9); }
+  .prt-grp > summary .n { margin-left:auto; font-variant-numeric:tabular-nums; }
+  .prt-grp.yours > summary { color:#b91c1c; }
+  .prt-grp.chase > summary { color:#b45309; }
+  /* One line under the heading saying what the lane MEANS. "Chase someone" and "Yours to do" are
+     both urgent; the difference is who can finish them, and that difference is the whole point. */
+  .prt-grp > summary .lane-t { display:flex; flex-direction:column; min-width:0; }
+  .prt-grp > summary .lane-h { font-size:.62rem; font-weight:600; text-transform:none;
+                               letter-spacing:0; color:var(--text-muted,#94a3b8); margin-top:.15rem; }
+  .prt-grp > summary { align-items:flex-start; }
+
+  .prt-row { display:block; width:100%; text-align:left; border:0; background:none; cursor:pointer;
+             padding:.5rem .6rem; border-radius:12px; font-family:'Inter',sans-serif; }
+  .prt-row:hover { background: var(--bg-inset,#f1f5f9); }
+  .prt-row.on { background:#eef2ff; box-shadow: inset 0 0 0 1px #c7d2fe; }
+  .prt-row .t { display:flex; align-items:baseline; gap:.4rem; }
+  .prt-row .no { font-weight:700; font-size:.78rem; color:var(--text-primary,#0f172a); }
+  .prt-row .v  { margin-left:auto; font-size:.74rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .prt-row .c  { font-size:.7rem; color:var(--text-muted,#64748b); margin-top:.12rem;
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .prt-row .s  { font-size:.68rem; margin-top:.2rem; font-weight:700; }
+  .prt-row .s.yours   { color:#b91c1c; }
+  .prt-row .s.chase   { color:#b45309; }
+  .prt-row .s.waiting { color:var(--text-muted,#64748b); font-weight:600; }
+  .prt-row .s.done    { color:var(--text-muted,#94a3b8); font-weight:600; }
+  /* Age travels with every row. Without it the rep has to open 61 chases to find the stale one. */
+  .prt-row .s .age { font-weight:600; color:var(--text-muted,#94a3b8); }
+  .prt-row .s .age.hot { color:#b91c1c; font-weight:800; }
+
+  .prt-pane { background:#fff; border:1px solid #e2e6ec; border-radius:18px; padding:20px 22px;
+              box-shadow:0 1px 2px rgba(15,23,42,.05), 0 12px 30px -20px rgba(15,23,42,.4); }
+  .prt-head { border-bottom:1px solid #eef1f5; padding-bottom:14px; margin-bottom:14px; }
+  /* Title and status pill share one row — the pill is the answer to "what is this waiting on", which
+     is the question the page exists for, so it belongs beside the name and not buried below. */
+  .prt-head .ttl { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .prt-head h2 { margin:0; font:800 18px 'Inter',sans-serif; color:#111827; }
+  .prt-head .sub { font:400 12.5px 'Inter',sans-serif; color:#8b93a1; margin-top:3px; }
+  .prt-stats { display:flex; gap:22px; flex-wrap:wrap; margin-top:12px; }
+  .prt-stats div { font:700 10.5px 'Inter',sans-serif; color:#8b93a1; text-transform:uppercase;
+                   letter-spacing:.04em; }
+  .prt-stats b { display:block; font:800 16px 'Inter',sans-serif; color:#111827;
+                 letter-spacing:0; text-transform:none; font-variant-numeric:tabular-nums; margin-top:2px; }
+
+  /* The next action — the one instruction, and the button that goes where the work is done. */
+  .prt-next { border:1px solid var(--border,#e2e8f0); border-left:3px solid var(--accent-dark,#4338ca);
+              border-radius:10px; padding:.65rem .8rem; margin:.9rem 0; background:var(--bg-subtle,#f8fafc); }
+  .prt-next.now { border-left-color:#b91c1c; }
+  .prt-next .k { font-size:.66rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+                 color:var(--text-muted,#8b93a1); }
+  .prt-next .t { font-size:.92rem; font-weight:800; margin-top:.15rem; }
+  .prt-next .d { font-size:.76rem; color:var(--text-muted,#64748b); margin-top:.2rem; line-height:1.5; }
+
+  /* Six dots: Request → Sourcing → Pricing → Verify → Quotation → Sent. The sixth is the join to the
+     quotation's own life — the thing the tracker was asked for. */
+  .prt-rail6 { display:flex; gap:5px; margin:16px 0 4px; }
+  /* `min-width:0` is load-bearing, not tidiness. A flex item will not shrink below the width of its
+     longest unbreakable word, so "QUOTATION" held the sixth dot wider than its 1/6 share and pushed
+     the whole pane 3px past its column at 375px. Measured, then fixed here rather than by shortening
+     the label — the words are the same six the pipeline view uses and must stay in step. */
+  .prt-dot { flex:1; min-width:0; text-align:center; }
+  .prt-dot .b { height:5px; border-radius:3px; background:var(--border,#e2e8f0); }
+  .prt-dot.done .b { background:#16a34a; }
+  .prt-dot.at .b   { background:#4f46e5; }
+  .prt-dot .l { font:700 9.5px 'Inter',sans-serif; margin-top:5px; color:#94a3b8;
+                text-transform:uppercase; letter-spacing:.03em;
+                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .prt-dot.at .l { color:#3730a3; }
+  @media (max-width: 560px) { .prt-dot .l { font-size:8.5px; letter-spacing:0; } }
+  .prt-dot.done .l { color:#15803d; }
+
+  .prt-sec { margin-top:16px; }
+  .prt-sec:first-child { margin-top:0; }
+  .prt-sec > h3 { font:800 10.5px 'Inter',sans-serif; text-transform:uppercase; letter-spacing:.05em;
+                  color:#8b93a1; margin:0 0 8px; }
+
+  /* THE TABLE WRAPPER. A rounded, clipped box so the header band and the total row meet the border
+     cleanly instead of running to a square edge. `overflow:hidden` is what does the clipping, so the
+     horizontal scroller has to live INSIDE it — nesting the other way round would clip the scroll. */
+  .prt-tw { border:1px solid #e2e6ec; border-radius:12px; overflow:hidden; }
+  .prt-tw > div { overflow-x:auto; }
+  .prt-tw .flow-table tr:last-child td { border-bottom:none; }
+  /* Item names run long — "Mitutoyo 129-112 Depth Micrometer with Interchangeable Rods" is 58
+     characters — and flow-screen.css sets every cell `white-space:nowrap`. Measured at 1440: the item
+     column took 354px of a 516px box and pushed State clean out of view behind the scroller. Let the
+     NAME wrap and hold the other three to their content, and all four fit without scrolling. */
+  body.flow-screen .prt-tw .flow-table th:first-child,
+  body.flow-screen .prt-tw .flow-table td:first-child { white-space:normal; min-width:140px; line-height:1.35; }
+  body.flow-screen .prt-tw .flow-table th:not(:first-child),
+  body.flow-screen .prt-tw .flow-table td:not(:first-child) { white-space:nowrap; width:1%; }
+
+  /* TWO SPECIFICITY FIGHTS, both real and both measured.
+   *
+   * flow-screen.css:155 zebra-stripes `tbody tr:nth-child(even) td` at (0,3,4) and hovers at the same
+   * weight, while its own `tr.tot td` total-row rule at :157 is only (0,3,3). So the indigo total row
+   * LOSES: it renders grey on any request with an odd number of lines, and grey on every hover. That
+   * is a shared bug affecting all 29 flow-screen pages and is not this change's to fix — but it must
+   * not ship here, so both are answered locally at (0,4,4)+.
+   *
+   * The design has no zebra at all, so it is switched off inside the pane rather than fought row by
+   * row — which also removes the interaction that caused the fight. */
+  body.flow-screen .prt-pane .flow-table tbody tr:nth-child(even) td { background:transparent; }
+  body.flow-screen .prt-pane .flow-table tbody tr:hover td { background:#f8fafc; }
+  body.flow-screen .prt-pane .flow-table tbody tr.tot td,
+  body.flow-screen .prt-pane .flow-table tbody tr.tot:hover td {
+    font-weight:800; color:#3730a3; background:#eef2ff;
+    border-top:2px solid #4f46e5; border-bottom:none;
+  }
+  .prt-note { font-size:.74rem; color:var(--text-muted,#64748b); line-height:1.5; }
+  .prt-warn { font-size:.74rem; color:#b91c1c; font-weight:600; line-height:1.5; }
+  .prt-cap  { font-size:.72rem; color:var(--text-muted,#8b93a1); margin-top:.45rem; line-height:1.5; }
+  .prt-cap a { color:var(--accent-dark,#4338ca); cursor:pointer; text-decoration:underline; }
+
+  .prt-empty { color:var(--text-muted,#94a3b8); font-size:.82rem; padding:1.4rem .6rem; text-align:center; }
+
+  /* Two badge tones the shared palette does not carry. `.b-unpaid` is the nearest red but sits lighter
+     than the design; this is the darker "you are late and it is yours" pill. */
+  .flow-badge.prt-b-hot { background:#fee2e2; color:#b91c1c; }
+  .flow-badge.prt-b-client { background:#e0e7ff; color:#3730a3; }
+
+  /* THE PANE SPLITS IN TWO when there is room. Left is the story of the request — what to do, then
+     the lines it is made of. Right is what it connects to — the quotation, the documents, the notes.
+     Stacked, that was a long scroll on a screen with 500px of unused width beside it. */
+  .prt-cols { display:grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap:1.4rem; }
+  @media (max-width: 1180px) { .prt-cols { grid-template-columns: minmax(0,1fr); gap:0; } }
+
+  /* One card per connected record, so "the quotation" reads as a thing and not as a paragraph. */
+  .prt-card { border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:.7rem .8rem;
+              background:var(--bg-subtle,#f8fafc); }
+  .prt-card .hd { display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
+  .prt-card .hd b { font-size:.92rem; }
+  .prt-card .mt { font-size:.74rem; color:var(--text-muted,#64748b); margin-top:.3rem; line-height:1.5; }
+
+  /* What happened, from the facts this page holds — never a guess at a stage it cannot see. */
+  .prt-tl { list-style:none; margin:0; padding:0; }
+  .prt-tl li { position:relative; padding:0 0 .6rem 1.1rem; font-size:.76rem; line-height:1.5;
+               border-left:2px solid var(--border,#e2e8f0); }
+  .prt-tl li:last-child { border-left-color:transparent; padding-bottom:0; }
+  .prt-tl li::before { content:''; position:absolute; left:-5px; top:.35rem; width:8px; height:8px;
+                       border-radius:50%; background:var(--border,#cbd5e1); }
+  .prt-tl li.on::before { background:var(--accent-dark,#4338ca); }
+  .prt-tl li .w { color:var(--text-muted,#8b93a1); }
+  .prt-tl li b { font-weight:700; }
+
+  /* THE PIPELINE — the "By stage" summary as six stages you can read in one pass, not ten table
+     rows you have to add up. The bar is share-of-open, so a blockage is visible as a shape. */
+  .prt-pipe { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:.5rem; }
+  @media (max-width: 900px) { .prt-pipe { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  @media (max-width: 520px) { .prt-pipe { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  .prt-stage { border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:.6rem .65rem; background:#fff; }
+  .prt-stage.hot { border-color:#fca5a5; background:#fef2f2; }
+  .prt-stage .l { font-size:.62rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em;
+                  color:var(--text-muted,#8b93a1); }
+  .prt-stage .n { font:800 1.3rem 'Inter',sans-serif; font-variant-numeric:tabular-nums; line-height:1.2; }
+  .prt-stage.hot .n { color:#b91c1c; }
+  .prt-stage .v { font-size:.68rem; color:var(--text-muted,#64748b); font-variant-numeric:tabular-nums; }
+  .prt-stage .who { font-size:.62rem; font-weight:700; margin-top:.3rem; }
+  .prt-stage .who.you  { color:#b91c1c; }
+  .prt-stage .who.them { color:#b45309; }
+  .prt-stage .bar { height:4px; border-radius:2px; background:var(--border,#e2e8f0); margin-top:.4rem; overflow:hidden; }
+  .prt-stage .bar i { display:block; height:100%; background:var(--accent-dark,#4338ca); }
+  .prt-stage.hot .bar i { background:#dc2626; }
+
+  /* COLOURED KPI VALUES. `:not(.spot)` is structural, not decorative: flow-screen.css:128 sets
+     `.kpi.spot .v{color:#fff}` at the same specificity as `.kpi .v.k-*` would be, so without it
+     source order alone would decide whether the dark tile's number stayed white. */
+  body.flow-screen .kpi:not(.spot) .v.k-warn { color:#b45309; }
+  body.flow-screen .kpi:not(.spot) .v.k-good { color:#15803d; }
+  body.flow-screen .kpi:not(.spot) .v.k-bad  { color:#b91c1c; }
+
+  @media print {
+    .navbar, .flow-nav, .seg, .prt-rail, .no-print { display:none !important; }
+    .prt-wrap { grid-template-columns: minmax(0,1fr); }
+    body { background:#fff; }
+  }
+</style>
+</head>
+<body class="flow-screen">
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div>
+          <div class="eyebrow">Sales · Purchase Requests</div>
+          <h1>Purchase Request Tracker</h1>
+          <p>Every request you raised — what it is waiting on, and the quotation it became.</p>
+        </div>
+      </div>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center;">
+        <span id="prtScope" style="font-size:.72rem;color:var(--text-muted,#64748b);"></span>
+        <a class="btn btn-secondary" onclick="prtReload()">&#8635; Refresh</a>
+        <a class="btn btn-secondary" id="prtPrint">Print</a>
+      </div>
+    </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+    <div id="prtMsg" class="flow-msg" style="display:none;"></div>
+
+    <!-- A226 — the tiles answer "what can I finish myself" before "what is open".
+         The first cut led with one number: 67 "needs you now". On live data 61 of those 67 were
+         other people's queues gone stale, and a rep cannot finish 61 things. The split is the
+         headline now: YOURS is the work, CHASE is the nagging, and they never share a tile. -->
+    <!-- `five` is flow-screen.css's own five-column modifier. Without it the shared .kpi-row fits
+         four and orphans the fifth on a row of its own beside a hole. -->
+    <div class="kpi-row five">
+      <div class="kpi spot"><div class="top"><span class="l">Yours to do</span><span class="chip">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span></div>
+        <div class="v sm" id="kYours">—</div><div class="d" id="kYoursSub">&nbsp;</div></div>
+      <div class="kpi"><div class="top"><span class="l">Chase someone</span><span class="chip" style="background:#fffbeb;color:#d97706;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></span></div>
+        <div class="v sm k-warn" id="kChase">—</div><div class="d" id="kChaseSub">&nbsp;</div></div>
+      <div class="kpi"><div class="top"><span class="l">Waiting, still in time</span></div>
+        <div class="v sm" id="kWait">—</div><div class="d" id="kWaitSub">&nbsp;</div></div>
+      <div class="kpi"><div class="top"><span class="l">Quoted</span><span class="chip" style="background:#dcfce7;color:#15803d;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span></div>
+        <div class="v sm k-good" id="kQuoted">—</div><div class="d" id="kQuotedSub">&nbsp;</div></div>
+      <div class="kpi"><div class="top"><span class="l">Needs checking</span></div>
+        <div class="v sm" id="kBad">—</div><div class="d">quotation missing or gone</div></div>
+    </div>
+    <div class="prt-cap" id="prtCap"></div>
+    <div id="prtFinding"></div>
+
+    <div class="seg no-print" id="prtViews" style="margin-top:.8rem;">
+      <button data-view="worklist" class="on">Worklist</button>
+      <button data-view="stage">By stage</button>
+      <button data-view="client">By client</button>
+      <button data-view="history">History</button>
+    </div>
+
+    <div id="prtBody" style="margin-top:.8rem;">
+      <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading…</span></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/flow-ledger-view.js"></script>
+  <script src="js/quotation-worklist.js"></script>
+  <script src="js/pr-worklist.js"></script>
+  <script src="js/purchase-request-tracker.js"></script>
+  <script>
+    (function () {
+      const d = new Date();
+      const day = document.getElementById('hbDay'), mon = document.getElementById('hbMon');
+      if (day) day.textContent = d.getDate();
+      if (mon) mon.innerHTML = d.toLocaleDateString('en-US', { weekday: 'short' }) + ',<br>' +
+                               d.toLocaleDateString('en-US', { month: 'long' });
+    })();
+  </script>
+</body>
+</html>

@@ -6,7 +6,17 @@
    label, writes the full cost breakdown, regenerates the migrated Invoice + Receiving).
    File totals: Revenue ₱8,535,630.46 · COGS ₱3,720,768.54 · GP ₱4,814,861.92. */
 
-const RS_MIN_VERSION = 65;            // v64: year-scoped wipe · v65: import ALWAYS ensures the SO header
+/* A220 — RETIRED. This tool hard-codes SO-202607-001 and SO-202607-002 in REPLACE_2026 below and
+   matches on exact soNo. Sales orders can now be RENAMED (renameSalesOrder), and after a rename this
+   tool reports the order as "not in system" and, on a re-run, RE-CREATES IT UNDER THE OLD NUMBER via
+   the header-ensuring branch of saveSOCostDetails — leaving two orders where there was one, plus a
+   duplicate set of migrated Invoice and Receiving rows.
+
+   It is a one-time migration that has already been run. Rather than keep its 37 embedded numbers in
+   step with every future rename, the floor is raised above the current FLOW_VERSION so it refuses.
+   To run it again deliberately: reconcile the constant with the live SO numbers first, then lower
+   this. */
+const RS_MIN_VERSION = 9000;          // was 65 (v64: year-scoped wipe · v65: import ensures the SO header)
 const RS_EXP_SALES = 8535630.46;
 const RS_EXP_COGS  = 3720768.54;
 

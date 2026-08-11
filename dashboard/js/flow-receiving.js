@@ -158,9 +158,25 @@ async function saveReceiving() {
        surfaced as a bare error with no way to act on it and no override, unlike every other guard
        here. Now it names what is missing and opens the Docs window on the shipment. */
     if (!res.success && res.missingDocs && res.missingDocs.length) {
+      /* A220 — and it still had no override. The server has accepted `confirmNoDocs` since A195 and
+         NO CLIENT HAS EVER SENT IT, so a gap could only ever be resolved by producing the file.
+         That is fine when the file exists. It is a hard freeze when it cannot: reclassifying an order
+         to International newly demands six documents a supplier may be unable to produce, and there
+         was no way past. Offer the documents window first — that is the right answer nearly always —
+         and let someone proceed on the record when it is not. */
       flowMsg('formMsg', res.message, false);
-      if (typeof flowOpenShipmentDocs === 'function') await flowOpenShipmentDocs(rcCurrent.poNo, res.missingDocs);
-      return;
+      const go = confirm(res.message + '\n\nAttach the missing document(s) now?\n\n' +
+        'OK — open the Documents window.\nCancel — receive anyway, on the record, without them.');
+      if (go) {
+        if (typeof flowOpenShipmentDocs === 'function') await flowOpenShipmentDocs(rcCurrent.poNo, res.missingDocs);
+        return;
+      }
+      if (!confirm('Receive WITHOUT these documents?\n\n' + res.missingDocs.join('\n') +
+                   '\n\nThis is recorded against the order.')) {
+        flowMsg('formMsg', 'Receiving cancelled.', false); return;
+      }
+      extra.confirmNoDocs = true;
+      res = await postFlow('createReceiving', Object.assign({}, payload, extra));
     }
     // A158: the PO was already received — confirm only if this is a genuine additional delivery.
     if (!res.success && res.alreadyReceived) {

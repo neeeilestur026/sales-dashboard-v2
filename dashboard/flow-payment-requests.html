@@ -81,7 +81,10 @@
       <div class="flow-form">
         <div><label>Load Purchase Order *</label><select id="loadPO" onchange="loadFromPO()"></select></div>
         <div><label>Supplier / Payee *</label><input type="text" id="payee"></div>
-        <div><label>Amount (PHP) *</label>
+        <!-- A222: the label follows the ORDER's currency. A foreign purchase is owed in the
+             supplier's currency and the peso is only an estimate until the bank acts, so the box
+             must say which one is being typed. prSyncCurrencyUi rewrites it when a PO is picked. -->
+        <div><label id="amountLabel">Amount (PHP) *</label>
           <!-- A180: the portion is how you CHOOSE the amount, so it lives in the amount's own cell.
                The hidden input is the single source of truth; the buttons only paint it. -->
           <input type="hidden" id="paymentPortion">
@@ -91,6 +94,7 @@
             <button type="button" data-portion="Full" onclick="prPickPortion('Full')">Full payment</button>
           </div>
           <input type="number" step="0.01" min="0" id="amount">
+          <div id="prFxNote" style="display:none;margin-top:0.3rem;font-size:0.75rem;color:var(--text-muted,#8b93a1);"></div>
           <div id="apBreakdown" style="display:none;margin-top:0.3rem;font-size:0.75rem;color:var(--text-muted,#8b93a1);"></div>
           <div id="apDupWarn" style="display:none;margin-top:0.3rem;font-size:0.75rem;font-weight:600;color:#d97706;"></div>
           <div id="prPortionNote" style="display:none;margin-top:0.3rem;font-size:0.75rem;font-weight:600;color:#d97706;"></div></div>

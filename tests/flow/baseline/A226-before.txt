@@ -1,0 +1,453 @@
+A226 baseline — Purchase Requests and Quotations BEFORE the tracker.
+Read live from getPricingRequests / getQuotations. Dates converted to Asia/Manila.
+Nothing in A226 may change a figure without this file showing what it was.
+
+====================================================================================================
+COUNTS
+====================================================================================================
+  Pricing/Purchase Requests : 315
+  Quotations                : 90
+
+  PR status counts — the worklist must reconcile to exactly these:
+     Migrated                142
+     Requested                84
+     Quoted                   76
+     Returned to Sales         7
+     Mgmt Priced               3
+     Sourcing                  3
+     TOTAL                   315
+
+  Requested By — the migration source for the new Salesperson column:
+     Larry Estur             137
+     Kimberlyn Blones        115
+     Gerald Lucena            46
+     Crystal Gayle            12
+     (blank)                   5
+
+  TWO DATE FORMATS ARE LIVE, and the worklist ages every one of them:
+     ISO '2026-06-29T16:00:00.000Z'                          173
+     JS  'Mon Jun 29 2026 16:44:00 GMT+0800 (…)'             142
+     unparseable by either rule                                0
+     The client's flowDate() handles BOTH (new Date(d) parses the JS form),
+     so pr-worklist must be fixture-tested against both, not just ISO.
+
+  Quotations carrying a PR No : 35 of 90
+  PRs at status 'Quoted'      : 76
+  ^ that gap is a FINDING A226 reports, not a bug it introduces.
+
+====================================================================================================
+EVERY PURCHASE REQUEST
+====================================================================================================
+PR NO              DATE        REQUESTED BY         STATUS                 VALUE (PHP) LINES   QUOTATION
+PR-202606-001      2026-06-30  Kimberlyn Blones     Quoted                   370982.88 2/2     
+PR-202607-001      2026-06-29  Larry Estur          Migrated                 152394.22 1/1     
+PR-202607-002      2026-06-26  Larry Estur          Migrated                  68768.20 1/1     
+PR-202607-003      2026-06-26  Larry Estur          Migrated                 428005.16 1/1     
+PR-202607-004      2026-06-26                       Migrated                         — 1/1     
+PR-202607-005      2026-06-26  Larry Estur          Migrated                 369211.76 1/1     
+PR-202607-006      2026-06-26  Larry Estur          Migrated                  97323.53 1/1     
+PR-202607-007      2026-06-25  Larry Estur          Migrated                 202355.96 3/3     
+PR-202607-008      2026-06-24  Larry Estur          Migrated                 645113.80 1/1     
+PR-202607-009      2026-06-24  Larry Estur          Migrated                  48543.65 1/1     
+PR-202607-010      2026-06-23  Larry Estur          Migrated                  72607.20 2/2     
+PR-202607-011      2026-06-23  Larry Estur          Migrated                 195269.32 1/1     
+PR-202607-012      2026-06-22  Larry Estur          Migrated                 183896.60 2/2     
+PR-202607-013      2026-06-22  Larry Estur          Migrated                  79264.72 3/3     
+PR-202607-014      2026-06-20  Larry Estur          Migrated                  22139.60 5/5     
+PR-202607-015      2026-06-19  Larry Estur          Migrated                 470244.84 1/1     
+PR-202607-016      2026-06-19  Larry Estur          Migrated                  52411.77 3/3     
+PR-202607-017      2026-06-17  Larry Estur          Migrated                 239060.34 1/1     
+PR-202607-018      2026-06-17  Larry Estur          Migrated                 107572.60 4/4     
+PR-202607-019      2026-06-17  Larry Estur          Migrated                  13170.00 5/5     
+PR-202607-020      2026-06-16  Larry Estur          Migrated                   6950.45 1/1     
+PR-202607-021      2026-06-16                       Migrated                         — 4/4     
+PR-202607-022      2026-06-16  Larry Estur          Migrated                1680283.02 1/1     
+PR-202607-023      2026-06-15  Larry Estur          Migrated                 228244.50 1/1     
+PR-202607-024      2026-06-15  Larry Estur          Migrated                  50179.42 2/2     
+PR-202607-025      2026-06-15  Larry Estur          Migrated                 179596.29 1/1     
+PR-202607-026      2026-06-15                       Migrated                         — 1/1     
+PR-202607-027      2026-06-13  Larry Estur          Migrated                  43680.00 1/1     
+PR-202607-028      2026-06-11  Larry Estur          Migrated                 264237.53 1/1     
+PR-202607-029      2026-06-10  Larry Estur          Migrated                 285822.00 3/3     
+PR-202607-030      2026-06-08  Larry Estur          Migrated                1049142.86 1/1     
+PR-202607-031      2026-06-08  Larry Estur          Migrated                  20551.48 1/1     
+PR-202607-032      2026-06-08  Larry Estur          Migrated                 103797.22 3/3     
+PR-202607-033      2026-06-08  Larry Estur          Migrated                  74430.94 5/5     
+PR-202607-034      2026-06-05  Larry Estur          Migrated                1607279.14 1/1     
+PR-202607-035      2026-06-05  Larry Estur          Migrated                 172071.42 1/1     
+PR-202607-036      2026-06-05  Larry Estur          Migrated                 463307.94 2/2     
+PR-202607-037      2026-06-05  Larry Estur          Migrated                 184344.82 1/1     
+PR-202607-038      2026-06-04  Larry Estur          Migrated                  12575.47 1/1     
+PR-202607-039      2026-06-03  Larry Estur          Migrated                   3042.45 1/1     
+PR-202607-040      2026-06-02  Larry Estur          Migrated                  52357.20 1/1     
+PR-202607-041      2026-06-02  Larry Estur          Migrated                  46552.00 1/1     
+PR-202607-042      2026-06-02  Larry Estur          Migrated                 157053.86 1/1     
+PR-202607-043      2026-06-02  Larry Estur          Migrated                 233456.63 2/2     
+PR-202607-044      2026-06-02  Larry Estur          Migrated                 257446.67 2/2     
+PR-202607-045      2026-06-02  Larry Estur          Migrated                  30803.57 1/1     
+PR-202607-046      2026-06-02  Larry Estur          Migrated                 137087.61 1/1     
+PR-202607-047      2026-06-01  Larry Estur          Migrated                  35294.05 3/3     
+PR-202607-048      2026-06-01  Larry Estur          Migrated                  85611.12 1/1     
+PR-202607-049      2026-05-29  Larry Estur          Migrated                   5403.00 2/2     
+PR-202607-050      2026-05-29  Larry Estur          Migrated                 583139.78 2/2     
+PR-202607-051      2026-05-28  Larry Estur          Migrated                 132234.91 3/3     
+PR-202607-052      2026-05-28  Larry Estur          Migrated                1198481.82 2/2     
+PR-202607-053      2026-05-26  Larry Estur          Migrated                1302343.08 1/1     
+PR-202607-054      2026-05-26  Larry Estur          Migrated                1023164.75 6/6     
+PR-202607-055      2026-05-26  Larry Estur          Migrated                 106498.70 1/1     
+PR-202607-056      2026-05-26  Larry Estur          Migrated                 947547.12 1/1     
+PR-202607-057      2026-05-26  Larry Estur          Migrated                 317189.79 1/1     
+PR-202607-058      2026-05-25  Larry Estur          Migrated                2154458.40 1/1     
+PR-202607-059      2026-05-25  Larry Estur          Migrated                4755189.48 6/6     
+PR-202607-060      2026-05-25  Larry Estur          Migrated                  88458.73 6/6     
+PR-202607-061      2026-05-25  Larry Estur          Migrated                 569057.99 3/3     
+PR-202607-062      2026-05-25  Larry Estur          Migrated                2344670.28 1/1     
+PR-202607-063      2026-05-23  Larry Estur          Migrated                 500882.51 8/8     
+PR-202607-064      2026-05-23  Larry Estur          Migrated                  43526.59 1/1     
+PR-202607-065      2026-05-22  Larry Estur          Migrated                  10002.82 7/7     
+PR-202607-066      2026-05-22  Larry Estur          Migrated                   6447.92 1/1     
+PR-202607-067      2026-05-21  Larry Estur          Migrated                 106928.88 1/1     
+PR-202607-068      2026-05-21  Larry Estur          Migrated                 176934.03 2/2     
+PR-202607-069      2026-05-21  Larry Estur          Migrated                 120362.06 1/1     
+PR-202607-070      2026-05-21  Larry Estur          Migrated                 113810.34 1/1     
+PR-202607-071      2026-05-20  Larry Estur          Migrated                  99753.06 7/7     
+PR-202607-072      2026-05-20                       Migrated                         — 7/7     
+PR-202607-073      2026-05-20  Larry Estur          Migrated                  96600.00 2/2     
+PR-202607-074      2026-05-20  Larry Estur          Migrated                  96600.00 2/2     
+PR-202607-075      2026-05-19  Larry Estur          Migrated                 163664.20 8/8     
+PR-202607-076      2026-05-18  Larry Estur          Migrated                  24833.48 1/1     
+PR-202607-077      2026-05-18  Larry Estur          Migrated                  91178.57 3/3     
+PR-202607-078      2026-05-18  Larry Estur          Migrated                  77808.79 1/1     
+PR-202607-079      2026-05-16  Larry Estur          Migrated                  30099.42 1/1     
+PR-202607-080      2026-05-15  Larry Estur          Migrated                 703333.96 1/1     
+PR-202607-081      2026-05-15  Larry Estur          Migrated                3353855.48 1/1     
+PR-202607-082      2026-05-14  Larry Estur          Migrated                  34134.03 20/20   
+PR-202607-083      2026-05-14                       Migrated                         — 20/20   
+PR-202607-084      2026-05-14  Larry Estur          Migrated                3852628.28 1/1     
+PR-202607-085      2026-05-13  Larry Estur          Migrated                 262741.38 1/1     
+PR-202607-086      2026-05-13  Larry Estur          Migrated                 200870.69 1/1     
+PR-202607-087      2026-05-13  Larry Estur          Migrated                  47701.68 6/6     
+PR-202607-088      2026-05-13  Larry Estur          Migrated                  63823.11 4/4     
+PR-202607-089      2026-05-13  Larry Estur          Migrated                  26720.59 1/1     
+PR-202607-090      2026-05-13  Larry Estur          Migrated                 238801.00 2/2     
+PR-202607-091      2026-05-12  Larry Estur          Migrated                 243973.20 2/2     
+PR-202607-092      2026-05-12  Larry Estur          Migrated                 261428.57 1/1     
+PR-202607-093      2026-05-12  Larry Estur          Migrated                 259637.93 1/1     
+PR-202607-094      2026-05-11  Larry Estur          Migrated                   7102.94 1/1     
+PR-202607-095      2026-05-11  Larry Estur          Migrated                  25705.90 4/4     
+PR-202607-096      2026-05-09  Larry Estur          Migrated                 175034.39 1/1     
+PR-202607-097      2026-05-08  Larry Estur          Migrated                  30931.54 4/4     
+PR-202607-098      2026-05-07  Larry Estur          Migrated                 164548.48 2/2     
+PR-202607-099      2026-05-07  Larry Estur          Migrated                   9282.14 1/1     
+PR-202607-100      2026-05-07  Larry Estur          Migrated                1555173.00 2/2     
+PR-202607-101      2026-05-07  Larry Estur          Migrated                2559745.91 2/2     
+PR-202607-102      2026-05-06  Larry Estur          Migrated                  36783.56 2/2     
+PR-202607-103      2026-05-06  Larry Estur          Migrated                 406114.32 5/5     
+PR-202607-104      2026-05-06  Larry Estur          Migrated                 932031.69 1/1     
+PR-202607-105      2026-05-06  Larry Estur          Migrated                2302120.28 2/2     
+PR-202607-106      2026-05-05  Larry Estur          Migrated                 158573.13 2/2     
+PR-202607-107      2026-05-05  Larry Estur          Migrated                 158573.13 2/2     
+PR-202607-108      2026-05-05  Larry Estur          Migrated                 253321.92 2/2     
+PR-202607-109      2026-05-05  Larry Estur          Migrated                3777931.03 1/1     
+PR-202607-110      2026-05-05  Larry Estur          Migrated                  16911.84 1/1     
+PR-202607-111      2026-05-05  Larry Estur          Migrated                 242834.48 6/6     
+PR-202607-112      2026-05-04  Larry Estur          Migrated                  54214.29 1/1     
+PR-202607-113      2026-04-29  Larry Estur          Migrated                4973762.41 3/3     
+PR-202607-114      2026-04-29  Larry Estur          Migrated                 105312.51 2/2     
+PR-202607-115      2026-04-28  Larry Estur          Migrated                   1160.00 1/1     
+PR-202607-116      2026-04-27  Larry Estur          Migrated                2914000.08 1/1     
+PR-202607-117      2026-04-27  Larry Estur          Migrated                  42349.09 7/7     
+PR-202607-118      2026-04-25  Larry Estur          Migrated                 487043.76 1/1     
+PR-202607-119      2026-04-25  Larry Estur          Migrated                 117169.44 1/1     
+PR-202607-120      2026-04-25  Larry Estur          Migrated                  36706.35 1/1     
+PR-202607-121      2026-04-25  Larry Estur          Migrated                  53142.86 1/1     
+PR-202607-122      2026-04-25  Larry Estur          Migrated                 307843.68 2/2     
+PR-202607-123      2026-04-24  Larry Estur          Migrated                 307843.68 2/2     
+PR-202607-124      2026-04-24  Larry Estur          Migrated                 318306.17 2/2     
+PR-202607-125      2026-04-24  Larry Estur          Migrated                 163367.64 2/2     
+PR-202607-126      2026-04-24  Larry Estur          Migrated                5875938.82 3/3     
+PR-202607-127      2026-04-23  Larry Estur          Migrated                  45102.15 3/3     
+PR-202607-128      2026-04-23  Larry Estur          Migrated                  25080.15 10/10   
+PR-202607-129      2026-04-23  Larry Estur          Migrated                  82062.78 2/2     
+PR-202607-130      2026-04-22  Larry Estur          Migrated                2529914.30 3/3     
+PR-202607-131      2026-04-21  Larry Estur          Migrated                7270240.35 3/3     
+PR-202607-132      2026-04-21  Larry Estur          Migrated                2568637.25 3/3     
+PR-202607-133      2026-04-21  Larry Estur          Migrated                1033448.28 1/1     
+PR-202607-134      2026-04-20  Larry Estur          Migrated                 109718.74 1/1     
+PR-202607-135      2026-04-18  Larry Estur          Migrated                 194738.84 6/6     
+PR-202607-136      2026-04-18  Larry Estur          Migrated                 994411.76 1/1     
+PR-202607-137      2026-04-17  Larry Estur          Migrated                 203112.00 1/1     
+PR-202607-138      2026-04-17  Larry Estur          Migrated                  39411.76 1/1     
+PR-202607-139      2026-04-16  Larry Estur          Migrated                  22797.08 2/2     
+PR-202607-140      2026-04-16  Larry Estur          Migrated                  13064.34 2/2     
+PR-202607-141      2026-04-16  Larry Estur          Migrated                  37265.29 5/5     
+PR-202607-142      2026-04-15  Larry Estur          Migrated                3641215.64 5/5     
+PR-202607-143      2026-07-01  Kimberlyn Blones     Mgmt Priced              457591.93 2/2     
+PR-202607-144      2026-07-01  Kimberlyn Blones     Quoted                   105268.89 1/1     
+PR-202607-145      2026-07-01  Kimberlyn Blones     Mgmt Priced              135492.25 1/1     
+PR-202607-146      2026-07-01  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-147      2026-07-01  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-148      2026-07-01  Kimberlyn Blones     Quoted                    43583.50 2/2     
+PR-202607-149      2026-07-02  Kimberlyn Blones     Quoted                   185867.64 1/1     
+PR-202607-150      2026-07-02  Kimberlyn Blones     Quoted                   333364.87 1/1     
+PR-202607-151      2026-07-02  Gerald Lucena        Quoted                    38607.93 1/1     
+PR-202607-152      2026-07-02  Kimberlyn Blones     Quoted                   464676.76 9/9     
+PR-202607-153      2026-07-03  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-154      2026-07-03  Kimberlyn Blones     Quoted                   169242.86 1/1     
+PR-202607-155      2026-07-03  Kimberlyn Blones     Returned to Sales         84292.25 4/4     
+PR-202607-156      2026-07-03  Kimberlyn Blones     Returned to Sales           218.11 3/3     
+PR-202607-157      2026-07-03  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-158      2026-07-03  Kimberlyn Blones     Requested                        — 3/3     
+PR-202607-159      2026-07-03  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-160      2026-07-03  Kimberlyn Blones     Requested                        — 8/8     
+PR-202607-161      2026-07-04  Crystal Gayle        Quoted                   103910.10 1/1     
+PR-202607-162      2026-07-06  Kimberlyn Blones     Quoted                   356234.44 12/13   
+PR-202607-163      2026-07-07  Kimberlyn Blones     Quoted                   394200.00 1/1     
+PR-202607-165      2026-07-07  Gerald Lucena        Requested                        — 9/9     
+PR-202607-166      2026-07-07  Gerald Lucena        Quoted                  3332538.16 1/1     
+PR-202607-173      2026-07-07  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-174      2026-07-07  Kimberlyn Blones     Requested                        — 5/5     
+PR-202607-177      2026-07-07  Kimberlyn Blones     Mgmt Priced              694344.26 1/1     
+PR-202607-178      2026-07-08  Gerald Lucena        Requested                        — 1/1     
+PR-202607-180      2026-07-08  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-181      2026-07-08  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-182      2026-07-08  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-184      2026-07-08  Gerald Lucena        Quoted                    88213.24 1/1     
+PR-202607-190      2026-07-08  Kimberlyn Blones     Quoted                    74407.33 3/9     
+PR-202607-191      2026-07-08  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-192      2026-07-08  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-193      2026-07-08  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-194      2026-07-09  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-195      2026-07-09  Kimberlyn Blones     Quoted                   302787.40 1/1     
+PR-202607-196      2026-07-09  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-197      2026-07-09  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-198      2026-07-10  Kimberlyn Blones     Requested                        — 3/3     
+PR-202607-199      2026-07-10  Kimberlyn Blones     Quoted                    14586.21 1/1     
+PR-202607-200      2026-07-10  Gerald Lucena        Quoted                    71051.00 2/3     
+PR-202607-201      2026-07-10  Kimberlyn Blones     Quoted                    57758.62 1/1     
+PR-202607-202      2026-07-10  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-203      2026-07-10  Kimberlyn Blones     Requested                        — 4/4     
+PR-202607-204      2026-07-10  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-205      2026-07-13  Gerald Lucena        Requested                        — 2/2     
+PR-202607-206      2026-07-13  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-207      2026-07-13  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-208      2026-07-13  Kimberlyn Blones     Quoted                   680464.85 1/1     
+PR-202607-209      2026-07-13  Kimberlyn Blones     Requested                        — 5/5     
+PR-202607-210      2026-07-14  Kimberlyn Blones     Quoted                   699769.90 5/5     
+PR-202607-211      2026-07-14  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-212      2026-07-14  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-213      2026-07-14  Kimberlyn Blones     Sourcing                         — 5/5     
+PR-202607-214      2026-07-14  Kimberlyn Blones     Quoted                   362942.40 2/2     
+PR-202607-215      2026-07-14  Kimberlyn Blones     Quoted                    28666.00 3/3     
+PR-202607-216      2026-07-14  Gerald Lucena        Requested                        — 1/1     
+PR-202607-217      2026-07-14  Gerald Lucena        Quoted                   171658.70 3/5     
+PR-202607-218      2026-07-14  Gerald Lucena        Quoted                  5063492.06 2/2     
+PR-202607-220      2026-07-15  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-221      2026-07-15  Kimberlyn Blones     Quoted                    65523.80 1/2     
+PR-202607-222      2026-07-15  Kimberlyn Blones     Quoted                    19904.76 1/2     
+PR-202607-223      2026-07-15  Kimberlyn Blones     Quoted                 99430158.72 1/1     
+PR-202607-224      2026-07-15  Kimberlyn Blones     Quoted                    27301.60 1/2     
+PR-202607-225      2026-07-15  Gerald Lucena        Quoted                    33497.62 2/2     
+PR-202607-227      2026-07-16  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-228      2026-07-16  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-229      2026-07-16  Gerald Lucena        Requested                        — 3/3     
+PR-202607-230      2026-07-16  Gerald Lucena        Requested                        — 1/1     
+PR-202607-231      2026-07-16  Kimberlyn Blones     Quoted                   696887.92 1/1     
+PR-202607-232      2026-07-17  Kimberlyn Blones     Quoted                    55681.74 2/2     2026-425-KIM-ABOITIZ TMI BU
+PR-202607-233      2026-07-17  Kimberlyn Blones     Quoted                 27150677.21 1/1     
+PR-202607-234      2026-07-17  Gerald Lucena        Quoted                   158106.63 9/9     
+PR-202607-235      2026-07-17  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-236      2026-07-17  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-237      2026-07-17  Kimberlyn Blones     Quoted                    50961.92 2/2     
+PR-202607-238      2026-07-17  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-239      2026-07-17  Kimberlyn Blones     Requested                        — 3/3     
+PR-202607-240      2026-07-17  Kimberlyn Blones     Requested                        — 4/4     
+PR-202607-241      2026-07-17  Gerald Lucena        Quoted                   436533.29 2/2     
+PR-202607-242      2026-07-17  Crystal Gayle        Returned to Sales      69185873.01 1/1     
+PR-202607-243      2026-07-20  Gerald Lucena        Quoted                    24437.72 1/6     
+PR-202607-244      2026-07-20  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-245      2026-07-20  Gerald Lucena        Requested                        — 1/1     
+PR-202607-246      2026-07-20  Gerald Lucena        Requested                        — 1/1     
+PR-202607-247      2026-07-21  Gerald Lucena        Requested                        — 1/1     
+PR-202607-248      2026-07-21  Kimberlyn Blones     Quoted                   572332.08 1/1     
+PR-202607-249      2026-07-22  Kimberlyn Blones     Quoted                   377750.94 2/2     
+PR-202607-250      2026-07-22  Kimberlyn Blones     Quoted                 74995506.99 4/4     
+PR-202607-251      2026-07-22  Kimberlyn Blones     Quoted                   187392.80 3/3     
+PR-202607-252      2026-07-22  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-253      2026-07-22  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-254      2026-07-23  Kimberlyn Blones     Requested                        — 3/3     
+PR-202607-255      2026-07-23  Gerald Lucena        Requested                        — 4/4     
+PR-202607-256      2026-07-23  Gerald Lucena        Requested                        — 1/1     
+PR-202607-257      2026-07-23  Gerald Lucena        Quoted                   172083.43 6/7     2026-409-GL-SOUTHLUZONTHERMAL
+PR-202607-258      2026-07-23  Gerald Lucena        Requested                        — 13/13   
+PR-202607-259      2026-07-23  Gerald Lucena        Requested                        — 6/6     
+PR-202607-261      2026-07-24  Kimberlyn Blones     Quoted                   830530.20 1/1     
+PR-202607-263      2026-07-24  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-264      2026-07-24  Kimberlyn Blones     Quoted                    48627.16 2/2     2026-409-KIM-TAIHEIYO
+PR-202607-267      2026-07-24  Kimberlyn Blones     Quoted                    33455.20 1/1     2026-413-KIM-APEX
+PR-202607-268      2026-07-24  Kimberlyn Blones     Quoted                    37930.00 1/2     2026-410-KIM-APEX
+PR-202607-269      2026-07-24  Kimberlyn Blones     Quoted                   250841.42 4/4     2026408-KIM-APEX
+PR-202607-270      2026-07-24  Kimberlyn Blones     Requested                        — 16/16   
+PR-202607-271      2026-07-24  Gerald Lucena        Requested                        — 4/4     
+PR-202607-273      2026-07-27  Gerald Lucena        Quoted                   605043.12 1/1     2026-418-GLrev2-ABOITIZPOWERCORP-SNAPBU
+PR-202607-275      2026-07-27  Gerald Lucena        Quoted                   215034.29 9/9     2026-415-GL-ISRI
+PR-202607-276      2026-07-27  Kimberlyn Blones     Quoted                    28965.00 1/1     2026-417-KIM-APEX_CUTTING DISC
+PR-202607-277      2026-07-27  Kimberlyn Blones     Quoted                   124629.32 1/1     2026-414-KIM-APEX-TURBOMAXX
+PR-202607-278      2026-07-27  Kimberlyn Blones     Quoted                    55788.68 1/1     2026-413-KIM-PETRACEMENT_SPIRIT_LEVEL
+PR-202607-279      2026-07-28  Kimberlyn Blones     Requested                        — 2/2     
+PR-202607-280      2026-07-28  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-281      2026-07-28  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-282      2026-07-28  Gerald Lucena        Quoted                  2513107.76 1/1     2026-415-GL-LANCETENTERPRISED
+PR-202607-283      2026-07-29  Kimberlyn Blones     Quoted                  2298549.55 3/3     2026-416-KIM-THPAL-TORQUE
+PR-202607-284      2026-07-29  Gerald Lucena        Quoted                   249233.18 7/7     2026-416-GL-ISRI
+PR-202607-285      2026-07-29  Gerald Lucena        Quoted                   122222.24 1/2     2026-417-GL-SOUTHLUZONTHERMAL
+PR-202607-286      2026-07-29  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-287      2026-07-29  Gerald Lucena        Requested                        — 1/1     
+PR-202607-288      2026-07-29  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-289      2026-07-29  Kimberlyn Blones     Quoted                    74303.44 6/10    2026-421-KIM-SPI
+PR-202607-290      2026-07-29  Kimberlyn Blones     Requested                        — 1/1     
+PR-202607-291      2026-07-30  Kimberlyn Blones     Requested                        — 4/4     
+PR-202607-292      2026-07-30  Kimberlyn Blones     Quoted                   890714.29 1/1     
+PR-202607-293      2026-07-30  Kimberlyn Blones     Quoted                   388448.28 1/1     2026-420-KIM-APEX
+PR-202607-294      2026-07-30  Gerald Lucena        Requested                        — 2/2     
+PR-202607-295      2026-07-31  Crystal Gayle        Quoted                  7203990.57 1/1     2026-419-NE-ECC-HYDRAULIC THRUST ROLLER
+PR-202607-296      2026-07-31  Kimberlyn Blones     Requested                        — 1/1     
+PR-202608-001      2026-08-01  Kimberlyn Blones     Requested                        — 1/1     
+PR-202608-002      2026-08-01  Kimberlyn Blones     Quoted                    45327.56 4/4     2026-423-KIM-APEX
+PR-202608-003      2026-08-03  Kimberlyn Blones     Quoted                    31093.40 1/1     2026-422-KIM-ABOITIZ-TVI_BU
+PR-202608-004      2026-08-03  Gerald Lucena        Requested                        — 11/11   
+PR-202608-005      2026-08-03  Gerald Lucena        Requested                        — 5/5     
+PR-202608-006      2026-08-03  Gerald Lucena        Quoted                   959349.34 2/3     2026-424-GL-ISRI-HYDRAULICS
+PR-202608-007      2026-08-03  Gerald Lucena        Quoted                    82047.72 1/1     2026-427-GL-SANROQUEPOWERCORP-PUMP_READY_4FLYGT
+PR-202608-008      2026-08-04  Gerald Lucena        Requested                        — 1/1     
+PR-202608-009      2026-08-04  Gerald Lucena        Requested                        — 1/1     
+PR-202608-010      2026-08-04  Gerald Lucena        Requested                        — 2/2     
+PR-202608-011      2026-08-04  Kimberlyn Blones     Quoted                   944172.86 2/2     2026-426-KIM-SPI
+PR-202608-012      2026-08-05  Crystal Gayle        Quoted                   127542.19 2/2     2026-273-GL-ABOITIZ POWER_HYDRAULIC PUMP REV1
+PR-202608-013      2026-08-05  Kimberlyn Blones     Quoted                    13446.77 1/2     2026-430-NE-ECC-IMPACT SOCKET
+PR-202608-014      2026-08-05  Crystal Gayle        Requested                        — 2/2     
+PR-202608-015      2026-08-05  Kimberlyn Blones     Requested                        — 1/1     
+PR-202608-016      2026-08-05  Gerald Lucena        Requested                        — 5/5     
+PR-202608-017      2026-08-06  Kimberlyn Blones     Requested                        — 2/2     
+PR-202608-018      2026-08-06  Kimberlyn Blones     Requested                        — 2/2     
+PR-202608-019      2026-08-06  Kimberlyn Blones     Quoted                    34120.00 2/2     2026-438-KPB-ACEN-BOLT&NUT
+PR-202608-020      2026-08-06  Kimberlyn Blones     Requested                        — 2/2     
+PR-202608-021      2026-08-06  Gerald Lucena        Requested                        — 2/2     
+PR-202608-022      2026-08-06  Gerald Lucena        Requested                        — 1/1     
+PR-202608-023      2026-08-06  Gerald Lucena        Quoted                   395922.41 1/1     2026-433-GL-ISRI_HYDRJACK
+PR-202608-024      2026-08-07  Kimberlyn Blones     Requested                        — 6/6     
+PR-202608-025      2026-08-07  Kimberlyn Blones     Quoted                    33359.15 10/10   2026-432-KPB-TAIHEIYO
+PR-202608-026      2026-08-07  Kimberlyn Blones     Requested                        — 1/1     
+PR-202608-027      2026-08-07  Crystal Gayle        Quoted                  1695621.64 4/4     2026-438-ADM-SMC MALITA-HYDRAULIC CYLINDER
+PR-202608-028      2026-08-07  Kimberlyn Blones     Quoted                  1215465.25 1/1     2026-431-KPB-ABOITIZ_POWER
+PR-202608-029      2026-08-07  Crystal Gayle        Quoted                  4220379.31 1/1     2026-437-NE-SMGPH-SHAPING MACHINE
+PR-202608-030      2026-08-07  Kimberlyn Blones     Requested                        — 9/9     
+PR-202608-031      2026-08-08  Crystal Gayle        Sourcing                         — 1/1     
+PR-202608-032      2026-08-08  Crystal Gayle        Returned to Sales       5439522.41 4/4     
+PR-202608-033      2026-08-08  Crystal Gayle        Requested                        — 10/10   
+PR-202608-034      2026-08-08  Crystal Gayle        Returned to Sales       3459833.55 11/11   
+PR-202608-035      2026-08-08  Crystal Gayle        Returned to Sales       3047278.20 3/3     
+PR-202608-036      2026-08-10  Gerald Lucena        Sourcing                         — 1/1     
+PR-202608-037      2026-08-10  Kimberlyn Blones     Quoted                   151825.83 3/3     2026-439-KIM-APEX-HAMMER
+PR-202608-038      2026-08-10  Kimberlyn Blones     Requested                        — 1/1     
+PR-202608-039      2026-08-10  Kimberlyn Blones     Quoted                   101724.91 1/1     2026-440-NE-ECC-JACK_PALLET
+PR-202608-040      2026-08-10  Kimberlyn Blones     Quoted                  8578948.09 3/3     2026-442-KPB-APEX-TRACKLINKPUSHER
+PR-202608-041      2026-08-10  Gerald Lucena        Quoted                    51791.13 2/2     2026-441-GL-ABOITIZPOWERCORP_HOSE
+PR-202608-042      2026-08-10  Gerald Lucena        Returned to Sales       3360562.29 2/2     
+
+  Total value of priced requests: 423618148.93
+
+====================================================================================================
+EVERY QUOTATION
+====================================================================================================
+QUOTATION NO                             PR NO              STATUS         SALESPERSON         
+2026-191-ADM_SMGPH_HORIZONTAL BAND SAW R —                  Approved       Crystal Gayle       
+2026-273-GL-ABOITIZ POWER_HYDRAULIC PUMP PR-202608-012      Sent           Gerald Lucena       
+2026-276-ADM-GNP-POWER TEAM HYDRAULIC    —                  Sent           Crystal Gayle       
+2026-343-KIM-SNABOITIZ-BLADDER           —                  Sent           Kimberlyn Blones    
+2026-373-ADM-PHILCEMENT-ASSY CYLINDER    —                  Sent           Crystal Gayle       
+2026-374                                 —                  Sent           Kimberlyn Blones    
+2026-376-ADM-TOOL STORAGE SET            —                  Sent           Crystal Gayle       
+2026-384-GL-FCFMINERALS                  —                  Sent           Gerald Lucena       
+2026-385-GL-ISRI                         —                  Sent           Gerald Lucena       
+2026-386-KIM-APEX                        —                  Sent           Kimberlyn Blones    
+2026-387-KIM-APEX                        —                  Sent           Kimberlyn Blones    
+2026-389-KIM-APEX-TAILIN                 —                  Sent           Kimberlyn Blones    
+2026-390-KIM-APEX                        —                  Sent           Kimberlyn Blones    
+2026-391-KIM-APEX-CROSS WRENCH           —                  Sent           Kimberlyn Blones    
+2026-393-KIM-THPAL-CEJN HOSES            —                  Sent           Kimberlyn Blones    
+2026-395-GL-ISRIWEBERRESCUE              —                  Sent           Gerald Lucena       
+2026-396-GL BULACAN THERMAL              —                  Sent           Gerald Lucena       
+2026-396-KIM-APEX                        —                  Sent           Kimberlyn Blones    
+2026-397-GL-ITOGON SOYUC                 —                  Sent           Gerald Lucena       
+2026-398-GL-LIQUIGAZ                     —                  Sent           Gerald Lucena       
+2026-399-GL-LIQUIGAZ                     —                  Sent           Gerald Lucena       
+2026-400-GL-BULACANTHERMAL               —                  Sent           Gerald Lucena       
+2026-402-GL-BULACANTHERMALCUTOFF         —                  Sent           Gerald Lucena       
+2026-403-KIM-ABOITIZSNABU-AMBUKLAO_BLADD —                  Sent           Kimberlyn Blones    
+2026-404-NEIL-ECC-GENSET                 —                  Sent           Crystal Gayle       
+2026-405-ADM-HYTEC                       —                  Sent           Crystal Gayle       
+2026-406-KIM-ABOITIZ_TSI_BU_CUTTINGKIT   —                  Sent           Kimberlyn Blones    
+2026-407-ADM-THPAL-TORQUE WRENCH         —                  Sent           Crystal Gayle       
+2026-408-ADM-PETRA CEMENT-UNINTERRUPTIBL —                  Not Pursued    Crystal Gayle       
+2026-409-GL-SOUTHLUZONTHERMAL            PR-202607-257      Sent           Gerald Lucena       
+2026-409-KIM-TAIHEIYO                    PR-202607-264      Sent           Kimberlyn Blones    
+2026-410-KIM-APEX                        PR-202607-268      Sent           Kimberlyn Blones    
+2026-413-KIM-APEX                        PR-202607-267      Sent           Kimberlyn Blones    
+2026-413-KIM-PETRACEMENT_SPIRIT_LEVEL    PR-202607-278      Sent           Kimberlyn Blones    
+2026-414-KIM-APEX-TURBOMAXX              PR-202607-277      Sent           Kimberlyn Blones    
+2026-415-GL-ISRI                         PR-202607-275      Sent           Gerald Lucena       
+2026-415-GL-LANCETENTERPRISED            PR-202607-282      Sent           Gerald Lucena       
+2026-416-GL-ISRI                         PR-202607-284      Sent           Gerald Lucena       
+2026-416-KIM-THPAL-TORQUE                PR-202607-283      Sent           Kimberlyn Blones    
+2026-417-GL-SOUTHLUZONTHERMAL            PR-202607-285      Sent           Gerald Lucena       
+2026-417-KIM-APEX_CUTTING DISC           PR-202607-276      Sent           Kimberlyn Blones    
+2026-418-GLrev2-ABOITIZPOWERCORP-SNAPBU  PR-202607-273      Sent           Gerald Lucena       
+2026-419-NE-ECC-HYDRAULIC THRUST ROLLER  PR-202607-295      Sent           Crystal Gayle       
+2026-420-KIM-APEX                        PR-202607-293      Sent           Kimberlyn Blones    
+2026-421-KIM-SPI                         PR-202607-289      Sent           Kimberlyn Blones    
+2026-422-KIM-ABOITIZ-TVI_BU              PR-202608-003      Sent           Kimberlyn Blones    
+2026-423-KIM-APEX                        PR-202608-002      Sent           Kimberlyn Blones    
+2026-424-GL-ISRI-HYDRAULICS              PR-202608-006      Rejected       Gerald Lucena       
+2026-425-KIM-ABOITIZ TMI BU              PR-202607-232      Sent           Kimberlyn Blones    
+2026-426-KIM-SPI                         PR-202608-011      Sent           Kimberlyn Blones    
+2026-427-GL-SANROQUEPOWERCORP-PUMP_READY PR-202608-007      Sent           Gerald Lucena       
+2026-428-KIM-APEX-WELDING_CABLE_REV1     —                  Pending Manage Kimberlyn Blones    
+2026-429-NE-ECC-SNAP-ON CORDLESS IMPACT  —                  Sent           Crystal Gayle       
+2026-430-NE-ECC-IMPACT SOCKET            PR-202608-013      Sent           Crystal Gayle       
+2026-431-GL-ABOITIZPOWERSNAPBU           —                  Sent           Gerald Lucena       
+2026-431-KPB-ABOITIZ_POWER               PR-202608-028      Sent           Kimberlyn Blones    
+2026-432-KPB-TAIHEIYO                    PR-202608-025      Sent           Kimberlyn Blones    
+2026-433-GL-ISRI_HYDRJACK                PR-202608-023      Sent           Gerald Lucena       
+2026-434-NE-SMGPH-LATHE MACHINE          —                  Not Pursued    Crystal Gayle       
+2026-434-NE-SMGPH-LATHE MACHINE REV2026  —                  Approved       Crystal Gayle       
+2026-435-NE-SMGPH-MILLING MACHINE        —                  Approved       Crystal Gayle       
+2026-436-NE-SMGPH-BAND SAW               —                  Approved       Crystal Gayle       
+2026-437-NE-SMGPH-SHAPING MACHINE        PR-202608-029      Approved       Crystal Gayle       
+2026-438-ADM-SMC MALITA-HYDRAULIC CYLIND PR-202608-027      Sent           Crystal Gayle       
+2026-438-KPB-ACEN-BOLT&NUT               PR-202608-019      Pending Manage Kimberlyn Blones    
+2026-439-KIM-APEX-HAMMER                 PR-202608-037      Approved       Kimberlyn Blones    
+2026-440-NE-ECC-JACK_PALLET              PR-202608-039      Approved       Kimberlyn Blones    
+2026-441-GL-ABOITIZPOWERCORP_HOSE        PR-202608-041      Approved       Gerald Lucena       
+2026-442-KPB-APEX-TRACKLINKPUSHER        PR-202608-040      Approved       Kimberlyn Blones    
+2026408-KIM-APEX                         PR-202607-269      Sent           Kimberlyn Blones    
+DEMO-QTN-001                             —                  Approved       Neil                
+QTN-202606-003                           —                  Sent           Kimberlyn Blones    
+QTN-202607-001                           —                  Sent           Kimberlyn Blones    
+QTN-202607-002                           —                  Sent           Kimberlyn Blones    
+QTN-202607-003                           —                  Sent           Kimberlyn Blones    
+QTN-202607-004                           —                  Sent           Kimberlyn Blones    
+QTN-202607-005                           —                  Sent           Gerald Lucena       
+QTN-202607-007                           —                  Sent           Kimberlyn Blones    
+QTN-202607-008                           —                  Sent           Crystal Gayle       
+QTN-202607-009                           —                  Sent           Kimberlyn Blones    
+QTN-202607-010                           —                  Sent           Kimberlyn Blones    
+QTN-202607-011                           —                  Sent           Gerald Lucena       
+QTN-202607-013                           —                  Sent           Gerald Lucena       
+QTN-202607-014                           —                  Sent           Kimberlyn Blones    
+QTN-202607-015                           —                  Sent           Kimberlyn Blones    
+QTN-202607-016                           —                  Sent           Kimberlyn Blones    
+QTN-202607-017                           —                  Sent           Kimberlyn Blones    
+QTN-202607-018                           —                  Sent           Kimberlyn Blones    
+QTN-202607-019                           —                  Sent           Gerald Lucena       
+QTN-202607-020                           —                  Sent           Kimberlyn Blones    

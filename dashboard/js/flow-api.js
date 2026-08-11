@@ -123,13 +123,21 @@ function _flowIdempotentAction(action) {
 const FLOW_SECURED_ACTIONS = [
   'approveQuotation', 'rejectQuotation', 'approvePO', 'rejectPO',
   'approvePaymentRequest', 'rejectPaymentRequest', 'markPaymentRequestPaid',
+  // A225 — admin/accounting only, enforced server-side, so identity comes from the session.
+  'createPaymentRequest', 'updatePaymentRequest',
   'setMgmtPricing', 'rejectMgmtPricing', 'verifyReturnToSales',
   'deleteQuotation', 'deleteSalesOrder', 'deletePurchaseOrder', 'deletePaymentRequest',
+  // A220 — a rename re-keys fourteen sheets and every money record on the order.
+  'renameSalesOrder',
   'deleteAPEntry', 'updateAPAging', 'recordCollection', 'correctCollection',
   'voidCollection', 'voidInvoice',
   // A190 — mirrors _SECURED (FlowAPI.gs) and SECURED_ACTIONS (blueprints/flow.py). If this list
   // omits an action the other two secure, the POST goes direct and the server rejects it.
   'approveWeeklyItinerary', 'rejectWeeklyItinerary',
+  // A220 — reclassifying International <-> Local rewrites the document contract at four money gates.
+  'setSOSupplierType',
+  // A222-U — rewrites stock valuation and deletes a journal; no undo.
+  'reverseReceiving',
   // A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
   'seedClientAliases', 'runDriveMigration', 'buildDriveSkeleton',
   // A194 run-it-all wrappers + the folder setup call. The three preview/verify actions stay out:
@@ -158,18 +166,62 @@ const FLOW_SECURED_ACTIONS = [
   'rejectTravelReplenishment', 'reviseTravelReplenishment',
   'getTravelFloats', 'setTravelFloat', 'requestTravelFloatCash',
   // A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
-  'runQuotationSentAtBackfill'
+  'runQuotationSentAtBackfill',
+  // A226 — both rewrite who a purchase request belongs to, which is what the tracker filters by.
+  'runPricingRequestOwnerBackfill', 'setPricingRequestSalesperson'
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
-/* A158 — who releases the money for a given payment method. Bank/online transfers are executed by
-   the director, every other method by accounting. This lived in three separate copies (the payment
-   actions, the Action Center and FlowAPI); adding a method to the form would have silently routed it
-   to accounting in all of them. Mirrors _PR_DIRECTOR_METHODS / _prPayOwner in FlowAPI.gs. */
-const FLOW_DIRECTOR_PAY_METHODS = ['bank transfer', 'online'];
+/* A224 — who releases the money for a given payment method.
+ *
+ *     telegraphic transfer  →  accounting or admin
+ *     everything else       →  the director
+ *
+ * The exact mirror of _PR_ACCOUNTING_PAY_METHODS / _prPayOwner in FlowAPI.gs, and it has to stay
+ * exact: this decides whether the Mark Paid button is drawn, while the server decides whether the
+ * payment is accepted. Disagreement shows a button that is refused, or hides one from the person
+ * whose job it is. tests/flow/pay-ownership.js lifts BOTH copies and compares them method by method.
+ *
+ * A158's version returned a single role and had the rule inverted (director = bank/online). It lived
+ * in three copies; this is the one, read by prPayActions, the Action Center and the pay dialog. */
+const FLOW_ACCOUNTING_PAY_METHODS = ['telegraphic transfer'];
 function flowPayOwner(method) {
-  return FLOW_DIRECTOR_PAY_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1
-    ? 'director' : 'accounting';
+  return FLOW_ACCOUNTING_PAY_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1
+    ? ['accounting', 'admin'] : ['director'];
+}
+/** Does `role` release this payment method? The question every call site actually asks. */
+function flowPayOwns(method, role) { return flowPayOwner(method).indexOf(String(role || '')) !== -1; }
+/** "accounting or admin" / "the director" — for telling someone why a button is not theirs. */
+function flowPayOwnerLabel(method) {
+  const o = flowPayOwner(method);
+  return o.length > 1 ? o.slice(0, -1).join(', ') + ' or ' + o[o.length - 1] : 'the ' + o[0];
+}
+
+/* A225 — ONE PAYMENT REQUEST PER PURCHASE ORDER, the browser's copy.
+ *
+ * Mirrors FLOW_PR_PER_PO / _PR_DEAD_STATUSES / _prPerPOProblem in FlowAPI.gs. The server decides
+ * whether the request is ACCEPTED; this decides whether the form is drawn as usable. A divergence
+ * either shows a Save button the server refuses, or disables one for work that would have been fine.
+ * tests/flow/pr-per-po.js lifts BOTH copies and compares their ANSWERS case by case — two lists can
+ * agree with each other and both be wrong.
+ *
+ * 'live' — Draft / any Pending* / Approved stand against the PO. Paid and Rejected do not, which is
+ *          what keeps 50% DP → Balance working. */
+const FLOW_PR_PER_PO = 'live';                     // 'live' | 'ever'
+const FLOW_PR_DEAD_STATUSES = ['Rejected', 'Paid'];
+const FLOW_PR_DEAD_EVER = ['Rejected'];
+
+/** rows: [{prNo, status}] already scoped to one PO and excluding the record being edited.
+ *  Returns '' when a new request may be raised, else the reason, naming the request in the way. */
+function flowPRPerPOProblem(poNo, rows) {
+  const dead = FLOW_PR_PER_PO === 'ever' ? FLOW_PR_DEAD_EVER : FLOW_PR_DEAD_STATUSES;
+  const live = (rows || []).filter(r => dead.indexOf(String(r.status || 'Draft') || 'Draft') === -1);
+  if (!live.length) return '';
+  const names = live.map(r => `${r.prNo} (${r.status})`).join(', ');
+  return FLOW_PR_PER_PO === 'ever'
+    ? `${poNo} already has a payment request — ${names}. One purchase order carries one payment request.`
+    : `${poNo} already has a payment request in progress — ${names}. Finish ${live[0].prNo} `
+      + `(approve and pay it, or reject it), Revise it, or delete it if it was raised by mistake.`;
 }
 
 function _flowSessionToken() {
@@ -418,6 +470,27 @@ function flowCutoffNext(key) {
 
 const FLOW_CURRENCIES = ['PHP', 'USD', 'EUR', 'SGD', 'AUD', 'JPY', 'GBP', 'AED'];
 
+/* A224 — which of those a purchase order may use, given who the supplier is.
+ *
+ *     'intl'   →  the foreign currencies. PHP is not offered: an international purchase is stated in
+ *                 the supplier's own currency, and the peso figure is an estimate until the bank acts.
+ *     'local'  →  PHP only.
+ *     ''       →  everything, because the order has no supplier type and guessing is worse than
+ *                 offering the full list (13 live orders are unclassified — see _soSupplierKind).
+ *
+ * The mirror of _poCurrencyProblem in FlowAPI.gs. This one shapes the dropdown; that one decides
+ * whether the save is accepted, and it is the one that matters. */
+function flowCurrenciesFor(kind) {
+  if (kind === 'local') return ['PHP'];
+  if (kind === 'intl') return FLOW_CURRENCIES.filter(c => c !== 'PHP');
+  return FLOW_CURRENCIES.slice();
+}
+/** 'International' | 'Local' | anything else → the 'intl' | 'local' | '' the rules speak in. */
+function flowSupplierKind(supplierType) {
+  const t = String(supplierType || '').trim().toLowerCase();
+  return t === 'international' ? 'intl' : (t === 'local' ? 'local' : '');
+}
+
 /** Map an approval/workflow status to a .flow-badge class + label. */
 function flowStatusBadge(status) {
   const s = String(status || 'Draft');
@@ -446,6 +519,7 @@ function renderFlowNav(active) {
     ['flow-commissions.html', 'Commissions'],
     ['flow-travel.html', 'Travel'],
     ['flow-ap-aging.html', 'AP Aging'],
+    ['flow-payments.html', 'Payment Register'],   // A223
     ['flow-other-payables.html', 'Other Payables'],
     ['flow-receiving.html', 'Receiving'],
     ['flow-invoices.html', 'Invoices'],

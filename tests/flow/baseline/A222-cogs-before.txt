@@ -1,0 +1,62 @@
+A222 baseline — the COGS invariant, BEFORE any change.
+Captured live from getReceiving / getPurchaseOrders / getAPAging.
+
+THE FORMULA A222 MUST NOT MOVE  (createReceiving)
+    Purchase/Unit (PHP) = Paid (PHP) × Unit Price (FC) / PO Total (FC)
+    Shipping/Unit (PHP) = (duties + delivery + other, VAT excluded) × Unit Price (FC) / PO Total (FC)
+    Landed = purchase + shipping,  written to ReceivingItems and into _applyInventory
+
+SCOPE IS MUCH NARROWER THAN EXPECTED
+  92 receiving records exist. NINETY are 'Migrated (legacy)' with a BLANK PO No — plain appends
+  written by _writeMigratedRecordsForSO, which never ran the formula at all. Their cost came from the
+  migration, not from a payment.
+
+  Only TWO records were created through createReceiving and therefore carry a formula-derived cost:
+
+  MR-202606-001   PO-202606-001   USD   received 2026-06-28 by Jay Ralph
+      AP Paid (PHP) at the time : 0          <-- received against an UNPAID payable
+      PO Total (FC) today       : 0          <-- PO-202606-001 no longer exists in getPurchaseOrders
+      stored purchasePHP        : 18,419.77  (RLS100, qty 1)
+      inventoriable shipping    : 4,688.83
+      Recomputing today gives 0 — both inputs are gone. This row's cost basis cannot be reproduced
+      from current data and must be treated as historical, not as a regression signal.
+
+  MR-202608-014   2026-39 Chicago Pneumatics Tools   USD 202   received 2026-08-09 by Crystal Gayle
+      AP Paid (PHP) at the time : 310,895.71   <-- THE CORRUPTED FIGURE
+      AP Paid (PHP) today       :  12,447.24   <-- after the correction
+      PO Total (FC)             : 202
+      stored purchasePHP  CP872 : 184,690.52
+      stored purchasePHP  CP873 : 126,205.19
+                            SUM : 310,895.71   exactly the corrupted payable
+
+════════════════════════════════════════════════════════════════════════════════════════════════
+THE CORRUPTED FIGURE REACHED INVENTORY, AND CORRECTING THE PAYABLE DID NOT UNDO IT
+════════════════════════════════════════════════════════════════════════════════════════════════
+  MR-202608-014 was received on 2026-08-09 WHILE AP-202607-006 still held ₱310,895.71. createReceiving
+  read that figure through _apPaidPHP and stamped it across the two lines as their landed cost, then
+  called _applyInventory to fold it into the weighted-average cost of CP872 and CP873.
+
+  Correcting the AP row afterwards fixed the payable and the ledger. It did NOT fix inventory:
+  receiving is a one-time stamp, and there is NO deleteReceiving anywhere in FlowAPI.gs.
+
+  CP872 and CP873 therefore carry a cost basis roughly 25x too high (₱310,895.71 against a USD 202
+  order, i.e. ~₱12,447.24). The moment either is invoiced, that inflated figure becomes COGS and the
+  gross profit on that sale is badly understated.
+
+  Correct landed cost for the two lines, recomputed from the corrected payable:
+      purchase total = 12,447.24  (split between CP872/CP873 by unit price over PO total FC)
+      + inventoriable shipping 3,120.11
+      = 15,567.35 across 2 units, versus the 314,015.82 currently stamped.
+
+  OVERSTATEMENT IN INVENTORY: 310,895.71 - 12,447.24 = 298,448.47
+
+  This is the SAME ₱298,448.47 that appears as the false Cash credit in tests/flow/baseline/
+  A221-before.txt. One mistyped cell produced it three times: in the payable, in the general ledger,
+  and in the inventory cost basis.
+
+CONSEQUENCE FOR A222
+  The COGS regression check has only these two rows to compare, and one of them (MR-202606-001) is
+  irreproducible. So "COGS byte-identical" is asserted on MR-202608-014 alone, and only AFTER the
+  inventory correction below — comparing against the 310,895.71 stamp would lock in the error.
+
+  A222 must not touch inventory. The CP872/CP873 correction is a separate, deliberate act.

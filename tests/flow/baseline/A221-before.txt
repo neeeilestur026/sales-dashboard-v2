@@ -1,0 +1,105 @@
+A221 baseline — AP Aging, the APPAY journal, and the payment requests, BEFORE any change.
+Captured live from getAPAging / getPaymentRequests / getPurchaseOrders / getJournal / getTrialBalance.
+Nothing in A221 may alter a figure without this file showing what it was.
+
+APAging
+apNo             poNo                                   cur     amountFC      amountPHP        paidPHP  status   prNo                              prStatus
+AP-202607-001    PO-202607-001                          USD       720.00      446393.80       46393.80  Paid     —                                 —
+AP-202607-002    PO-202607-002                          PHP     43500.00       43500.00       43500.00  Paid     —                                 —
+AP-202607-005    2026-38 Power Team Hydraulic Technolog  USD      5035.36      310429.94      310895.71  Paid     PRF-2026-63 HYDRAULIC TECHNOLOGY  Approved
+AP-202607-006    2026-39 Chicago Pneumatics Tools        USD       202.00      310895.71      310895.71  Paid     PRF-2026-65 CHICAGO PNEUMATICS    Approved
+AP-202607-007    2026-40 RS Components Corporation       PHP     27000.00       30240.00       30240.00  Paid     PRF-2026-66 RS Components         Approved
+AP-202607-009    2026-41 TOOLEC                          PHP     34146.00       34146.00       17073.00  Partial  PRF-2026-69 TOOLEC                Paid
+AP-202607-011    2026-42 TOOLEC                          PHP    139372.00      139372.00       69686.00  Partial  PRF-2026-70 TOOLEC                Paid
+AP-202607-012    2026-43 CO BAN KIAT                     PHP     54400.00       54400.00           0.00  Unpaid   PRF-2026-71 CO BAN KIAT           Pending Director
+AP-202607-013    2026-44 CO BAN KIAT                     PHP    250560.00      250560.00           0.00  Unpaid   —                                 —
+AP-202607-014    2026-45 CEJN                            SGD      2493.90      119083.73           0.00  Unpaid   PRF-2026-73 CEJN                  Approved
+
+PaymentRequests — Type PO
+prNo                              poNo                                      amount  status            paidBy  paidAt
+PRF-2026-73 CEJN                  2026-45 CEJN                           119083.73  Approved          —       —
+PRF-2026-71 CO BAN KIAT           2026-43 CO BAN KIAT                     54400.00  Pending Director  —       —
+PRF-2026-70 TOOLEC                2026-42 TOOLEC                          69686.00  Paid              Neil    2026-07-30
+PRF-2026-69 TOOLEC                2026-41 TOOLEC                          17073.00  Paid              Neil    2026-07-30
+PRF-2026-66 RS Components         2026-40 RS Components Corporation       30240.00  Approved          —       —
+PRF-2026-65 CHICAGO PNEUMATICS    2026-39 Chicago Pneumatics Tools        12447.24  Approved          —       —
+PRF-2026-63 HYDRAULIC TECHNOLOGY  2026-38 Power Team Hydraulic Technolog 310429.94  Approved          —       —
+PRF-2026-62 AOLAI RESCUE          PO-202607-001                           44323.20  Approved          —       —
+PRF-2026-61 YALE HARDWARE         PO-202607-002                           43500.00  Approved          —       —
+
+ONLY TWO of these nine were ever marked paid through the Mark Paid button (both TOOLEC, Paid By: Neil).
+Five more show a payable already marked Paid while the request still sits at Approved with Paid By blank:
+PRF-2026-63, -65, -66, -62, -61. The money is recorded as gone with no record of who released it.
+
+PaymentRequests — Type Other  (11 rows, 8 of them Paid — NONE of which posts a journal or an expense today)
+  PRF-2026-78 FOURELEVEN            62656.67  Pending Director  FOURELEVEN FREIGHT LOGISTICS
+  PRF-2026-76 KIM BLONES              853.00  Paid              KIMBERLYN P. BLONES
+  PRF-2026-75 GERALD LUCENA           283.00  Paid              GERALD E. LUCENA
+  PR-202608-001                      6354.36  Paid              NETGLOBAL-PCAB
+  PRF-2026-74 FEDEX                  3120.11  Paid              FEDERAL EXPRESS PACIFIC
+  PRF-2026-73 GERALD LUCENA          2000.00  Paid              GERALF E. LUCENA
+  PRF-2026-72 KIMBERLYN BLONES       2000.00  Paid              KIMBERLYN P. BLONES
+  PRF-2026-68 ANGELICA SIMEON         302.00  Paid              ANGELICA SIMEON
+  PRF-2026-67 DHL EXPRESS           46325.43  Approved          DHL EXPRESS
+  PRF-2026-64 DHL EXPRESS           15420.52  Approved          DHL EXPRESS
+  PRF-2026-62 AFAB                   1200.00  Paid              AFAB Operating
+                          Paid total  16,112.47 — cash that left the company and reached no ledger at all.
+  (An earlier draft of this file said 56,459.62. That was an addition error on my part and it was
+   repeated downstream before A223's reconciliation caught it: the eight rows above sum to
+   16,112.47, which ties exactly — 99,206.24 paid on PO requests + 16,112.47 here = 115,318.71,
+   the total of every paid request.)
+
+Journal — every APPAY entry (Dr 2010 Accounts Payable / Cr 1010 Cash)
+  JE-APPAY-AP-202606-002             135000.00
+  JE-APPAY-AP-202606-003               3750.00
+  JE-APPAY-AP-202606-004             751249.80
+  JE-APPAY-AP-202606-005              71478.50
+  JE-APPAY-AP-202607-001              46393.80
+  JE-APPAY-AP-202607-002              43500.00
+  JE-APPAY-AP-202607-005             310895.71
+  JE-APPAY-AP-202607-006             310895.71   <-- FALSE. Cash never left for this one.
+  JE-APPAY-AP-202607-007              30240.00
+  JE-APPAY-AP-202607-009              17073.00
+  JE-APPAY-AP-202607-011              69686.00
+  TOTAL cash credited by APPAY      1790162.52
+
+Trial balance
+  1010  Cash                       Dr  1480245.56  Cr  1825493.84   balance  Cr   345248.28
+  1200  Accounts Receivable        Dr   258861.99  Cr  1482834.18   balance  Cr  1223972.19
+  1300  Inventory                  Dr  1172559.04  Cr    99793.42   balance  Dr  1072765.62
+  1400  Purchases Clearing         Dr   697087.08  Cr  1155793.78   balance  Cr   458706.70
+  1500  Input VAT Receivable       Dr    18566.06  Cr        0.00   balance  Dr    18566.06
+  1600  Creditable Withholding Tax Dr     2588.62  Cr        0.00   balance  Dr     2588.62
+  2010  Accounts Payable           Dr  1790162.52  Cr   697087.08   balance  Dr  1093075.44
+  4000  Sales                      Dr        0.00  Cr   258861.99   balance  Cr   258861.99
+  5000  Cost of Goods Sold         Dr    99793.42  Cr        0.00   balance  Dr    99793.42
+
+THE TWO ROWS A221 CORRECTS
+  AP-202607-006  USD 202. amountPHP AND paidPHP both 310,895.71 — byte-identical to AP-202607-005's
+                 paidPHP, pasted into the wrong row 2026-07-28 01:38. Only ONE of the two was typed:
+                 updateAPAging's reconcile (FlowAPI.gs:2510) copied Paid over Amount.
+                 The approved request PRF-2026-65 is 12,447.24 and was NEVER marked paid.
+                 JE-APPAY-AP-202607-006 credits Cash 310,895.71 that never left the bank.
+                 FALSE CASH CREDIT = 310,895.71 - 12,447.24 = 298,448.47
+
+  AP-202607-001  USD 720. amountPHP 446,393.80 against an approved request of 44,323.20 — its own
+                 paid figure with a "4" prefixed, exactly 400,000 more. Its JOURNAL is 46,393.80,
+                 and the 2,070.60 excess over the request is a BANK CHARGE, not an error (A219).
+                 Correcting the payable must not erase that 2,070.60.
+
+A SEPARATE, LARGER PROBLEM THIS BASELINE EXPOSES — NOT IN A221's SCOPE
+  The trial balance does not balance in the ordinary sense and cannot, because the two sides of the
+  procure-to-pay chain post in DIFFERENT UNITS:
+
+    JE-PO-2026-39 Chicago Pneumatics Tools   Dr 1400 Purchases Clearing  202     <- USD, currency 'USD'
+    JE-APPAY-AP-202607-006                   Cr 1010 Cash            310,895.71  <- PHP
+
+  A foreign PO whose 'Exchange Rate' is 0 and whose totalPHP is blank posts its journal at the
+  FOREIGN CURRENCY total, while its payment posts in pesos. Hence Accounts Payable — a liability —
+  carries a DEBIT balance of 1,093,075.44, and Purchases Clearing (which should net to roughly zero)
+  carries a credit balance of 458,706.70.
+
+  Correcting AP-202607-006 removes 298,448.47 of the Cash distortion but CANNOT fix this: the
+  remaining imbalance is structural and belongs to the PO journal, not to the payment. Flagged here
+  so that "the trial balance still looks wrong afterwards" is understood as expected, not as A221
+  having failed.

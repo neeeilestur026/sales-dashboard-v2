@@ -449,6 +449,7 @@ function renderNavbar(activePage) {
           <a href="flow-lifecycle.html" class="${activePage === 'flow-lifecycle' ? 'active' : ''}">SO Lifecycle Tracker</a>
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
+          <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
@@ -458,6 +459,7 @@ function renderNavbar(activePage) {
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
+          <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Materials Receiving</a>
           <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
@@ -519,6 +521,7 @@ function renderNavbar(activePage) {
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
+          <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Receiving</a>
@@ -563,8 +566,8 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'management') {
-    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'quotation-board', 'client-tracker'];   // A207 · A216 · A217
-    const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle'];
+    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226
+    const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223
     const mAcctPages = ['leave-request', 'change-password'];
     const mApprActive = mApprPages.includes(activePage) ? 'active' : '';
     const mFinActive = mFinPages.includes(activePage) ? 'active' : '';
@@ -588,6 +591,7 @@ function renderNavbar(activePage) {
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Pricing Requests</a>
+          <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="management-leave.html" class="${activePage === 'management-leave' ? 'active' : ''}">Leave Approvals</a>
           <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
           <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions${_soon(session.role)}</a>
@@ -604,6 +608,7 @@ function renderNavbar(activePage) {
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
+          <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="management-sales-orders.html" class="${activePage === 'management-sales-orders' ? 'active' : ''}">Sales Orders</a>
@@ -633,7 +638,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'director') {
-    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel'].includes(activePage);   // A207 · A212
+    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-performance', 'management-itinerary'].includes(activePage);   // A216
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
@@ -669,6 +674,7 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
+          <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="director-expenses.html" class="${activePage === 'director-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Commissions for Payroll${_soon(session.role)}</a>
@@ -781,7 +787,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226
     const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -799,6 +805,7 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">Product Finder</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
+          <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
@@ -1147,10 +1154,14 @@ async function flowComputeActions(session) {
         else if (isDir && (s === 'Pending Director' || (s === 'Pending Final' && !p.dirApprovedBy))) waiting[t]++;
         // Approved but not yet paid — owned by whoever executes that payment method.
         if (s === 'Approved') {
-          // A158: one shared owner rule (flow-api.js) instead of a third copy of the method list.
-          const owner = (typeof flowPayOwner === 'function') ? flowPayOwner(p.paymentMethod)
-            : (['bank transfer', 'online'].indexOf(String(p.paymentMethod || '').trim().toLowerCase()) !== -1 ? 'director' : 'accounting');
-          if ((owner === 'director' && isDir) || (owner === 'accounting' && isAcct)) toPay[t]++;
+          // A224: one shared owner rule (flow-api.js) instead of a fourth copy of the method list.
+          // Telegraphic transfers belong to accounting OR admin, everything else to the director —
+          // so admin now sees the wires it is expected to execute, which it never did before.
+          const owns = (typeof flowPayOwns === 'function')
+            ? flowPayOwns(p.paymentMethod, role)
+            : (String(p.paymentMethod || '').trim().toLowerCase() === 'telegraphic transfer'
+                ? (isAcct || isAdmin) : isDir);
+          if (owns) toPay[t]++;
         }
       });
       const page = t => t === 'Other' ? 'flow-other-payables.html' : 'flow-payment-requests.html';

@@ -156,13 +156,57 @@ console.log('\n== paid exceeding the payable ==');
      !(collapsed && collapsed.block), collapsed && collapsed.message);
 }
 
-console.log('\n== the ordering is asserted in the source, not just described ==');
+console.log('\n== A221: THE RECONCILE IS GONE, and its absence is asserted on the source ==');
+{
+  /* A219 fixed the ORDER of these two statements. A221 deleted the second one outright, because a
+     payable is what is owed and the paid figure is what was paid, and letting either become the other
+     destroys the evidence that they ever differed. That is how AP-202607-006 came to hold TWO wrong
+     numbers when only ONE was typed.
+
+     An absence cannot be observed from behaviour — a function that never had the line and a function
+     that just lost it behave identically — so it is asserted against the source. Comments are
+     stripped first, or the explanatory comment that replaced the code would satisfy the search. */
+  const fn = lift('updateAPAging');
+  const code = fn.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  ok('the guard is still there', code.indexOf('_apAmountProblem(') > 0);
+  ok('Amount (PHP) is never assigned from Paid (PHP)',
+     !/cur\[5\]\s*=\s*_num\(cur\[8\]\)/.test(code), code.match(/cur\[5\][^\n]*/g));
+  ok('...and no reconcile of any shape survives',
+     !/if\s*\(String\(cur\[6\]\)\.toLowerCase\(\)\s*===\s*'paid'\s*&&/.test(code));
+  /* The same removal had to happen in the journal, or the Status dropdown became a third way to move
+     money: choose 'Paid', save, and the full payable was credited out of Cash with nothing entered. */
+  ok('and the journal no longer falls back to the payable when Status is Paid',
+     !/payment\s*=\s*_num\(cur\[5\]\)/.test(code), code.match(/payment\s*=[^\n]*/g));
+  ok('the journal follows Paid (PHP) alone', /var payment = _num\(cur\[8\]\);/.test(code));
+}
+
+console.log('\n== A221: Paid (PHP) cannot be written from this page without saying so ==');
+{
+  /* Until A221 this was an ordinary editable cell, and therefore a second way to pay a supplier with
+     no approved request, no payment method, no method-ownership check and no proof of payment — all
+     of which markPaymentRequestPaid demands. On the live book only 2 of 9 supplier payments went
+     through Mark Paid; five more show a payable marked Paid with the request still at Approved and
+     'Paid By' blank. */
+  const code = lift('updateAPAging').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  ok('a change to Paid (PHP) is gated', /p\.paidPHP !== undefined && _num\(p\.paidPHP\) !== _num\(cur\[8\]\)/.test(code));
+  ok('the gate needs BOTH an explicit flag and a reason',
+     /!p\.externalPayment \|\| !_why/.test(code), code.match(/!p\.externalPayment[^\n]*/g));
+  ok('it refuses with a named confirm rather than a bare error',
+     /needsConfirm: 'externalPayment'/.test(code));
+  ok('and the reason is stamped into Notes, where it stays visible afterwards',
+     /Recorded outside the system by/.test(lift('updateAPAging')));
+  ok('the stamp is not then overwritten by the same save',
+     /p\.notes = undefined/.test(code));
+  /* Paid (PHP) is no longer written by the plain set() list — that is the whole point. */
+  ok('set(8, ...) is gone from the ordinary field list', !/set\(8,/.test(code), code.match(/set\(\d,[^\n]*/g));
+}
+
+console.log('\n== the guard ordering (A219) still holds where it matters ==');
 {
   const fn = lift('updateAPAging');
   const guardAt = fn.indexOf('_apAmountProblem(');
-  const reconcileAt = fn.indexOf("if (String(cur[6]).toLowerCase() === 'paid'");
-  ok('both are present', guardAt > 0 && reconcileAt > 0, { guardAt, reconcileAt });
-  ok('and the guard runs BEFORE the reconcile', guardAt < reconcileAt, { guardAt, reconcileAt });
+  const writeAt = fn.indexOf('sh.getRange(ri, 1, 1, headers.length).setValues');
+  ok('the guard runs BEFORE the row is written', guardAt > 0 && guardAt < writeAt, { guardAt, writeAt });
   // Read the argument list by brace-matching rather than a regex — the call contains nested _num(...)
   // parens, which a naive [^)]* can never span.
   const callAt = fn.indexOf('_apAmountProblem(');

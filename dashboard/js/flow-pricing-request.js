@@ -15,7 +15,13 @@ const STEP_OF = {
   'Requested': 1, 'Sourcing': 1, 'For Mgmt Pricing': 2, 'Mgmt Priced': 3,
   'Verifying': 3, 'Returned to Sales': 4, 'Quoted': 5
 };
-const STEP_LABELS = ['Request', 'Sourcing', 'Pricing', 'Verify', 'Quotation'];
+/* A226 — a SIXTH step. The rail stopped at 'Quotation', which is the moment the quotation is created
+   and not the moment anything reaches the client. A request whose quotation is still a draft looked
+   finished here while the rep still had a move to make. 'Sent' is that move, and it is the join
+   between a purchase request's life and the quotation's own — the thing the tracker was asked for.
+   STEP_OF still tops out at 5 ('Quoted'), so nothing on this page advances into the new dot; it is
+   the tracker that fills it in from the quotation's status. */
+const STEP_LABELS = ['Request', 'Sourcing', 'Pricing', 'Verify', 'Quotation', 'Sent'];
 
 const BADGE = {
   'Requested': 'b-open', 'Sourcing': 'b-open', 'For Mgmt Pricing': 'b-pending',

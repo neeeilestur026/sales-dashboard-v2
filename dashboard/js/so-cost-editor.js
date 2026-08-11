@@ -9,6 +9,7 @@
 
 let _scePrefill = null;
 let _sceOnSaved = null;
+let _sceBank = null;      // A224: getSOBankCharges for the order currently open, or null
 
 const _SCE_FIELDS = [
   ['purchaseOfGoods', 'Purchase of Goods', 'both'],
@@ -41,6 +42,11 @@ function _sceEl() {
       </div>
       <div class="group-title">Cost components (PHP)</div>
       <div class="flow-form" id="sceComps"></div>
+      <!-- A224: what the bank actually charged on this order's payments. It REPORTS; the buckets
+           above stay hand-entered. See getSOBankCharges for why nothing here writes. -->
+      <div id="sceBank" style="display:none;font-size:0.76rem;line-height:1.55;margin-top:0.6rem;
+           border:1px solid var(--border);border-radius:7px;padding:0.5rem 0.7rem;
+           background:var(--bg-subtle,#f8fafc);"></div>
       <div style="display:flex;justify-content:space-between;gap:1rem;margin-top:0.75rem;font-weight:700;">
         <span>Total COGS: <span id="sceTotalCogs" style="color:#ef4444;">0.00</span></span>
         <span>Gross Profit: <span id="sceGross" style="color:#16a34a;">0.00</span></span>
@@ -77,6 +83,62 @@ function openSoCostEditor(prefill, onSaved) {
   ).join('');
   el.classList.add('open');
   _sceRecalc();
+  _sceLoadBankCharges(_scePrefill.soNo);
+}
+
+/* ── A224 — the bank charges this order's payments actually recorded ───────────────────────────────
+ *
+ * A222 captures what the bank did at the moment it is known — actual debited, bank charge, value date
+ * — on the payment request. The charge is deliberately kept out of the payable (it is our cost, not
+ * the supplier's) and out of landed cost. So it is a real, known cost of this order that the COGS
+ * record has never been told about, and until now the only way to find it was to open each payment
+ * request and read it off.
+ *
+ * IT IS SHOWN, NOT WRITTEN, and that is a decision rather than an omission — there are TWO buckets
+ * for the same fee and nothing in the data says which one a supplier wire belongs in, a local order
+ * excludes both from Total COGS entirely, saveSOCostDetails overwrites the whole row, and several
+ * payments on one order would each have to accumulate. Any one of those would move gross profit
+ * silently. So: the system reports the figure and the person who knows which bucket puts it there.
+ *
+ * Best-effort throughout. This is a convenience beside the form, and it must never be able to stop
+ * somebody editing costs — an older backend simply has no such handler. */
+async function _sceLoadBankCharges(soNo) {
+  _sceBank = null;
+  const box = document.getElementById('sceBank');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  if (!soNo || typeof fetchFlow !== 'function') return;
+  let r = null;
+  try { r = await fetchFlow('getSOBankCharges', { soNo: String(soNo) }, { fresh: true }); }
+  catch (e) { return; }
+  if (!r || !r.success || !r.count) return;
+  // The dialog may have been closed, or reopened on a different order, while that was in flight.
+  if (String((_scePrefill || {}).soNo || '') !== String(soNo)) return;
+  _sceBank = r;
+  _sceRenderBank();
+}
+
+/** Re-rendered on every recalc, because flipping COGS Type changes what the advice HAS to say. */
+function _sceRenderBank() {
+  const box = document.getElementById('sceBank');
+  const r = _sceBank;
+  if (!box) return;
+  if (!r || !r.count) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const intl = document.getElementById('sceCogsType').value === 'international';
+  box.innerHTML =
+    `<b>₱${flowNum(r.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}</b> of bank charges `
+    + `was recorded on this order's payments:`
+    + '<ul style="margin:0.35rem 0 0.4rem 1.1rem;padding:0;">'
+    + r.rows.map(x => `<li>${flowEsc(x.prNo)}${x.valueDate ? ' · ' + flowEsc(x.valueDate) : ''} — `
+        + `${flowMoney(x.charge, 'PHP')}${x.currency && x.currency !== 'PHP' ? ' on a ' + flowEsc(x.currency) + ' wire' : ''}</li>`).join('')
+    + '</ul>'
+    + (intl
+        ? 'It is <b>not</b> entered for you: it belongs either in Bank Charge (COGS) or in Bank Charge '
+          + '(Shipping), and only you know which — writing to the wrong one would double-count against '
+          + 'whichever you have been using.'
+        : '<span style="color:#b45309;">This order is <b>Local</b>, and both bank-charge buckets are '
+          + 'excluded from Total COGS on a local order — so entering it above would store it without '
+          + 'counting it. Reclassify the order first if this charge belongs in its cost.</span>');
+  box.style.display = '';
 }
 
 function closeSoCostEditor() {
@@ -101,6 +163,7 @@ function _sceRecalc() {
   const g = document.getElementById('sceGross');
   g.textContent = flowMoney(gp, 'PHP');
   g.style.color = gp < 0 ? '#ef4444' : '#16a34a';
+  _sceRenderBank();     // A224: the advice differs for a local order, so it follows the COGS Type
 }
 
 async function _sceSave() {

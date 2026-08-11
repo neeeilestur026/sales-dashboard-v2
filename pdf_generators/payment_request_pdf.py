@@ -276,6 +276,23 @@ def build_payment_request_pdf(buffer, details, supporting_docs=None):
         ]))
         elements.append(amt_box)
 
+        # ── A222: the peso ESTIMATE beneath a foreign obligation ──
+        # The box above now prints the real obligation — "USD 202.00" — because a foreign purchase is
+        # owed in the supplier's currency. The peso figure that used to stand in its place was an
+        # estimate derived from a rate typed when the order was raised, and printing it as though it
+        # were the amount is what let an estimate be mistaken for a cost all the way to the ledger.
+        # Printed only when there IS an estimate and the request is genuinely foreign: a PHP request
+        # is unchanged, down to the byte.
+        est_php = _to_float(details.get("amount_php_est"))
+        if est_php > 0 and str(currency).upper() != "PHP":
+            elements.append(Paragraph(
+                f"Estimated cost &asymp; PHP {est_php:,.2f} &mdash; an estimate only. "
+                f"The peso figure is set by the bank on the day of the transfer.",
+                ParagraphStyle(
+                    "fx_est", fontName="Helvetica-Oblique", fontSize=8.5,
+                    textColor=colors.HexColor("#1e40af"), leading=11, alignment=2,
+                )))
+
         # ── A180: which slice of the PO this payment is ───────────
         # Deliberately NOT a fifth tuple in the PAYMENT INFORMATION section above: that list is
         # consumed two-at-a-time, so a fifth entry would add a shaded table row even when blank and

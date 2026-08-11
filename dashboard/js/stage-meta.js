@@ -5,7 +5,7 @@
    Loaded before admin.js AND management-home.js
    ═══════════════════════════════════════════════ */
 
-// ── 24-stage lifecycle definition (A151: + downstream Billing & Collection) ─────
+// ── 25-stage lifecycle definition (A151: + downstream Billing & Collection) ─────
 // The authoritative auto/manual flag comes from the SERVER (_shipAutoDerive → t.autoderived);
 // the `autoDerive` flags below are display metadata, aligned to what the server actually derives:
 // AUTO = so_received, po_created/approved/sent, prf_created, tt_sent, delivered, invoiced, ar_open,
@@ -40,6 +40,75 @@ const _SM_LIFECYCLE_STAGES = [
   { key: 'ar_open',                 label: 'Receivable Booked (AR)',            owner: 'Accounting', autoDerive: true,  docLabel: null },
   { key: 'collected',               label: 'Collected — Paid in Full',          owner: 'Accounting', autoDerive: true,  docLabel: 'Official Receipt / proof of collection' },
 ];
+
+/* ── A220: which of the 25 stages exist only on an INTERNATIONAL order ────────────────────────────
+   A local purchase is paid and then delivered to the office — no proforma, no forwarder, no customs,
+   no bank debit memo. These twelve describe documents a local supplier will never produce, and until
+   now all 25 rendered on every shipment, so a local order was asked on screen for FAN/SAD/TAN and a
+   forwarder's final invoice.
+
+   MUST match _SHIP_STAGE_INTL in apps-script/FlowAPI.gs — tests/flow/ship-kind.js asserts it, the
+   same coupling _SM_LIFECYCLE_STAGES already has with _SHIP_STAGES on ORDER.
+
+   Kept as one list rather than a flag on each of the 25 entries above so there is a single place to
+   read the answer, and one place for the two files to disagree loudly instead of quietly.          */
+const _SM_INTL_ONLY = ['proforma_received', 'shipping_docs_received', 'forwarder_quotes',
+  'forwarder_approved', 'booked', 'pickup', 'in_transit', 'customs_clearance', 'fan_sad_tan',
+  'debit_memo', 'forwarder_final_invoice', 'local_charges'];
+
+/** 'intl' when the stage exists only on an international order, else 'both'. */
+function smStageApplies(stageKey) {
+  return _SM_INTL_ONLY.indexOf(String(stageKey)) === -1 ? 'both' : 'intl';
+}
+
+/** Does this stage belong to an order of this kind?
+ *  kind is 'intl' | 'local' | '' — UNCLASSIFIED shows everything, because guessing would silently
+ *  drop document requirements on the 13 live orders nobody has classified. */
+function smStageInKind(stageKey, kind) {
+  return kind === 'local' ? smStageApplies(stageKey) === 'both' : true;
+}
+
+/* On a local order the money moves by ordinary bank transfer, not a telegraphic transfer. Same stage
+   keys and the same auto-derivation — only the wording changes, so no stored state moves. */
+const _SM_LOCAL_LABELS = {
+  tt_sent:      'Bank Transfer Sent',
+  tt_forwarded: 'Transfer Forwarded to Supplier',
+};
+
+/** The stage's label, worded for the order's kind. */
+function smStageLabel(stageKey, kind) {
+  if (kind === 'local' && _SM_LOCAL_LABELS[stageKey]) return _SM_LOCAL_LABELS[stageKey];
+  const s = _SM_LIFECYCLE_STAGES.find(x => x.key === stageKey);
+  return s ? s.label : stageKey;
+}
+
+/** The stages of one phase that apply to this kind. Returns [] when the whole phase drops out —
+ *  'Documents' and 'Logistics' are entirely international, so a local shipment shows neither. */
+function smPhaseStages(phaseName, kind) {
+  const p = _SM_PHASES.find(x => x.name === phaseName);
+  return p ? p.stages.filter(k => smStageInKind(k, kind)) : [];
+}
+
+/* _SM_STAGE_META.requires is a strict linear spine: delivered ← local_charges ←
+   forwarder_final_invoice ← … ← customs_clearance. On a LOCAL order that chain runs through five
+   stages that do not exist, so "Delivered to Office" could never legitimately be reached. Walk back
+   through the inapplicable links to the nearest prerequisite that does apply. */
+function smRequires(stageKey, kind) {
+  const seen = {};
+  const walk = (key) => {
+    const meta = _SM_STAGE_META[key];
+    const reqs = (meta && meta.requires) || [];
+    const out = [];
+    reqs.forEach(r => {
+      if (seen[r]) return;
+      seen[r] = true;
+      if (smStageInKind(r, kind)) out.push(r);
+      else walk(r).forEach(x => { if (out.indexOf(x) === -1) out.push(x); });
+    });
+    return out;
+  };
+  return walk(stageKey);
+}
 
 // ── 5-phase grouping ──────────────────────────────
 const _SM_PHASES = [

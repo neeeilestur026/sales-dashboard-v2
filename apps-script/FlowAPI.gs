@@ -25,7 +25,7 @@ var FLOW_DRIVE_FOLDER_ID = '1aE92m5g31bx9SoUIkLrBxlLVftCEXNTM';
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 124;  // A219 the peso side of a foreign payable. AP-202607-006 showed USD 202 as P310,895.71 (implied P1,539/USD) - a figure byte-identical to AP-202607-005's Paid, pasted into the wrong row. getAPAging does NO arithmetic, so it was a stored cell. All four bad rows were already NAMED in c34f99b (A171 W2, 2026-07-29 12:36); AP-006 was last written 2026-07-28 01:38, ~35h BEFORE that guard existed, and A171's checks are write-time only - nothing has ever re-read an existing row. THERE IS NO EXCHANGE RATE TO VALIDATE AGAINST: the rate is whatever the bank gives on the day, which is why three of four foreign POs store rate 0 - honest, not missing. So the primary rule uses no rate at all: A PAYABLE MARKED PAID CANNOT EXCEED WHAT WAS ACTUALLY PAID FOR IT, reconciled against the approved PaymentRequests via _poRequestedPHP (deliberately NOT _poPayablePHP/_poRemainingPayable, which derive from APAging's own Amount and would be circular). That catches both errors (10x and 25x) and clears AP-202607-007 with no special case - the VAT is on the payment request too. The 20-200 FX band survives only as a typo net for rows with no payment yet. _apAmountProblem finally USES the poNo it always took and ignored, and now receives the status. THE ORDER OF TWO STATEMENTS IN updateAPAging WAS A BUG: the Status=Paid reconcile overwrote the payable with the paid figure BEFORE validation, so the paid-exceeds-payable branch could never fire on a Paid row - validate first, reconcile second. updatePurchaseOrder gained the _poFxProblem call it never had (create was guarded, update was not, and update writes both the rate and the AP peso amount). previewAPAgingAnomalies is the sweep the guards never had - read-only, names WHICH FIELD is wrong, and refuses to erase a probable BANK CHARGE: two USD wires show paid slightly above the payable (P2,070.60 and P465.77), which is a fee with nowhere to be recorded, not a typo. It reports the residual a correction would throw away rather than dropping it silently · 123: A218 WHOSE quotation is it. 'Created By' is who TYPED it, and the system was treating it as whose deal it is - creating quotations is one person's job here, so she is Created By on 46 of 85 while owning 27. The real owner existed ONLY as initials inside the quotation number (2026-404-NEIL-ECC-GENSET is Crystal's, typed by Kimberlyn, and at P74.2M it is the largest deal in the book); flowQuotationDupPairs documents that format and deliberately throws the segment away, and nothing else ever parsed it. Quotations gains 'Salesperson' 26 -> 27, BOTH positional writers widened in step (the width trap, asserted first in tests/flow/quotation-owner.js). _quoOwner is the ONE answer to 'whose deal is this': the column, then the initials via _QUO_INITIALS, then the creator. _QUO_INITIALS IS A MIGRATION AID - after runQuotationOwnerBackfill the column is the fact, and a new hire must never need a code change. previewQuotationOwners / runQuotationOwnerBackfill are preview-then-apply and idempotent, and REPORT any number whose initials nobody recognises rather than defaulting it to the typist - silently assuming is how the wrong name got attached in the first place. updateQuotation can now correct 'Salesperson', which is the first correction path attribution has ever had ('Created By' is written once by createQuotation and no code could change it). closeQuotation/reopenQuotation guards WIDENED to owner OR creator, never moved: moving them would lock the typist out of quotations she maintains. _commSalesperson resolves through _quoOwner - that single line selects the commission RATE, decides who may file the claim at all, and is frozen onto the payable at submit, so a misattribution paid the wrong person AND refused the right one. previewCommissionOwnerShift reports what moves BEFORE the rule is trusted; on today's data it is empty - all 7 linked orders already agree, so this is protection for future claims, not a restatement of past ones · 122: A217 the quotation TRACKER: a pipeline board (dashboard/quotation-board.html), a per-client timeline (client-tracker.html), and the Sent mailbox as a SPLIT VIEW so attaching a message to a quotation is one click on a row already on screen. Zero links had ever been made - the scorer was fine, it just lived inside a dialog nobody thought to open, on the wrong page. ONE new handler: setQuotationEmailReply, which is the MISSING HALF OF A208. 'Reply At' / 'Reply From' / 'Reply Checked At' have been in the schema since 113, are read by _qeMap, and were written by NOTHING - so flowFollowUp's `replied` branch has never fired in production and the worklist's top-priority step 'They replied' was unreachable. The thread matching itself was ALSO already finished and callerless (/api/email/quotation-threads, blueprints/email_log.py:1067, real References/In-Reply-To walking with a normalised-subject fallback); this handler only writes down what it found. checkedAt is stamped EVEN WHEN NO REPLY WAS FOUND, because 'we looked and there was nothing' is a different fact from 'nobody has ever looked' and flowFollowUp already tells them apart - and Flask omits the misses, so the CLIENT sends an entry for every id it checked. A recorded reply is never erased by a later empty sweep. NOT _SECURED, matching its three A208 siblings - linkQuotationEmail is strictly more powerful (it back-dates 'Sent At') and is unsecured too, so securing one of four would add inconsistency rather than raise the floor; secure the QuotationEmails write group together, as its own change · 121: A216 the weekly itinerary reaches the people who approve it: dashboard/management-itinerary.html shows one Mon-Sun week per rep, planned stops with the visits actually logged underneath them, plus every rep who filed NOTHING - the live week has a rep with five client visits and no plan, and until now no screen anywhere said so. Backend change is ONE function: _timeOfDay now returns 24-hour 'HH:mm' instead of '3:30 PM', because the rep's planner renders it into <input type="time"> (weekly-itinerary.js:156) which accepts only that format - given anything else the browser BLANKS the control and the next Save writes the blank back, so opening a plan and saving it destroyed every planned time on it. Whatever a human reads is formatted at the point of display (iwTime12). No new handler, no new column: getWeeklyItineraries with no params already returns every rep's plan with items, getClientVisits returns the visits, and approve/rejectWeeklyItinerary already exist and are already _SECURED. The plan-vs-actual JOIN is the part that can lie, so it lives in a pure table-tested module (dashboard/js/itinerary-week.js): an EXACT link - ClientVisits '<Itinerary No>#<Seq>', which nothing in the repo had ever parsed - is the only thing counted as matched; a same-week company-NAME agreement is reported separately as 'likely' and never added to it; and a link whose Seq no longer exists (a revise re-appends every item row) degrades to 'stop deleted' rather than quietly becoming an unplanned visit. On today's data every match is 'likely' and matched is honestly ZERO, because the visit picker offers Approved plans only (report.js:359) and no plan has ever been approved · 120: A215 track quotations by WHAT IS NEXT, not by date. Quotations gains 'Sent At Basis' (blank = the date was recorded as it happened; anything else = ESTIMATED by the backfill, and every surface showing it must say so) plus 'Snooze Until' / 'Snooze Reason'. Parking is NOT the same as 'Follow Up Days': a threshold is a property of the deal ("this client always takes three weeks"), parking is a decision just made ("not now, ask me in October") - folding them together would let a rep quietly change how every future follow-up on a deal is judged. previewQuotationSentAt / runQuotationSentAtBackfill estimate the send date from 'Approved At' for the 60 quotations marked Sent before the stamp existed, because flowFollowUp returns 'unknown' for all of them and goes silent, leaving the worklist blind to nearly the whole pipeline. Preview and apply are separate handlers - nothing writes until somebody has read what would change - and the run is idempotent: a quotation that already has a real date is never touched. BOTH positional Quotations writers widened 23 -> 26 in step (the width trap). runQuotationSentAtBackfill is _SECURED because it decides who may rewrite 60 send dates off a browser-supplied actorRole; snoozeQuotation is deliberately not, matching setQuotationFollowUp beside it · 119: A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
+var FLOW_VERSION = 131;  // A227 WHICH QUOTATION, WHEN A REQUEST HAS MORE THAN ONE. Both resolvers took [0], the first matching sheet row, with no regard for status. Fine until somebody revises: an approved quotation is found to have an error, it is retired with Close, and a corrected one is raised against the same request - the retired one is the EARLIER row, so first-wins handed the purchase request its own cancelled document, and because a closed quotation buckets as finished the request then read "done" while the replacement still needed approving and sending. _quoPickForPR now prefers a LIVE quotation and takes the LAST row among equals; the tracker's client-side fallback applies the same rule. Measured first: of the 35 requests carrying a quotation link, ZERO had more than one, so no existing answer moves. 'Rejected' is deliberately NOT retired - that is rework on the same document. The worklist gains 'quotation-void': Cancelled is a WITHDRAWAL, not an outcome, so it is the rep's own move to re-quote, while Lost and Not Pursued stay finished. // A226 THE PURCHASE REQUEST TRACKER, for the sales rep. A rep raises a request and then loses sight of it: it moves through sourcing, management pricing and verification - all in OTHER PEOPLE'S queues - and the only screen showing it was built around doing that work, not tracking it. Seven live requests sit at 'Returned to Sales' (priced, verified, waiting on the rep) and nothing said so. THE PREMISE NEEDED CORRECTING FIRST: the 2026-000-KIM format is the QUOTATION numbering (68 of 90), while all 315 purchase requests are PR-YYYYMM-NNN with no initials anywhere - so the tracker keys off the PERSON, not the number, and PR numbering does not change. PricingRequests gains 'Salesperson' 19 -> 20, APPENDED and that is not style: _setPRStatus writes hard-coded columns 8/10/12 and setMgmtPricing/rejectMgmtPricing write column 15, so an INSERT would shift all 315 rows and land those writes in the wrong cells. _prOwner reads the column and falls back to 'Requested By', and getPricingRequests' filter becomes owner-aware AND whitespace/case tolerant - a STRICT WIDENING (137/115/46/12 per rep, unchanged, union+5 blanks = 315). That tolerance is the bug fix that paid for the change: the old exact String===String stranded PR-202607-242 and PR-202607-295 permanently, and one trailing space empties a rep's whole tracker with no error. previewPricingRequestOwners/runPricingRequestOwnerBackfill copy from 'Requested By' rather than guessing from initials - 310 of 315 are populated with four unambiguous names, so NO initials table is needed here and none is added; _QUO_INITIALS serves quotations only and its own header says not to extend it. The 5 blanks are REPORTED, never defaulted. setPricingRequestSalesperson is the first correction path attribution has ever had on a request. THE QUOTATION LINK IS SURFACED: getPricingRequests now emits quotationNo + quotationNoSource, resolved column-first then from the PR's own Notes - and the Notes fallback is doing REAL work, resolving 41 of the 76 live Quoted requests, so a pure client-side join would have reported 41 live deals as unquoted. Quotations is indexed ONCE (calling _quotationNoForPR inside the 315-row map would be 315 full-sheet reads on a handler 16 surfaces depend on). MEASURED, and it corrected the plan: ZERO Quoted requests lack a number, but 13 name a quotation that no longer exists - deleted or renumbered after the link was written - so the worklist's 'quotation-gone' step fires on a DEAD reference, not a missing one. dashboard/js/pr-worklist.js is the pure engine (13 steps, table-tested against the live 315, reconciling to the status counts exactly): the rep's own move outranks chasing somebody else, and chases run LATEST STAGE FIRST because a request one step from the rep is worth more than one five steps away. No snooze - a PR sits in a colleague's queue and parking it hides a stuck request. Two date formats are live (173 ISO, 142 the JavaScript toString the import left) and both are fixture-tested, because a parser that only knew ISO would mark 142 requests undateable. The 142 Migrated are never in the worklist and never in a headline, and the exclusion is STATED on screen rather than silent. dashboard/purchase-request-tracker.html is READ-ONLY and links out - deliberately NOT named pr-tracker.html, which is the old pre-flow admin page on legacy Code.gs and is untouched. Commission and margin are never rendered and the fetch is noStore, so A191's cost boundary holds. Email linking is A227 - the picker will target the client's inbound RFQ, which makes it the first real consumer of Direction='Received' · 129: A225 ONE PAYMENT REQUEST PER PURCHASE ORDER, and two holes bigger than the one asked about. THE CARDINALITY RULE DID NOT EXIST: createPaymentRequest had eight guards and every one constrained VALUE, never COUNT - _poRemainingPayable caps what a request may ask for, not how many may exist. A158 allowed that deliberately for deposit-then-balance, but the cap has a gap the director had already felt: A 50% DP SITTING AT PENDING DIRECTOR DOES NOT STOP A SECOND REQUEST FOR THE FULL PAYABLE, because half the payable genuinely is still open. FLOW_PR_PER_PO='live': a PO may not carry a second request while one is STANDING (Draft, any Pending*, Approved); once it is Paid or Rejected the next may be raised. Paid must not block - that is what keeps 50% DP -> Balance working and what leaves the two TOOLEC balances raisable (P17,073 on 2026-41 and P69,686 on 2026-42, both half paid with the balance never requested; 'ever' would strand P86,759 and make two of the three A180 portion buttons controls the server refuses). Rejected must not block either: the money rule already treats it as reserving nothing, and under 'ever' one mistaken rejection would bar a real order for ever with no remedy, since revisePaymentRequest refuses a Rejected row. _PR_DEAD_STATUSES IS DELIBERATELY THE SAME PAIR _poRemainingPayable EXCLUDES - if cardinality and money ever disagreed about 'still standing', a PO could be blocked by a request reserving nothing, or reserved against by one that does not block, and neither message would name the other. THE GUARD'S POSITION IS THE DESIGN: after the clientRef dedupe (above it, the first honest network retry is refused as a duplicate of itself - the A145 bug), after the duplicate-AP stop, but BEFORE the money cap and before the amount auto-fill, because the cap answers with 'that exceeds what is still owed' and never names WHAT is in the way. No override flag; the refusal names the request, its status and all three remedies. THE SECOND HOLE, LARGER: _poRemainingPayable returns null when a PO has NO AP ROW, and the cap is written 'if (cap && ...)', so such a PO had NO CEILING WHATSOEVER - any amount passed, and passed again. Refused now on !rem (not !cap) in createPaymentRequest AND updatePaymentRequest, because create-only was the exact A219 mistake. THE THIRD: 'admin or accounting' was never enforced anywhere - it existed only as prCanCreate hiding a form card, while createPaymentRequest wrote actorRole into the row and never read it. _PR_PO_CREATE_ROLES gates Type 'PO' only (the travel chain's payables are Type 'Other' and are raised with the TRAVELLER's role), on create AND update, and both actions joined _SECURED in all three lists so the role comes from the session rather than the payload - which also closes submitPaymentRequest reading 'Created By Role' and skipping straight to Pending Management when it says admin. updatePaymentRequest additionally refuses to move a request to a different PO: it never wrote 'PO No', but saying so out loud is what stops the create-only rule being walked past. Measured before writing: all 7 live PO requests created by 'accounting', 0 of 10 POs without an AP row - so nothing historical is refused · 128: A224 THE PAYMENT CHAIN, HARDENED END TO END. Purchase Order -> Payment Request -> AP Aging was right in its arithmetic (A219-A223) and loose in its SHAPE: any currency on any order, a payment method that was free text against a policy everyone already followed, and Mark Paid living on a different page from the payable it settles. THE OWNERSHIP RULE WAS INVERTED AND IS A SECURITY CHANGE: A158 had director = bank transfer|online and everybody-else = accounting, which put cheque and cash with accounting and gave admin no release rights at all. The real rule is telegraphic transfer -> ACCOUNTING OR ADMIN, everything else -> THE DIRECTOR. _prPayOwner therefore returns a ROLE LIST, and FOUR call sites had to move in step, not the three the plan named - markPaymentRequestPaid here, flowPayOwner/flowPayOwns in flow-api.js, prPayActions in flow-pr-actions.js and the ACTION CENTER in auth.js, which was a fourth copy of the method list. tests/flow/pay-ownership.js lifts BOTH copies and asserts the matrix per method AND per role before anything else in this change - two lists can agree with each other and both be wrong. An unknown or blank method now falls to the DIRECTOR (the most restricted single role) where A158 silently defaulted it to accounting. CURRENCY FOLLOWS THE SUPPLIER TYPE: _poCurrencyProblem on BOTH createPurchaseOrder and updatePurchaseOrder (create-only was the exact A219 hole in _poFxProblem, and update rewrites Currency on the PO and its AP row). International -> the supplier's own currency, PHP not offered; Local -> PHP; UNCLASSIFIED AND RESTOCK KEEP THE FULL LIST, deliberately - 13 live orders have no supplier type and A220's reasons for refusing to guess have not changed. Measured against every live PO first: 4 international (USD x3, SGD x1) and 6 local (PHP x6), ZERO violations, so this hardens what people already do and nothing needs migrating. NOTE this is a NEW coupling - no money path had ever called _soSupplierKind; the PO form even received supplierType from getSalesOrders and threw it away. MARK PAID IS NOW REACHABLE FROM THE PAYABLE WITHOUT A SECOND WRITER: flow-ap-aging.html loads flow-pr-actions.js and a Pay button on the row calls the SAME prMarkPaid, opening the same dialog and posting the same payload - one action, two entry points, one guard. A native payment control there would have widened who may release money (AP Aging is requireOversight, all four roles) or duplicated the guard, and a duplicated money guard is A221. The shared file assumed page globals AP Aging does not define (prSession/prList/loadPRs), which would have been a ReferenceError rather than a graceful degrade, so each now goes through a resolver - prActor/prFindRow/prReloadHost. Docs stays Docs and Save stays Save: conflating Save with Mark Paid is precisely what let a Status dropdown move money. THE AP DOCS WINDOW OFFERED NOTHING BUT 'Other...' - _DOC_RULES had no module 'AP Aging' at all, so every document ever filed against a payable is free text; two vocabOnly rules give it a controlled vocabulary without adding an unclosable line to the per-ORDER checklist. THE BANK CHARGE IS SURFACED, NEVER AUTO-WRITTEN: getSOBankCharges is read-only and the cost editor shows what each payment recorded. Routing it into SOCostDetails['Bank Charge (COGS)'] would have been wrong four ways - two indistinguishable buckets for the same fee, a LOCAL order excludes both from Total COGS so it would store and never sum, saveSOCostDetails is a full-row overwrite, and several requests per PO must accumulate. COGS itself is untouched: landed cost still comes from _apPaidPHP. Two live bugs the same trace found: backfillMigratedRecords was missing the intl guard A220 gave its twin (a bulk run would write the local/international disagreement across the whole legacy book at once), and _soCostComputed read bankServiceCharge* while getSOCostDetails emits bankCharge*, so called with a stored record it scored both bank charges as ZERO · 127: A222 THE FOREIGN PAYABLE: obligation in the supplier currency, pesos only when the bank acts. A foreign purchase has TWO numbers and the system pretended it had one. The obligation is exact and foreign (USD 202, SGD 2493.90); the peso cost is unknowable until the bank executes. The peso was invented at PO time - a foreign PO is REFUSED without one - copied into the payable, inherited by the request, and treated everywhere as fact, while the figure itself was NEVER STORED ON THE ORDER THAT PRODUCED IT. PurchaseOrders gains Total (PHP) Est + FX Basis (15 -> 17); PaymentRequests gains Amount (PHP) Est + the three BANK FACTS - Actual Debited (PHP), Bank Charge (PHP), Value Date (37 -> 41). Both positional writers widened in step, asserted FIRST in tests/flow/fx-chain.js. A Type PO request is now raised in the SUPPLIER CURRENCY (createPaymentRequest no longer forces PHP) and _poRemainingFC caps it in foreign units, RETURNING NULL rather than guessing when a foreign order carries legacy PHP requests - which is every one of the 20 live rows, so the null path is the normal case. THE REALISED RATE WAS NOT MERELY UNCOMPUTED, IT WAS UNRECORDABLE: markPaymentRequestPaid copied the peso estimate verbatim and CAPPED IT AT THE PAYABLE, so a true outflow above the estimate was refused - which is exactly why Power Team (310,895.71) and AOLAI (46,393.80) were typed into the AP page instead and their requests still sit at Approved with Paid By blank. Mark Paid now captures what the bank did and DERIVES: settles = debited - charge; rate = settles / foreign; FX difference vs the estimate. The charge never settles the payable (A219 found 2,070.60 and 465.77 folded into paid with nowhere to go). The cap moved onto the FOREIGN amount - you cannot pay more USD than you owe - and a foreign payable now closes on the OBLIGATION, because judging by pesos strands a fully-settled order at Partial for ever when the rate moves in your favour. COGS IS UNTOUCHED AND ASSERTED SO: landed cost has always come from _apPaidPHP x unitFC / poTotalFC and never reads a payment request. Three FX bugs died with it: a JPY PO was IMPOSSIBLE TO SAVE (the 20-200 band was a second unconditional if, and since the PO screen computes peso AS rate x FC they always reconcile, so the band was the only check that ever ran - and the screen has no poAmount confirm handler, making the refusal unappealable); _poPayablePHP returned the FOREIGN amount when the peso payable was blank and every caller treated it as pesos; and PO Value (PHP) excluded every foreign PO because getPurchaseOrders never emitted the field the KPI reads · 126: A221 ONE WAY TO PAY A SUPPLIER. Marking PRF-2026-65 paid was refused - "paying 12447.24 would take the total paid to 323342.95 against a payable of 310895.71" - and the guard was RIGHT while the data was wrong. AP-202607-006 is a USD 202 order carrying 310,895.71 in BOTH Amount (PHP) and Paid (PHP), a figure byte-identical to AP-202607-005 Paid, pasted into the wrong row. ONLY ONE OF THE TWO WAS EVER TYPED: updateAPAging reconciled Amount := Paid on any row saved as Paid, so one typo became two wrong numbers - and Amount (PHP) is what drives landed cost and COGS. It reached the GENERAL LEDGER: JE-APPAY-AP-202607-006 credits Cash 310,895.71 that never left the bank, 298,448.47 of the impossible 345,248.28 CREDIT balance on Cash. ROOT CAUSE: there were TWO ways to pay and they did not know about each other. Mark Paid demands an Approved request, a payment method, method-ownership and a proof-of-payment document, and ACCUMULATES; the AP Aging Paid box demanded nothing, was open to all four oversight roles, and OVERWRITES - and both wrote the same journal key JE-APPAY-<apNo>, so the ledger silently followed whichever touched the row last. Of nine live supplier payments only TWO went through Mark Paid; five more show a payable Paid with the request still Approved and Paid By blank. A221 gives paying one door: Paid (PHP) is read-only on the AP page and writing it needs an explicit externalPayment flag PLUS a reason, stamped into Notes. THE RECONCILE IS DELETED - a payable is what is owed, the paid figure is what was paid, neither may become the other. Deleting it opened a second hole that had to close with it: the journal used to fall back to Amount (PHP) when Status was Paid with a zero paid figure, which made the Status dropdown a third way to move money. The implied rate is now ON SCREEN (Amount PHP div Amount FC) - it shows 1539.09 red on the Chicago row and 619.99 on AOLAI against a normal 61.65, which is the whole point: nobody needs to know today rate to see that is wrong, but only if it is visible. updatePurchaseOrder finally checks payment requests the way deletePurchaseOrder always has, and stops rewriting Currency/Amount (FC) on an already-Paid AP row. NOT FIXED HERE: the PO journal posts foreign POs in FC units while payments post in pesos, which is why Accounts Payable carries a DEBIT balance - see tests/flow/baseline/A221-before.txt · 125: A220 a LOCAL purchase is 13 steps, not 25 - and a sales order can be renamed. The company buys two ways: an international order goes through a proforma, a forwarder, customs and a bank debit memo; a local one is paid and then delivered to the office. _DOC_RULES has known that since A195 (applies intl/local/both, 7 documents at the receive gate vs 2), but the 25-stage shipment timeline never did, so every local shipment was asked ON SCREEN for FAN/SAD/TAN, a forwarder's final invoice and a customs clearance that will never exist, and reported progress out of 25 steps it could not finish. _SHIP_STAGE_INTL names the 12 international-only stages, mirrored by _SM_INTL_ONLY in stage-meta.js - tests/flow/ship-kind.js asserts the two agree in CONTENT, the way FlowAPI.gs:3345 already required them to agree in ORDER. NOTHING IS DELETED BY A RECLASSIFICATION: _shipTimeline still returns every stage with its stored state and marks the inapplicable ones applies:false, so switching back restores every tick and every document - which matters because SO-202607-001 is live, International, and 12 of 25 stages done. THE requires CHAIN HAD TO BE REPAIRED TOO: it is a linear spine running delivered <- local_charges <- forwarder_final_invoice <- ... <- customs_clearance, all international, so hiding them without smRequires walking back to the nearest applicable prerequisite would have made 'Delivered to Office' unreachable on a local order - the same complaint in reverse. The classification is STORED ON THE SALES ORDER (SalesOrders 'Supplier Type', SOCostDetails 'COGS Type' as fallback) and Shipments has no such column and deliberately does not gain one; setSOSupplierType writes the two cells and syncs them, and is NOT updateSalesOrder, which reads an omitted p.items as [] and DELETES EVERY LINE ON THE ORDER. Blank stays blank: _setSoSupplierType used to coerce anything not exactly 'international' to 'Local', so a partial save of the cost editor silently classified one of the 13 unclassified orders as local and halved its document contract. _writeMigratedRecordsForSO gained the cogsType guard saveSOCostDetails already had - without it a flip leaves the MaterialsReceiving row carrying the full international shipping load while Invoices gets the reduced Total COGS, and the two never reconcile again. And createReceiving's confirmNoDocs, accepted by the server since A195 and SENT BY NO CLIENT EVER, is finally wired: a Local -> International flip newly demands six documents a supplier may not be able to produce, and there was no way past · 124: A219 the peso side of a foreign payable. AP-202607-006 showed USD 202 as P310,895.71 (implied P1,539/USD) - a figure byte-identical to AP-202607-005's Paid, pasted into the wrong row. getAPAging does NO arithmetic, so it was a stored cell. All four bad rows were already NAMED in c34f99b (A171 W2, 2026-07-29 12:36); AP-006 was last written 2026-07-28 01:38, ~35h BEFORE that guard existed, and A171's checks are write-time only - nothing has ever re-read an existing row. THERE IS NO EXCHANGE RATE TO VALIDATE AGAINST: the rate is whatever the bank gives on the day, which is why three of four foreign POs store rate 0 - honest, not missing. So the primary rule uses no rate at all: A PAYABLE MARKED PAID CANNOT EXCEED WHAT WAS ACTUALLY PAID FOR IT, reconciled against the approved PaymentRequests via _poRequestedPHP (deliberately NOT _poPayablePHP/_poRemainingPayable, which derive from APAging's own Amount and would be circular). That catches both errors (10x and 25x) and clears AP-202607-007 with no special case - the VAT is on the payment request too. The 20-200 FX band survives only as a typo net for rows with no payment yet. _apAmountProblem finally USES the poNo it always took and ignored, and now receives the status. THE ORDER OF TWO STATEMENTS IN updateAPAging WAS A BUG: the Status=Paid reconcile overwrote the payable with the paid figure BEFORE validation, so the paid-exceeds-payable branch could never fire on a Paid row - validate first, reconcile second. updatePurchaseOrder gained the _poFxProblem call it never had (create was guarded, update was not, and update writes both the rate and the AP peso amount). previewAPAgingAnomalies is the sweep the guards never had - read-only, names WHICH FIELD is wrong, and refuses to erase a probable BANK CHARGE: two USD wires show paid slightly above the payable (P2,070.60 and P465.77), which is a fee with nowhere to be recorded, not a typo. It reports the residual a correction would throw away rather than dropping it silently · 123: A218 WHOSE quotation is it. 'Created By' is who TYPED it, and the system was treating it as whose deal it is - creating quotations is one person's job here, so she is Created By on 46 of 85 while owning 27. The real owner existed ONLY as initials inside the quotation number (2026-404-NEIL-ECC-GENSET is Crystal's, typed by Kimberlyn, and at P74.2M it is the largest deal in the book); flowQuotationDupPairs documents that format and deliberately throws the segment away, and nothing else ever parsed it. Quotations gains 'Salesperson' 26 -> 27, BOTH positional writers widened in step (the width trap, asserted first in tests/flow/quotation-owner.js). _quoOwner is the ONE answer to 'whose deal is this': the column, then the initials via _QUO_INITIALS, then the creator. _QUO_INITIALS IS A MIGRATION AID - after runQuotationOwnerBackfill the column is the fact, and a new hire must never need a code change. previewQuotationOwners / runQuotationOwnerBackfill are preview-then-apply and idempotent, and REPORT any number whose initials nobody recognises rather than defaulting it to the typist - silently assuming is how the wrong name got attached in the first place. updateQuotation can now correct 'Salesperson', which is the first correction path attribution has ever had ('Created By' is written once by createQuotation and no code could change it). closeQuotation/reopenQuotation guards WIDENED to owner OR creator, never moved: moving them would lock the typist out of quotations she maintains. _commSalesperson resolves through _quoOwner - that single line selects the commission RATE, decides who may file the claim at all, and is frozen onto the payable at submit, so a misattribution paid the wrong person AND refused the right one. previewCommissionOwnerShift reports what moves BEFORE the rule is trusted; on today's data it is empty - all 7 linked orders already agree, so this is protection for future claims, not a restatement of past ones · 122: A217 the quotation TRACKER: a pipeline board (dashboard/quotation-board.html), a per-client timeline (client-tracker.html), and the Sent mailbox as a SPLIT VIEW so attaching a message to a quotation is one click on a row already on screen. Zero links had ever been made - the scorer was fine, it just lived inside a dialog nobody thought to open, on the wrong page. ONE new handler: setQuotationEmailReply, which is the MISSING HALF OF A208. 'Reply At' / 'Reply From' / 'Reply Checked At' have been in the schema since 113, are read by _qeMap, and were written by NOTHING - so flowFollowUp's `replied` branch has never fired in production and the worklist's top-priority step 'They replied' was unreachable. The thread matching itself was ALSO already finished and callerless (/api/email/quotation-threads, blueprints/email_log.py:1067, real References/In-Reply-To walking with a normalised-subject fallback); this handler only writes down what it found. checkedAt is stamped EVEN WHEN NO REPLY WAS FOUND, because 'we looked and there was nothing' is a different fact from 'nobody has ever looked' and flowFollowUp already tells them apart - and Flask omits the misses, so the CLIENT sends an entry for every id it checked. A recorded reply is never erased by a later empty sweep. NOT _SECURED, matching its three A208 siblings - linkQuotationEmail is strictly more powerful (it back-dates 'Sent At') and is unsecured too, so securing one of four would add inconsistency rather than raise the floor; secure the QuotationEmails write group together, as its own change · 121: A216 the weekly itinerary reaches the people who approve it: dashboard/management-itinerary.html shows one Mon-Sun week per rep, planned stops with the visits actually logged underneath them, plus every rep who filed NOTHING - the live week has a rep with five client visits and no plan, and until now no screen anywhere said so. Backend change is ONE function: _timeOfDay now returns 24-hour 'HH:mm' instead of '3:30 PM', because the rep's planner renders it into <input type="time"> (weekly-itinerary.js:156) which accepts only that format - given anything else the browser BLANKS the control and the next Save writes the blank back, so opening a plan and saving it destroyed every planned time on it. Whatever a human reads is formatted at the point of display (iwTime12). No new handler, no new column: getWeeklyItineraries with no params already returns every rep's plan with items, getClientVisits returns the visits, and approve/rejectWeeklyItinerary already exist and are already _SECURED. The plan-vs-actual JOIN is the part that can lie, so it lives in a pure table-tested module (dashboard/js/itinerary-week.js): an EXACT link - ClientVisits '<Itinerary No>#<Seq>', which nothing in the repo had ever parsed - is the only thing counted as matched; a same-week company-NAME agreement is reported separately as 'likely' and never added to it; and a link whose Seq no longer exists (a revise re-appends every item row) degrades to 'stop deleted' rather than quietly becoming an unplanned visit. On today's data every match is 'likely' and matched is honestly ZERO, because the visit picker offers Approved plans only (report.js:359) and no plan has ever been approved · 120: A215 track quotations by WHAT IS NEXT, not by date. Quotations gains 'Sent At Basis' (blank = the date was recorded as it happened; anything else = ESTIMATED by the backfill, and every surface showing it must say so) plus 'Snooze Until' / 'Snooze Reason'. Parking is NOT the same as 'Follow Up Days': a threshold is a property of the deal ("this client always takes three weeks"), parking is a decision just made ("not now, ask me in October") - folding them together would let a rep quietly change how every future follow-up on a deal is judged. previewQuotationSentAt / runQuotationSentAtBackfill estimate the send date from 'Approved At' for the 60 quotations marked Sent before the stamp existed, because flowFollowUp returns 'unknown' for all of them and goes silent, leaving the worklist blind to nearly the whole pipeline. Preview and apply are separate handlers - nothing writes until somebody has read what would change - and the run is idempotent: a quotation that already has a real date is never touched. BOTH positional Quotations writers widened 23 -> 26 in step (the width trap). runQuotationSentAtBackfill is _SECURED because it decides who may rewrite 60 send dates off a browser-supplied actorRole; snoozeQuotation is deliberately not, matching setQuotationFollowUp beside it · 119: A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -99,8 +99,15 @@ var SCHEMA = {
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID'],
 
   //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
+  /* A222: 'Total (PHP) Est' and 'FX Basis' appended at the END (house convention).
+     The peso total has ALWAYS been typed at PO time — a foreign PO is refused without it — and has
+     always been validated by _poFxProblem. It was then written into APAging['Amount (PHP)'] and the
+     journal and DISCARDED, so the origin of the chain held no peso figure and nothing could ever
+     contradict a corrupted payable. It is an ESTIMATE, never a cost; the cost is what the bank
+     charges, captured at Mark Paid. See the width trap on createPurchaseOrder. */
   PurchaseOrders:     ['PO No', 'SO No', 'Date', 'Supplier', 'Currency', 'Total Purchase (FC)', 'Status', 'Created By', 'Created At', 'PDF Link',
-                       'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Exchange Rate'],
+                       'Created By Role', 'Approval Note', 'Approved By', 'Approved At', 'Exchange Rate',
+                       'Total (PHP) Est', 'FX Basis'],
   PurchaseOrderItems: ['PO No', 'Item No', 'Item Name', 'Qty', 'Purchase Price/Unit (FC)', 'Total (FC)', 'Item ID'],
 
   APAging: ['AP No', 'PO No', 'Supplier', 'Currency', 'Amount (FC)', 'Amount (PHP)', 'Status',
@@ -168,9 +175,14 @@ var SCHEMA = {
   //    cost, not anyone's entitlement. A sales rep's actual commission is CommissionRequests
   //    ['Commission Rate %'] further down. The two are one hop apart via Quotations['PR No']; do not
   //    read one where the other is meant.
+  //    A226: 'Salesperson' — WHOSE request it is, as a correctable fact rather than a free-text echo
+  //    of whoever was signed in. APPENDED AT THE END, and that is not a style preference: _setPRStatus
+  //    writes hard-coded columns 8/10/12 and setMgmtPricing/rejectMgmtPricing write column 15, so an
+  //    INSERT would shift all 315 live rows and those writes would land in the wrong cells.
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
-                    'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref', 'Plant Site'],
+                    'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref', 'Plant Site',
+                    'Salesperson'],
   //    A144: 'Supplier Price VAT' (Inclusive|Exclusive note — display only, no costing-math effect).
   PricingRequestItems: ['PR No', 'Line', 'Item No', 'Item Name', 'Qty', 'UOM', 'Remarks', 'Included',
                         'Supplier', 'Principal', 'Currency', 'Supplier Price (FC)', 'CBM', 'Final Price',
@@ -365,7 +377,17 @@ var SCHEMA = {
                     // total and balance without re-reading an AP row that may since have moved, and so
                     // history stays true when the payable is later corrected. No stored balance and no
                     // stored percentage: both would be a second source of truth that drifts from Amount.
-                    'Payment Portion', 'PO Total (PHP)', 'PO Paid Before (PHP)'],
+                    'Payment Portion', 'PO Total (PHP)', 'PO Paid Before (PHP)',
+                    /* A222: a Type 'PO' request is now raised in the SUPPLIER'S currency — 'Amount' is
+                       the foreign obligation and 'Currency' is the PO's — with 'Amount (PHP) Est'
+                       carried beside it for approval and cash planning, labelled an estimate wherever
+                       it is shown. The last three are what the BANK actually did, captured at Mark
+                       Paid: they are the first fields in this system that record a fact rather than a
+                       forecast. 'Actual Debited (PHP)' minus 'Bank Charge (PHP)' is what settles the
+                       payable; the charge is a cost of ours and must never reduce what the supplier
+                       is owed (A219 found ₱2,070.60 and ₱465.77 of exactly this, with nowhere to go).
+                       Appended at the END — see the width trap on createPaymentRequest. */
+                    'Amount (PHP) Est', 'Actual Debited (PHP)', 'Bank Charge (PHP)', 'Value Date'],
 
   // ── Per-SO cost breakdown migrated from the old Profit Report (revenue + COGS components) ──
   SOCostDetails: ['SO No', 'Customer', 'Date', 'Sales', 'COGS Type', 'Purchase of Goods',
@@ -505,14 +527,32 @@ function _json(obj) {
 var _SECURED = {
   approveQuotation: 1, rejectQuotation: 1, approvePO: 1, rejectPO: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, markPaymentRequestPaid: 1,
+  /* A225 — raising and editing a PO payment request now decide something, so identity must stop
+   * coming from the browser. The role rule (_PR_PO_CREATE_ROLES) answers to `actorRole`, and until
+   * these were secured that field was whatever the caller typed. It also closes a second hole that
+   * predates A225: submitPaymentRequest reads 'Created By Role' and skips straight to Pending
+   * Management when it says 'admin', so a payload claiming admin skipped an approval stage.
+   * The travel chain is unaffected — _travMintPayable and requestTravelFloatCash call
+   * createPaymentRequest directly, in-process, and never pass through _dispatch. */
+  createPaymentRequest: 1, updatePaymentRequest: 1,
   setMgmtPricing: 1, rejectMgmtPricing: 1, verifyReturnToSales: 1,
   deleteQuotation: 1, deleteSalesOrder: 1, deletePurchaseOrder: 1, deletePaymentRequest: 1,
+  /* A220 — a rename decides which order every downstream money record points at, so identity must
+     come from the server. All three secured lists have to agree. */
+  renameSalesOrder: 1,
   deleteAPEntry: 1, updateAPAging: 1, recordCollection: 1, correctCollection: 1,
   voidCollection: 1, voidInvoice: 1,
   // A190 — approving an itinerary decides whose week is sanctioned, so identity must come from
   // the server, not the browser. All three secured lists have to agree; missing one re-opens the
   // actorRole spoof the A188 review flagged on createQuotation.
   approveWeeklyItinerary: 1, rejectWeeklyItinerary: 1,
+  /* A222-U — reversing a receiving rewrites STOCK VALUATION and deletes a journal. There is no
+     undo for it, so identity must come from the server. */
+  reverseReceiving: 1,
+  /* A220 — reclassifying an order rewrites its document contract at four money gates: local needs
+     two documents where international needs seven. That is a permissions decision, so identity must
+     come from the server. All three secured lists have to agree. */
+  setSOSupplierType: 1,
   // A207 — these decide what a named person is PAID. submitCommissionRequest is secured too, unlike
   // submitWeeklyItinerary: submitting is the act that freezes the payable figure and seizes the
   // collections, so the browser must not be able to claim it is someone else while doing it.
@@ -552,6 +592,11 @@ var _SECURED = {
      against — the A211 lesson. snoozeQuotation is deliberately NOT here: it reads no role, is
      reversible, requires a reason, and matches setQuotationFollowUp beside it. */
   runQuotationSentAtBackfill: 1, runQuotationOwnerBackfill: 1,
+  /* A226 — the same argument, on the request side: this rewrites who owns up to 315 purchase
+     requests off a browser-supplied actorRole, and ownership is what the tracker filters by.
+     setPricingRequestSalesperson is here too — a single-row correction is still a correction to
+     attribution, and A218 found that a wrong name attached permanently is the expensive failure. */
+  runPricingRequestOwnerBackfill: 1, setPricingRequestSalesperson: 1,
   // A193 — these move hundreds of real files and rewrite the client registry, so the web endpoint
   // demands the shared secret. Running them by hand from the Apps Script editor is unaffected: that
   // path calls the function directly and never reaches _dispatch. previewDriveMigration is
@@ -1574,10 +1619,19 @@ function backfillShipments(p) {
     message: 'Created ' + created + ' lifecycle row(s); ' + skipped + ' already present.' };
 }
 
-// Set a Sales Order's Supplier Type label (International/Local) from a cost type. Best-effort.
+/* Set a Sales Order's Supplier Type label (International/Local) from a cost type. Best-effort.
+ *
+ * A220 — this used to read `cogsType === 'international' ? 'International' : 'Local'`, so ANY value
+ * that was not exactly that string became Local, INCLUDING A BLANK ONE. Saving the cost editor
+ * without touching the COGS Type silently classified an unclassified order as local, and a local
+ * order needs two documents at the receive gate where an international one needs seven. Nobody chose
+ * that; a partial save did. An empty cogsType now leaves the order unclassified, which is what
+ * _soSupplierKind already returns '' for and what _rulesFor already handles. */
 function _setSoSupplierType(soNo, cogsType) {
   try {
-    var label = String(cogsType) === 'international' ? 'International' : 'Local';
+    var t = String(cogsType == null ? '' : cogsType).trim().toLowerCase();
+    if (!t) return;                                    // no opinion offered — do not invent one
+    var label = t === 'international' ? 'International' : 'Local';
     var col = SCHEMA.SalesOrders.indexOf('Supplier Type') + 1;
     if (col < 1) return;
     var sh = _sheet('SalesOrders');
@@ -1585,6 +1639,90 @@ function _setSoSupplierType(soNo, cogsType) {
       if (String(r['SO No']) === String(soNo)) sh.getRange(r.rowIndex, col, 1, 1).setValues([[label]]);
     });
   } catch (e) { /* best-effort */ }
+}
+
+/* A220 — reclassify a sales order between International and Local, from shipment monitoring.
+ *
+ * WHY THIS IS NOT updateSalesOrder. That function reads `p.items` as JSON.parse(p.items || '[]'), so
+ * any caller that does not resend every line DELETES ALL OF THEM and zeroes the total; it also writes
+ * `p.customer` straight through, blanking the customer when omitted. It is a whole-record rewrite
+ * wearing the name of an update. This writes two cells.
+ *
+ * WHY THIS IS NOT ON THE SHIPMENT. `Shipments` has no supplier-type column and should not gain one —
+ * the classification belongs to the ORDER (it decides COGS composition and the document contract for
+ * four money gates), and a second copy would just be a second thing to disagree. The control lives on
+ * the shipment page because that is where the person doing the work is; the value lives on the order.
+ *
+ * NOTHING IS DELETED. Stages that stop applying are hidden by _shipStageInKind, never cleared, and
+ * documents already filed stay filed. Reclassify back and every tick returns. What the caller gets
+ * instead is a WARNING naming the recorded work that is about to become invisible — SO-202607-001 is
+ * International with 12 of 25 stages done, so this is not hypothetical.
+ */
+function setSOSupplierType(p) {
+  if (!p || !p.soNo) return { success: false, message: 'soNo required.' };
+  var soNo = String(p.soNo);
+  var want = String(p.supplierType == null ? '' : p.supplierType).trim();
+  var norm = want.toLowerCase();
+  if (norm && norm !== 'international' && norm !== 'local') {
+    return { success: false, message: 'Supplier type must be International, Local, or blank.' };
+  }
+  var label = norm === 'international' ? 'International' : norm === 'local' ? 'Local' : '';
+
+  var so = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === soNo; })[0];
+  if (!so) return { success: false, message: 'Sales order ' + soNo + ' not found.' };
+
+  var wasLabel = String(so['Supplier Type'] || '').trim();
+  var wasKind = _soSupplierKind(soNo);
+  var newKind = norm === 'international' ? 'intl' : norm === 'local' ? 'local' : '';
+  if (wasLabel === label) {
+    return { success: true, soNo: soNo, supplierType: label, changed: false,
+      supplierKind: wasKind, message: 'Supplier type is already ' + (label || 'unclassified') + '.' };
+  }
+
+  /* What recorded work is about to stop being shown? Only stages that BOTH drop out under the new
+     kind AND carry something — a tick, a skip, or an attached document. A stage nobody has touched
+     disappearing is not news. */
+  var hiding = [];
+  if (newKind === 'local') {
+    var ships = _rows('Shipments').filter(function (r) { return String(r['SO No']) === soNo; });
+    var docTypes = {};
+    ships.forEach(function (sr) {
+      _rows('Documents').forEach(function (d) {
+        if (String(d['Module']) === 'Shipment' && String(d['Ref No']) === String(sr['Shipment ID'])) {
+          docTypes[_docTypeKey(d['Doc Type'])] = true;
+        }
+      });
+    });
+    var derived = _shipAutoDerive(soNo);
+    _SHIP_STAGE_INTL.forEach(function (key) {
+      var touched = !!derived[key], why = touched ? 'auto-derived' : '';
+      ships.forEach(function (sr) {
+        var st = _shipParse(sr['Stages (JSON)'])[key];
+        if (st && st.status) { touched = true; why = st.status; }
+      });
+      if (docTypes[_docTypeKey(key)]) { touched = true; why = why ? why + ' + document' : 'document attached'; }
+      if (touched) hiding.push({ stage: key, state: why });
+    });
+  }
+  if (hiding.length && !p.confirmHide) {
+    return { success: false, needsConfirm: 'hideStages', soNo: soNo, hiding: hiding,
+      message: 'Switching ' + soNo + ' to Local hides ' + hiding.length + ' international stage(s) that '
+        + 'already carry work: ' + hiding.map(function (h) { return h.stage; }).join(', ')
+        + '. Nothing is deleted — the record keeps every tick and every document, and switching back '
+        + 'restores them. Confirm to reclassify.' };
+  }
+
+  _setCellByKey('SalesOrders', 'SO No', soNo, 'Supplier Type', label);
+  /* Keep the two stores that _soSupplierKind reads in priority order from disagreeing. The SO label
+     wins the lookup, so a stale COGS Type would not change the answer today — but backfillMigratedRecords
+     and matchSupplierTypes both re-sync the label FROM it, which would silently undo this later. */
+  var costSynced = false;
+  if (label) costSynced = _setCellByKey('SOCostDetails', 'SO No', soNo, 'COGS Type', label.toLowerCase());
+
+  return { success: true, soNo: soNo, supplierType: label, changed: true,
+    supplierKind: newKind, previousType: wasLabel, costSynced: costSynced, hid: hiding.length,
+    message: soNo + ' is now ' + (label || 'unclassified')
+      + (hiding.length ? ' — ' + hiding.length + ' international stage(s) hidden but kept on record.' : '.') };
 }
 
 // Backfill the Supplier Type (International/Local) label on every SO from its SOCostDetails COGS Type.
@@ -1725,6 +1863,165 @@ function updateSalesOrder(p) {
   return { success: true, soNo: no, message: 'Sales Order updated.' };
 }
 
+/* A220 — RENAME a sales order, carrying every reference with it.
+ *
+ * The SO number is the join key for fourteen sheets, the Drive folder name, and the commission
+ * prior-claim check, which is why flow-sales-orders.js has always disabled the field on edit. It is
+ * renameable now because this re-keys all of it in one pass.
+ *
+ * WHY NOT updateSalesOrder. That function is a whole-record rewrite wearing the name of an update:
+ * an omitted `p.items` becomes JSON.parse('[]') and DELETES EVERY LINE on the order (total → 0), and
+ * an omitted `p.customer` is written straight through as blank. A rename must touch one cell per
+ * sheet and nothing else.
+ *
+ * Shaped after updateQuotation's re-key block (the only other rename in the file), with one
+ * correction: every column index is derived from SCHEMA. updateQuotation hard-codes `3` for
+ * Documents['Ref No'] — here that would be silently wrong, because MaterialsReceiving keeps 'SO No'
+ * in its LAST column and Collections in its 4th.
+ *
+ * What it cannot fix, and therefore reports:
+ *   • the old Drive FOLDER. _ensurePath only creates; nothing renames or moves a folder. Documents
+ *     themselves follow via _adoptSoDocs, and a move preserves file ID and URL so every stored
+ *     'Drive Link' keeps working — but the empty old folder is left for cleanupLegacyFolders;
+ *   • a STAMPED client PO, which carries the old number in its pixels (po_stamp_pdf.py) and can only
+ *     be corrected by re-stamping;
+ *   • the _refStore idempotency key, which still maps the original clientRef to the old number.
+ */
+function renameSalesOrder(p) {
+  if (!p || !p.soNo) return { success: false, message: 'soNo required.' };
+  var oldNo = String(p.soNo).trim();
+  var newNo = String(p.newSoNo == null ? '' : p.newSoNo).trim();
+  if (!newNo) return { success: false, message: 'newSoNo required.' };
+  if (newNo === oldNo) return { success: true, soNo: oldNo, renamed: false, message: 'The number is unchanged.' };
+
+  var so = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === oldNo; })[0];
+  if (!so) return { success: false, message: 'Sales order ' + oldNo + ' not found.' };
+
+  /* Collision, case-INSENSITIVE. The browser's create-side check already is (flow-sales-orders.js);
+     updateQuotation's server-side check is not, and that half is deliberately not copied. */
+  var lower = newNo.toLowerCase();
+  var clash = _rows('SalesOrders').some(function (r) {
+    return String(r['SO No']).trim().toLowerCase() === lower && String(r['SO No']) !== oldNo;
+  });
+  if (clash) return { success: false, message: 'Sales Order No "' + newNo + '" already exists.' };
+
+  /* And a Drive-folder collision, which is not the same test: _safeName maps / and \ to '-' and caps
+     at 120 characters, and live SO numbers contain pipes ("3120001511 | T21"), so two distinct
+     numbers can collapse onto one folder and quietly merge two orders' documents. */
+  /* Build the name the order WILL have, rather than calling _soFolderName(newNo) — that reads the
+     Client PO No off a row keyed by newNo, which does not exist yet, so it would compare a bare
+     number against suffixed ones and miss the collision it exists to catch. */
+  var soFolderFor = function (no, clientPoNo) {
+    var n = String(no || '');
+    if (clientPoNo && _rawKey(clientPoNo) !== _rawKey(n)) n += ' - PO ' + clientPoNo;
+    return _safeName(n);
+  };
+  var newFolder = soFolderFor(newNo, so['Client PO No']);
+  var folderClash = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) !== oldNo; })
+    .some(function (r) { return soFolderFor(String(r['SO No']), r['Client PO No']) === newFolder; });
+  if (folderClash) {
+    return { success: false, message: '"' + newNo + '" would share a Drive folder name ("' + newFolder
+      + '") with another sales order, which would merge their documents. Choose a different number.' };
+  }
+
+  /* A live commission claim freezes the SO number onto a payable. _commPriorClaimed sums prior claims
+     by string-matching 'SO No', so a rename that moved only some rows would reset the prior-claimed
+     total to zero and let the same collection be claimed twice. Refuse rather than risk it. */
+  var locked = _rows('CommissionRequests').filter(function (r) {
+    return String(r['SO No']) === oldNo && _COMM_LOCKING[String(r['Status'])];
+  });
+  if (locked.length) {
+    return { success: false, message: 'Cannot rename ' + oldNo + ' — ' + locked.length
+      + ' commission claim(s) are in flight against it (' + locked.map(function (r) { return r['Comm No']; }).join(', ')
+      + '). Settle or withdraw them first.' };
+  }
+
+  /* The demo order is recognised by its PREFIX, not its name: _commDemoRow tests
+     indexOf('DEMO-') === 0, and _COMM_DEMO_SHEETS recognises SalesOrderItems ONLY by 'SO No'. */
+  var wasDemo = oldNo.indexOf(_COMM_DEMO_PREFIX) === 0;
+  var staysDemo = newNo.indexOf(_COMM_DEMO_PREFIX) === 0;
+  if ((wasDemo || staysDemo) && !p.confirmDemo) {
+    var why = wasDemo && !staysDemo
+      ? 'Renaming ' + oldNo + ' out of the "DEMO-" prefix makes it PERMANENT. clearCommissionDemo '
+        + 'finds demo rows by that prefix, so this order and its line items could never be cleared '
+        + 'again — they would stand as real revenue on the live sheets. Pressing Seed afterwards '
+        + 'would give you two demo orders, and any commission claim filed against it would be '
+        + 'invisible to the cleaner and reach the payout report.'
+      : 'This involves the commission demo data (the "DEMO-" prefix). Seeding and clearing depend on it.';
+    return { success: false, needsConfirm: 'demoRename', soNo: oldNo, newSoNo: newNo, message: why + ' Confirm to proceed.' };
+  }
+
+  /* Documents already filed follow the rename, but a stamped client PO cannot: the old number is
+     printed into the image. Count both so the confirm can say so. */
+  var docs = [];
+  try {
+    var refs = {};
+    _soDocChain(oldNo).forEach(function (x) { refs[String(x[0]) + '|' + String(x[1])] = true; });
+    docs = _rows('Documents').filter(function (d) { return refs[String(d['Module']) + '|' + String(d['Ref No'])]; });
+  } catch (e) {}
+  var stamped = docs.filter(function (d) { return /stamp/i.test(String(d['Doc Type'])); });
+  if (docs.length && !p.confirmDocs) {
+    return { success: false, needsConfirm: 'renameDocs', soNo: oldNo, newSoNo: newNo,
+      docCount: docs.length, stampedCount: stamped.length,
+      message: docs.length + ' document(s) are filed against ' + oldNo + '. They will be re-filed under '
+        + newNo + ' and their links keep working, but the old Drive folder is left behind empty.'
+        + (stamped.length ? ' ' + stamped.length + ' stamped document(s) carry ' + oldNo + ' printed inside '
+           + 'the file itself — re-keying cannot change that, only re-stamping can.' : '')
+        + ' Confirm to proceed.' };
+  }
+
+  // ── The re-key. Header first, then every child, then Documents. ──────────────────────────────
+  var soCol = SCHEMA.SalesOrders.indexOf('SO No') + 1;
+  _sheet('SalesOrders').getRange(so.rowIndex, soCol, 1, 1).setValues([[newNo]]);
+
+  /* Every sheet with an 'SO No' column, found from the schema rather than a hand-kept list, so a
+     sheet added later cannot be forgotten here. SalesOrders is done above. Collections is often blank
+     on legacy imports and is rescued via AR → invoice by _commSoForCollection, which is why
+     Collections, ARAging and Invoices must all move or none of them. */
+  var moved = {};
+  Object.keys(SCHEMA).forEach(function (name) {
+    if (name === 'SalesOrders') return;
+    var col = SCHEMA[name].indexOf('SO No') + 1;
+    if (col < 1) return;
+    var sh = _sheet(name), n = 0;
+    _rows(name).forEach(function (r) {
+      if (String(r['SO No']) === oldNo) { sh.getRange(r.rowIndex, col, 1, 1).setValues([[newNo]]); n++; }
+    });
+    if (n) moved[name] = n;
+  });
+
+  // Documents are polymorphic: Module + Ref No, where Module 'Sales Order' means Ref No IS the SO No.
+  var docSh = _sheet('Documents');
+  var refCol = SCHEMA.Documents.indexOf('Ref No') + 1;
+  var docsMoved = 0;
+  _rows('Documents').forEach(function (d) {
+    if (String(d['Module']) === 'Sales Order' && String(d['Ref No']) === oldNo) {
+      docSh.getRange(d.rowIndex, refCol, 1, 1).setValues([[newNo]]);
+      docsMoved++;
+    }
+  });
+  if (docsMoved) moved.Documents = docsMoved;
+
+  /* Re-file in Drive. The memo caches key on the SO number and are now stale, so they must be dropped
+     BEFORE _adoptSoDocs resolves a path — otherwise every document files under the old folder or,
+     worse, under _Unknown Client. */
+  var oldFolder = '';
+  try { oldFolder = (_docFolderPath('Sales Order', oldNo, '') || []).join(' / '); } catch (e) {}
+  try {
+    SpreadsheetApp.flush();
+    _flowFilingReset();
+    _adoptSoDocs(newNo);
+  } catch (e) { /* filing must not undo a completed re-key */ }
+
+  return { success: true, soNo: newNo, previousSoNo: oldNo, renamed: true, moved: moved,
+    documents: docsMoved, stamped: stamped.length, orphanedFolder: oldFolder,
+    message: oldNo + ' renamed to ' + newNo + '. '
+      + Object.keys(moved).map(function (k) { return moved[k] + ' × ' + k; }).join(', ')
+      + (stamped.length ? '. NOTE: ' + stamped.length + ' stamped document(s) still show ' + oldNo
+         + ' inside the file — re-stamp to correct.' : '')
+      + (oldFolder ? ' The old Drive folder is now empty and can be swept.' : '') };
+}
+
 function deleteSalesOrder(p) {
   var no = p.soNo;
   /* A158 — this deleted the SO and its items and nothing else, leaving the PO, AP, invoice, AR,
@@ -1759,6 +2056,12 @@ function getPurchaseOrders() {
       createdByRole: po['Created By Role'] || '', approvalNote: po['Approval Note'] || '',
       approvedBy: po['Approved By'] || '', approvedAt: po['Approved At'] || '', rowIndex: po.rowIndex,
       exchangeRate: _num(po['Exchange Rate']),
+      /* A222 — the peso ESTIMATE, now that the order actually keeps one. flow-purchase-orders.html
+         has read `p.totalPHP` for its "PO Value (PHP)" KPI all along, and this handler never emitted
+         it, so the figure was always undefined and the KPI silently EXCLUDED every foreign PO — its
+         own subtitle then reported "N of M POs have a PHP total", counting only the PHP ones. It is
+         an estimate and the screen must label it as such; the cost is what the bank charged. */
+      totalPHP: _num(po['Total (PHP) Est']), fxBasis: po['FX Basis'] || '',
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Purchase Price/Unit (FC)']), total: _num(r['Total (FC)']) }; })
@@ -1779,6 +2082,9 @@ function createPurchaseOrder(p) {
   }
   var no = p.poNo || _nextNumber('PurchaseOrders', 1, 'PO');
   var currency = p.currency || 'PHP';
+  // A224 — the currency must match who the supplier is. Checked before anything is written.
+  var _poCur = _poCurrencyProblem(p.soNo, currency);
+  if (_poCur) return { success: false, message: _poCur };
   // A144: a foreign-currency PO with no exchange rate produces a ₱0 payable (poFxRate → 0), which then
   // pays the FC number as if it were pesos downstream. Require a PHP total on non-PHP POs.
   if (currency !== 'PHP' && !(_num(p.totalPHP) > 0)) {
@@ -1797,7 +2103,11 @@ function createPurchaseOrder(p) {
   _append('PurchaseOrders', [no, p.soNo || '', p.date || _now(), p.supplier, currency, total,
     p.status || 'Draft', p.createdBy || '', _now(), '',
     p.actorRole || p.createdByRole || '', '', '', '',
-    _num(p.exchangeRate) > 0 ? _num(p.exchangeRate) : (currency === 'PHP' ? 1 : '')]);   // A145: Exchange Rate
+    _num(p.exchangeRate) > 0 ? _num(p.exchangeRate) : (currency === 'PHP' ? 1 : ''),   // A145: Exchange Rate
+    /* A222 (17 values). The peso total finally STAYS. It was always typed, always validated, and
+       always thrown away — so nothing downstream could ever be checked against the order that
+       started it. THE WIDTH TRAP: exactly SCHEMA.PurchaseOrders.length entries. */
+    _num(p.totalPHP) > 0 ? _num(p.totalPHP) : '', String(p.fxBasis || '').slice(0, 200)]);
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || ''];   // A159 Item ID
@@ -1859,6 +2169,13 @@ function updatePurchaseOrder(p) {
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
 
+  /* A224 — the same currency rule as create. It has to be on BOTH: this function rewrites Currency on
+     the PO and on its AP row, so guarding only the create path would leave the rule one edit away
+     from being walked past — the identical hole A219 found in _poFxProblem. The order's own SO No is
+     the fallback, so an edit that does not resend soNo is still judged against the right order. */
+  var _poCur = _poCurrencyProblem(p.soNo || (poRow ? poRow['SO No'] : ''), currency);
+  if (_poCur) return { success: false, message: _poCur };
+
   /* A219 — the A171 hole that was left open on the UPDATE path.
      _poFxProblem was wired into createPurchaseOrder only, yet this function writes BOTH the exchange
      rate and, further down, APAging['Amount (PHP)'] — the number that becomes landed cost and COGS.
@@ -1878,6 +2195,17 @@ function updatePurchaseOrder(p) {
       if (p.exchangeRate !== undefined && _num(p.exchangeRate) > 0) {   // A145: persist the FX rate (col appended at END)
         sh.getRange(r.rowIndex, poRateCol, 1, 1).setValues([[_num(p.exchangeRate)]]);
       }
+      /* A222 — the peso estimate and its basis follow the same rule: written when supplied, never
+         cleared by an edit that merely omits them. Without this the estimate would be right only on
+         the day the order was raised and would silently go stale on the first revision. */
+      if (_num(p.totalPHP) > 0) {
+        var poEstCol = SCHEMA.PurchaseOrders.indexOf('Total (PHP) Est') + 1;
+        if (poEstCol > 0) sh.getRange(r.rowIndex, poEstCol, 1, 1).setValues([[_num(p.totalPHP)]]);
+      }
+      if (p.fxBasis !== undefined) {
+        var poBasisCol = SCHEMA.PurchaseOrders.indexOf('FX Basis') + 1;
+        if (poBasisCol > 0) sh.getRange(r.rowIndex, poBasisCol, 1, 1).setValues([[String(p.fxBasis || '').slice(0, 200)]]);
+      }
     }
   });
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
@@ -1888,9 +2216,36 @@ function updatePurchaseOrder(p) {
   // Keep the linked AP entry's FC amount + currency in sync. Refresh the PHP estimate too when a new
   // one is supplied and the AP is still untouched (Unpaid, nothing paid) — don't clobber manual edits.
   var apSh = _sheet('APAging');
+  /* A221 — deletePurchaseOrder has always refused while a payment, a receiving or a non-Rejected
+   * payment request stands. updatePurchaseOrder checked NONE of that: its paid/received guards live
+   * inside the `p.revise` branch only, so a PO still sitting at Draft or Open sailed past all of
+   * them — and nothing anywhere looked at PaymentRequests. A Draft PO can carry an Approved, even
+   * Paid, request (createPaymentRequest never requires the PO to be approved), and this function
+   * would still rewrite its items, its Amount (FC) and its journal underneath that request.
+   * Rewriting the amount a request was approved against is exactly the class of silent change the
+   * whole payable guard exists to prevent. */
+  var liveReqs = _rows('PaymentRequests').filter(function (r) {
+    return String(r['PO No'] || '').trim() === String(no) && String(r['Status']) !== 'Rejected'
+        && String(r['Status']) !== 'Draft';
+  });
+  if (liveReqs.length && !p.confirmRepricePaid) {
+    return { success: false, needsConfirm: 'poHasRequests', poNo: no,
+      requests: liveReqs.map(function (r) { return String(r['PR No']) + ' (' + r['Status'] + ')'; }),
+      message: 'PO ' + no + ' has ' + liveReqs.length + ' payment request(s) in flight or settled — '
+        + liveReqs.map(function (r) { return String(r['PR No']) + ' ' + r['Status']; }).join(', ')
+        + '. Editing the PO changes the amount they were approved against. Confirm to proceed.' };
+  }
+
   var newPHP = _num(p.totalPHP);
   _rows('APAging').forEach(function (r) {
     if (String(r['PO No']) === String(no)) {
+      /* Currency and Amount (FC) used to be rewritten here on EVERY matching row with no conditions
+         at all — including a row already Paid, whose figures are settled history. */
+      var apPaid = _num(r['Paid (PHP)']) > 0 || String(r['Status']).toLowerCase() === 'paid';
+      if (apPaid && !p.confirmRepricePaid) {
+        apSh.getRange(r.rowIndex, 12, 1, 1).setValues([[_now()]]);
+        return;
+      }
       apSh.getRange(r.rowIndex, 4, 1, 2).setValues([[currency, total]]);
       if (newPHP > 0 && _num(r['Paid (PHP)']) === 0 && String(r['Status']).toLowerCase() !== 'paid') {
         apSh.getRange(r.rowIndex, 6, 1, 1).setValues([[newPHP]]);   // Amount (PHP)
@@ -2183,6 +2538,44 @@ function previewAPAgingAnomalies(p) {
       : 'Every payable reconciles with its payment requests.' };
 }
 
+/* A224 — WHICH CURRENCIES A PURCHASE ORDER MAY BE RAISED IN, decided by who the supplier is.
+ *
+ *     International supplier  →  a foreign currency. PHP is not offered.
+ *     Local supplier          →  PHP.
+ *     Unclassified, or a restock PO with no sales order  →  anything.
+ *
+ * The classification already decides the document contract (A195/A220); from here it decides the
+ * money too, and the chain finally states the obligation once: the PO's currency, inherited by the
+ * payment request (A222), settled against the payable in that same currency.
+ *
+ * THE UNCLASSIFIED CASE IS DELIBERATE, not an oversight. 13 live sales orders carry no supplier type,
+ * and A220 refused to guess for exactly the reason that applies here: a wrong guess would either
+ * force a local order into USD or refuse a legitimate international one, and neither failure would
+ * name itself. So an unclassified order keeps the full list, and classifying it is what turns the
+ * rule on.
+ *
+ * Enforced HERE, not only in the dropdown — a filtered select is a convenience for the person typing;
+ * the sheet is the record. Returns a message when the pairing is wrong, '' when there is nothing to
+ * say. The message names BOTH remedies, because either one may be the thing that is actually wrong:
+ * the currency on this order, or the supplier type on the sales order. */
+function _poCurrencyProblem(soNo, currency) {
+  var cur = String(currency || '').trim().toUpperCase();
+  var so = String(soNo || '').trim();
+  if (!cur || !so) return '';                       // no currency yet, or a restock PO — no rule to apply
+  var kind = _soSupplierKind(so);
+  if (!kind) return '';                             // unclassified — see above
+  if (kind === 'local' && cur !== 'PHP') {
+    return so + ' is a LOCAL order, so its purchase order is in pesos — ' + cur + ' cannot be used. '
+      + 'Either set the currency to PHP, or change the supplier type on ' + so + ' to International.';
+  }
+  if (kind === 'intl' && cur === 'PHP') {
+    return so + ' is an INTERNATIONAL order, so its purchase order is raised in the supplier\'s own '
+      + 'currency, not pesos. The peso figure is an estimate until the bank executes. Either pick the '
+      + 'supplier\'s currency, or change the supplier type on ' + so + ' to Local.';
+  }
+  return '';
+}
+
 /** A171 — a PO's peso total and its exchange rate must tell the same story. Returns null when fine. */
 function _poFxProblem(currency, totalFC, rate, totalPHP) {
   var cur = String(currency || 'PHP').toUpperCase();
@@ -2196,8 +2589,21 @@ function _poFxProblem(currency, totalFC, rate, totalPHP) {
                ' per ' + cur + ', but the exchange rate entered is ₱' + rate.toFixed(2) +
                '. Correct whichever is wrong before saving.' };
   }
-  // Only the peso total supplied → its implied rate must at least be plausible.
-  if (implied < _FX_BAND.min || implied > _FX_BAND.max) {
+  /* A222 — this is now an ELSE, and that is the fix.
+   *
+   * It was a second, unconditional `if`, so the band fired even when the rate and the peso total
+   * agreed perfectly. The PO screen computes the peso total AS `FC × rate` from the very rate it
+   * sends, so `implied === rate` by construction and the branch above can never fire from the UI —
+   * leaving the band as the only check that ever ran. At ≈₱0.4/¥ that made a JPY purchase order
+   * IMPOSSIBLE TO SAVE, and flow-purchase-orders.js has no `needsConfirm: 'poAmount'` handler, so
+   * the server's confirmAmount escape hatch was unreachable and the refusal unappealable.
+   *
+   * A rate the user has explicitly supplied and that reconciles IS the check — the band adds nothing
+   * to it and only overrules it. So the band now runs solely in the case it was written for: a peso
+   * total offered with no rate to check it against. Note `!(rate > 0)` rather than an `else`: an
+   * `else` on the branch above would skip the band only when the rate DISAGREED, which is exactly
+   * backwards and is how this fix was first written wrong. */
+  if (!(rate > 0) && (implied < _FX_BAND.min || implied > _FX_BAND.max)) {
     return { impliedFx: implied,
       message: '₱' + totalPHP.toFixed(2) + ' for ' + totalFC.toFixed(2) + ' ' + cur + ' implies ₱' +
                implied.toFixed(2) + ' per ' + cur + ' — outside any real rate (₱' + _FX_BAND.min +
@@ -2227,7 +2633,41 @@ function updateAPAging(p) {
   set(5, p.amountPHP !== undefined ? _num(p.amountPHP) : undefined); // Amount (PHP)
   set(6, p.status);                                                  // Status
   setText(7, p.dueDate);                                             // Due Date (clearable)
-  set(8, p.paidPHP !== undefined ? _num(p.paidPHP) : undefined);     // Paid (PHP)
+
+  /* A221 — PAYING HAS ONE DOOR, AND THIS IS NOT IT.
+   *
+   * Until now `Paid (PHP)` was an ordinary editable cell on this page, and that made it a second,
+   * unguarded way to pay a supplier: no approved request, no payment method, no method-ownership
+   * check, no proof-of-payment document — all of which markPaymentRequestPaid demands — and open to
+   * all four oversight roles. It was not a theoretical hole. Of nine supplier payments on the live
+   * book only TWO went through Mark Paid; five more show a payable marked Paid with the request
+   * still at Approved and 'Paid By' blank, so the money is recorded as gone with no record of who
+   * released it. One of those five is AP-202607-006, where ₱310,895.71 pasted into this box became
+   * a false Cr Cash of ₱298,448.47 in the general ledger.
+   *
+   * The two writers also disagree by construction: markPaymentRequestPaid ACCUMULATES
+   * (paidNow = existing + amt) while this one OVERWRITES. Type a ₱300,000 deposit here, then mark
+   * the ₱300,000 request paid, and the total reaches ₱600,000 — under the payable, so the guard
+   * there passes and the same money is counted twice.
+   *
+   * Payments genuinely are made outside the system, so this is not sealed shut — but it becomes the
+   * documented exception rather than the silent default: it needs an explicit flag AND a reason,
+   * and the reason is stamped into Notes where it stays visible. */
+  if (p.paidPHP !== undefined && _num(p.paidPHP) !== _num(cur[8])) {
+    var _why = String(p.externalPaymentReason || '').trim();
+    if (!p.externalPayment || !_why) {
+      return { success: false, needsConfirm: 'externalPayment',
+        apNo: cur[0], poNo: cur[1], currentPaid: _num(cur[8]), attempted: _num(p.paidPHP),
+        message: 'Paid (PHP) is recorded by marking the payment request paid, not here — that is what '
+          + 'checks the approval, the payment method and the proof of payment. If this payment really '
+          + 'was made outside the system, say so and give a reason; it will be recorded against the row.' };
+    }
+    cur[8] = _num(p.paidPHP);
+    var _stamp = 'Recorded outside the system by ' + (p.actorName || 'unknown') + ' on '
+               + _dateStr(_now()) + ': ' + _why;
+    cur[9] = cur[9] ? (String(cur[9]) + ' | ' + _stamp) : _stamp;
+    p.notes = undefined;                      // the stamp wins; do not let the same save overwrite it
+  }
   setText(9, p.notes);                                               // Notes (clearable)
   /* A171 — the payable is the number that becomes landed cost, COGS and gross profit, and until now
      this function accepted it as a bare number with no idea what the PO was. That is how a 202-USD
@@ -2244,19 +2684,40 @@ function updateAPAging(p) {
              message: _apGuard.message };
   }
 
-  // A145: once the row is marked Paid with an actual Paid (PHP), the ACTUAL disbursed pesos become the
-  // payable so downstream (payment request amount, receiving landed cost) use the real figure, not the
-  // stale PO-time estimate. (The AP form always sends Amount (PHP), so this is the effective reconcile.)
-  if (String(cur[6]).toLowerCase() === 'paid' && _num(cur[8]) > 0) {
-    cur[5] = _num(cur[8]);
-  }
+  /* A221 — THE RECONCILE THAT USED TO LIVE HERE IS GONE. It read:
+   *
+   *     if (String(cur[6]).toLowerCase() === 'paid' && _num(cur[8]) > 0) { cur[5] = _num(cur[8]); }
+   *
+   * i.e. Amount (PHP) := Paid (PHP) on any row saved as Paid. A145 introduced it so that the actual
+   * disbursed pesos, rather than a stale PO-time estimate, drove the payment-request cap and
+   * receiving's landed cost. The intent was right and the mechanism was not: a payable is what is
+   * OWED and the paid figure is what was PAID, and letting either silently become the other destroys
+   * the only evidence that they ever differed.
+   *
+   * It is why AP-202607-006 carries TWO wrong numbers when only ONE was ever typed: ₱310,895.71 was
+   * pasted into Paid, and this line copied it into Amount — the figure that drives landed cost and
+   * therefore COGS. It is also why correcting that row by lowering the Amount alone was refused: the
+   * stale paid figure was re-promoted on the way through, and the message described a mistake the
+   * user had not just made.
+   *
+   * What A145 actually wanted is now served honestly: the peso value of a foreign payable is
+   * reconciled against the APPROVED PAYMENT REQUESTS on the PO by _apAmountProblem / _poRequestedPHP
+   * (A219), which is a check against a figure the company really has and needs no exchange rate. */
 
   cur[11] = _now();                                                  // Updated At
   sh.getRange(ri, 1, 1, headers.length).setValues([cur]);
   // GL: payment of A/P — Dr Accounts Payable / Cr Cash (PHP). Amount = paid, or full PHP if marked Paid.
   var apNo = cur[0], currency = cur[3] || 'PHP';
+  /* A221 — the journal follows Paid (PHP) and NOTHING ELSE. This used to fall back to Amount (PHP)
+   * whenever the row was marked Paid with a zero paid figure:
+   *
+   *     if (payment === 0 && String(cur[6]).toLowerCase() === 'paid') payment = _num(cur[5]);
+   *
+   * which made the Status dropdown a third way to move money — choose 'Paid', save, and the full
+   * payable was credited out of Cash with no figure entered anywhere. Harmless while the reconcile
+   * above kept the two columns equal; a live hole the moment it was removed. Status is an aging
+   * label. Only a recorded payment credits cash. */
   var payment = _num(cur[8]);
-  if (payment === 0 && String(cur[6]).toLowerCase() === 'paid') payment = _num(cur[5]);
   if (payment > 0) {
     _postJournal('APPAY', apNo, _now(), 'PHP', [
       { account: ACC.AP, debit: payment, memo: 'Payment of ' + apNo },
@@ -2847,7 +3308,28 @@ var _DOC_RULES = [
 
   // ── Collection ────────────────────────────────────────────────────────────
   { stage: 'collected',   module: 'Shipment',      type: 'collected',
-    label: 'Official receipt / proof of collection', applies: 'both', gate: 'collect' }
+    label: 'Official receipt / proof of collection', applies: 'both', gate: 'collect' },
+
+  /* ── A224: the payable's own document window ──────────────────────────────
+   * There was no rule with module 'AP Aging' at all, so the Doc Type picker on a payable offered
+   * nothing but "Other…" and every document filed against a payable to date is free text. These two
+   * give it a controlled vocabulary like every other module.
+   *
+   * `vocabOnly` marks them as PICKER ENTRIES, NOT CONTRACT ITEMS — see _rulesFor. A payable is not a
+   * sales order: one order can carry several, so listing these on the per-order checklist would add a
+   * line that is neither satisfiable nor countable in that scope.
+   *
+   * They deliberately reuse the EXISTING canonical types rather than inventing new ones, so a bank
+   * debit memo filed here counts as the bank debit memo the receive gate asks for (the SO's document
+   * chain already walks AP Aging). A document is what it is, wherever it was filed from.
+   *
+   * 'proof of payment' is deliberately NOT offered here. markPaymentRequestPaid looks for it on the
+   * PAYMENT REQUEST specifically, so a proof filed against the payable would look attached and still
+   * leave Mark Paid refusing — the AP row's Proof button opens the request's window instead. */
+  { stage: 'ap_bank_advice', module: 'AP Aging',   type: 'debit_memo',
+    label: 'Bank advice / debit memo',            applies: 'both',  gate: null, vocabOnly: true },
+  { stage: 'ap_supplier_invoice', module: 'AP Aging', type: 'supplier sales invoice',
+    label: "Supplier's invoice or statement",     applies: 'both',  gate: null, vocabOnly: true }
 ];
 
 /* Doc Type is free text and 71 of 234 live rows are blank, so a rule that demanded an exact string
@@ -2905,6 +3387,10 @@ function _soPredatesRules(soNo) {
 function _rulesFor(soNo, gate) {
   var kind = _soSupplierKind(soNo);
   return _DOC_RULES.filter(function (r) {
+    // A224: vocabOnly rules exist to fill a Doc Type picker, not to be part of an order's contract.
+    // They are scoped to a payable rather than to a sales order, so counting them per order would
+    // report a gap that the order as a whole can neither own nor close.
+    if (r.vocabOnly) return false;
     if (gate && r.gate !== gate) return false;
     if (r.applies === 'both') return true;
     return kind ? r.applies === kind : false;
@@ -3340,7 +3826,7 @@ function getTrialBalance() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  SHIPMENT MONITORING (flow-native) — 21-stage timeline auto-linked to the flow
+//  SHIPMENT MONITORING (flow-native) — 25-stage timeline auto-linked to the flow (13 apply to a local order)
 // ════════════════════════════════════════════════════════════════════════════
 // Stage keys (must match dashboard/js/stage-meta.js _SM_LIFECYCLE_STAGES order).
 var _SHIP_STAGES = ['so_received', 'po_created', 'po_approved', 'po_sent', 'proforma_received',
@@ -3353,6 +3839,39 @@ var _SHIP_STAGES = ['so_received', 'po_created', 'po_approved', 'po_sent', 'prof
   'delivered_client',
   // A151: downstream lifecycle spine — the sales/receivables close after inbound delivery.
   'invoiced', 'ar_open', 'collected'];
+
+/* A220 — which stages belong to an INTERNATIONAL order only.
+ *
+ * A local purchase is paid and then delivered to the office; there is no proforma, no forwarder, no
+ * customs and no bank debit memo, so eleven of these stages describe documents that will never exist.
+ * Until now all 25 rendered on every shipment, which is why a local order was asked on screen for
+ * FAN/SAD/TAN and a forwarder's final invoice.
+ *
+ * The local chain is the business's own description: the order stages unchanged, then PRF created →
+ * PRF approved → the transfer sent (a bank transfer rather than a TT — see _shipStageLabel) →
+ * forwarded to the supplier → delivered to the office, and then the ordinary sales close.
+ *
+ * NOTHING IS DELETED WHEN A STAGE STOPS APPLYING. _shipTimeline still returns every stage and its
+ * stored state; it marks the inapplicable ones `applies: false` and the UI hides them. Reclassify an
+ * order back and every tick and every attached document is exactly where it was. That matters on the
+ * live book: SO-202607-001 is International with 12 of 25 stages already done.
+ *
+ * Mirrors dashboard/js/stage-meta.js _SM_LIFECYCLE_STAGES appliesTo — tests/flow/ship-kind.js asserts
+ * the two agree, the same way _SHIP_STAGES and that array must already agree in ORDER. */
+var _SHIP_STAGE_INTL = ['proforma_received', 'shipping_docs_received', 'forwarder_quotes',
+  'forwarder_approved', 'booked', 'pickup', 'in_transit', 'customs_clearance', 'fan_sad_tan',
+  'debit_memo', 'forwarder_final_invoice', 'local_charges'];
+
+/** 'intl' when the stage exists only on an international order, else 'both'. */
+function _shipStageApplies(stageKey) {
+  return _SHIP_STAGE_INTL.indexOf(String(stageKey)) === -1 ? 'both' : 'intl';
+}
+
+/** Does this stage apply to an order of this kind? An UNCLASSIFIED order ('') shows everything —
+ *  guessing would silently drop document requirements on the 13 orders nobody has classified. */
+function _shipStageInKind(stageKey, kind) {
+  return kind === 'local' ? _shipStageApplies(stageKey) === 'both' : true;
+}
 
 function _shipParse(json) { try { return JSON.parse(json || '{}') || {}; } catch (e) { return {}; } }
 
@@ -3406,9 +3925,13 @@ function _shipMap(r) {
   };
 }
 
-/** Merge stored manual stage states with the auto-derived "done" flags. */
-function _shipTimeline(s) {
+/** Merge stored manual stage states with the auto-derived "done" flags.
+ *  A220: every stage is still returned, whatever the order's kind — `applies` says whether it belongs
+ *  to this one. Filtering here instead would throw away the stored state of a hidden stage, and a
+ *  reclassification must never destroy what was recorded. */
+function _shipTimeline(s, kind) {
   var derived = _shipAutoDerive(s.soNo);
+  if (kind === undefined) kind = _soSupplierKind(s.soNo);
   return _SHIP_STAGES.map(function (key) {
     var stored = s.stages[key] || {};
     var auto = !!derived[key];
@@ -3417,6 +3940,7 @@ function _shipTimeline(s) {
     if (auto && status !== 'skipped') status = 'done';
     return {
       key: key, status: status, autoderived: auto,
+      appliesTo: _shipStageApplies(key), applies: _shipStageInKind(key, kind),
       completedAt: stored.completedAt || '', completedBy: stored.completedBy || '',
       notes: stored.notes || '', skippedReason: stored.skippedReason || ''
     };
@@ -3426,10 +3950,14 @@ function _shipTimeline(s) {
 function getShipments() {
   return { success: true, data: _rows('Shipments').map(function (r) {
     var s = _shipMap(r);
-    var tl = _shipTimeline(s);
-    var done = tl.filter(function (t) { return t.status === 'done'; }).length;
-    var skipped = tl.filter(function (t) { return t.status === 'skipped'; }).length;
-    s.progress = { done: done, skipped: skipped, total: _SHIP_STAGES.length };
+    s.supplierKind = _soSupplierKind(s.soNo);            // 'intl' | 'local' | '' (unclassified)
+    var tl = _shipTimeline(s, s.supplierKind);
+    // A220: progress counts only the stages this order actually has. A local order is 13 steps, not
+    // 25 — reporting it out of 25 made every local shipment look permanently half-finished.
+    var mine = tl.filter(function (t) { return t.applies; });
+    var done = mine.filter(function (t) { return t.status === 'done'; }).length;
+    var skipped = mine.filter(function (t) { return t.status === 'skipped'; }).length;
+    s.progress = { done: done, skipped: skipped, total: mine.length };
     delete s.stages;
     return s;
   }) };
@@ -3440,9 +3968,10 @@ function getShipmentTimeline(p) {
   var r = _rows('Shipments').filter(function (x) { return String(x['Shipment ID']) === String(p.shipmentId); })[0];
   if (!r) return { success: false, message: 'Shipment not found.' };
   var s = _shipMap(r);
-  return { success: true, shipment: { shipmentId: s.shipmentId, soNo: s.soNo, poNo: s.poNo,
+  var kind = _soSupplierKind(s.soNo);
+  return { success: true, supplierKind: kind, shipment: { shipmentId: s.shipmentId, soNo: s.soNo, poNo: s.poNo,
     customer: s.customer, principal: s.principal, item: s.item, mode: s.mode, etd: s.etd, eta: s.eta,
-    awb: s.awb, status: s.status, remarks: s.remarks }, timeline: _shipTimeline(s) };
+    awb: s.awb, status: s.status, remarks: s.remarks, supplierKind: kind }, timeline: _shipTimeline(s, kind) };
 }
 
 function advanceShipmentStage(p) {
@@ -3502,6 +4031,11 @@ function _prMap(r) {
     // list cell and the PDF caption gate on — an old PRF can never grow a portion line.
     paymentPortion: r['Payment Portion'] || '',
     poTotal: _num(r['PO Total (PHP)']), poPaidBefore: _num(r['PO Paid Before (PHP)']),
+    /* A222 — the peso ESTIMATE and the three BANK FACTS. Every surface showing amountPHPEst must say
+       it is an estimate; actualDebitedPHP is what really left the account and is blank until the
+       payment is marked paid, because until then nobody knows it. */
+    amountPHPEst: _num(r['Amount (PHP) Est']), actualDebitedPHP: _num(r['Actual Debited (PHP)']),
+    bankChargePHP: _num(r['Bank Charge (PHP)']), valueDate: r['Value Date'] || '',
     rowIndex: r.rowIndex
   };
 }
@@ -3520,12 +4054,19 @@ function getPaymentRequests(p) {
 }
 
 /** PHP payable for a PO = Σ APAging Amount (PHP) for that PO (fallback FC total). */
+/* The PESO payable on a PO. A222 — it no longer falls back to the FOREIGN amount.
+ *
+ * It used to end `return php > 0 ? php : fc;`, so an AP row with a blank peso amount handed back a
+ * number denominated in USD or SGD which every caller then treated as pesos — silently understating
+ * a payable by a factor of ~60. A missing peso figure is a fact worth returning honestly: 0 means
+ * "not known yet", and the caller can say so or fall back to _poRemainingFC, which answers the same
+ * question in the currency the obligation is actually in. */
 function _poPayablePHP(poNo) {
-  var php = 0, fc = 0;
+  var php = 0;
   _rows('APAging').forEach(function (r) {
-    if (String(r['PO No']) === String(poNo)) { php += _num(r['Amount (PHP)']); fc += _num(r['Amount (FC)']); }
+    if (String(r['PO No']) === String(poNo)) php += _num(r['Amount (PHP)']);
   });
-  return php > 0 ? php : fc;
+  return php;
 }
 
 // Stamp the PR No onto every AP Aging row for a PO, so the payment request shows on its AP entry.
@@ -3539,6 +4080,146 @@ function _linkPrToAp(poNo, prNo) {
   });
 }
 
+/* A222 — what is still owed on a PO, in the SUPPLIER'S currency.
+ *
+ * The peso twin (_poRemainingPayable) reads APAging's Amount (PHP) and Paid (PHP). There is no
+ * 'Paid (FC)' column and there should not be one: a payment settles a foreign obligation, so what has
+ * been settled in foreign terms is simply the sum of the requests that were PAID. No exchange rate is
+ * involved anywhere in this function, which is the point.
+ *
+ * Returns null — deliberately, so the caller falls back to the peso cap — when it cannot answer
+ * honestly: a PHP order (where the peso path is already correct), or a foreign order carrying legacy
+ * requests denominated in a DIFFERENT currency from the order itself. Every one of the 20 live
+ * requests is such a legacy row, so this is the normal case today, not an edge case. Converting them
+ * would require inventing the very rate this whole change exists to stop inventing.
+ */
+function _poRemainingFC(poNo, excludePrNo) {
+  var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
+  if (!po) return null;
+  var cur = String(po['Currency'] || 'PHP').toUpperCase();
+  if (cur === 'PHP') return null;                       // the peso path is already the right answer
+
+  var aps = _rows('APAging').filter(function (r) { return String(r['PO No']) === String(poNo); });
+  if (!aps.length) return null;
+  var amount = aps.reduce(function (s, a) { return s + _num(a['Amount (FC)']); }, 0);
+  if (!(amount > 0)) return null;
+
+  var paid = 0, open = 0, mixed = false;
+  _rows('PaymentRequests').forEach(function (r) {
+    if (String(r['PO No'] || '').trim() !== String(poNo)) return;
+    if (String(r['PR No']) === String(excludePrNo || '')) return;
+    var st = String(r['Status'] || '');
+    if (st === 'Rejected') return;
+    if (String(r['Currency'] || 'PHP').toUpperCase() !== cur) { mixed = true; return; }
+    if (st === 'Paid') paid += _num(r['Amount']); else open += _num(r['Amount']);
+  });
+  if (mixed) return null;                               // cannot compare without inventing a rate
+
+  return { amount: amount, paid: paid, openRequests: open,
+           remaining: amount - paid - open, currency: cur, count: aps.length };
+}
+
+/* The peso ESTIMATE for a slice of a PO, pro-rated from the order's OWN stored estimate so a request
+ * can never imply a different rate from the order it belongs to. Falls back to the stored Exchange
+ * Rate, then to nothing at all — an absent estimate is honest; a guessed one is not. */
+function _poEstPHPFor(poNo, amountFC, currency) {
+  if (String(currency || 'PHP').toUpperCase() === 'PHP') return _num(amountFC);
+  var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
+  if (!po) return '';
+  var totFC = _num(po['Total Purchase (FC)']), estPHP = _num(po['Total (PHP) Est']);
+  if (totFC > 0 && estPHP > 0) return Math.round(estPHP * _num(amountFC) / totFC * 100) / 100;
+  var rate = _num(po['Exchange Rate']);
+  return rate > 0 ? Math.round(_num(amountFC) * rate * 100) / 100 : '';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ *  A225 — ONE PAYMENT REQUEST PER PURCHASE ORDER
+ *
+ * 'live' — a PO may not carry a second request while one is still STANDING (Draft, any Pending*,
+ *          Approved). Once the first is Paid or Rejected the next may be raised. This keeps the A180
+ *          deposit → balance flow, and it leaves the two TOOLEC balances raisable — ₱17,073 on
+ *          2026-41 and ₱69,686 on 2026-42, both 50% paid with the balance never requested.
+ * 'ever'  — strictly one request per PO for all time. tests/flow/pr-per-po.js records what that
+ *          costs: ₱86,759 of live balances become unraisable through the system, and two of the
+ *          three A180 portion buttons become controls the server refuses.
+ *
+ * The switch is a constant rather than folklore, so the decision stays visible and reversible. */
+var FLOW_PR_PER_PO = 'live';                       // 'live' | 'ever'
+
+/* WHICH STATUSES MEAN A REQUEST IS FINISHED and no longer stands against its PO.
+ *
+ * Deliberately the SAME pair _poRemainingPayable excludes from `openRequests` and _poRemainingFC
+ * skips. If the cardinality rule and the money rule ever disagreed about what "still standing"
+ * means, a PO could be blocked by a request that reserves no money, or reserved against by one that
+ * does not block — and neither message would name the other. tests/flow/pr-per-po.js asserts the two
+ * sets are identical before it asserts anything else.
+ *
+ * REJECTED NEVER BLOCKS, in either mode. Two reasons: the money rule already treats it as reserving
+ * nothing, and under 'ever' a single mistaken rejection would bar a real purchase order for ever with
+ * no remedy — revisePaymentRequest refuses a Rejected row, and its PR number is already minted. The
+ * remedy that does exist (edit the Rejected request and resubmit it) works precisely because of this. */
+var _PR_DEAD_STATUSES = ['Rejected', 'Paid'];      // 'live'
+var _PR_DEAD_EVER     = ['Rejected'];              // 'ever' — Paid still blocks; Rejected still does not
+
+/** Every request standing against a PO. Matched on PO No ALONE, exactly as _poRemainingPayable does —
+ *  not on Type. A Type 'Other' request never carries a PO No, so filtering on Type would only add a
+ *  way for the two functions to drift apart on a legacy row with a blank Type column. */
+function _poStandingRequests(poNo, excludePrNo) {
+  var po = String(poNo || '').trim();
+  if (!po) return [];
+  var skip = String(excludePrNo || '');
+  var dead = (String(FLOW_PR_PER_PO) === 'ever') ? _PR_DEAD_EVER : _PR_DEAD_STATUSES;
+  var out = [];
+  _rows('PaymentRequests').forEach(function (r) {
+    if (String(r['PO No'] || '').trim() !== po) return;
+    if (String(r['PR No']) === skip) return;
+    var st = String(r['Status'] || 'Draft') || 'Draft';   // a blank status is a Draft, and blocks
+    if (dead.indexOf(st) !== -1) return;
+    out.push({ prNo: String(r['PR No']), status: st, amount: _num(r['Amount']) });
+  });
+  return out;
+}
+
+/* Why a new request cannot be raised on this PO — '' when it can.
+ *
+ * The message NAMES the request in the way and its status. "One per PO" with nothing named sends
+ * someone hunting through a list of twenty for a record they cannot see from this form. It names
+ * every remedy too, which is why there is NO OVERRIDE FLAG: each remedy is reachable by the same
+ * people who would have used the override, and a rule with a bypass is not a rule. */
+function _prPerPOProblem(poNo, excludePrNo) {
+  var rows = _poStandingRequests(poNo, excludePrNo);
+  if (!rows.length) return '';
+  var names = rows.map(function (r) { return r.prNo + ' (' + r.status + ')'; }).join(', ');
+  if (String(FLOW_PR_PER_PO) === 'ever') {
+    return String(poNo) + ' already has a payment request — ' + names +
+      '. One purchase order carries one payment request. Correct that one instead of raising another.';
+  }
+  return String(poNo) + ' already has a payment request in progress — ' + names +
+    '. One live request at a time per purchase order: finish ' + rows[0].prNo +
+    ' (approve and pay it, or reject it), use Revise to change it, or delete it if it was raised by mistake.';
+}
+
+/* A225 — who may raise or edit a payment request against a PURCHASE ORDER.
+ *
+ * Until now this rule existed only as a hidden form card (flow-payment-requests.js `prCanCreate`) and
+ * not on the server at all: createPaymentRequest wrote p.actorRole into 'Created By Role' and never
+ * read it for a decision. It matters more than it looks, because submitPaymentRequest DOES read that
+ * value — `if (String(r['Created By Role']) === 'admin')` skips straight to Pending Management — so a
+ * payload claiming admin skipped an entire approval stage.
+ *
+ * TYPE 'PO' ONLY, and that is not an oversight. _travMintPayable raises its payable with the
+ * TRAVELLER's role ('sales' on the live book) and requestTravelFloatCash with the director's or
+ * accounting's. Both are Type 'Other'. Applying this to them would break the travel chain on its
+ * first use. Measured before writing: all 7 live PO requests were created by 'accounting', so this
+ * refuses nothing that has actually happened. */
+var _PR_PO_CREATE_ROLES = ['admin', 'accounting'];
+function _prPORoleProblem(actorRole) {
+  var who = String(actorRole || '').trim().toLowerCase();
+  if (_PR_PO_CREATE_ROLES.indexOf(who) !== -1) return '';
+  return 'Only admin or accounting can raise a payment request against a purchase order (this request says "' +
+    (who || 'no role') + '").';
+}
+
 function createPaymentRequest(p) {
   var type = (p.type === 'Other') ? 'Other' : 'PO';
   // A145: idempotent create — a retried submission (network bounce) carrying the same clientRef returns
@@ -3550,11 +4231,37 @@ function createPaymentRequest(p) {
   var supplier = p.supplier || '', currency = p.currency || 'PHP', amount = _num(p.amount),
       poNo = p.poNo || '', soNo = p.soNo || '';
   // A180: blank for a Type 'Other' payable — it has no PO, so no denominator and no portion.
-  var portion = '', poTotalSnap = '', poPaidSnap = '';
+  var portion = '', poTotalSnap = '', poPaidSnap = '', amountPHPEst = '';
   if (type === 'PO') {
     if (!poNo) return { success: false, message: 'A purchase order is required for a PO payment request.' };
     var po = _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0];
-    if (po) { supplier = supplier || po['Supplier']; currency = 'PHP'; soNo = soNo || po['SO No']; }
+    /* A222 — THE REQUEST IS RAISED IN THE SUPPLIER'S CURRENCY.
+     *
+     * This used to read `currency = 'PHP'`, unconditionally, and the form had no currency control at
+     * all. So a USD 202 obligation was recorded as a peso number that nobody could know: the peso was
+     * computed at PO time from a typed rate, inherited here, and then treated everywhere as the fact.
+     * It is not a fact. The obligation is USD 202 — exact, from the supplier — and the peso is
+     * whatever the bank charges on the day, which is only knowable at Mark Paid.
+     *
+     * So: Currency and Amount now carry the OBLIGATION, and 'Amount (PHP) Est' carries the estimate
+     * for approval and cash planning, labelled as an estimate wherever it is shown. Type 'Other' is
+     * untouched — a reimbursement or a local bill genuinely is a peso obligation. */
+    if (po) {
+      supplier = supplier || po['Supplier'];
+      soNo = soNo || po['SO No'];
+      var poCur = String(po['Currency'] || 'PHP').toUpperCase();
+      /* THE CALLER MUST SAY WHICH CURRENCY IT TYPED. Adopting the PO's currency from a payload that
+         stayed silent is how a peso figure becomes a foreign obligation: a browser still running the
+         pre-A222 form sends only `amount`, typed in pesos, and the request would be stored as
+         SGD 119,083 on an SGD order. A stale cached page must degrade to the OLD behaviour, not to a
+         60x overstatement — so silence means PHP, and a mismatch is refused outright. */
+      var said = String(p.currency || '').toUpperCase();
+      if (!said) currency = 'PHP';
+      else if (said !== poCur) {
+        return { success: false, message: 'This request says ' + said + ' but ' + poNo + ' is a ' +
+          poCur + ' order. Reload the page and raise it again.' };
+      } else currency = poCur;
+    }
     // A144 duplicate-AP hard stop: _poPayablePHP SUMS Amount (PHP) across all AP rows for the PO, so a
     // stale second AP row doubles the amount (the PRF-2026-63 incident). Refuse until it is resolved.
     var apAmountRows = _rows('APAging').filter(function (r) {
@@ -3563,18 +4270,80 @@ function createPaymentRequest(p) {
     if (apAmountRows > 1) {
       return { success: false, message: 'This PO has ' + apAmountRows + ' AP entries with an amount — the payable would be their sum. Remove the stale duplicate in AP Aging before creating the payment request.' };
     }
+
+    /* ── A225 — ONE PAYMENT REQUEST PER PURCHASE ORDER. The ordering here IS the design. ──────────
+     *
+     * AFTER the clientRef dedupe at the top of this function, load-bearingly: a retried submission
+     * resolves at _refSeen and returns the request it already made, so it never reaches here. Move
+     * this guard above that and the first honest network retry is refused as a duplicate of itself,
+     * which is the A145 bug reintroduced.
+     *
+     * AFTER the duplicate-AP stop above, which keeps priority: a payable that is the sum of two stale
+     * rows is untrustworthy in a way that has to be fixed on AP Aging first.
+     *
+     * BEFORE the remaining-payable cap below, also deliberately. The cap is money arithmetic. When a
+     * live request already covers the whole payable it does refuse — but with "that exceeds what is
+     * still owed … less open requests", which never names WHAT is in the way. And when the live
+     * request is a 50% DP still sitting at Pending Director it does not refuse AT ALL, because half
+     * the payable genuinely is still open. That second case is the duplicate this change was asked to
+     * close. Cardinality is the more specific question, so it is asked first and answered by name.
+     *
+     * BEFORE the amount auto-fill too, or a payload carrying no amount would be quietly filled in
+     * from a payable it is not allowed to claim.
+     *
+     * The role gate rides here rather than at the top of the branch so that a caller with the wrong
+     * role still gets the more useful of the two refusals when both apply. */
+    var perPO = _prPerPOProblem(poNo, '');
+    if (perPO) return { success: false, message: perPO, blockedBy: 'onePerPO' };
+    var roleBad = _prPORoleProblem(p.actorRole || p.createdByRole);
+    if (roleBad) return { success: false, message: roleBad, blockedBy: 'role' };
+
     // A158: a PO is usually paid in full, but deposits happen — so a second request is allowed while
     // what it may ask for is capped at what is genuinely still owed (payable − paid − other open
     // requests). Without this, the natural deposit/balance flow defaults to paying the PO twice.
     var rem = _poRemainingPayable(poNo, '');
-    if (amount <= 0) amount = rem ? Math.max(0, rem.remaining) : _poPayablePHP(poNo);
-    if (rem && amount > rem.remaining + 0.005) {
+    /* A222 — the cap is applied in the currency the obligation is actually in. `rem` is peso-based
+       (it sums APAging's Amount/Paid (PHP)), so comparing a foreign amount against it would be
+       comparing USD to pesos. _poRemainingFC settles the same question in foreign units, and returns
+       null when it cannot answer honestly — see its own comment. */
+    var remFC = _poRemainingFC(poNo, '');
+    var cap = remFC || rem;
+    var capCur = remFC ? currency : 'PHP';
+
+    /* A225 — NO PAYABLE, NO REQUEST. This is a larger hole than the duplicate above.
+     *
+     * `rem` is null when the PO has NO APAging row at all, and the cap below is written
+     * `if (cap && ...)` — so a PO with no payable had NO CEILING WHATSOEVER. Any amount passed, and
+     * passed again on the next request. The one-per-PO guard only narrows it to one unbounded
+     * request at a time.
+     *
+     * Tested on `rem`, not on `cap`, even though `cap = remFC || rem` makes them equivalent today:
+     * `rem` is the one whose null means "no AP rows", while _poRemainingFC returns null in five
+     * unrelated cases of its own (including every PHP order). Naming the right one keeps this correct
+     * if the `||` ever changes.
+     *
+     * Refusing is right rather than harsh. A PO with no AP row has nothing to pay against; its
+     * receiving would cost inventory at zero, because createReceiving pro-rates by _apPaidPHP over
+     * the order's foreign total; and createPurchaseOrder writes the AP row in the same breath as the
+     * order. A PO with none is a PO whose payable was deleted — a data problem to fix on AP Aging,
+     * not a payment to raise. Measured before writing: 0 of 10 live POs are in this state. */
+    if (!rem) {
+      return { success: false, message: 'There is no payable on AP Aging for ' + poNo +
+        ', so there is nothing to raise a payment request against. Add or restore the AP entry for ' +
+        'this purchase order first.' };
+    }
+
+    if (amount <= 0) amount = cap ? Math.max(0, cap.remaining) : _poPayablePHP(poNo);
+    if (cap && amount > cap.remaining + 0.005) {
       return { success: false, message: 'That exceeds what is still owed on ' + poNo + ': payable ' +
-        rem.amount.toFixed(2) + ' less paid ' + rem.paid.toFixed(2) +
-        (rem.openRequests > 0 ? ' less open requests ' + rem.openRequests.toFixed(2) : '') +
-        ' = ' + rem.remaining.toFixed(2) + ' remaining.' };
+        cap.amount.toFixed(2) + ' less paid ' + cap.paid.toFixed(2) +
+        (cap.openRequests > 0 ? ' less open requests ' + cap.openRequests.toFixed(2) : '') +
+        ' = ' + cap.remaining.toFixed(2) + ' ' + capCur + ' remaining.' };
     }
     if (amount <= 0) return { success: false, message: 'Nothing is outstanding on ' + poNo + ' — it is already fully paid or requested.' };
+    /* The peso ESTIMATE for this request, pro-rated from the order's own estimate so the two can
+       never imply different rates. Never typed, and never treated as the amount owed. */
+    amountPHPEst = _poEstPHPFor(poNo, amount, currency);
     // A180: snapshot the payable this portion was computed against, and record which slice it is.
     // The amount is NOT recomputed from the portion — it stays hand-editable, so the portion is
     // validated against it and downgraded to 'Custom' on a mismatch instead of overwriting money.
@@ -3590,7 +4359,12 @@ function createPaymentRequest(p) {
     p.paymentMethod || '', p.dueDate || '', p.remarks || '', 'Draft', p.createdBy || p.actorName || '',
     p.actorRole || p.createdByRole || '', '', '', '', '', '', '', '', '', _now(), _now(),
     '', '', '', '', '',                          // A156 trailing: Admin Approved By/At · Paid By/At · Payment Ref
-    portion, poTotalSnap, poPaidSnap]);          // A180 trailing: portion + payable snapshot (37 values)
+    portion, poTotalSnap, poPaidSnap,            // A180 trailing: portion + payable snapshot
+    /* A222 trailing (41 values). The peso estimate is stored at creation; the three bank facts stay
+       blank until Mark Paid, because until the transfer happens nobody knows them. THE WIDTH TRAP:
+       this list must carry exactly SCHEMA.PaymentRequests.length entries — asserted first in
+       tests/flow/fx-chain.js, because this mistake has been made in A186, A193, A205, A215 and A218. */
+    amountPHPEst, '', '', '']);
   if (type === 'PO') _linkPrToAp(poNo, no);   // connect the PR to this PO's AP Aging entry
   _refStore('createPaymentRequest', p.clientRef, no);   // A145: remember for idempotent retry
   return { success: true, prNo: no, type: type, amount: amount, message: 'Payment Request ' + no + ' created (Draft).' };
@@ -3637,6 +4411,29 @@ function updatePaymentRequest(p) {
   if (!_prEditable(r['Status'])) {
     return { success: false, message: 'This payment request is ' + r['Status'] + ' — use Revise to reopen it for editing.' };
   }
+
+  /* A225 — THE PURCHASE ORDER IS NOT AN EDITABLE FIELD, said out loud rather than left to rest on
+   * 'PO No' merely being absent from the field map below. The one-per-PO rule lives on CREATE; an
+   * edit that could move a request onto another order would walk straight past it — the A219 shape
+   * exactly, where a rule was wired into create while update rewrote the same field.
+   *
+   * It COMPARES rather than refusing the field's presence, because savePR reuses one payload object
+   * for both paths and sends poNo on an edit too.
+   *
+   * Note this is deliberately NOT the cardinality guard. With excludePrNo it could never fire on the
+   * only request on a PO — dead code that reads like protection; without it, it would refuse every
+   * edit of that request, which is the exact bug excludePrNo was invented to prevent. */
+  if (p.poNo !== undefined && String(p.poNo).trim() !== String(r['PO No'] || '').trim()) {
+    return { success: false, message: 'A payment request cannot be moved to a different purchase order. ' +
+      'Delete this one and raise it on ' + String(p.poNo) + ' instead.' };
+  }
+  /* A225 — the same role rule as create. A create-only permission rule is one edit away from
+   * irrelevant. Type 'PO' only, for the same reason: the travel chain's payables are Type 'Other'. */
+  if (String(r['Type']) === 'PO') {
+    var upRoleBad = _prPORoleProblem(p.actorRole || p.createdByRole);
+    if (upRoleBad) return { success: false, message: upRoleBad, blockedBy: 'role' };
+  }
+
   var fields = { 'Supplier': p.supplier, 'Payee': p.payee, 'Currency': p.currency, 'Purpose': p.purpose,
     'Department': p.department, 'Bank Name': p.bankName, 'Account Name': p.accountName,
     'Account Number': p.accountNumber, 'Payment Method': p.paymentMethod, 'Due Date': p.dueDate, 'Remarks': p.remarks,
@@ -3655,6 +4452,15 @@ function updatePaymentRequest(p) {
     var amt = _num(p.amount);
     if (amt <= 0) return { success: false, message: 'Amount must be greater than zero.' };
     var rem = _poRemainingPayable(r['PO No'], p.prNo);
+    /* A225 — the same no-payable refusal as create. Create-only was the exact A219 mistake, and here
+       it is not merely a missing ceiling: `rem` null makes the cap below a no-op AND makes the three
+       snapshot columns fall back to _poPayablePHP/0, so an edit would quietly rewrite the printed
+       PRF balance off a payable that no longer exists. */
+    if (!rem) {
+      return { success: false, message: 'There is no payable on AP Aging for ' + r['PO No'] +
+        ', so this request\'s amount cannot be checked against anything. Restore the AP entry for ' +
+        'that purchase order, or delete this request.' };
+    }
     if (rem && amt > rem.remaining + 0.005) {
       return { success: false, message: 'That exceeds what is still owed on ' + r['PO No'] + ': payable ' +
         rem.amount.toFixed(2) + ' less paid ' + rem.paid.toFixed(2) +
@@ -3809,12 +4615,32 @@ function approvePaymentRequest(p) {
 }
 
 /* A156: mark an APPROVED request as actually paid, with the proof of payment on file.
-   Ownership follows the payment method: bank/online transfers are executed by the director, every
-   other method (cheque, cash, telegraphic transfer) by accounting. */
-var _PR_DIRECTOR_METHODS = ['bank transfer', 'online'];
+ *
+ * A224 — THE OWNERSHIP RULE, CORRECTED. This decides who may release money, so it is the first thing
+ * in this change and the thing tests/flow/pay-ownership.js holds down hardest.
+ *
+ * A158 had it as `director = bank transfer | online, everybody else = accounting`, which put cheque
+ * and cash with accounting and gave admin no release rights at all. The rule the company actually
+ * runs on is the other way round and simpler:
+ *
+ *     telegraphic transfer  →  ACCOUNTING or ADMIN     (the international wires)
+ *     everything else       →  THE DIRECTOR            (bank transfer, online, cheque, cash — local)
+ *
+ * It returns a LIST because a telegraphic transfer has two legitimate owners, and a single-string
+ * answer would have forced either an arbitrary choice or a second rule beside this one. Four call
+ * sites read it — markPaymentRequestPaid here, flowPayOwner in flow-api.js, prPayActions in
+ * flow-pr-actions.js and the Action Center in auth.js — and they must all agree, or a button appears
+ * for someone the server will refuse (or worse, fails to appear for the person who should act). */
+var _PR_ACCOUNTING_PAY_METHODS = ['telegraphic transfer'];
 var _PR_KNOWN_METHODS = ['bank transfer', 'online', 'cheque', 'cash', 'telegraphic transfer'];
 function _prPayOwner(method) {
-  return _PR_DIRECTOR_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1 ? 'director' : 'accounting';
+  return _PR_ACCOUNTING_PAY_METHODS.indexOf(String(method || '').trim().toLowerCase()) !== -1
+    ? ['accounting', 'admin'] : ['director'];
+}
+/** Human wording for a refusal — "accounting or admin" reads better than the array does. */
+function _prPayOwnerLabel(method) {
+  var o = _prPayOwner(method);
+  return o.length > 1 ? o.slice(0, -1).join(', ') + ' or ' + o[o.length - 1] : 'the ' + o[0];
 }
 
 /* A158: find the AP row a PO-type request settles, and say clearly when that can't be done safely.
@@ -3863,6 +4689,48 @@ function _poRemainingPayable(poNo, excludePrNo) {
            remaining: amount - paid - openReq, count: aps.length };
 }
 
+/* A221-5 — the idempotency key for the expense a Type 'Other' payment books. Mirrors _travExpenseKey
+ * ('TRAV:<no>'), so the two schemes cannot collide and a travel payable — which already writes its
+ * own row — is recognised rather than double-booked. */
+function _prExpenseKey(prNo) { return 'PRF:' + String(prNo); }
+
+/* Read-only. Which Type 'Other' payment requests were marked Paid but never reached the P&L?
+ *
+ * Until A221-5 that was ALL of them: marking such a request paid wrote the request row and nothing
+ * else, so the cash left and no ledger anywhere recorded it. On the live book that is 8 requests
+ * worth ₱16,112.47. This names them and what each would book, and writes nothing — the same
+ * preview-then-apply shape as previewAPAgingAnomalies and previewQuotationOwners, because these are
+ * historical payments and deserve a human decision rather than a migration. */
+function previewOtherPaymentExpenses() {
+  var exp = _rows('Expenses');
+  var byKey = {}, byVoucher = {};
+  exp.forEach(function (e) {
+    if (e['Legacy Key']) byKey[String(e['Legacy Key'])] = e;
+    if (e['Voucher No']) byVoucher[String(e['Voucher No'])] = e;
+  });
+  var rows = [], missing = 0, total = 0;
+  _rows('PaymentRequests').forEach(function (r) {
+    if (String(r['Type']) === 'PO') return;
+    if (String(r['Status']) !== 'Paid') return;
+    var no = String(r['PR No']);
+    var hit = byKey[_prExpenseKey(no)] || byVoucher[no] || null;
+    var amt = _num(r['Amount']);
+    if (!hit) { missing++; total += amt; }
+    rows.push({ prNo: no, payee: r['Payee'] || '', amount: amt,
+      paidAt: _dateStr(r['Paid At'] || ''), paidBy: r['Paid By'] || '',
+      purpose: r['Purpose'] || '', department: r['Department'] || '',
+      inBooks: !!hit, expNo: hit ? String(hit['Exp No']) : '',
+      via: hit ? (byKey[_prExpenseKey(no)] ? 'PRF key' : 'voucher no') : '' });
+  });
+  rows.sort(function (a, b) { return (a.inBooks === b.inBooks) ? b.amount - a.amount : (a.inBooks ? 1 : -1); });
+  return { success: true, checked: rows.length, missing: missing,
+    missingTotal: Math.round(total * 100) / 100, rows: rows,
+    message: missing
+      ? missing + ' paid Type-Other request(s) worth ₱' + (Math.round(total * 100) / 100).toFixed(2) +
+        ' never reached the P&L. Nothing has been written — review the list, then book them.'
+      : 'Every paid Type-Other request is in the books.' };
+}
+
 function markPaymentRequestPaid(p) {
   var r = _prRow(p.prNo);
   if (!r) return { success: false, message: 'Payment Request not found.' };
@@ -3877,10 +4745,10 @@ function markPaymentRequestPaid(p) {
   if (_PR_KNOWN_METHODS.indexOf(method.toLowerCase()) === -1) {
     return { success: false, message: 'Unrecognised payment method "' + method + '" — set a known method before marking this paid.' };
   }
-  var owner = _prPayOwner(method);
-  if (String(p.actorRole || '') !== owner) {
+  var owner = _prPayOwner(method);                       // A224: a LIST — see _prPayOwner
+  if (owner.indexOf(String(p.actorRole || '')) === -1) {
     return { success: false, message: method + ' payments are marked paid by ' +
-      (owner === 'director' ? 'the director' : 'accounting') + '.' };
+      _prPayOwnerLabel(method) + '.' };
   }
   // Proof is the point of the step — no proof, no Paid. The record's own generated PDF doesn't count.
   var hasProof = _rows('Documents').some(function (d) {
@@ -3889,8 +4757,44 @@ function markPaymentRequestPaid(p) {
   });
   if (!hasProof) return { success: false, message: 'Attach the proof of payment (Docs → Proof of Payment) before marking this paid.' };
 
-  var amt = _num(r['Amount']);
-  var apUpdated = '', apStatus = '';
+  /* A222 — THIS IS THE MOMENT THE PESO BECOMES REAL, so it is the moment the bank's own figures are
+   * captured. Until now this function copied PaymentRequests['Amount'] verbatim into Paid (PHP) and
+   * called it a payment. On a foreign order that amount was a peso ESTIMATE derived from a rate typed
+   * at PO time, so the "paid" figure could never be anything but the estimate — the realised rate was
+   * not merely uncomputed, it was unrecordable. Anyone who knew the true cost had to type it into the
+   * AP page instead, which is exactly what happened to Power Team (₱310,895.71) and AOLAI
+   * (₱46,393.80): both above their approved requests, both still sitting at "Approved" with Paid By
+   * blank.
+   *
+   *     settles the payable = actual debited − bank charge
+   *     realised rate       = settles ÷ the foreign amount        (derived, never typed)
+   *
+   * The bank charge is OUR cost and must never reduce what the supplier is owed — A219 found
+   * ₱2,070.60 and ₱465.77 of exactly this folded into "paid" with nowhere else to go.
+   *
+   * Backwards compatible on purpose: with nothing supplied, `settles` falls back to the request's own
+   * amount and the behaviour is exactly as before, so a PHP request is untouched. */
+  var isFC = String(r['Currency'] || 'PHP').toUpperCase() !== 'PHP';
+  var debited = p.actualDebitedPHP !== undefined ? _num(p.actualDebitedPHP) : 0;
+  var charge  = _num(p.bankChargePHP);
+  if (charge < 0) return { success: false, message: 'A bank charge cannot be negative.' };
+  if (debited > 0 && charge > debited) {
+    return { success: false, message: 'The bank charge (' + charge.toFixed(2) + ') cannot exceed what was debited (' + debited.toFixed(2) + ').' };
+  }
+  /* A foreign payment has no peso figure anywhere that is worth trusting, so it must be told what the
+     bank actually took. A peso request already knows. */
+  if (isFC && !(debited > 0) && !p.confirmNoActual) {
+    return { success: false, needsConfirm: 'actualDebited', prNo: p.prNo,
+      currency: r['Currency'], amountFC: _num(r['Amount']), estimatePHP: _num(r['Amount (PHP) Est']),
+      message: 'This request is for ' + _num(r['Amount']) + ' ' + r['Currency'] +
+        '. Enter the pesos the bank actually debited (and any charge) so the real rate is recorded — '
+        + 'the peso figure on the request is only an estimate.' };
+  }
+  var settles = debited > 0 ? (debited - charge) : _num(r['Amount']);
+  var amt = settles;
+  var apUpdated = '', apStatus = '', realisedRate = null;
+  if (isFC && _num(r['Amount']) > 0 && settles > 0) realisedRate = settles / _num(r['Amount']);
+
   // A PO-backed payment settles a real payable. Recording it on AP Aging is what lets Receiving value
   // the stock in pesos (_apPaidPHP drives the landed cost) and closes the payable.
   if (String(r['Type']) === 'PO') {
@@ -3904,11 +4808,35 @@ function markPaymentRequestPaid(p) {
       // A158: ACCUMULATE. Overwriting turned a ₱300k deposit on a ₱1M payable into "₱300k, fully
       // paid" — the remaining ₱700k vanished from the aging, the KPIs and the next request's prefill.
       var paidNow = _num(cur[headers.indexOf('Paid (PHP)')]) + amt;
-      if (payable > 0 && paidNow > payable + 0.005) {
+      /* A222 — THE CAP MOVES OFF THE PESO ESTIMATE.
+       *
+       * Capping the peso paid at APAging['Amount (PHP)'] means capping reality at a forecast: if the
+       * bank's rate moved against us, the true outflow is legitimately higher than the estimate and
+       * this guard refused it. That refusal is why the two real foreign payments on the live book
+       * were typed into the AP page instead of going through this door.
+       *
+       * On a FOREIGN order the real ceiling is the obligation itself — you cannot pay more USD than
+       * you owe — and that is already enforced when the request is created (_poRemainingFC). The peso
+       * is an outcome and has no ceiling. On a PHP order the payable IS the obligation, so the
+       * original guard is exactly right and stays. */
+      if (!isFC && payable > 0 && paidNow > payable + 0.005) {
         return { success: false, message: 'Paying ' + amt.toFixed(2) + ' would take the total paid to ' +
           paidNow.toFixed(2) + ' against a payable of ' + payable.toFixed(2) + ' — check the amount first.' };
       }
-      apStatus = (payable > 0 && paidNow >= payable - 0.005) ? 'Paid' : 'Partial';
+      /* A222 — on a foreign order the payable is settled when the OBLIGATION is settled, not when the
+         peso estimate happens to be met. Judging by pesos gets it wrong in both directions: a worse
+         rate reads as fully paid too early, and a BETTER rate leaves a fully-settled order stuck at
+         "Partial" for ever because the pesos came in under the forecast. Falls back to the peso rule
+         when _poRemainingFC declines to answer (legacy mixed-currency requests). */
+      if (isFC) {
+        var fcRem = _poRemainingFC(String(r['PO No'] || ''), String(p.prNo));
+        var leftFC = fcRem ? (fcRem.remaining - _num(r['Amount'])) : null;
+        apStatus = (leftFC === null)
+          ? ((payable > 0 && paidNow >= payable - 0.005) ? 'Paid' : 'Partial')
+          : (leftFC <= 0.005 ? 'Paid' : 'Partial');
+      } else {
+        apStatus = (payable > 0 && paidNow >= payable - 0.005) ? 'Paid' : 'Partial';
+      }
       cur[headers.indexOf('Paid (PHP)')] = paidNow;
       cur[headers.indexOf('Status')] = apStatus;
       cur[headers.indexOf('Updated At')] = _now();
@@ -3923,12 +4851,79 @@ function markPaymentRequestPaid(p) {
     }
   }
 
-  _prSet(p.prNo, { 'Status': 'Paid', 'Paid By': p.actorName || '', 'Paid At': _now(),
-                   'Payment Ref': p.paymentRef || '' });
+  /* A221-5 — A TYPE 'Other' PAYMENT MUST REACH THE P&L.
+   *
+   * A PO-backed payment settles a payable and posts Dr AP / Cr Cash above. A Type 'Other' one settled
+   * NOTHING: no AP row, no journal, no expense. The cash left the company and never appeared in the
+   * books at all. On the live sheet that is 8 paid requests worth ₱16,112.47 — FedEx, PCAB,
+   * reimbursements — none of it in the P&L.
+   *
+   * The travel chain already noticed this and worked around it privately: _travPostExpense writes one
+   * Expenses row per approved week precisely because "a Type 'Other' payment request marked Paid
+   * touches no ledger at all". A222 makes that the rule rather than one caller's workaround, reusing
+   * the same helper (addExpense) and the same idempotency device (a Legacy Key), so a travel payable
+   * is not double-booked: it already carries 'TRAV:<no>' and is skipped here.
+   *
+   * Deliberately an EXPENSE row and not a journal entry. The GL's cash account is fed by the APPAY
+   * postings, which key on an AP No that an 'Other' request does not have; inventing one would put a
+   * second, keyless writer on the ledger. The Expenses sheet is where operating spend already lives
+   * and where the P&L already reads. Best-effort: a refused expense must not undo a completed
+   * payment, so it is reported rather than thrown. */
+  var expNo = '', expNote = '';
+  if (String(r['Type']) !== 'PO') {
+    try {
+      var already = _travExpenseRow ? null : null;
+      var lk = _prExpenseKey(p.prNo);
+      var dup = _rows('Expenses').filter(function (e) { return String(e['Legacy Key']) === lk; })[0];
+      var travLk = _rows('Expenses').filter(function (e) {
+        return String(e['Voucher No']) === String(p.prNo) && String(e['Legacy Key']).indexOf('TRAV:') === 0;
+      })[0];
+      if (dup) { expNo = String(dup['Exp No']); }
+      else if (travLk) { expNo = String(travLk['Exp No']); expNote = ' (already on the travel expense row)'; }
+      else {
+        var made = addExpense({
+          date: _dateStr(p.valueDate || _now()),
+          category: String(r['Department'] || '') || 'Other Operating Expense',
+          voucherNo: String(p.prNo),
+          description: String(r['Purpose'] || '') || ('Payment to ' + String(r['Payee'] || 'payee')),
+          amount: settles, other: settles,
+          notes: 'Payment Request ' + p.prNo + ' · ' + String(r['Payee'] || '') +
+                 (p.paymentRef ? ' · ref ' + p.paymentRef : ''),
+          createdBy: String(p.actorName || ''), legacyKey: lk
+        });
+        if (made && made.success) expNo = made.expNo;
+        else expNote = ' — the expense row was refused (' + ((made && made.message) || 'unknown') + '), record it by hand';
+      }
+    } catch (e) { expNote = ' — the expense row failed (' + e.message + '), record it by hand'; }
+  }
+
+  var prPatch = { 'Status': 'Paid', 'Paid By': p.actorName || '', 'Paid At': _now(),
+                  'Payment Ref': p.paymentRef || '' };
+  /* A222 — the bank's own figures, written only when they were actually supplied. These are the first
+     fields in this chain that record a fact rather than a forecast, so a blank one means "not told",
+     never "zero". The Value Date is the BANK's date; 'Paid At' remains the moment somebody clicked. */
+  if (debited > 0) prPatch['Actual Debited (PHP)'] = debited;
+  if (charge > 0) prPatch['Bank Charge (PHP)'] = charge;
+  if (p.valueDate) prPatch['Value Date'] = p.valueDate;
+  _prSet(p.prNo, prPatch);
+
+  /* The FX difference is DERIVED, never stored: settled pesos less the estimate the request carried.
+     Storing it would be a fourth number that could drift from the three it is computed from. */
+  var estPHP = _num(r['Amount (PHP) Est']);
+  var fxDiff = (isFC && estPHP > 0 && settles > 0) ? Math.round((settles - estPHP) * 100) / 100 : null;
 
   return { success: true, prNo: p.prNo, status: 'Paid', apNo: apUpdated, apStatus: apStatus,
+           expNo: expNo, settledPHP: settles, bankCharge: charge || 0,
+           realisedRate: realisedRate ? Math.round(realisedRate * 10000) / 10000 : null,
+           estimatePHP: estPHP || null, fxDifference: fxDiff,
            message: 'Payment Request marked paid' +
-             (apUpdated ? ' and recorded on ' + apUpdated + (apStatus === 'Partial' ? ' (partially paid).' : '.') : '.') };
+             (apUpdated ? ' and recorded on ' + apUpdated + (apStatus === 'Partial' ? ' (partially paid)' : '') : '') +
+             (expNo ? ' and booked as expense ' + expNo + expNote : expNote) +
+             (realisedRate ? '. Realised rate ₱' + (Math.round(realisedRate * 100) / 100).toFixed(2) +
+               '/' + r['Currency'] : '') +
+             (charge > 0 ? ', bank charge ₱' + charge.toFixed(2) + ' recorded separately' : '') +
+             (fxDiff !== null && Math.abs(fxDiff) >= 0.01
+               ? ' (₱' + Math.abs(fxDiff).toFixed(2) + (fxDiff > 0 ? ' more' : ' less') + ' than estimated)' : '') + '.' };
 }
 
 function rejectPaymentRequest(p) {
@@ -3974,11 +4969,82 @@ function getSOCostDetails(p) {
   }) };
 }
 
+/* A224 — READ-ONLY. The bank charges actually captured on this sales order's supplier payments.
+ *
+ * A222 records what the bank did at the moment it is known: Actual Debited, Bank Charge, Value Date,
+ * on the payment request. The charge is correctly kept OUT of the payable — it is our cost, not the
+ * supplier's — and out of landed cost, which comes from _apPaidPHP. So it is a real, known cost of
+ * this order sitting in a place the COGS record never looks.
+ *
+ * THIS DOES NOT WRITE, AND THAT IS THE DECISION, not an omission. Routing it into
+ * SOCostDetails['Bank Charge (COGS)'] automatically would be wrong four ways:
+ *
+ *   1. there are TWO hand-entered buckets for the same kind of fee — Bank Charge (COGS) and Bank
+ *      Charge (Shipping) — and nothing distinguishes which one a supplier wire belongs in. If
+ *      accounting has been using the shipping bucket, writing to the other double-counts;
+ *   2. on a LOCAL order both buckets are excluded from Total COGS (saveSOCostDetails and
+ *      _soCostComputed gate them on cogsType), so the figure would be stored and never summed —
+ *      it would vanish with no error at all;
+ *   3. saveSOCostDetails is a FULL-ROW OVERWRITE, so an automatic writer must round-trip the whole
+ *      record or it clobbers every other cost component;
+ *   4. a PO can carry several payment requests (50% DP + Balance), each with its own charge, so a
+ *      writer would have to accumulate — and an overwrite would let the balance payment's fee erase
+ *      the deposit's.
+ *
+ * So the system REPORTS and a person decides which bucket. Same preview-then-apply shape as
+ * previewAPAgingAnomalies and previewReceivingReversal, and the only version that cannot silently
+ * move gross profit. */
+function getSOBankCharges(p) {
+  if (!p || !p.soNo) return { success: false, message: 'soNo required.' };
+  var soNo = String(p.soNo);
+  var poSet = {};
+  _rows('PurchaseOrders').forEach(function (po) {
+    if (String(po['SO No']) === soNo) poSet[String(po['PO No'])] = true;
+  });
+  var rows = [], total = 0;
+  _rows('PaymentRequests').forEach(function (r) {
+    // Only requests belonging to this order, and only ones that actually record a charge.
+    if (!(poSet[String(r['PO No'] || '')] || String(r['SO No'] || '') === soNo)) return;
+    var charge = _num(r['Bank Charge (PHP)']);
+    if (!(charge > 0)) return;
+    total += charge;
+    rows.push({ prNo: String(r['PR No']), poNo: String(r['PO No'] || ''),
+      payee: r['Payee'] || r['Supplier'] || '', currency: String(r['Currency'] || 'PHP').toUpperCase(),
+      charge: charge, debited: _num(r['Actual Debited (PHP)']),
+      valueDate: _dateStr(r['Value Date'] || ''), status: String(r['Status'] || ''),
+      paidAt: _dateStr(r['Paid At'] || '') });
+  });
+  rows.sort(function (a, b) { return String(a.valueDate).localeCompare(String(b.valueDate)); });
+  total = Math.round(total * 100) / 100;
+  return { success: true, soNo: soNo, count: rows.length, total: total, rows: rows,
+    message: rows.length
+      ? rows.length + ' payment(s) on this order recorded a bank charge, ₱' + total.toFixed(2) +
+        ' in total. Nothing has been written to the cost record — enter it in the bucket it belongs in.'
+      : 'No bank charge has been captured on this order\'s payments.' };
+}
+
 /** Computed COGS from the components (for the mismatch check). */
+/* A224 — THE TWO BANK-CHARGE FIELDS HAVE TWO NAMES and this function only knew one of them.
+ *
+ * The import payload calls them bankServiceChargeCOGS / bankServiceChargeShipping;
+ * getSOCostDetails emits bankChargeCOGS / bankChargeShipping. This is the mismatch checker — it
+ * recomputes Total COGS and reports a disagreement — and it only ever worked because its sole caller
+ * (importSOCostDetails) happens to pass the import shape. Called with a STORED record, as any new
+ * caller naturally would, it scored both bank charges as ZERO and would have reported a false
+ * mismatch on every international order that carries one.
+ *
+ * Accepting both spellings rather than picking one: renaming would break the import path, and the
+ * function's job is to answer "does this add up", not to police field names. */
+function _soCostBankCOGS(c) {
+  return _num(c.bankChargeCOGS != null ? c.bankChargeCOGS : c.bankServiceChargeCOGS);
+}
+function _soCostBankShipping(c) {
+  return _num(c.bankChargeShipping != null ? c.bankChargeShipping : c.bankServiceChargeShipping);
+}
 function _soCostComputed(c) {
   var t = _num(c.purchaseOfGoods) + _num(c.deliveryToOffice) + _num(c.deliveryToClient);
   if (String(c.cogsType) === 'international') {
-    t += _num(c.bankServiceChargeCOGS) + _num(c.dutiesAndTaxes) + _num(c.bankServiceChargeShipping) +
+    t += _soCostBankCOGS(c) + _num(c.dutiesAndTaxes) + _soCostBankShipping(c) +
          _num(c.shippingCost) + _num(c.localCharges);
   }
   return t;
@@ -4048,6 +5114,103 @@ function _deleteMigratedInvoiceForSO(soNo) {
 }
 
 /** Delete the SO's migrated Receiving(s) + their ReceivingItems. */
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+ *  A222-U — REVERSING A RECEIVING.
+ *
+ *  There has never been a deleteReceiving, and its absence was survivable only while nothing could
+ *  cost a receiving wrongly. Something could: MR-202608-014 was recorded while AP-202607-006 still
+ *  held a pasted ₱310,895.71, so createReceiving read that through _apPaidPHP and stamped ₱184,690.52
+ *  and ₱126,205.19 onto CP872 and CP873 — a USD 202 order costed 25× over. Correcting the payable
+ *  afterwards fixed the ledger and the payable and left the INVENTORY untouched, because receiving is
+ *  a one-time stamp. The moment either item is invoiced that figure becomes COGS.
+ *
+ *  Reversal is the exact inverse of _applyInventory's weighted average:
+ *
+ *      Q_before = Q_now − q
+ *      C_before = (Q_now × C_now − q × c) / Q_before        (0 when Q_before is 0)
+ *
+ *  which is arithmetically exact ONLY if nothing has moved the item since. That cannot be proven from
+ *  the sheet, so it is INFERRED and reported: a balance below the received quantity, or a back-computed
+ *  cost that comes out negative, means something else has happened and the reversal is refused rather
+ *  than guessed. Preview first — this is stock valuation, and it deserves a human decision.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The arithmetic for one line, shared by the preview and the apply so they cannot disagree. */
+function _rcvReversalLine(it) {
+  var itemNo = _normItemNo(it['Item No']);
+  // Column names read from SCHEMA.ReceivingItems, not from memory: 'Qty Received' and
+  // 'Purchase Price/Unit (PHP)' — a near-miss here would silently reverse zero and report success.
+  var q = _num(it['Qty Received']);
+  var c = _num(it['Purchase Price/Unit (PHP)']), s = _num(it['Shipping/Unit (PHP)']);
+  var inv = _findInventory(itemNo, { itemId: it['Item ID'], description: it['Item Name'] });
+  var out = { itemNo: itemNo, itemName: it['Item Name'], qty: q, purchasePerUnit: c, shippingPerUnit: s,
+              found: !!inv, exact: false, reason: '' };
+  if (!inv) { out.reason = 'no inventory row — nothing to reverse'; return out; }
+  var Qn = _num(inv['Available Balance']), Cn = _num(inv['Purchase Price/Unit']), Sn = _num(inv['Shipping Cost/Unit']);
+  out.balanceNow = Qn; out.purchaseNow = Cn; out.shippingNow = Sn;
+  out.rowIndex = inv.rowIndex;
+  if (q <= 0) { out.reason = 'zero quantity — nothing to reverse'; return out; }
+  if (Qn + 1e-9 < q) { out.reason = 'balance ' + Qn + ' is below the ' + q + ' received — the stock has moved since'; return out; }
+  var Qb = Qn - q;
+  var Cb = Qb > 0 ? (Qn * Cn - q * c) / Qb : 0;
+  var Sb = Qb > 0 ? (Qn * Sn - q * s) / Qb : 0;
+  if (Cb < -0.005 || Sb < -0.005) { out.reason = 'backing the cost out goes negative — the stock has moved since'; return out; }
+  out.balanceAfter = Qb; out.purchaseAfter = Math.max(0, Cb); out.shippingAfter = Math.max(0, Sb);
+  out.valueRemoved = Math.round((q * (c + s)) * 100) / 100;
+  out.exact = true;
+  return out;
+}
+
+/** Read-only. What reversing this receiving would do to inventory, and whether it can be done exactly. */
+function previewReceivingReversal(p) {
+  if (!p || !p.mrNo) return { success: false, message: 'mrNo required.' };
+  var mr = _rows('MaterialsReceiving').filter(function (m) { return String(m['MR No']) === String(p.mrNo); })[0];
+  if (!mr) return { success: false, message: 'Receiving ' + p.mrNo + ' not found.' };
+  var its = _rows('ReceivingItems').filter(function (r) { return String(r['MR No']) === String(p.mrNo); });
+  var lines = its.map(_rcvReversalLine);
+  var blocked = lines.filter(function (l) { return !l.exact; });
+  var jrn = _rows('Journal').filter(function (j) { return String(j['Source']) === 'MR' && String(j['Source No']) === String(p.mrNo); });
+  return { success: true, mrNo: String(p.mrNo), poNo: mr['PO No'] || '', soNo: mr['SO No'] || '',
+    receivedBy: mr['Received By'] || '', date: _dateStr(mr['Date'] || ''),
+    lines: lines, canReverse: blocked.length === 0 && lines.length > 0, blocked: blocked.length,
+    journalLines: jrn.length,
+    valueRemoved: Math.round(lines.reduce(function (t, l) { return t + (l.valueRemoved || 0); }, 0) * 100) / 100,
+    message: !lines.length ? 'This receiving has no item lines.'
+      : blocked.length ? blocked.length + ' of ' + lines.length + ' line(s) cannot be reversed exactly — '
+          + blocked.map(function (l) { return l.itemNo + ': ' + l.reason; }).join('; ')
+      : 'Reversing removes ' + lines.length + ' line(s) worth ₱' +
+        Math.round(lines.reduce(function (t, l) { return t + (l.valueRemoved || 0); }, 0) * 100) / 100 +
+        ' from inventory and deletes ' + jrn.length + ' journal line(s). Nothing has been written.' };
+}
+
+/** Apply the reversal: back the cost out of inventory, drop the journal, delete the record. */
+function reverseReceiving(p) {
+  var pre = previewReceivingReversal(p);
+  if (!pre.success) return pre;
+  if (!pre.canReverse) return { success: false, message: pre.message };
+  if (!p.confirmReverse) {
+    return { success: false, needsConfirm: 'reverseReceiving', preview: pre,
+      message: pre.message + ' Confirm to reverse — this is stock valuation, and it cannot be undone by re-running.' };
+  }
+  var invSh = _sheet('Inventory');
+  pre.lines.forEach(function (l) {
+    var c = _invComputed(l.balanceAfter, l.purchaseAfter, l.shippingAfter);
+    invSh.getRange(l.rowIndex, 3, 1, 7).setValues([[l.balanceAfter, l.purchaseAfter, l.shippingAfter,
+      c.landed, c.total, 'PHP', _now()]]);
+  });
+  _removeJournal('MR', String(p.mrNo));
+  var mrSh = _sheet('MaterialsReceiving'), itSh = _sheet('ReceivingItems');
+  _rows('ReceivingItems').filter(function (r) { return String(r['MR No']) === String(p.mrNo); })
+    .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { itSh.deleteRow(r.rowIndex); });
+  _rows('MaterialsReceiving').filter(function (m) { return String(m['MR No']) === String(p.mrNo); })
+    .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (m) { mrSh.deleteRow(m.rowIndex); });
+  return { success: true, mrNo: String(p.mrNo), reversed: pre.lines.length,
+    valueRemoved: pre.valueRemoved, poNo: pre.poNo,
+    message: 'Receiving ' + p.mrNo + ' reversed — ₱' + pre.valueRemoved.toFixed(2) +
+      ' removed from inventory, its journal deleted and the record removed. Receive it again to restamp ' +
+      'the cost from the corrected payable.' };
+}
+
 function _deleteMigratedReceivingForSO(soNo) {
   var mrSh = _sheet('MaterialsReceiving'), itemSh = _sheet('ReceivingItems'), mrNos = {};
   _rows('MaterialsReceiving').filter(function (m) { return String(m['SO No']) === String(soNo) && String(m['Received By']) === 'Migrated (legacy)'; })
@@ -4083,9 +5246,19 @@ function _writeMigratedRecordsForSO(cd, force) {
   }
   if (force || !hasMigRcv) {
     if (force) _deleteMigratedReceivingForSO(soNo);
-    var duties = _num(cd['Duties & Taxes']);
+    /* A220 — THIS MUST APPLY THE SAME RULE AS saveSOCostDetails, which excludes the five
+     * international components from Total COGS on a local order. It did not, so the two disagreed:
+     * the Invoices row got the REDUCED cogs while the MaterialsReceiving row regenerated here still
+     * carried the full international shipping load. _soCostComputed — the mismatch checker — uses the
+     * kind-aware formula, so after a reclassification nothing reconciled with anything.
+     *
+     * Latent until now because only a change of COGS Type could expose it; A220 puts a control on the
+     * shipment page that does exactly that, so it would have started firing on the first flip. */
+    var intl = String(cd['COGS Type'] || 'local').trim().toLowerCase() === 'international';
+    var duties = intl ? _num(cd['Duties & Taxes']) : 0;
     var delivery = _num(cd['Delivery to Office']) + _num(cd['Delivery to Client']);
-    var other = _num(cd['Local Charges']) + _num(cd['Bank Charge (COGS)']) + _num(cd['Bank Charge (Shipping)']) + _num(cd['Shipping Cost']);
+    var other = intl ? _num(cd['Local Charges']) + _num(cd['Bank Charge (COGS)']) +
+                       _num(cd['Bank Charge (Shipping)']) + _num(cd['Shipping Cost']) : 0;
     var totalShip = duties + delivery + other;
     var purchase = _num(cd['Purchase of Goods']);
     var mrNo = _nextNumber('MaterialsReceiving', 1, 'MR');
@@ -4131,9 +5304,19 @@ function backfillMigratedRecords(p) {
     }
     // Receiving — capture the cost breakdown; dedupe on a migrated MR for this SO.
     if (!migRcv[soNo]) {
-      var duties = _num(c['Duties & Taxes']);
+      /* A224 — the guard A220 added to _writeMigratedRecordsForSO, which this function is the twin of
+       * and which it was missed out of. saveSOCostDetails and _soCostComputed both exclude the five
+       * international components from Total COGS on a LOCAL order; without the same test here, a local
+       * order's receiving row carries duties, local charges, both bank charges and the shipping cost
+       * that its own Total COGS left out, and the two never reconcile again.
+       *
+       * It matters more here than there: this is the bulk backfill over every SOCostDetails row, so a
+       * single run writes the disagreement across the whole legacy book at once. */
+      var bIntl = String(c['COGS Type'] || 'local').trim().toLowerCase() === 'international';
+      var duties = bIntl ? _num(c['Duties & Taxes']) : 0;
       var delivery = _num(c['Delivery to Office']) + _num(c['Delivery to Client']);
-      var other = _num(c['Local Charges']) + _num(c['Bank Charge (COGS)']) + _num(c['Bank Charge (Shipping)']) + _num(c['Shipping Cost']);
+      var other = bIntl ? _num(c['Local Charges']) + _num(c['Bank Charge (COGS)']) +
+                          _num(c['Bank Charge (Shipping)']) + _num(c['Shipping Cost']) : 0;
       var totalShip = duties + delivery + other;
       var purchase = _num(c['Purchase of Goods']);
       var mrNo = _nextNumber('MaterialsReceiving', 1, 'MR');
@@ -6559,6 +7742,79 @@ function previewCommissionOwnerShift(p) {
  * `unresolved` is the part to read. A quotation whose number carries no initials we recognise is
  * REPORTED, never quietly defaulted to the typist — silently assuming is exactly how the wrong name
  * got attached in the first place. */
+/* A226 — PURCHASE-REQUEST ATTRIBUTION, previewed before it is applied.
+ *
+ * The quotation twin below had to guess from initials in the number. This one does not have to guess
+ * at all: 'Requested By' is populated on 310 of 315 live rows with four unambiguous names, so the
+ * backfill is a copy, not an inference — which is the end state A218 was working toward.
+ *
+ * The 5 blanks are REPORTED, never defaulted. A request nobody is named on is a real fact about the
+ * book, and inventing an owner for it is how a wrong name gets attached permanently (A218's finding). */
+function previewPricingRequestOwners(p) {
+  p = p || {};
+  var out = [], blank = [];
+  _rows('PricingRequests').forEach(function (h) {
+    var no = String(h['PR No'] || '');
+    if (!no) return;
+    if (String(h['Salesperson'] || '').trim()) return;        // idempotent: a recorded owner is never touched
+    var typist = String(h['Requested By'] || '').trim();
+    if (!typist) {
+      blank.push({ prNo: no, customer: h['Customer'] || '', status: String(h['Status'] || ''),
+        note: 'Nobody is named on this request — it needs a person, not a default.' });
+      return;
+    }
+    out.push({ prNo: no, customer: h['Customer'] || '', status: String(h['Status'] || ''),
+      owner: typist, source: 'Requested By' });
+  });
+  return { success: true, total: out.length, blankCount: blank.length,
+    data: out, blanks: blank,
+    message: out.length + ' request(s) would be attributed from "Requested By". ' + blank.length +
+      ' name nobody at all and are left alone for a person to assign.' };
+}
+
+/** Apply it. Idempotent — a request that already names a salesperson is never rewritten, so running
+ *  this twice is a no-op and a later correction by hand is never undone. */
+function runPricingRequestOwnerBackfill(p) {
+  p = p || {};
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['director', 'management', 'admin'].indexOf(role) < 0) {
+    return { success: false, message: 'Only management, the director or admin can reattribute purchase requests.' };
+  }
+  var only = null;
+  if (p.prNos) {
+    try { only = {}; (JSON.parse(p.prNos) || []).forEach(function (n) { only[String(n)] = 1; }); }
+    catch (e) { return { success: false, message: 'prNos must be JSON.' }; }
+  }
+  var plan = previewPricingRequestOwners(p);
+  var done = 0, failed = 0;
+  plan.data.forEach(function (r) {
+    if (only && !only[r.prNo]) return;
+    try { _setCellByKey('PricingRequests', 'PR No', r.prNo, 'Salesperson', r.owner); done++; }
+    catch (e) { failed++; }
+  });
+  return { success: true, updated: done, failed: failed, blankLeft: plan.blankCount,
+    message: 'Attributed ' + done + ' purchase request(s). ' + plan.blankCount +
+      ' still name nobody and were left for a person to assign.' };
+}
+
+/** A226 — the first correction path attribution has ever had on a purchase request. 'Requested By'
+ *  records who typed it and stays a fact; this says whose deal it is, and can be fixed. */
+function setPricingRequestSalesperson(p) {
+  if (!p || !p.prNo) return { success: false, message: 'prNo required.' };
+  var role = String(p.actorRole || '').toLowerCase();
+  if (['director', 'management', 'admin', 'accounting'].indexOf(role) < 0) {
+    return { success: false, message: 'Only oversight roles can change who a purchase request belongs to.' };
+  }
+  var h = _prHeaderRow(p.prNo);
+  if (!h) return { success: false, message: 'Purchase request ' + p.prNo + ' not found.' };
+  var who = String(p.salesperson == null ? '' : p.salesperson).trim();
+  var was = _prOwner(h);
+  _setCellByKey('PricingRequests', 'PR No', p.prNo, 'Salesperson', who);
+  return { success: true, prNo: p.prNo, salesperson: who, previous: was,
+    message: who ? (p.prNo + ' now belongs to ' + who + '.')
+                 : (p.prNo + ' no longer names a salesperson; it falls back to who requested it (' + was + ').') };
+}
+
 function previewQuotationOwners(p) {
   p = p || {};
   var out = [], unresolved = [];
@@ -9113,6 +10369,7 @@ var _MODULE_MAP = {
   importInventory: ['Inventory', 'Imported'], classifyInventory: ['Inventory', 'Classified'],
   createQuotation: ['Quotation', 'Created'], updateQuotation: ['Quotation', 'Updated'], deleteQuotation: ['Quotation', 'Deleted'],
   createSalesOrder: ['Sales Order', 'Created'], updateSalesOrder: ['Sales Order', 'Updated'], deleteSalesOrder: ['Sales Order', 'Deleted'],
+  renameSalesOrder: ['Sales Order', 'Renamed'],
   importSalesOrders: ['Sales Order', 'Imported'],
   createPurchaseOrder: ['Purchase Order', 'Created'], updatePurchaseOrder: ['Purchase Order', 'Updated'], deletePurchaseOrder: ['Purchase Order', 'Deleted'],
   updateAPAging: ['AP Aging', 'Updated'], deleteAPEntry: ['AP Aging', 'Deleted'],
@@ -9126,6 +10383,7 @@ var _MODULE_MAP = {
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
   reclassifyExpenses: ['Expense', 'Reclassified'],
   createReceiving: ['Receiving', 'Received'],
+  reverseReceiving: ['Receiving', 'Reversed'], previewReceivingReversal: ['Receiving', 'Reviewed'],
   createInvoice: ['Invoice', 'Issued'],
   saveQuotationPDF: ['Quotation', 'PDF Saved'], savePOPDF: ['Purchase Order', 'PDF Saved'],
   createPricingRequest: ['Pricing Request', 'Created'], updatePRSourcing: ['Pricing Request', 'Sourced'],
@@ -9165,6 +10423,9 @@ var _MODULE_MAP = {
   setQuotationFollowUp: ['Quotation', 'Follow-up Set'],
   snoozeQuotation: ['Quotation', 'Parked'],                                         // A215
   runQuotationSentAtBackfill: ['Quotation', 'Send Dates Estimated'],
+  // A226 — without these two the reattribution leaves no audit row at all.
+  runPricingRequestOwnerBackfill: ['Pricing Request', 'Reattributed'],
+  setPricingRequestSalesperson: ['Pricing Request', 'Reattributed'],
   runQuotationOwnerBackfill: ['Quotation', 'Reattributed'],
   setFlowSettings: ['Settings', 'Saved'],
   // A207 — every writer, deletes included. An action missing here leaves NO audit row at all
@@ -9196,6 +10457,8 @@ var _MODULE_MAP = {
   requestTravelFloatCash: ['Travel Allowance', 'Float Cash Requested'],
   setOpeningBalance: ['Balance Sheet', 'Updated'],
   advanceShipmentStage: ['Shipment', 'Stage Updated'], updateShipment: ['Shipment', 'Updated'],
+  previewOtherPaymentExpenses: ['Payment Request', 'Reviewed'],
+  setSOSupplierType: ['Sales Order', 'Reclassified'],
   createPaymentRequest: ['Payment Request', 'Created'], submitPaymentRequest: ['Payment Request', 'Submitted'],
   approvePaymentRequest: ['Payment Request', 'Approved'], rejectPaymentRequest: ['Payment Request', 'Rejected'],
   markPaymentRequestPaid: ['Payment Request', 'Paid'],
@@ -9535,15 +10798,75 @@ function reviewDailyReport(p) {
 //  SALES PRICING-REQUEST FLOW
 //  PR (sales) → Sourcing (admin) → Mgmt Pricing → Verify (admin) → Sales → Quotation
 // ════════════════════════════════════════════════════════════════════════════
+/* A226 — WHOSE REQUEST IS IT.
+ *
+ * 'Requested By' records who TYPED it, and until now it was also the only answer to who OWNS it. It
+ * is a free-text display name copied from the browser session at submit, and getPricingRequests
+ * matched it with exact `String(a) === String(b)` — so one trailing space, one rename, and a rep's
+ * tracker empties with no error anywhere. That is not hypothetical: PR-202607-242 and PR-202607-295
+ * were stranded exactly that way (flow-pricing-request.js:609).
+ *
+ * The stored column is the fact; 'Requested By' is the fallback for the 315 rows minted before it
+ * existed. THERE IS NO INITIALS TABLE HERE, ON PURPOSE — all 315 live numbers are PR-YYYYMM-NNN and
+ * must stay that way (_nextNumber's collision-proof counter is keyed on that stem, and re-minting
+ * would re-key PricingRequestItems, Quotations['PR No'], APAging['PR No'], PFInquiries['PR No'],
+ * Documents['Ref No'] and the Drive tree). _QUO_INITIALS serves quotations only, and its own header
+ * says it is a migration aid nobody should extend. */
+function _prOwner(h) {
+  var stored = String((h && (h['Salesperson'] || h.salesperson)) || '').trim();
+  return stored || String((h && (h['Requested By'] || h.requestedBy)) || '').trim();
+}
+/** Compare two people-names the way a human would: collapse runs of space, ignore case. */
+function _prSameOwner(a, b) {
+  return String(a || '').replace(/\s+/g, ' ').trim().toLowerCase() ===
+         String(b || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function getPricingRequests(p) {
   var items = _rows('PricingRequestItems');
   var headers = _rows('PricingRequests');
   if (p && p.status) headers = headers.filter(function (h) { return String(h['Status']) === String(p.status); });
-  if (p && p.requestedBy) headers = headers.filter(function (h) { return String(h['Requested By']) === String(p.requestedBy); });
+  /* A226 — owner-aware and whitespace/case tolerant. This is a strict WIDENING: every row the old
+     exact match returned still matches, and rows that only differ by stray whitespace now match too.
+     `salesperson` is accepted as a synonym so callers can migrate at their own pace. */
+  var who = (p && (p.salesperson || p.requestedBy)) || '';
+  if (who) headers = headers.filter(function (h) { return _prSameOwner(_prOwner(h), who); });
+
+  /* A226 — the quotation each request became.
+   *
+   * _quotationNoForPR is the one right answer (the column first, then a prose scrape of the PR's own
+   * Notes for rows predating A151's 'PR No' column) but it re-reads the whole Quotations tab on every
+   * call — 315 full-sheet reads inside the map below, on a handler 16 surfaces depend on. Index it
+   * ONCE here; the Notes fallback stays per-row because it reads the PR row already in hand. */
+  var quoCands = {};
+  _rows('Quotations').forEach(function (q) {
+    var k = String(q['PR No'] || '');
+    if (k) (quoCands[k] = quoCands[k] || []).push(q);
+  });
+  /* A227 — a LIVE quotation beats a retired one, same rule as _quotationNoForPR and for the same
+     reason: first-wins handed a revised request its own cancelled document. */
+  var quoByPR = {};
+  Object.keys(quoCands).forEach(function (k) {
+    var pick = _quoPickForPR(quoCands[k]);
+    if (pick) quoByPR[k] = String(pick['Quotation No']);
+  });
+
   return { success: true, data: headers.map(function (h) {
     var its = items.filter(function (r) { return String(r['PR No']) === String(h['PR No']); });
+    var qno = quoByPR[String(h['PR No'])] || '', qsrc = qno ? 'column' : '';
+    if (!qno) {
+      var qm = String(h['Notes'] || '').match(/Quotation\s+(\S+)/i);
+      if (qm) { qno = qm[1].replace(/[.\s]+$/, ''); qsrc = 'notes'; }
+    }
     return {
       prNo: h['PR No'], date: h['Date'], requestedBy: h['Requested By'], customer: h['Customer'],
+      /* A226: the owner, and HOW we know — a page that groups by a guess should be able to say so.
+         Same shape as getQuotations' salespersonSource (A218). */
+      salesperson: _prOwner(h),
+      salespersonSource: String(h['Salesperson'] || '').trim() ? 'recorded' : 'from who requested it',
+      /* A226: '' when nothing links. 'notes' is a WEAKER claim than 'column' — a number scraped out
+         of free text — and the tracker says so rather than presenting it as fact. */
+      quotationNo: qno, quotationNoSource: qsrc,
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
       clientLocation: h['Client Location'] || '', docJson: h['Doc JSON'] || '',
@@ -9607,8 +10930,34 @@ function _prHeaderRow(prNo) {
    before that it was fished out of the PR's free-text Notes with a regex, which broke the moment
    anything else wrote to that column. The prose note is still read as a fallback for the rows that
    predate the column. */
+/* A227 — WHICH quotation, when a request has more than one.
+ *
+ * Both places that resolved this took `[0]`, the first matching sheet row, with no regard for status.
+ * That is fine until somebody revises: an approved quotation is found to have an error, it is retired
+ * with Close, and a corrected one is raised against the same request. The retired one is the EARLIER
+ * row, so first-wins hands the purchase request its own cancelled document — and because a closed
+ * quotation buckets as finished, the request then reads "done" while the replacement still needs
+ * approving and sending. Silently, with the correct answer sitting two rows below.
+ *
+ * The rule: a LIVE quotation always beats a retired one. Among equals take the LAST row, because a
+ * replacement is written after the thing it replaces. If every candidate is retired, return the newest
+ * of them rather than nothing — it is still what the record says, and the worklist has a step that
+ * says so out loud.
+ *
+ * Measured before changing: of the 35 requests carrying a quotation link, ZERO had more than one, so
+ * no existing row's answer moves. 'Rejected' is deliberately NOT treated as retired — management
+ * rejecting the pricing is rework on the same document, not a replacement of it. */
+function _quoPickForPR(cands) {
+  if (!cands || !cands.length) return null;
+  var live = cands.filter(function (q) { return _QUOTE_CLOSED.indexOf(String(q['Status'] || '')) === -1; });
+  var pool = live.length ? live : cands;
+  return pool[pool.length - 1];
+}
+
 function _quotationNoForPR(prNo) {
-  var byCol = _rows('Quotations').filter(function (q) { return String(q['PR No'] || '') === String(prNo); })[0];
+  var byCol = _quoPickForPR(_rows('Quotations').filter(function (q) {
+    return String(q['PR No'] || '') === String(prNo);
+  }));
   if (byCol) return String(byCol['Quotation No']);
   var hdr = _prHeaderRow(prNo);
   var m = hdr ? String(hdr['Notes'] || '').match(/Quotation\s+(\S+)/i) : null;
@@ -9637,10 +10986,16 @@ function createPricingRequest(p) {
       message: 'Purchase request submitted to admin.' };
   }
   var no = p.prNo || _nextNumber('PricingRequests', 1, 'PR');
+  /* A226 (20 values) — 'Salesperson' is stamped at creation so the tracker never has to guess for a
+     request raised from today on. It defaults to the same string 'Requested By' gets, which is the
+     honest starting point: they ARE the same person at this moment. The difference is that this one
+     is correctable afterwards (setPricingRequestSalesperson) while 'Requested By' records who typed
+     it and must stay a fact. THE WIDTH TRAP: exactly SCHEMA.PricingRequests.length entries. */
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
     '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '',
-    p.docJson || '', p.clientRef || '', p.plantSite || '']);
-    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref / Plant Site
+    p.docJson || '', p.clientRef || '', p.plantSite || '',
+    p.salesperson || p.requestedBy || p.actorName || '']);
+    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref / Plant Site / Salesperson
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
@@ -10068,6 +11423,7 @@ var HANDLERS = {
   updateQuotation: updateQuotation, deleteQuotation: deleteQuotation,
   getSalesOrders: getSalesOrders, createSalesOrder: createSalesOrder,
   updateSalesOrder: updateSalesOrder, deleteSalesOrder: deleteSalesOrder, importSalesOrders: importSalesOrders,
+  renameSalesOrder: renameSalesOrder,
   getPurchaseOrders: getPurchaseOrders, createPurchaseOrder: createPurchaseOrder,
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
   getAPAging: getAPAging, previewAPAgingAnomalies: previewAPAgingAnomalies, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
@@ -10093,6 +11449,10 @@ var HANDLERS = {
   setQuotationFollowUp: setQuotationFollowUp,
   snoozeQuotation: snoozeQuotation,                                                 // A215
   previewQuotationOwners: previewQuotationOwners, runQuotationOwnerBackfill: runQuotationOwnerBackfill,
+  // A226 — the same three for purchase requests: preview, apply, and correct.
+  previewPricingRequestOwners: previewPricingRequestOwners,
+  runPricingRequestOwnerBackfill: runPricingRequestOwnerBackfill,
+  setPricingRequestSalesperson: setPricingRequestSalesperson,
   previewCommissionOwnerShift: previewCommissionOwnerShift,
   previewQuotationSentAt: previewQuotationSentAt,
   runQuotationSentAtBackfill: runQuotationSentAtBackfill,
@@ -10124,11 +11484,14 @@ var HANDLERS = {
   requestTravelFloatCash: requestTravelFloatCash,
   getTravelReceipts: getTravelReceipts,                                                             // A214
   getReceiving: getReceiving, createReceiving: createReceiving,
+  previewReceivingReversal: previewReceivingReversal, reverseReceiving: reverseReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
   getOpeningBalances: getOpeningBalances, setOpeningBalance: setOpeningBalance,
   getShipments: getShipments, getShipmentTimeline: getShipmentTimeline,
   advanceShipmentStage: advanceShipmentStage, updateShipment: updateShipment,
+  previewOtherPaymentExpenses: previewOtherPaymentExpenses,
+  setSOSupplierType: setSOSupplierType,
   getPaymentRequests: getPaymentRequests, createPaymentRequest: createPaymentRequest,
   updatePaymentRequest: updatePaymentRequest, deletePaymentRequest: deletePaymentRequest,
   submitPaymentRequest: submitPaymentRequest, approvePaymentRequest: approvePaymentRequest,
@@ -10136,6 +11499,7 @@ var HANDLERS = {
   rejectPaymentRequest: rejectPaymentRequest, savePaymentRequestPDF: savePaymentRequestPDF,
   revisePaymentRequest: revisePaymentRequest,
   getSOCostDetails: getSOCostDetails, importSOCostDetails: importSOCostDetails, saveSOCostDetails: saveSOCostDetails,
+  getSOBankCharges: getSOBankCharges,          // A224 — read-only; it reports, a person decides
   backfillMigratedRecords: backfillMigratedRecords, deleteMigratedRecords: deleteMigratedRecords,
   resetSequenceCounters: resetSequenceCounters,
   matchSupplierTypes: matchSupplierTypes,
@@ -10175,6 +11539,7 @@ var MUTATIONS = {
   importInventory: 1, classifyInventory: 1,
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1, reorderQuotationItems: 1,
   createSalesOrder: 1, updateSalesOrder: 1, deleteSalesOrder: 1, importSalesOrders: 1, matchSupplierTypes: 1,
+  renameSalesOrder: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, correctCollection: 1, updateARAging: 1, importCollections: 1, createReceiving: 1, createInvoice: 1,
   voidCollection: 1, voidInvoice: 1,
@@ -10193,6 +11558,8 @@ var MUTATIONS = {
   // A215 — snoozeQuotation and the backfill both write to Quotations rows; the backfill rewrites
   // history across up to 60 of them, so it takes the lock like every other writer.
   snoozeQuotation: 1, runQuotationSentAtBackfill: 1, runQuotationOwnerBackfill: 1,
+  // A226 — both write attribution; the backfill can touch 315 rows in one call.
+  runPricingRequestOwnerBackfill: 1, setPricingRequestSalesperson: 1,
   // A207 — every commission writer runs under the script lock, which is what makes the
   // "one collection, one claim" check at submit atomic against two tabs racing each other.
   createCommissionRequest: 1, updateCommissionRequest: 1, deleteCommissionRequest: 1,
@@ -10219,7 +11586,7 @@ var MUTATIONS = {
   closeQuotation: 1, reopenQuotation: 1,
   submitPOApproval: 1, approvePO: 1, rejectPO: 1,
   setOpeningBalance: 1,
-  advanceShipmentStage: 1, updateShipment: 1,
+  advanceShipmentStage: 1, updateShipment: 1, setSOSupplierType: 1,
   createPaymentRequest: 1, updatePaymentRequest: 1, deletePaymentRequest: 1, submitPaymentRequest: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, savePaymentRequestPDF: 1, revisePaymentRequest: 1,
   markPaymentRequestPaid: 1,

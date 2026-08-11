@@ -4,6 +4,8 @@ let soList = [];
 let soCds = {};        // soNo → SOCostDetails record (for the COGS column + Costs editor prefill)
 let soHasPO = {};      // A145: soNo → true when a purchase order references it (no-PO nudge)
 let soSession = null;
+let soOrigNo = '';     // A220: the number the open record had when it was loaded, so an edited SO No
+                       // is recognised as a RENAME and routed to renameSalesOrder, not to an update.
 
 document.addEventListener('DOMContentLoaded', async () => {
   soSession = requireAccountingOrAdmin();
@@ -254,6 +256,21 @@ async function saveSO() {
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
   const btn = document.getElementById('saveBtn');
   let soNo = document.getElementById('soNo').value;
+  /* A220 — the visible field is editable on an edit now, so it carries the number the user INTENDS,
+     while the hidden field stays the lookup key for the record being edited. Reading only the hidden
+     one (as before) would silently discard a rename. */
+  const soTyped = (document.getElementById('soNoInput').value || '').trim();
+  if (soNo && !soTyped) {
+    flowMsg('formMsg', 'SO No cannot be blank.', false);
+    document.getElementById('soNoInput').focus();
+    return;
+  }
+  if (soNo && soTyped !== soNo &&
+      soList.some(x => String(x.soNo).toLowerCase() === soTyped.toLowerCase())) {
+    flowMsg('formMsg', 'SO No "' + soTyped + '" already belongs to another sales order.', false);
+    document.getElementById('soNoInput').focus();
+    return;
+  }
   // Creating: the SO No must be typed manually (it is the client's PO number) and be unique.
   if (!soNo) {
     const typed = (document.getElementById('soNoInput').value || '').trim();
@@ -271,7 +288,7 @@ async function saveSO() {
     var soNoTyped = typed;
   }
   const payload = {
-    soNo: soNo || soNoTyped, quotationNo: document.getElementById('quotationNo').value, customer,
+    soNo: soNo ? soTyped : soNoTyped, quotationNo: document.getElementById('quotationNo').value, customer,
     date: document.getElementById('date').value, status: document.getElementById('status').value,
     supplierType: document.getElementById('soSupplierType').value,
     clientPoDate: soVal('clientPoDate'), poReceivedDate: soVal('poReceivedDate'),   // A186
@@ -281,6 +298,18 @@ async function saveSO() {
   if (!soNo) payload.clientRef = flowClientRef();          // idempotent create (safe retry)
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
+    /* A220 — a changed SO No on an EXISTING record is a rename, and must go through its own handler
+       BEFORE the ordinary update: updateSalesOrder uses p.soNo as both the lookup key and the value
+       it writes, so it could only ever find the old row and write the old number back. Do the rename
+       first, then let the update run against the new key. */
+    if (soNo && soOrigNo && String(payload.soNo) !== soOrigNo) {
+      const renamed = await soRename(soOrigNo, String(payload.soNo));
+      if (!renamed) { flowMsg('formMsg', 'Rename cancelled — nothing was saved.', false); return; }
+      soNo = renamed;                        // everything below now refers to the new number
+      payload.soNo = renamed;
+      document.getElementById('soNo').value = renamed;
+      soOrigNo = renamed;
+    }
     const res = await postFlow(soNo ? 'updateSalesOrder' : 'createSalesOrder', payload);
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message} (${res.soNo || soNo})`, true);
@@ -290,10 +319,34 @@ async function saveSO() {
   finally { btn.disabled = false; btn.textContent = 'Save Sales Order'; }
 }
 
+/* A220 — run the rename, answering the server's two confirms. Returns the new number on success, or
+   '' if the user backed out or it was refused. Both confirms are real decisions, not formalities:
+   one is about documents that cannot be corrected by re-keying, the other about permanently
+   un-clearable demo data. Shaped like the prDeviation / evidenceChanged handlers elsewhere. */
+async function soRename(oldNo, newNo) {
+  const opts = {};
+  for (let i = 0; i < 3; i++) {                       // at most: docs confirm, demo confirm, then done
+    const r = await postFlow('renameSalesOrder', Object.assign({ soNo: oldNo, newSoNo: newNo }, opts));
+    if (r.success) {
+      if (r.stamped) {
+        alert(r.stamped + ' stamped document(s) still show "' + oldNo + '" printed inside the file.\n\n'
+            + 'Re-keying cannot change what is drawn on a page — re-stamp them to correct it.');
+      }
+      return r.soNo || newNo;
+    }
+    if (r.needsConfirm === 'renameDocs') { if (!confirm(r.message)) return ''; opts.confirmDocs = true; continue; }
+    if (r.needsConfirm === 'demoRename') { if (!confirm(r.message)) return ''; opts.confirmDemo = true; continue; }
+    flowMsg('formMsg', r.message, false);
+    return '';
+  }
+  return '';
+}
+
 function resetForm() {
   document.getElementById('soNo').value = '';
   const ni = document.getElementById('soNoInput');
-  if (ni) { ni.value = ''; ni.disabled = false; }
+  if (ni) { ni.value = ''; ni.disabled = false; ni.title = ''; }
+  soOrigNo = '';
   document.getElementById('quotationNo').value = '';
   document.getElementById('loadQuotation').value = '';
   document.getElementById('customer').value = '';
@@ -418,7 +471,11 @@ function editSO(no) {
   if (!s) return;
   document.getElementById('soNo').value = s.soNo;
   const ni = document.getElementById('soNoInput');
-  if (ni) { ni.value = s.soNo; ni.disabled = true; }   // the SO number is the record key — not renameable here
+  /* A220 — the SO number IS the record key (fourteen sheets, the Drive folder, the commission
+     prior-claim check), which is why this was disabled. It is editable now because renameSalesOrder
+     re-keys all of it; soOrigNo remembers what it was so save() can tell a rename from an edit. */
+  if (ni) { ni.value = s.soNo; ni.disabled = false; ni.title = 'Editing this renames the order and re-keys every record on it.'; }
+  soOrigNo = String(s.soNo);
   document.getElementById('quotationNo').value = s.quotationNo || '';
   document.getElementById('customer').value = s.customer;
   document.getElementById('date').value = flowDate(s.date);

@@ -75,14 +75,20 @@ function _flowDocsChosenType() {
   return sel.value || '';
 }
 
-/** Fill the picker with the types that make sense for this record, plus Other. */
-async function _flowDocsFillTypes(module, presetType) {
+/** Fill the picker with the types that make sense for this record, plus Other.
+ *  kind (optional): 'intl' | 'local' | '' — the order's supplier type. A220: without it the picker
+ *  offered FAN/SAD/TAN and a forwarder's final invoice on a LOCAL purchase, merely suffixed
+ *  "(international)". Suffixing is not filtering; the rule engine does not want those documents and
+ *  the supplier cannot produce them. An UNKNOWN kind still shows everything — never fewer options
+ *  than the user might legitimately need. */
+async function _flowDocsFillTypes(module, presetType, kind) {
   const sel = document.getElementById('flowDocsType');
   if (!sel) return;
   const rules = await _flowDocRulesLoad();
   const seen = {}, opts = [];
   rules.forEach(r => {
     if (module && r.module && r.module !== module) return;
+    if (kind && r.applies && r.applies !== 'both' && r.applies !== kind) return;
     if (seen[r.type]) return;
     seen[r.type] = true;
     opts.push({ v: r.type, l: r.label + (r.applies === 'intl' ? ' (international)' : r.applies === 'local' ? ' (local)' : '') });
@@ -98,7 +104,9 @@ async function _flowDocsFillTypes(module, presetType) {
 
 // presetType (optional): lock the Doc Type field to a controlled value (e.g. "Supplier Quotation")
 // so an upload from a required-attachment gate carries the exact docType the gate matches on.
-function openDocsModal(module, refNo, title, presetType) {
+// kind (optional, A220): the order's supplier type, so the picker offers only documents that order
+// can actually have. Omitted means "unknown" and everything is offered, as before.
+function openDocsModal(module, refNo, title, presetType, kind) {
   if (!refNo) { return; }
   _docsCtx = { module: module || '', refNo: String(refNo) };
   const el = _docsModalEl();
@@ -114,7 +122,7 @@ function openDocsModal(module, refNo, title, presetType) {
     t.disabled = !!presetType;                       // a gate's demand is not up for negotiation
     t.style.background = presetType ? 'var(--bg-inset,#eef2f6)' : '';
   }
-  _flowDocsFillTypes(module || '', presetType || '');
+  _flowDocsFillTypes(module || '', presetType || '', kind || '');
   el.classList.add('open');
   flowDocsRefresh();
 }
@@ -127,13 +135,23 @@ async function flowOpenShipmentDocs(poNoOrSoNo, missingLabels) {
     const r = await fetchFlow('getShipments', {}, { fresh: true });
     const rows = (r && r.data) || [];
     const key = String(poNoOrSoNo || '');
-    const ship = rows.find(s => String(s.poNo || '') === key) || rows.find(s => String(s.soNo || '') === key);
+    /* A220 — the caller passes a PO number (receiving does: rcCurrent.poNo) but Shipments['PO No'] is
+       BLANK on every live row, and a PO number is not an SO number, so both matches missed and the
+       one recovery path from a doc-gate refusal dead-ended in an alert. Resolve the PO to its sales
+       order first, which is the join the rest of the system already uses. */
+    let ship = rows.find(s => String(s.poNo || '') === key) || rows.find(s => String(s.soNo || '') === key);
+    if (!ship) {
+      const po = await fetchFlow('getPurchaseOrders', {}).catch(() => null);
+      const hitPo = ((po && po.data) || []).find(p => String(p.poNo || '') === key);
+      if (hitPo && hitPo.soNo) ship = rows.find(s => String(s.soNo || '') === String(hitPo.soNo));
+    }
     if (!ship) { alert('Missing: ' + (missingLabels || []).join('; ')); return; }
     // Map the first missing label back to its rule so the picker opens on the right type.
     const rules = await _flowDocRulesLoad();
     const first = (missingLabels || [])[0] || '';
     const hit = rules.find(x => x.label === first);
-    openDocsModal('Shipment', ship.shipmentId, 'Shipment · ' + ship.shipmentId, hit ? hit.type : '');
+    openDocsModal('Shipment', ship.shipmentId, 'Shipment · ' + ship.shipmentId,
+                  hit ? hit.type : '', ship.supplierKind || '');
   } catch (e) { alert('Missing: ' + (missingLabels || []).join('; ')); }
 }
 

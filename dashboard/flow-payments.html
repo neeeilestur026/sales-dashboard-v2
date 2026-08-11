@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow — Payment Register</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/bento-skin-v2.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <style>
+    /* A223 — one band per section, colour-coded by how worried you should be. The register's whole
+       job is to separate "this reconciles" from "this does not", so the page says which is which
+       before you read a single figure. */
+    .pg-sec { margin-top: 1.5rem; }
+    .pg-sec-h { display:flex; align-items:baseline; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.5rem;
+                padding-left:0.6rem; border-left:3px solid var(--border); }
+    .pg-sec-h h3 { font-size:0.95rem; font-weight:700; margin:0; }
+    .pg-sec-h .n { font-size:0.78rem; color:var(--text-muted,#64748b); }
+    .pg-sec-h .t { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; }
+    .pg-sec.ok   .pg-sec-h { border-left-color:#16a34a; }
+    .pg-sec.warn .pg-sec-h { border-left-color:#d97706; }
+    .pg-sec.bad  .pg-sec-h { border-left-color:#b91c1c; }
+    .pg-note { font-size:0.78rem; line-height:1.5; color:var(--text-muted,#64748b);
+               background:var(--bg-subtle,#f8fafc); border:1px solid var(--border);
+               border-radius:7px; padding:0.5rem 0.7rem; margin:0 0 0.6rem; }
+    .pg-why { font-size:0.74rem; color:#b45309; }
+    /* The identity line: the page states its own arithmetic rather than asking you to do it. */
+    .pg-ident { font-size:0.8rem; padding:0.6rem 0.8rem; border-radius:8px; margin-top:0.9rem;
+                border:1px solid var(--border); font-variant-numeric:tabular-nums; }
+    .pg-ident.ok  { border-color:#16a34a; color:#15803d; }
+    .pg-ident.bad { border-color:#b91c1c; color:#b91c1c; font-weight:700; }
+    @media print {
+      .navbar, .no-print, .flow-nav, .stepper { display:none !important; }
+      body { background:#fff; }
+      .main-content { padding:0 !important; }
+      .pg-sec { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body class="flow-screen">
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content">
+      <div class="hband">
+        <div class="left">
+          <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+          <div><div class="eyebrow">Payables · Register</div><h1>Payment Register</h1><p>Every peso the ledger says left the company, matched against the payable and the request that should explain it. Read-only — act from the record that owns it.</p></div>
+        </div>
+        <div class="no-print" style="display:flex;gap:8px;align-items:center;">
+          <a class="btn btn-secondary" onclick="loadRegister()">&#8635; Refresh</a>
+          <a class="btn btn-secondary" id="printBtn">Print</a>
+        </div>
+      </div>
+    <div class="flow-nav" id="flowNav"></div>
+
+      <div class="kpi-row">
+        <div class="kpi spot"><div class="top"><span class="l">Cash out (ledger)</span><span class="chip">$</span></div><div class="v sm" id="kpiLedger">—</div><div class="d"><span id="kpiLedgerSub">APPAY postings</span></div></div>
+        <div class="kpi"><div class="top"><span class="l">Reconciled</span></div><div class="v sm" id="kpiOk">—</div><div class="d">request, payable and ledger agree</div></div>
+        <div class="kpi"><div class="top"><span class="l">Unexplained</span></div><div class="v sm" id="kpiUnexplained">—</div><div class="d">paid, but no paid request</div></div>
+        <div class="kpi"><div class="top"><span class="l">Unmatched postings</span></div><div class="v sm" id="kpiOrphan">—</div><div class="d">no payable survives</div></div>
+      </div>
+
+    <div class="chart-card">
+      <div id="container" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+      <div id="msg" class="flow-msg" style="display:none;"></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/payment-register.js"></script>
+  <script src="js/flow-payments.js"></script>
+  <script>
+    (function () {
+      const d = new Date();
+      const day = document.getElementById('hbDay'), mon = document.getElementById('hbMon');
+      if (day) day.textContent = d.getDate();
+      if (mon) mon.innerHTML = d.toLocaleDateString('en-US', { weekday: 'short' }) + ',<br>' +
+                               d.toLocaleDateString('en-US', { month: 'long' });
+    })();
+  </script>
+</body>
+</html>

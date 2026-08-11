@@ -23,9 +23,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   else {
     document.getElementById('dueDate').value = '';
     prWatchAmount();          // A180: an overtyped amount marks the portion 'Custom'
+    // A224: once someone picks a method deliberately, nothing defaults over it again.
+    const _pm = document.getElementById('paymentMethod');
+    if (_pm) _pm.addEventListener('change', () => { prMethodTouched = true; });
     await Promise.all([loadPOOptions(), loadSuppliers()]);
     prSyncPortionUi();        // start disabled — no PO is loaded yet
-    await prCheckPortionBackend();
+    await Promise.all([prCheckPortionBackend(), prCheckPerPOBackend()]);
+    prSyncCreateGate();       // A225: the version gate has resolved, so apply it
   }
   await prInitPayGate();   // A156: Mark Paid only once the backend is v92
   await loadPRs();
@@ -64,11 +68,22 @@ async function loadPOOptions() {
     ((reqs && reqs.data) || []).forEach(r => {
       const st = String(r.status || '');
       if (String(r.type) !== 'PO' || st === 'Rejected' || st === 'Paid') return;
-      prOpenReqRows.push({ poNo: String(r.poNo), prNo: String(r.prNo), amount: flowNum(r.amount) });
+      // A225: `status` rides along for the one-per-PO gate. The filter above already excludes exactly
+      // the pair the rule treats as finished, so no second pass and no second fetch is needed.
+      prOpenReqRows.push({ poNo: String(r.poNo), prNo: String(r.prNo), status: st, amount: flowNum(r.amount) });
     });
+    /* A225 — mark a PO that already carries a live request, so the refusal is visible BEFORE the
+       form is filled in. ANNOTATE, never `disabled`: a blocked PO must stay selectable so
+       loadFromPO can explain why and name the record. The reasoning at prPortionBlocked below
+       applies verbatim — a disabled control with no explanation reads as a broken page. */
+    const openOn = poNo => prOpenReqRows.filter(r => r.poNo === String(poNo))[0];
     document.getElementById('loadPO').innerHTML = '<option value="">— select a purchase order —</option>' +
       prPOs.slice().sort((a, b) => (flowDate(b.date) || '').localeCompare(flowDate(a.date) || ''))
-        .map(p => `<option value="${flowEsc(p.poNo)}">${flowEsc(p.poNo)} — ${flowEsc(p.supplier)} (${flowEsc(p.currency)} ${flowNum(p.total).toLocaleString()})</option>`).join('');
+        .map(p => {
+          const live = openOn(p.poNo);
+          return `<option value="${flowEsc(p.poNo)}">${flowEsc(p.poNo)} — ${flowEsc(p.supplier)} (${flowEsc(p.currency)} ${flowNum(p.total).toLocaleString()})`
+            + (live ? ` · ${flowEsc(live.prNo)} open` : '') + '</option>';
+        }).join('');
   } catch (e) { /* leave empty */ }
 }
 
@@ -105,9 +120,60 @@ function prPortionAmount(poNo, portion, excludePrNo) {
   return null;
 }
 
+/* ── A225 — one live payment request per purchase order ───────────────────────────────────────────
+ *
+ * The browser's half of the rule. The server refuses the save; this stops someone filling in a whole
+ * form first. `prOpenReqRows` already holds exactly the right rows — it is built from a fetch that
+ * filters on the same Rejected/Paid pair — so there is no extra call.
+ *
+ * `prPerPOGateLive` is the version gate. Below FlowAPI v129 the dropdown annotation still shows (it
+ * is true either way) but Save is never disabled: between the Render deploy and the Apps Script paste
+ * the page must not refuse work the server would happily accept. */
+let prPerPOGateLive = false;
+
+async function prCheckPerPOBackend() {
+  try { prPerPOGateLive = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(129) : false; }
+  catch (e) { prPerPOGateLive = false; }
+}
+
+/** Why a NEW request cannot be raised on this PO — '' when it can. */
+function prPerPOBlocked(poNo, excludePrNo) {
+  if (typeof flowPRPerPOProblem !== 'function') return '';
+  const skip = String(excludePrNo || '');
+  return flowPRPerPOProblem(poNo, prOpenReqRows.filter(
+    r => r.poNo === String(poNo) && r.prNo !== skip));
+}
+
+/* Disable Save, with the reason visible, when the loaded PO already carries a live request.
+ *
+ * Called from loadFromPO, prEdit AND resetForm. prEdit is the one that matters: it sets
+ * loadPO.value directly and deliberately never calls loadFromPO, so without re-running the gate
+ * here, picking a blocked PO and then clicking Edit on another record would leave Save dead with no
+ * visible reason. EDITING IS NEVER GATED — the server's guard is on create only, because the PO
+ * cannot be changed by an edit at all. */
+function prSyncCreateGate() {
+  const btn = document.getElementById('saveBtn');
+  const poNo = (document.getElementById('loadPO') || {}).value || '';
+  const editing = (document.getElementById('prNo') || {}).value || '';
+  const reason = (!editing && poNo && prPerPOGateLive) ? prPerPOBlocked(poNo, editing) : '';
+  if (btn) {
+    btn.disabled = !!reason;
+    btn.title = reason || '';
+    btn.style.opacity = reason ? '0.5' : '';
+  }
+  return reason;
+}
+
 /** Why a portion can't be used on this PO — '' when it can. The reason is shown, never swallowed:
  *  a disabled button with no explanation reads as a broken page. */
 function prPortionBlocked(poNo, portion, excludePrNo) {
+  /* A225 FIRST: when the PO already carries a live request the real cause is that, not the
+     arithmetic. Without this the buttons would go grey saying "nothing is left on this PO", which is
+     both true and the wrong explanation. */
+  if (!excludePrNo) {
+    const perPO = prPerPOBlocked(poNo, excludePrNo);
+    if (perPO) return perPO;
+  }
   const rem = prRemaining(poNo, excludePrNo);
   if (!(rem.amount > 0)) {
     return 'This PO has no payable in AP Aging yet, so there is nothing to take a portion of.';
@@ -216,6 +282,74 @@ async function prCheckPortionBackend() {
     'so which portion you picked will not be recorded or printed on the PRF.';
 }
 
+/* A222 — which currency is this request denominated in?
+ *
+ * A foreign purchase is owed in the supplier's currency: the obligation is USD 202, exactly, and the
+ * peso is whatever the bank charges on the day. The form used to type pesos and the server used to
+ * force 'PHP', so the peso estimate was recorded as though it were the debt. The box now follows the
+ * ORDER, and the payload says so explicitly — without that the server would take the PO's currency
+ * while the user was still typing pesos, and record a USD 119,083 obligation on an SGD order. */
+function prPOCurrency(poNo) {
+  const p = prPOs.find(x => String(x.poNo) === String(poNo));
+  return String((p && p.currency) || 'PHP').toUpperCase();
+}
+
+/** Repaint the amount label, and show the peso estimate beside a foreign amount. */
+function prSyncCurrencyUi(poNo) {
+  const cur = prPOCurrency(poNo);
+  const lbl = document.getElementById('amountLabel');
+  const note = document.getElementById('prFxNote');
+  if (lbl) lbl.textContent = 'Amount (' + cur + ') *';
+  if (!note) return;
+  if (cur === 'PHP') { note.style.display = 'none'; note.textContent = ''; return; }
+  const p = prPOs.find(x => String(x.poNo) === String(poNo)) || {};
+  const amt = flowNum(document.getElementById('amount').value);
+  const totFC = flowNum(p.total), estPHP = flowNum(p.totalPHP);
+  // Pro-rated from the ORDER's own estimate so the request can never imply a different rate from it.
+  const est = (totFC > 0 && estPHP > 0 && amt > 0) ? (estPHP * amt / totFC)
+            : (flowNum(p.exchangeRate) > 0 && amt > 0 ? amt * flowNum(p.exchangeRate) : 0);
+  note.style.display = '';
+  note.innerHTML = est > 0
+    ? `This is the amount owed in <b>${flowEsc(cur)}</b>. Estimated cost <b>≈ ${flowMoney(est, 'PHP')}</b> ` +
+      `— an estimate only; the real peso figure is recorded when the payment is marked paid.` +
+      (p.fxBasis ? ` <span style="opacity:.8;">(${flowEsc(p.fxBasis)})</span>` : '')
+    : `This is the amount owed in <b>${flowEsc(cur)}</b>. The order carries no peso estimate, so none is shown — ` +
+      `the real figure is recorded when the payment is marked paid.`;
+}
+
+/* ── A224 — the payment method, defaulted rather than locked ──────────────────────────────────────
+ *
+ * The company's own description is "usually telegraphic transfer" for international suppliers and
+ * "almost every time bank transfer or online" for local ones. Both of those words matter: a LOCK
+ * would block the genuine exception instead of flagging it, so this only chooses the opening value
+ * and leaves the select fully editable.
+ *
+ * It reads the PURCHASE ORDER'S CURRENCY rather than the sales order's supplier type, and that is
+ * deliberate. A224 makes the currency follow the supplier type, so on any order that has one they say
+ * the same thing — but the currency is a property of the order in front of you, already loaded here,
+ * and it keeps working for a restock PO with no sales order and for the 13 orders nobody has
+ * classified. A USD purchase is a wire whether or not anyone has ticked a box.
+ *
+ * The supplier master still wins where it names a method, because a specific supplier's known
+ * arrangement beats a rule of thumb. And a deliberate choice beats both — see prMethodTouched. */
+let prMethodTouched = false;
+
+/** Match a stored free-text method onto one of the select's options, case-insensitively.
+ *  The sheet holds whatever was typed; `select.value = 'bank transfer'` matches no option and would
+ *  silently blank the control, which is how a request reaches Mark Paid with no method at all. */
+function prMethodOption(v) {
+  const sel = document.getElementById('paymentMethod');
+  const want = String(v || '').trim().toLowerCase();
+  if (!sel || !want) return '';
+  const hit = Array.from(sel.options).find(o => String(o.value).trim().toLowerCase() === want);
+  return hit ? hit.value : '';
+}
+
+/** Telegraphic Transfer for a foreign order, Bank Transfer for a peso one. */
+function prDefaultMethod(poNo) {
+  return prPOCurrency(poNo) !== 'PHP' ? 'Telegraphic Transfer' : 'Bank Transfer';
+}
+
 function loadFromPO() {
   const no = document.getElementById('loadPO').value;
   const p = prPOs.find(x => String(x.poNo) === String(no));
@@ -229,16 +363,40 @@ function loadFromPO() {
   const dflt = (rem.paid > 0 || rem.open > 0) ? 'Balance' : 'Full';
   const picked = prPortionBlocked(no, dflt, editing) ? '' : dflt;
   document.getElementById('paymentPortion').value = picked;
-  document.getElementById('amount').value = rem.remaining > 0 ? prRound2(rem.remaining) : '';
+  /* A222 — prefill in the currency the box is now labelled in. prRemaining reads APAging's peso
+     columns, so on a foreign order it returns pesos; dropping that into a box labelled USD would
+     seed the obligation at ~60x. The foreign remainder needs no rate: it is the order's own FC total
+     less every non-Rejected request already raised against it, in the same currency. */
+  const curNow = prPOCurrency(no);
+  let seed = rem.remaining;
+  if (curNow !== 'PHP') {
+    const claimed = (prList || []).filter(x => String(x.poNo) === String(no)
+        && String(x.prNo) !== String(editing)
+        && String(x.status) !== 'Rejected'
+        && String(x.currency || 'PHP').toUpperCase() === curNow)
+      .reduce((t, x) => t + flowNum(x.amount), 0);
+    seed = flowNum(p.total) - claimed;
+  }
+  document.getElementById('amount').value = seed > 0 ? prRound2(seed) : '';
   prRefreshBreakdown(no, editing);
   prSyncPortionUi();
+  prSyncCurrencyUi(no);            // A222: the box must say which currency is being typed
   document.getElementById('purpose').value = `Supplier payment for ${p.poNo}` + (p.soNo ? ` (SO ${p.soNo})` : '');
   // A145: prefill bank details from the supplier master (only into blank fields — never clobber a typed value).
   const sup = prSuppliers[String(p.supplier || '').toLowerCase()];
   if (sup) {
     const fill = (id, v) => { const el = document.getElementById(id); if (el && !el.value && v) el.value = v; };
     fill('bankName', sup.bankName); fill('accountName', sup.accountName);
-    fill('accountNumber', sup.accountNumber); fill('paymentMethod', sup.paymentMethod);
+    fill('accountNumber', sup.accountNumber);
+    /* A224 — `fill('paymentMethod', ...)` was here and NEVER ONCE FIRED. A <select> always reports its
+       first option as its value, so `!el.value` is never true for it: the bank fields prefilled and
+       the method silently did not, for every request ever raised on this page. It is handled below
+       instead, where the supplier's method and the supplier-type default can be ranked properly. */
+  }
+  /* A224 — the opening value: a deliberate pick wins, then the supplier master, then the rule. */
+  const msel = document.getElementById('paymentMethod');
+  if (msel && !prMethodTouched) {
+    msel.value = (sup && prMethodOption(sup.paymentMethod)) || prDefaultMethod(no);
   }
   // Duplicate-AP guard (the PRF-2026-63 incident): the amount is the SUM of every AP entry for this
   // PO — if more than one carries an amount, say so loudly instead of silently doubling.
@@ -246,6 +404,10 @@ function loadFromPO() {
   if (warn) {
     const n = prAPCount[String(no)] || 0;
     const msgs = [];
+    /* A225 FIRST and styled as a refusal, not an amber FYI — it is the reason Save is disabled, so it
+       has to be the first thing read. The AP-duplicate and already-partly-paid notes stay below it. */
+    const perPO = prSyncCreateGate();
+    if (perPO) msgs.push(`<span style="color:#b91c1c;">🚫 ${flowEsc(perPO)}</span>`);
     if (n > 1) msgs.push(`⚠ ${n} AP entries found for this PO — the payable above is their SUM. Check AP Aging for stale duplicates before submitting; the portion buttons stay disabled until it is resolved.`);
     // A158: a second request on the same PO is legitimate (deposit → balance) but worth flagging,
     // since re-requesting the full payable is exactly how a PO gets paid twice.
@@ -276,6 +438,14 @@ async function savePR() {
     flowMsg('formMsg', `This PO has ${prAPCount[String(poNo)]} AP entries with an amount — the payable would be their sum. Remove the stale duplicate in AP Aging first.`, false);
     return;
   }
+  /* A225 — the last-line mirror. prOpenReqRows is a page-load snapshot, so this catches a form left
+     open while somebody else raised a request on the same PO. The server still has the final word;
+     this only saves the round trip and gives the same wording. Create path only — an edit cannot move
+     a request onto another PO, and the server refuses that separately. */
+  if (!editing) {
+    const perPO = prPerPOBlocked(poNo, editing);
+    if (perPO) { flowMsg('formMsg', perPO, false); return; }
+  }
   /* A158: never let a request ask for more than is still owed — the server enforces the same cap.
      A180: this now runs on the EDIT path too, since updatePaymentRequest finally caps as well. The
      record being edited is excluded, or its own amount counts against itself and every edit fails. */
@@ -292,6 +462,11 @@ async function savePR() {
   const payload = {
     prNo: editing || (document.getElementById('prNoInput').value || '').trim(),
     type: 'PO', poNo, payee: document.getElementById('payee').value.trim(), amount,
+    /* A222 — send the currency EXPLICITLY. The server adopts the PO's currency for a PO-type
+       request, so a payload that stays silent would have the amount stored under the order's
+       currency while the user was still typing pesos — recording a USD 119,083 obligation on an
+       SGD order. Sending it means the two can never disagree about what was typed. */
+    currency: prPOCurrency(poNo),
     paymentPortion: document.getElementById('paymentPortion').value,   // A180
     purpose: document.getElementById('purpose').value.trim(),
     department: document.getElementById('department').value.trim(),
@@ -338,7 +513,11 @@ function resetForm() {
   document.getElementById('formMsg').style.display = 'none';
   // A180: clear the pressed state and re-disable the group — no PO is loaded any more.
   const bd = document.getElementById('apBreakdown'); if (bd) { bd.style.display = 'none'; bd.innerHTML = ''; }
+  /* A224: a fresh form takes the default again. Without this, editing one request would make its
+     method stick to every request raised afterwards in the same session. */
+  prMethodTouched = false;
   prSyncPortionUi();
+  prSyncCreateGate();    // A225: no PO loaded any more, so Save is free again
 }
 
 async function loadPRs() {
@@ -505,7 +684,12 @@ function prEdit(no) {
   document.getElementById('bankName').value = r.bankName || '';
   document.getElementById('accountName').value = r.accountName || '';
   document.getElementById('accountNumber').value = r.accountNumber || '';
-  document.getElementById('paymentMethod').value = r.paymentMethod || 'Telegraphic Transfer';
+  /* A224: through the case-insensitive matcher, and the record's OWN method is a deliberate choice —
+     it must survive the loadPO select being set beside it. `r.paymentMethod` is free text from the
+     sheet, so assigning it raw could match no option and blank the control. */
+  document.getElementById('paymentMethod').value =
+    prMethodOption(r.paymentMethod) || prDefaultMethod(r.poNo);
+  prMethodTouched = true;
   document.getElementById('department').value = r.department || '';
   document.getElementById('dueDate').value = flowDate(r.dueDate) || '';
   document.getElementById('purpose').value = r.purpose || '';
@@ -517,6 +701,11 @@ function prEdit(no) {
      it excludes this record so its own amount doesn't read as already claimed. */
   prSetPortion(r.paymentPortion || '');
   prRefreshBreakdown(r.poNo, r.prNo);
+  /* A225 — MUST run here. prEdit sets loadPO.value directly and deliberately never calls loadFromPO,
+     so without this, picking a blocked PO and then clicking Edit on another record would leave Save
+     disabled with no visible reason. Editing always re-enables: #prNo is set by now, and the gate
+     returns early for an edit. */
+  prSyncCreateGate();
   document.getElementById('formTitle').textContent = 'Edit ' + r.prNo;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -532,6 +721,8 @@ async function prGenPdf(no) {
       // A180: from the RECORD, not recomputed — the payable is snapshotted at save time, and a
       // management/director viewer never loads the AP maps, so computing it here would print a blank.
       paymentPortion: r.paymentPortion || '', poTotal: r.poTotal || '', poPaidBefore: r.poPaidBefore || '',
+      // A222: the peso estimate, printed under a foreign obligation and labelled as an estimate.
+      amountPHPEst: r.amountPHPEst || '',
     };
     const resp = await fetch('/flow/payment-request-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.message || 'PDF generation failed.'); }
