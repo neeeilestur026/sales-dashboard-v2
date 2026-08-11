@@ -1,7 +1,7 @@
 /* A207 — Commissions for Payroll.
  *
  * What the director opens while preparing a cutoff. One line per person, one number to key into the
- * payroll register's Other Income column.
+ * payroll register's Incentive column, using the Commission category.
  *
  * Deliberately NOT automated: nothing here writes into the payroll spreadsheet, and nothing tries to
  * match a commission name to a payroll employee. Those are two different Google Sheets with three
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       panel.style.display = '';
       panel.innerHTML = flowComingSoonHtml('Commissions for payroll',
         'This will group approved sales commissions by salary cutoff, so you have one figure per ' +
-        'person to enter as Other Income while preparing payroll.');
+        'person to enter as an Incentive (category: Commission) while preparing payroll.');
     }
     return;
   }
@@ -94,7 +94,10 @@ function cpRenderWindow(res) {
   el.innerHTML = `<b>${flowEsc(res.periodLabel || res.payoutPeriod)}</b> · covers ` +
     `${flowEsc(res.periodFrom)} to ${flowEsc(res.periodTo)}.` +
     (res.periodMode === 'next-B'
-      ? ` Commissions are always paid in a 2nd cutoff, because payroll only applies Other Income in the 2nd cutoff.`
+      /* A229 — this used to say commissions can only be paid in a 2nd cutoff, because Other Income
+         was 2nd-cutoff only. The Incentive column is per cutoff and works on either, so the
+         restriction is now a CHOICE about when commissions are settled, not a limit of the system. */
+      ? ` Commissions are settled in the 2nd cutoff.`
       : '');
 }
 
@@ -114,7 +117,7 @@ function cpRender(res) {
     html += `<table class="cp"><thead><tr>
       <th>Salesperson</th><th class="num">Claims</th><th class="num">Net of taxes</th>
       <th class="num">Commission</th><th class="num">Adjustments</th>
-      <th class="num">Enter as Other Income</th><th class="cp-noprint"></th></tr></thead><tbody>`;
+      <th class="num">Enter as Incentive</th><th class="cp-noprint"></th></tr></thead><tbody>`;
     html += payable.map(cpPersonRow).join('');
     html += `</tbody><tfoot><tr>
       <td colspan="5">Total to add to this cutoff</td>

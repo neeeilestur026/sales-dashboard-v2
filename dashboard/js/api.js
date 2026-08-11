@@ -43,12 +43,12 @@ function clearApiCache() {
 }
 
 // Actions that should never be cached (mutations)
-const NO_CACHE_ACTIONS = ['login', 'logout', 'submitDailyReport', 'submitAdminDailyReport', 'updateTrackerRow', 'changePassword', 'setTargets', 'addOrder', 'updateOrder', 'deleteOrder', 'addExpense', 'updateExpense', 'deleteExpense', 'addSupplierQuotation', 'updateSupplierQuotation', 'deleteSupplierQuotation', 'uploadSQDocuments', 'updateSQDriveLink', 'addClient', 'updateClient', 'deleteClient', 'addUser', 'updateUser', 'deleteUser', 'resetUserPassword', 'updatePaymentRequestStatus', 'markBillPaid', 'saveCashVoucher', 'addInventoryItem', 'updateInventoryItem', 'deleteInventoryItem', 'approveQuotation', 'updateQuotationDriveLink', 'reviseQuotation', 'updatePRPricing', 'finalizeQuotation', 'getQuotationApprovalStatus', 'createSalesOrder', 'updateSOStatus', 'deleteSalesOrder', 'uploadSODocument', 'savePORecord', 'approvePO', 'sendPOEmail', 'sendAdminEmail', 'sendAcctEmail', 'savePOPDF', 'savePRPDF', 'savePricingSubmission', 'forwardPRToPricing', 'applyPricingToPR', 'submitHRDailyReport', 'addCandidate', 'updateCandidate', 'deleteCandidate', 'addHRTask', 'updateHRTask', 'deleteHRTask', 'addEmployee', 'updateEmployee', 'deleteEmployee', 'addLeaveRequest', 'updateLeaveRequest', 'deleteLeaveRequest', 'addPerformanceReview', 'updatePerformanceReview', 'deletePerformanceReview', 'addTrainingProgram', 'updateTrainingProgram', 'deleteTrainingProgram', 'addMemo', 'updateMemo', 'deleteMemo', 'addGrievance', 'updateGrievance', 'deleteGrievance', 'addCampaign', 'updateCampaign', 'deleteCampaign', 'addContentItem', 'updateContentItem', 'deleteContentItem', 'addAccreditation', 'updateAccreditation', 'deleteAccreditation', 'submitAccountingDailyReport', 'addCollection', 'deleteCollection', 'updateCollection', 'saveProfitReport', 'updateProfitReportEntry', 'saveShipment', 'uploadShipmentDoc', 'deleteShipmentDoc', 'advanceShipmentStage', 'restoreShipmentDoc', 'migrateShipmentDocs', 'exportAuditLogCsv', 'archiveHistoryNow', 'backfillHistory', 'savePayrollEmployee', 'deletePayrollEmployee', 'savePayrollHours', 'savePayrollRegister', 'submitPayrollForApproval', 'decidePayrollApproval', 'saveBankAccount', 'addBankTransaction', 'deleteBankTransaction', 'saveDirectorPayable', 'markDirectorPayablePaid', 'unmarkDirectorPayablePaid', 'deleteDirectorPayable',
+const NO_CACHE_ACTIONS = ['login', 'logout', 'submitDailyReport', 'submitAdminDailyReport', 'updateTrackerRow', 'changePassword', 'setTargets', 'addOrder', 'updateOrder', 'deleteOrder', 'addExpense', 'updateExpense', 'deleteExpense', 'addSupplierQuotation', 'updateSupplierQuotation', 'deleteSupplierQuotation', 'uploadSQDocuments', 'updateSQDriveLink', 'addClient', 'updateClient', 'deleteClient', 'addUser', 'updateUser', 'deleteUser', 'resetUserPassword', 'updatePaymentRequestStatus', 'markBillPaid', 'saveCashVoucher', 'addInventoryItem', 'updateInventoryItem', 'deleteInventoryItem', 'approveQuotation', 'updateQuotationDriveLink', 'reviseQuotation', 'updatePRPricing', 'finalizeQuotation', 'getQuotationApprovalStatus', 'createSalesOrder', 'updateSOStatus', 'deleteSalesOrder', 'uploadSODocument', 'savePORecord', 'approvePO', 'sendPOEmail', 'sendAdminEmail', 'sendAcctEmail', 'savePOPDF', 'savePRPDF', 'savePricingSubmission', 'forwardPRToPricing', 'applyPricingToPR', 'submitHRDailyReport', 'addCandidate', 'updateCandidate', 'deleteCandidate', 'addHRTask', 'updateHRTask', 'deleteHRTask', 'addEmployee', 'updateEmployee', 'deleteEmployee', 'addLeaveRequest', 'updateLeaveRequest', 'deleteLeaveRequest', 'addPerformanceReview', 'updatePerformanceReview', 'deletePerformanceReview', 'addTrainingProgram', 'updateTrainingProgram', 'deleteTrainingProgram', 'addMemo', 'updateMemo', 'deleteMemo', 'addGrievance', 'updateGrievance', 'deleteGrievance', 'addCampaign', 'updateCampaign', 'deleteCampaign', 'addContentItem', 'updateContentItem', 'deleteContentItem', 'addAccreditation', 'updateAccreditation', 'deleteAccreditation', 'submitAccountingDailyReport', 'addCollection', 'deleteCollection', 'updateCollection', 'saveProfitReport', 'updateProfitReportEntry', 'saveShipment', 'uploadShipmentDoc', 'deleteShipmentDoc', 'advanceShipmentStage', 'restoreShipmentDoc', 'migrateShipmentDocs', 'exportAuditLogCsv', 'archiveHistoryNow', 'backfillHistory', 'savePayrollEmployee', 'deletePayrollEmployee', 'savePayrollHours', 'savePayrollRegister', 'submitPayrollForApproval', 'decidePayrollApproval', 'saveBankAccount', 'addBankTransaction', 'deleteBankTransaction', 'saveDirectorPayable', 'markDirectorPayablePaid', 'unmarkDirectorPayablePaid', 'deleteDirectorPayable', 'savePayrollIncentive', 'voidPayrollIncentive',
 ];
 
 // Read-only actions that must always fetch fresh data (use GET, skip cache).
 // Stale cache caused approved quotations to revert to "Pending" on refresh.
-const NO_CACHE_READS = ['getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister'];
+const NO_CACHE_READS = ['getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister', 'getPayrollIncentives'];
 
 /**
  * General-purpose fetch wrapper with caching.
@@ -1208,6 +1208,40 @@ function apiDeletePayrollEmployee(id) {
 // A198 — read-only salary-change audit; optional employee filter ("Last, First").
 function apiGetPayrollRateHistory(employee) {
   return fetchFromAPI({ action: 'getPayrollRateHistory', employee: employee || '' }, { noCache: true });
+}
+
+/* A229 — per-cutoff incentives. Both filters are optional and independent: by employee for the
+   per-person history, by period for the payroll grid's totals. */
+function apiGetPayrollIncentives(opts) {
+  var o = opts || {};
+  return fetchFromAPI({
+    action: 'getPayrollIncentives',
+    employee: o.employee || '',
+    period: o.period || ''
+  }, { noCache: true });
+}
+
+function apiSavePayrollIncentive(payload) {
+  return fetchFromAPI({
+    action: 'savePayrollIncentive',
+    period: payload.period,
+    employee: payload.employee,
+    amount: payload.amount,
+    category: payload.category || '',
+    reason: payload.reason || '',
+    actorName: payload.actorName || '',
+    source: payload.source || '',
+    sourceRef: payload.sourceRef || ''
+  }, { noCache: true });
+}
+
+/** Voids by ID — the row survives, so the history stays complete. */
+function apiVoidPayrollIncentive(incentiveId, actorName) {
+  return fetchFromAPI({
+    action: 'voidPayrollIncentive',
+    incentiveId: incentiveId,
+    actorName: actorName || ''
+  }, { noCache: true });
 }
 
 function apiGetPayrollHours(period) {

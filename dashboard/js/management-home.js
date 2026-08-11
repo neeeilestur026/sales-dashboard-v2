@@ -3371,11 +3371,41 @@ async function _logPayrollExpense(rec, approvedBy) {
       description: 'Payroll ' + (rec.cutoffLabel || '') + ' — ' + rec.period + ' (' + (t.employeeCount || 0) + ' employees)',
       amount: amount
     };
+    /* A229 — WARN LOUDLY IF THIS PERIOD IS ALREADY IN EXPENSES AT A DIFFERENT AMOUNT.
+     *
+     * importExpenses de-duplicates on a signature that INCLUDES the amount. So the normal
+     * submit -> reject -> correct -> resubmit -> approve path creates a SECOND Expenses row under the
+     * same PAYROLL-<period> voucher, because the corrected gross no longer matches the first
+     * signature. That was already true; incentives make amount-changing resubmits routine rather
+     * than rare, so it will now fire in ordinary use.
+     *
+     * The real fix (refuse, and require the first row to be reversed) has to change the shared
+     * Expenses import and belongs in its own task. What must not happen is the double-post landing
+     * silently and surfacing at month-end close — so this checks first and says so. */
+    var priorWarning = '';
+    try {
+      var ex = await fetchFlow('getExpenses', {}, { fresh: true });
+      var prior = (((ex && ex.data) || []).filter(function (x) {
+        return String(x.voucherNo || '') === rec2.voucherNo;
+      }));
+      var clash = prior.filter(function (x) { return Math.abs((Number(x.amount) || 0) - amount) > 0.005; });
+      if (clash.length) {
+        priorWarning = 'WARNING: ' + rec2.voucherNo + ' is already in Expenses at ' +
+          clash.map(function (x) { return '₱' + (Number(x.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }); }).join(', ') +
+          ', and this approval is ₱' + amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) +
+          '. Both rows will sit in the ledger — reverse the old one or payroll is counted twice for this cutoff.';
+      }
+    } catch (e) { /* the check is a courtesy; never block the posting on it */ }
+
     var r = await postFlow('importExpenses', { items: JSON.stringify([rec2]) });
     if (r && r.success) {
       var msg = (r.created ? 'Logged ' : 'Already logged ') + '₱' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
         ' to Expenses (Operating · Salaries and wages).';
       if (typeof showToast === 'function') showToast(msg); else console.log(msg);
+      if (priorWarning) {
+        console.warn(priorWarning);
+        alert(priorWarning);          // deliberately blocking: a double-booked payroll must be seen
+      }
     }
   } catch (e) {
     console.warn('Payroll expense logging failed (approval still recorded):', e);

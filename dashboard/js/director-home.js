@@ -9,6 +9,13 @@ let _hoursA    = {};   // { "EmployeeName|YYYY-MM-DD": { employee, date, dayType
 let _hoursB    = {};
 let _registerA = {};   // { "EmployeeName": { pagibig, sss, philhealth, advances, wtax } }
 let _registerB = {};
+/* A229 — incentives are per CUTOFF, never per employee-master, which is what stops a one-off bonus
+   repeating next month. Two shapes per cutoff: the totals the grid and the pay maths read, and the
+   line items behind them for the drill-down. */
+let _incentivesA = {};     // { "EmployeeName": total of ACTIVE incentives }
+let _incentivesB = {};
+let _incentiveRowsA = {};  // { "EmployeeName": [ row, … ] }
+let _incentiveRowsB = {};
 let _currentYear  = null;
 let _currentMonth = null;
 
@@ -82,13 +89,17 @@ async function loadPeriod() {
 
   // Load hours and register for both cutoffs. A transient backend failure must render an
   // inline error, not abort as an unhandled rejection leaving the grids stuck on the intro text.
-  let hA, hB, rA, rB;
+  let hA, hB, rA, rB, iA, iB;
   try {
-    [hA, hB, rA, rB] = await Promise.all([
+    /* A229 — the two incentive reads join THIS Promise.all rather than awaiting after it. Six
+       round trips to Apps Script in parallel is already slow; two more in sequence would be felt. */
+    [hA, hB, rA, rB, iA, iB] = await Promise.all([
       apiGetPayrollHours(periodA),
       apiGetPayrollHours(periodB),
       apiGetPayrollRegister(periodA),
-      apiGetPayrollRegister(periodB)
+      apiGetPayrollRegister(periodB),
+      apiGetPayrollIncentives({ period: periodA }),
+      apiGetPayrollIncentives({ period: periodB })
     ]);
   } catch (e) {
     ['hoursAGrid', 'payAGrid', 'hoursBGrid', 'payBGrid'].forEach(id => {
@@ -111,6 +122,9 @@ async function loadPeriod() {
   _registerB = {};
   (rB.data || []).forEach(r => { _registerB[r.employee] = r; });
 
+  _applyIncentives('A', (iA && iA.data) || []);
+  _applyIncentives('B', (iB && iB.data) || []);
+
   renderHoursGrid('A');
   renderHoursGrid('B');
   renderPayGrid('A');
@@ -124,6 +138,7 @@ async function loadEmployees() {
     _employees = (res.data || []).filter(e => e.status !== 'Inactive');
     renderEETable();
     if (typeof loadRateChanges === 'function') loadRateChanges();   // A198 — refresh the recent-changes panel
+    if (typeof loadRecentIncentives === 'function') loadRecentIncentives();  // A229
     // Re-render grids in case period was already loaded (they need employee list)
     if (_currentYear && _currentMonth) {
       renderHoursGrid('A');
@@ -155,7 +170,8 @@ function renderEETable() {
       <td>${esc(e.status)}</td>
       <td>
         <button class="btn-sm" onclick="openEEModal(${i})">Edit</button>
-        <button class="btn-sm" onclick="openRateHistory(${i})" title="Salary change history">History</button>
+        <button class="btn-sm" onclick="openRateHistory(${i})" title="Salary change history">Salary</button>
+        <button class="btn-sm" onclick="openIncentiveHistory(${i})" title="Every incentive ever given">Incentives</button>
         <button class="btn-sm danger" onclick="deleteEE(${e.id})">Del</button>
       </td>
     </tr>
@@ -249,6 +265,7 @@ async function saveEE() {
   closeEEModal();
   await loadEmployees();
   if (typeof loadRateChanges === 'function') loadRateChanges();
+  if (typeof loadRecentIncentives === 'function') loadRecentIncentives();   // A229
 }
 
 // ── A198: salary-change history ───────────────────────────────
@@ -286,6 +303,87 @@ async function openRateHistory(idx) {
   } catch (err) {
     document.getElementById('rhBody').innerHTML = `<div style="color:#ef4444;">${esc(err.message)}</div>`;
   }
+}
+
+/* ── A229: every incentive this employee has ever been given ────────────────────────────────────
+   Mirrors the salary-history modal above deliberately — same overlay classes, same shape, so anyone
+   who has used one already knows this one.
+
+   VOIDED ROWS ARE SHOWN, struck through, not hidden. "Every incentive ever given" includes the ones
+   that were given and then withdrawn; hiding them would make the ledger a summary rather than a
+   record, and the withdrawal is exactly the thing somebody will later want to explain. */
+let _ihEmpName = '';
+function closeIncentiveHistory() { document.getElementById('ihOverlay').classList.remove('open'); }
+
+function _ihRowsHtml(rows) {
+  if (!rows.length) return '<div style="color:var(--text-muted);padding:0.6rem 0;">No incentives recorded for this employee yet.</div>';
+  const live = rows.filter(r => String(r.status || 'Active') !== 'Voided');
+  const total = live.reduce((t, r) => t + (parseFloat(r.amount) || 0), 0);
+  return `<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem;">
+      ${live.length} incentive${live.length === 1 ? '' : 's'} paid, ${peso(total)} in total${
+      rows.length > live.length ? ` · ${rows.length - live.length} voided` : ''}
+    </div>
+    <table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+    <tr><th>Cutoff</th><th class="num">Amount</th><th>What for</th><th>Reason</th><th>Given by</th><th>Recorded</th><th></th></tr>
+    </thead><tbody>
+    ${rows.map(r => {
+      const voided = String(r.status || 'Active') === 'Voided';
+      const style = voided ? 'text-decoration:line-through;color:var(--text-muted);' : '';
+      return `<tr style="${style}">
+        <td>${esc(r.period || '')}</td>
+        <td class="num">${peso(r.amount)}</td>
+        <td>${esc(r.category || '')}</td>
+        <td>${esc(r.reason || '')}</td>
+        <td>${esc(r.givenBy || '')}</td>
+        <td style="color:var(--text-muted);">${esc(String(r.recordedAt || '').slice(0, 10))}</td>
+        <td>${voided
+          ? `<span title="Voided by ${esc(r.voidedBy || '')}" style="font-size:.72rem;">voided</span>`
+          : `<button class="btn-sm" title="Void this incentive — it stays in the history"
+               onclick="voidIncentive('${esc(r.incentiveId)}','${esc(String(r.period || '').slice(-1))}')">Void</button>`}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function openIncentiveHistory(idx) {
+  const e = _employees[idx];
+  openIncentiveHistoryByName(e.lastName + ', ' + e.firstName);
+}
+
+async function openIncentiveHistoryByName(name) {
+  _ihEmpName = name;
+  document.getElementById('ihTitle').textContent = 'Incentive History — ' + name;
+  document.getElementById('ihBody').innerHTML = '<div style="color:var(--text-muted);padding:0.6rem 0;">Loading…</div>';
+  document.getElementById('ihOverlay').classList.add('open');
+  try {
+    const res = await apiGetPayrollIncentives({ employee: name });
+    document.getElementById('ihBody').innerHTML = _ihRowsHtml((res && res.data) || []);
+  } catch (err) {
+    document.getElementById('ihBody').innerHTML = `<div style="color:#ef4444;">${esc(err.message)}</div>`;
+  }
+}
+
+/** The last few incentives across everyone, so the cutoff's bonuses read without opening each person. */
+async function loadRecentIncentives() {
+  const box = document.getElementById('incentivesBox');
+  if (!box) return;
+  try {
+    const res = await apiGetPayrollIncentives({});
+    const rows = ((res && res.data) || []).slice(0, 12);
+    if (!rows.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No incentives recorded yet.</div>'; return; }
+    box.innerHTML = `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+      <tr><th>Employee</th><th>Cutoff</th><th class="num">Amount</th><th>What for</th><th>Reason</th><th>Given by</th></tr></thead><tbody>
+      ${rows.map(r => {
+        const voided = String(r.status || 'Active') === 'Voided';
+        return `<tr style="${voided ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">
+          <td>${esc(r.employee || '')}</td>
+          <td>${esc(r.period || '')}</td>
+          <td class="num">${peso(r.amount)}</td>
+          <td>${esc(r.category || '')}</td>
+          <td>${esc(r.reason || '')}</td>
+          <td>${esc(r.givenBy || '')}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  } catch (e) { box.innerHTML = ''; }
 }
 
 /* The last few changes across everyone, so the raise is visible without opening each person. Mounted
@@ -496,33 +594,22 @@ function _payslipPeriod(cutoff) {
 // Compute one employee's full payslip breakdown — identical math to renderPayGrid,
 // reading the same hours/register maps (so it reflects on-screen deduction edits).
 function _computePaySlip(emp, cutoff) {
-  const empName = emp.lastName + ', ' + emp.firstName;
-  const hourlyRate = emp.dailyRate / 8;
-  const hoursMap = cutoff === 'A' ? _hoursA : _hoursB;
+  const e = _payEarnings(emp, cutoff);                 // A229 — one definition of the earnings half
+  const empName = e.empName;
+  const grossPay = e.grossPay;
   const registerMap = cutoff === 'A' ? _registerA : _registerB;
-  let regHrs = 0, otHrs = 0, holidayHrs = 0;
-  Object.keys(hoursMap).forEach(key => {
-    if (!key.startsWith(empName + '|')) return;
-    const entry = hoursMap[key];
-    const hrs = parseFloat(entry.hours) || 0;
-    if (entry.dayType === 'Holiday') holidayHrs += hrs;
-    else { regHrs += Math.min(hrs, 8); otHrs += Math.max(hrs - 8, 0); }
-  });
-  const basicPay = regHrs * hourlyRate;
-  const holidayPay = holidayHrs * hourlyRate * 2;
-  const otPay = otHrs * hourlyRate * 1.25;
-  const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
-  const grossPay = basicPay + holidayPay + otPay + otherIncome;
   const saved = registerMap[empName] || {};
   const pagibig = +(saved.pagibig !== undefined ? saved.pagibig : (emp.hdmfAmount || 100));
-  const sss = +(saved.sss !== undefined ? saved.sss : _calcSSS(grossPay));
-  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(grossPay));
+  const sss = +(saved.sss !== undefined ? saved.sss : _calcSSS(e.statBase));
+  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase));
   const advances = +(saved.advances !== undefined ? saved.advances : 0);
   const wtax = +(saved.wtax !== undefined ? saved.wtax : 0);
   const totalDed = pagibig + sss + philhealth + advances + wtax;
   return {
-    empName, hourlyRate, dailyRate: emp.dailyRate, regHrs, otHrs, holidayHrs,
-    basicPay, holidayPay, otPay, otherIncome, grossPay,
+    empName, hourlyRate: e.hourlyRate, dailyRate: emp.dailyRate,
+    regHrs: e.regHrs, otHrs: e.otHrs, holidayHrs: e.holidayHrs,
+    basicPay: e.basicPay, holidayPay: e.holidayPay, otPay: e.otPay,
+    otherIncome: e.otherIncome, incentive: e.incentive, grossPay,
     pagibig, sss, philhealth, advances, wtax, totalDed, netPay: grossPay - totalDed,
   };
 }
@@ -560,6 +647,7 @@ function _payslipHtml(emp, cutoff) {
       ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
       ${money('Holiday (' + hn(s.holidayHrs) + ' x2)', s.holidayPay)}
       ${money('Other Income', s.otherIncome)}
+      ${money('Incentive', s.incentive)}
       ${money('GROSS PAY', s.grossPay, 'sub')}
     </tbody></table>
     <div class="ps-sep"></div>
@@ -803,6 +891,7 @@ function renderPayGrid(cutoff) {
       <th class="num">Holiday Pay</th>
       <th class="num">OT Pay</th>
       <th class="num">Other Income</th>
+      <th class="num">Incentive</th>
       <th class="num">Gross Pay</th>
       <th class="num">Pag-IBIG</th>
       <th class="num">SSS</th>
@@ -815,39 +904,21 @@ function renderPayGrid(cutoff) {
     </tr></thead>
     <tbody>`;
 
-  let totBasic=0, totHol=0, totOT=0, totOther=0, totGross=0,
+  let totBasic=0, totHol=0, totOT=0, totOther=0, totInc=0, totGross=0,
       totPag=0, totSSS=0, totPHIC=0, totAdv=0, totWTax=0, totDed=0, totNet=0;
 
   activeEE.forEach(emp => {
-    const empName = emp.lastName + ', ' + emp.firstName;
-    const hourlyRate = emp.dailyRate / 8;
+    const e = _payEarnings(emp, cutoff);            // A229 — one definition of the earnings half
+    const empName = e.empName, hourlyRate = e.hourlyRate;
+    const regHrs = e.regHrs, otHrs = e.otHrs, holidayHrs = e.holidayHrs;
+    const basicPay = e.basicPay, holidayPay = e.holidayPay, otPay = e.otPay;
+    const otherIncome = e.otherIncome, incentive = e.incentive, grossPay = e.grossPay;
 
-    // Compute from hours
-    let regHrs = 0, otHrs = 0, holidayHrs = 0;
-    Object.keys(hoursMap).forEach(key => {
-      if (!key.startsWith(empName + '|')) return;
-      const entry = hoursMap[key];
-      const hrs = parseFloat(entry.hours) || 0;
-      if (entry.dayType === 'Holiday') {
-        holidayHrs += hrs;
-      } else {
-        regHrs += Math.min(hrs, 8);
-        otHrs  += Math.max(hrs - 8, 0);
-      }
-    });
-
-    const basicPay   = regHrs * hourlyRate;
-    const holidayPay = holidayHrs * hourlyRate * 2; // double time
-    const otPay      = otHrs * hourlyRate * 1.25;
-    // Other income only in 2nd cutoff (PAY B) per payroll convention
-    const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
-    const grossPay   = basicPay + holidayPay + otPay + otherIncome;
-
-    // Statutory deductions — use stored overrides if present
+    // Statutory deductions — use stored overrides if present. statBase excludes the incentive.
     const saved = registerMap[empName] || {};
     const pagibig    = saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100);
-    const sss        = saved.sss        !== undefined ? saved.sss        : _calcSSS(grossPay);
-    const philhealth = saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(grossPay);
+    const sss        = saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase);
+    const philhealth = saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase);
     const advances   = saved.advances   !== undefined ? saved.advances   : 0;
     const wtax       = saved.wtax       !== undefined ? saved.wtax       : 0;
 
@@ -855,10 +926,22 @@ function renderPayGrid(cutoff) {
     const netPay   = grossPay - totalDed;
 
     totBasic += basicPay; totHol += holidayPay; totOT += otPay; totOther += otherIncome;
+    totInc += incentive;
     totGross += grossPay; totPag += pagibig; totSSS += sss; totPHIC += philhealth;
     totAdv += advances; totWTax += wtax; totDed += totalDed; totNet += netPay;
 
     const k = _empKey(empName);
+
+    /* A229 — the Incentive cell is a TOTAL plus a "+", never a bare input like Advances beside it.
+       An inline number box would say "type it and it saves with the register", which is the opposite
+       of how this works, and it has nowhere to put the category or the reason that make the
+       per-employee record worth having. */
+    const incCell = `<td class="num computed" style="white-space:nowrap;">
+        ${incentive > 0 ? `<span style="font-weight:700;">${peso(incentive)}</span>` : '<span style="color:var(--text-muted);">—</span>'}
+        <button class="btn-sm" title="Add an incentive for this cutoff"
+          onclick="openIncentiveAdd('${esc(empName)}','${cutoff}')"
+          style="margin-left:6px;padding:1px 7px;">+</button>
+      </td>`;
 
     html += `<tr data-emp="${esc(empName)}">
       <td class="sticky"><strong>${esc(empName)}</strong></td>
@@ -866,6 +949,7 @@ function renderPayGrid(cutoff) {
       <td class="num computed">${peso(holidayPay)}</td>
       <td class="num computed">${peso(otPay)}</td>
       <td class="num computed">${peso(otherIncome)}</td>
+      ${incCell}
       <td class="num computed highlight">${peso(grossPay)}</td>
       <td class="num"><input type="number" min="0" step="0.01" value="${pagibig.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="pagibig" onchange="_updateRegCell(this)" style="width:75px;"></td>
       <td class="num"><input type="number" min="0" step="0.01" value="${sss.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="sss" onchange="_updateRegCell(this)" style="width:75px;"></td>
@@ -884,6 +968,7 @@ function renderPayGrid(cutoff) {
     <td class="num">${peso(totHol)}</td>
     <td class="num">${peso(totOT)}</td>
     <td class="num">${peso(totOther)}</td>
+    <td class="num">${peso(totInc)}</td>
     <td class="num">${peso(totGross)}</td>
     <td class="num">${peso(totPag)}</td>
     <td class="num">${peso(totSSS)}</td>
@@ -911,23 +996,12 @@ function _updateRegCell(input) {
   const emp = _employees.find(e => (e.lastName + ', ' + e.firstName) === empName);
   if (!emp) return;
 
-  const hourlyRate = emp.dailyRate / 8;
-  const hoursMap   = cutoff === 'A' ? _hoursA : _hoursB;
-  let regHrs = 0, otHrs = 0, holidayHrs = 0;
-  Object.keys(hoursMap).forEach(key => {
-    if (!key.startsWith(empName + '|')) return;
-    const entry = hoursMap[key];
-    const hrs = parseFloat(entry.hours) || 0;
-    if (entry.dayType === 'Holiday') holidayHrs += hrs;
-    else { regHrs += Math.min(hrs, 8); otHrs += Math.max(hrs - 8, 0); }
-  });
+  const grossPay = _payEarnings(emp, cutoff).grossPay;   // A229 — one definition
 
-  const basicPay   = regHrs * hourlyRate;
-  const holidayPay = holidayHrs * hourlyRate * 2;
-  const otPay      = otHrs * hourlyRate * 1.25;
-  const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
-  const grossPay   = basicPay + holidayPay + otPay + otherIncome;
-
+  /* NOTE this block deliberately keeps its own deduction idiom: `parseFloat(x) || 0` with NO
+     `!== undefined` fallback, unlike the other four sites. That is correct here — by the time this
+     runs the row has been rendered, so regMap already holds every field. Folding it into a shared
+     helper would have changed it. */
   const saved = regMap[empName];
   const pag  = parseFloat(saved.pagibig)    || 0;
   const sss  = parseFloat(saved.sss)        || 0;
@@ -952,36 +1026,22 @@ async function saveRegister(cutoff) {
   const registerMap = cutoff === 'A' ? _registerA : _registerB;
 
   const rows = _employees.map(emp => {
-    const empName = emp.lastName + ', ' + emp.firstName;
-    const hourlyRate = emp.dailyRate / 8;
-
-    let regHrs = 0, otHrs = 0, holidayHrs = 0;
-    Object.keys(hoursMap).forEach(key => {
-      if (!key.startsWith(empName + '|')) return;
-      const entry = hoursMap[key];
-      const hrs = parseFloat(entry.hours) || 0;
-      if (entry.dayType === 'Holiday') holidayHrs += hrs;
-      else { regHrs += Math.min(hrs, 8); otHrs += Math.max(hrs - 8, 0); }
-    });
-
-    const basicPay   = regHrs * hourlyRate;
-    const holidayPay = holidayHrs * hourlyRate * 2;
-    const otPay      = otHrs * hourlyRate * 1.25;
-    const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
-    // Same statutory-deduction base as renderPayGrid/_computePaySlip (gross INCLUDING holiday pay),
-    // so the saved defaults equal what was displayed — saving must never change the numbers.
-    const grossPay   = basicPay + holidayPay + otPay + otherIncome;
-    const saved = registerMap[empName] || {};
+    /* A229 — one definition of the earnings half. The statutory defaults must match exactly what was
+       displayed, so saving never changes a number on screen — which is why both this and the grid
+       pass `statBase`, not gross. The incentive is NOT sent: the server recomputes it from the
+       ledger and discards anything the client claims. */
+    const e = _payEarnings(emp, cutoff);
+    const saved = registerMap[e.empName] || {};
 
     return {
-      employee:    empName,
-      basicPay:    basicPay,
-      holidayPay:  holidayPay,
-      otPay:       otPay,
-      otherIncome: otherIncome,
+      employee:    e.empName,
+      basicPay:    e.basicPay,
+      holidayPay:  e.holidayPay,
+      otPay:       e.otPay,
+      otherIncome: e.otherIncome,
       pagibig:     saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100),
-      sss:         saved.sss        !== undefined ? saved.sss        : _calcSSS(grossPay),
-      philhealth:  saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(grossPay),
+      sss:         saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase),
+      philhealth:  saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase),
       advances:    saved.advances   || 0,
       wtax:        saved.wtax       || 0
     };
@@ -1105,38 +1165,26 @@ function _buildCutoffHtml(cutoff) {
   </tr>`;
 
   let prBody = '';
-  let gBasic=0,gHol=0,gOT=0,gOther=0,gGross=0,gPag=0,gSSS=0,gPHIC=0,gAdv=0,gWTax=0,gDed=0,gNet=0;
+  let gBasic=0,gHol=0,gOT=0,gOther=0,gInc=0,gGross=0,gPag=0,gSSS=0,gPHIC=0,gAdv=0,gWTax=0,gDed=0,gNet=0;
   let employeeCount = 0;
 
   _employees.forEach(emp => {
-    const empName    = emp.lastName + ', ' + emp.firstName;
-    const hourlyRate = emp.dailyRate / 8;
-    let regHrs=0, otHrs=0, holidayHrs=0;
-
-    Object.keys(hoursMap).forEach(key => {
-      if (!key.startsWith(empName + '|')) return;
-      const entry = hoursMap[key];
-      const hrs   = parseFloat(entry.hours) || 0;
-      if (entry.dayType === 'Holiday') holidayHrs += hrs;
-      else { regHrs += Math.min(hrs,8); otHrs += Math.max(hrs-8,0); }
-    });
-
-    const basicPay    = regHrs * hourlyRate;
-    const holidayPay  = holidayHrs * hourlyRate * 2;
-    const otPay       = otHrs * hourlyRate * 1.25;
-    const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
-    const grossPay    = basicPay + holidayPay + otPay + otherIncome;
+    const e = _payEarnings(emp, cutoff);            // A229 — one definition of the earnings half
+    const empName = e.empName;
+    const basicPay = e.basicPay, holidayPay = e.holidayPay, otPay = e.otPay;
+    const otherIncome = e.otherIncome, incentive = e.incentive, grossPay = e.grossPay;
+    const regHrs = e.regHrs, otHrs = e.otHrs;
     const saved       = registerMap[empName] || {};
     const pagibig     = saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100);
-    const sss         = saved.sss        !== undefined ? saved.sss        : _calcSSS(grossPay);
-    const philhealth  = saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(grossPay);
+    const sss         = saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase);
+    const philhealth  = saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase);
     const advances    = saved.advances   || 0;
     const wtax        = saved.wtax       || 0;
     const totalDed    = pagibig + sss + philhealth + advances + wtax;
     const netPay      = grossPay - totalDed;
 
     employeeCount++;
-    gBasic+=basicPay; gHol+=holidayPay; gOT+=otPay; gOther+=otherIncome;
+    gBasic+=basicPay; gHol+=holidayPay; gOT+=otPay; gOther+=otherIncome; gInc+=incentive;
     gGross+=grossPay; gPag+=pagibig; gSSS+=sss; gPHIC+=philhealth;
     gAdv+=advances; gWTax+=wtax; gDed+=totalDed; gNet+=netPay;
 
@@ -1146,6 +1194,7 @@ function _buildCutoffHtml(cutoff) {
       <td class="num">${holidayPay > 0 ? p(holidayPay) : '—'}</td>
       <td class="num">${otPay > 0 ? p(otPay) : '—'}</td>
       <td class="num">${otherIncome > 0 ? p(otherIncome) : '—'}</td>
+      <td class="num">${incentive > 0 ? p(incentive) : '—'}</td>
       <td class="num bold">${p(grossPay)}</td>
       <td class="num">${pagibig > 0 ? p(pagibig) : '—'}</td>
       <td class="num">${sss > 0 ? p(sss) : '—'}</td>
@@ -1163,6 +1212,7 @@ function _buildCutoffHtml(cutoff) {
     <td class="num">${gHol > 0 ? p(gHol) : '—'}</td>
     <td class="num">${gOT > 0 ? p(gOT) : '—'}</td>
     <td class="num">${gOther > 0 ? p(gOther) : '—'}</td>
+    <td class="num">${gInc > 0 ? p(gInc) : '—'}</td>
     <td class="num bold">${p(gGross)}</td>
     <td class="num">${p(gPag)}</td>
     <td class="num">${p(gSSS)}</td>
@@ -1228,7 +1278,7 @@ function _buildCutoffHtml(cutoff) {
   <thead>
     <tr>
       <th>Employee</th>
-      <th>Basic Pay</th><th>Hol. Pay</th><th>OT Pay</th><th>Other Inc.</th>
+      <th>Basic Pay</th><th>Hol. Pay</th><th>OT Pay</th><th>Other Inc.</th><th>Incentive</th>
       <th>Gross Pay</th>
       <th>Pag-IBIG</th><th>SSS</th><th>PhilHealth</th><th>Advances</th><th>WTax</th>
       <th>Total Ded.</th><th>Net Pay</th>
@@ -1279,6 +1329,142 @@ function _buildCutoffHtml(cutoff) {
 }
 
 // ── Philippine statutory computation helpers ──────────────────
+/* ── A229 — ONE definition of what an employee earns in a cutoff ────────────────────────────────
+ *
+ * The earnings arithmetic used to be copy-pasted at five call sites (the payslip, the on-screen grid,
+ * the live per-row recompute, the save, and the export/approval snapshot). They agreed, but only by
+ * luck — nothing made them agree, and adding a sixth earnings component to five places by hand is how
+ * a payslip ends up disagreeing with the PDF it was printed from.
+ *
+ * ONLY THE EARNINGS HALF IS SHARED. The deduction half is deliberately left at each call site,
+ * because those five sites are NOT identical there — they use four different default idioms
+ * (`+(saved.advances !== undefined ? … : 0)`, a bare `saved.advances || 0`, and one with no default
+ * at all). Folding those together would silently change behaviour while pretending to be a refactor.
+ *
+ * `statBase` IS THE POINT, not a convenience. SSS and PhilHealth are computed from it, and it EXCLUDES
+ * the incentive: a one-off bonus must not drag somebody into a higher SSS bracket. Without it a
+ * ₱2,000 bonus would climb four brackets and add roughly ₱230 to that employee's own deductions —
+ * they would take home ₱1,770 of their ₱2,000 and nobody would be able to explain why. Confirmed with
+ * the director; it is also the ordinary PH treatment, a one-off bonus sitting outside the monthly
+ * salary credit. `grossPay` still carries the incentive, so pay, the payslip and the P&L are right.
+ */
+function _incentiveFor(empName, cutoff) {
+  const map = cutoff === 'A' ? _incentivesA : _incentivesB;
+  return (map && map[empName]) || 0;
+}
+
+/* Build both shapes for one cutoff from the handler's rows: the totals the pay maths reads, and the
+   line items behind them. VOIDED ROWS ARE KEPT in the line items and excluded from the totals —
+   the history has to show the mistake and the correction, but only live money may be paid. */
+function _applyIncentives(cutoff, rows) {
+  const totals = {}, byEmp = {};
+  (rows || []).forEach(r => {
+    const name = String(r.employee || '');
+    if (!name) return;
+    (byEmp[name] = byEmp[name] || []).push(r);
+    if (String(r.status || 'Active') === 'Voided') return;
+    totals[name] = (totals[name] || 0) + (parseFloat(r.amount) || 0);
+  });
+  if (cutoff === 'A') { _incentivesA = totals; _incentiveRowsA = byEmp; }
+  else                { _incentivesB = totals; _incentiveRowsB = byEmp; }
+}
+
+/* ── Adding one ─────────────────────────────────────────────────────────────────────────────────
+   This writes to the ledger IMMEDIATELY, on its own round trip — it is not staged into the register
+   payload the way a deduction edit is. That is deliberate: money somebody has been promised should
+   not depend on remembering to press "Save Pay" afterwards. */
+let _incAddCutoff = 'A';
+let _incAddEmp = '';
+
+function openIncentiveAdd(empName, cutoff) {
+  _incAddCutoff = cutoff; _incAddEmp = empName;
+  document.getElementById('incAddTitle').textContent = 'Add incentive — ' + empName;
+  document.getElementById('incAddPeriod').textContent =
+    (cutoff === 'A' ? '1st' : '2nd') + ' cutoff · ' + _currentYear + '-' + _currentMonth;
+  document.getElementById('incAmount').value = '';
+  document.getElementById('incCategory').value = 'Performance Bonus';
+  document.getElementById('incReason').value = '';
+  document.getElementById('incAddMsg').textContent = '';
+  document.getElementById('incAddOverlay').classList.add('open');
+  setTimeout(() => { const a = document.getElementById('incAmount'); if (a) a.focus(); }, 50);
+}
+function closeIncentiveAdd() { document.getElementById('incAddOverlay').classList.remove('open'); }
+
+async function saveIncentiveAdd() {
+  const msg = document.getElementById('incAddMsg');
+  const amount = parseFloat(document.getElementById('incAmount').value) || 0;
+  if (!(amount > 0)) { msg.textContent = 'Enter an amount greater than zero.'; return; }
+  const btn = document.getElementById('incSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const res = await apiSavePayrollIncentive({
+      period: _currentYear + '-' + _currentMonth + '-' + _incAddCutoff,
+      employee: _incAddEmp,
+      amount: amount,
+      category: document.getElementById('incCategory').value,
+      reason: document.getElementById('incReason').value,
+      actorName: _eeActor()
+    });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Save failed.');
+    closeIncentiveAdd();
+    await _refreshIncentives(_incAddCutoff);
+  } catch (e) {
+    msg.textContent = e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Add incentive'; }
+  }
+}
+
+/** Re-read one cutoff's ledger and repaint that grid. Also refreshes the recent panel. */
+async function _refreshIncentives(cutoff) {
+  const period = _currentYear + '-' + _currentMonth + '-' + cutoff;
+  const res = await apiGetPayrollIncentives({ period: period });
+  _applyIncentives(cutoff, (res && res.data) || []);
+  renderPayGrid(cutoff);
+  if (typeof loadRecentIncentives === 'function') loadRecentIncentives();
+}
+
+async function voidIncentive(incentiveId, cutoff) {
+  if (!confirm('Void this incentive?\n\nIt stops being paid, but stays in the employee\'s history as a record that it was given and then withdrawn.')) return;
+  try {
+    const res = await apiVoidPayrollIncentive(incentiveId, _eeActor());
+    if (!res || !res.success) throw new Error((res && res.message) || 'Void failed.');
+    await _refreshIncentives(cutoff);
+    // The open history modal, if any, is re-rendered by its own caller below.
+    if (document.getElementById('ihOverlay').classList.contains('open') && _ihEmpName) {
+      openIncentiveHistoryByName(_ihEmpName);
+    }
+  } catch (e) { alert(e.message); }
+}
+
+function _payEarnings(emp, cutoff) {
+  const empName = emp.lastName + ', ' + emp.firstName;
+  const hourlyRate = emp.dailyRate / 8;
+  const hoursMap = cutoff === 'A' ? _hoursA : _hoursB;
+  let regHrs = 0, otHrs = 0, holidayHrs = 0;
+  Object.keys(hoursMap).forEach(key => {
+    if (!key.startsWith(empName + '|')) return;
+    const entry = hoursMap[key];
+    const hrs = parseFloat(entry.hours) || 0;
+    if (entry.dayType === 'Holiday') holidayHrs += hrs;
+    else { regHrs += Math.min(hrs, 8); otHrs += Math.max(hrs - 8, 0); }
+  });
+  const basicPay = regHrs * hourlyRate;
+  const holidayPay = holidayHrs * hourlyRate * 2;
+  const otPay = otHrs * hourlyRate * 1.25;
+  // Other Income is the STANDING allowance on the employee row, and it is 2nd-cutoff only. Untouched.
+  const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
+  const incentive = _incentiveFor(empName, cutoff);
+  const statBase = basicPay + holidayPay + otPay + otherIncome;
+  return {
+    empName, hourlyRate, regHrs, otHrs, holidayHrs,
+    basicPay, holidayPay, otPay, otherIncome, incentive,
+    statBase,                       // what SSS / PhilHealth are computed from — no incentive
+    grossPay: statBase + incentive  // what the employee is actually paid
+  };
+}
+
+/** @param monthlyBasic the STATUTORY base (_payEarnings().statBase) — deliberately not gross. */
 function _calcSSS(monthlyBasic) {
   // Simplified SSS table (EE share), based on 2023+ table
   const compensation = Math.max(0, monthlyBasic);

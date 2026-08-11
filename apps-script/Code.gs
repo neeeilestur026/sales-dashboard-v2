@@ -618,6 +618,17 @@ function doGet(e) {
       case 'getPayrollRateHistory':               // A198 — read-only salary-change audit
         result = handleGetPayrollRateHistory(params);
         break;
+      case 'getPayrollIncentives':                // A229 — per-cutoff incentives + the per-employee record
+        result = handleGetPayrollIncentives(params);
+        break;
+      /* The two writes are registered on BOTH doors, matching savePayrollRegister above — api.js
+         routes a NO_CACHE_ACTION through POST, but the GET path stays reachable. */
+      case 'savePayrollIncentive':
+        result = handleSavePayrollIncentive(params);
+        break;
+      case 'voidPayrollIncentive':
+        result = handleVoidPayrollIncentive(params);
+        break;
       case 'getBankAccounts':
         result = handleGetBankAccounts();
         break;
@@ -2814,6 +2825,12 @@ function doPost(e) {
         break;
       case 'savePayrollRegister':
         result = handleSavePayrollRegister(body);
+        break;
+      case 'savePayrollIncentive':                // A229
+        result = handleSavePayrollIncentive(body);
+        break;
+      case 'voidPayrollIncentive':                // A229
+        result = handleVoidPayrollIncentive(body);
         break;
       case 'submitPayrollForApproval':
         result = handleSubmitPayrollForApproval(body);
@@ -11202,13 +11219,34 @@ function _payrollHoursSheet() {
     'Period', 'Employee', 'Date', 'Day Type', 'Hours'
   ]);
 }
+/* A229 — 'Incentive' is column 15, and it is APPENDED. Never insert it.
+ *
+ * Every read of this sheet is positional (handleGetPayrollRegister walks row[0]..row[13]; the
+ * 13th-month aggregator reads row[0] and row[2]). Putting Incentive between 'Other Income' and
+ * 'Gross Pay' — where it belongs on screen — would shift Gross Pay into the Pag-IBIG slot on every
+ * existing row and silently corrupt every deduction and net figure in the live book. Position 15 is
+ * the only safe home; the SCREEN can order the columns however it likes.
+ *
+ * The header also has to be added by hand, because _getOrCreateSheet writes headers ONLY when it
+ * creates the sheet — it never reconciles an existing one. So the array below covers a fresh
+ * spreadsheet and the widener below covers the live one. Both are needed; neither alone is enough.
+ * Same idiom already used at the MRO/MI sheets in this file; idempotent, so re-running is a no-op.
+ *
+ * Consequence worth knowing: the first payroll request after deploy performs a WRITE, even on a GET,
+ * because that is the only entry point there is. */
 function _payrollRegisterSheet() {
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
-  return _getOrCreateSheet(ss, 'Payroll Register', [
+  var sheet = _getOrCreateSheet(ss, 'Payroll Register', [
     'Period', 'Employee', 'Basic Pay', 'Holiday Pay', 'OT Pay',
     'Other Income', 'Gross Pay', 'Pag-IBIG', 'SSS', 'PhilHealth',
-    'Advances', 'WTax', 'Total Deductions', 'Net Pay'
+    'Advances', 'WTax', 'Total Deductions', 'Net Pay', 'Incentive'
   ]);
+  try {
+    if (sheet.getLastColumn() < 15 || !String(sheet.getRange(1, 15).getValue()).trim()) {
+      sheet.getRange(1, 15).setValue('Incentive');
+    }
+  } catch (e) { /* labelling is cosmetic — a failure must not block payroll */ }
+  return sheet;
 }
 function _payrollApprovalsSheet() {
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
@@ -11270,6 +11308,154 @@ function handleGetPayrollRateHistory(params) {
     }
     out.reverse();                       // newest first
     return { success: true, data: out };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   A229 — PER-CUTOFF INCENTIVES, and the per-employee record of every one ever given.
+
+   WHY A LEDGER AND NOT A REGISTER COLUMN. The only additive earnings field before this was
+   'Other Income', and it is the wrong shape for a bonus three ways at once: it lives on the EMPLOYEE
+   MASTER row, so it silently re-pays every 2nd cutoff for ever; it is not editable on the payroll
+   grid; and it is gated to cutoff B. A one-off bonus entered there becomes a permanent allowance
+   nobody notices — which is exactly what the commission report used to instruct people to do.
+
+   A 15th register column alone would not do either:
+     • the real case is two line items ("perfect attendance 500" + "sales incentive 2,000"), and one
+       column holds one number and no reason;
+     • handleSavePayrollRegister DELETES every row for the period and re-appends. An employee who
+       goes Inactive drops out of the client's employee list, never reaches the payload, and their
+       row is erased — so their bonus history would be erased by a routine save. A history that a
+       save can delete is not a history;
+     • a correction would overwrite the prior figure with no trace, which is the precise failure
+       Payroll Rate History was created to fix for the daily rate.
+
+   So THIS SHEET IS THE SOURCE OF TRUTH and the register carries only a computed mirror in column 15.
+   Because a row is keyed on the full 'YYYY-MM-A|B' period and NOTHING is derived from the employee
+   master, an incentive cannot repeat and works identically on cutoff A. That one fact is the whole
+   requirement.
+
+   VOID, NEVER DELETE. The ask was "every incentive ever given". A typo fixed by deleting the row is
+   not a record, so a mistake is voided: the row stays, renders struck through, and drops out of every
+   sum via Status !== 'Voided'.
+
+   'Source' / 'Source Ref' are blank for a manual entry. They are the landing pad for joining a
+   commission to what was actually paid — free to add on a new sheet today, a migration if added later.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+var _PAYROLL_INCENTIVE_CATEGORIES = [
+  'Perfect Attendance', 'Sales Incentive', 'Performance Bonus', 'Commission', 'Referral', 'Other'
+];
+
+function _payrollIncentivesSheet() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  return _getOrCreateSheet(ss, 'Payroll Incentives', [
+    'Incentive ID', 'Period', 'Cutoff', 'Employee', 'Amount', 'Category', 'Reason',
+    'Given By', 'Recorded At', 'Status', 'Voided By', 'Voided At', 'Source', 'Source Ref'
+  ]);
+}
+
+/** Row indices shift on every delete; an ID does not. This is what void addresses. */
+function _newIncentiveId() {
+  return 'INC-' + Date.now() + '-' + Math.floor(Math.random() * 9000 + 1000);
+}
+
+/** Sum the ACTIVE incentives for one period into { 'period|employee': total }.
+ *
+ *  Read once per caller, never per row: handleSavePayrollRegister is already O(rows) deleteRow round
+ *  trips and must not gain a second sheet read on top of each one. */
+function _incentiveTotalsFor(period) {
+  var map = {};
+  try {
+    var data = _payrollIncentivesSheet().getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (String(r[9] || '') === 'Voided') continue;
+      if (period && String(r[1] || '') !== String(period)) continue;
+      var k = String(r[1] || '') + '|' + String(r[3] || '');
+      map[k] = (map[k] || 0) + (parseFloat(r[4]) || 0);
+    }
+  } catch (e) { /* a missing sheet means no incentives, which is a valid answer of zero */ }
+  return map;
+}
+
+/* Record one incentive.
+ *
+ * DELIBERATELY NOT wrapped in the swallowing try/catch that _logPayrollRateChange uses. That comment
+ * — "history is an audit, not a gate" — is right there, because the rate has already been written to
+ * the employee row by the time it logs. HERE THE LEDGER *IS* THE WRITE: there is no other copy of the
+ * money. Swallowing the error would drop a bonus and tell the director it saved. So this throws, and
+ * the caller reports the failure. */
+function handleSavePayrollIncentive(params) {
+  try {
+    var period = String((params && params.period) || '').trim();
+    var employee = String((params && params.employee) || '').trim();
+    var amount = parseFloat((params && params.amount) || 0) || 0;
+    if (!period) return { success: false, message: 'Period required.' };
+    if (!employee) return { success: false, message: 'Employee required.' };
+    if (!(amount > 0)) return { success: false, message: 'Amount must be more than zero.' };
+    if (!/^\d{4}-\d{2}-[AB]$/.test(period)) {
+      return { success: false, message: 'Period must look like 2026-08-A.' };
+    }
+    /* Cutoff is DERIVED from the period, never taken from the client — two fields that can disagree
+       will eventually disagree, and this one decides which payslip the money lands on. */
+    var cutoff = period.slice(-1);
+    var category = String((params && params.category) || '').trim() || 'Other';
+    if (_PAYROLL_INCENTIVE_CATEGORIES.indexOf(category) === -1) category = 'Other';
+
+    var id = _newIncentiveId();
+    _payrollIncentivesSheet().appendRow([
+      id, period, cutoff, employee, amount, category,
+      String((params && params.reason) || '').trim(),
+      _resolveActor(params), new Date().toISOString(), 'Active', '', '',
+      String((params && params.source) || ''), String((params && params.sourceRef) || '')
+    ]);
+    return { success: true, incentiveId: id, message: 'Incentive recorded.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/** Void by ID. Never deletes the row — see the header note on why. */
+function handleVoidPayrollIncentive(params) {
+  try {
+    var id = String((params && params.incentiveId) || '').trim();
+    if (!id) return { success: false, message: 'incentiveId required.' };
+    var sheet = _payrollIncentivesSheet();
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '') !== id) continue;
+      if (String(data[i][9] || '') === 'Voided') {
+        return { success: true, alreadyVoided: true, message: 'Already voided.' };
+      }
+      sheet.getRange(i + 1, 10, 1, 3).setValues([['Voided', _resolveActor(params), new Date().toISOString()]]);
+      return { success: true, message: 'Incentive voided — the record stays in the history.' };
+    }
+    return { success: false, message: 'Incentive not found: ' + id };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/** Optional exact-match `employee` and/or `period`. Newest first, same shape as the rate history. */
+function handleGetPayrollIncentives(params) {
+  try {
+    var data = _payrollIncentivesSheet().getDataRange().getValues();
+    if (data.length < 2) return { success: true, data: [] };
+    var wantEmp = params && params.employee ? String(params.employee).trim() : '';
+    var wantPer = params && params.period ? String(params.period).trim() : '';
+    var out = [];
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (!r[0]) continue;
+      if (wantEmp && String(r[3] || '').trim() !== wantEmp) continue;
+      if (wantPer && String(r[1] || '').trim() !== wantPer) continue;
+      out.push({
+        incentiveId: String(r[0] || ''), period: String(r[1] || ''), cutoff: String(r[2] || ''),
+        employee: String(r[3] || ''), amount: parseFloat(r[4]) || 0,
+        category: String(r[5] || ''), reason: String(r[6] || ''),
+        givenBy: String(r[7] || ''), recordedAt: String(r[8] || ''),
+        status: String(r[9] || 'Active'), voidedBy: String(r[10] || ''), voidedAt: String(r[11] || ''),
+        source: String(r[12] || ''), sourceRef: String(r[13] || '')
+      });
+    }
+    out.reverse();                       // newest first
+    return { success: true, data: out, categories: _PAYROLL_INCENTIVE_CATEGORIES };
   } catch (e) { return { success: false, message: e.message }; }
 }
 
@@ -11387,7 +11573,10 @@ function handleGetPayrollRegister(params) {
         grossPay: parseFloat(row[6])||0, pagibig: parseFloat(row[7])||0,
         sss: parseFloat(row[8])||0, philhealth: parseFloat(row[9])||0,
         advances: parseFloat(row[10])||0, wtax: parseFloat(row[11])||0,
-        totalDeductions: parseFloat(row[12])||0, netPay: parseFloat(row[13])||0 });
+        totalDeductions: parseFloat(row[12])||0, netPay: parseFloat(row[13])||0,
+        /* A229 — column 15. A legacy 14-wide row has no row[14], so this reads undefined -> 0.
+           Safe by construction; no backfill needed. */
+        incentive: parseFloat(row[14])||0 });
     }
     return { success: true, data: results };
   } catch(e) { return { success: false, message: e.message }; }
@@ -11400,16 +11589,24 @@ function handleSavePayrollRegister(params) {
     if (!period) return { success: false, message: 'Period required.' };
     var sheet = _payrollRegisterSheet();
     var data  = sheet.getDataRange().getValues();
+    /* A229 — read the ledger ONCE, before the loop. This handler is already O(rows) deleteRow round
+       trips; a per-row sheet read on top of that would double an already slow save. */
+    var incMap = _incentiveTotalsFor(period);
     for (var i = data.length; i >= 2; i--) { if (String(data[i-1][0]) === period) sheet.deleteRow(i); }
     for (var j = 0; j < rows.length; j++) {
       var r = rows[j];
+      /* A229 — THE LEDGER ALWAYS WINS. Any `incentive` the client sent is discarded and the figure is
+         recomputed here, exactly as gross/totDed/net already are. No UI writes the register's
+         incentive column directly, so there is no path by which the client could be the authority —
+         and this is what makes the delete-and-reappend above harmless to the incentive. */
+      var inc = incMap[period + '|' + String(r.employee || '')] || 0;
       var basic=parseFloat(r.basicPay)||0, hol=parseFloat(r.holidayPay)||0,
           ot=parseFloat(r.otPay)||0, other=parseFloat(r.otherIncome)||0,
-          gross=basic+hol+ot+other,
+          gross=basic+hol+ot+other+inc,
           pag=parseFloat(r.pagibig)||0, sss=parseFloat(r.sss)||0,
           phic=parseFloat(r.philhealth)||0, adv=parseFloat(r.advances)||0,
           wtax=parseFloat(r.wtax)||0, totDed=pag+sss+phic+adv+wtax;
-      sheet.appendRow([period,r.employee,basic,hol,ot,other,gross,pag,sss,phic,adv,wtax,totDed,gross-totDed]);
+      sheet.appendRow([period,r.employee,basic,hol,ot,other,gross,pag,sss,phic,adv,wtax,totDed,gross-totDed,inc]);
     }
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
