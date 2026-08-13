@@ -521,8 +521,78 @@ def _cap_name(name, limit=600, token=40):
     )
 
 
-def _scope_rows(bullets, width):
+def _norm_bullets(v):
+    """A235 — one item's scope into [{"text", "bold"}].
+
+    Mirrors blueprints/flow.py::_bullets deliberately, and the duplication is the point: that one
+    normalises the DOCUMENT-level block on the way in, and rewriting it to also walk every item
+    would put a loop over items inside a request handler that has no other reason to know about
+    them. This module is the only consumer of per-item scope, so per-item scope is normalised here.
+
+    Accepts a textarea string (one entry per line), an already-split list, or a list of dicts, so the
+    same payload works from the configurator, from a re-imported quotation and from a test.
+    A line wrapped in **asterisks** is a sub-heading — the same syntax the document-level block uses,
+    because a rep should not have to learn a second one."""
+    if not v:
+        return []
+    lines = (v.splitlines() if isinstance(v, str)
+             else list(v) if isinstance(v, (list, tuple)) else str(v).splitlines())
+    out = []
+    for ln in lines:
+        if isinstance(ln, dict):
+            text, bold = str(ln.get("text") or "").strip(), bool(ln.get("bold"))
+        else:
+            text, bold = str(ln or "").strip(), False
+            # Detect **bold** BEFORE stripping bullet glyphs — the stripper eats '*' and would
+            # turn a sub-heading into an ordinary bullet with stray asterisks.
+            if len(text) > 4 and text.startswith("**") and text.endswith("**"):
+                text, bold = text[2:-2].strip(), True
+            text = text.lstrip("-*•–— ").strip()
+        if text:
+            out.append({"text": text, "bold": bold})
+    return out
+
+
+# A235 — the per-bullet character cap, raised from A213's 320 and RE-DERIVED, not inherited.
+#
+# Its only job is to keep ONE bullet's row shorter than the frame, because a table row cannot split
+# across a page. It is not an editorial limit and must not be used as one — the rep decides how much
+# scope an item needs; this decides only what cannot physically render.
+#
+# Worst case is the NARROW column: once alternative offers widen the index column the description
+# text drops to ~176pt, about 25 characters per line.
+#
+#     1200 chars ÷ 25 chars/line = 48 lines × 8.62pt leading = 413.8pt
+#     frame 773.65 − repeated header 26.10 − row padding 11.62 = 735.93pt available
+#     → 1.78x margin (A213's 320-char cap gave 6.6x)
+#
+# Thinner than before and deliberately so: 320 characters truncated real specifications, and losing
+# the end of a contractual inclusion is worse than a slimmer layout margin. A row that does not fit
+# the space left on a page moves whole to the next one — LayoutError needs a row taller than an EMPTY
+# frame, and 413.8 against 735.93 is not close to that.
+_SCOPE_BULLET_LIMIT = 1200
+
+
+def _scope_rows(bullets, width, per_item=False, indent=0.0):
     """A213 — the scope of supply, as rows for the ITEMS TABLE rather than a card after the totals.
+
+    A235 — `per_item=True` renders ONE ITEM's own scope, under that item, and differs in exactly
+    three ways. It is a mode of this function rather than a copy of it, because a second renderer
+    would drift from this one and the two blocks would stop looking alike on the same page:
+
+      · NO DOCUMENT HEADING. Five copies of "SCOPE OF SUPPLY" down one quotation is noise; the
+        quotation-level block carries that title once, above.
+      · ONE COLUMN ALWAYS. The two-column pairing suits a long document-level list; for the two or
+        three lines a single item usually carries it reads as a broken grid with a ragged right edge.
+      · INDENTED BY `indent` (the caller passes _desc_indent(), the thumbnail gutter) so the bullets
+        line up under the item's DESCRIPTION TEXT rather than under its index number. That alignment
+        is the whole point — it is what makes the block read as belonging to the item above it.
+
+    A235 ORPHAN CONTROL. In per-item mode a **bold** sub-heading is emitted in the SAME ROW as its
+    first bullet. The document-level path gives a heading its own row, which is fine there because
+    the block sits mid-table; per item, a page break landing on that row would strand the heading
+    alone at the foot of a page with its contents overleaf. Rows split between each other, so the
+    only way to guarantee they stay together is to make them one row.
 
     Returns a list of flowable-lists, one per table row, all sized to `width` (the description text
     width). The caller drops each into the description column of its own row, leaving QTY / UNIT
@@ -555,18 +625,20 @@ def _scope_rows(bullets, width):
     # Two columns at ~105pt is what the mock-up shows and what the median inclusion needs (1-2
     # lines). Once alternative offers widen the index column the text drops to ~176pt and each
     # column to ~83pt, where the same bullets need three lines and read as a mess — one column there.
-    columns = 2 if width >= 200 else 1
+    columns = 1 if per_item else (2 if width >= 200 else 1)
     size = 9.5
     body_st = _ps("scpB", size, BODY2, leading_mult=1.25)
     head_st = _ps("scpH", 10, ACCENT_DARK, ARCH_B, leading_mult=1.3)
     sub_st = _ps("scpS", 10, HEADING, LATO_B, leading_mult=1.3)
 
-    out = [[Paragraph(_esc(QUO_SCOPE_INTABLE_HEADING), head_st)]]
+    # A235 — per-item blocks carry no document heading; the quotation-level block above owns it.
+    out = [] if per_item else [[Paragraph(_esc(QUO_SCOPE_INTABLE_HEADING), head_st)]]
     gutter = 14 * PX
     col_w = (width - gutter) / 2.0 if columns == 2 else width
 
     def bullet(entry):
-        return _bullet_para(_cap_name(str(entry.get("text") or ""), limit=320, token=24), body_st)
+        return _bullet_para(_cap_name(str(entry.get("text") or ""),
+                                      limit=_SCOPE_BULLET_LIMIT, token=24), body_st)
 
     def pair_row(left, right):
         """One row holding up to two bullets side by side, at the column width they were measured at."""
@@ -580,25 +652,60 @@ def _scope_rows(bullets, width):
                                ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * PX)]))
         return [t]
 
+    def indented(cell):
+        """A235 — push a per-item row across the thumbnail gutter so its bullets sit under the
+        DESCRIPTION TEXT, not under the item's index number. A zero indent returns the cell
+        untouched, which is what keeps the document-level path byte-identical."""
+        if not indent:
+            return cell
+        t = Table([["", cell]], colWidths=[indent, width], hAlign="LEFT")
+        t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                               ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        return [t]
+
+    def head_with_first(head_text, entry):
+        """A235 ORPHAN CONTROL — the sub-heading and its first bullet in ONE row, so a page break
+        cannot put the heading on one page and what it introduces on the next."""
+        return [Paragraph(_esc(_cap_name(head_text, limit=_SCOPE_BULLET_LIMIT, token=24)), sub_st),
+                Spacer(1, 1 * PX),
+                _bullet_para(_cap_name(str(entry.get("text") or ""),
+                                       limit=_SCOPE_BULLET_LIMIT, token=24), body_st)]
+
     pending = None
+    held_head = None                                # A235 — a heading waiting for its first bullet
     for b in rows:
         text = str(b.get("text") or "").strip()
         if b.get("bold"):
             if pending is not None:                 # never leave a heading beside a stray bullet
-                out.append(pair_row(pending, None))
+                out.append(indented(pair_row(pending, None)))
                 pending = None
-            out.append([Spacer(1, 3 * PX),
-                        Paragraph(_esc(_cap_name(text, limit=320, token=24)), sub_st)])
+            if per_item:
+                if held_head is not None:           # two headings running — the first has no bullets
+                    out.append(indented([Paragraph(
+                        _esc(_cap_name(held_head, limit=_SCOPE_BULLET_LIMIT, token=24)), sub_st)]))
+                held_head = text
+            else:
+                out.append([Spacer(1, 3 * PX),
+                            Paragraph(_esc(_cap_name(text, limit=_SCOPE_BULLET_LIMIT, token=24)), sub_st)])
             continue
-        if columns == 1:
-            out.append(pair_row(b, None))
+        if held_head is not None:
+            out.append(indented(head_with_first(held_head, b)))
+            held_head = None
+        elif columns == 1:
+            out.append(indented(pair_row(b, None)))
         elif pending is None:
             pending = b
         else:
             out.append(pair_row(pending, b))
             pending = None
     if pending is not None:
-        out.append(pair_row(pending, None))
+        out.append(indented(pair_row(pending, None)))
+    if held_head is not None:                       # a trailing heading with nothing under it
+        out.append(indented([Paragraph(
+            _esc(_cap_name(held_head, limit=_SCOPE_BULLET_LIMIT, token=24)), sub_st)]))
     return out
 
 
@@ -976,6 +1083,21 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # Appended INSIDE this loop on purpose: span_rows records `len(rows)` as it goes, so rows
         # added here shift every later index correctly. Building them in a second pass and
         # inserting would silently break every A205 span index.
+        # A235 — THIS ITEM'S OWN scope, before the document-level block, so the bullets sit directly
+        # under the description they belong to. Indented past the thumbnail gutter so they line up
+        # with the description TEXT rather than the index column.
+        own = _scope_rows(_norm_bullets(it.get("scope")), _desc_text_width(col_w[1]),
+                          per_item=True, indent=_desc_indent())
+        if own:
+            # A fixed gap above the first bullet and below the last, so a block never touches the
+            # description above it or the rule below it. Uniform across items by construction:
+            # every block is built here, by this code, with these two spacers.
+            own[0] = [Spacer(1, 3 * PX)] + list(own[0])
+            own[-1] = list(own[-1]) + [Spacer(1, 3 * PX)]
+            for cell in own:
+                scope_row_idx.append(len(rows))
+                rows.append(["", cell, "", "", ""])
+
         if scope_rows_pending and not _k:
             for cell in scope_rows_pending:
                 scope_row_idx.append(len(rows))
@@ -1021,7 +1143,6 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # what makes an item and its inclusions read as one continuous band rather than a stripe
         # every third line, and it keeps every later item on the stripe it would have had.
         zebra, rules, phase = [], [], 0
-        last_scope = scope_row_idx[-1]
         for ri in range(1, len(rows)):
             if ri in scope_set:
                 fill = [colors.white, CARD_B][(phase - 1) % 2]
@@ -1029,11 +1150,19 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                 fill = [colors.white, CARD_B][phase % 2]
                 phase += 1
             zebra.append(("BACKGROUND", (0, ri), (-1, ri), fill))
-            # A rule under every row EXCEPT inside the scope block. The one under item 01 moves to
-            # the foot of its inclusions, which is what separates item 01's band from item 02's.
-            if ri not in scope_set or ri == last_scope:
-                if not (ri + 1 in scope_set):
-                    rules.append(("LINEBELOW", (0, ri), (-1, ri), 1, HAIR_F0))
+            # A rule under every row EXCEPT inside a scope block. The rule that would sit under the
+            # item moves to the FOOT of its inclusions, which is what separates one item's band from
+            # the next.
+            #
+            # A235 — ONE condition now, and it generalises. A213 wrote this as
+            #     (ri not in scope_set or ri == last_scope) and (ri + 1 not in scope_set)
+            # where `last_scope` was the single global last scope row — correct only while item 01
+            # was the sole item that could carry a block. With a block under EVERY item, each block's
+            # own last row needs the rule, and "is the next row inside a block?" already answers that
+            # for item rows and scope rows alike. Provably the same commands for one contiguous
+            # block, which is what keeps the existing document-level output byte-identical.
+            if (ri + 1) not in scope_set:
+                rules.append(("LINEBELOW", (0, ri), (-1, ri), 1, HAIR_F0))
 
     # Command ORDER is preserved exactly — zebra where ROWBACKGROUNDS sat, rules where LINEBELOW sat.
     # ReportLab emits its content stream in command order, so merely hoisting the rules above BOX

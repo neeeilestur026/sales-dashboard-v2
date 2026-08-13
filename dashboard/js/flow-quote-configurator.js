@@ -228,14 +228,37 @@ function qcLoadExisting(q) {
     qty: num(it.qty), price: num(it.price), uom: it.uom || '',
     origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
     itemId: it.itemId || '', vat: it.vat || '', imageDataUrl: '',
-    optionNo: String(it.optionNo || '').trim()             // A205
+    optionNo: String(it.optionNo || '').trim(),            // A205
+    scope: ''                                              // A235 — filled from layoutJson just below
   }));
+  /* A235 — put each item's scope of supply back on its line. It is NOT in `q.items`: QuotationItems
+     has no scope column and deliberately never will (adding one is the width trap that has bitten
+     this codebase five times, and no total, sales order or commission reads scope). It lives in the
+     Layout JSON blob the configurator already round-trips, keyed by Line Key. */
+  const qcScopeStore = Array.isArray(lay.itemScopes) ? lay.itemScopes : [];
+  if (qcScopeStore.length) {
+    const byKey = {};
+    qcScopeStore.forEach(e => { if (e && e.k) byKey[String(e.k)] = String(e.s || ''); });
+    /* Positional fallback, and only under two conditions at once. createQuotationFromPR rebuilds every
+       line server-side from PricingRequestItems and assigns NEW Line Keys, so the keys stored on that
+       first save match nothing and identity alone would drop the scope the rep had already typed.
+       Requiring that NO key matched and that the counts agree is what stops the fallback ever
+       shuffling scope between items on an ordinary edit, where identity is available and correct. */
+    const anyKeyHit = qcItems.some(i => byKey[String(i.lineKey)] !== undefined);
+    const alignable = !anyKeyHit && qcScopeStore.length === qcItems.length;
+    qcItems.forEach((it, idx) => {
+      const hit = byKey[String(it.lineKey)];
+      it.scope = (hit !== undefined) ? hit
+               : (alignable ? String((qcScopeStore[idx] || {}).s || '') : '');
+    });
+  }
   // A205: restore which option the stored total was built from, so reopening and re-saving does not
   // silently re-target the total to the cheapest.
   qcRecommended = String(q.recommendedOption || '').trim();
   if (qcRecommended && !qcItems.some(i => i.optionNo === qcRecommended)) qcRecommended = '';
   if (!qcItems.length) qcItems = [{ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0,
-    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '', optionNo: '' }];
+    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '', optionNo: '',
+    scope: '' }];                                          // A235
   // Document mode locks the figures (items included) but leaves the photo buttons live, because the
   // document half of the builder is where photos are managed.
   qcLocked = (qcMode === 'document');
@@ -432,7 +455,7 @@ async function qcLoadFromPR(prNo) {
       qty: (typeof flowNum === 'function' ? flowNum(i.qty) : +i.qty) || 0,
       price: (typeof flowNum === 'function' ? flowNum(i.finalPrice) : +i.finalPrice) || 0,
       uom: i.uom || '', origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',
-      itemId: i.itemId || '', vat: i.vat || '', imageDataUrl: ''
+      itemId: i.itemId || '', vat: i.vat || '', imageDataUrl: '', scope: ''   // A235
     }));
     if (!qcItems.length) { qcMsg('That request has no included items to quote.', false); return; }
 
@@ -470,7 +493,8 @@ function qcLineKey() {
 
 function qcAddRow(item) {
   qcItems.push(Object.assign({ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0, optionNo: '',
-    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '' }, item || {}));
+    uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '',
+    scope: '' }, item || {}));                             // A235
   qcRenderItems();
   qcOnChange();
 }
@@ -540,6 +564,14 @@ function qcRenderItems() {
             onclick="qcPickPhoto('${esc(i.lineKey)}')">${i.imageDataUrl ? '✓ photo' : '+ photo'}</button>${
           i.imageDataUrl ? `<button class="qc-del" style="margin-left:.3rem;"
             onclick="qcClearPhoto('${esc(i.lineKey)}')" title="Remove this photo">✕</button>` : ''}</td>
+      <!-- A235 — a BUTTON, not an inline textarea: a textarea per row would wreck the layout the
+           moment anyone typed a real scope. A236 — but its own CELL. Sharing the photo cell put two
+           nowrap pills in a column sized for one, so the scope button overhung the remove button by
+           84px and covered it completely. -->
+      <td><button class="btn btn-secondary btn-sm qc-scope-btn ${qcScopeCount(i) ? 'qc-scope-on' : ''}"
+            onclick="qcOpenScope('${esc(i.lineKey)}')"
+            title="Scope of supply printed under this item's description">${
+            qcScopeCount(i) ? '✓ scope (' + qcScopeCount(i) + ')' : '+ scope'}</button></td>
       <td>${qcLocked ? '' : `<button class="qc-del" onclick="qcRemoveRow('${esc(i.lineKey)}')" title="Remove line">✕</button>`}</td>
     </tr>`).join('');
   /* A205 — the header cell has to follow the gate too. The <th> is static markup, so leaving it
@@ -548,6 +580,58 @@ function qcRenderItems() {
   if (thOpt) thOpt.style.display = qcOptionsEnabled ? '' : 'none';
   const add = document.getElementById('qcAddBtn');
   if (add) add.style.display = qcLocked ? 'none' : '';
+}
+
+/* ── A235: scope of supply, per item ───────────────────────────────────────────────────────────
+   Printed under THAT item's description on the PDF. Separate from the document-level Scope block,
+   which stays for what is true of the whole offer (delivery, warranty, commissioning). */
+
+let qcScopeKey = null;                                  // the line currently open in the editor
+
+/** Entries in one item's scope — what the row button counts. Blank lines never count, so an
+ *  accidental trailing newline does not light the button up as though scope had been written. */
+function qcScopeCount(it) {
+  return String((it || {}).scope || '').split('\n').filter(s => s.trim()).length;
+}
+
+function qcOpenScope(key) {
+  const it = qcItems.find(i => String(i.lineKey) === String(key));
+  if (!it) return;
+  qcScopeKey = key;
+  const name = (it.itemName || it.itemNo || 'this item');
+  document.getElementById('qcScopeItem').textContent = name;
+  const box = document.getElementById('qcScopeText');
+  box.value = String(it.scope || '');
+  box.readOnly = !!qcLocked;
+  document.getElementById('qcScopeSave').style.display = qcLocked ? 'none' : '';
+  qcScopeTick();
+  document.getElementById('qcScopeOverlay').classList.add('open');
+  if (!qcLocked) box.focus();
+}
+
+/** Live count while typing, so a rep can see the block growing without saving to find out. */
+function qcScopeTick() {
+  const n = String(document.getElementById('qcScopeText').value || '')
+              .split('\n').filter(s => s.trim()).length;
+  document.getElementById('qcScopeCount').textContent =
+    n ? (n + (n === 1 ? ' entry' : ' entries') + ' — each prints on its own line under the item')
+      : 'No entries yet. One inclusion per line.';
+}
+
+function qcCloseScope() {
+  document.getElementById('qcScopeOverlay').classList.remove('open');
+  qcScopeKey = null;
+}
+
+function qcSaveScope() {
+  if (qcLocked) return qcCloseScope();
+  const it = qcItems.find(i => String(i.lineKey) === String(qcScopeKey));
+  if (it) {
+    it.scope = String(document.getElementById('qcScopeText').value || '');
+    qcRenderItems();
+    qcOnChange();                                       // refresh the live preview
+  }
+  qcCloseScope();
 }
 
 function qcSet(key, field, value) {
@@ -711,6 +795,12 @@ function qcPayload(withImages) {
       description: i.itemName || '',
       uom: i.uom || '',                                  // A147: never force "pc(s)"
       origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',   // A86 pairing
+      // A235 — this item's own scope of supply, printed under its description. Rides the item in
+      // the payload rather than a QuotationItems column: that sheet is 13 wide and every positional
+      // writer must match it, so a 14th column is the width trap that bit A186/A193/A205/A215/A218.
+      // The payload is embedded in the PDF and round-trips by lineKey, which is already the item's
+      // stable identity.
+      scope: i.scope || '',
       imageDataUrl: (showPhotos && withImages) ? (i.imageDataUrl || '') : ''
     })),
     doc: {
@@ -820,13 +910,26 @@ function qcMsg(text, good) {
 function qcLayoutJson() {
   const val = id => (document.getElementById(id) || {}).value || '';
   const on = id => document.getElementById(id).checked;
-  return JSON.stringify({
+  const lay = {
     // A176: the Template selector is gone — neither the Flask route nor the ReportLab renderer has
     // ever read `layout`, so it promised something it never did. Re-add it when A172-P4 is built.
     template: 'full', photos: val('qcPhotos') !== 'off',
     blocks: { scope: on('qcBlkScope'), exclusions: on('qcBlkExcl'), options: on('qcBlkOpts') },
     scope: val('qcScope'), exclusions: val('qcExclusions'), options: val('qcOptions')
-  });
+  };
+  /* A235 — per-item scope of supply. Stored in item ORDER and keyed by Line Key: the key is what an
+     ordinary edit re-attaches by, the order is what the from-PR path falls back to when the server
+     re-keys the lines (see qcLoadExisting). The key is omitted entirely when no item carries scope,
+     so every quotation without it stores exactly the string it stored before A235.
+     A236 — the SAME filter qcFinalize applies before saving `items`. It used to map every row,
+     including the empty one the form always leaves at the bottom, so the stored list was one longer
+     than the saved items. Keys still matched on an ordinary edit, but on the from-PR path the server
+     re-keys every line and ORDER is the only thing holding the scope — and the fallback is disabled
+     when the counts disagree. That silently dropped scope typed before the first save. */
+  const scopes = qcItems.filter(i => (i.itemNo || i.itemName))
+                        .map(i => ({ k: String(i.lineKey || ''), s: String(i.scope || '') }));
+  if (scopes.some(e => e.s.trim())) lay.itemScopes = scopes;
+  return JSON.stringify(lay);
 }
 
 async function qcFinalize() {
@@ -850,6 +953,16 @@ async function qcFinalize() {
   }
   if (qcGroups.length === 1) {
     qcMsg('Option ' + qcGroups[0].key + ' is the only option — either add another alternative, or clear the Option tag so it is an ordinary line.', false);
+    return;
+  }
+  /* A235 — the Layout JSON is ONE Google Sheets cell and a cell holds at most 50,000 characters. Past
+     that the write fails inside Apps Script with an opaque error, after the rep has pressed Finalize
+     and while their typing is the thing that gets lost. Refuse here instead, naming the cause, while
+     the text is still on screen to shorten. Nothing is truncated silently. */
+  const qcLay = qcLayoutJson();
+  if (qcLay.length > 45000) {
+    qcMsg('The scope of supply and summary text is too long to store — ' + qcLay.length.toLocaleString() +
+          ' characters against a 45,000 limit. Shorten the longest item scope and save again.', false);
     return;
   }
 

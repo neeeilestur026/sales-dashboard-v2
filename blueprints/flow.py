@@ -255,6 +255,13 @@ def quotation_pdf():
             "orig_code": _s(it.get("origItemNo")),
             "orig_name": _s(it.get("origItemName")),
             "option_no": _s(it.get("optionNo")).strip(),   # A205
+            # A235 — THIS item's own scope of supply, printed under its description. Passed RAW:
+            # flow_quotation_pdf._norm_bullets does the splitting and the **bold** detection, because
+            # the renderer is the only consumer and normalising per item here would put a loop over
+            # items into a request handler that has no other reason to know their shape. The
+            # document-level `scope` below still goes through _bullets — that path is unchanged and
+            # ~100 live quotations depend on its bytes.
+            "scope": it.get("scope"),
         })
         img = _decode_data_url(it.get("imageDataUrl"))
         if img:

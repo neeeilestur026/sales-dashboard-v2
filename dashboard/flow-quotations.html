@@ -51,7 +51,11 @@
 
   /* A175 — the Quote Configurator is now the create surface on this page: form on the left,
      the REAL generated PDF on the right. The history below is untouched. */
-  .qc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 1rem; align-items: start; }
+  /* A236 — the form column leads slightly now. It used to trail the preview (1 : 1.05), which left
+     the items table 565px against the 640px it needs once Scope has its own column, so the table
+     scrolled sideways on every desktop. 1.3 : 1 clears the 640px floor with room to spare and still
+     leaves the preview ~505px, which renders the PDF legibly. */
+  .qc-wrap { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
   /* A200 — let each grid child shrink to its track instead of its content's min-content, so the
      item table can never push the builder column under the preview pane. */
   .qc-wrap > div { min-width: 0; }
@@ -69,8 +73,16 @@
 
   /* item rows */
   /* A200 — fixed layout so the column widths below are honoured and a long description flexes into
-     the remaining space, instead of auto-layout widening the table under the preview pane. */
-  #qcItems { width: 100%; border-collapse: collapse; table-layout: fixed; }
+     the remaining space, instead of auto-layout widening the table under the preview pane.
+     A236 — min-width, because fixed layout has no give: with the live preview open this pane is only
+     ~565px, and seven columns of percentages divided into that produced cells too narrow for their
+     own contents, which then drew ON TOP of the next column (the photo button in A200, the scope
+     button in A235 — the same regression twice). 640px is the MEASURED floor, not an estimate: the
+     three button columns need 93 + 91 + 27px for their contents ("✓ photo" plus its clear ✕ is the
+     widest, and it came in 3px over the first estimate — hence the assertion below), and the four
+     inputs need 77 + 51 + 77 + 160px to stay usable with the Option column showing. Under 640px the
+     table keeps its designed widths and the wrapper scrolls — what that overflow-x:auto div is for. */
+  #qcItems { width: 100%; min-width: 640px; border-collapse: collapse; table-layout: fixed; }
   #qcItems th { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #64748b);
     text-align: left; padding: .35rem .3rem; border-bottom: 1px solid var(--border, #e2e8f0); }
   #qcItems td { padding: .3rem .25rem; vertical-align: middle; }
@@ -78,8 +90,20 @@
     font: inherit; font-size: .84rem; }
   #qcItems td.num input { text-align: right; }
   .qc-del { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1rem; line-height: 1; padding: .25rem .35rem; }
-  .qc-photo-btn { font-size: .7rem; padding: .25rem .45rem; white-space: nowrap; }
+  .qc-photo-btn { font-size: .7rem; padding: .25rem .35rem; white-space: nowrap; }
   .qc-photo-on { color: #16a34a; font-weight: 700; }
+  /* A235 — the per-item scope button. A236 — it has its own COLUMN now; it spent A235 sharing the
+     13% Photo cell with the photo button, needed 145px of the 74px available, and overhung the
+     remove button by 84px. */
+  .qc-scope-btn { font-size: .7rem; padding: .25rem .35rem; white-space: nowrap; }
+  .qc-scope-on { color: #0d9488; font-weight: 700; }
+  .qc-scope-hint { font-size: .74rem; color: var(--text-muted, #64748b); margin: .1rem 0 .5rem; }
+  .qc-scope-count { font-size: .72rem; color: var(--text-muted, #64748b); margin-top: .4rem; }
+  #qcScopeText { width: 100%; min-height: 220px; font: 13px/1.55 'Inter', system-ui, sans-serif;
+    padding: .6rem .7rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px;
+    resize: vertical; box-sizing: border-box; }
+  #qcScopeText:focus { outline: none; border-color: var(--accent, #0d9488);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, .12); }
 
   /* live totals — these update on every keystroke, with no server round trip */
   .qc-tot { margin-top: .9rem; border-top: 1px solid var(--border, #e2e8f0); padding-top: .7rem; }
@@ -197,12 +221,21 @@
               <div style="overflow-x:auto;">
               <table id="qcItems">
                 <!-- A205 — the Option column is 8%, taken from Item No and Photo so the row still
-                     totals 100% and the photo button stays reachable (the A200 regression). -->
+                     totals 100% and the photo button stays reachable (the A200 regression).
+                     A236 — Scope is its own column. In A235 its button lived in the Photo cell, which
+                     put a second nowrap pill in a column sized for one and left the "PHOTO" heading
+                     sitting above a scope control. Widths are measured, not guessed: at the 700px
+                     floor above, Photo 14% = 98px holds "✓ photo" plus its clear ✕ (90px) and
+                     Scope 15% = 96px holds "✓ scope (12)" (91px), and the actions column 5% = 32px
+                     holds the ✕ (27px). Description takes the remainder — 33% with Option hidden,
+                     25% with it shown. -->
                 <thead><tr>
                   <th id="qcThOption" style="width:8%;display:none;" title="Blank = an ordinary line, always charged. A number makes this an alternative — the client picks one option, and options are never summed together.">Option</th>
-                  <th style="width:13%;">Item No</th><th>Description</th>
-                  <th style="width:9%;">Qty</th><th style="width:15%;">Unit Price</th>
-                  <th style="width:13%;">Photo</th><th style="width:4%;"></th>
+                  <th style="width:12%;">Item No</th><th>Description</th>
+                  <th style="width:8%;">Qty</th><th style="width:12%;">Unit Price</th>
+                  <th style="width:15%;">Photo</th>
+                  <th style="width:15%;" title="Scope of supply printed under this item's description on the quotation.">Scope</th>
+                  <th style="width:5%;"></th>
                 </tr></thead>
                 <tbody id="qcItemBody"></tbody>
               </table>
@@ -384,6 +417,31 @@
       <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Document</div>
       <div id="qrPdf" style="margin-bottom:1rem;"></div>
       <div class="flow-modal-foot" id="qrFoot"></div>
+    </div>
+  </div>
+
+  <!-- A235: scope of supply for ONE item. Prints under that item's description on the PDF.
+       A dialog rather than a table column: the item table is already seven wide (A200) and an
+       inline textarea per row would collapse it the moment anyone typed a real scope. -->
+  <div class="flow-modal-overlay" id="qcScopeOverlay">
+    <div class="flow-modal" style="max-width:620px;">
+      <h3 style="margin:0 0 .2rem;">Scope of supply</h3>
+      <div class="sub" style="margin-bottom:.6rem;">for <b id="qcScopeItem">—</b></div>
+      <div class="qc-scope-hint">
+        One inclusion per line — each prints as its own bullet under this item's description.
+        Wrap a line in <b>**asterisks**</b> to make it a sub-heading (e.g. <b>**Standard
+        Accessories**</b>); it stays with the line beneath it so a page break cannot separate them.
+        Add as many lines as you like — they flow onto the next page rather than being cut.
+        A single line longer than 1,200 characters is shortened on the document with a “…”, and the
+        quotation refuses to save if all its scope text together passes 45,000 characters.
+      </div>
+      <textarea id="qcScopeText" oninput="qcScopeTick()"
+        placeholder="Machine complete with motor and control panel&#10;**Standard Accessories**&#10;3-jaw chuck 250mm&#10;Steady rest and follow rest"></textarea>
+      <div class="qc-scope-count" id="qcScopeCount">No entries yet. One inclusion per line.</div>
+      <div class="flow-modal-foot">
+        <button class="btn btn-sm" onclick="qcCloseScope()">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="qcScopeSave" onclick="qcSaveScope()">Save scope</button>
+      </div>
     </div>
   </div>
 

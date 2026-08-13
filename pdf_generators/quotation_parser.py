@@ -77,6 +77,23 @@ def _flat(s):
 assert not any(_flat(QUO_SCOPE_INTABLE_HEADING).startswith(s) for s in _ITEM_STOP), (
     "QUO_SCOPE_INTABLE_HEADING must not start with an _ITEM_STOP prefix — it would end the item table")
 
+# A235 — PER-ITEM SCOPE IS NOT SEPARATELY RECOVERABLE, and that is a deliberate trade, not an
+# oversight. An item's own scope prints with NO heading — repeating "SCOPE OF SUPPLY" under every
+# item is noise, and the heading above already names the section once — so this parser has nothing
+# to match on and reads those bullets as part of the item's DESCRIPTION.
+#
+# Benign in practice: they are descriptive lines sitting under a description, so a re-imported
+# quotation keeps every word, in the right order, attached to the right item. What is lost is only
+# the DISTINCTION between "description" and "scope" on the way back in, which matters solely if
+# somebody re-imports a quotation and then edits it — the scope reappears in the description box
+# rather than the scope dialog.
+#
+# The alternative was a machine-readable marker on every per-item block, which would either be
+# visible to the client (a heading nobody wants) or invisible-but-fragile (a zero-width sentinel
+# that any PDF round-trip could eat). The embedded JSON payload is the real recovery path anyway:
+# _embed_quo_data stores the exact source, item scopes included, and the importer prefers it.
+# This text-geometry path is the fallback for documents that never had one.
+
 
 def _num(s):
     """'3,240,216.00' -> 3240216.0. Returns None when the token is not a number."""
