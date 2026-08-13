@@ -31,7 +31,11 @@ async function main() {
 console.log('== the roster, and the two halves agreeing ==');
 const c = load(null, store());
 const ACTS = Object.keys(c._COMM_ACTIONS);
-eq('_COMM_ROLES (A212: held closed again)', c._COMM_ROLES, []);
+/* A233 — LAUNCHED. This pin is the point of the test: the roster is the one line that decides who
+   can reach a feature that pays people, so it is asserted literally rather than derived. Everything
+   below reads OPEN/HELD off the constant, so the whole file re-aims itself when this changes — but
+   this line has to be edited deliberately, which is exactly the friction it is here to create. */
+eq('_COMM_ROLES (A233: launched to all three)', c._COMM_ROLES, ['director', 'management', 'sales']);
 eq('and the browser half agrees', commissionRoster(), c._COMM_ROLES);
 const OPEN = c._COMM_ROLES.slice();
 const HELD = ALL.filter(r => OPEN.indexOf(r) < 0);
@@ -74,14 +78,18 @@ ok('setMgmtPricing (unrelated, similar name) is not caught', !call(c, 'setMgmtPr
 
 console.log('\n== the gate is reversible in BOTH directions ==');
 {
+  /* A233 — the simulated edit is now the CLOSE, because the open direction is the live state and is
+     already proven above for all seven roles. Reversibility still has to be shown from wherever the
+     baseline currently is: emptying the roster must hold every action again, or the kill switch has
+     stopped being a kill switch and there is no way back if the launch goes wrong. */
   const w = load(null, store());
-  w._COMM_ROLES = ['director', 'management', 'sales'];        // the launch edit
-  const held = ACTS.filter(a => call(w, a, Object.assign({}, ARGS,
+  w._COMM_ROLES = [];                                          // the close edit
+  const open = ACTS.filter(a => !call(w, a, Object.assign({}, ARGS,
     { actorRole: 'sales', rate: '3', settings: '{}', collectionNos: '[]' })).comingSoon);
-  eq('adding sales opens all ' + ACTS.length + ' for them', held, []);
-  eq('and a getter returns real data, not a stub',
-     [call(w, 'getCommissionRates', { actorRole: 'sales' }).success,
-      Array.isArray(call(w, 'getCommissionRates', { actorRole: 'sales' }).data)], [true, true]);
+  eq('emptying the roster holds all ' + ACTS.length + ' again', open, []);
+  eq('and a getter is refused rather than returning data',
+     [call(w, 'getCommissionRates', { actorRole: 'sales' }).comingSoon,
+      call(w, 'getCommissionRates', { actorRole: 'director' }).comingSoon], [true, true]);
 }
 
 console.log('\n== the browser half: every held role sees nothing run and nothing show ==');

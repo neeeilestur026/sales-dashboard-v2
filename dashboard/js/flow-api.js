@@ -363,13 +363,18 @@ function flowMoney(v, cur) {
    is worse than a closed one. Nothing else from A211 was rolled back — every access-control fix
    stays, and re-opening is one word in this array plus one in _COMM_ROLES.
 
-   TO OPEN FOR TESTING AGAIN: ['director', 'management'].
-   TO LAUNCH, both together:
-     1. add 'sales' here
-     2. add it to `var _COMM_ROLES` in apps-script/FlowAPI.gs, bump FLOW_VERSION, and paste it
-   The backend refuses every commission action on its own, so changing only this one exposes nothing
-   a user can act on — which is the intended failure direction. */
-const FLOW_COMMISSIONS_ROLES = [];
+   A233 — LAUNCHED. All three roles, on the director's instruction. Sales reps can now file
+   commission requests that decide what they are paid.
+
+   THIS HALF DOES NOTHING ON ITS OWN. _COMM_ROLES in apps-script/FlowAPI.gs is the half that lets an
+   action through, and it only takes effect once FlowAPI.gs is pasted AND redeployed as a new version.
+   Until that happens the pages open and every commission action is refused server-side — the same
+   safe failure direction the hold always had, but a broken-looking one, so the paste is not optional.
+
+   TO CLOSE AGAIN: empty this array and _COMM_ROLES. Note that closing after launch is NOT free the
+   way it was before — reps will have in-flight requests, and a closed feature strands them where
+   they stand rather than losing them. */
+const FLOW_COMMISSIONS_ROLES = ['director', 'management', 'sales'];
 
 /** Is the commission feature open to this role? Mirrors _COMM_ROLES in FlowAPI.gs. */
 function flowCommissionsLiveFor(role) {

@@ -305,6 +305,19 @@ function cmActions(r) {
   let a = B(`cmDetail("${no}")`, 'Details');
   const editable = r.status === 'Draft' || r.status === 'Rejected';
   if (editable) {
+    /* A234 — flag the fully-collected gate, but do NOT disable Submit.
+     *
+     * The plan said disable it. This is better, and the reason is staleness: r.coverageNote is the
+     * snapshot written when the draft was last saved, while the server re-derives from live
+     * collections at submit. A rep whose balance landed this morning would be looking at a dead
+     * button telling them they cannot do something they can — which is a worse failure than a live
+     * button that comes back with a precise refusal, because the dead one offers no way to find out.
+     *
+     * So: warn from the snapshot, let the server decide from the truth. cmSubmit already surfaces
+     * that refusal verbatim, and it names the shortfall in pesos. */
+    if (/PARTIAL/.test(String(r.coverageNote || ''))) {
+      a += `<span class="cm-gate" title="${flowEsc(r.coverageNote)}">not fully collected</span>`;
+    }
     a += B(`cmSubmit("${no}")`, 'Submit');
     a += B(`cmDelete("${no}")`, 'Delete', 'del-btn');
   }
