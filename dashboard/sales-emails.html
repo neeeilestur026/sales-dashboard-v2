@@ -65,6 +65,13 @@
     .at-mail .m { font-size: .76rem; color: var(--text-muted, #64748b); margin-top: .2rem;
       overflow-wrap: anywhere; }
 
+    /* A232 — the search over the rep's own quotations. */
+    .at-search { width: 100%; padding: .5rem .7rem; border-radius: 8px; font: inherit; font-size: .86rem;
+      border: 1px solid var(--border, #e2e8f0); background: var(--card, #fff); color: inherit;
+      margin: .1rem 0 .45rem; }
+    .at-search:focus { outline: none; border-color: var(--accent, #0d9488);
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, .12); }
+    .at-count { font-size: .76rem; color: var(--text-muted, #64748b); margin: 0 0 .45rem; }
     .at-list { display: flex; flex-direction: column; gap: .5rem; max-height: 46vh; overflow-y: auto;
       padding: 2px; margin: 0 -2px; }
     .at-opt { display: flex; gap: .8rem; align-items: flex-start; text-align: left; width: 100%;
@@ -207,6 +214,11 @@
       <div class="sub">Pick the quotation this message carried. Best guesses first — nothing is linked
         until you choose.</div>
       <div class="at-mail" id="atMail"></div>
+      <!-- A232: the list is no longer capped at six, so it needs a way through. Hidden by
+           atRender when there are six or fewer — a search box over five rows is just clutter. -->
+      <input type="text" id="atSearch" class="at-search" autocomplete="off"
+             placeholder="Search your quotations by number or customer…">
+      <div class="at-count" id="atCount"></div>
       <div class="at-list" id="atList"></div>
       <div class="at-note" id="atNote"></div>
       <div class="flow-modal-foot">

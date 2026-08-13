@@ -197,7 +197,11 @@ async function seLoadQuotations() {
          sent whenever somebody else had typed the quotation for them: the message sits in the
          OWNER's Sent folder, and the owner is who must be offered it. The parameter name is
          unchanged; getQuotations now resolves it through _quoOwner. */
-      fetchFlow('getQuotations', deSession.role === 'sales' ? { createdBy: deSession.name } : {}).catch(() => ({ data: [] })),
+      /* A232 — scoped for EVERY role, not just sales. This page is one person's Sent folder, so the
+         only quotations that message could have carried are that person's. The old `role === 'sales'
+         ? … : {}` handed anybody else the whole book (94 rows live) — and since the guard here is
+         requireAuth(), not a sales check, any signed-in role reaching this page by URL got them. */
+      fetchFlow('getQuotations', { createdBy: deSession.name }).catch(() => ({ data: [] })),
       fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
       /* A230 — the "not this" rows, read separately. See the twin comment in flow-quotations.js:
          the call above returns Active only, and widening it would change what seLinks MEANS for
@@ -479,8 +483,9 @@ async function seUnlink(linkId, quotationNo, messageId) {
    Nothing is pre-selected unless qemIsConfident says the top match is both strong and unambiguous;
    a merely least-bad guess must not arrive looking like an answer. */
 let atRanked = [];
-let atPick = -1;
+let atPick = -1;        // index into atRanked — NEVER into the filtered view (see atView)
 let atMsg = null;
+let atQuery = '';       // A232: the search box
 
 /** The same scorer as the quotation-side modal, arguments reversed: message fixed, quotations ranked. */
 function seAttach(messageId) {
@@ -488,7 +493,16 @@ function seAttach(messageId) {
   if (!m || typeof qemRankQuotations !== 'function') return;
   // A217: one ranking, shared with the side pane — two copies would eventually rank differently and
   // the dialog would contradict the list the rep is looking at.
-  atRanked = seRankFor(m).slice(0, 6);
+  /* A232 — NO SLICE. This used to be .slice(0, 6) and the dialog had no search, so the top six were
+     not the first page of the list, they were the ONLY quotations reachable: a message that actually
+     carried the rep's seventh-best match could not be attached at all, and the dialog gave no hint
+     that anything had been withheld. The list is the rep's OWN quotations (scoped in the fetch), so
+     it is tens of rows, not the whole book — the .at-list box already scrolls, and the search below
+     is what makes a long list usable. Ranking and order are untouched. */
+  atRanked = seRankFor(m);
+  atQuery = '';
+  const box = document.getElementById('atSearch');
+  if (box) box.value = '';
   atMsg = m;
   /* Only pre-select a genuinely confident top match — see qemIsConfident. */
   atPick = (typeof qemIsConfident === 'function' && qemIsConfident(atRanked)) ? 0 : -1;
@@ -503,7 +517,26 @@ function atOpen(on) {
   if (on) {
     const first = ov.querySelector('.at-opt');
     if (first) first.focus();
-  } else { atRanked = []; atPick = -1; atMsg = null; }
+  } else { atRanked = []; atPick = -1; atMsg = null; atQuery = ''; }
+}
+
+/* A232 — the search view.
+ *
+ * Returns [{ r, i }] where i is the index in atRanked, NOT in the filtered array. That indirection is
+ * the whole point: atPick indexes atRanked and the confirm handler reads atRanked[atPick], so if the
+ * rendered buttons carried their filtered position instead, typing a search would silently re-point
+ * the selection and ATTACH THE WRONG QUOTATION. Filter order is left alone, so the ranking still
+ * decides what comes first.
+ *
+ * Matching is on the quotation number and the customer — the two things a rep knows off the top of
+ * their head. Status and money are shown but not searched: nobody looks for a quotation by typing
+ * "Approved". */
+function atView() {
+  const q = atQuery.trim().toLowerCase();
+  const all = atRanked.map((r, i) => ({ r: r, i: i }));
+  if (!q) return all;
+  return all.filter(x => (String(x.r.quotation.quotationNo || '') + ' ' +
+                          String(x.r.quotation.customer || '')).toLowerCase().indexOf(q) !== -1);
 }
 
 function atRender() {
@@ -514,14 +547,35 @@ function atRender() {
     `<div class="m">to ${_esc(to || '—')}${m.date ? ' · ' + _esc(_when(m.date)) : ''}</div>`;
 
   const list = document.getElementById('atList');
+  const search = document.getElementById('atSearch');
+  const count = document.getElementById('atCount');
   if (!atRanked.length) {
-    list.innerHTML = '<div class="at-empty">No approved or sent quotation to attach this to.<br>' +
-      'A quotation becomes attachable once it has been approved.</div>';
+    /* Say WHOSE list is empty. The scope is not obvious from the dialog, and "no quotation to attach"
+       reads as a fault in the page when the real answer is that this mailbox's owner has none yet. */
+    list.innerHTML = '<div class="at-empty">You have no approved or sent quotation to attach this to.<br>' +
+      'A quotation becomes attachable once it has been approved, and only your own are offered here.</div>';
     document.getElementById('atNote').textContent = '';
     document.getElementById('atConfirm').disabled = true;
+    if (search) search.style.display = 'none';
+    if (count) count.textContent = '';
     return;
   }
-  list.innerHTML = atRanked.map((r, i) => {
+  /* The search only earns its space once the list is long enough to need it. */
+  if (search) search.style.display = atRanked.length > 6 ? '' : 'none';
+
+  const view = atView();
+  if (count) {
+    count.textContent = atQuery.trim()
+      ? `${view.length} of ${atRanked.length} of your quotations`
+      : `${atRanked.length} of your quotations, best guesses first`;
+  }
+  if (!view.length) {
+    list.innerHTML = `<div class="at-empty">Nothing matches “${_esc(atQuery.trim())}”.<br>` +
+      'Search by quotation number or customer.</div>';
+    atNoteAndButton(view);
+    return;
+  }
+  list.innerHTML = view.map(({ r, i }) => {
     const q = r.quotation;
     const why = r.reasons.length
       ? r.reasons.map(x => `<span>${_esc(x)}</span>`).join('')
@@ -540,22 +594,53 @@ function atRender() {
         ${i === 0 && atPick === 0 ? '<span class="at-best">best match</span>' : ''}
       </button>`;
   }).join('');
-  document.getElementById('atNote').textContent = atPick < 0
-    ? 'No single quotation stands out, so none is pre-selected — pick the right one.'
-    : '';
-  document.getElementById('atConfirm').disabled = atPick < 0;
+  atNoteAndButton(view);
 }
 
-function atSelect(i) { atPick = i; atRender(); document.querySelectorAll('.at-opt')[i].focus(); }
+/* A232 — the note and the Attach button, in ONE place so the two branches above cannot disagree.
+ *
+ * The case that matters: a rep picks a quotation, then types in the search and their pick drops out
+ * of the view. The selection is still real and Attach still works on it — so rather than silently
+ * attaching something no longer on screen, the note NAMES it. Clearing the pick instead would throw
+ * away a deliberate choice because somebody typed a letter. */
+function atNoteAndButton(view) {
+  const note = document.getElementById('atNote');
+  const ok = document.getElementById('atConfirm');
+  if (!note || !ok) return;
+  if (atPick < 0) {
+    note.textContent = 'No single quotation stands out, so none is pre-selected — pick the right one.';
+  } else if (!view.some(x => x.i === atPick)) {
+    const q = (atRanked[atPick] || {}).quotation || {};
+    note.textContent = 'Selected: ' + (q.quotationNo || '—') + ' — not shown by the current search.';
+  } else {
+    note.textContent = '';
+  }
+  ok.disabled = atPick < 0;
+}
+
+/** `i` is an index into atRanked, so the button has to be found by data-i — its position in the DOM
+ *  is the FILTERED position and the two stop agreeing the moment the search box has anything in it. */
+function atSelect(i) {
+  atPick = i;
+  atRender();
+  const el = document.querySelector('.at-opt[data-i="' + i + '"]');
+  if (el) el.focus();
+}
 
 /** Arrow keys move through the list, Enter attaches. A picker you have to reach for the mouse to
- *  use is slower than the prompt() it replaced. */
+ *  use is slower than the prompt() it replaced.
+ *  A232: navigate the RENDERED buttons. The old version stepped through atRanked by index modulo its
+ *  length, which with a search active would land on a quotation that is not on screen. */
 function atKey(ev, i) {
-  const n = atRanked.length;
+  const opts = Array.prototype.slice.call(document.querySelectorAll('.at-opt'));
+  const n = opts.length;
+  if (!n) return;
   if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
     ev.preventDefault();
-    const next = (i + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
-    document.querySelectorAll('.at-opt')[next].focus();
+    const at = opts.findIndex(el => el.getAttribute('data-i') === String(i));
+    const from = at < 0 ? 0 : at;
+    const next = (from + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+    opts[next].focus();
   } else if (ev.key === 'Enter' || ev.key === ' ') {
     ev.preventDefault(); atSelect(i);
   }
@@ -565,6 +650,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancel = document.getElementById('atCancel'), ok = document.getElementById('atConfirm'),
         ov = document.getElementById('atOverlay');
   if (cancel) cancel.addEventListener('click', () => atOpen(false));
+  /* A232 — re-render on every keystroke. atRender reads atQuery and rebuilds the view; the selection
+     survives because it is stored as an atRanked index, not a position on screen. */
+  const box = document.getElementById('atSearch');
+  if (box) box.addEventListener('input', () => { atQuery = box.value || ''; atRender(); });
   if (ov) ov.addEventListener('click', (e) => { if (e.target === ov) atOpen(false); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && ov && ov.classList.contains('open')) atOpen(false);
