@@ -46,6 +46,60 @@ const TV_DEBOUNCE = 500;
 const TV_WAKE_AFTER = 4000;
 const TV_MIN_FLOW_VERSION = 119;   // A212-3/4/5 — the chain and the money arrived with 119
 const TV_KINDS = ['Transport', 'Meals', 'Load', 'Tips/Porterage', 'Parking/Toll', 'Other'];
+
+/* A237 — WHAT THE LEG WAS, chosen once, driving both printed pages.
+
+   Until now `means` was free text and `kind` was hardcoded 'Transport' at every creation site, so
+   TV_KINDS above was dead and a lunch printed on the Travel Itinerary as a journey leg. Worse, the
+   COENRR membership was derived from whether a receipt PHOTO happened to be attached yet — so every
+   leg landed on the certificate the moment it was added, before the rep had uploaded anything.
+
+   That is not a cosmetic default. The COENRR is a signed certification that these particular
+   expenses CANNOT produce an official receipt; a bus fare or a hotel bill on it is a false statement
+   that the rep certifies and the director approves. The list below is the domain fact instead:
+   `cert: true` is Philippine informal transport, which genuinely never issues an OR.
+
+   `kind` must stay inside TV_KINDS — it is what page 2 filters on (kind == 'Transport') and what the
+   cover sheet's transport subtotal sums. `cert` is only the DEFAULT: the rep can flip any single leg,
+   because a jeepney operator occasionally does issue a receipt and a carinderia occasionally does
+   not, and a vocabulary that cannot be overridden just gets worked around by mislabelling the leg. */
+const TV_MEANS = [
+  { v: 'Tricycle',         kind: 'Transport',      cert: true  },
+  { v: 'Jeepney',          kind: 'Transport',      cert: true  },
+  { v: 'Pedicab',          kind: 'Transport',      cert: true  },
+  { v: 'Habal-habal',      kind: 'Transport',      cert: true  },
+  { v: 'Bus',              kind: 'Transport',      cert: false },
+  { v: 'Taxi / Grab',      kind: 'Transport',      cert: false },
+  { v: 'UV Express / Van', kind: 'Transport',      cert: false },
+  { v: 'Ferry / Boat',     kind: 'Transport',      cert: false },
+  { v: 'Plane',            kind: 'Transport',      cert: false },
+  { v: 'Fuel',             kind: 'Transport',      cert: false },
+  { v: 'Parking / Toll',   kind: 'Parking/Toll',   cert: false },
+  { v: 'Meals',            kind: 'Meals',          cert: false },
+  { v: 'Lodging',          kind: 'Other',          cert: false },
+  { v: 'Load / Data',      kind: 'Load',           cert: false },
+  { v: 'Tips / Porterage', kind: 'Tips/Porterage', cert: false },
+  { v: 'Other',            kind: 'Other',          cert: false }
+];
+
+/** The row for a means, or null when it is a legacy free-text value we have never seen. */
+function tvMeansSpec(means) {
+  const m = String(means || '').trim().toLowerCase();
+  return TV_MEANS.filter(x => x.v.toLowerCase() === m)[0] || null;
+}
+
+/** Options for one leg's Transport cell. An unrecognised stored value is offered as itself rather
+ *  than silently rewritten — legacy legs read "Trike" or "jeep" and that is what the rep typed. */
+function tvMeansOptions(cur) {
+  const esc = flowEsc;
+  const known = tvMeansSpec(cur);
+  const sel = String(cur || '');
+  let out = '<option value=""' + (sel ? '' : ' selected') + '>—</option>';
+  if (sel && !known) out += '<option value="' + esc(sel) + '" selected>' + esc(sel) + ' (as typed)</option>';
+  return out + TV_MEANS.map(x =>
+    '<option value="' + esc(x.v) + '"' + (known && known.v === x.v ? ' selected' : '') + '>' +
+    esc(x.v) + '</option>').join('');
+}
 /* The sum of every attached receipt, not each one. FLOW_DOC_MAX_MB caps a single file and nothing
    caps the total — but the 16MB limit is on the WHOLE request and base64 inflates by a third, so
    four large photos 413 before a byte reaches the generator. */
@@ -143,7 +197,11 @@ async function tvLoad() {
     tvLegs = (tvRecord.items || []).map(i => ({
       seq: i.seq, date: i.date, kind: i.kind || 'Transport', description: i.description,
       departureTime: i.departureTime, arrivalTime: i.arrivalTime, means: i.means,
-      amount: i.amount, hasReceipt: !!i.hasReceipt, receiptDocId: i.receiptDocId || '',
+      amount: i.amount, receiptDocId: i.receiptDocId || '',
+      /* A237 — the stored 'Has Receipt' IS the treatment, so a reopened week shows exactly what was
+         filed. It is not re-derived from the means here: that would silently rewrite a deliberate
+         override the moment somebody opened an approved report. */
+      noReceipt: !i.hasReceipt,
       dataUrl: ''
     }));
     tvSeqCounter = tvLegs.reduce((m, l) => Math.max(m, tvNum(l.seq)), 0);
@@ -178,7 +236,7 @@ async function tvLoadReceipts() {
     if (r.missing) {
       /* The Documents row survives but the file behind it does not. Clear the leg so the rep is
          asked for it again, and leave the id in the map so the next save clears the dead row. */
-      if (l) { l.dataUrl = ''; l.receiptDocId = ''; l.hasReceipt = false; }
+      if (l) { l.dataUrl = ''; l.receiptDocId = ''; }   // A237: treatment is the rep's, not the file's
       return;
     }
     if (!l || !r.base64) return;
@@ -401,14 +459,57 @@ function tvRenderLegs() {
       <td><input data-f="description" value="${flowEsc(l.description || '')}" placeholder="Residence to Terminal"${dis}></td>
       <td><input data-f="departureTime" value="${flowEsc(l.departureTime || '')}" placeholder="7:30 AM"${dis}></td>
       <td><input data-f="arrivalTime" value="${flowEsc(l.arrivalTime || '')}" placeholder="7:40 AM"${dis}></td>
-      <td><input data-f="means" value="${flowEsc(l.means || '')}" placeholder="Tricycle"${dis}></td>
+      <td><select data-f="means"${dis}>${tvMeansOptions(l.means)}</select></td>
       <td class="num"><input data-f="amount" type="number" step="0.01" value="${l.amount || ''}"${dis}></td>
-      <td><button class="btn btn-sm tv-rcpt${l.dataUrl || l.receiptDocId ? ' on' : ''}"
-                  onclick="tvPickReceipt(${i})"${dis}>${l.dataUrl || l.receiptDocId ? '✓ photo' : 'attach'}</button></td>
+      <td>
+        <select data-f="noReceipt" class="tv-treat"${dis}
+                title="A leg on the certificate is one that CANNOT produce an official receipt. Anything that can must carry its photo instead.">
+          <option value="no"${l.noReceipt ? '' : ' selected'}>Receipt</option>
+          <option value="yes"${l.noReceipt ? ' selected' : ''}>On certificate</option>
+        </select>
+        ${l.noReceipt ? '' :
+          `<button class="btn btn-sm tv-rcpt${l.dataUrl || l.receiptDocId ? ' on' : ''}"
+                   onclick="tvPickReceipt(${i})"${dis}>${l.dataUrl || l.receiptDocId ? '✓ photo' : 'attach'}</button>`}
+      </td>
       <td><button class="tv-del" onclick="tvDelLeg(${i})" title="Remove"${dis}>&times;</button></td>
     </tr>`).join('') ||
     '<tr><td colspan="8" style="padding:1rem;color:var(--text-muted,#64748b);font-size:.85rem;">' +
     'No legs yet — add one, or fill them in from the visits you logged this week.</td></tr>';
+
+  /* A237 — the Transport choice drives BOTH projections: `kind` decides whether the leg prints on
+     the Travel Itinerary, `noReceipt` whether it prints on the certificate. Re-deriving on every
+     change is deliberate — a rep who corrects Bus to Tricycle means the whole treatment, not just
+     the label — and it is visible immediately, so a deliberate override is simply re-applied after. */
+  body.querySelectorAll('select[data-f="means"]').forEach(sel => {
+    sel.addEventListener('change', ev => {
+      const l = tvLegs[Number(ev.target.closest('tr').getAttribute('data-i'))];
+      if (!l) return;
+      l.means = ev.target.value;
+      const spec = tvMeansSpec(l.means);
+      if (spec) {
+        l.kind = spec.kind;
+        l.noReceipt = spec.cert;
+        if (l.noReceipt) { l.dataUrl = ''; l.rcptDirty = !!l.receiptDocId; l.receiptDocId = ''; }
+      }
+      tvRenderLegs();
+      tvOnChange();
+    });
+  });
+
+  body.querySelectorAll('select[data-f="noReceipt"]').forEach(sel => {
+    sel.addEventListener('change', ev => {
+      const l = tvLegs[Number(ev.target.closest('tr').getAttribute('data-i'))];
+      if (!l) return;
+      l.noReceipt = ev.target.value === 'yes';
+      /* Moving a leg ONTO the certificate drops any photo on it: the certificate's whole claim is
+         that no receipt exists, so shipping one in the annex beside it contradicts the document the
+         rep signs. Clearing it here means the next save also clears the Drive row. */
+      if (l.noReceipt) { l.dataUrl = ''; l.rcptDirty = !!l.receiptDocId; l.receiptDocId = ''; }
+      tvPreviewReceipts = true;
+      tvRenderLegs();
+      tvOnChange();
+    });
+  });
 
   body.querySelectorAll('input').forEach(inp => {
     inp.addEventListener('input', ev => {
@@ -429,26 +530,41 @@ function tvRenderTotals() {
   const t = tvLegs.reduce((s, l) => s + tvNum(l.amount), 0);
   const trans = tvLegs.filter(l => (l.kind || 'Transport') === 'Transport')
     .reduce((s, l) => s + tvNum(l.amount), 0);
-  const noR = tvLegs.filter(l => !(l.dataUrl || l.receiptDocId))
-    .reduce((s, l) => s + tvNum(l.amount), 0);
+  /* A237 — the certificate subtotal follows the TREATMENT, exactly as the printed page does. It used
+     to follow "has no photo yet", which is why this line and page 3 both read the whole claim. */
+  const certLegs = tvLegs.filter(l => l.noReceipt);
+  const noR = certLegs.reduce((s, l) => s + tvNum(l.amount), 0);
+  /* The gap this change opens up, named rather than left to be discovered by an approver: a leg that
+     needs a receipt and has no photo is now on NEITHER printed page, so silence about it would be a
+     regression on the old behaviour, which at least printed it somewhere. */
+  const owing = tvLegs.filter(l => !l.noReceipt && !(l.dataUrl || l.receiptDocId) && tvNum(l.amount) > 0);
   const flt = tvNum(document.getElementById('tvFloat').value);
   const rem = Math.max(0, flt - t), adv = Math.max(0, t - flt);
   const m = v => flowMoney(v, 'PHP');
   document.getElementById('tvTotals').innerHTML =
     `<div class="row"><span>On the itinerary page (trips)</span><span class="v">${m(trans)}</span></div>
-     <div class="row"><span>On the certification page (no receipt)</span><span class="v">${m(noR)}</span></div>
+     <div class="row"><span>On the certification page (no receipt possible) — ${certLegs.length} leg${certLegs.length === 1 ? '' : 's'}</span><span class="v">${m(noR)}</span></div>
      <div class="row grand"><span>Total spent — what you are claiming</span><span class="v">${m(t)}</span></div>
      <div class="row"><span>Float held</span><span class="v">${m(flt)}</span></div>
      <div class="row${adv ? ' over' : ''}"><span>${adv ? 'You advanced' : 'Remaining in your float'}</span>
-       <span class="v">${m(adv || rem)}</span></div>`;
+       <span class="v">${m(adv || rem)}</span></div>` +
+    (owing.length
+      ? `<div class="tv-owing">${owing.length} leg${owing.length === 1 ? '' : 's'} still ` +
+        `${owing.length === 1 ? 'needs' : 'need'} a receipt photo — ` +
+        `${m(owing.reduce((s, l) => s + tvNum(l.amount), 0))}. Attach ` +
+        `${owing.length === 1 ? 'it' : 'them'}, or set the leg to <b>On certificate</b> if no receipt ` +
+        `exists for it.</div>`
+      : '');
 }
 
 function tvAddLeg() {
   if (!tvEditable()) return;
   const wk = tvWeek();
+  /* A237 — a new leg starts with NO transport chosen and expecting a receipt. It used to start on the
+     certificate, which is how every leg ended up there: the rep had simply not attached a photo yet. */
   tvLegs.push({ seq: ++tvSeqCounter, date: wk[0] || '', kind: 'Transport', description: '',
                 departureTime: '', arrivalTime: '', means: '', amount: 0,
-                hasReceipt: false, receiptDocId: '', dataUrl: '' });
+                noReceipt: false, receiptDocId: '', dataUrl: '' });
   tvRenderLegs();
   tvOnChange();
 }
@@ -475,7 +591,7 @@ async function tvPrefill() {
       tvLegs.push({ seq: ++tvSeqCounter, date: String(v.date).slice(0, 10), kind: 'Transport',
         description: 'to ' + [v.company, v.cityAddress].filter(Boolean).join(', '),
         departureTime: '', arrivalTime: v.time || '', means: '', amount: 0,
-        hasReceipt: false, receiptDocId: '', dataUrl: '' });
+        noReceipt: false, receiptDocId: '', dataUrl: '' });   // A237
     });
     tvRenderLegs();
     tvOnChange();
@@ -504,11 +620,15 @@ async function tvReceiptChosen(ev) {
     /* 1400px, not the configurator's 900: a receipt is READ at half a page in the annex, where 900
        is legible as a thumbnail but not as a document. */
     l.dataUrl = await flowDownscaleImage(file, 1400, 0.72);
-    l.hasReceipt = true;
+    /* A237 — attaching a photo no longer DECIDES the treatment; it only supplies the evidence for a
+       leg the rep already said needs a receipt. Deriving it here is exactly what put every unphotographed
+       leg on the certificate. It does clear the certificate flag, because attaching a receipt to a leg
+       certified as having none is a contradiction, and the rep's action is the more recent statement. */
+    l.noReceipt = false;
     l.rcptDirty = true;          // only a dirty leg is re-uploaded; a read-back one is left alone
     const total = tvLegs.reduce((s, x) => s + (x.dataUrl ? x.dataUrl.length : 0), 0);
     if (total > TV_MAX_TOTAL_MB * 1024 * 1024) {
-      l.dataUrl = ''; l.hasReceipt = false; l.rcptDirty = false;
+      l.dataUrl = ''; l.rcptDirty = false;
       flowMsg('tvMsg', 'Those receipts come to more than ' + TV_MAX_TOTAL_MB + 'MB together, which ' +
         'the server will refuse. Remove one before adding this.', false);
       tvRenderLegs();
@@ -538,7 +658,9 @@ function tvPayload(withReceipts) {
     items: tvLegs.map(l => ({
       seq: l.seq, date: l.date, kind: l.kind || 'Transport', description: l.description,
       departureTime: l.departureTime, arrivalTime: l.arrivalTime, means: l.means,
-      amount: tvNum(l.amount), hasReceipt: !!(l.dataUrl || l.receiptDocId),
+      /* A237 — 'Has Receipt' is the TREATMENT the rep chose, not whether a photo happens to be
+         attached yet. Deriving it from the file is what put every leg on the certificate. */
+      amount: tvNum(l.amount), hasReceipt: !l.noReceipt,
       receiptDocId: l.receiptDocId || ''
     })),
     /* The seq always goes; the BYTES only on the one render after the set changed. That keeps the
@@ -614,7 +736,9 @@ function tvWriteRecord(wk) {
     items: JSON.stringify(tvLegs.map(l => ({
       seq: l.seq, date: l.date, kind: l.kind || 'Transport', description: l.description,
       departureTime: l.departureTime, arrivalTime: l.arrivalTime, means: l.means,
-      amount: tvNum(l.amount), hasReceipt: !!(l.dataUrl || l.receiptDocId),
+      /* A237 — 'Has Receipt' is the TREATMENT the rep chose, not whether a photo happens to be
+         attached yet. Deriving it from the file is what put every leg on the certificate. */
+      amount: tvNum(l.amount), hasReceipt: !l.noReceipt,
       receiptDocId: l.receiptDocId || ''
     })))
   });
