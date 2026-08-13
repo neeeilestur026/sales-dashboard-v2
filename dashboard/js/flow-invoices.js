@@ -4,15 +4,24 @@ let ivInventory = [];
 let ivCurrent = null;
 let ivSession = null;
 let ivCanVoid = false;   // A158: the void action needs FlowAPI v94
+let ivViewer = false;    // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
-  ivSession = requireAccountingOrAdmin();
+  ivSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!ivSession) return;
+  ivViewer = isFlowViewerRole(ivSession);
+  flowSetViewerOnly(ivViewer);
+  if (ivViewer) {
+    /* Issuing deducts inventory and books COGS — the heaviest write in the whole flow. Both the form
+       and the CTA that scrolls to it go, or the button leads somewhere that is no longer there. */
+    ['formCard', 'newInvCta'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  }
   renderNavbar('flow-invoices');
   renderFlowNav('flow-invoices.html');
   // A158: voiding an invoice needs the v94 backend — gate it so it can't fail with 'Unknown action'.
   try { ivCanVoid = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(94) : false; }
   catch (e) { ivCanVoid = false; }
+  if (ivViewer) ivCanVoid = false;   // A231 — one flag decides the button, as on flow-collections
   document.getElementById('date').value = flowToday();
   await Promise.all([loadSOOptions(), loadInventory()]);
   await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();

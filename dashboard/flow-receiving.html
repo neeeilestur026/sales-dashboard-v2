@@ -19,7 +19,7 @@
           <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
           <div><div class="eyebrow">Process Flow · Step 5 of 6</div><h1>Materials Receiving</h1><p>Load a purchase order, enter total shipping cost, and the system pro-rates it into the landed cost per item, then updates inventory.</p></div>
         </div>
-        <a class="btn btn-primary" onclick="document.querySelector('.chart-card').scrollIntoView({behavior:'smooth',block:'center'});">Receive Materials &rarr;</a>
+        <a class="btn btn-primary" id="receiveCta" onclick="document.querySelector('.chart-card').scrollIntoView({behavior:'smooth',block:'center'});">Receive Materials &rarr;</a>
       </div>
         <nav class="stepper">
           <a class="step done" href="flow-inventory.html"><span class="n">1</span>Inventory</a><span class="step-sep">&rsaquo;</span>
@@ -38,7 +38,7 @@
         <div class="kpi"><div class="top"><span class="l">Input VAT</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span></div><div class="v sm" id="kpiVat">—</div><div class="d">recoverable</div></div>
       </div>
 
-    <div class="chart-card" style="margin-bottom:1.25rem;">
+    <div class="chart-card" style="margin-bottom:1.25rem;" id="formCard">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">New Receiving</h3>
       <div class="flow-form">
         <div><label>Load Purchase Order *</label><select id="loadPO" onchange="loadFromPO()"></select></div>

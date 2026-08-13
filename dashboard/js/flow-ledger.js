@@ -3,8 +3,10 @@ let glJournal = [];
 let glSession = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  glSession = requireAccountingOrAdmin();
+  glSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!glSession) return;
+  flowSetViewerOnly(isFlowViewerRole(glSession));       // no writes here today; see flow-home.html
+
   renderNavbar('flow-ledger');
   renderFlowNav('flow-ledger.html');
   await loadAll();

@@ -1,10 +1,16 @@
 /* flow-suppliers.js — supplier master (A145). Bank/payment details prefill the payment request. */
 let supData = [];
 let supSession = null;
+let supViewer = false;    // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
-  supSession = requireAccountingOrAdmin();
+  supSession = requireFlowOperations();                 // A231 — management admitted as a viewer
   if (!supSession) return;
+  supViewer = isFlowViewerRole(supSession);
+  flowSetViewerOnly(supViewer);
+  /* Hide the whole add/edit card, not just its Save button: a form a viewer can type into but never
+     submit invites them to fill it in and lose the work. Same call the inventory page makes. */
+  if (supViewer) { const fc = document.getElementById('formCard'); if (fc) fc.style.display = 'none'; }
   renderNavbar('flow-suppliers');
   renderFlowNav('flow-suppliers.html');
   const s = document.getElementById('sSearch');
@@ -26,15 +32,15 @@ function render() {
   const c = document.getElementById('container');
   const q = (document.getElementById('sSearch').value || '').toLowerCase();
   const rows = supData.filter(s => !q || String(s.supplier).toLowerCase().includes(q) || String(s.bankName).toLowerCase().includes(q));
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No suppliers yet. Add one above (or it fills in when you save a payment request).</p>'; return; }
+  if (!rows.length) { c.innerHTML = `<p style="color:var(--text-muted,#64748b);">No suppliers yet.${supViewer ? '' : ' Add one above (or it fills in when you save a payment request).'}</p>`; return; }
   c.innerHTML = `<table class="flow-table" style="min-width:820px;"><thead><tr>
     <th>Supplier</th><th>Bank</th><th>Account Name</th><th>Account No</th><th>Method</th><th>Cur</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr>
       <td>${flowEsc(s.supplier)}</td><td>${flowEsc(s.bankName)}</td><td>${flowEsc(s.accountName)}</td>
       <td>${flowEsc(s.accountNumber)}</td><td>${flowEsc(s.paymentMethod)}</td><td>${flowEsc(s.currency)}</td>
-      <td style="white-space:nowrap;">
+      <td style="white-space:nowrap;">${supViewer ? '' : `
         <button class="link-btn" onclick='editSupplier(${JSON.stringify(s.supplier)})'>Edit</button>
-        <button class="link-btn del-btn" onclick='deleteSupplierRec(${JSON.stringify(s.supplier)})' style="margin-left:0.4rem;">Delete</button>
+        <button class="link-btn del-btn" onclick='deleteSupplierRec(${JSON.stringify(s.supplier)})' style="margin-left:0.4rem;">Delete</button>`}
       </td></tr>`).join('')}</tbody></table>`;
 }
 

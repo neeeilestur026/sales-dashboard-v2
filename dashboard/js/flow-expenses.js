@@ -3,6 +3,7 @@
    per-category breakdowns, and an overall total. Add/edit/delete + per-record Docs. */
 
 let expSession = null;
+let expViewer = false;           // A231: management looks, does not touch
 let allExp = [];                 // all expense records (camelCase from getExpenses)
 let collapsed = {};              // type → collapsed?
 
@@ -38,14 +39,24 @@ const EXP_CATEGORIES = ['Advertising', 'Bank service charge', 'Commission', 'Cos
 function expTypeFor(cat) { return EXP_TYPE_MAP[String(cat || '').trim().toLowerCase()] || 'Operating'; }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  expSession = requireAccountingOrAdmin();
+  expSession = requireFlowOperations();                 // A231 — management admitted as a viewer
   if (!expSession) return;
+  expViewer = isFlowViewerRole(expSession);
+  flowSetViewerOnly(expViewer);
   renderNavbar('flow-expenses');
   renderFlowNav('flow-expenses.html');
   document.getElementById('reloadBtn').addEventListener('click', loadExpenses);
-  document.getElementById('addBtn').addEventListener('click', () => openExpModal());
+  /* Docs, Print, Refresh and every filter stay — they read. Add, Edit, ✕ and the salaries
+     reclassify go: reclassifyExpenses rewrites the TYPE on every matching row at once, which is the
+     single most destructive button on this page and the last one that should survive a viewer. */
+  const addBtn = document.getElementById('addBtn');
+  if (expViewer) { if (addBtn) addBtn.style.display = 'none'; }
+  else if (addBtn) addBtn.addEventListener('click', () => openExpModal());
   const reclassBtn = document.getElementById('reclassSalariesBtn');
-  if (reclassBtn) reclassBtn.addEventListener('click', reclassSalaries);
+  if (reclassBtn) {
+    if (expViewer) reclassBtn.style.display = 'none';
+    else reclassBtn.addEventListener('click', reclassSalaries);
+  }
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   ['search', 'yearSel', 'monthSel', 'catFilter'].forEach(id =>
     document.getElementById(id).addEventListener('input', render));
@@ -192,9 +203,9 @@ function rowHtml(r) {
     <td class="c-break">${exBreakdownCell(r)}</td>
     <td class="num amt c-amt">${flowMoney(r.amount, 'PHP')}</td>
     <td class="c-act">
-      <button class="ex-act" data-edit="${r.rowIndex}">Edit</button>
+      ${expViewer ? '' : `<button class="ex-act" data-edit="${r.rowIndex}">Edit</button>`}
       <button class="ex-act" data-docs="${flowEsc(r.expNo)}">Docs</button>
-      <button class="ex-act" data-del="${r.rowIndex}">✕</button>
+      ${expViewer ? '' : `<button class="ex-act" data-del="${r.rowIndex}">✕</button>`}
     </td></tr>`;
 }
 

@@ -5,8 +5,10 @@ let accModels = [];   // assembled per-SO models
 let accSession = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  accSession = requireAccountingOrAdmin();
+  accSession = requireFlowOperations();                 // A231 — management admitted as a viewer
   if (!accSession) return;
+  flowSetViewerOnly(isFlowViewerRole(accSession));      // no writes here today; see flow-home.html
+
   renderNavbar('flow-accounting');
   renderFlowNav('flow-accounting.html');
   await loadAll();

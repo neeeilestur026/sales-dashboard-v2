@@ -6,10 +6,17 @@ let soHasPO = {};      // A145: soNo → true when a purchase order references i
 let soSession = null;
 let soOrigNo = '';     // A220: the number the open record had when it was loaded, so an edited SO No
                        // is recognised as a RENAME and routed to renameSalesOrder, not to an update.
+let soViewer = false;  // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
-  soSession = requireAccountingOrAdmin();
+  soSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!soSession) return;
+  soViewer = isFlowViewerRole(soSession);
+  flowSetViewerOnly(soViewer);
+  /* The form is also the EDIT surface — editSO fills it — so hiding it closes creation, editing and
+     the A220 rename in one move, which is why the row's Edit button goes with it rather than being
+     left to open a card that is not on the page. */
+  if (soViewer) { const fc = document.getElementById('formCard'); if (fc) fc.style.display = 'none'; }
   renderNavbar('flow-sales-orders');
   renderFlowNav('flow-sales-orders.html');
   document.getElementById('date').value = flowToday();
@@ -458,10 +465,10 @@ function renderSOs() {
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
     <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
-    <td style="white-space:nowrap;"><button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>Costs</button>
-    <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>
+    <td style="white-space:nowrap;">${soViewer ? '' : `<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>Costs</button>`}
+    <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
-    <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button></td></tr>`).join('')}</tbody></table>`;
+    <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button>`}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function editSO(no) {

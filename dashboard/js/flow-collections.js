@@ -4,14 +4,21 @@ let colData = [];   // collection ledger rows
 let arData = [];    // AR (per-invoice receivable) rows
 let colSession = null;
 let colCanVoid = false;   // A158: voiding needs the v94 backend (gated so it can't 'Unknown action')
+let colViewer = false;    // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
-  colSession = requireAccountingOrAdmin();
+  colSession = requireFlowOperations();                 // A231 — management admitted as a viewer
   if (!colSession) return;
+  colViewer = isFlowViewerRole(colSession);
+  flowSetViewerOnly(colViewer);
   renderNavbar('flow-collections');
   renderFlowNav('flow-collections.html');
   try { colCanVoid = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(94) : false; }
   catch (e) { colCanVoid = false; }
+  /* A231 — the only write on this page is Void, and it already had a gate. Folding the viewer into
+     that same flag rather than adding a second test at the render site keeps ONE condition deciding
+     whether the button exists; two would eventually disagree. */
+  if (colViewer) colCanVoid = false;
   ['fSO', 'fClient', 'fYear', 'fMonth'].forEach(id => document.getElementById(id).addEventListener('change', render));
   await loadCollections();
 });

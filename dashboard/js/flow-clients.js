@@ -1,10 +1,15 @@
 /* flow-clients.js — client master (A145). Contact/address details prefill the purchase request. */
 let cliData = [];
 let cliSession = null;
+let cliViewer = false;    // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
-  cliSession = requireAccountingOrAdmin();
+  cliSession = requireFlowOperations();                 // A231 — management admitted as a viewer
   if (!cliSession) return;
+  cliViewer = isFlowViewerRole(cliSession);
+  flowSetViewerOnly(cliViewer);
+  /* Hide the whole add/edit card — see flow-suppliers.js for why the Save button alone is not enough. */
+  if (cliViewer) { const fc = document.getElementById('formCard'); if (fc) fc.style.display = 'none'; }
   renderNavbar('flow-clients');
   renderFlowNav('flow-clients.html');
   const s = document.getElementById('cSearch');
@@ -26,15 +31,15 @@ function render() {
   const c = document.getElementById('container');
   const q = (document.getElementById('cSearch').value || '').toLowerCase();
   const rows = cliData.filter(x => !q || String(x.customer).toLowerCase().includes(q) || String(x.contactPerson).toLowerCase().includes(q));
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No clients yet. Add one above (or it fills in when you save a purchase request).</p>'; return; }
+  if (!rows.length) { c.innerHTML = `<p style="color:var(--text-muted,#64748b);">No clients yet.${cliViewer ? '' : ' Add one above (or it fills in when you save a purchase request).'}</p>`; return; }
   c.innerHTML = `<table class="flow-table" style="min-width:820px;"><thead><tr>
     <th>Customer</th><th>Contact</th><th>Email</th><th>Phone</th><th>Terms</th><th></th></tr></thead><tbody>${rows.map(x => `
     <tr>
       <td>${flowEsc(x.customer)}</td><td>${flowEsc(x.contactPerson)}${x.designation ? ' · ' + flowEsc(x.designation) : ''}</td>
       <td>${flowEsc(x.email)}</td><td>${flowEsc(x.phone)}</td><td>${flowEsc(x.paymentTerms)}</td>
-      <td style="white-space:nowrap;">
+      <td style="white-space:nowrap;">${cliViewer ? '' : `
         <button class="link-btn" onclick='editClient(${JSON.stringify(x.customer)})'>Edit</button>
-        <button class="link-btn del-btn" onclick='deleteClientRec(${JSON.stringify(x.customer)})' style="margin-left:0.4rem;">Delete</button>
+        <button class="link-btn del-btn" onclick='deleteClientRec(${JSON.stringify(x.customer)})' style="margin-left:0.4rem;">Delete</button>`}
       </td></tr>`).join('')}</tbody></table>`;
 }
 

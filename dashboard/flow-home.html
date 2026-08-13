@@ -42,8 +42,12 @@
   <script src="js/flow-api.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const session = requireAccountingOrAdmin();
+      const session = requireFlowOperations();          // A231 — management admitted as a viewer
       if (!session) return;
+      /* This page makes no writes today. The flag goes on anyway: it costs nothing, and it means
+         a write added here later is refused by default rather than shipping open because whoever
+         added it did not know this page was reachable by a viewer. */
+      flowSetViewerOnly(isFlowViewerRole(session));
       renderNavbar('flow-home');
       renderFlowNav('flow-home.html');
       if (!_flowConfigured()) document.getElementById('cfgWarn').style.display = 'block';

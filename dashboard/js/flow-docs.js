@@ -23,6 +23,11 @@ function _docsModalEl() {
       <h3>Documents</h3>
       <div class="sub" id="flowDocsSub">—</div>
       <div id="flowDocsList" style="margin:0.75rem 0;"></div>
+      <!-- A231 — one check covers every docs modal in the app. This file is shared by 15 pages, but
+           flowIsViewerOnly() is only true on the pages that called flowSetViewerOnly, so the pages
+           management already had (purchase orders, payment requests, quotations) are untouched: on
+           those the flag is false and this renders exactly as before. -->
+      <div ${flowIsViewerOnly() ? 'style="display:none;"' : ''}>
       <div class="group-title">Attach a document</div>
       <div class="flow-form">
         <div class="full"><label>Files (multiple allowed · max ${FLOW_DOC_MAX_MB}MB each)</label><input type="file" id="flowDocsFile" multiple></div>
@@ -35,10 +40,11 @@ function _docsModalEl() {
           <input type="text" id="flowDocsTypeOther" placeholder="Describe the document" style="display:none;margin-top:0.35rem;">
         </div>
       </div>
+      </div>
       <div id="flowDocsMsg" class="flow-msg" style="display:none;"></div>
       <div class="flow-modal-foot">
         <button type="button" class="btn btn-secondary" onclick="closeDocsModal()">Close</button>
-        <button type="button" class="btn btn-primary" id="flowDocsAddBtn" onclick="flowDocsUpload()">Attach</button>
+        ${flowIsViewerOnly() ? '' : `<button type="button" class="btn btn-primary" id="flowDocsAddBtn" onclick="flowDocsUpload()">Attach</button>`}
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -202,7 +208,7 @@ async function flowDocsRefresh() {
         <td>${d.link ? `<a href="${flowEsc(d.link)}" target="_blank" class="link-btn">${flowEsc(d.fileName || 'document')}</a>` : flowEsc(d.fileName || 'document')}</td>
         <td>${flowEsc(d.docType || '—')}</td>
         <td>${flowEsc(d.uploadedBy || '—')}</td>
-        <td style="white-space:nowrap;"><button class="link-btn del-btn" onclick='flowDocsDelete("${flowEsc(d.docId)}")'>Remove</button></td>
+        <td style="white-space:nowrap;">${flowIsViewerOnly() ? '' : `<button class="link-btn del-btn" onclick='flowDocsDelete("${flowEsc(d.docId)}")'>Remove</button>`}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) {
     list.innerHTML = `<div style="color:#ef4444;font-size:0.85rem;">${flowEsc(e.message)}</div>`;

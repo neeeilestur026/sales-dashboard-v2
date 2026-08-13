@@ -249,8 +249,40 @@ async function _postFlowSecured(action, params) {
   return data;
 }
 
+/* A231 — THE READ-ONLY DOOR.
+ *
+ * Management was given the operational Process Flow pages (Expenses, Suppliers, Receiving, Invoices,
+ * Shipments, Collections, Clients, Sales Orders) as a VIEWER. Hiding the buttons is not the control:
+ * most of those writes — addExpense, updateExpense, saveSupplier, saveClient, the receiving and
+ * shipment writes — are NOT in _SECURED, so the server takes the browser's word for the caller's role.
+ * For those pages the page guard was the only thing standing between management and a write, and a
+ * guard that admits you is no longer a guard. So the refusal lives here, at the one door all 28 of
+ * those call sites go through, where a button somebody forgot to hide cannot get past it.
+ *
+ * WHY A PER-PAGE FLAG AND NOT `role === 'management'`: management writes through postFlow constantly
+ * on the pages they already had — approveQuotation, approvePO, approvePaymentRequest, setMgmtPricing,
+ * approveWeeklyItinerary. A blanket role check would refuse their actual job. Because no pre-existing
+ * page sets this flag, every surface management had before is unchanged BY CONSTRUCTION rather than
+ * by audit — the flag can only affect a page that opted in.
+ *
+ * Set through the function, not by assigning a bare name: if flow-api.js has not loaded, a call fails
+ * loudly here instead of quietly creating a global that nothing reads. `var` (not `let`) so it is a
+ * window property and stays inspectable from the console during verification.
+ */
+var _flowViewerOnly = false;
+function flowSetViewerOnly(on) { _flowViewerOnly = !!on; }
+function flowIsViewerOnly() { return _flowViewerOnly; }
+
 async function postFlow(action, params = {}) {
   if (!_flowConfigured()) throw new Error('Flow backend not configured. Set FLOW_API_URL in js/flow-api.js.');
+  /* Reads pass. A viewer page exists to SHOW the data, so refusing its reads would break the very
+     thing the access was granted for — and a read changes nothing. Same `^get` test _postFlowSecured
+     already uses at the cache-clear below, kept identical so the two cannot drift into disagreeing
+     about what counts as a read. */
+  if (_flowViewerOnly && !/^get/.test(action)) {
+    throw new Error('Read-only view — your role (' + (_flowActorRole() || 'unknown') +
+                    ') can view this page but not change it. Refused: ' + action + '.');
+  }
   if (_flowIsSecured(action)) return _postFlowSecured(action, params);
   const body = Object.assign({ actorName: _flowActor(), actorRole: _flowActorRole() }, params, { action });
   const payload = JSON.stringify(body);

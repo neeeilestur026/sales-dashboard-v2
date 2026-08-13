@@ -7,10 +7,18 @@ let rcPoTotalFC = 0;
 let rcPaidPHP = 0;
 let rcShip = { duties: 0, vat: 0, delivery: 0, other: 0 };
 let rcSession = null;
+let rcViewer = false;        // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
-  rcSession = requireAccountingOrAdmin();
+  rcSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!rcSession) return;
+  rcViewer = isFlowViewerRole(rcSession);
+  flowSetViewerOnly(rcViewer);
+  if (rcViewer) {
+    /* Receiving updates inventory AND books landed cost into COGS — the write with no undo short of
+       reverseReceiving. Form and its CTA both go; the received-list below stays fully readable. */
+    ['formCard', 'receiveCta'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  }
   renderNavbar('flow-receiving');
   renderFlowNav('flow-receiving.html');
   document.getElementById('date').value = flowToday();

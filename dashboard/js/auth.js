@@ -128,6 +128,46 @@ function requireAccountingOrAdmin() {
 }
 
 /**
+ * A231 — the operational Process Flow pages: Expenses, Suppliers, Clients, Shipments, Invoices,
+ * Collections, Receiving, Sales Orders, plus the three read-only views (Overview, Accounting,
+ * General Ledger).
+ *
+ * Admin and accounting get what they always had. Management is admitted as a VIEWER: they run the
+ * company and could not see where its money went without opening the accounting login, which is a
+ * worse answer than a read-only page.
+ *
+ * This is a NEW guard rather than a widening of requireAccountingOrAdmin, which stays exactly as it
+ * was. Widening that one would have moved every page still using it at the same time, including any
+ * added later by someone who never read this comment; a separate guard can only affect the pages
+ * that opt into it by name.
+ *
+ * ADMITTING IS NOT AUTHORISING. The read-only half is enforced by flowSetViewerOnly() in
+ * flow-api.js, which each admitted page calls for management — not by this function and not by the
+ * hidden buttons. Most writes on these pages are unsecured server-side, so a page that forgets that
+ * call hands management a live write. The precedent is flow-inventory.js:12, where the guard admits
+ * and the page decides.
+ *
+ * Director is deliberately NOT here. That is a separate permissions decision, not a detail of this one.
+ */
+function requireFlowOperations() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['admin', 'accounting', 'management'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
+/** True when this session may only look. Kept beside the guard so the two are read together. */
+function isFlowViewerRole(session) {
+  return !!session && session.role === 'management';
+}
+
+/**
  * Require quotation access — sales (own only) plus all oversight roles
  * (admin, accounting, management, director) who see/edit every rep's quotations.
  */
@@ -569,8 +609,16 @@ function renderNavbar(activePage) {
     const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226
     const mFinPages = ['accounting-summary', 'balance-sheet', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223
     const mAcctPages = ['leave-request', 'change-password'];
+    /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
+       entry here is absent from Approvals and Financials above, so nothing appears in two menus.
+       Product Finder and Import Quotation are deliberately out — see requireProductFinderAccess and
+       requireAdmin for why. All of these open read-only for management. */
+    const mFlowPages = ['flow-home', 'flow-accounting', 'flow-sales-orders', 'flow-receiving',
+                        'flow-invoices', 'flow-collections', 'flow-expenses', 'flow-ledger',
+                        'flow-suppliers', 'flow-clients', 'flow-shipments', 'flow-travel', 'flow-guide'];
     const mApprActive = mApprPages.includes(activePage) ? 'active' : '';
     const mFinActive = mFinPages.includes(activePage) ? 'active' : '';
+    const mFlowActive = mFlowPages.includes(activePage) ? 'active' : '';
     const mAcctActive = mAcctPages.includes(activePage) ? 'active' : '';
     navLinks = `
       <a href="management-home.html" class="${activePage === 'management-home' ? 'active' : ''}">
@@ -612,6 +660,30 @@ function renderNavbar(activePage) {
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="management-sales-orders.html" class="${activePage === 'management-sales-orders' ? 'active' : ''}">Sales Orders</a>
+        </div>
+      </div>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn ${mFlowActive}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          Process Flow
+          <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="flow-home.html" class="${activePage === 'flow-home' ? 'active' : ''}">Overview</a>
+          <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
+          <!-- A231: labelled to disambiguate. Financials above has "Sales Orders" pointing at
+               management-sales-orders.html, which is the oversight summary, not this one. -->
+          <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders — Operations</a>
+          <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Materials Receiving</a>
+          <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
+          <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
+          <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
+          <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
+          <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
+          <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
+          <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
+          <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
+          <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
       </div>
       <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">

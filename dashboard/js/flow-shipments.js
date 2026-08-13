@@ -4,6 +4,7 @@
    Documents registry (module='Shipment', refNo=shipmentId, docType=stageKey). */
 
 let shSession = null;
+let shViewer = false;     // A231: management looks, does not touch
 let shList = [];
 let shDocs = [];          // documents for the open shipment
 let shCurrent = null;     // open shipment timeline payload
@@ -11,8 +12,10 @@ let shCurrent = null;     // open shipment timeline payload
 const SH_DOC_MAX_MB = 10;
 
 document.addEventListener('DOMContentLoaded', () => {
-  shSession = requireAccountingOrAdmin();
+  shSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!shSession) return;
+  shViewer = isFlowViewerRole(shSession);
+  flowSetViewerOnly(shViewer);
   renderNavbar('flow-shipments');
   if (typeof renderFlowNav === 'function') renderFlowNav('flow-shipments.html');
   document.getElementById('shSearch').addEventListener('input', renderShipments);
@@ -122,7 +125,7 @@ function shRenderTimeline() {
     <div><label>Principal</label><input type="text" id="shPrincipal" value="${flowEsc(s.principal || '')}"></div>
     <div style="grid-column:1/-1;"><label>Remarks</label><input type="text" id="shRemarks" value="${flowEsc(s.remarks || '')}"></div>
   </div>
-  <div class="flow-actions" style="margin:-0.3rem 0 0.6rem;"><button class="btn btn-sm btn-primary" onclick="shSaveHeader()">Save details</button><span id="shHeadMsg" style="font-size:0.76rem;color:var(--text-muted,#64748b);"></span></div>`;
+  <div class="flow-actions" style="margin:-0.3rem 0 0.6rem;">${shViewer ? '' : `<button class="btn btn-sm btn-primary" onclick="shSaveHeader()">Save details</button>`}<span id="shHeadMsg" style="font-size:0.76rem;color:var(--text-muted,#64748b);"></span></div>`;
 
   if (kind === 'local') {
     html += `<div class="sh-kindnote">Local purchase — paid, then delivered to the office. The proforma,
@@ -150,8 +153,8 @@ function shRenderTimeline() {
       const ownerCls = _SM_OWNER_BADGE_CLASS[meta.owner] || 'sm-owner-admin';
       const stageDocs = shDocs.filter(d => String(d.docType) === key);
       const dot = t.status === 'done' ? '✓' : (t.status === 'skipped' ? '–' : '');
-      const acts = t.autoderived
-        ? `<span class="sh-meta">auto from flow</span>`
+      const acts = (t.autoderived || shViewer)
+        ? `<span class="sh-meta">${t.autoderived ? 'auto from flow' : ''}</span>`
         : `<div class="sh-stage-acts">
              ${t.status !== 'done' ? `<button onclick="shStage('${key}','done')">Done</button>` : ''}
              ${t.status !== 'skipped' ? `<button onclick="shStage('${key}','skipped')">Skip</button>` : ''}
@@ -166,8 +169,8 @@ function shRenderTimeline() {
           ${acts}
         </div>
         ${meta.docLabel ? `<div class="sh-stage-doc">📎 ${flowEsc(meta.docLabel)}</div>` : ''}
-        ${stageDocs.map(d => `<div class="sh-docrow">${d.link ? `<a href="${flowEsc(d.link)}" target="_blank" class="link-btn">${flowEsc(d.fileName || 'document')}</a>` : flowEsc(d.fileName || 'document')}<button class="link-btn del-btn" onclick='shDelDoc("${flowEsc(d.docId)}")'>✕</button></div>`).join('')}
-        <div class="sh-docrow"><input type="file" multiple id="shFile_${key}"><button class="btn btn-sm btn-secondary" onclick="shUpload('${key}')">Attach</button></div>
+        ${stageDocs.map(d => `<div class="sh-docrow">${d.link ? `<a href="${flowEsc(d.link)}" target="_blank" class="link-btn">${flowEsc(d.fileName || 'document')}</a>` : flowEsc(d.fileName || 'document')}${shViewer ? '' : `<button class="link-btn del-btn" onclick='shDelDoc("${flowEsc(d.docId)}")'>✕</button>`}</div>`).join('')}
+        ${shViewer ? '' : `<div class="sh-docrow"><input type="file" multiple id="shFile_${key}"><button class="btn btn-sm btn-secondary" onclick="shUpload('${key}')">Attach</button></div>`}
         ${t.completedAt ? `<div class="sh-meta">${t.status === 'skipped' ? 'Skipped' : 'Done'} ${flowEsc(t.completedAt)}${t.completedBy ? ' · ' + flowEsc(t.completedBy) : ''}${t.skippedReason ? ' · ' + flowEsc(t.skippedReason) : ''}</div>` : ''}
       </div>`;
     });
@@ -175,6 +178,15 @@ function shRenderTimeline() {
   });
 
   document.getElementById('shTlBody').innerHTML = html;
+  /* A231 — DISABLE the header fields rather than hide them. Supplier type, mode, status, ETD, ETA,
+     AWB and principal are the shipment's actual state; a viewer needs to READ them, and hiding the
+     grid to remove the edit affordance would take the information with it. Disabled shows the value
+     and refuses the edit. The Save button is already gone, and shSaveKind cannot fire from a
+     disabled select. */
+  if (shViewer) {
+    document.querySelectorAll('#shTlBody .sh-editgrid input, #shTlBody .sh-editgrid select')
+      .forEach(el => { el.disabled = true; });
+  }
 }
 
 async function shStage(stageKey, stageStatus) {
