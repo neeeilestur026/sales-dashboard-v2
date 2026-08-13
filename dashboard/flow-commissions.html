@@ -60,6 +60,13 @@
     .cm-badge{display:inline-block;padding:2px 8px;border-radius:999px;font:600 10.5px 'Inter',sans-serif;
       background:#eef2f6;color:#475569;border:1px solid var(--line);}
     .cm-empty{padding:2rem;text-align:center;color:var(--ink2);font:500 13px 'Inter',sans-serif;}
+    /* A239 — the attribution diagnostic's tables. min-width so the six columns keep their contents
+       rather than crushing them, with the wrapper scrolling instead (the A236/A238 lesson). */
+    table.cm-diag{width:100%;min-width:640px;border-collapse:collapse;font:400 12.5px 'Inter',sans-serif;}
+    table.cm-diag th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;
+      color:var(--ink2);padding:.35rem .4rem;border-bottom:1px solid var(--border,#e2e8f0);}
+    table.cm-diag td{padding:.4rem;border-bottom:1px solid var(--border,#f1f5f9);vertical-align:top;}
+    table.cm-diag td.num{text-align:right;font-variant-numeric:tabular-nums;}
     .cm-gate{padding:1.4rem;border-radius:12px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;
       font:500 13px/1.6 'Inter',sans-serif;}
     .cm-sum{display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
@@ -124,6 +131,28 @@
         DEMO- row from all nine sheets, so nothing is left in your real records.
       </p>
       <div id="cmDemoMsg" class="flow-msg" style="display:none;"></div>
+    </div>
+
+    <!-- A239 — WHY MONEY IS NOT CLAIMABLE. Oversight only (director/management/admin, mirroring
+         _COMM_OVERSIGHT_READ): a rep's own claimable list already tells them what they can claim,
+         and a rep has no use for a data-quality console over everybody's collections. Read-only. -->
+    <div class="chart-card" id="cmDiagCard" style="display:none;">
+      <div class="flow-actions" style="justify-content:space-between;margin-top:0;">
+        <h3>Money that reaches nobody</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="cmDiagRef" placeholder="quotation or SO no. (optional)"
+                 style="padding:.4rem .55rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;
+                        font:inherit;font-size:.8rem;width:230px;">
+          <button class="btn btn-sm btn-primary" onclick="cmRunDiagnostic()">Check</button>
+        </div>
+      </div>
+      <p style="font:400 12px/1.6 'Inter',sans-serif;color:var(--ink2);margin:6px 0 0;">
+        Commission reaches a rep down one chain &mdash; collection &rarr; sales order &rarr; quotation
+        &rarr; owner &mdash; and it can break at any link. Leave the box empty to scan every
+        collection, or name a quotation or sales order to ask why that one cannot be claimed.
+      </p>
+      <div id="cmDiagMsg" class="flow-msg" style="display:none;"></div>
+      <div id="cmDiagBody"></div>
     </div>
 
     <div class="chart-card" id="claimCard">

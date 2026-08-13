@@ -70,11 +70,92 @@ document.addEventListener('DOMContentLoaded', async () => {
     const card = document.getElementById('cmDemoCard');
     if (card) card.style.display = '';
   }
+  /* A239 — the same shape as the demo card above: oversight only, and only once the backend is
+     known to carry the handler, so the button cannot offer an "unknown action". */
+  if (cmMayDiagnose() && typeof flowVersionAtLeast === 'function'
+      && await flowVersionAtLeast(CM_DIAG_FLOW_VERSION)) {
+    const d = document.getElementById('cmDiagCard');
+    if (d) d.style.display = '';
+  }
   await cmLoadAll();
 });
 
 /** The name a commission is attributed to. Quotations record the rep's FULL NAME, so that is the key. */
 function cmWho() { return String((cmSession && cmSession.name) || ''); }
+
+/* ── A239: why money reaches nobody ──────────────────────────────────────────
+   Read-only, oversight only. The server refuses this action for anyone outside _COMM_ROLES anyway;
+   hiding the card is only so a rep is not shown a console that is not theirs to use. */
+const CM_DIAG_ROLES = ['director', 'management', 'admin'];   // mirrors _COMM_OVERSIGHT_READ
+const CM_DIAG_FLOW_VERSION = 135;                            // A239 — the handler arrives with 135
+
+function cmMayDiagnose() {
+  return CM_DIAG_ROLES.indexOf(String((cmSession && cmSession.role) || '').toLowerCase()) >= 0;
+}
+
+async function cmRunDiagnostic() {
+  const ref = String((document.getElementById('cmDiagRef') || {}).value || '').trim();
+  const body = document.getElementById('cmDiagBody');
+  body.innerHTML = '<div class="cm-empty">Checking…</div>';
+  try {
+    /* A quotation number and a sales order number are told apart by the house prefix rather than by
+       asking the user which one they typed — SO numbers start SO-, everything else is a quotation. */
+    const params = !ref ? {}
+      : (/^SO[-\s]/i.test(ref) ? { soNo: ref } : { quotationNo: ref });
+    const r = await postFlow('previewCommissionAttribution', params);
+    if (!r || !r.success) throw new Error((r && r.message) || 'The check could not be run.');
+    cmRenderDiagnostic(r);
+  } catch (e) {
+    body.innerHTML = '';
+    flowMsg('cmDiagMsg', e.message, false);
+  }
+}
+
+function cmRenderDiagnostic(r) {
+  const esc = flowEsc, m = v => flowMoney(v, 'PHP');
+  const rows = [];
+
+  /* When one order was asked about, its verdict leads — that is the question that was asked, and the
+     collection list underneath is the evidence for it rather than the answer. */
+  if (r.order) {
+    const blocked = r.order.blockedAt;
+    rows.push(`<div class="flow-msg ${blocked ? 'bad' : 'good'}" style="display:block;margin:10px 0;">
+      <b>${blocked ? 'Blocked at the ' + esc(blocked) : 'Nothing is blocking this'}</b><br>
+      ${esc(r.order.summary)}</div>`);
+    rows.push(`<div style="font:400 12px/1.7 'Inter',sans-serif;color:var(--ink2);margin-bottom:10px;">
+      quotation <b>${esc(r.order.quotationNo || '—')}</b> ${r.order.quotationExists ? '✓' : '✗ not in the book'}
+      &nbsp;·&nbsp; sales order <b>${esc(r.order.soNo || '—')}</b> ${r.order.soExists ? '✓' : '✗'}
+      &nbsp;·&nbsp; owner <b>${esc(r.order.salesperson || '—')}</b>${
+        r.order.ownerBasis ? ' <span style="opacity:.7">(' + esc(r.order.ownerBasis) + ')</span>' : ''}
+      &nbsp;·&nbsp; ${r.order.collections} collection(s)</div>`);
+  }
+
+  const table = (title, list, cls) => {
+    if (!list.length) return '';
+    return `<h4 style="margin:14px 0 6px;font:800 12px/1 'Inter',sans-serif;letter-spacing:.04em;
+                       text-transform:uppercase;color:var(--ink2);">${title} — ${list.length}</h4>
+      <div style="overflow-x:auto;"><table class="cm-diag"><thead><tr>
+        <th>Collection</th><th>Customer</th><th style="text-align:right;">Net cash</th>
+        <th>Sales order</th><th>${cls === 'ok' ? 'Salesperson' : 'Missing link'}</th><th>Detail</th>
+      </tr></thead><tbody>${list.map(x => `<tr>
+        <td>${esc(x.collectionNo)}</td><td>${esc(x.customer)}</td>
+        <td class="num">${m(x.netCash)}</td><td>${esc(x.soNo || '—')}</td>
+        <td>${esc(cls === 'ok' ? x.salesperson : x.link)}</td>
+        <td style="font-size:.78rem;color:var(--ink2);">${esc(cls === 'ok' ? (x.ownerBasis || '') : x.reason)}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  };
+
+  rows.push(table('No sales order', r.unresolved || [], 'bad'));
+  rows.push(table('Nobody to pay', r.unattributed || [], 'bad'));
+  rows.push(table('Attributable', r.resolved || [], 'ok'));
+
+  if (!r.order && !(r.unresolved || []).length && !(r.unattributed || []).length
+      && !(r.resolved || []).length) {
+    rows.push('<div class="cm-empty">No collections to examine.</div>');
+  }
+  document.getElementById('cmDiagBody').innerHTML = rows.join('');
+  flowMsg('cmDiagMsg', r.message, !(r.order && r.order.blockedAt));
+}
 
 /* ── A211: the removable demo order ──────────────────────────────────────────
    Both are secured POSTs, so the director's identity comes from the session — the button cannot be
