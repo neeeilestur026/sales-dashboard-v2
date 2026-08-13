@@ -166,7 +166,10 @@
           <div class="tv-grid">
             <div>
               <label for="tvPosition">Your position</label>
-              <input id="tvPosition" placeholder="e.g. Sales Engineer">
+              <!-- A238 — capped at the FIELD, so the rep is stopped here rather than by a pack that
+                   will not render. The generator clips too (see _HEAD_NAME_LINES), but that backstop
+                   only ever fires on a record already in the sheet. -->
+              <input id="tvPosition" maxlength="120" placeholder="e.g. Sales Engineer">
             </div>
             <div>
               <label for="tvFloat">Float held</label>
@@ -174,7 +177,7 @@
             </div>
             <div class="full">
               <label for="tvPurpose">Purpose of the travel</label>
-              <input id="tvPurpose" placeholder="e.g. Client visit in Makati, City">
+              <input id="tvPurpose" maxlength="300" placeholder="e.g. Client visit in Makati, City">
             </div>
           </div>
           <div id="tvMsg" class="flow-msg" style="display:none;margin-top:.6rem;"></div>

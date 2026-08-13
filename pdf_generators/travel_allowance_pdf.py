@@ -114,6 +114,29 @@ def _num(v):
     return f
 
 
+# A238 — THE HEADER FIELDS ARE CLIPPED, because page 1's header is a fixed table and a ReportLab row
+# cannot split. Over the ceiling it raises LayoutError, the route answers 500, and the pack becomes
+# ungeneratable — for the approver as well as the rep, so the week is stuck with no document at all.
+# The claim still saves and submits, which is what made it a trap rather than an inconvenience.
+#
+# Measured, not guessed. With all three fields maxed the pack stops rendering at 28 lines; the raw
+# ceilings were 2,078 characters for purpose, 1,361 for position and 1,169 for the name. Six lines
+# for purpose is a 4.7x margin and still holds ~382 characters of real prose — more than a field
+# labelled "Purpose of the travel" needs, and the form now caps input below that anyway, so the clip
+# only ever fires on a record already in the sheet. The cut is VISIBLE: _clip_text appends an
+# ellipsis, because silently shortening a line on a document somebody signs is worse than the crash.
+#
+# Clipped at the NARROWEST width each field renders at — purpose sits two-up (CONTENT_W/2), the two
+# name fields three-up on page 2 (CONTENT_W/3).
+_HEAD_PURPOSE_LINES = 6
+_HEAD_NAME_LINES = 3
+
+
+def _head_style():
+    """The value style _labelled renders these fields in — same object, so the measurement is real."""
+    return _ps("taVal", 11.5, HEADING, ARCH_B, leading_mult=1.35)
+
+
 def _normalise(record):
     """Payload → the model the three pages read, with every field coerced and ordered.
 
@@ -121,7 +144,15 @@ def _normalise(record):
     enters Tuesday's ride before Monday's would otherwise print 07/28, then 07/27, then a blank date
     row belonging to a different day than the date printed above it — a false statement on a document
     that gets signed. Blank dates sort last, together, so '' never collides with a real day."""
-    rec = dict(record or {})
+    # A238 — a non-mapping record used to raise ValueError out of dict(). The route catches it, so no
+    # HTML 500 ever reached a browser, but this module's contract is never-raise and the item loop
+    # below already guards the same way.
+    if not isinstance(record, dict):
+        if record is not None:
+            logger.warning("travel_allowance_pdf: record is %s, not a dict — rendering a blank pack",
+                           type(record).__name__)
+        record = {}
+    rec = dict(record)
     raw = rec.get("items") or []
     items = []
     for idx, it in enumerate(raw, start=1):
@@ -153,10 +184,13 @@ def _normalise(record):
         "date": str(rec.get("date") or "").strip(),
         "weekStart": str(rec.get("weekStart") or "").strip(),
         "weekEnd": str(rec.get("weekEnd") or "").strip(),
-        "user": str(rec.get("user") or "").strip(),
-        "position": str(rec.get("position") or "").strip(),
+        # A238 — clipped, VISIBLY, at the narrowest width each is rendered at. See the note by
+        # _HEAD_PURPOSE_LINES: uncapped, any of these three could make page 1's unsplittable header
+        # row taller than the frame, which is a LayoutError and a 500 on the whole pack.
+        "user": _clip_text(rec.get("user"), _head_style(), CONTENT_W / 3, _HEAD_NAME_LINES),
+        "position": _clip_text(rec.get("position"), _head_style(), CONTENT_W / 3, _HEAD_NAME_LINES),
         "durationLabel": str(rec.get("durationLabel") or "").strip(),
-        "purpose": str(rec.get("purpose") or "").strip(),
+        "purpose": _clip_text(rec.get("purpose"), _head_style(), CONTENT_W / 2, _HEAD_PURPOSE_LINES),
         "status": str(rec.get("status") or "").strip(),
         "acctApprovedBy": str(rec.get("acctApprovedBy") or "").strip(),
         "dirApprovedBy": str(rec.get("dirApprovedBy") or "").strip(),
@@ -774,6 +808,11 @@ def _annex(rec, receipts):
     running = 0
     cells = []
     for r in receipts:
+        # A238 — the Flask route filters these, so a non-dict cannot arrive over HTTP; this module is
+        # also importable and its contract is never-raise, and _normalise guards items the same way.
+        if not isinstance(r, dict):
+            logger.warning("travel_allowance_pdf: skipping non-dict receipt (%s)", type(r).__name__)
+            continue
         seq = int(_num(r.get("seq")))
         item = by_seq.get(seq) or {"seq": seq, "date": "", "means": "", "description": "",
                                    "amount": 0.0, "kind": ""}

@@ -28,11 +28,16 @@ const DIR   = { actorName: 'Neil M. Estur', actorRole: 'director' };
 const MGMT  = { actorName: 'A Manager', actorRole: 'management' };
 const with_ = (a, b) => Object.assign({}, a, b);
 
+/* A238 — the Bus leg carries a receiptDocId now. It says 'Has Receipt: Yes', and since A238
+   submitTravelReplenishment refuses a week whose receipted legs have no receipt actually filed —
+   they would print on neither page while their money sits in the claim total. Nothing about THIS
+   file's subject changed (the float, the payable, the itinerary waiver); the leg simply had to stop
+   claiming evidence it did not have. The gate itself is pinned in its own section below. */
 const SAMPLE = JSON.stringify([
   { seq: 1, date: '2026-07-27', kind: 'Transport', description: 'Residence to Terminal',
     means: 'Tricycle', amount: 35, hasReceipt: false },
   { seq: 2, date: '2026-07-27', kind: 'Transport', description: 'Terminal to Manila',
-    means: 'Bus', amount: 70, hasReceipt: true }
+    means: 'Bus', amount: 70, hasReceipt: true, receiptDocId: 'DOC-BUS-1' }
 ]);
 
 /** A context with a float already issued and one saved week, ready to submit. */
@@ -201,6 +206,62 @@ console.log('\n== submit: the preconditions ==');
      ['Rojan Leo R. Francisco Jr.', 'no itinerary filed yet']);
   eq('the itinerary status at submit was recorded honestly',
      String(c.__store.TravelReplenishments[0]['Itinerary Status At Submit']), 'none');
+}
+
+console.log('\n== A238: a leg that would print on NEITHER page blocks the submission ==');
+{
+  /* Since A237 a leg saying 'Has Receipt: Yes' with nothing filed against it appears on neither the
+     itinerary (unless it is Transport) nor the certificate (reserved for expenses that CANNOT
+     produce one), while its money still lands in Total Spent — so an approver signs for an amount
+     with nothing behind it. The old behaviour at least printed it, falsely, on the certificate. */
+  const NOPROOF = JSON.stringify([
+    { seq: 1, date: '2026-07-27', kind: 'Transport', description: 'Residence to Terminal',
+      means: 'Tricycle', amount: 35, hasReceipt: false },
+    { seq: 2, date: '2026-07-27', kind: 'Meals', description: 'Lunch, Baguio',
+      means: 'Meals', amount: 150, hasReceipt: true }            // claims a receipt, files none
+  ]);
+  const f = fresh({ items: NOPROOF });
+  f.c.__store.WeeklyItineraries.push({ 'Itinerary No': 'ITN-1', 'Week Start': '2026-07-27',
+    'Week End': '2026-08-02', 'User': 'Crystal Gayle', 'Status': 'Approved' });
+
+  const r = f.c.submitTravelReplenishment(with_(GAYLE, { travNo: f.no }));
+  ok('the rep is refused', !r.success, r);
+  eq('and told a receipt waiver is what is missing', r.needsReceiptWaiver, true);
+  eq('it names how many legs', r.legs, 1);
+  eq('and the peso amount that evidences nothing', r.amount, 150);
+  ok('the message says what to do about it',
+     /Attach the photos|set those legs to the certificate/.test(String(r.message)), r.message);
+
+  const own = f.c.submitTravelReplenishment(with_(GAYLE, { travNo: f.no, waiverReason: 'trust me' }));
+  ok('a rep cannot waive it for themselves', !own.success, own);
+
+  const ok2 = f.c.submitTravelReplenishment(with_(ACCT, { travNo: f.no, waiverReason: 'receipt lost in transit' }));
+  eq('accounting can, on the record', ok2.success, true);
+  eq('and the reason is stored on the same pair the itinerary waiver uses',
+     [String(f.c.__store.TravelReplenishments[0]['Waiver By']),
+      String(f.c.__store.TravelReplenishments[0]['Waiver Reason'])],
+     ['Rojan Leo R. Francisco Jr.', 'receipt lost in transit']);
+}
+
+console.log('\n== A238: the DOC ID is not the question — the filed FILE is ==');
+{
+  /* 'Receipt Doc ID' is written back in a second pass flow-travel.js explicitly allows to fail
+     quietly, because the durable link is the Drive file name (receipt-<seq>.jpg). Gating on the
+     column would refuse a rep whose photo uploaded perfectly and whose write-back merely missed. */
+  const ONE = JSON.stringify([
+    { seq: 7, date: '2026-07-27', kind: 'Meals', description: 'Lunch', means: 'Meals',
+      amount: 150, hasReceipt: true }                            // no receiptDocId at all
+  ]);
+  const f = fresh({ items: ONE });
+  f.c.__store.WeeklyItineraries.push({ 'Itinerary No': 'ITN-1', 'Week Start': '2026-07-27',
+    'Week End': '2026-08-02', 'User': 'Crystal Gayle', 'Status': 'Approved' });
+  ok('with nothing filed it is refused',
+     !f.c.submitTravelReplenishment(with_(GAYLE, { travNo: f.no })).success);
+
+  f.c.__store.Documents.push({ 'Doc ID': 'D1', 'Module': 'Travel Replenishment', 'Ref No': f.no,
+                               'File Name': 'receipt-7.jpg', 'File ID': 'FID-1' });
+  const r = f.c.submitTravelReplenishment(with_(GAYLE, { travNo: f.no }));
+  eq('but the FILE alone is enough, with no Doc ID on the row', r.success, true);
 }
 
 console.log('\n== an APPROVED itinerary needs no waiver at all ==');

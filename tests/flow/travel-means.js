@@ -80,6 +80,24 @@ const blank = tvMeansOptions('');
 ok('a new leg starts on the em dash', /<option value="" selected>/.test(blank));
 eq('  and nothing else is selected', (blank.match(/ selected/g) || []).length, 1);
 
+console.log('\n== the client and the server agree on what a kind IS ==');
+// A238 — saveTravelReplenishment refuses any kind outside _TRAV_KINDS ("Unknown expense kind ..."),
+// so a list that drifts on one side breaks EVERY save on that path. The three _SECURED mirrors are
+// pinned the same way for the same reason; this one was not, and it is one edit away from a live
+// outage. Read out of the .gs rather than duplicated here, so the test cannot drift either.
+{
+  const gs = fs.readFileSync(path.join(__dirname, '..', '..', 'apps-script', 'FlowAPI.gs'), 'utf8');
+  const m = gs.match(/var _TRAV_KINDS\s*=\s*\[([\s\S]*?)\]/);
+  ok('_TRAV_KINDS was found in FlowAPI.gs', !!m);
+  if (m) {
+    const server = m[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    eq('server _TRAV_KINDS === client TV_KINDS', server, TV_KINDS);
+    ok('every means maps to a kind the SERVER will accept',
+       TV_MEANS.every(x => server.indexOf(x.kind) >= 0),
+       TV_MEANS.filter(x => server.indexOf(x.kind) < 0).map(x => x.v + ' -> ' + x.kind));
+  }
+}
+
 console.log('\n== the vocabulary itself is well formed ==');
 ok('no duplicate labels', new Set(TV_MEANS.map(m => m.v)).size === TV_MEANS.length);
 ok('every entry has all three fields',

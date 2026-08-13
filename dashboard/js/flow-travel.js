@@ -41,6 +41,9 @@ let tvReceiptDocs = {};
 let tvQueue = [];
 let tvViewUser = '';
 let tvViewNo = '';
+/* A238 — an approver's reason for letting a week through with legs that have no receipt. Set by
+   tvSubmit immediately before the call and consumed by it; never persisted client-side. */
+let tvReceiptWaiver = '';
 
 const TV_DEBOUNCE = 500;
 const TV_WAKE_AFTER = 4000;
@@ -384,17 +387,69 @@ function tvRenderTrail() {
       record: the server may have done more than was asked (raised a payable, posted an expense), and
       guessing at that is how a screen starts disagreeing with the sheet. ─────────────────────────── */
 
+/** A238 — the legs that would print on NEITHER page: they expect a receipt and none is attached.
+ *
+ *  Before A237 an unphotographed leg silently went on the certificate, which at least printed it —
+ *  falsely. Now it prints nowhere, so its money sits inside the claim total on page 1 with nothing
+ *  behind it, and the approver signing pages 2 and 3 cannot see where it went. */
+function tvUnevidenced() {
+  return tvLegs.filter(l => !l.noReceipt && !(l.dataUrl || l.receiptDocId) && tvNum(l.amount) > 0);
+}
+
 async function tvSubmit() {
   if (!tvRecord || !tvRecord.travNo) return;
+
+  /* Refuse HERE as well as on the server. The server gate is the one that actually holds — this only
+     spares the rep a round trip, and names the legs while they are still on screen to fix. */
+  const owed = tvUnevidenced();
+  if (owed.length) {
+    const list = owed.map(l => '  · ' + (l.description || l.means || 'leg ' + l.seq) +
+                               '  (' + (l.means || '—') + ')  ' + flowMoney(tvNum(l.amount), 'PHP'))
+                     .join('\n');
+    const sum = flowMoney(owed.reduce((s, l) => s + tvNum(l.amount), 0), 'PHP');
+    const why = owed.length + ' leg' + (owed.length === 1 ? '' : 's') + ' expect' +
+      (owed.length === 1 ? 's' : '') + ' a receipt and ' + (owed.length === 1 ? 'has' : 'have') +
+      ' none — ' + sum + ':\n\n' + list + '\n\nThese print on neither the itinerary nor the ' +
+      'certificate, so nothing on the pack evidences them.\n\nAttach the photos, or set those legs ' +
+      'to "On certificate" if no receipt exists for them.';
+    /* An approver filing on somebody's behalf can still let it through, exactly as they can waive a
+       missing weekly itinerary — with a reason, on the record. A rep cannot waive their own claim. */
+    if (!tvIsApprover() || (tvViewUser && tvViewUser === tvWho())) {
+      flowMsg('tvMsg', why.replace(/\n/g, ' '), false);
+      alert(why);
+      return;
+    }
+    const waive = prompt(why + '\n\nYou can still let this week through — record why:');
+    if (!waive || !waive.trim()) return;
+    tvReceiptWaiver = waive.trim();
+  } else {
+    tvReceiptWaiver = '';
+  }
+
   const spent = flowMoney(tvRecord.totalSpent, 'PHP');
   if (!confirm('Submit this week for ' + spent + '?\n\nOnce accounting signs it you will not be able ' +
                'to edit it without asking them to reopen it.')) return;
-  await tvAct('submitTravelReplenishment', { travNo: tvRecord.travNo }, async (res) => {
+  /* A238 — a receipt waiver travels as the SAME waiverReason the itinerary one uses. The server
+     records both in the one Waiver By / Waiver Reason pair, deliberately: they are the same fact
+     (an approver let something through, and why), and a fourth column on a 33-wide sheet is the
+     width trap this codebase keeps walking into. */
+  const base = { travNo: tvRecord.travNo };
+  if (tvReceiptWaiver) base.waiverReason = 'Receipts waived: ' + tvReceiptWaiver;
+  await tvAct('submitTravelReplenishment', base, async (res) => {
     if (res.needsWaiver && tvIsApprover()) {
       const why = prompt('There is no approved weekly itinerary for this week (' +
         (res.itineraryStatus || 'none') + ').\n\nYou can still let it through — record why:');
       if (!why || !why.trim()) return false;
-      return { travNo: tvRecord.travNo, waiverReason: why.trim() };
+      return Object.assign({}, base, {
+        waiverReason: (base.waiverReason ? base.waiverReason + ' · ' : '') + why.trim() });
+    }
+    /* The server half of the receipt gate (A238-G), for a browser that has not been reloaded since
+       the paste — or an approver whose client-side prompt was bypassed some other way. */
+    if (res.needsReceiptWaiver && tvIsApprover()) {
+      const why = prompt((res.message || 'Some legs have no receipt.') +
+                         '\n\nYou can still let it through — record why:');
+      if (!why || !why.trim()) return false;
+      return Object.assign({}, base, { waiverReason: 'Receipts waived: ' + why.trim() });
     }
     return false;
   });
@@ -435,9 +490,17 @@ async function tvAct(action, params, onRetry) {
       if (retry) res = await postFlow(action, retry);
     }
     if (!res.success) { flowMsg('tvMsg', res.message, false); return; }
+    /* A238 — file the pack whenever the STATE changed, so Drive holds what was signed at each step:
+       once on submit, and again on approval with both signatures on it. After the state change, so a
+       Drive failure can never cost the signature — it is reported as a note on a success. */
+    let filed = '';
+    if (action === 'submitTravelReplenishment' || action === 'approveTravelReplenishment') {
+      filed = await tvFilePack(res.travNo || (tvRecord && tvRecord.travNo));
+    }
     /* payableFailed is a SUCCESS that did not do everything it says on the tin. Saying so plainly
        beats a green message that quietly leaves nobody paid. */
-    flowMsg('tvMsg', res.message, !res.payableFailed);
+    flowMsg('tvMsg', res.message + (filed ? ' — note: ' + filed : ''),
+            !res.payableFailed && !filed);
     if (tvIsApprover()) await tvLoadQueue();
     await tvLoad();
   } catch (e) { flowMsg('tvMsg', e.message, false); }
@@ -484,8 +547,20 @@ function tvRenderLegs() {
     sel.addEventListener('change', ev => {
       const l = tvLegs[Number(ev.target.closest('tr').getAttribute('data-i'))];
       if (!l) return;
+      const was = l.means;
+      const spec = tvMeansSpec(ev.target.value);
+      /* A238 — the same confirm the treatment control carries. Correcting Bus to Tricycle re-derives
+         the leg onto the certificate, which discards its photo; doing that without asking destroys a
+         filed receipt on what looks like a harmless relabel. */
+      if (spec && spec.cert && (l.dataUrl || l.receiptDocId)) {
+        if (!confirm(spec.v + ' goes on the certificate, which means certifying that no receipt ' +
+                     'exists for this leg — so the photo attached to it will be removed when you ' +
+                     'save.\n\nChange the transport and remove the photo?')) {
+          ev.target.value = was;           // put the control back; nothing was touched
+          return;
+        }
+      }
       l.means = ev.target.value;
-      const spec = tvMeansSpec(l.means);
       if (spec) {
         l.kind = spec.kind;
         l.noReceipt = spec.cert;
@@ -500,10 +575,22 @@ function tvRenderLegs() {
     sel.addEventListener('change', ev => {
       const l = tvLegs[Number(ev.target.closest('tr').getAttribute('data-i'))];
       if (!l) return;
-      l.noReceipt = ev.target.value === 'yes';
+      const want = ev.target.value === 'yes';
       /* Moving a leg ONTO the certificate drops any photo on it: the certificate's whole claim is
          that no receipt exists, so shipping one in the annex beside it contradicts the document the
-         rep signs. Clearing it here means the next save also clears the Drive row. */
+         rep signs. Clearing it here means the next save also clears the Drive row.
+         A238 — but ASK first when there is really something to lose. The discard used to be silent
+         and the next save trashed the Drive file, so one mis-click on a dropdown destroyed a
+         photograph the rep had already filed, with no way back. */
+      if (want && (l.dataUrl || l.receiptDocId)) {
+        if (!confirm('This leg has a receipt photo attached.\n\nPutting it on the certificate means ' +
+                     'certifying that NO receipt exists for it, so the photo will be removed when you ' +
+                     'save.\n\nRemove the photo and certify this leg?')) {
+          ev.target.value = 'no';          // put the control back; nothing was touched
+          return;
+        }
+      }
+      l.noReceipt = want;
       if (l.noReceipt) { l.dataUrl = ''; l.rcptDirty = !!l.receiptDocId; l.receiptDocId = ''; }
       tvPreviewReceipts = true;
       tvRenderLegs();
@@ -726,6 +813,38 @@ async function tvRenderPreview() {
     const w = document.getElementById('tvWake'); if (w) w.remove();
     if (seq === tvSeq) wrap.classList.remove('busy');
   }
+}
+
+/* A238 — file the pack to Drive, so an approved week leaves an artefact.
+ *
+ *  Called AFTER the state change lands, never before and never as a precondition: the A178 ordering,
+ *  for the same reason. A Drive hiccup must not cost a rep their submission or an approver their
+ *  signature, so this is fire-and-swallow and its failure is reported as a note on a success, not as
+ *  a failure. It renders through the SAME route the preview uses, with receipts included, so what is
+ *  archived is exactly what was on screen.
+ *
+ *  Silently a no-op until FlowAPI.gs v134 is pasted — postFlow answers "unknown action" and the catch
+ *  swallows it, which is why this cannot be the thing that reports success. */
+async function tvFilePack(travNo) {
+  if (!travNo || !tvReady) return '';
+  try {
+    const res = await fetch('/flow/travel-allowance-pdf', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tvPayload(true))          // true = with the receipt bytes
+    });
+    if (!res.ok) return 'the pack could not be rendered for filing';
+    const blob = await res.blob();
+    const b64 = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = reject;
+      r.onload = () => resolve(String(r.result).split(',')[1]);
+      r.readAsDataURL(blob);
+    });
+    const out = await postFlow('saveTravelPDF', {
+      travNo: travNo, fileName: 'Travel_Allowance_' + travNo + '.pdf', pdfBase64: b64
+    });
+    return (out && out.success) ? '' : 'the pack could not be filed to Drive';
+  } catch (e) { return 'the pack could not be filed to Drive'; }
 }
 
 function tvWriteRecord(wk) {
