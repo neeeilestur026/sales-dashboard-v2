@@ -182,6 +182,8 @@ function renderList() {
 /* ── A208: attach a sent message to a quotation, from the message end ────────────────────────── */
 let deCached = false, deMailbox = '';
 let seQuotes = [], seLinks = [], seLinkByMsg = {}, seReady = false;
+// A230 — the "not this" rows, kept apart from seLinks because seLinks means "attached".
+let seDismissed = [];
 let seReplyReady = false;      // A217: setQuotationEmailReply exists on the deployed backend
 
 /** Loaded once, alongside the mailbox. Both degrade to empty — the mailbox still lists. */
@@ -190,16 +192,21 @@ async function seLoadQuotations() {
     seReady = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(113) : false;
     if (!seReady) return;
     seReplyReady = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(122) : false;
-    const [q, l] = await Promise.all([
+    const [q, l, d] = await Promise.all([
       /* A218 — scope by OWNER. Scoped by creator, a rep could not attach the email they actually
          sent whenever somebody else had typed the quotation for them: the message sits in the
          OWNER's Sent folder, and the owner is who must be offered it. The parameter name is
          unchanged; getQuotations now resolves it through _quoOwner. */
       fetchFlow('getQuotations', deSession.role === 'sales' ? { createdBy: deSession.name } : {}).catch(() => ({ data: [] })),
       fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
+      /* A230 — the "not this" rows, read separately. See the twin comment in flow-quotations.js:
+         the call above returns Active only, and widening it would change what seLinks MEANS for
+         seLinkByMsg and qemLearnDomains, both of which mean "attached". */
+      fetchFlow('getQuotationEmails', { status: 'Dismissed' }).catch(() => ({ data: [] })),
     ]);
     seQuotes = (q && q.data) || [];
     seLinks = (l && l.data) || [];
+    seDismissed = (d && d.data) || [];
     seLinkByMsg = {};
     seLinks.forEach(x => {
       const id = String(x.messageId || '').toLowerCase();
@@ -249,10 +256,31 @@ function seRankFor(m) {
   });
   /* Only a quotation that has actually gone out can have been carried by a sent message. The same
      filter the dialog uses. */
-  return qemRankQuotations(m, seQuotes.filter(q => {
+  const ranked = qemRankQuotations(m, seQuotes.filter(q => {
     const st = String(q.status || '');
     return st === 'Approved' || st === 'Sent' || ['Not Pursued', 'Lost', 'Cancelled'].indexOf(st) !== -1;
   }), ctx);
+
+  /* A230 — honour "not this", and note that THE DIRECTION IS INVERTED HERE.
+   *
+   * qemScore checks ctx.dismissed[messageId]. On the quotation modal that is right: one quotation,
+   * many messages, so each message is judged on its own. This page is the other way round — ONE
+   * message, many quotations — so a messageId-keyed map would match every candidate at once and sink
+   * the entire list. That is the easy mistake, and it would look like the page had simply broken.
+   *
+   * So the dismissals are applied out here instead, keyed by QUOTATION, and qemScore is left exactly
+   * as the table test pins it. Demoted rather than dropped, because qemRank's stated rule is that
+   * nothing is ever filtered out — the person picking knows things this does not. */
+  const no = {};
+  const mid = String(m.messageId || '').toLowerCase();
+  (seDismissed || []).forEach(l => {
+    if (String(l.messageId || '').toLowerCase() === mid) no[String(l.quotationNo)] = true;
+  });
+  if (!Object.keys(no).length) return ranked;
+  const keep = ranked.filter(r => !no[String(r.quotation.quotationNo)]);
+  const sunk = ranked.filter(r => no[String(r.quotation.quotationNo)])
+    .map(r => ({ quotation: r.quotation, score: -1000, reasons: ['you said not this one'] }));
+  return keep.concat(sunk);
 }
 
 function seRenderSplit(rows, box) {
@@ -359,7 +387,7 @@ function seRenderSide() {
     side.innerHTML = head + `<div class="hint">Attached to
       <a href="flow-quotations.html?review=${encodeURIComponent(hit.quotationNo)}"><b>${_esc(hit.quotationNo)}</b></a>.
       The follow-up clock for that quotation runs from this message.</div>
-      <button class="btn btn-sm btn-secondary" onclick="seUnlink('${_esc(hit.quotationNo)}','${_esc(m.messageId)}')">Detach</button>`;
+      <button class="btn btn-sm btn-secondary" onclick="seUnlink('${_esc(hit.linkId || '')}','${_esc(hit.quotationNo)}','${_esc(m.messageId)}')">Detach</button>`;
     return;
   }
 
@@ -407,10 +435,34 @@ async function seLinkNow(quotationNo) {
   await seDoLink(quotationNo, m);
 }
 
-async function seUnlink(quotationNo, messageId) {
+/* A230 — THIS BUTTON HAD NEVER ONCE WORKED.
+ *
+ * `unlinkQuotationEmail` resolves a row by its Link ID. This function used to post
+ * `{quotationNo, messageId}` and no linkId at all, so the server looked up the string "undefined",
+ * found nothing, and answered "Link not found." — about a link named in the sentence directly above
+ * the button. Every Detach from the mailbox since A217 has failed that way. The link modal on
+ * flow-quotations posts `{linkId}` and has always worked, which is exactly why this looked
+ * intermittent rather than broken.
+ *
+ * The id was never missing: `seRenderSide` already holds the whole link DTO, and `_qeMap` puts
+ * `linkId` on it. It simply was not passed.
+ *
+ * `linkId` is a stable key, not a convenience: `linkQuotationEmail` upserts on the
+ * (quotation, message) pair and REUSES the existing Link ID, so a detach→re-attach cycle revives the
+ * same row with the same id. The pair is sent alongside so the widened handler can fall back to it
+ * when a row was deleted from the sheet by hand — but the id is what normally resolves. */
+async function seUnlink(linkId, quotationNo, messageId) {
+  if (!linkId) {
+    /* Refuse here rather than firing a request that cannot succeed. If this ever shows, the link
+       DTO arrived without an id and the fault is upstream in getQuotationEmails, not in the click. */
+    seToast('This link has no id on record, so it cannot be detached from here — open the quotation and remove it there.', false);
+    return;
+  }
   if (!confirm(`Detach this message from ${quotationNo}?\n\nThe quotation keeps its send date; only the link goes.`)) return;
   try {
-    const res = await postFlow('unlinkQuotationEmail', { quotationNo: quotationNo, messageId: messageId });
+    const res = await postFlow('unlinkQuotationEmail', {
+      linkId: linkId, quotationNo: quotationNo, messageId: messageId
+    });
     if (!res.success) throw new Error(res.message);
     await seLoadQuotations();
     renderList();

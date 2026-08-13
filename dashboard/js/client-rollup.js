@@ -187,7 +187,13 @@ function crTimeline(c, links) {
               title: String(q.subject || '') || 'Quotation',
               status: String(q.status || ''), who: String(q.createdBy || ''),
               value: (typeof flowQuotationNet === 'function') ? flowQuotationNet(q) : _crNum(q.total),
-              emails: ((links || {})[String(q.quotationNo)] || []).length });
+              /* A230 — count ACTIVE links only. This is a no-op today, and that is exactly why it
+                 goes in now: it was the ONE link counter in the codebase without the filter (every
+                 other consumer reaches links through flowFollowUp, which already applies it), so it
+                 was the single line that would have started counting "not this" rows as real emails
+                 the moment anything handed it an inactive one. */
+              emails: ((links || {})[String(q.quotationNo)] || [])
+                        .filter(l => String((l || {}).status || 'Active') === 'Active').length });
     if (q.sentAt) ev.push({ kind: 'sent', date: _crDate(q.sentAt), ref: String(q.quotationNo || ''),
                             title: 'Sent to the client', who: String(q.sentTo || '') });
   });

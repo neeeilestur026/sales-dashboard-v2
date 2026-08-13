@@ -2,7 +2,12 @@
  *
  * Pure and DOM-free on purpose (the puller-selector.js precedent from A185): every rule here is a
  * judgement about someone's real mail, and a judgement that can only be checked by clicking through
- * a UI never gets checked. Everything below is exercised by a table test.
+ * a UI never gets checked. Everything below is exercised by a table test: tests/flow/quotation-email-match.js.
+ *
+ * A230 — that sentence was here from A208 and was NOT TRUE: no such file existed, and
+ * quotation-worklist.js cited it as the table-tested precedent, so a claim nobody had checked was
+ * being used to justify other files. The test exists now, and its snapshot is what lets the scoring
+ * be left alone while the plumbing around it is repaired.
  *
  * NOTHING HERE EVER LINKS ANYTHING. It only reorders a list a person then picks from. The scores are
  * shown as plain reasons ("same domain", "matches your client ref") so a wrong suggestion is
@@ -15,8 +20,14 @@
  */
 
 /* Free mailboxes tell you nothing about which company someone works for, so they must never earn the
-   domain points — otherwise every gmail client collides with every other. Mirrors the same list in
-   blueprints/email_log.py _company_from_email. */
+   domain points — otherwise every gmail client collides with every other.
+
+   A230 — this list is a SUPERSET of the one in blueprints/email_log.py _company_from_email, which
+   carries six. The comment here used to claim the two "mirror" each other; they do not, and the test
+   now pins the real relationship rather than an equality that was never true. The difference is in
+   the safe direction — this file excludes four MORE free hosts (yahoo.com.ph, aol, protonmail, msn),
+   so the worst case is a domain point not awarded, never a wrong client matched. If the Python side
+   is ever widened, this must stay a superset. */
 const QEM_PUBLIC_DOMAINS = ['gmail.com', 'yahoo.com', 'yahoo.com.ph', 'outlook.com', 'hotmail.com',
   'icloud.com', 'live.com', 'aol.com', 'protonmail.com', 'msn.com'];
 
@@ -224,6 +235,9 @@ function qemLearnDomains(links, quotationsByNo) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
+  /* A230 — the two tables are exported so the table test can pin them against their second copy in
+     blueprints/email_log.py. No behaviour; a `const` at this scope is otherwise unreachable. */
   module.exports = { qemScore, qemRank, qemRankQuotations, qemIsConfident, qemLearnDomains,
-    qemDomain, qemOverlap, qemTokens, qemFlat, qemDays, qemAddresses };
+    qemDomain, qemOverlap, qemTokens, qemFlat, qemDays, qemAddresses,
+    QEM_PUBLIC_DOMAINS, QEM_STOPWORDS };
 }

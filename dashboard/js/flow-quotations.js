@@ -19,7 +19,8 @@ let qrGate = { block: false, needTick: false };   // A183: state the tick uses t
 const Q_CLOSED = ['Not Pursued', 'Lost', 'Cancelled'];   // A152 soft-close outcomes
 let qRoll = null;        // A208: the current flowQuotationRollup — tiles, counter and rep headers share it
 let qDupPairs = [];      // A208: same document number + same customer on two rows
-let qLinks = {};         // A208: quotationNo → its email link rows
+let qLinks = {};         // A208: quotationNo → its email link rows (ACTIVE only)
+let qDismissed = [];     // A230: the "not this" rows, read separately — see loadQuotations
 let qCfg = null;         // A208: the follow-up thresholds (director-set, with built-in defaults)
 let qCanTrack = false;   // A208: the email/follow-up backend needs FlowAPI v113
 let qClientEmails = {}; // A208: customer -> the address on file, for the domain signal
@@ -124,10 +125,25 @@ async function loadQuotations() {
     /* A208 — the email links and the follow-up thresholds ride along with the existing two fetches.
        Both degrade to empty: the tracker then measures purely on Quotations['Sent At'], which is
        still three of the four things it watches. No IMAP is touched here, ever. */
-    const [res, soRes, linkRes, cfgRes, cliRes] = await Promise.all([
+    const [res, soRes, linkRes, dismRes, cfgRes, cliRes] = await Promise.all([
       fetchFlow('getQuotations', params),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),   // A145: which quotations became SOs
       fetchFlow('getQuotationEmails').catch(() => ({ data: [] })),
+      /* A230 — a SECOND, narrow read for the rows "not this" writes.
+       *
+       * The call above is left byte-identical on purpose. getQuotationEmails returns only Active rows
+       * unless asked otherwise, and every one of its six callers asked with {} — so a Dismissed row
+       * had never once reached a browser, qeCtx.dismissed below could never be populated, and the
+       * -1000 branch in quotation-email-match.js was unreachable code. "Not this" wrote a row nothing
+       * read, and the same email came back next time.
+       *
+       * Widening the existing call with includeInactive would have been one character shorter and
+       * would have quietly changed what qLinks MEANS for five other consumers on this page — the same
+       * kind of implicit invariant that caused the bug. A separate request keeps their query string,
+       * and therefore their cache entry and payload, provably identical. `status` is not new: it has
+       * been in the handler since A208 shipped as v113, and every UI that can link at all is already
+       * gated on v113 — so this needs no Apps Script paste. */
+      fetchFlow('getQuotationEmails', { status: 'Dismissed' }).catch(() => ({ data: [] })),
       fetchFlow('getFlowSettings').catch(() => ({ data: null })),
       fetchFlow('getClients').catch(() => ({ data: [] })),   // A208: the client's own email domain
     ]);
@@ -139,6 +155,12 @@ async function loadQuotations() {
       const k = String(l.quotationNo || '');
       if (k) (qLinks[k] = qLinks[k] || []).push(l);
     });
+    /* A230 — kept in its OWN variable, never merged into qLinks. Five things on this page read
+       qLinks (the Email (n) badge, the attached list, the history timeline, the follow-up badge and
+       qemLearnDomains) and every one of them means "attached". A dismissed row is the opposite of
+       attached; folding it in would make all five depend on their Active filters staying put for
+       ever. Only qeBuildCtx reads this. */
+    qDismissed = ((dismRes && dismRes.data) || []);
     qCfg = (cfgRes && cfgRes.data) || null;
     qClientEmails = {}; qClientRefs = {};
     ((cliRes && cliRes.data) || []).forEach(c => {
@@ -975,8 +997,17 @@ function qeBuildCtx() {
   all.forEach(l => {
     const id = String(l.messageId || '').toLowerCase();
     if (!id) return;
-    if (String(l.status) === 'Dismissed' && String(l.quotationNo) === qeQuotationNo) qeCtx.dismissed[id] = true;
     if (String(l.status) === 'Active') qeCtx.linked[id] = String(l.quotationNo);
+  });
+  /* A230 — the dismissed half now comes from its own read, because `all` above is built from qLinks
+     and qLinks has only ever held Active rows. This branch used to live in the loop above and could
+     never fire.
+     SCOPED TO THIS QUOTATION, deliberately: "not this" is a judgement about the message against the
+     quotation in front of the rep, not a global blacklist. The same email may well be the right one
+     for a different quotation. */
+  (qDismissed || []).forEach(l => {
+    const id = String(l.messageId || '').toLowerCase();
+    if (id && String(l.quotationNo) === qeQuotationNo) qeCtx.dismissed[id] = true;
   });
 }
 
@@ -1028,6 +1059,43 @@ function qeRenderLinked() {
     </div>`).join('');
 }
 
+/* A230 — WHICH BUTTONS A SUGGESTION MAY OFFER.
+ *
+ * This used to draw "Link" and "not this" on every row, including rows the loop had ALREADY worked
+ * out were attached (`already`, two lines up). On a message attached to THIS quotation, "not this"
+ * called dismissQuotationEmail, which matches on the (quotation, message) pair across every status
+ * and flips a live Active link straight to Dismissed. That is a detach — but performed by the wrong
+ * handler, so it skipped every guard the real one has, left the back-dated Sent At standing, and
+ * wrote an audit row reading "Email Dismissed" when what had happened was a detach. The audit log
+ * lied, which is the part no UI change can repair; the server refuses it now too.
+ *
+ * The three cases, and why each is what it is:
+ *   • attached to THIS quotation — one button, "remove". "Not this" here can only mean "I attached
+ *     the wrong one", and the honest action for that is a detach, through the handler that does it;
+ *   • attached to a DIFFERENT quotation — both stay. Dismissing writes a row for THIS quotation and
+ *     cannot touch the other pair, and one email legitimately carrying two quotations is normal;
+ *   • attached nowhere — both, as before. */
+function qeSuggestActions(id, already, top) {
+  if (already && String(already) === String(qeQuotationNo)) {
+    return `<button class="link-btn del-btn" onclick='qeUnlinkByMessage("${id}")'>remove</button>`;
+  }
+  return `<button class="link-btn" onclick='qeLink("${id}")'>${top ? 'Link (suggested)' : 'Link'}</button>
+        <button class="link-btn del-btn" onclick='qeDismiss("${id}")'>not this</button>`;
+}
+
+/** Detach from the suggestion list, where only the message id is to hand — resolve it to the link
+ *  row this quotation holds and reuse the normal unlink path, never the dismiss one. */
+async function qeUnlinkByMessage(messageId) {
+  /* qLinks is a MAP of quotationNo -> rows, not a flat array — indexed the same way qeRenderLinked
+     does it, so both read the same rows by the same route. */
+  const mid = String(messageId || '').toLowerCase();
+  const hit = (qLinks[qeQuotationNo] || []).filter(l =>
+    String(l.messageId || '').toLowerCase() === mid &&
+    String(l.status || 'Active') === 'Active')[0];
+  if (!hit) { flowMsg('qeMsg', 'That link is no longer on this quotation — reopen to refresh.', false); return; }
+  await qeUnlink(hit.linkId);
+}
+
 function qeRenderSuggest() {
   const box = document.getElementById('qeSuggest');
   const q = qList.filter(x => String(x.quotationNo) === qeQuotationNo)[0];
@@ -1066,8 +1134,7 @@ function qeRenderSuggest() {
         </div>
       </div>
       <div style="white-space:nowrap;">
-        <button class="link-btn" onclick='qeLink("${id}")'>${top ? 'Link (suggested)' : 'Link'}</button>
-        <button class="link-btn del-btn" onclick='qeDismiss("${id}")'>not this</button>
+        ${qeSuggestActions(id, already, top)}
       </div>
     </div>`;
   }).join('');

@@ -9,7 +9,14 @@
  * the rep must do rather than by when it happened. Newest-first is precisely backwards for tracking:
  * the row that needs attention most is the one that has sat longest, so it ends up furthest down.
  *
- * Pure and DOM-free, and table-tested — the puller-selector.js / quotation-email-match.js precedent.
+ * Pure and DOM-free, and table-tested at tests/flow/quotation-worklist.js — the
+ * quotation-email-match.js precedent (tests/flow/quotation-email-match.js).
+ *
+ * A230 — this line used to cite "the puller-selector.js / quotation-email-match.js precedent" and
+ * NEITHER had a test. quotation-email-match.js now does, so it is named with its path; the
+ * puller-selector.js claim is dropped rather than repeated, because a precedent that does not exist
+ * is how the claim spread here in the first place. (dashboard/js/puller-selector.js still says it is
+ * table-tested and still is not — its own line, not this one's, and left for its own change.)
  * It reuses flowFollowUp and flowQuotationBucket rather than restating their rules: those two already
  * decide what is closed, what is chaseable and when the clock started, and a second copy of that
  * judgement would drift from the first.
