@@ -1261,18 +1261,47 @@ async function qcSavePdf(no) {
        and the filed PDF silently loses its alternative-offers layout, leaving the copy in Drive
        different from the one the client was shown. */
     payload.recommendedOption = String(rec.recommendedOption || '').trim();
-    payload.items = (rec.items || []).map((it, i) => ({
-      itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo,
-      qty: num(it.qty) || 0,
-      price: num(it.price) || 0,
-      description: it.itemName || '',
-      uom: it.uom || '',
-      optionNo: String(it.optionNo || '').trim(),           // A205
-      // A86: the pairing the customer sees — what they asked for, then OUR OFFER
-      origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
-      imageDataUrl: photoByKey[String(it.lineKey)]
-                    || (alignable ? (priced[i].imageDataUrl || '') : '')
-    }));
+    /* A240 — the three per-line facts that do NOT live in QuotationItems: this item's scope of
+       supply, its note blocks, and whether its price prints. They ride in Layout JSON, so rebuilding
+       payload.items from `rec.items` alone drops all three — the filed and reviewed PDF loses the
+       scope blocks entirely and prints every hidden price. That is the SAME failure the A205 comment
+       two lines above records, in the same function, for the same reason.
+
+       Sourced from the RECORD's own layout first, which is what this function is documented to do
+       (A173: build from the saved record, never the browser's copy) and is correct here because the
+       save that precedes this call has already written it. The browser's line is the fallback, by key
+       and then by position — identical to the photo logic below, and it is what covers the ?fromPR
+       path, where the server mints its own line keys and every keyed lookup misses. */
+    const layByKey = {};
+    try {
+      const _lay = JSON.parse(rec.layoutJson || '{}');
+      (Array.isArray(_lay.itemScopes) ? _lay.itemScopes : []).forEach(e => {
+        if (e && e.k) layByKey[String(e.k)] = e;
+      });
+    } catch (e) { /* a record with no or broken layout simply has no per-line detail */ }
+    const localByKey = {};
+    priced.forEach(i => { localByKey[String(i.lineKey)] = i; });
+
+    payload.items = (rec.items || []).map((it, i) => {
+      const lay = layByKey[String(it.lineKey)];
+      const loc = localByKey[String(it.lineKey)] || (alignable ? priced[i] : null);
+      return {
+        itemNo: it.itemNo || 'N/A', itemName: it.itemName || it.itemNo,
+        qty: num(it.qty) || 0,
+        price: num(it.price) || 0,
+        description: it.itemName || '',
+        uom: it.uom || '',
+        optionNo: String(it.optionNo || '').trim(),           // A205
+        // A86: the pairing the customer sees — what they asked for, then OUR OFFER
+        origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
+        scope: lay ? String(lay.s || '') : String((loc && loc.scope) || ''),
+        blocks: lay ? (Array.isArray(lay.blocks) ? lay.blocks : [])
+                    : ((loc && Array.isArray(loc.blocks)) ? loc.blocks : []),
+        hidePrice: lay ? !!lay.hide : !!(loc && loc.hidePrice),
+        imageDataUrl: photoByKey[String(it.lineKey)]
+                      || (alignable ? (priced[i].imageDataUrl || '') : '')
+      };
+    });
   }
   const res = await fetch('/flow/quotation-pdf', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
