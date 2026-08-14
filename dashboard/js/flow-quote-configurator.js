@@ -237,8 +237,10 @@ function qcLoadExisting(q) {
      Layout JSON blob the configurator already round-trips, keyed by Line Key. */
   const qcScopeStore = Array.isArray(lay.itemScopes) ? lay.itemScopes : [];
   if (qcScopeStore.length) {
+    // A240 — the WHOLE entry is carried now (scope, blocks, hidden flag), not just the scope string,
+    // so the three travel together through both the identity path and the positional fallback below.
     const byKey = {};
-    qcScopeStore.forEach(e => { if (e && e.k) byKey[String(e.k)] = String(e.s || ''); });
+    qcScopeStore.forEach(e => { if (e && e.k) byKey[String(e.k)] = e; });
     /* Positional fallback, and only under two conditions at once. createQuotationFromPR rebuilds every
        line server-side from PricingRequestItems and assigns NEW Line Keys, so the keys stored on that
        first save match nothing and identity alone would drop the scope the rep had already typed.
@@ -248,8 +250,11 @@ function qcLoadExisting(q) {
     const alignable = !anyKeyHit && qcScopeStore.length === qcItems.length;
     qcItems.forEach((it, idx) => {
       const hit = byKey[String(it.lineKey)];
-      it.scope = (hit !== undefined) ? hit
-               : (alignable ? String((qcScopeStore[idx] || {}).s || '') : '');
+      const e = (hit !== undefined) ? hit : (alignable ? (qcScopeStore[idx] || {}) : {});
+      it.scope = String(e.s || '');
+      it.blocks = (Array.isArray(e.blocks) ? e.blocks : [])
+                    .map(b => ({ t: String((b || {}).t || ''), b: String((b || {}).b || '') }));
+      it.hidePrice = !!e.hide;
     });
   }
   // A205: restore which option the stored total was built from, so reopening and re-saving does not
@@ -568,10 +573,10 @@ function qcRenderItems() {
            moment anyone typed a real scope. A236 — but its own CELL. Sharing the photo cell put two
            nowrap pills in a column sized for one, so the scope button overhung the remove button by
            84px and covered it completely. -->
-      <td><button class="btn btn-secondary btn-sm qc-scope-btn ${qcScopeCount(i) ? 'qc-scope-on' : ''}"
+      <td><button class="btn btn-secondary btn-sm qc-scope-btn ${qcLineMark(i) ? 'qc-scope-on' : ''}"
             onclick="qcOpenScope('${esc(i.lineKey)}')"
-            title="Scope of supply printed under this item's description">${
-            qcScopeCount(i) ? '✓ scope (' + qcScopeCount(i) + ')' : '+ scope'}</button></td>
+            title="Scope of supply, note blocks and price visibility for this line">${
+            qcLineMark(i) || '+ details'}</button></td>
       <td>${qcLocked ? '' : `<button class="qc-del" onclick="qcRemoveRow('${esc(i.lineKey)}')" title="Remove line">✕</button>`}</td>
     </tr>`).join('');
   /* A205 — the header cell has to follow the gate too. The <th> is static markup, so leaving it
@@ -594,6 +599,24 @@ function qcScopeCount(it) {
   return String((it || {}).scope || '').split('\n').filter(s => s.trim()).length;
 }
 
+/** A240 — what the row button says. It has to fit a column sized for one short pill (A236: a wider
+ *  control here overhung the ✕ and covered it), so the parts are terse and the count comes first.
+ *  Empty string means nothing is set, and the caller prints "+ details". */
+function qcLineMark(it) {
+  const n = qcScopeCount(it);
+  const b = (Array.isArray((it || {}).blocks) ? it.blocks : []).length;
+  const parts = [];
+  if (n) parts.push('✓ ' + n);
+  if (b) parts.push(b + ' note' + (b === 1 ? '' : 's'));
+  if ((it || {}).hidePrice) parts.push('₱ hidden');
+  return parts.join(' · ');
+}
+
+/* A240 — the blocks being edited, held apart from qcItems until Save so Cancel really cancels.
+   The row button counts scope entries AND blocks AND the hidden flag, so the rep can see from the
+   table that a line carries something without opening it. */
+let qcBlkDraft = [];
+
 function qcOpenScope(key) {
   const it = qcItems.find(i => String(i.lineKey) === String(key));
   if (!it) return;
@@ -604,9 +627,57 @@ function qcOpenScope(key) {
   box.value = String(it.scope || '');
   box.readOnly = !!qcLocked;
   document.getElementById('qcScopeSave').style.display = qcLocked ? 'none' : '';
+  // Deep copy: editing the draft must not reach qcItems until Save.
+  qcBlkDraft = (Array.isArray(it.blocks) ? it.blocks : [])
+                 .map(b => ({ t: String((b || {}).t || ''), b: String((b || {}).b || '') }));
+  qcRenderBlocks();
+  const hide = document.getElementById('qcHidePrice');
+  hide.checked = !!it.hidePrice;
+  hide.disabled = !!qcLocked;
+  document.getElementById('qcBlkAdd').style.display = qcLocked ? 'none' : '';
   qcScopeTick();
   document.getElementById('qcScopeOverlay').classList.add('open');
   if (!qcLocked) box.focus();
+}
+
+/** One editor per block: a free-text heading and its body. Rendered from qcBlkDraft each time so
+ *  add and remove cannot leave the DOM and the array disagreeing about which block is which. */
+function qcRenderBlocks() {
+  const host = document.getElementById('qcBlkList');
+  if (!host) return;
+  // `esc` is function-local in qcRenderItems, not a global — the same line, for the same reason.
+  const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
+  const ro = qcLocked ? ' readonly' : '';
+  host.innerHTML = qcBlkDraft.map((b, i) => `
+    <div class="qc-blk" style="border:1px solid var(--line,#e5e7eb);border-radius:8px;padding:.5rem;margin-top:.4rem;">
+      <div style="display:flex;gap:.4rem;align-items:center;">
+        <input type="text" value="${esc(b.t)}"${ro} style="flex:1;"
+               placeholder="FACTORY ACCEPTANCE TEST — ITEMS 01 &amp; 02"
+               oninput="qcBlkSet(${i},'t',this.value)">
+        ${qcLocked ? '' : `<button class="qc-del" onclick="qcDelBlock(${i})" title="Remove this block">✕</button>`}
+      </div>
+      <textarea${ro} rows="3" style="margin-top:.35rem;width:100%;"
+        placeholder="Leave a blank line between paragraphs."
+        oninput="qcBlkSet(${i},'b',this.value)">${esc(b.b)}</textarea>
+    </div>`).join('') ||
+    '<div class="qc-scope-count">No note blocks on this line.</div>';
+}
+
+function qcBlkSet(i, field, value) {
+  if (qcLocked) return;
+  if (qcBlkDraft[i]) qcBlkDraft[i][field] = String(value || '');
+}
+
+function qcAddBlock() {
+  if (qcLocked) return;
+  qcBlkDraft.push({ t: '', b: '' });
+  qcRenderBlocks();
+}
+
+function qcDelBlock(i) {
+  if (qcLocked) return;
+  qcBlkDraft.splice(i, 1);
+  qcRenderBlocks();
 }
 
 /** Live count while typing, so a rep can see the block growing without saving to find out. */
@@ -628,6 +699,11 @@ function qcSaveScope() {
   const it = qcItems.find(i => String(i.lineKey) === String(qcScopeKey));
   if (it) {
     it.scope = String(document.getElementById('qcScopeText').value || '');
+    // A240 — a block with neither a heading nor a body is a row the rep added and left empty; it
+    // would print as a blank gap under the item. Drop it here rather than teach the renderer to.
+    it.blocks = qcBlkDraft.map(b => ({ t: String(b.t || '').trim(), b: String(b.b || '') }))
+                          .filter(b => b.t || b.b.trim());
+    it.hidePrice = !!document.getElementById('qcHidePrice').checked;
     qcRenderItems();
     qcOnChange();                                       // refresh the live preview
   }
@@ -801,6 +877,11 @@ function qcPayload(withImages) {
       // The payload is embedded in the PDF and round-trips by lineKey, which is already the item's
       // stable identity.
       scope: i.scope || '',
+      // A240 — the note blocks and the hidden-price flag ride the same way, for the same reason.
+      // `hidePrice` suppresses only the two money cells: the price is still in this payload and
+      // total_ex_vat still sums it, so nothing downstream of the display changes.
+      blocks: Array.isArray(i.blocks) ? i.blocks : [],
+      hidePrice: !!i.hidePrice,
       imageDataUrl: (showPhotos && withImages) ? (i.imageDataUrl || '') : ''
     })),
     doc: {
@@ -926,9 +1007,19 @@ function qcLayoutJson() {
      than the saved items. Keys still matched on an ordinary edit, but on the from-PR path the server
      re-keys every line and ORDER is the only thing holding the scope — and the fallback is disabled
      when the counts disagree. That silently dropped scope typed before the first save. */
-  const scopes = qcItems.filter(i => (i.itemNo || i.itemName))
-                        .map(i => ({ k: String(i.lineKey || ''), s: String(i.scope || '') }));
-  if (scopes.some(e => e.s.trim())) lay.itemScopes = scopes;
+  /* A240 — the same entry now carries the note blocks and the hidden-price flag. `hide` and `blocks`
+     are written ONLY when set, so an entry that carries nothing new is byte-identical to the A236
+     one and a quotation saved before A240 reloads unchanged. */
+  const scopes = qcItems.filter(i => (i.itemNo || i.itemName)).map(i => {
+    const e = { k: String(i.lineKey || ''), s: String(i.scope || '') };
+    const blocks = (Array.isArray(i.blocks) ? i.blocks : [])
+                     .map(b => ({ t: String((b || {}).t || ''), b: String((b || {}).b || '') }))
+                     .filter(b => b.t || b.b.trim());
+    if (blocks.length) e.blocks = blocks;
+    if (i.hidePrice) e.hide = true;
+    return e;
+  });
+  if (scopes.some(e => e.s.trim() || e.blocks || e.hide)) lay.itemScopes = scopes;
   return JSON.stringify(lay);
 }
 
@@ -961,8 +1052,12 @@ async function qcFinalize() {
      the text is still on screen to shorten. Nothing is truncated silently. */
   const qcLay = qcLayoutJson();
   if (qcLay.length > 45000) {
-    qcMsg('The scope of supply and summary text is too long to store — ' + qcLay.length.toLocaleString() +
-          ' characters against a 45,000 limit. Shorten the longest item scope and save again.', false);
+    // A240 — the note blocks ride the same cell, so they are already inside this measurement; the
+    // message names them so a rep who blew the limit with a long note is not told to shorten scope.
+    qcMsg('The scope of supply, note blocks and summary text are too long to store — ' +
+          qcLay.length.toLocaleString() +
+          ' characters against a 45,000 limit. Shorten the longest item scope or note and save again.',
+          false);
     return;
   }
 

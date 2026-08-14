@@ -425,22 +425,45 @@
        inline textarea per row would collapse it the moment anyone typed a real scope. -->
   <div class="flow-modal-overlay" id="qcScopeOverlay">
     <div class="flow-modal" style="max-width:620px;">
-      <h3 style="margin:0 0 .2rem;">Scope of supply</h3>
+      <h3 style="margin:0 0 .2rem;">Line details</h3>
       <div class="sub" style="margin-bottom:.6rem;">for <b id="qcScopeItem">—</b></div>
+
       <div class="qc-scope-hint">
         One inclusion per line — each prints as its own bullet under this item's description.
         Wrap a line in <b>**asterisks**</b> to make it a sub-heading (e.g. <b>**Standard
         Accessories**</b>); it stays with the line beneath it so a page break cannot separate them.
+        Start a line with <b>–</b> or <b>--</b> to indent it under the bullet above.
+        A <b>**lead-in**</b> may also open a line — <b>**Diesel Engine** — Baudouin 16M33</b> prints
+        the first part in bold and the rest as ordinary text.
         Add as many lines as you like — they flow onto the next page rather than being cut.
         A single line longer than 1,200 characters is shortened on the document with a “…”, and the
         quotation refuses to save if all its scope text together passes 45,000 characters.
       </div>
       <textarea id="qcScopeText" oninput="qcScopeTick()"
-        placeholder="Machine complete with motor and control panel&#10;**Standard Accessories**&#10;3-jaw chuck 250mm&#10;Steady rest and follow rest"></textarea>
+        placeholder="**Diesel Engine** — Baudouin 16M33G1650/6, 1800rpm — 3 pcs&#10;– Vacuum Circuit Breaker: ABB-VD4&#10;**Standard Accessories**&#10;3-jaw chuck 250mm"></textarea>
       <div class="qc-scope-count" id="qcScopeCount">No entries yet. One inclusion per line.</div>
+
+      <!-- A240: note blocks. A free-text title is what lets one block speak for several items
+           ("FACTORY ACCEPTANCE TEST — ITEMS 01 & 02"); the block itself hangs off this line. -->
+      <div class="qc-scope-hint" style="margin-top:.9rem;">
+        <b>Note blocks</b> print under this item's inclusions, each with its own heading. The heading
+        is free text, so a block covering more than one item can say so.
+      </div>
+      <div id="qcBlkList"></div>
+      <button class="btn btn-sm" id="qcBlkAdd" onclick="qcAddBlock()" style="margin-top:.4rem;">+ Add note block</button>
+
+      <!-- A240: display only. The price stays in the total, the sales order and the commission. -->
+      <label class="qc-scope-hint" id="qcHideWrap"
+             style="display:flex;gap:.5rem;align-items:flex-start;margin-top:.9rem;cursor:pointer;">
+        <input type="checkbox" id="qcHidePrice" style="margin-top:.15rem;flex:none;">
+        <span><b>Hide this line's price on the PDF.</b> Unit price and amount print as “—”.
+        The amount is still counted in the total, the sales order and the commission — a note under
+        the items says which lines are covered by the package price.</span>
+      </label>
+
       <div class="flow-modal-foot">
         <button class="btn btn-sm" onclick="qcCloseScope()">Cancel</button>
-        <button class="btn btn-sm btn-primary" id="qcScopeSave" onclick="qcSaveScope()">Save scope</button>
+        <button class="btn btn-sm btn-primary" id="qcScopeSave" onclick="qcSaveScope()">Save line details</button>
       </div>
     </div>
   </div>
