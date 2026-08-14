@@ -35,7 +35,8 @@ from PIL import Image as PILImage
 
 # A213 — shared with quotation_parser.py, which has to recognise this heading to know that the rows
 # under it belong to no item. One constant, so the two cannot drift.
-from pdf_generators.utils import QUO_SCOPE_INTABLE_HEADING
+from pdf_generators.utils import (QUO_SCOPE_INTABLE_HEADING, QUO_SCOPE_ITEM_HEADING_FMT,
+                                  QUO_HIDDEN_PRICE_NOTE_FMT, QUO_LETTERHEAD_NAME)
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ ARCH_B = _FACE["Archivo-Bold"]
 ARCH_XB = _FACE["Archivo-ExtraBold"]
 
 # ── Company constants ─────────────────────────────────────────────────────────
-COMPANY_NAME = "H.O ESTUR CORPORATION"
+COMPANY_NAME = QUO_LETTERHEAD_NAME
 COMPANY_ADDRESS = ("Blk 90 Lot 2 & 4 Ph 1 University Heights, Brgy Kaypian,\n"
                    "District 1, San Jose Del Monte, Bulacan,\nPhilippines, 3023")
 COMPANY_WEBSITE = "www.hiescorp.com"
@@ -146,6 +147,36 @@ def _num_key(v):
         return float(str(v).strip())
     except (TypeError, ValueError):
         return float("inf")
+
+
+def _number_span(nos):
+    """A240 — item numbers as a reader would say them: '03 to 12', '03, 05 and 09', '03'.
+
+    A run is collapsed only from three consecutive numbers up, because '03 and 04' reads better than
+    '03 to 04'. Anything that is not a plain integer (a rep can type an item number by hand) is kept
+    verbatim and simply never joins a run, so the note degrades to a list instead of lying about a
+    range it cannot verify.
+    """
+    def as_int(s):
+        try:
+            return int(str(s).strip())
+        except (TypeError, ValueError):
+            return None
+
+    parts, i = [], 0
+    while i < len(nos):
+        j = i
+        while (j + 1 < len(nos) and as_int(nos[j]) is not None
+               and as_int(nos[j + 1]) == as_int(nos[j]) + 1):
+            j += 1
+        if j - i >= 2:
+            parts.append("%s to %s" % (nos[i], nos[j]))
+        else:
+            parts.extend(nos[i:j + 1])
+        i = j + 1
+    if len(parts) == 1:
+        return parts[0]
+    return "%s and %s" % (", ".join(parts[:-1]), parts[-1])
 
 
 def _fmt(n):
@@ -521,18 +552,41 @@ def _cap_name(name, limit=600, token=40):
     )
 
 
-def _norm_bullets(v):
-    """A235 — one item's scope into [{"text", "bold"}].
+# A240 — the pasted-bullet stripper, taken verbatim from blueprints/flow.py::_bullets, WHICH IS THE
+# POINT. That character class deliberately excludes '*'. A173 wrote it that way after a real defect:
+# a line like '**Note** includes freight' fails endswith('**'), so it is not a whole-line sub-heading,
+# and a stripper containing '*' then eats the OPENING marker and prints a literal '**' on the
+# customer's document. A235's per-item parser used lstrip("-*•–— ") and reproduced that bug exactly.
+_BULLET_GLYPH_RE = re.compile(r"^[•·\-–—]+\s*")
+# A sub-bullet is a DELIBERATE second level. Three ways to say it, because reps transcribe from a
+# drawn page rather than learning a syntax:
+#   ·  two or more leading spaces/tabs   — survives a paste that kept its indentation
+#   ·  '--'                              — typeable when indentation does not survive
+#   ·  a leading en/em dash              — what the ACIC mock-up itself uses for its sub-points
+# ONE stray leading space is deliberately not enough: it would silently re-level a bullet somebody
+# already wrote. A plain '-' and a '•' stay top level, because those are what a pasted list uses.
+_SUB_BULLET_RE = re.compile(r"^(?:[ \t]{2,}|--(?!-)|[–—])\s*")
 
-    Mirrors blueprints/flow.py::_bullets deliberately, and the duplication is the point: that one
-    normalises the DOCUMENT-level block on the way in, and rewriting it to also walk every item
-    would put a loop over items inside a request handler that has no other reason to know about
-    them. This module is the only consumer of per-item scope, so per-item scope is normalised here.
+
+def _norm_bullets(v):
+    """A235/A240 — one scope block into [{"text", "bold", "sub"}].
+
+    THE ONE PARSER. A235 kept a second copy of blueprints/flow.py::_bullets here and the copy
+    silently lost A173's fix, so the document-level block and the per-item block disagreed about the
+    same syntax on the same page. flow.py now delegates to this, which is the only way two parsers
+    cannot drift: there is one.
 
     Accepts a textarea string (one entry per line), an already-split list, or a list of dicts, so the
     same payload works from the configurator, from a re-imported quotation and from a test.
-    A line wrapped in **asterisks** is a sub-heading — the same syntax the document-level block uses,
-    because a rep should not have to learn a second one."""
+
+        **Standard Accessories**        whole line   -> a sub-heading
+        **Diesel Engine** — Baudouin    lead-in      -> bold run, then ordinary text
+        --  Vacuum Circuit Breaker      indented     -> a second level, also '  ' (2+ spaces)
+
+    A LEAD-IN NEEDS NO SPECIAL FIELD. _bullet_para already escapes the text and THEN turns
+    '**x**' into '<b>x</b>', so the renderer could always do this; the only reason it did not was
+    that the stripper here ate the markers before the renderer ever saw them. So a lead-in is left
+    inline, exactly as typed, and the existing renderer handles it."""
     if not v:
         return []
     lines = (v.splitlines() if isinstance(v, str)
@@ -540,16 +594,22 @@ def _norm_bullets(v):
     out = []
     for ln in lines:
         if isinstance(ln, dict):
-            text, bold = str(ln.get("text") or "").strip(), bool(ln.get("bold"))
-        else:
-            text, bold = str(ln or "").strip(), False
-            # Detect **bold** BEFORE stripping bullet glyphs — the stripper eats '*' and would
-            # turn a sub-heading into an ordinary bullet with stray asterisks.
-            if len(text) > 4 and text.startswith("**") and text.endswith("**"):
-                text, bold = text[2:-2].strip(), True
-            text = text.lstrip("-*•–— ").strip()
+            text = str(ln.get("text") or "").strip()
+            if text:
+                out.append({"text": text, "bold": bool(ln.get("bold")), "sub": bool(ln.get("sub"))})
+            continue
+        raw = str(ln or "")
+        if not raw.strip():
+            continue
+        # Level BEFORE trimming — the indent is the signal and .strip() would destroy it.
+        sub = bool(_SUB_BULLET_RE.match(raw))
+        text = _SUB_BULLET_RE.sub("", raw).strip() if sub else raw.strip()
+        text = _BULLET_GLYPH_RE.sub("", text).strip()      # never eats '*' — see the note above
+        bold = False
+        if len(text) > 4 and text.startswith("**") and text.endswith("**") and text.count("**") == 2:
+            text, bold = text[2:-2].strip(), True          # the WHOLE line -> a sub-heading
         if text:
-            out.append({"text": text, "bold": bold})
+            out.append({"text": text, "bold": bold, "sub": sub})
     return out
 
 
@@ -573,7 +633,7 @@ def _norm_bullets(v):
 _SCOPE_BULLET_LIMIT = 1200
 
 
-def _scope_rows(bullets, width, per_item=False, indent=0.0):
+def _scope_rows(bullets, width, per_item=False, indent=0.0, heading=None):
     """A213 — the scope of supply, as rows for the ITEMS TABLE rather than a card after the totals.
 
     A235 — `per_item=True` renders ONE ITEM's own scope, under that item, and differs in exactly
@@ -619,7 +679,10 @@ def _scope_rows(bullets, width, per_item=False, indent=0.0):
     _bullets() already parses — deliberately, to avoid inventing a second one — which means a rep
     bolding a single bullet for emphasis now creates a heading. The configurator copy says so."""
     rows = [b for b in (bullets or []) if str((b or {}).get("text") or "").strip()]
-    if not rows:
+    # A240 — no bullets is still a block when a heading was asked for: an item whose only per-item
+    # content is a titled note block needs the heading anyway, because the heading is what marks the
+    # region for the importer. Without one the note's prose is read back as part of the product name.
+    if not rows and not (per_item and heading):
         return []
 
     # Two columns at ~105pt is what the mock-up shows and what the median inclusion needs (1-2
@@ -636,9 +699,17 @@ def _scope_rows(bullets, width, per_item=False, indent=0.0):
     gutter = 14 * PX
     col_w = (width - gutter) / 2.0 if columns == 2 else width
 
+    # A240 — the second level. Its own style rather than an indent on the paragraph, so the marker
+    # and the smaller size travel together and a sub-bullet is recognisable even when a page break
+    # separates it from its parent.
+    sub_body_st = _ps("scpB2", size - 0.5, MUTED8, leading_mult=1.25, leftIndent=10 * PX)
+
     def bullet(entry):
-        return _bullet_para(_cap_name(str(entry.get("text") or ""),
-                                      limit=_SCOPE_BULLET_LIMIT, token=24), body_st)
+        txt = _cap_name(str(entry.get("text") or ""), limit=_SCOPE_BULLET_LIMIT, token=24)
+        if entry.get("sub"):
+            body = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", _esc(txt))
+            return Paragraph("&ndash;&nbsp;" + body, sub_body_st)
+        return _bullet_para(txt, body_st)
 
     def pair_row(left, right):
         """One row holding up to two bullets side by side, at the column width they were measured at."""
@@ -706,6 +777,66 @@ def _scope_rows(bullets, width, per_item=False, indent=0.0):
     if held_head is not None:                       # a trailing heading with nothing under it
         out.append(indented([Paragraph(
             _esc(_cap_name(held_head, limit=_SCOPE_BULLET_LIMIT, token=24)), sub_st)]))
+
+    # A240 — the per-item heading, e.g. "SCOPE OF SUPPLY — ITEM 01". This REVERSES A235's decision
+    # documented above ("five copies of SCOPE OF SUPPLY is noise"): with the item number on it the
+    # line stops being a repeated title and becomes the label that says which item's inclusions these
+    # are — which is what the client's own mock-up asks for, and what a reader needs once several
+    # items each carry a block.
+    #
+    # It is PREPENDED INTO THE FIRST ROW rather than given a row of its own, for the same reason
+    # head_with_first exists: rows split between each other, so a heading in its own row can strand at
+    # the foot of a page with its bullets overleaf. Sharing a row makes that unrepresentable.
+    if heading:
+        head_cell = indented([Paragraph(_esc(_cap_name(str(heading), limit=120, token=24)),
+                                        _ps("scpIH", 9, ACCENT_DARK, ARCH_B, leading_mult=1.3)),
+                              Spacer(1, 2 * PX)])
+        out = [head_cell + list(out[0])] + out[1:] if out else [head_cell]
+    return out
+
+
+def _note_rows(title, body, width, indent=0.0):
+    """A240 — a titled note block under an item: the mock-up's "FACTORY ACCEPTANCE TEST — ITEMS 01 &
+    02". The title is the rep's own free text, so one block can speak for several items by saying so;
+    the alternative — a real many-to-many link between a note and the items it covers — buys nothing
+    the title does not already say, and would need a schema the 13-column QuotationItems cannot take.
+
+    Same row discipline as _scope_rows and for the same reason: ONE PARAGRAPH PER ROW, so the block's
+    height is never a sum and a long note flows onto the next page instead of raising LayoutError. The
+    title rides in the first paragraph's row so it cannot strand.
+
+    Body paragraphs are split on blank lines, so a rep can shape a note; single newlines stay inside a
+    paragraph and re-wrap, which is what a pasted note usually wants."""
+    body = str(body or "").replace("\r\n", "\n").replace("\r", "\n")
+    paras = [re.sub(r"\s*\n\s*", " ", p).strip() for p in re.split(r"\n\s*\n", body)]
+    paras = [p for p in paras if p]
+    title = str(title or "").strip()
+    if not paras and not title:
+        return []
+
+    # 1,200 chars is ~21 lines in the description column at this size against ~60 available in the
+    # frame — a 2.9x margin, derived the same way as the _scope_rows bound above.
+    body_st = _ps("ntB", 9, BODY2, leading_mult=1.35)
+    head_st = _ps("ntH", 9, ACCENT_DARK, ARCH_B, leading_mult=1.3)
+
+    def indented(cell):
+        if not indent:
+            return cell
+        t = Table([["", cell]], colWidths=[indent, width], hAlign="LEFT")
+        t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                               ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        return [t]
+
+    out = [indented([Paragraph(_esc(_cap_name(p, limit=1200, token=24)), body_st)]) for p in paras]
+    if not title:                                   # a body with no title is still a note
+        return out
+    head = [Paragraph(_esc(_cap_name(title, limit=120, token=24)), head_st), Spacer(1, 2 * PX)]
+    if not out:                                     # a title with no body still says something
+        return [indented(head)]
+    out[0] = indented(head) + list(out[0])
     return out
 
 
@@ -955,6 +1086,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             ordered.append({"_marker": "subtotal", "_key": k})
     span_rows = []          # (row_index, kind) filled as the rows are appended
     item_rows = []          # A213 — indices of REAL item rows, for the zebra band counter
+    hidden_nos = []         # A240 — item numbers whose price is suppressed, for the note below
     scope_row_idx = []      # A213 — indices of the scope rows, so they share item 01's band
     # A213 — scope prints inside the table, under the first BASE item. With no base item there is
     # nothing to hang it on: if every line carries an option_no, ordered[0] is the ALTERNATIVE OFFERS
@@ -1075,9 +1207,19 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         else:
             idx_cell = Paragraph(idx_txt, idx_st)
         item_rows.append(len(rows))
-        rows.append([idx_cell, desc_cell, qty_cell,
-                     Paragraph(_fmt(it.get("total_amount")), price_st),
-                     Paragraph(_fmt(it.get("total_unit_price")), amt_st)])
+        # A240 — a HIDDEN price shows an em dash in both money cells and nothing else changes. The
+        # value is untouched everywhere it matters: total_ex_vat in flow.py sums total_unit_price
+        # over every item regardless, so the printed total, the stored Quotations['Total'], the
+        # sales order and the commission base all stay correct BY CONSTRUCTION rather than by a
+        # second calculation that could drift from this one.
+        if it.get("hide_price"):
+            hidden_nos.append(idx_txt)
+            price_cell = Paragraph("&mdash;", price_st)
+            amount_cell = Paragraph("&mdash;", amt_st)
+        else:
+            price_cell = Paragraph(_fmt(it.get("total_amount")), price_st)
+            amount_cell = Paragraph(_fmt(it.get("total_unit_price")), amt_st)
+        rows.append([idx_cell, desc_cell, qty_cell, price_cell, amount_cell])
 
         # A213 — the scope of supply hangs off the FIRST base item, right under its description.
         # Appended INSIDE this loop on purpose: span_rows records `len(rows)` as it goes, so rows
@@ -1086,8 +1228,23 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # A235 — THIS ITEM'S OWN scope, before the document-level block, so the bullets sit directly
         # under the description they belong to. Indented past the thumbnail gutter so they line up
         # with the description TEXT rather than the index column.
-        own = _scope_rows(_norm_bullets(it.get("scope")), _desc_text_width(col_w[1]),
-                          per_item=True, indent=_desc_indent())
+        # A240 — titled note blocks, after this item's own scope so a block reads as a rider on the
+        # inclusions above it rather than as part of them.
+        blocks = []
+        for blk in (it.get("blocks") or []):
+            if isinstance(blk, dict):
+                blocks += _note_rows(blk.get("t"), blk.get("b"),
+                                     _desc_text_width(col_w[1]), indent=_desc_indent())
+        bullets = _norm_bullets(it.get("scope"))
+        # A240 — the heading is emitted for an item that has EITHER, and for no other item. It also
+        # covers a block with no scope above it: the heading is what tells the importer where this
+        # item's rows stop being its product name, and without one every line of the note is
+        # concatenated onto that name on re-import. Slightly broad as a label there, but a poisoned
+        # name is not visible the way a slightly broad heading is.
+        own = _scope_rows(bullets, _desc_text_width(col_w[1]), per_item=True, indent=_desc_indent(),
+                          heading=(QUO_SCOPE_ITEM_HEADING_FMT % idx_txt
+                                   if (bullets or blocks) else None))
+        own = own + blocks
         if own:
             # A fixed gap above the first bullet and below the last, so a block never touches the
             # description above it or the rule below it. Uniform across items by construction:
@@ -1103,6 +1260,21 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                 scope_row_idx.append(len(rows))
                 rows.append(["", cell, "", "", ""])
             scope_rows_pending = None
+
+    # A240 — THE RECONCILING NOTE. Without it the visible lines do not add up to the total and
+    # nothing on the page says why: on the ACIC quotation the reader is PHP 7,249,695.36 short with
+    # no explanation, which reads as an arithmetic error in our own document. Built from the item
+    # numbers actually suppressed, so it cannot go stale when lines are added, removed or reordered,
+    # and emitted only when something is in fact hidden.
+    if hidden_nos:
+        note_st = _ps("hidNote", 8.5, MUTED8, leading_mult=1.35)
+        scope_row_idx.append(len(rows))          # banded and un-ruled like a scope row
+        rows.append(["", [Spacer(1, 3 * PX),
+                          Paragraph(_esc(QUO_HIDDEN_PRICE_NOTE_FMT
+                                         % ("s" if len(hidden_nos) > 1 else "",
+                                            _number_span(hidden_nos),
+                                            "are" if len(hidden_nos) > 1 else "is")), note_st),
+                          Spacer(1, 3 * PX)], "", "", ""])
 
     items_tbl = Table(rows, colWidths=col_w, repeatRows=1)
     # Header: ONE continuous blue→red fade across all columns — each cell gets a horizontal

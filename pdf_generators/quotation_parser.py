@@ -30,7 +30,8 @@ import logging
 import re
 from io import BytesIO
 
-from .utils import ph_date_ymd, QUO_SCOPE_INTABLE_HEADING
+from .utils import (ph_date_ymd, QUO_SCOPE_INTABLE_HEADING, QUO_SCOPE_ITEM_HEADING_FMT,
+                    QUO_HIDDEN_PRICE_NOTE_FMT, QUO_LETTERHEAD_NAME)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,30 @@ def _flat(s):
 # quotation rather than a broken one.
 assert not any(_flat(QUO_SCOPE_INTABLE_HEADING).startswith(s) for s in _ITEM_STOP), (
     "QUO_SCOPE_INTABLE_HEADING must not start with an _ITEM_STOP prefix — it would end the item table")
+
+# A240 — the per-item heading, as a matcher. Built from the renderer's own format string so the two
+# cannot drift: whatever the renderer prints, this is what recognises it.
+_ITEM_SCOPE_HEAD_RE = re.compile(
+    "^" + re.escape(_flat(QUO_SCOPE_ITEM_HEADING_FMT)).replace(re.escape("%S"), r"[^\W_]{1,8}"))
+assert not any(_flat(QUO_SCOPE_ITEM_HEADING_FMT % "01").startswith(s) for s in _ITEM_STOP), (
+    "QUO_SCOPE_ITEM_HEADING_FMT must not start with an _ITEM_STOP prefix — 'SCOPE OF SUPPLY — ITEM "
+    "01' would have ended the item table at item 01 and dropped every item after it")
+assert _ITEM_SCOPE_HEAD_RE.match(_flat(QUO_SCOPE_ITEM_HEADING_FMT % "07")), (
+    "the per-item scope heading matcher no longer matches what the renderer prints")
+
+# A240 — the hidden-price reconciling note is furniture in the item table too, and without this it is
+# concatenated onto the LAST item's name on re-import, exactly the way scope bullets were before A213.
+# The tail comes from the renderer's own format string so the two cannot drift; the leading span and
+# verb are matched loosely because the numbers vary. Requiring the verb AND the tail is what makes a
+# false positive on a real description line unreachable in practice.
+_HIDDEN_NOTE_RE = re.compile(r"^ITEMS?\d[\dANDTO,]*(?:IS|ARE)"
+                             + re.escape(_flat(QUO_HIDDEN_PRICE_NOTE_FMT.split("%s")[-1])))
+assert _HIDDEN_NOTE_RE.match(_flat(QUO_HIDDEN_PRICE_NOTE_FMT % ("s", "03 to 12", "are"))), (
+    "the hidden-price note matcher no longer matches what the renderer prints (plural)")
+assert _HIDDEN_NOTE_RE.match(_flat(QUO_HIDDEN_PRICE_NOTE_FMT % ("", "03", "is"))), (
+    "the hidden-price note matcher no longer matches what the renderer prints (singular)")
+assert _HIDDEN_NOTE_RE.match(_flat(QUO_HIDDEN_PRICE_NOTE_FMT % ("s", "03, 05 and 09", "are"))), (
+    "the hidden-price note matcher no longer matches what the renderer prints (scattered)")
 
 # A235 — PER-ITEM SCOPE IS NOT SEPARATELY RECOVERABLE, and that is a deliberate trade, not an
 # oversight. An item's own scope prints with NO heading — repeating "SCOPE OF SUPPLY" under every
@@ -354,6 +379,26 @@ def parse_quotation_pdf(pdf_bytes):
             # A REGION, not a single line: skipping only the heading still absorbs every bullet.
             if in_items and flat_all.startswith(_flat(QUO_SCOPE_INTABLE_HEADING)):
                 in_scope = True
+                continue
+            # A240 — a PER-ITEM block opens the same region. This closes the asymmetry A235 left
+            # behind: per-item bullets carried no heading, so nothing marked where they began and
+            # every one of them fell into the `elif items:` branch and was concatenated onto that
+            # item's product name on re-import. The region ends the same way the document-level one
+            # does, at the next item line — which is where the next item's own heading sits anyway.
+            if in_items and _ITEM_SCOPE_HEAD_RE.match(flat_all):
+                in_scope = True
+                continue
+            # A240 — the hidden-price note. A REGION, not a single line, because a long span of item
+            # numbers wraps and only the first line carries the phrase that identifies it.
+            if in_items and _HIDDEN_NOTE_RE.match(flat_all):
+                in_scope = True
+                continue
+            # A240 — the PAGE letterhead, on every page after the first. The repeated TABLE header
+            # two branches up was already skipped; this was not, so on any quotation whose item table
+            # spans a page the letterhead was concatenated onto the name of the item above the break
+            # ("PACKAGE LINE 8 H.O ESTUR CORPORATION"). One line, not a region: the address lines
+            # under it carry no words the item table would claim.
+            if in_items and flat_all.startswith(_flat(QUO_LETTERHEAD_NAME)):
                 continue
             if in_scope:
                 # The block ends at the next item line — nothing separates them — or at any of the

@@ -204,3 +204,26 @@ def get_static_path(*parts):
 # ("SCOPEOFSUPPLY", "EXCLUSIONS", …). This heading must NOT start with any of them, or the importer
 # will stop reading items at the first one. The parser asserts exactly that next to _ITEM_STOP.
 QUO_SCOPE_INTABLE_HEADING = "INCLUSIONS — SCOPE OF SUPPLY"
+
+# A240 — the heading over ONE item's own scope block, e.g. "ITEM 01 — SCOPE OF SUPPLY". This reverses
+# A235's decision to leave per-item blocks unheaded: once several items each carry inclusions, a
+# reader needs to be told which item's they are, and the client's own mock-up asks for it.
+#
+# THE ITEM NUMBER COMES FIRST, AND THAT IS NOT A STYLE CHOICE. _ITEM_STOP holds "SCOPEOFSUPPLY" as a
+# prefix that ENDS the item table, so "SCOPE OF SUPPLY — ITEM 01" would have stopped the importer at
+# item 01 and silently dropped every item after it — a poisoned re-import that looks like a clean one.
+# Leading with "ITEM %s" keeps the flattened form clear of every terminator. The parser asserts it.
+QUO_SCOPE_ITEM_HEADING_FMT = "ITEM %s — SCOPE OF SUPPLY"
+
+# A240 — the line that reconciles hidden prices to the total: "Items 03 to 12 are supplied within the
+# package price above." Held here, not in the renderer, for the same reason as the two headings above:
+# the parser has to recognise it, and a second copy of the wording is a second thing to keep in step.
+# Its three slots are the plural 's', the item-number span, and the verb.
+QUO_HIDDEN_PRICE_NOTE_FMT = "Item%s %s %s supplied within the package price above."
+
+# The letterhead every page carries. Shared for the same reason as the headings: the parser has to
+# recognise it to skip it. A240 found it doing real damage — on a quotation whose item table spans a
+# page, the page-2 letterhead lands between two item rows and is concatenated onto the name of the
+# item above it ("PACKAGE LINE 8 H.O ESTUR CORPORATION"). The repeated TABLE header was already
+# handled; the page header was not.
+QUO_LETTERHEAD_NAME = "H.O ESTUR CORPORATION"

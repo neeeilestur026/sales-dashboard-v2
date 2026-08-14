@@ -18,7 +18,7 @@ import requests as http_requests
 from flask import Blueprint, request, jsonify, make_response
 from PyPDF2 import PdfReader, PdfWriter
 
-from pdf_generators.flow_quotation_pdf import build_quotation_pdf_bytes, build_summary_table
+from pdf_generators.flow_quotation_pdf import build_quotation_pdf_bytes, build_summary_table, _norm_bullets
 from pdf_generators.quotation_parser import parse_quotation_pdf
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
@@ -52,37 +52,14 @@ def _s(v):
 
 
 def _bullets(v):
-    """Parse Scope/Exclusions bullets into [{"text", "bold"}].
+    """Scope/Exclusions bullets — A240: DELEGATED, not reimplemented.
 
-    Accepts a textarea string (one bullet per line) or an already-split list, so the
-    payload works from the dialog and from a script. A leading bullet/dash the user
-    pasted is stripped; a line wrapped in **asterisks** is flagged bold."""
-    if not v:
-        return []
-    # A number-looking cell comes back from Sheets as a number, not a string — coerce
-    # anything that isn't a string or a sequence rather than crashing on list().
-    lines = (v.splitlines() if isinstance(v, str)
-             else list(v) if isinstance(v, (list, tuple)) else _s(v).splitlines())
-    out = []
-    for ln in lines:
-        if isinstance(ln, dict):
-            text, bold = _s(ln.get("text")).strip(), bool(ln.get("bold"))
-        else:
-            text, bold = _s(ln).strip(), False
-        # Detect **bold** FIRST — the bullet-stripper below eats '*', which would
-        # otherwise swallow the opening marker and leave a stray '**' at the end.
-        # A173: strip the pasted bullet glyph FIRST. Doing it after the bold test meant a line like
-        # '**Note** includes freight' failed endswith('**'), then the stripper (whose character class
-        # contains \*) ate the opening marker and the PDF printed a literal '**'.
-        text = re.sub(r"^[\u2022\u00b7\-\u2013\u2014]+\s*", "", text).strip()
-        if not bold and text.startswith("**") and text.endswith("**") and len(text) > 4:
-            text, bold = text[2:-2].strip(), True
-        elif text.startswith("*") and not text.startswith("**"):
-            text = text[1:].strip()
-        if not text:
-            continue
-        out.append({"text": text, "bold": bold})
-    return out
+    This used to be its own parser and A235 made a second copy of it in the renderer for per-item
+    scope. The copy lost A173's fix (a stripper containing '*' eats the opening marker of a
+    '**lead-in** rest' line and prints a literal '**'), so the SAME syntax rendered two different
+    ways on the SAME page depending on which block it was typed into. One function is the only
+    version of "they agree" that cannot rot."""
+    return _norm_bullets(v)
 
 
 def _options(v):
@@ -262,6 +239,12 @@ def quotation_pdf():
             # document-level `scope` below still goes through _bullets — that path is unchanged and
             # ~100 live quotations depend on its bytes.
             "scope": it.get("scope"),
+            # A240 — DISPLAY ONLY. The price is still stored, still summed into total_ex_vat below,
+            # still what the sales order and the commission base read. Only the two money cells on
+            # the page are suppressed. A zero-priced line would have been the other way to do this
+            # and it is wrong: on the ACIC quotation it would understate the offer by PHP 7.25M.
+            "hide_price": bool(it.get("hidePrice")),
+            "blocks": it.get("blocks"),
         })
         img = _decode_data_url(it.get("imageDataUrl"))
         if img:
