@@ -245,6 +245,10 @@ def quotation_pdf():
             # and it is wrong: on the ACIC quotation it would understate the offer by PHP 7.25M.
             "hide_price": bool(it.get("hidePrice")),
             "blocks": it.get("blocks"),
+            # A241 — the section band this line joins. Consecutive lines sharing it print under one
+            # group header. Like scope and blocks it rides the item rather than a QuotationItems
+            # column, so the 13-column width trap is untouched.
+            "group": _s(it.get("group")),
         })
         img = _decode_data_url(it.get("imageDataUrl"))
         if img:
