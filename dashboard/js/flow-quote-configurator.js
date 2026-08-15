@@ -35,6 +35,23 @@ let qcQuotationNo = '';           // set once saved, so a second Finalize update
    any record saved from here, is design 2. Read from layoutJson.v on load, stamped by qcLayoutJson()
    on save. */
 let qcDesignVersion = 2;
+
+/* A242 — WHICH DESIGN THE LIVE PREVIEW RENDERS AT, and why it is not simply qcDesignVersion.
+ *
+ * Reported as "the group feature doesn't work": a rep opened an existing quotation, typed a Group on
+ * a line, and the preview showed no band. Nothing was broken — the record predated A241, so
+ * qcDesignVersion loaded as 1, and design 1 has no bands at all. But qcLayoutJson() stamps v:2 on
+ * EVERY save, so the moment they pressed Finalize the document would have banded. The preview was
+ * showing a design the save was never going to produce.
+ *
+ * So the rule is: preview what the save will write.
+ *   • 'document' mode regenerates a PDF that has already gone out and must reproduce it faithfully
+ *     (qcRegenerateOnly), so it keeps the version the record was stored at.
+ *   • 'edit' mode always saves v:2, so it always previews 2.
+ */
+function qcPreviewDesign() {
+  return (qcMode === 'document') ? qcDesignVersion : 2;
+}
 let qcFromPr = '';                // the process-flow path
 let qcLocked = false;             // items display-only (fromPR, and A176 document mode)
 /* A242 — line selection on the fromPR path. `qcPartial` says the rows carry PR-line state; the
@@ -979,7 +996,7 @@ function qcPayload(withImages) {
     // its multi-line descriptions. It now follows the selector, which defaults to Full.
     descMode: val('qcDescMode') || 'long',
     photos: showPhotos,
-    designVersion: qcDesignVersion,                             // A241
+    designVersion: qcPreviewDesign(),                           // A241 / A242 — see the helper
     recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205
     items: qcQuotedItems().filter(i => (i.itemNo || i.itemName)).map(i => ({   // A242: the ticked lines
       itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
