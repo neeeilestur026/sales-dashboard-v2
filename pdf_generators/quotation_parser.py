@@ -189,6 +189,14 @@ def _columns(row):
     if not all(k in right_edge for k in ("qty", "price", "amount")) or qty_left is None:
         return None
     right_edge["desc_x1_max"] = qty_left - 4      # description ends before the QTY column starts
+    # A241 — where the DESCRIPTION column begins, taken from its own heading. Everything an item ever
+    # writes into the description column — the name, a wrapped continuation, a scope bullet — starts
+    # at or right of this x. A full-width section band does not: it starts at the table's left edge,
+    # out in the index column. That gap is what tells the two apart. See _looks_like_band.
+    for w in row:
+        if _flat(w["text"]) == "ITEM":
+            right_edge["desc_x0"] = float(w["x0"])
+            break
     return right_edge
 
 
@@ -205,6 +213,38 @@ def _split_row(row, cols):
                           key=lambda t: t[1])
         dict(buckets)[name].append(w)
     return d, q, p, a
+
+
+def _looks_like_band(row, cols):
+    """A241 — is this row a full-width GROUP BAND rather than anything belonging to an item?
+
+    THE TAG ALONE IS NOT ENOUGH, and finding that out cost a bug. The band draws its title and its
+    range tag on one visual line, but pdfplumber assigns each word a `top` derived from its font
+    metrics, and _rows() buckets by round(top/3) — so a 11.5px title and a 9.5px tag can land in
+    DIFFERENT buckets and the band arrives as a bare title with the tag nowhere near it. Matching the
+    tag then silently stops working, on some documents and not others, depending on where the band
+    happens to fall down the page. Aligning the two baselines only moved the residual around; it did
+    not remove it, because the metric a viewer uses is not one ReportLab exposes.
+
+    So identify the band by GEOMETRY, which no font metric can perturb:
+
+      · it starts in the INDEX column, left of where the description column begins — every item's own
+        text (name, wrapped continuation, scope bullet) starts at or right of that edge;
+      · its first token is not an item index or an OPTION badge — that is what separates it from a
+        real item row, which also starts out there;
+      · it carries no money and no quantity — an item row always has at least one.
+
+    The tag match stays as a second, independent route in the caller: either is sufficient, and having
+    two means the row is skipped even when one of them is defeated.
+    """
+    if not row or not cols or "desc_x0" not in cols:
+        return False
+    if float(row[0]["x0"]) >= cols["desc_x0"] - 4:
+        return False
+    first = str(row[0]["text"])
+    if _INDEX_RE.match(first) or _OPTION_RE.match(first):
+        return False
+    return not any(_num(str(w["text"])) is not None for w in row)
 
 
 def parse_quotation_pdf(pdf_bytes):
@@ -417,8 +457,10 @@ def parse_quotation_pdf(pdf_bytes):
             if in_items and flat_all.startswith(_flat(QUO_LETTERHEAD_NAME)):
                 continue
             # A241 — a group band. One line, not a region: the band is a single row and the items
-            # under it are ordinary indexed lines that must keep parsing normally.
-            if in_items and _BAND_TAG_RE.search(flat_all):
+            # under it are ordinary indexed lines that must keep parsing normally. Two independent
+            # tests, either sufficient — the generated tag when it lands in this row, and the band's
+            # geometry when the row bucketing has split the tag away from its title.
+            if in_items and (_BAND_TAG_RE.search(flat_all) or _looks_like_band(r, cols)):
                 continue
             if in_scope:
                 # The block ends at the next item line — nothing separates them — or at any of the

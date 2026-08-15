@@ -250,7 +250,14 @@ class _Theme(object):
 
 
 def _theme(design_version):
-    v2 = int(design_version or 1) >= 2
+    # NEVER RAISE ON THE VERSION. It arrives as JSON from the browser, so it can be anything at all;
+    # int("banana") would take down the whole PDF route for a field that only chooses a look. Anything
+    # unreadable means design 1 — the conservative answer, because design 1 is what an existing record
+    # already renders as.
+    try:
+        v2 = int(float(str(design_version).strip())) >= 2
+    except (TypeError, ValueError):
+        v2 = False
     return _Theme(
         v2=v2,
         # Product image: v1 is the 66px rounded square thumbnail; v2 is a 150px natural-aspect photo.
@@ -467,16 +474,17 @@ class _GroupBand(Flowable):
         c.setFont(f, s)
         c.drawString(x0, base, title, charSpace=tr)
 
-        # THE TAG'S BASELINE IS RAISED TO MATCH THE TITLE'S GLYPH TOP, and that is a correctness
-        # requirement, not typography. quotation_parser groups words into rows by round(top/3), and
-        # `top` is the top of the glyph box — which depends on FONT SIZE. Drawn on a shared baseline,
-        # an 11.5px title and a 9.5px tag land in DIFFERENT buckets, so the band reaches the importer
-        # as a bare title with no tag, the tag-anchored matcher never fires, and the group name is
-        # concatenated onto the previous item's product name. Equal tops, one bucket, one row.
+        # The tag shares the title's BASELINE, which is what the design shows.
+        #
+        # It deliberately does NOT try to share the title's row in the importer's eyes. pdfplumber
+        # assigns each word a `top` from its font metrics and quotation_parser buckets by
+        # round(top/3), so two different sizes on one baseline can fall either side of a boundary —
+        # and nudging the baseline to compensate only moved the residual around, because the metric a
+        # viewer uses is not one ReportLab exposes. The importer identifies this row by its GEOMETRY
+        # instead (see _looks_like_band); the type is free to be what the design asks for.
         c.setFillColor(tcol)
         c.setFont(tf, ts)
-        c.drawRightString(tag_r, base + (pdfmetrics.getAscent(f, s) - pdfmetrics.getAscent(tf, ts)),
-                          self.tag, charSpace=ttr)
+        c.drawRightString(tag_r, base, self.tag, charSpace=ttr)
 
         x1 = x0 + _w(title, f, s, tr) + 10 * PX
         x2 = tag_r - tagw - 10 * PX
