@@ -36,7 +36,9 @@ from PIL import Image as PILImage
 # A213 — shared with quotation_parser.py, which has to recognise this heading to know that the rows
 # under it belong to no item. One constant, so the two cannot drift.
 from pdf_generators.utils import (QUO_SCOPE_INTABLE_HEADING, QUO_SCOPE_ITEM_HEADING_FMT,
-                                  QUO_HIDDEN_PRICE_NOTE_FMT, QUO_LETTERHEAD_NAME)
+                                  QUO_HIDDEN_PRICE_NOTE_FMT, QUO_LETTERHEAD_NAME,
+                                  QUO_GROUP_TAG_RANGE_FMT, QUO_GROUP_TAG_ONE_FMT,
+                                  QUO_INCLUDED_WORD)
 
 logger = logging.getLogger(__name__)
 
@@ -202,10 +204,83 @@ def _sp(text):
     return "   ".join(" ".join(list(w)) for w in str(text).split(" ") if w)
 
 
+def _sp_p(text, spaced=True):
+    """A241 — _sp() for a PARAGRAPH rather than the canvas.
+
+    A Paragraph collapses the whitespace runs _sp() inserts, so a card label arrived with no tracking
+    at all — the eyebrow rendered "PREPAREDFOR". The canvas-drawn labels keep theirs, which is why
+    the terms strip has always looked right and these have not. _SectionHead already does exactly
+    this substitution; this is that one line, shared. `spaced=False` returns the old string verbatim,
+    which is what keeps design 1 byte-identical."""
+    s = _esc(_sp(text))
+    return s.replace("   ", "&nbsp;&nbsp;&nbsp;").replace(" ", "&nbsp;") if spaced else s
+
+
 def _ps(name, size_px, color=TEXT, font=None, align=0, leading_mult=1.45, **kw):
     size = size_px * PX
     return ParagraphStyle(name=name, fontName=font or LATO, fontSize=size, textColor=color,
                           alignment=align, leading=size * leading_mult, **kw)
+
+
+# ── A241: the two designs ─────────────────────────────────────────────────────
+# The quotation was redesigned (acic_semfinal.pdf) with group bands, an INCLUDED cell in place of a
+# suppressed price, and a large natural-aspect product photo. ~102 quotations already exist and a
+# client holds a copy of some of them, so the old look is NOT retired: a record keeps design 1 until
+# someone edits it, at which point the configurator stamps design 2.
+#
+# ONE BUILDER, NOT TWO. Everything that differs is a value in here, read once at the top of
+# build_quotation_pdf_bytes and consulted at the divergence points. A second copy of a 500-line
+# builder would drift from this one within a month, and the drift would only ever be visible on a
+# document already in front of a client.
+#
+# EVERY v1 VALUE MUST BE WHAT THE CODE DID BEFORE A241. tests pin nine cases byte-for-byte against
+# the pre-A241 renderer; if a v1 value here is wrong, that pin is what says so.
+_BAND_TINT = HexColor("#eef1f6")      # group band ground
+_BAND_LINE = HexColor("#d8dee8")      # group band hairlines, top and bottom
+_BAND_META = HexColor("#8b93a1")      # the range tag / "continued" marker
+_NAVY_INK = HexColor("#1F3A63")       # band titles and the INCLUDED word
+
+
+class _Theme(object):
+    """Resolved presentation constants for one design version. Attribute access, so a typo raises
+    rather than silently reading None the way a dict .get() would."""
+
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+def _theme(design_version):
+    v2 = int(design_version or 1) >= 2
+    return _Theme(
+        v2=v2,
+        # Product image: v1 is the 66px rounded square thumbnail; v2 is a 150px natural-aspect photo.
+        photo_w=(150 if v2 else 66) * PX,
+        # A row cannot split across a page, so a natural-aspect portrait would grow the row without
+        # bound — a 1:3 image is 326pt on its own against a 773.65pt frame. Capped and letterboxed.
+        photo_max_h=160 * PX,
+        # v2 starts the scope block at the cell's LEFT EDGE, under the photo, rather than indented
+        # past it (A235's decision). With a 150px photo the indent would leave the bullets in a
+        # 162pt gutter; at the left edge they read as belonging to the whole item.
+        scope_indent=(not v2),
+        # A suppressed price: v1 prints an em dash in both money cells and a reconciling note under
+        # the items; v2 merges the two cells into one centred INCLUDED and drops the note.
+        included_cell=v2,
+        hidden_note=(not v2),
+        bands=v2,
+        # Group bands. Text specs are (font, size, tracking, colour) rather than ParagraphStyles,
+        # because every one of these is letter-spaced and therefore canvas-drawn.
+        band_tint=_BAND_TINT,
+        band_edge=_BAND_LINE,
+        band_accent=ACCENT,
+        stripe_w=4 * PX,                  # ONE constant: the band's accent and the member stripe
+        band_pad=7 * PX,
+        band_title=(ARCH_XB, 11.5 * PX, 1.4 * PX, _NAVY_INK),
+        band_tag=(LATO_B, 9.5 * PX, 1.2 * PX, _BAND_META),
+        incl=(ARCH_B, 11 * PX, 1.2 * PX, _NAVY_INK),
+        # HAIR_F0 is already the lightest rule in the palette, so "lighter divider for grouped rows"
+        # has to be derived rather than picked.
+        hair_group=_mix(HAIR_F0, colors.white, 0.55),
+    )
 
 
 # ── Custom flowables ──────────────────────────────────────────────────────────
@@ -222,6 +297,209 @@ def _desc_text_width(col_w1):
     ~176pt once alternative offers widen the index column, which is why the scope drops to one
     column there (see _scope_rows)."""
     return col_w1 - _desc_indent() - 10 * PX
+
+
+class _Photo(Flowable):
+    """A241 — the design-2 product photo: fixed WIDTH, natural aspect ratio, never cropped.
+
+    _Thumb below is a fixed 66px SQUARE and letterboxes anything non-square into it. The redesign
+    shows the machine properly, so this one keeps the image's own proportions and takes whatever
+    height that implies — which is the whole reason it needs a ceiling.
+
+    WHY THE HEIGHT IS CAPPED. A ReportLab table row cannot split across a page, so the row is as tall
+    as its tallest cell and a row taller than the 773.65pt frame raises LayoutError — a 500 on the
+    quotation a rep is trying to send. At 150px wide a 1:3 panorama is 326pt tall on its own, before
+    the item name, the model line and an eight-bullet scope block are added beside it. Past the cap
+    the image is letterboxed inside the full width instead of growing, so a mis-shot photo costs a
+    little white space rather than the document.
+    """
+    RAD = 6 * PX
+
+    def __init__(self, img_bytes=None, width=150 * PX, max_h=160 * PX):
+        super().__init__()
+        self.img_bytes = img_bytes
+        self.width = width
+        self._pil = None
+        ar = 4.0 / 3.0                                      # the placeholder's shape
+        if img_bytes:
+            try:
+                pil = PILImage.open(BytesIO(img_bytes))
+                if pil.mode not in ("RGB", "RGBA"):
+                    pil = pil.convert("RGB")
+                pil.thumbnail((640, 640))                    # embed small — the slot is ~109pt
+                self._pil = pil
+                if pil.size[1]:
+                    ar = float(pil.size[0]) / float(pil.size[1])
+            except Exception:
+                logger.warning("photo decode failed; using placeholder")
+        self.height = min(max_h, width / ar) if ar else max_h
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.saveState()
+        clip = c.beginPath()
+        clip.roundRect(0, 0, w, h, self.RAD)
+        c.clipPath(clip, stroke=0, fill=0)
+        c.setFillColor(colors.white)
+        c.rect(0, 0, w, h, stroke=0, fill=1)
+        if self._pil is not None:
+            iw, ih = self._pil.size
+            scale = min(w / iw, h / ih) if iw and ih else 1   # fit, never crop
+            dw, dh = iw * scale, ih * scale
+            c.drawImage(ImageReader(self._pil), (w - dw) / 2, (h - dh) / 2, dw, dh,
+                        preserveAspectRatio=True, mask="auto")
+        else:
+            c.setFillColor(STRIPE_A)
+            c.rect(0, 0, w, h, stroke=0, fill=1)
+            c.setStrokeColor(STRIPE_B)
+            c.setLineWidth(2.2)
+            stripes = c.beginPath()
+            x = -h
+            while x < w:
+                stripes.moveTo(x, 0)
+                stripes.lineTo(x + h, h)
+                x += 7 * PX
+            c.drawPath(stripes, stroke=1, fill=0)
+            c.setFillColor(colors.white)
+            c.rect(w * 0.06, h * 0.38, w * 0.88, h * 0.24, stroke=0, fill=1)
+            c.setFillColor(MUTED8)
+            c.setFont("Courier", 6.5 * PX)
+            c.drawCentredString(w / 2, h * 0.45, "product shot")
+        c.restoreState()
+        c.saveState()
+        c.setStrokeColor(THUMB_BORDER)
+        c.setLineWidth(1)
+        c.roundRect(0, 0, w, h, self.RAD, stroke=1, fill=0)
+        c.restoreState()
+
+
+class _Tracked(Flowable):
+    """A241 — one letter-spaced line, drawn on the canvas.
+
+    WHY NOT A PARAGRAPH. ReportLab's ParagraphStyle has no letter-spacing attribute at all, and the
+    design leans on tracking for every structural label (the band titles at 1.4px, the range tags at
+    1.2px, INCLUDED at 1.2px). canvas.drawString and friends DO take charSpace and correct the
+    alignment width for it, so the canvas is the only place these can be drawn honestly. It also
+    sidesteps a second problem: registerFontFamily is set up for Lato only, so <b> inside an Archivo
+    paragraph silently does nothing — and every one of these labels is Archivo.
+    """
+
+    def __init__(self, spec, text, width, align="center", pad=3 * PX):
+        super().__init__()
+        self.font, self.size, self.track, self.color = spec
+        self.text = str(text or "")
+        self.width = width
+        self.align = align
+        self.height = self.size * 1.25 + 2 * pad
+        self._pad = pad
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        c.setFillColor(self.color)
+        c.setFont(self.font, self.size)
+        y = self._pad + self.size * 0.22
+        if self.align == "center":
+            c.drawCentredString(self.width / 2.0, y, self.text, charSpace=self.track)
+        elif self.align == "right":
+            c.drawRightString(self.width, y, self.text, charSpace=self.track)
+        else:
+            c.drawString(0, y, self.text, charSpace=self.track)
+        c.restoreState()
+
+
+class _GroupBand(Flowable):
+    """A241 — the section title row inside the items table.
+
+    THE GEOMETRY THAT MAKES THE ACCENT FLUSH. The band is a row with SPAN (0,ri)-(-1,ri) and all four
+    paddings zeroed, so ReportLab places this flowable's origin exactly at the row's bottom-left
+    corner and its box is exactly the row rect. That is what lets a 4px accent sit hard against the
+    table's left edge, INSIDE the outer BOX, without a sixth column and without touching col_w. A
+    LINEBEFORE would not do it: ReportLab strokes vertical lines centred on the column boundary, so
+    half the stroke would fall outside the table.
+    """
+
+    def __init__(self, width, title, tag, th):
+        super().__init__()
+        self.width = width
+        self.title = str(title or "").upper()
+        self.tag = str(tag or "")
+        self.th = th
+        self.height = th.band_title[1] * 1.25 + 2 * th.band_pad
+
+    def wrap(self, aw, ah):
+        # min(), not self.width: ReportLab raises LayoutError when a cell's content is wider than the
+        # cell, and self.width == the table width would leave that on exact float equality.
+        return (min(aw, self.width), self.height)
+
+    def draw(self):
+        c, th, W, H = self.canv, self.th, self.width, self.height
+        c.saveState()
+        c.setFillColor(th.band_tint)
+        c.rect(0, 0, W, H, stroke=0, fill=1)
+        c.setFillColor(th.band_accent)
+        c.rect(0, 0, th.stripe_w, H, stroke=0, fill=1)
+
+        f, s, tr, col = th.band_title
+        tf, ts, ttr, tcol = th.band_tag
+        x0, base = th.stripe_w + 10 * PX, (H - s) / 2.0 + s * 0.22
+        tag_r = W - 8 * PX                      # matches the table's RIGHTPADDING, so the tag lines
+                                                # up with the AMOUNT figures below it
+
+        # stringWidth does NOT account for tracking, so add it back by hand — otherwise the rule is
+        # drawn straight through the end of the title.
+        def _w(t, fnt, sz, trk):
+            return pdfmetrics.stringWidth(t, fnt, sz) + trk * max(0, len(t) - 1)
+
+        # THE TITLE IS CLAMPED, and this is not defensive dressing. drawString does not wrap: a title
+        # wider than the space left of the tag simply runs on and prints THROUGH it, so a long group
+        # name silently produces two overlapping strings on the client's document. Trim to fit with an
+        # ellipsis instead — the band is a label, and a label that collides is worse than one clipped.
+        tagw = _w(self.tag, tf, ts, ttr)
+        room = tag_r - tagw - 14 * PX - x0
+        title = self.title
+        if _w(title, f, s, tr) > room:
+            while title and _w(title + "…", f, s, tr) > room:
+                title = title[:-1]
+            title = (title.rstrip() + "…") if title else ""
+
+        c.setFillColor(col)
+        c.setFont(f, s)
+        c.drawString(x0, base, title, charSpace=tr)
+
+        # THE TAG'S BASELINE IS RAISED TO MATCH THE TITLE'S GLYPH TOP, and that is a correctness
+        # requirement, not typography. quotation_parser groups words into rows by round(top/3), and
+        # `top` is the top of the glyph box — which depends on FONT SIZE. Drawn on a shared baseline,
+        # an 11.5px title and a 9.5px tag land in DIFFERENT buckets, so the band reaches the importer
+        # as a bare title with no tag, the tag-anchored matcher never fires, and the group name is
+        # concatenated onto the previous item's product name. Equal tops, one bucket, one row.
+        c.setFillColor(tcol)
+        c.setFont(tf, ts)
+        c.drawRightString(tag_r, base + (pdfmetrics.getAscent(f, s) - pdfmetrics.getAscent(tf, ts)),
+                          self.tag, charSpace=ttr)
+
+        x1 = x0 + _w(title, f, s, tr) + 10 * PX
+        x2 = tag_r - tagw - 10 * PX
+        if x2 > x1:
+            c.setStrokeColor(th.band_edge)
+            c.setLineWidth(1)
+            c.line(x1, H / 2.0, x2, H / 2.0)
+        c.restoreState()
+
+
+def _stripe(color, w):
+    """A241 — the band-membership stripe: a 4px column in the band's own tint on a member row's first
+    cell, so the eye follows one continuous stripe — solid red at the band, pale through its members.
+
+    A CALLABLE background, not a plain colour, for two reasons. It is handed the raw cell rect so it
+    can paint a 4px slice rather than the whole cell; and a single-cell plain BACKGROUND on a row that
+    carries a SPAN is silently substituted with the merged span rect by ReportLab, which would flood
+    the row. `ch` arrives NEGATIVE — row positions run down the page.
+    """
+    def paint(_tbl, canv, x, y, _cw, ch):
+        canv.setFillColor(color)
+        canv.rect(x, y, w, ch, stroke=0, fill=1)
+    return paint
 
 
 class _Thumb(Flowable):
@@ -466,14 +744,34 @@ class _QuoTemplate(BaseDocTemplate):
 
 
 # ── Public API (route contract unchanged) ─────────────────────────────────────
-def _alt_row_styles(span_rows):
+def _alt_row_styles(span_rows, th=None):
     """A205 — SPAN the banner and per-option subtotal rows across all five columns and tint them, so
     they read as section furniture rather than as another priced line. ROWBACKGROUNDS zebra-stripes
     every body row, so each of these needs its own BACKGROUND to override it; without that a subtotal
-    can land on a white stripe and look exactly like an item."""
+    can land on a white stripe and look exactly like an item.
+
+    A241 — the group band is a third kind. Everything it needs is emitted HERE and nowhere else,
+    because this function's output is LAST in the style concatenation and last is simultaneously the
+    winning position in all four ReportLab buckets: its BACKGROUND beats the zebra, its
+    LINEABOVE/LINEBELOW beat both the per-row rules and the table BOX, and its zeroed paddings beat
+    the blanket ones. One position satisfies every precedence requirement at once."""
     out = []
     for ri, kind in span_rows or []:
         out.append(("SPAN", (0, ri), (-1, ri)))
+        if kind == "band":
+            # Paddings MUST be zero, and not for looks: with the blanket 8px the band flowable would
+            # start 5.81pt inside the cell and its red accent would no longer be flush with the
+            # table's left edge, which is the entire point of the stripe.
+            out += [("BACKGROUND", (0, ri), (-1, ri), th.band_tint),
+                    ("LEFTPADDING", (0, ri), (-1, ri), 0),
+                    ("RIGHTPADDING", (0, ri), (-1, ri), 0),
+                    ("TOPPADDING", (0, ri), (-1, ri), 0),
+                    ("BOTTOMPADDING", (0, ri), (-1, ri), 0),
+                    # Weight in POINTS, like the file's other BOX/LINEBELOW commands. 1*PX would be
+                    # 0.73pt and read visibly thinner than the row rules the band sits among.
+                    ("LINEABOVE", (0, ri), (-1, ri), 1, th.band_edge),
+                    ("LINEBELOW", (0, ri), (-1, ri), 1, th.band_edge)]
+            continue
         # ACCENT_SOFT is the existing red-on-white tint used elsewhere for accent panels; the
         # subtotal uses the neutral card tint so the eye reads banner > subtotal > item.
         out.append(("BACKGROUND", (0, ri), (-1, ri),
@@ -946,7 +1244,7 @@ def _options_block(label, options, width):
 def build_quotation_pdf_bytes(items, images, client_details, terms_and_conditions,
                               summary_table_data, desc_mode="short", note="",
                               scope=None, exclusions=None, options=None,
-                              recommended_option=""):
+                              recommended_option="", design_version=1):
     """Render the quotation PDF (v2 layout) and return its bytes.
 
     `scope` / `exclusions` are lists of {"text", "bold"}; `options` a list of
@@ -960,6 +1258,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     the output is byte-identical to before — which matters, because ~100 live quotations depend on
     that path being untouched."""
     cd = client_details or {}
+    # A241 — resolved ONCE, then consulted at each divergence point. Design 1 is what every quotation
+    # rendered before A241 and is what ~102 existing records keep until someone edits them.
+    th = _theme(design_version)
     desc_mode = (desc_mode or "").strip().lower()          # "short" hides description sub-lines
     terms = terms_and_conditions or {}
     if isinstance(summary_table_data, dict):
@@ -1010,7 +1311,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     story.append(Spacer(1, 8 * PX))
 
     # ── Row C: PREPARED FOR card | SUBJECT card ──
-    cust_bits = [f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_sp('PREPARED FOR')}</font><br/>",
+    cust_bits = [f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(ACCENT_DARK)}'>{_sp_p('PREPARED FOR', th.v2)}</font><br/>",
                  f"<font name='{ARCH_B}' size={16 * PX:.1f} color='{_hx(HEADING)}'>{_esc(cd.get('client_name'))}</font>"]
     if cd.get("client_address"):
         cust_bits.append("<br/>" + "<br/>".join(_esc(l) for l in str(cd["client_address"]).splitlines() if l.strip()))
@@ -1022,7 +1323,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         cust_bits.append(f"<br/><font color='{_hx(LINK)}'>{_esc(cd['email'])}</font>")
     cust_para = Paragraph("".join(cust_bits), _ps("cust", 13, BODY3, leading_mult=1.5))
     subj_para = Paragraph(
-        f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(LABEL9)}'>{_sp('SUBJECT')}</font><br/>"
+        f"<font name='{LATO_B}' size={10.5 * PX:.1f} color='{_hx(LABEL9)}'>{_sp_p('SUBJECT', th.v2)}</font><br/>"
         f"<font name='{LATO_B}'>{_esc(cd.get('subject') or '')}</font>",
         _ps("subj", 13, TEXT, leading_mult=1.5))
     cust_w = CONTENT_W - 250 * PX - 24 * PX
@@ -1078,7 +1379,46 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     if opt_order and rec_key not in opt_map:
         rec_key = min(opt_order, key=lambda k: sum(float(x.get("total_unit_price") or 0) for x in opt_map[k]))
 
-    ordered = list(base_items)
+    # A241 — GROUP BANDS. A run of CONSECUTIVE base items carrying the same `group` gets a section
+    # title row above it and a pale stripe down its members. Consecutive is the whole rule: the band
+    # announces "the next N lines are this", so a group interrupted by an ungrouped line is two bands,
+    # which is honest — reordering the items to make one band is the rep's call, not the renderer's.
+    #
+    # Base items only, mirroring scope_in_table above: a band drawn across ALTERNATIVE OFFERS would
+    # claim lines the client has to choose between are one package, which is the opposite of true.
+    def _grp_of(x):
+        return str((x or {}).get("group") or "").strip() if th.bands else ""
+
+    def _band_tag(run):
+        """'ITEMS 03 – 08' for a run, 'ITEM 11' for a single. Derived from the numbers actually in
+        the run, so it cannot go stale when lines are added, removed or reordered. NOT _number_span:
+        that helper's exact output is pinned by the parser's hidden-note matcher."""
+        return (QUO_GROUP_TAG_ONE_FMT % run[0] if len(run) == 1
+                else QUO_GROUP_TAG_RANGE_FMT % (run[0], run[-1]))
+
+    def _idx_txt(x):
+        no = (x or {}).get("item_no")
+        try:
+            return "%02d" % int(no)
+        except (TypeError, ValueError):
+            return str(no or "")
+
+    ordered = []
+    if th.bands:
+        _prev = None
+        for _i, _it in enumerate(base_items):
+            g = _grp_of(_it)
+            if g and g != _prev:
+                run = []
+                for _j in range(_i, len(base_items)):
+                    if _grp_of(base_items[_j]) != g:
+                        break
+                    run.append(_idx_txt(base_items[_j]))
+                ordered.append({"_marker": "band", "_title": g, "_tag": _band_tag(run)})
+            ordered.append(_it)
+            _prev = g
+    else:
+        ordered = list(base_items)
     if opt_order:
         ordered.append({"_marker": "banner"})
         for k in opt_order:
@@ -1088,6 +1428,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     item_rows = []          # A213 — indices of REAL item rows, for the zebra band counter
     hidden_nos = []         # A240 — item numbers whose price is suppressed, for the note below
     scope_row_idx = []      # A213 — indices of the scope rows, so they share item 01's band
+    band_row_idx = []       # A241 — the group band rows themselves
+    member_row_idx = []     # A241 — rows under a band, which carry its pale stripe
+    incl_spans = []         # A241 — ("SPAN", (3,ri), (4,ri)) for each INCLUDED cell
     # A213 — scope prints inside the table, under the first BASE item. With no base item there is
     # nothing to hang it on: if every line carries an option_no, ordered[0] is the ALTERNATIVE OFFERS
     # banner, and scope placed there reads as belonging to option 1 — which it does not. Same when
@@ -1104,12 +1447,30 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         col_w[0] = 96 * PX
         col_w[1] = CONTENT_W - col_w[0] - col_w[2] - col_w[3] - col_w[4]
 
+    # A241 — the description column's internal geometry, resolved once from the theme so the photo,
+    # the text beside it and the scope block below it cannot drift apart. v1 reproduces
+    # _desc_indent() / _desc_text_width() exactly; asserted by the byte-identity pin.
+    img_gutter = th.photo_w + (14 if th.v2 else 10) * PX
+    text_w = col_w[1] - img_gutter - 10 * PX
+    # Where a scope / note block sits. v1 pushes it past the thumbnail so the bullets line up with the
+    # description TEXT. v2 starts it at the cell's left edge, under the photo: with a 150px photo the
+    # indent would strand the bullets in a narrow gutter, and at the left edge the block reads as
+    # belonging to the whole item rather than to its name.
+    scope_indent = img_gutter if th.scope_indent else 0.0
+    scope_w = text_w if th.scope_indent else (col_w[1] - 16 * PX)
+
     def model_line(code):
         return (f"<font color='{_hx(LABELB)}'>Model No.</font> "
                 f"<font color='{_hx(MUTED8)}'>{_esc(code)}</font>")
 
     for it in ordered:
         mk = it.get("_marker")
+        if mk == "band":
+            band_row_idx.append(len(rows))
+            span_rows.append((len(rows), "band"))
+            rows.append([_GroupBand(sum(col_w), it.get("_title"), it.get("_tag"), th),
+                         "", "", "", ""])
+            continue
         if mk == "banner":
             span_rows.append((len(rows), "banner"))
             rows.append([Paragraph(
@@ -1167,7 +1528,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             if orig_code and orig_code.lower() != "n/a" and orig_code != req_name:
                 text_col.append(Paragraph(model_line(orig_code), sub_st))
             text_col.append(Spacer(1, 4 * PX))
-            text_col.append(Paragraph(_sp("OUR OFFER"), offer_label_st))
+            text_col.append(Paragraph(_sp_p("OUR OFFER", th.v2), offer_label_st))
             text_col.append(Paragraph(
                 f"<font name='{ARCH_SB}' color='{_hx(HEADING)}'>{_esc(_cap_name(name))}</font>", sub_st))
             if sub_lines:
@@ -1183,13 +1544,22 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                 text_col.append(Paragraph(model_line(code), sub_st))
 
         img_bytes = (images or {}).get(no)
-        desc_cell = Table([[_Thumb(img_bytes), text_col]],
-                          colWidths=[_desc_indent(), _desc_text_width(col_w[1])])
-        desc_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                                       ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                       ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                                       ("TOPPADDING", (0, 0), (-1, -1), 0),
-                                       ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        # A241 — a line INSIDE a group is a component of the package above it, not a headline
+        # product: one line of text, no photo and no model line. The band already says what it
+        # belongs to. Without this a run of eight cables each claims a 150px photo slot and the
+        # group swells to three pages of placeholders — which is exactly what the first render did.
+        if th.bands and _grp_of(it):
+            desc_cell = [Paragraph(_esc(_cap_name(name)), title_st)]
+        else:
+            shot = (_Photo(img_bytes, width=th.photo_w, max_h=th.photo_max_h) if th.v2
+                    else _Thumb(img_bytes))
+            desc_cell = Table([[shot, text_col]],
+                              colWidths=[img_gutter, text_w])
+            desc_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                           ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                           ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                           ("TOPPADDING", (0, 0), (-1, -1), 0),
+                                           ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
         try:
             idx_txt = f"{int(no):02d}"
         except Exception:
@@ -1214,11 +1584,24 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # second calculation that could drift from this one.
         if it.get("hide_price"):
             hidden_nos.append(idx_txt)
-            price_cell = Paragraph("&mdash;", price_st)
-            amount_cell = Paragraph("&mdash;", amt_st)
+            if th.included_cell:
+                # A241 — the two money cells MERGE into one centred word. Two dashes in two columns
+                # read as missing data; INCLUDED straddling the boundary is an affirmative statement
+                # about the package and cannot be misread as a price for either column alone. Navy
+                # and letter-spaced, the same type key as the group titles, so it groups with the
+                # structural labels rather than with the numbers.
+                incl_spans.append(("SPAN", (3, len(rows)), (4, len(rows))))
+                price_cell = _Tracked(th.incl, QUO_INCLUDED_WORD,
+                                      col_w[3] + col_w[4] - 16 * PX, align="center")
+                amount_cell = ""
+            else:
+                price_cell = Paragraph("&mdash;", price_st)
+                amount_cell = Paragraph("&mdash;", amt_st)
         else:
             price_cell = Paragraph(_fmt(it.get("total_amount")), price_st)
             amount_cell = Paragraph(_fmt(it.get("total_unit_price")), amt_st)
+        if th.bands and _grp_of(it):
+            member_row_idx.append(len(rows))
         rows.append([idx_cell, desc_cell, qty_cell, price_cell, amount_cell])
 
         # A213 — the scope of supply hangs off the FIRST base item, right under its description.
@@ -1234,14 +1617,14 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         for blk in (it.get("blocks") or []):
             if isinstance(blk, dict):
                 blocks += _note_rows(blk.get("t"), blk.get("b"),
-                                     _desc_text_width(col_w[1]), indent=_desc_indent())
+                                     scope_w, indent=scope_indent)
         bullets = _norm_bullets(it.get("scope"))
         # A240 — the heading is emitted for an item that has EITHER, and for no other item. It also
         # covers a block with no scope above it: the heading is what tells the importer where this
         # item's rows stop being its product name, and without one every line of the note is
         # concatenated onto that name on re-import. Slightly broad as a label there, but a poisoned
         # name is not visible the way a slightly broad heading is.
-        own = _scope_rows(bullets, _desc_text_width(col_w[1]), per_item=True, indent=_desc_indent(),
+        own = _scope_rows(bullets, scope_w, per_item=True, indent=scope_indent,
                           heading=(QUO_SCOPE_ITEM_HEADING_FMT % idx_txt
                                    if (bullets or blocks) else None))
         own = own + blocks
@@ -1266,7 +1649,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # no explanation, which reads as an arithmetic error in our own document. Built from the item
     # numbers actually suppressed, so it cannot go stale when lines are added, removed or reordered,
     # and emitted only when something is in fact hidden.
-    if hidden_nos:
+    # A241 — design 2 drops the note: INCLUDED says the same thing on the line itself, where the
+    # reader is already looking, so repeating it under the table is noise.
+    if hidden_nos and th.hidden_note:
         note_st = _ps("hidNote", 8.5, MUTED8, leading_mult=1.35)
         scope_row_idx.append(len(rows))          # banded and un-ruled like a scope row
         rows.append(["", [Spacer(1, 3 * PX),
@@ -1302,7 +1687,13 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # block into stripes. Per-row commands instead: under every ordinary item row, and under the LAST
     # scope row (that rule is what separates item 01's band from item 02), never in between.
     scope_set = set(scope_row_idx)
-    if not scope_set:
+    band_set = set(band_row_idx)          # A241 — empty under design 1
+    member_set = set(member_row_idx)
+    # A241 — a banded item's scope rows join member_set too, so the 4px stripe runs unbroken down the
+    # inclusions instead of stopping at the item line and resuming under it.
+    if member_set:
+        member_set |= {ri for ri in scope_set if any(m < ri for m in member_set)}
+    if not scope_set and not band_set:
         # No scope rows — keep the original blanket commands EXACTLY. The per-row rewrite below is
         # only needed to stop inserted rows shifting the stripe, so a quotation without scope must
         # not pay for it: ~100 live quotations render through here and their output stays byte for
@@ -1316,6 +1707,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # every third line, and it keeps every later item on the stripe it would have had.
         zebra, rules, phase = [], [], 0
         for ri in range(1, len(rows)):
+            if ri in band_set:
+                # A241 — a band consumes no zebra slot and paints its own ground. Resetting the phase
+                # means every group starts on white; letting the band advance it would make the first
+                # item of each group alternate group-to-group, which reads as a rendering fault.
+                phase = 0
+                continue
             if ri in scope_set:
                 fill = [colors.white, CARD_B][(phase - 1) % 2]
             else:
@@ -1333,13 +1730,23 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             # own last row needs the rule, and "is the next row inside a block?" already answers that
             # for item rows and scope rows alike. Provably the same commands for one contiguous
             # block, which is what keeps the existing document-level output byte-identical.
-            if (ri + 1) not in scope_set:
-                rules.append(("LINEBELOW", (0, ri), (-1, ri), 1, HAIR_F0))
+            # A241 — and no rule immediately above a band: the band's own LINEABOVE is that divider,
+            # and two 1pt lines at the same y read as a double rule. Grouped rows take a lighter
+            # hairline so the band reads as one block rather than a stack of separate lines.
+            if (ri + 1) not in scope_set and (ri + 1) not in band_set:
+                rules.append(("LINEBELOW", (0, ri), (-1, ri), 1,
+                              th.hair_group if ri in member_set else HAIR_F0))
 
     # Command ORDER is preserved exactly — zebra where ROWBACKGROUNDS sat, rules where LINEBELOW sat.
     # ReportLab emits its content stream in command order, so merely hoisting the rules above BOX
     # changes the bytes of every quotation ever rendered. The baseline caught precisely that.
-    items_tbl.setStyle(TableStyle(header_grads + zebra + [
+    # A241 — the membership stripe goes AFTER the zebra and nowhere else: backgrounds are painted in
+    # list order, so ahead of it the zebra's full-row fill would erase every stripe. Both lists are
+    # empty under design 1, and `list + []` is the identity — which is what keeps the byte-identity
+    # pin true rather than merely likely.
+    v2_stripes = [("BACKGROUND", (0, ri), (0, ri), _stripe(th.band_tint, th.stripe_w))
+                  for ri in sorted(member_set)]
+    items_tbl.setStyle(TableStyle(header_grads + zebra + v2_stripes + [
         ("BOX", (0, 0), (-1, -1), 1, HAIR_EC),
         ("VALIGN", (0, 0), (-1, -1), "TOP")] + rules + [
         ("LEFTPADDING", (0, 0), (-1, -1), 8 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 8 * PX),
@@ -1349,7 +1756,9 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # bottom on every row would treble the gaps between bullet pairs. Tighten them here only.
         + [("TOPPADDING", (0, ri), (-1, ri), 0) for ri in scope_row_idx]
         + [("BOTTOMPADDING", (0, ri), (-1, ri), 0) for ri in scope_row_idx]
-        + _alt_row_styles(span_rows)))
+        # A241 — SPAN goes to its own bucket and is consumed as a set, so its position is free.
+        + incl_spans
+        + _alt_row_styles(span_rows, th)))
     story.append(items_tbl)
     story.append(Spacer(1, 10 * PX))
 

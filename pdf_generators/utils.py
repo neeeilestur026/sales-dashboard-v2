@@ -227,3 +227,15 @@ QUO_HIDDEN_PRICE_NOTE_FMT = "Item%s %s %s supplied within the package price abov
 # item above it ("PACKAGE LINE 8 H.O ESTUR CORPORATION"). The repeated TABLE header was already
 # handled; the page header was not.
 QUO_LETTERHEAD_NAME = "H.O ESTUR CORPORATION"
+
+# A241 — the group band's right-hand range tag, and the word that replaces a suppressed price.
+# Here for the same reason as everything above it: the renderer prints them and the importer has to
+# recognise them, and two copies of a string that must agree is the bug class, not just the bug.
+#
+# A band row carries the rep's own free-text group title and NO item index and NO figures, so on
+# re-import it falls into the branch that concatenates an unclaimed line onto the previous item's
+# product name — the exact failure A213 and A240 each had to fix. The tag is the generated, matchable
+# part, which is what lets the parser skip the row. The en dash and its spaces are load-bearing.
+QUO_GROUP_TAG_RANGE_FMT = "ITEMS %s – %s"
+QUO_GROUP_TAG_ONE_FMT = "ITEM %s"
+QUO_INCLUDED_WORD = "INCLUDED"

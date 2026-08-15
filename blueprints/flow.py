@@ -299,7 +299,11 @@ def quotation_pdf():
                                               scope=_bullets(doc.get("scope")),
                                               exclusions=_bullets(doc.get("exclusions")),
                                               options=_options(doc.get("options")),
-                                              recommended_option=_rec)
+                                              recommended_option=_rec,
+                                              # A241 — which design this record renders in. Absent
+                                              # means 1: a quotation that predates the redesign keeps
+                                              # the look the client already has until it is edited.
+                                              design_version=_num(data.get("designVersion")) or 1)
         pdf_bytes = _merge_brochures(pdf_bytes, data.get("brochures"))
         pdf_bytes = _embed_quo_data(pdf_bytes, data)
     except Exception as e:
