@@ -18,8 +18,16 @@
  *     deleted or renamed. That is the case worth surfacing, and the plan had it the other way round;
  *   • an unpriced request reports `priced:false` rather than ₱0.00 — the A215 rule about never
  *     stating a figure nobody agreed;
- *   • THE LIVE 315 RECONCILE. Group counts must add back to the status counts in
- *     tests/flow/baseline/A226-before.txt.
+ *   • THE LIVE RECONCILE. Group counts must add back to the status counts of whatever snapshot is
+ *     present.
+ *
+ * A242 — the reconcile was written against A226's book and froze its four totals at 315. The book
+ * grows, so those assertions could only ever pass while the snapshot was ABSENT and the whole block
+ * skipped; the moment a fresh snapshot appeared they failed on 342 without a single thing being
+ * wrong. They now derive the total from the snapshot itself. What is actually being asserted is
+ * unchanged and is the only thing worth asserting: every request lands in exactly one group, the
+ * groups sum to the whole, and each status's rows land in the steps that status can produce — all
+ * true at any size of book.
  */
 const path = require('path');
 const fs = require('fs');
@@ -188,13 +196,32 @@ console.log('\n== value: honest about what has not been priced ==');
 {
   const items = (arr) => arr.map((x, i) => ({ line: i + 1, qty: x[0], finalPrice: x[1], included: x[2] !== false }));
   eq('two included lines', prValue({ items: items([[2, 100], [3, 50]]) }),
-     { value: 350, priced: true, lines: 2, included: 2 });
+     { value: 350, priced: true, lines: 2, included: 2, open: 2, quoted: 0 });
   eq('an EXCLUDED line is not counted', prValue({ items: items([[2, 100], [99, 999, false]]) }),
-     { value: 200, priced: true, lines: 2, included: 1 });
+     { value: 200, priced: true, lines: 2, included: 1, open: 1, quoted: 0 });
   eq('nothing sourced yet → priced:false, so the UI shows a dash not zero',
-     prValue({ items: items([[5, 0], [2, 0]]) }), { value: 0, priced: false, lines: 2, included: 2 });
-  eq('no items at all', prValue({ items: [] }), { value: 0, priced: false, lines: 0, included: 0 });
-  eq('no items key at all', prValue({}), { value: 0, priced: false, lines: 0, included: 0 });
+     prValue({ items: items([[5, 0], [2, 0]]) }),
+     { value: 0, priced: false, lines: 2, included: 2, open: 2, quoted: 0 });
+  eq('no items at all', prValue({ items: [] }),
+     { value: 0, priced: false, lines: 0, included: 0, open: 0, quoted: 0 });
+
+  /* A242 — money already out on a quotation is not money in play. Without this a partly-quoted
+     request reports its whole value here while the quoted half is separately live on the quotation
+     board, and every rollup built on prValue double-counts it. */
+  const q = (arr) => arr.map((x, i) => ({ line: i + 1, qty: x[0], finalPrice: x[1],
+                                          included: true, quotable: x[2] }));
+  eq('a quoted line stops counting as in play',
+     prValue({ items: q([[2, 100, false], [3, 50, true]]) }),
+     { value: 150, priced: true, lines: 2, included: 2, open: 1, quoted: 1 });
+  eq('  every line quoted → nothing in play',
+     prValue({ items: q([[2, 100, false], [3, 50, false]]) }),
+     { value: 0, priced: false, lines: 2, included: 2, open: 0, quoted: 2 });
+  /* An older backend sends no `quotable` at all. Undefined must read as OPEN, or every request in
+     the book would silently report zero value the moment this shipped. */
+  eq('no quotable field → treated as open, exactly as before',
+     prValue({ items: items([[2, 100], [3, 50]]) }).value, 350);
+  eq('no items key at all', prValue({}),
+     { value: 0, priced: false, lines: 0, included: 0, open: 0, quoted: 0 });
   ok('an unpriced request never contributes value to a group total',
      pricingRequestWorklist([PR({ items: items([[5, 0]]) })], {}, {}, {}, TODAY).value.waiting === 0);
 }
@@ -339,7 +366,7 @@ console.log('\n== per rep, busiest first ==');
      reps.reduce((t, r) => t + r.now.length + r.waiting.length + r.done.length, 0), 4);
 }
 
-console.log('\n== THE LIVE 315 — reconciled against the baseline ==');
+console.log('\n== THE LIVE BOOK — reconciled against itself ==');
 {
   const SCAN = '/private/tmp/claude-501/-Users-neilestur-Documents-app-CRM-sales-dashboard/' +
                '815863d9-c2cf-4190-a7c3-fb6e0c291a74/scratchpad/scan/getPricingRequests.json';
@@ -366,28 +393,43 @@ console.log('\n== THE LIVE 315 — reconciled against the baseline ==');
     });
 
     const list = pricingRequestWorklist(prs, {}, quoByNo, {}, TODAY);
-    eq('every live request is in exactly one group', list.counts.total, 315);
+    const LIVE = prs.length;                    // A242: the book's size, not a frozen number
+    console.log('     live requests in this snapshot:', LIVE);
+    eq('every live request is in exactly one group', list.counts.total, LIVE);
     eq('  = now + waiting + done',
-       list.counts.now + list.counts.waiting + list.counts.done, 315);
+       list.counts.now + list.counts.waiting + list.counts.done, LIVE);
 
     const byStep = {};
     list.rows.forEach(r => { byStep[r.step] = (byStep[r.step] || 0) + 1; });
     console.log('     step distribution:', JSON.stringify(byStep));
 
-    // Reconcile against the baseline's status counts.
+    /* Reconcile each status against the steps that status can produce. Counts come from the snapshot
+       on both sides, so the shape is asserted and the size is not. */
     const byStatus = {};
     prs.forEach(p => { const s = String(p.status); byStatus[s] = (byStatus[s] || 0) + 1; });
-    eq('  Migrated 142 all land in done', byStep.migrated || 0, byStatus.Migrated);
-    eq('  Returned to Sales 7 all land in quote', byStep.quote || 0, byStatus['Returned to Sales']);
-    eq('  the 76 Quoted split across quoted / send-quote / quotation-gone',
-       (byStep.quoted || 0) + (byStep['send-quote'] || 0) + (byStep['quotation-gone'] || 0),
-       byStatus.Quoted);
-    eq('  Requested 84 + Sourcing 3 land in the sourcing pair',
-       (byStep['chase-admin'] || 0) + (byStep['wait-sourcing'] || 0),
-       byStatus.Requested + byStatus.Sourcing);
-    eq('  Mgmt Priced 3 land in the verify pair',
-       (byStep['chase-verify'] || 0) + (byStep['wait-verify'] || 0), byStatus['Mgmt Priced']);
+    const sum = (...steps) => steps.reduce((t, s) => t + (byStep[s] || 0), 0);
+    eq('  every Migrated lands in done', byStep.migrated || 0, byStatus.Migrated);
+    eq('  every Returned to Sales lands in quote', byStep.quote || 0, byStatus['Returned to Sales']);
+    /* A242 — 'quotation-void' belongs in this sum and was missing. A227 added the step (a Quoted
+       request whose only quotation was CANCELLED) without widening the reconcile, so the moment one
+       appeared in the live book the total came up one short. It never fired because this whole block
+       only runs when a snapshot is present, and there was none. */
+    eq('  every Quoted splits across quoted / send-quote / quotation-gone / quotation-void',
+       sum('quoted', 'send-quote', 'quotation-gone', 'quotation-void'), byStatus.Quoted);
+    eq('  Requested + Sourcing land in the sourcing pair',
+       sum('chase-admin', 'wait-sourcing'),
+       (byStatus.Requested || 0) + (byStatus.Sourcing || 0));
+    eq('  Mgmt Priced lands in the verify pair',
+       sum('chase-verify', 'wait-verify'), byStatus['Mgmt Priced'] || 0);
+    eq('  For Mgmt Pricing lands in the pricing pair',
+       sum('chase-pricing', 'wait-pricing'), byStatus['For Mgmt Pricing'] || 0);
     eq('  nothing fell through to unknown', byStep.unknown || 0, 0);
+    /* A242 — no live request is partly quoted yet, so the two new steps must be empty. This is the
+       assertion that proves the feature changed no existing row: the moment one appears here, it is
+       because somebody used it. */
+    eq('  no live request is Partly Quoted yet', byStatus['Partly Quoted'] || 0, 0);
+    eq('  so neither new step fires on the live book',
+       (byStep['quote-rest'] || 0) + (byStep['price-rest'] || 0), 0);
     eq('  nothing was undateable — both formats parsed', byStep['no-date'] || 0, 0);
 
     ok('the 15 requests naming a deleted quotation are surfaced, not hidden',
@@ -403,8 +445,48 @@ console.log('\n== THE LIVE 315 — reconciled against the baseline ==');
       String(r.now.length).padStart(4) + String(r.waiting.length).padStart(5) +
       String(r.done.length).padStart(6)));
     eq('  every request is attributed to exactly one rep',
-       reps.reduce((t, r) => t + r.now.length + r.waiting.length + r.done.length, 0), 315);
+       reps.reduce((t, r) => t + r.now.length + r.waiting.length + r.done.length, 0), LIVE);
   }
+}
+
+/* A242 — the partly-quoted request. The whole reason the status exists is that its leftover items
+   were invisible: before this, quoting 3 of 5 flipped the request to 'Quoted' and the other 2 fell
+   out of every list with nothing anywhere saying they had never been sent to anybody. */
+console.log('\n== A242: a request that is only partly quoted ==');
+{
+  const line = (n, price, quotable) => ({ line: n, qty: 1, finalPrice: price,
+                                          included: true, quotable: quotable });
+  const partly = (items) => pricingRequestWorklistStep(
+    { prNo: 'PR-1', date: daysAgo(2), status: 'Partly Quoted', quotationNo: 'Q-1',
+      customer: 'ACME', items },
+    [], { quotationNo: 'Q-1', status: 'Sent' }, {}, TODAY);
+
+  // 3 quoted, 2 priced and waiting — the rep can finish it alone.
+  const ready = partly([line(1, 100, false), line(2, 100, false), line(3, 100, false),
+                        line(4, 250, true), line(5, 250, true)]);
+  eq('priced remainder → the rep quotes the rest', ready.step, 'quote-rest');
+  eq('  which is theirs to do', PRW_STEPS[ready.step].hands, 'you');
+  eq('  and it is urgent, not "done"', ready.group, 'now');
+  eq('  the value in play is the REMAINDER only, not the whole request', ready.value, 500);
+  ok('  and the detail says how the request is split', /3 item\(s\) already quoted/.test(ready.detail), ready.detail);
+
+  // 3 quoted, 2 with no price — somebody else has to move first.
+  const unpriced = partly([line(1, 100, false), line(2, 100, false), line(3, 100, false),
+                           line(4, 0, true), line(5, 0, true)]);
+  eq('unpriced remainder → it needs pricing first', unpriced.step, 'price-rest');
+  eq('  which is somebody else’s move', PRW_STEPS[unpriced.step].hands, 'them');
+  eq('  and no value is claimed for lines nobody has priced', unpriced.value, 0);
+  eq('  so the UI shows a dash, not ₱0.00', unpriced.priced, false);
+
+  /* Every line out but the status never caught up. The stamp and the status are two separate cell
+     writes and Apps Script cannot do both at once, so this state is reachable — reading it as done
+     is right, and saying so beats inventing work. */
+  const all = partly([line(1, 100, false), line(2, 100, false)]);
+  eq('every line quoted but the status lagged → read as done', all.step, 'quoted');
+  eq('  and it lands in done, not now', all.group, 'done');
+
+  ok('both new steps are in the table with a verb',
+     !!(PRW_STEPS['quote-rest'].verb && PRW_STEPS['price-rest'].verb));
 }
 
 console.log('\n== rubbish does not throw ==');

@@ -136,6 +136,37 @@ console.log('== THE WIDTH TRAP — asserted before any behaviour ==');
   ok('no column name appears twice', new Set(COLS).size === COLS.length, COLS);
 }
 
+/* A242 — the ITEM sheet's width trap, which nothing pinned until partial quoting needed a column on
+   it. Two positional BLOCK writes live here, at different anchors, and either one landing a cell out
+   would corrupt supplier prices across 926 live lines rather than fail loudly. */
+console.log('\n== THE WIDTH TRAP, item sheet — asserted before any behaviour ==');
+{
+  const IC = schemaCols('PricingRequestItems');
+  eq('SCHEMA.PricingRequestItems is 19 wide', IC.length, 19);
+  eq('and the new column is the LAST one, appended', IC[IC.length - 1], 'Quoted On');
+  eq('Item ID stays at 18, where A159 put it', IC[17], 'Item ID');
+  eq('createPricingRequest writes exactly that many values',
+    countRow('createPricingRequest', "sh.appendRow(["), 19);
+
+  /* importPricingSubmissions writes 14 and always has — a legacy row carries no Orig No/Name, no
+     VAT note, no catalogue Item ID and, now, no quotation. Pinned so a later widening cannot shift
+     it silently either. */
+  eq('importPricingSubmissions still writes 14 for items — deliberate, now pinned',
+    countRow('importPricingSubmissions', 'itemSh.appendRow(['), 14);
+
+  /* THE ANCHORS. updatePRSourcing writes cols 8-13 as ONE range and rejectMgmtPricing writes cols
+     9-14 as another; both are hard-coded. If a column were ever inserted rather than appended, the
+     names at these positions change and this fails instead of the sheet corrupting. */
+  eq('col 8 is still Included            (updatePRSourcing block start)', IC[7], 'Included');
+  eq('col 13 is still CBM                (updatePRSourcing block end)', IC[12], 'CBM');
+  eq('col 9 is still Supplier            (rejectMgmtPricing block start)', IC[8], 'Supplier');
+  eq('col 14 is still Final Price        (rejectMgmtPricing block end, setMgmtPricing)', IC[13], 'Final Price');
+  eq('col 5 is still Qty                 (setMgmtPricing)', IC[4], 'Qty');
+  eq('col 12 is still Supplier Price (FC)(setMgmtPricing)', IC[11], 'Supplier Price (FC)');
+
+  ok('no column name appears twice', new Set(IC).size === IC.length, IC);
+}
+
 console.log('\n== _prOwner — the column, then who typed it, and never a guess ==');
 {
   eq('a recorded Salesperson wins',

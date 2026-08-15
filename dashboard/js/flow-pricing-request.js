@@ -13,7 +13,10 @@ let canPrice = false;     // may run management pricing
 // status → 5-step index (0=Request,1=Sourcing,2=Pricing,3=Verify,4=Quotation)
 const STEP_OF = {
   'Requested': 1, 'Sourcing': 1, 'For Mgmt Pricing': 2, 'Mgmt Priced': 3,
-  'Verifying': 3, 'Returned to Sales': 4, 'Quoted': 5
+  'Verifying': 3, 'Returned to Sales': 4, 'Quoted': 5,
+  // A242 — some items quoted, some still on the request. A quotation exists, so it reaches the
+  // Quotation dot; the rail cannot show "half", and the list row spells out how many are left.
+  'Partly Quoted': 5
 };
 /* A226 — a SIXTH step. The rail stopped at 'Quotation', which is the moment the quotation is created
    and not the moment anything reaches the client. A request whose quotation is still a draft looked
@@ -26,7 +29,10 @@ const STEP_LABELS = ['Request', 'Sourcing', 'Pricing', 'Verify', 'Quotation', 'S
 const BADGE = {
   'Requested': 'b-open', 'Sourcing': 'b-open', 'For Mgmt Pricing': 'b-pending',
   'Mgmt Priced': 'b-pending', 'Verifying': 'b-pending', 'Returned to Sales': 'b-approved',
-  'Quoted': 'b-closed'
+  'Quoted': 'b-closed',
+  // A242 — NOT 'b-closed'. Items are still outstanding; colouring it as finished is the exact
+  // lie the status was added to stop.
+  'Partly Quoted': 'b-approved'
 };
 // Display label only — the STORED status stays 'Returned to Sales' so existing rows,
 // filters, and stage-gated logic keep working with zero migration.
@@ -142,12 +148,12 @@ function setupRoleUI() {
     document.getElementById('salesFormCard').style.display = '';
     listTitle.textContent = 'My Requests';
     blurb.textContent = 'Create a purchase request from inventory items. Admin sources suppliers and management prices it; when it returns you can build the quotation.';
-    seg.innerHTML = segBtns(['', 'Returned to Sales', 'Quoted'], ['All', 'For Quotation', 'Quoted']);
+    seg.innerHTML = segBtns(['', 'Returned to Sales,Partly Quoted', 'Quoted'], ['All', 'For Quotation', 'Quoted'])   // A242;
   } else if (prOversight) {
     const sqc = document.getElementById('sqSummaryCard'); if (sqc) sqc.style.display = '';   // A161b
     listTitle.textContent = 'All Purchase Requests (by sales rep)';
     blurb.textContent = 'Full oversight of every rep’s pricing requests across all stages. Open any request to review or act on its current stage.';
-    seg.innerHTML = segBtns(['', 'Requested,Sourcing', 'For Mgmt Pricing', 'Mgmt Priced', 'Returned to Sales,Quoted'],
+    seg.innerHTML = segBtns(['', 'Requested,Sourcing', 'For Mgmt Pricing', 'Mgmt Priced', 'Returned to Sales,Partly Quoted,Quoted'],
       ['All', 'Sourcing', 'Pricing', 'Verify', 'Done']);
     prFilter = '';
   } else if (prRole === 'admin') {
@@ -651,7 +657,7 @@ function openSourcingEdit(no) {
   document.getElementById('modalMsg').style.display = 'none';
   // Past the pricing stage, management's final prices are already set — editing supplier costs here
   // won't move them; the request must be re-priced by management if the final price should change.
-  const late = ['Mgmt Priced', 'Returned to Sales', 'Quoted'].includes(r.status);
+  const late = ['Mgmt Priced', 'Returned to Sales', 'Quoted', 'Partly Quoted'].includes(r.status);
   const hint = late
     ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ Editing supplier prices here does <b>not</b> change management's final prices — use <b>Save &amp; Send for Re-pricing</b> so management re-prices with the new costs.</p>`
     : (r.status === 'For Mgmt Pricing'
@@ -1117,8 +1123,18 @@ function peRepriceGuard(r) {
     const b = bdByLine[String(i.line != null ? i.line : idx + 1)] || bdByNo[String(i.itemNo)] || {};
     const buyPrice = flowNum(i.supplierPrice) ? flowNum(i.supplierPrice) : flowNum(b.buyPrice);
     const cbm = flowNum(i.cbm) ? flowNum(i.cbm) : flowNum(b.cbm);
+    /* A242 — THE RATE THIS LINE WAS PRICED AT, when the line remembers it.
+       The header carries one Commission % / Margin % for the whole request, so a request priced in
+       two runs keeps only the second run's rates and this check then "reproduces" the first run's
+       lines at the wrong margin — reporting a change that is the recomputation's fault, not the
+       data's. That was rare while a request was priced once; partial quoting makes two runs the
+       normal case (price 3 now, the other 2 next week), so it would fire on almost every split
+       request. Entries written before A242 carry no rates and fall back to the header, exactly as
+       they did — so no existing request's warning changes. */
+    const lc = (b.commissionPct != null) ? flowNum(b.commissionPct) : comm;
+    const lm = (b.marginPct != null) ? flowNum(b.marginPct) : marg;
     const out = flowCalcItem({ buyPrice, discount: flowNum(b.discount), qty: flowNum(i.qty), cbm },
-                             principal, dest, comm, marg, override);
+                             principal, dest, lc, lm, override);
     const now = Math.round(out.unitPriceVatEx * 100) / 100;
     if (Math.abs(now - stored) > 0.005) {
       changed.push({ line: i.line, name: i.itemName || i.itemNo || ('line ' + i.line), was: stored, now });
@@ -1282,6 +1298,15 @@ async function savePricing() {
       modelNo: mEl ? mEl.value : '', name: nEl ? nEl.value : '',
       qty: _peNum(tr, '.pe-qty'), buyPrice: round2(_peNum(tr, '.pe-buy')), discount: _peNum(tr, '.pe-disc'),
       cbm: _peNum(tr, '.pe-cbm'), forex: out.forexRate, dutiesPct: out.dutiesPct,
+      /* A242 — THE RATES THIS LINE WAS COMPUTED AT, recorded with the line itself.
+         The header carries ONE Commission % / Margin % for the whole request, which was survivable
+         while a request was priced in a single run. Partial quoting makes two runs ordinary — price
+         3 lines today at 25%/7.5%, the other 2 next week at 35%/10% — and the header then remembers
+         only the second run, so reloading recomputes the FIRST three at the wrong margin. That is
+         the A183 "stray margin" bug (PR-202607-210 inflated four lines ~20%) going from a rarity to
+         the normal case. Additive: _mergePricedItems merges by line, so entries written before this
+         are untouched and peRepriceGuard falls back to the header for them. */
+      commissionPct: comm, marginPct: marg,
       buyPricePHP: round2(out.buyPricePHP), brokerage: round2(out.brokerage), landedCost: round2(out.landedCost),
       deliveryCost: round2(out.deliveryCost), totalCOGS: round2(out.totalCOGS), netSellingPrice: round2(out.netSellingPrice),
       commission: round2(out.commission), profitMargin: round2(out.profitMargin), localTax: round2(out.localTax),
@@ -1289,15 +1314,25 @@ async function savePricing() {
     });
   });
   try {
-    /* A158: lines the user removed from the engine. Deleting a row left the item still flagged Included
-       with a Final Price of 0, so it printed on the client's quotation at ₱0.00 — un-include them
-       explicitly instead. */
-    const kept = {};
-    items.forEach(i => { kept[String(i.line)] = 1; });
+    /* A158 wrote `excluded` here: lines the user removed from the engine were un-included, because
+       deleting a row otherwise left the item flagged Included with a Final Price of 0 and it printed
+       on the client's quotation at ₱0.00.
+     *
+     * A242 — REMOVING A ROW NOW MEANS "NOT THIS TIME", NOT "NEVER". That single gesture was doing
+     * two jobs, and the destructive one won: management wanting to price 3 of 5 items had no way to
+     * say so, and dropping the other two from the engine dropped them from the DEAL. That is why a
+     * request with 2 items still waiting on a supplier could not be quoted at all.
+     *
+     * Permanent exclusion did not disappear — it lives where it is already labelled and explained,
+     * the admin's `Incl` checkbox during sourcing. What changes is that this screen stops doing it
+     * silently as a side effect.
+     *
+     * The ₱0.00 hazard A158 named is closed elsewhere, and had to be before this line could change:
+     * createQuotationFromPR now carries only the lines the rep ticked, and refuses outright when an
+     * old browser sends no selection while something is unpriced. `excludedLines` is still honoured
+     * server-side for older clients; this one just stops sending it. */
+    const excluded = [];
     const src = (prList || []).find(r => String(r.prNo) === String(prNo));
-    const excluded = ((src && src.items) || [])
-      .filter(i => i.included && !kept[String(i.line)])
-      .map(i => flowNum(i.line));
 
     const res = await postFlow('setMgmtPricing', {
       prNo, destination: dest, commission: comm, margin: marg,
@@ -1339,7 +1374,11 @@ async function rejectPricing() {
 
 // ─── Pricing History (new-flow: priced + migrated requests) with reload-to-re-price ───
 function loadFlowPricingHistory() {
-  const priced = ['Mgmt Priced', 'Verifying', 'Returned to Sales', 'Quoted'];
+  /* A242 — 'Partly Quoted' belongs here or the feature dead-ends. This list is what puts a request
+     in Pricing History, and Pricing History is how management reloads one to price the items that
+     have not been quoted yet. Leave it out and a partly-quoted request vanishes from the only
+     screen that could finish it. */
+  const priced = ['Mgmt Priced', 'Verifying', 'Returned to Sales', 'Quoted', 'Partly Quoted'];
   _pricingHistory = (prList || []).filter(r => priced.includes(r.status) || r.legacyId || r.status === 'Migrated')
     .slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.prNo).localeCompare(String(a.prNo)));
   renderPricingHistoryTable();

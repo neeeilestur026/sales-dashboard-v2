@@ -754,6 +754,64 @@ function flowPricingRowsIncomplete(rows) {
   return (rows || []).some(r => !r.hasBd && r.item);
 }
 
+/* ── A242 — PARTIAL QUOTATIONS, the client half ───────────────────────────────────────────────────
+ *
+ * The mirror of _prLineQuotable / _prPricedLines / _prRemainingLines in FlowAPI.gs. Two copies of a
+ * rule is how a screen and a server come to disagree about what a rep is allowed to do, so these
+ * exist to be the ONE definition every page reads — the configurator ticking boxes, the worklist
+ * counting what is outstanding, and the tracker saying how much of a request is still in play.
+ *
+ * The server is still the authority: it recomputes all of this on the way in and refuses a line the
+ * browser should not have offered. This half only decides what to SHOW.
+ *
+ * NOTE the asymmetry: the browser is given `quotable` already answered on each item by
+ * getPricingRequests, because deciding it needs the quotations' statuses and qcLoadFromPR fetches
+ * only the requests. flowPrLineQuotable is used where a page does hold both. */
+
+/** @param it a getPricingRequests item DTO; @param quoByNo {quotationNo: quotation DTO} */
+function flowPrLineQuotable(it, quoByNo) {
+  const on = String((it || {}).quotedOn || '').trim();
+  if (!on) return true;
+  const q = (quoByNo || {})[on];
+  if (!q) return true;                                   // renamed or deleted — the line is free again
+  return String(q.status || '') === 'Cancelled';         // withdrawn by us, not decided by the client
+}
+
+/** Lines management has actually priced. A ₱0 freebie IS priced; a deferred line is not, and must
+ *  never be mistaken for one — it would print on the client's quotation at ₱0.00. */
+function flowPrPricedLines(rec) {
+  const out = { has: false, lines: {} };
+  let rows = [];
+  try { rows = JSON.parse((rec || {}).pricedItemsJson || '[]') || []; } catch (e) { rows = []; }
+  rows.forEach(r => {
+    if (r && r.line != null && r.line !== '') { out.has = true; out.lines[String(flowNum(r.line))] = 1; }
+  });
+  return out;
+}
+
+function flowPrLinePriced(it, priced) {
+  if (priced && priced.has) return !!priced.lines[String(flowNum((it || {}).line))];
+  return flowNum((it || {}).finalPrice) > 0;             // pre-breakdown rows: the old signal
+}
+
+/** What is left on a request: included lines split into ready-to-quote, not-yet-priced, and gone.
+ *  `quotable` is preferred when the server answered it; falls back to the local rule otherwise. */
+function flowPrRemaining(rec, quoByNo) {
+  const priced = flowPrPricedLines(rec);
+  const included = ((rec || {}).items || []).filter(i => i && i.included);
+  const open = [], ready = [], unpriced = [], quoted = [];
+  included.forEach(i => {
+    const free = (i.quotable === undefined) ? flowPrLineQuotable(i, quoByNo) : !!i.quotable;
+    if (!free) { quoted.push(i); return; }
+    open.push(i);
+    (flowPrLinePriced(i, priced) ? ready : unpriced).push(i);
+  });
+  const val = list => Math.round(list.reduce(
+    (t, i) => t + (flowNum(i.qty) * flowNum(i.finalPrice)), 0) * 100) / 100;
+  return { included, open, ready, unpriced, quoted,
+           openValue: val(open), readyValue: val(ready), quotedValue: val(quoted) };
+}
+
 /** The wide per-item breakdown table, shared by the pricing-history and management-home details.
  *  Engine-derived figures are shown ONLY where they were recorded. They are never recomputed: on
  *  PR-202607-210 the four unrecorded lines do not reconcile with their own buy prices at the
@@ -904,9 +962,29 @@ function flowQuotationPricingReview(quotation, prRecord) {
     });
     return sum;
   };
+
+  /* A242 — WHICH PR LINES IS THIS QUOTATION ACTUALLY BUILT FROM?
+   *
+   * Until partial quotations existed the answer was "all of the included ones", and comparing that
+   * to the quotation's gross is what this whole check is. Once a request can send 3 of its 5 lines
+   * today and the other 2 next week, that comparison is guaranteed to disagree — by the value of the
+   * lines that are not on this document — so EVERY partial quotation would flag itself as a pricing
+   * deviation. And this is not a cosmetic warning: flowDeviationBanner drives the tick that gates
+   * the Approve button, so each one would block its own approval with a red banner saying the money
+   * had moved when nothing had.
+   *
+   * 'Quoted On' answers it exactly, with no name-matching, because the server recorded it at the
+   * moment the quotation was created. When NO line carries it — every quotation that existed before
+   * this — the old formula is used unchanged, so not one existing record's verdict moves. */
+  const mine = prItems.filter(p => p && String(p.quotedOn || '').trim() &&
+                                   String(p.quotedOn).trim() === String(quotation.quotationNo || '').trim());
+  const anyStamped = prItems.some(p => p && String(p.quotedOn || '').trim());
+
   const pricedTotal = optGroups.hasOptions
     ? _pricedFor(qItems)
-    : included.reduce((s, p) => s + flowNum(p.finalPrice) * flowNum(p.qty), 0);
+    : (anyStamped && mine.length
+        ? mine.reduce((s, p) => s + flowNum(p.finalPrice) * flowNum(p.qty), 0)
+        : included.reduce((s, p) => s + flowNum(p.finalPrice) * flowNum(p.qty), 0));
   const totalDelta = quotedGross - pricedTotal;
 
   const optionReview = optGroups.order.map(k => {

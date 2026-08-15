@@ -37,6 +37,25 @@ let qcQuotationNo = '';           // set once saved, so a second Finalize update
 let qcDesignVersion = 2;
 let qcFromPr = '';                // the process-flow path
 let qcLocked = false;             // items display-only (fromPR, and A176 document mode)
+/* A242 — line selection on the fromPR path. `qcPartial` says the rows carry PR-line state; the
+   CHECKBOXES only appear once the backend is known to understand a `lines` parameter, because an
+   older one ignores it and quotes everything — a rep would tick 3 and send 5 to a client. Set async
+   below; until it resolves the column stays hidden and the save sends no selection, which is exactly
+   the old behaviour. */
+let qcPartial = false;
+let qcPartialUI = false;
+/* THE LINES THIS QUOTATION WILL ACTUALLY CARRY. One definition, read by the total, the live preview
+   and the layout blob alike — if any of them disagreed, the rep would approve a figure the document
+   does not show. Off the fromPR path it is simply every row, which is what it has always been. */
+function qcQuotedItems() {
+  return (qcPartial && qcPartialUI) ? qcItems.filter(i => !i.prTaken && i.qtSel) : qcItems;
+}
+if (typeof flowVersionAtLeast === 'function') {
+  flowVersionAtLeast(136).then(v => {
+    qcPartialUI = !!v;
+    if (qcPartialUI && qcPartial && typeof qcRenderItems === 'function') qcRenderItems();
+  }).catch(() => { qcPartialUI = false; });
+}
 let qcInventory = [];             // for the admin free-type datalist
 /* A178 — item photos. `qcPhotoDocs` is what Drive already holds (lineKey -> docId) and `qcPhotoDirty`
    is what changed in THIS session; together they are the idempotence rule — stored and not dirty means
@@ -463,19 +482,49 @@ async function qcLoadFromPR(prNo) {
       set('qcRfq', dj.prNumberClient || dj.rfqNo);
     } catch (e) { /* a PR without a doc block is fine */ }
 
+    /* A242 — WHICH LINES ARE STILL AVAILABLE, and which are already out on another quotation.
+       flowPrRemaining is the same rule the server applies, so a line offered here is a line the
+       server will accept. `quotable` was decided server-side (it needs the quotations' statuses,
+       which this page never fetches). */
+    const rem = (typeof flowPrRemaining === 'function') ? flowPrRemaining(pr, {})
+                                                        : { open: included, ready: included, unpriced: [], quoted: [] };
+    const readyLines = {}; rem.ready.forEach(i => { readyLines[String(i.line)] = 1; });
+    const openLines = {};  rem.open.forEach(i => { openLines[String(i.line)] = 1; });
+
     qcItems = included.map(i => ({
       lineKey: qcLineKey(), optionNo: '', itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
       qty: (typeof flowNum === 'function' ? flowNum(i.qty) : +i.qty) || 0,
       price: (typeof flowNum === 'function' ? flowNum(i.finalPrice) : +i.finalPrice) || 0,
       uom: i.uom || '', origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',
-      itemId: i.itemId || '', vat: i.vat || '', imageDataUrl: '', scope: ''   // A235
+      itemId: i.itemId || '', vat: i.vat || '', imageDataUrl: '', scope: '',  // A235
+      /* A242 — the PR line this row came from, and its state. `prLine` is what travels back to the
+         server as the selection; without it the server would have to re-derive which row is which
+         by name, the very matching this codebase has been bitten by before. */
+      prLine: (typeof flowNum === 'function' ? flowNum(i.line) : +i.line) || 0,
+      prQuotedOn: String(i.quotedOn || ''),
+      prTaken: !openLines[String(i.line)],
+      prPriced: !!readyLines[String(i.line)],
+      // Pre-ticked = priced AND still available. An unpriced line can be ticked, but loudly.
+      qtSel: !!readyLines[String(i.line)]
     }));
     if (!qcItems.length) { qcMsg('That request has no included items to quote.', false); return; }
 
+    qcPartial = true;
     qcRenderItems();
+
+    /* Say what this quotation will contain BEFORE the rep presses anything. A partial quotation is
+       a deliberate act; discovering afterwards that two lines did not go is how a client ends up
+       waiting on an item nobody remembers. */
+    const bits = [];
+    if (rem.quoted.length) bits.push(rem.quoted.length + ' item(s) are already on a quotation and cannot be re-sent');
+    if (rem.unpriced.length) bits.push(rem.unpriced.length + ' item(s) have no price yet and are left unticked');
     qcBanner('Building the quotation for <strong>' + (typeof flowEsc === 'function' ? flowEsc(qcFromPr) : qcFromPr)
       + '</strong>. Item prices are management’s and cannot be changed here — you set the quotation number, '
-      + 'subject, discount and layout. Create it first, then edit the Draft if a line really must move.');
+      + 'subject, discount and layout. Create it first, then edit the Draft if a line really must move.'
+      + (bits.length
+          ? '<br><strong>' + rem.ready.length + ' of ' + included.length + ' item(s) are ticked to go on this quotation.</strong> '
+            + bits.join('; ') + '. Whatever you leave behind stays on the request and can be quoted later.'
+          : ''));
     qcOnChange();
   } catch (e) {
     qcMsg('Could not load ' + qcFromPr + ' — ' + (e.message || 'unknown error'), false);
@@ -560,8 +609,24 @@ function qcRenderItems() {
     return `<td><select${ro}${title} onchange="qcSet('${esc(i.lineKey)}','optionNo',this.value)"
               style="width:100%;box-sizing:border-box;">${opts}</select>${star}</td>`;
   };
+  /* A242 — the "goes on this quotation" tick. Only on the fromPR path, and only against a backend
+     that honours it. A line already out on another quotation is shown, disabled, with the number it
+     went out on: hiding it would leave the rep wondering where an item went, and it is the clearest
+     possible statement of what a partial quotation already covered. */
+  const selCell = (i) => {
+    if (!(qcPartial && qcPartialUI)) return '';
+    if (i.prTaken) {
+      return `<td class="num" title="Already quoted on ${esc(i.prQuotedOn)}">
+                <span style="font-size:.68rem;color:#94a3b8;white-space:nowrap;">✓ ${esc(i.prQuotedOn)}</span></td>`;
+    }
+    const warn = i.prPriced ? '' : ' title="Management has not priced this item — it would print as free."';
+    return `<td class="num"><input type="checkbox"${i.qtSel ? ' checked' : ''}${warn}
+              onchange="qcSetSel('${esc(i.lineKey)}',this.checked)">
+            ${i.prPriced ? '' : '<div style="font-size:.62rem;color:#b45309;">no price</div>'}</td>`;
+  };
   document.getElementById('qcItemBody').innerHTML = qcItems.map(i => `
-    <tr data-key="${esc(i.lineKey)}">
+    <tr data-key="${esc(i.lineKey)}"${(qcPartial && qcPartialUI && (i.prTaken || !i.qtSel)) ? ' style="opacity:.55;"' : ''}>
+      ${selCell(i)}
       ${optCell(i)}
       <td><input type="text" list="qcInvList" value="${esc(i.itemNo)}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','itemNo',this.value)"></td>
@@ -591,6 +656,9 @@ function qcRenderItems() {
      visible while the body renders one fewer <td> shifts every cell under the wrong heading. */
   const thOpt = document.getElementById('qcThOption');
   if (thOpt) thOpt.style.display = qcOptionsEnabled ? '' : 'none';
+  // A242 — same rule for the selection column, and for the same reason.
+  const thPick = document.getElementById('qcThPick');
+  if (thPick) thPick.style.display = (qcPartial && qcPartialUI) ? '' : 'none';
   const add = document.getElementById('qcAddBtn');
   if (add) add.style.display = qcLocked ? 'none' : '';
 }
@@ -746,6 +814,17 @@ function qcSaveScope() {
   qcCloseScope();
 }
 
+/* A242 — ticking a line on or off this quotation. Deliberately NOT gated on qcLocked: the lock says
+   management owns the PRICES, which is still true; choosing which of them go out today is the rep's
+   call and is the whole point of the feature. */
+function qcSetSel(key, on) {
+  const it = qcItems.find(i => i.lineKey === key);
+  if (!it || it.prTaken) return;
+  it.qtSel = !!on;
+  qcRenderItems();
+  qcOnChange();
+}
+
 function qcSet(key, field, value) {
   if (qcLocked) return;
   const it = qcItems.find(i => i.lineKey === key);
@@ -823,7 +902,9 @@ function qcTotals() {
      a line still carrying a stale optionNo would fail the `k !== rec` test and be DROPPED from the
      total — understating the quotation instead of overstating it. Off means every line is a base
      line, full stop. */
-  const gross = qcItems.reduce((s, i) => {
+  // A242: only the ticked lines. A total that included the two items being left behind would be a
+  // figure the client's document never shows, and it is the figure that gets stored.
+  const gross = qcQuotedItems().reduce((s, i) => {
     const k = qcOptionsEnabled ? String(i.optionNo || '').trim() : '';
     return (k && k !== rec) ? s : s + num(i.qty) * num(i.price);
   }, 0);
@@ -900,7 +981,7 @@ function qcPayload(withImages) {
     photos: showPhotos,
     designVersion: qcDesignVersion,                             // A241
     recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205
-    items: qcItems.filter(i => (i.itemNo || i.itemName)).map(i => ({
+    items: qcQuotedItems().filter(i => (i.itemNo || i.itemName)).map(i => ({   // A242: the ticked lines
       itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
       qty: num(i.qty), price: num(i.price),
       optionNo: String(i.optionNo || '').trim(),           // A205
@@ -1048,7 +1129,14 @@ function qcLayoutJson() {
   /* A240 — the same entry now carries the note blocks and the hidden-price flag. `hide` and `blocks`
      are written ONLY when set, so an entry that carries nothing new is byte-identical to the A236
      one and a quotation saved before A240 reloads unchanged. */
-  const scopes = qcItems.filter(i => (i.itemNo || i.itemName)).map(i => {
+  /* A242 — ON THE fromPR PATH THE BLOB MUST DESCRIBE ONLY THE LINES BEING QUOTED, in the order the
+     server will rebuild them. This is A236 repeating with a new cause. The entries are keyed by
+     lineKey, but the server re-keys every line on this path, so ORDER is the only thing that holds
+     scope to its item — and qcLoadExisting refuses the positional fallback unless the stored count
+     equals the item count (:256). Emitting all 5 entries for a 3-line quotation would therefore not
+     mis-attach the scope; it would silently DISCARD every scope, note, hidden-price flag and group
+     the rep typed, at the moment they reopen the record. */
+  const scopes = qcQuotedItems().filter(i => (i.itemNo || i.itemName)).map(i => {
     const e = { k: String(i.lineKey || ''), s: String(i.scope || '') };
     const blocks = (Array.isArray(i.blocks) ? i.blocks : [])
                      .map(b => ({ t: String((b || {}).t || ''), b: String((b || {}).b || '') }))
@@ -1119,6 +1207,18 @@ async function qcFinalize() {
         discountPct: Math.min(100, Math.max(0, num(val('qcDiscount')))),
         clientRef: (typeof flowClientRef === 'function') ? flowClientRef() : ('QC-' + Date.now())
       };
+      /* A242 — WHICH lines. Sent only when the backend understands it (qcPartialUI); an older one
+         ignores the key and quotes everything still open, which is why the checkboxes are hidden in
+         that case rather than shown and silently disregarded. The server re-derives availability and
+         refuses anything already out, so this is a request, not an instruction. */
+      if (qcPartial && qcPartialUI) {
+        const picked = qcQuotedItems().map(i => i.prLine);
+        if (!picked.length) {
+          qcMsg('Tick at least one item to put on this quotation.', false);
+          btn.disabled = false; btn.textContent = 'Finalize quotation'; return;
+        }
+        base.lines = JSON.stringify(picked);
+      }
       res = await postFlow('createQuotationFromPR', base);
       // A158: a ₱0 line is a real freebie, not a mistake — confirm, then repeat with the override.
       if (res && !res.success && res.needsConfirm === 'zeroPrice') {
@@ -1130,7 +1230,9 @@ async function qcFinalize() {
       if (!res || !res.success) throw new Error((res && res.message) || 'Save failed.');
       newNo = res.quotationNo;
       if (res.duplicate) {
-        qcMsg('That request was already quoted as ' + newNo + ' — revise that quotation rather than creating another.', true);
+        /* A242 — this no longer means "the request is Quoted"; it means EVERY ITEM on it is out
+           already. A request with items still outstanding never lands here. */
+        qcMsg(res.message || ('Every item on that request is already quoted (' + newNo + ').'), true);
         btn.disabled = false; btn.textContent = 'Finalize quotation';
         await qcAfterSave(newNo);
         return;

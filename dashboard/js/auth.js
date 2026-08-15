@@ -1148,7 +1148,10 @@ async function flowComputeActions(session) {
       /* Deliberately unscoped: a returned request nobody has quoted is admin's problem whoever
          raised it, and that oversight is exactly what was missing. Sales keeps its own scoped
          nudge for the ones raised in their name. */
-      const rts = rows.filter(p => p.status === 'Returned to Sales').length;
+      /* A242 — 'Partly Quoted' counts too. Its remaining items are priced and unquoted, which is
+         exactly what this nudge is for; leaving it out would make the leftover half of every split
+         request invisible from the moment the first quotation went out. */
+      const rts = rows.filter(p => p.status === 'Returned to Sales' || p.status === 'Partly Quoted').length;
       if (rts) add('report', '#22c55e', rts + ' priced request(s) still waiting to be quoted', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
@@ -1288,7 +1291,8 @@ async function flowComputeActions(session) {
   // Sales: my returned pricing requests, my approved/rejected quotations, my sent quotes with no SO.
   if (isSales) {
     jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
-      const n = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales').length;
+      // A242 — same on the rep's own home: a partly-quoted request still has items to quote.
+      const n = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales' || p.status === 'Partly Quoted').length;
       if (n) add('report', '#22c55e', n + ' pricing request(s) ready to quote (final prices set)', 'flow-pricing-request.html');
     }).catch(() => {}));
     jobs.push(Promise.all([

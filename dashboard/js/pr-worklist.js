@@ -46,19 +46,28 @@
  * `group` is untouched by this, so every existing consumer keeps its answer. */
 const PRW_STEPS = {
   quote:            { pri: 0,  group: 'now',     hands: 'you',     verb: 'Create quotation', title: 'Priced and ready' },
-  'send-quote':     { pri: 1,  group: 'now',     hands: 'you',     verb: 'Send',             title: 'Quoted, not sent' },
-  'quotation-gone': { pri: 2,  group: 'now',     hands: 'you',     verb: 'Check',            title: 'Quotation no longer exists' },
-  'quotation-void': { pri: 3,  group: 'now',     hands: 'you',     verb: 'Re-quote',         title: 'Quotation was cancelled' },
-  'chase-verify':   { pri: 4,  group: 'now',     hands: 'them',    verb: 'Chase',            title: 'Waiting on verification' },
-  'chase-pricing':  { pri: 5,  group: 'now',     hands: 'them',    verb: 'Chase',            title: 'Stuck with management' },
-  'chase-admin':    { pri: 6,  group: 'now',     hands: 'them',    verb: 'Chase',            title: 'Stuck in sourcing' },
-  'no-date':        { pri: 7,  group: 'now',     hands: 'you',     verb: 'Check',            title: 'Date missing' },
-  'wait-verify':    { pri: 8,  group: 'waiting', hands: 'them',    verb: '',                 title: 'With admin (verification)' },
-  'wait-pricing':   { pri: 9,  group: 'waiting', hands: 'them',    verb: '',                 title: 'With management (pricing)' },
-  'wait-sourcing':  { pri: 10,  group: 'waiting', hands: 'them',    verb: '',                 title: 'With admin (sourcing)' },
-  unknown:          { pri: 11, group: 'waiting', hands: 'unclear', verb: '',                 title: 'Unrecognised stage' },
-  quoted:           { pri: 12, group: 'done',    hands: 'nobody',  verb: '',                 title: 'Became a quotation' },
-  migrated:         { pri: 13, group: 'done',    hands: 'nobody',  verb: '',                 title: 'Imported history' }
+  /* A242 — a request can now be PARTLY quoted: some items went out on one quotation, the rest are
+     still on the request. Two new steps, because the remainder is in one of two different hands.
+     Ranked above 'send-quote': an item nobody has quoted at all is further from the client than a
+     quotation sitting unsent. */
+  'quote-rest':     { pri: 1,  group: 'now',     hands: 'you',     verb: 'Quote the rest',   title: 'Partly quoted — the rest is priced' },
+  'send-quote':     { pri: 2,  group: 'now',     hands: 'you',     verb: 'Send',             title: 'Quoted, not sent' },
+  'quotation-gone': { pri: 3,  group: 'now',     hands: 'you',     verb: 'Check',            title: 'Quotation no longer exists' },
+  'quotation-void': { pri: 4,  group: 'now',     hands: 'you',     verb: 'Re-quote',         title: 'Quotation was cancelled' },
+  'chase-verify':   { pri: 5,  group: 'now',     hands: 'them',    verb: 'Chase',            title: 'Waiting on verification' },
+  'chase-pricing':  { pri: 6,  group: 'now',     hands: 'them',    verb: 'Chase',            title: 'Stuck with management' },
+  'chase-admin':    { pri: 7,  group: 'now',     hands: 'them',    verb: 'Chase',            title: 'Stuck in sourcing' },
+  /* The other half of a partly-quoted request: the leftover items have no price, so somebody else
+     has to move before the rep can. `hands: 'them'` keeps it out of "yours to do" while still
+     showing on the list — the whole reason the status exists is that these items were invisible. */
+  'price-rest':     { pri: 8,  group: 'now',     hands: 'them',    verb: 'Send for pricing', title: 'Partly quoted — the rest needs pricing' },
+  'no-date':        { pri: 9,  group: 'now',     hands: 'you',     verb: 'Check',            title: 'Date missing' },
+  'wait-verify':    { pri: 10, group: 'waiting', hands: 'them',    verb: '',                 title: 'With admin (verification)' },
+  'wait-pricing':   { pri: 11, group: 'waiting', hands: 'them',    verb: '',                 title: 'With management (pricing)' },
+  'wait-sourcing':  { pri: 12, group: 'waiting', hands: 'them',    verb: '',                 title: 'With admin (sourcing)' },
+  unknown:          { pri: 13, group: 'waiting', hands: 'unclear', verb: '',                 title: 'Unrecognised stage' },
+  quoted:           { pri: 14, group: 'done',    hands: 'nobody',  verb: '',                 title: 'Became a quotation' },
+  migrated:         { pri: 15, group: 'done',    hands: 'nobody',  verb: '',                 title: 'Imported history' }
 };
 const PRW_GROUPS = ['now', 'waiting', 'done'];
 
@@ -96,13 +105,22 @@ const PRW_STAGE = {
 function prValue(pr) {
   const items = ((pr || {}).items) || [];
   const inc = items.filter(i => i && i.included);
+  /* A242 — MONEY ALREADY OUT ON A QUOTATION IS NOT MONEY IN PLAY. A partly-quoted request would
+     otherwise report its whole five-line value here while the three quoted lines are separately
+     live on the quotation board, and every rollup fed by this — the worklist lanes, the tracker's
+     concentration figures, the per-rep totals — would count them twice.
+     `quotable` is answered by the server (it needs the quotations' statuses). Rows from a backend
+     that does not send it are undefined, i.e. still open, which is exactly what every record was
+     before this existed — so no existing figure moves. */
+  const open = inc.filter(i => i.quotable === undefined || i.quotable === true);
   let v = 0, priced = false;
-  inc.forEach(i => {
+  open.forEach(i => {
     const fp = Number(i.finalPrice) || 0;
     if (fp > 0) priced = true;
     v += (Number(i.qty) || 0) * fp;
   });
-  return { value: Math.round(v * 100) / 100, priced: priced, lines: items.length, included: inc.length };
+  return { value: Math.round(v * 100) / 100, priced: priced, lines: items.length,
+           included: inc.length, open: open.length, quoted: inc.length - open.length };
 }
 
 /** Days between the request's date and `today` — null when the date cannot be read at all.
@@ -151,6 +169,25 @@ function pricingRequestWorklistStep(pr, links, quotation, cfg, today) {
 
   // Imported history is not work. It never enters the worklist and never nags — see the History view.
   if (status === 'Migrated') return finish('migrated', 'Imported from the old system.');
+
+  /* A242 — PARTLY QUOTED. Some items went out; the rest are still here, and the entire point of the
+     status is that they stay visible. Which step depends on whose move it is, and the honest answer
+     is "it depends whether anybody has priced them yet" — a rep told to quote items that carry no
+     price would be sent to a screen where the tick boxes are all empty. */
+  if (status === 'Partly Quoted') {
+    const gone = val.quoted, left = val.open;
+    const head = gone + ' item(s) already quoted' + (out.quotationNo ? ' (' + out.quotationNo + ')' : '') +
+                 ', ' + left + ' still on this request';
+    if (!left) {
+      /* Every line is out but the status never caught up — the write that flips it to Quoted is a
+         separate cell from the one that stamps the lines, and Apps Script cannot do both at once.
+         Reading it as done is right; saying so is better than pretending there is work. */
+      return finish('quoted', head + '. Nothing is outstanding.');
+    }
+    return finish(val.priced ? 'quote-rest' : 'price-rest',
+      head + (val.priced ? ' and priced — put them on a second quotation.'
+                         : ' with no price yet — they need sourcing and management pricing first.'));
+  }
 
   if (status === 'Quoted') {
     /* THE LINK EXISTS BUT THE QUOTATION DOES NOT. 13 live requests are in this state: the number was

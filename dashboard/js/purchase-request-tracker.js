@@ -274,7 +274,10 @@ const PRT_DOTS = ['Request', 'Sourcing', 'Pricing', 'Verify', 'Quotation', 'Sent
  * "still being checked", which is exactly the confusion this tracker exists to end. */
 const PRT_AT = {
   'Requested': 0, 'Sourcing': 1, 'For Mgmt Pricing': 2, 'Mgmt Priced': 3,
-  'Returned to Sales': 4, 'Quoted': 5, 'Migrated': 0
+  'Returned to Sales': 4, 'Quoted': 5, 'Migrated': 0,
+  // A242 — a quotation exists, so it has reached stage 5; what makes it different from 'Quoted' is
+  // that items are still outstanding, and the step engine is what says so.
+  'Partly Quoted': 5
 };
 
 function prtDots(r) {
@@ -594,7 +597,10 @@ const PRT_PIPE = [
   { l: 'Sourcing',  steps: [],                                statuses: ['Sourcing'] },
   { l: 'Pricing',   steps: ['chase-pricing', 'wait-pricing'], statuses: ['For Mgmt Pricing'] },
   { l: 'Verify',    steps: ['chase-verify', 'wait-verify'],   statuses: ['Mgmt Priced'] },
-  { l: 'Quotation', steps: ['quote'],                         statuses: ['Returned to Sales'] },
+  /* A242 — a partly-quoted request belongs in Quotation, not Sent: the work that remains is
+     quoting, and putting it under Sent would count it as finished on the one board built to show
+     what is not. */
+  { l: 'Quotation', steps: ['quote', 'quote-rest', 'price-rest'], statuses: ['Returned to Sales', 'Partly Quoted'] },
   { l: 'Sent',      steps: ['quoted', 'send-quote'],          statuses: ['Quoted'] }
 ];
 
@@ -635,7 +641,9 @@ function prtPipeline() {
 
 function prtByStage() {
   const cols = [
-    ['quote', 'Ready to quote'], ['send-quote', 'Quoted, not sent'], ['quotation-gone', 'Needs checking'],
+    ['quote', 'Ready to quote'],
+    ['quote-rest', 'Partly quoted — quote the rest'], ['price-rest', 'Partly quoted — rest needs pricing'],  // A242
+    ['send-quote', 'Quoted, not sent'], ['quotation-gone', 'Needs checking'],
     ['chase-verify', 'Chase verification'], ['chase-pricing', 'Chase pricing'], ['chase-admin', 'Chase sourcing'],
     ['wait-verify', 'With verification'], ['wait-pricing', 'With pricing'], ['wait-sourcing', 'With sourcing'],
     ['quoted', 'Quoted']

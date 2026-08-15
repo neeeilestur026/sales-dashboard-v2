@@ -230,6 +230,9 @@
                      holds the ✕ (27px). Description takes the remainder — 33% with Option hidden,
                      25% with it shown. -->
                 <thead><tr>
+                  <!-- A242: the "goes on this quotation" tick. Hidden unless the quotation is being
+                       built from a pricing request AND the backend understands a line selection. -->
+                  <th id="qcThPick" style="width:5%;display:none;" title="Tick the items that go on THIS quotation. Anything you leave stays on the pricing request and can be quoted later on a second quotation.">On&nbsp;qtn</th>
                   <th id="qcThOption" style="width:8%;display:none;" title="Blank = an ordinary line, always charged. A number makes this an alternative — the client picks one option, and options are never summed together.">Option</th>
                   <th style="width:12%;">Item No</th><th>Description</th>
                   <th style="width:8%;">Qty</th><th style="width:12%;">Unit Price</th>

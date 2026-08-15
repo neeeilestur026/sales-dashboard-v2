@@ -40,7 +40,12 @@ function load(today) {
   vm.runInContext('this.PRW_STEPS = PRW_STEPS; this.PRW_GROUPS = PRW_GROUPS;' +
                   'this.PRW_DEFAULTS = PRW_DEFAULTS; this.PRW_STAGE = PRW_STAGE;' +
                   'this.PRW_LANES = PRW_LANES; this.PRW_LANE_LABEL = PRW_LANE_LABEL;' +
-                  'this.QW_STEPS = QW_STEPS;', ctx);
+                  'this.QW_STEPS = QW_STEPS;' +
+                  /* A242 — the three statuses that mean a quotation is closed. pr-partial-quote.js
+                     asserts this list against FlowAPI.gs's _QUOTE_CLOSED, because the "is this line
+                     still quoted" rule is evaluated on BOTH sides of the wire and a drift between
+                     the two would let a browser offer a line the server then refuses. */
+                  'this.FLOW_Q_CLOSED_STATUSES = FLOW_Q_CLOSED_STATUSES;', ctx);
 
   /* Pin "today". Every age in the worklist is measured from flowToday(), so a floating clock would
      make these assertions quietly seasonal. */
