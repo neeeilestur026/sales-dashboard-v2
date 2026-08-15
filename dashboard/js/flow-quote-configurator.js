@@ -30,6 +30,11 @@ let qcTimer = null;
 let qcLastUrl = '';
 let qcPhotoTarget = '';
 let qcQuotationNo = '';           // set once saved, so a second Finalize updates instead of duplicating
+/* A241 — which document design this record renders in. A quotation that predates the redesign keeps
+   design 1 until someone edits it, so a client's copy never silently restyles itself; a new one, and
+   any record saved from here, is design 2. Read from layoutJson.v on load, stamped by qcLayoutJson()
+   on save. */
+let qcDesignVersion = 2;
 let qcFromPr = '';                // the process-flow path
 let qcLocked = false;             // items display-only (fromPR, and A176 document mode)
 let qcInventory = [];             // for the admin free-type datalist
@@ -101,6 +106,7 @@ function qcToggleCreate(open) {
 /* Clear the builder back to a blank quotation (leaves the remembered doc defaults in place). */
 function qcResetForm() {
   qcQuotationNo = '';
+  qcDesignVersion = 2;          // A241 — a brand-new quotation is born on the new design
   qcFromPr = '';
   qcLocked = false;
   qcMode = 'edit';
@@ -190,6 +196,7 @@ function qcLoadExisting(q) {
 
   // Layout JSON (A172) — restore the template, photo switch and the three summary blocks.
   let lay = {}; try { lay = q.layoutJson ? (JSON.parse(q.layoutJson) || {}) : {}; } catch (e) { lay = {}; }
+  qcDesignVersion = Number(lay.v) || 1;   // A241 — absent means this record predates the redesign
   if (lay.photos === false) set('qcPhotos', 'off');
   const blocks = lay.blocks || {};
   [['qcBlkScope', 'scope', 'qcScope'], ['qcBlkExcl', 'exclusions', 'qcExclusions'],
@@ -255,6 +262,7 @@ function qcLoadExisting(q) {
       it.blocks = (Array.isArray(e.blocks) ? e.blocks : [])
                     .map(b => ({ t: String((b || {}).t || ''), b: String((b || {}).b || '') }));
       it.hidePrice = !!e.hide;
+      it.group = String(e.g || '');                                   // A241
     });
   }
   // A205: restore which option the stored total was built from, so reopening and re-saving does not
@@ -609,6 +617,7 @@ function qcLineMark(it) {
   if (n) parts.push('✓ ' + n);
   if (b) parts.push(b + ' note' + (b === 1 ? '' : 's'));
   if ((it || {}).hidePrice) parts.push('₱ hidden');
+  if (String((it || {}).group || '').trim()) parts.push('▦ grouped');   // A241
   return parts.join(' · ');
 }
 
@@ -627,6 +636,17 @@ function qcOpenScope(key) {
   box.value = String(it.scope || '');
   box.readOnly = !!qcLocked;
   document.getElementById('qcScopeSave').style.display = qcLocked ? 'none' : '';
+  // A241 — the group and the unit. The unit selector always carries the line's CURRENT value even
+  // when it is not one of ours (A147: a real unit from the pricing request is never overwritten),
+  // so opening this modal on an old line and pressing Cancel cannot rewrite it.
+  const grp = document.getElementById('qcGroup');
+  grp.value = String(it.group || '');
+  grp.readOnly = !!qcLocked;
+  const uom = document.getElementById('qcUom');
+  uom.innerHTML = (typeof flowUomOptions === 'function') ? flowUomOptions(it.uom) : '';
+  uom.disabled = !!qcLocked;
+  document.getElementById('qcUomCustom').style.display = 'none';
+  document.getElementById('qcUomCustom').value = '';
   // Deep copy: editing the draft must not reach qcItems until Save.
   qcBlkDraft = (Array.isArray(it.blocks) ? it.blocks : [])
                  .map(b => ({ t: String((b || {}).t || ''), b: String((b || {}).b || '') }));
@@ -661,6 +681,20 @@ function qcRenderBlocks() {
         oninput="qcBlkSet(${i},'b',this.value)">${esc(b.b)}</textarea>
     </div>`).join('') ||
     '<div class="qc-scope-count">No note blocks on this line.</div>';
+}
+
+/** A241 — "Custom…" swaps the picker for a free-text box. The vocabulary makes the common unit one
+ *  click; it does not become a cage, because the units a supplier quotes in are not ours to limit. */
+function qcUomPick(v) {
+  const box = document.getElementById('qcUomCustom');
+  box.style.display = (v === '__custom__') ? '' : 'none';
+  if (v === '__custom__') box.focus();
+}
+
+function qcUomValue() {
+  const sel = String(document.getElementById('qcUom').value || '');
+  if (sel !== '__custom__') return sel;
+  return String(document.getElementById('qcUomCustom').value || '').trim();
 }
 
 function qcBlkSet(i, field, value) {
@@ -704,6 +738,8 @@ function qcSaveScope() {
     it.blocks = qcBlkDraft.map(b => ({ t: String(b.t || '').trim(), b: String(b.b || '') }))
                           .filter(b => b.t || b.b.trim());
     it.hidePrice = !!document.getElementById('qcHidePrice').checked;
+    it.group = String(document.getElementById('qcGroup').value || '').trim();
+    it.uom = qcUomValue();
     qcRenderItems();
     qcOnChange();                                       // refresh the live preview
   }
@@ -862,6 +898,7 @@ function qcPayload(withImages) {
     // its multi-line descriptions. It now follows the selector, which defaults to Full.
     descMode: val('qcDescMode') || 'long',
     photos: showPhotos,
+    designVersion: qcDesignVersion,                             // A241
     recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205
     items: qcItems.filter(i => (i.itemNo || i.itemName)).map(i => ({
       itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
@@ -882,6 +919,7 @@ function qcPayload(withImages) {
       // total_ex_vat still sums it, so nothing downstream of the display changes.
       blocks: Array.isArray(i.blocks) ? i.blocks : [],
       hidePrice: !!i.hidePrice,
+      group: String(i.group || ''),                      // A241 — the section band this line joins
       imageDataUrl: (showPhotos && withImages) ? (i.imageDataUrl || '') : ''
     })),
     doc: {
@@ -1017,9 +1055,14 @@ function qcLayoutJson() {
                      .filter(b => b.t || b.b.trim());
     if (blocks.length) e.blocks = blocks;
     if (i.hidePrice) e.hide = true;
+    if (String(i.group || '').trim()) e.g = String(i.group).trim();   // A241
     return e;
   });
-  if (scopes.some(e => e.s.trim() || e.blocks || e.hide)) lay.itemScopes = scopes;
+  if (scopes.some(e => e.s.trim() || e.blocks || e.hide || e.g)) lay.itemScopes = scopes;
+  /* A241 — the DESIGN STAMP. Saving is what marks a record as "edited", and an edited record moves
+     to the new document design; everything untouched keeps the look its client already has. Written
+     unconditionally on save, so a quotation created today is design 2 from birth. */
+  lay.v = 2;
   return JSON.stringify(lay);
 }
 
@@ -1278,6 +1321,11 @@ async function qcSavePdf(no) {
       (Array.isArray(_lay.itemScopes) ? _lay.itemScopes : []).forEach(e => {
         if (e && e.k) layByKey[String(e.k)] = e;
       });
+      /* A241 — the design comes from the RECORD, not from this browser's state. Regenerating an old
+         quotation must reproduce the document its client already holds, even if the tab happens to
+         have a newer one loaded; the save that precedes a finalize has already stamped v:2, so the
+         freshly-saved case reads 2 from here anyway. */
+      payload.designVersion = Number(_lay.v) || 1;
     } catch (e) { /* a record with no or broken layout simply has no per-line detail */ }
     const localByKey = {};
     priced.forEach(i => { localByKey[String(i.lineKey)] = i; });
@@ -1295,6 +1343,7 @@ async function qcSavePdf(no) {
         // A86: the pairing the customer sees — what they asked for, then OUR OFFER
         origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
         scope: lay ? String(lay.s || '') : String((loc && loc.scope) || ''),
+        group: lay ? String(lay.g || '') : String((loc && loc.group) || ''),   // A241
         blocks: lay ? (Array.isArray(lay.blocks) ? lay.blocks : [])
                     : ((loc && Array.isArray(loc.blocks)) ? loc.blocks : []),
         hidePrice: lay ? !!lay.hide : !!(loc && loc.hidePrice),

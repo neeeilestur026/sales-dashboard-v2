@@ -428,6 +428,23 @@
       <h3 style="margin:0 0 .2rem;">Line details</h3>
       <div class="sub" style="margin-bottom:.6rem;">for <b id="qcScopeItem">—</b></div>
 
+      <!-- A241: the two facts that describe the LINE itself, above the long-form scope. -->
+      <div style="display:flex;gap:.8rem;margin-bottom:.7rem;">
+        <label style="flex:1;">
+          <div class="qc-scope-hint" style="margin:0 0 .25rem;"><b>Group</b> — lines sharing this,
+            one after another, print under one section band (e.g. “Power and Control Cables”).
+            Leave blank for a standalone item.</div>
+          <input type="text" id="qcGroup" style="width:100%;" placeholder="e.g. Power and Control Cables">
+        </label>
+        <label style="width:190px;flex:none;">
+          <div class="qc-scope-hint" style="margin:0 0 .25rem;"><b>Unit</b> — prints under the
+            quantity.</div>
+          <select id="qcUom" style="width:100%;" onchange="qcUomPick(this.value)"></select>
+          <input type="text" id="qcUomCustom" style="width:100%;margin-top:.3rem;display:none;"
+                 placeholder="type a unit">
+        </label>
+      </div>
+
       <div class="qc-scope-hint">
         One inclusion per line — each prints as its own bullet under this item's description.
         Wrap a line in <b>**asterisks**</b> to make it a sub-heading (e.g. <b>**Standard

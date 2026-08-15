@@ -646,6 +646,49 @@ async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileN
   return { link, saveError, configured };
 }
 
+/* A241 — the quantity-label vocabulary, in ONE place so every surface offers the same list.
+   `uom` is threaded through PR -> quotation -> PDF -> sales order but was editable NOWHERE, so a
+   cable priced per metre printed "PC" and commissioning days printed "PC" until someone corrected
+   them through the API by hand. Grouped for the picker; the renderer prints whatever is chosen,
+   verbatim and uppercase.
+
+   NOT exhaustive and NOT enforced. A147's rule stands — a real unit that arrived from the pricing
+   request is never overwritten with a guess — so the selector always keeps an off-list value and
+   offers a free-text escape. This list is what makes the COMMON case one click. */
+const FLOW_UOM_GROUPS = [
+  ['Count',        ['PC', 'PCS', 'SET', 'SETS', 'UNIT', 'UNITS', 'LOT', 'PAIR', 'BOX', 'PACK', 'ROLL']],
+  ['Length',       ['M', 'METERS', 'FT', 'KM']],
+  ['Time',         ['DAY', 'DAYS', 'WEEK', 'WEEKS', 'MONTH', 'MONTHS', 'HOUR', 'HOURS']],
+  ['People',       ['PERSON', 'PERSONS', 'MANDAY', 'MANDAYS']],
+  ['Mass / volume',['KG', 'TON', 'LITER', 'LITERS']],
+  ['Service',      ['TRIP', 'VISIT', 'JOB', 'LUMP SUM']],
+];
+
+/** Flat list of every standard label, for membership tests. */
+function flowUomAll() {
+  return FLOW_UOM_GROUPS.reduce((a, g) => a.concat(g[1]), []);
+}
+
+/** <optgroup> markup for a unit picker, with `current` preselected — and ADDED to the list when it
+ *  is not one of ours, so opening the modal on an old line never silently rewrites its unit. */
+function flowUomOptions(current) {
+  const cur = String(current || '').trim();
+  const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
+  const known = flowUomAll().some(u => u.toUpperCase() === cur.toUpperCase());
+  let html = '<option value=""' + (cur ? '' : ' selected') + '>— none —</option>';
+  if (cur && !known) {
+    html += '<optgroup label="On this line"><option value="' + esc(cur) + '" selected>'
+          + esc(cur) + '</option></optgroup>';
+  }
+  FLOW_UOM_GROUPS.forEach(([label, list]) => {
+    html += '<optgroup label="' + esc(label) + '">'
+          + list.map(u => '<option value="' + esc(u) + '"'
+              + (u.toUpperCase() === cur.toUpperCase() ? ' selected' : '') + '>' + esc(u) + '</option>').join('')
+          + '</optgroup>';
+  });
+  return html + '<option value="__custom__">Custom…</option>';
+}
+
 /** Remember / restore PDF document-field defaults in localStorage. */
 function flowLoadDefaults(key) {
   try { return JSON.parse(localStorage.getItem('flowpdf_' + key) || '{}'); } catch (e) { return {}; }
