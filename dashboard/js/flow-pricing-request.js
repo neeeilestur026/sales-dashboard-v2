@@ -1330,9 +1330,25 @@ async function savePricing() {
      * The ₱0.00 hazard A158 named is closed elsewhere, and had to be before this line could change:
      * createQuotationFromPR now carries only the lines the rep ticked, and refuses outright when an
      * old browser sends no selection while something is unpriced. `excludedLines` is still honoured
-     * server-side for older clients; this one just stops sending it. */
-    const excluded = [];
+     * server-side for older clients; this one just stops sending it.
+     *
+     * BUT ONLY AGAINST A BACKEND THAT HAS THE REPLACEMENT. The front-end deploys to Render the
+     * moment it is pushed; the Apps Script backend is a manual paste and trails it — often by days.
+     * The old backend has no `lines` parameter and no unpriced-line refusal, so dropping
+     * `excludedLines` there would reinstate precisely the A158 failure: a deferred line left
+     * Included at ₱0.00, printing on a client's quotation as free. So the NEW meaning is gated on
+     * the NEW backend; until the paste lands, removing a row keeps its old destructive-but-safe
+     * meaning. Fail closed — any error resolving the version keeps the old behaviour. */
     const src = (prList || []).find(r => String(r.prNo) === String(prNo));
+    let canDefer = false;
+    try {
+      canDefer = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(136) : false;
+    } catch (e) { canDefer = false; }
+    const kept = {};
+    items.forEach(i => { kept[String(i.line)] = 1; });
+    const excluded = canDefer ? [] : ((src && src.items) || [])
+      .filter(i => i.included && !kept[String(i.line)])
+      .map(i => flowNum(i.line));
 
     const res = await postFlow('setMgmtPricing', {
       prNo, destination: dest, commission: comm, margin: marg,
