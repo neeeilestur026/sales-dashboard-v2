@@ -10884,7 +10884,21 @@ var _MODULE_MAP = {
   // A193
   seedClientAliases: ['Client', 'Names Seeded'], runDriveMigration: ['Document', 'Filed to Drive'],
   buildDriveSkeleton: ['Sales Order', 'Folders Created'],
-  cleanupLegacyFolders: ['Document', 'Folders Cleaned'], cleanupLegacyFoldersApply: ['Document', 'Folders Cleaned']
+  cleanupLegacyFolders: ['Document', 'Folders Cleaned'], cleanupLegacyFoldersApply: ['Document', 'Folders Cleaned'],
+  /* A243 — eight writers took the script lock and left NOTHING in ActivityLog, so the change they
+     made was invisible to the Accounting Daily Report that is built from it. Two of them move
+     money. Found by tests/audit/registration.js, which is the first thing to walk the whole
+     surface rather than the two or three actions one A-number happened to touch.
+     Deliberate omissions are listed in that file's EXCEPTIONS with a reason each — these eight
+     had no reason recorded anywhere, which is the difference between a decision and an oversight. */
+  updatePaymentRequest: ['Payment Request', 'Updated'],
+  deletePaymentRequest: ['Payment Request', 'Deleted'],
+  deleteSalesCall: ['Call', 'Deleted'],
+  reviewDailyReport: ['Daily Report', 'Reviewed'],
+  resetSequenceCounters: ['Settings', 'Counters Reset'],
+  buildDriveSkeletonAll: ['Document', 'Folders Created'],
+  runDriveMigrationAll: ['Document', 'Filed to Drive'],
+  setupFlowDrive: ['Document', 'Drive Set Up']
 };
 
 function _dateStr(v) {

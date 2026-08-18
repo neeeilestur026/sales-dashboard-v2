@@ -239,3 +239,44 @@ QUO_LETTERHEAD_NAME = "H.O ESTUR CORPORATION"
 QUO_GROUP_TAG_RANGE_FMT = "ITEMS %s – %s"
 QUO_GROUP_TAG_ONE_FMT = "ITEM %s"
 QUO_INCLUDED_WORD = "INCLUDED"
+
+
+# ── A243 — CLIPPING A VALUE SO THE DOCUMENT STILL EXISTS ─────────────────────────────────────────
+#
+# A ReportLab table row cannot split across a page, and ReportLab does NOT clip an overlong cell —
+# it grows the row until the row is taller than the frame, then raises LayoutError. The route turns
+# that into a 500, so the document a person needs simply does not exist. The claim, meanwhile, saved
+# fine, which is what makes it a trap rather than an inconvenience: nothing looks wrong until someone
+# tries to print it.
+#
+# A238 fixed this once, for travel_allowance_pdf, with a private _clip_text. A243's scan found the
+# identical bug still live in the three payment documents — payment request, payment slip and cash
+# voucher — where a 1,600-character Purpose (a paragraph somebody pastes) raised LayoutError in all
+# three. So the helper is shared now rather than copied a fourth time.
+#
+# The cut is VISIBLE: an ellipsis is appended. Silently shortening a line on a document somebody
+# signs is worse than the crash it replaces, because nobody can tell it happened.
+def clip_to_lines(text, style, width, max_lines=2):
+    """Hard-truncate `text` so it occupies at most `max_lines` at `width` in `style`.
+
+    Binary search on the cut point: a linear walk over a 4,000-character field is thousands of
+    wrap() calls, and this runs per cell. Returns '' for empty input and never raises."""
+    try:
+        s = str(text or "").strip()
+        if not s:
+            return ""
+        esc = html.escape(s, quote=False)
+        if len(Paragraph(esc, style).breakLines(width).lines) <= max_lines:
+            return s
+        lo, hi = 0, len(s)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            cand = html.escape(s[:mid].rstrip(), quote=False) + "…"
+            if len(Paragraph(cand, style).breakLines(width).lines) <= max_lines:
+                lo = mid
+            else:
+                hi = mid - 1
+        return (s[:lo].rstrip() + "…") if lo else "…"
+    except Exception:                       # never be the reason a document fails to build
+        s = str(text or "")
+        return s[:200] + "…" if len(s) > 200 else s

@@ -614,7 +614,11 @@ SECURED_ACTIONS = [
     "rejectTravelReplenishment", "reviseTravelReplenishment",
     "getTravelFloats", "setTravelFloat", "requestTravelFloatCash",
     # A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
-    "runQuotationSentAtBackfill",
+    # A218/A226 — runQuotationOwnerBackfill was added to _SECURED in FlowAPI.gs and to NEITHER
+    # mirror, so `_flowIsSecured` said no, the browser posted it straight to /exec with no
+    # flowSecret, and the server refused it: the quotation-owner backfill has been unreachable
+    # from the UI ever since. Fails closed, so no hole — just a dead feature. A243 restored it.
+    "runQuotationSentAtBackfill", "runQuotationOwnerBackfill",
     # A226 — reattributing a purchase request decides whose tracker it appears in, so the role has to
     # come from the session. Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS.
     "runPricingRequestOwnerBackfill", "setPricingRequestSalesperson",

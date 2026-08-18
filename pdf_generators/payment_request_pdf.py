@@ -13,7 +13,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import ParagraphStyle
 from PIL import Image as PILImage
 
-from pdf_generators.utils import get_static_path, ph_date_long
+from pdf_generators.utils import get_static_path, ph_date_long, clip_to_lines
 
 logger = logging.getLogger(__name__)
 
@@ -188,11 +188,19 @@ def build_payment_request_pdf(buffer, details, supporting_docs=None):
             left = rows[i]
             right = rows[i + 1] if i + 1 < len(rows) else ("", "")
 
+            # A243 — CLIP THE VALUE. This table's rows cannot split, and ReportLab grows a cell rather
+            # than clipping it, so a long free-text field (Purpose above all) makes the row taller than
+            # the frame and the build raises LayoutError -> the route answers 500 and the document does
+            # not exist. Measured: 1,600 characters in `purpose` was enough, which is one pasted
+            # paragraph. Identical bug to the one A238 fixed in travel_allowance_pdf; the helper is
+            # shared now rather than copied a fourth time. Eight lines is far more than any of these
+            # fields needs and leaves a wide margin under the frame.
+            _vw = (frame_w / 4) * 1.2 - 12          # the value column, less its 6pt padding
             row_data = [
                 Paragraph(left[0], ls),
-                Paragraph(str(left[1]) if left[1] else "", vs),
+                Paragraph(clip_to_lines(left[1], vs, _vw, 8), vs),
                 Paragraph(right[0], ls),
-                Paragraph(str(right[1]) if right[1] else "", vs),
+                Paragraph(clip_to_lines(right[1], vs, _vw, 8), vs),
             ]
             table_rows.append(row_data)
 
@@ -384,8 +392,8 @@ def build_payment_request_pdf(buffer, details, supporting_docs=None):
         parts = [
             [Spacer(1, 0.35 * inch)],
             [underline],
-            [Paragraph(name_text or "&nbsp;", sig_name)],
-            [Paragraph(pos_text or "&nbsp;", sig_pos)],
+            [Paragraph(clip_to_lines(name_text, sig_name, line_w - 12, 2) or "&nbsp;", sig_name)],
+            [Paragraph(clip_to_lines(pos_text,  sig_pos,  line_w - 12, 2) or "&nbsp;", sig_pos)],
             [Spacer(1, 0.04 * inch)],
             [Paragraph(f"<b>{label_text}</b>", sig_label)],
         ]

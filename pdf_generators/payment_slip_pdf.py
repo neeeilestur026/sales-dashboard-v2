@@ -14,7 +14,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import ParagraphStyle
 from dateutil.parser import parse as dateutil_parse
 
-from pdf_generators.utils import get_static_path
+from pdf_generators.utils import get_static_path, clip_to_lines
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,9 @@ def build_payment_slip_pdf(buffer, details: dict, paid_at: str = "", paid_by: st
     )
     paid_at_display = _fmt_date(paid_at) or _fmt_date(details.get("paid_at", ""))
     paid_by_display = paid_by or details.get("paid_by", "")
+    # A243 — the badge is a 1x2 table and its row cannot split, so an overlong "processed by" makes
+    # it taller than the frame and the slip stops rendering. Two lines is plenty for a person's name.
+    paid_by_display = clip_to_lines(paid_by_display, paid_date_style, frame_w * 0.5 - 24, 2)
 
     badge = Table([[
         Paragraph("✔ PAYMENT CONFIRMED", paid_style),
@@ -200,11 +203,19 @@ def build_payment_slip_pdf(buffer, details: dict, paid_at: str = "", paid_by: st
         for idx in range(0, len(rows), 2):
             left  = rows[idx]
             right = rows[idx + 1] if idx + 1 < len(rows) else ("", "")
-            table_rows.append([
-                Paragraph(left[0],              ls),
-                Paragraph(str(left[1] or ""),  vs),
-                Paragraph(right[0],             ls),
-                Paragraph(str(right[1] or ""), vs),
+        # A243 — CLIP THE VALUE. This table's rows cannot split, and ReportLab grows a cell rather
+        # than clipping it, so a long free-text field (Purpose above all) makes the row taller than
+        # the frame and the build raises LayoutError -> the route answers 500 and the document does
+        # not exist. Measured: 1,600 characters in `purpose` was enough, which is one pasted
+        # paragraph. Identical bug to the one A238 fixed in travel_allowance_pdf; the helper is
+        # shared now rather than copied a fourth time. Eight lines is far more than any of these
+        # fields needs and leaves a wide margin under the frame.
+        _vw = (frame_w / 4) * 1.2 - 12              # the value column, less its 6pt padding
+        table_rows.append([
+                Paragraph(left[0],                             ls),
+                Paragraph(clip_to_lines(left[1],  vs, _vw, 8), vs),
+                Paragraph(right[0],                            ls),
+                Paragraph(clip_to_lines(right[1], vs, _vw, 8), vs),
             ])
         cw = frame_w / 4
         t = Table(table_rows, colWidths=[cw * 0.8, cw * 1.2, cw * 0.8, cw * 1.2])
@@ -306,8 +317,8 @@ def build_payment_slip_pdf(buffer, details: dict, paid_at: str = "", paid_by: st
         t = Table([
             [Spacer(1, 0.35 * inch)],
             [uline],
-            [Paragraph(name or "&nbsp;", sig_nm)],
-            [Paragraph(pos  or "&nbsp;", sig_ps)],
+            [Paragraph(clip_to_lines(name, sig_nm, lw - 12, 2) or "&nbsp;", sig_nm)],
+            [Paragraph(clip_to_lines(pos,  sig_ps, lw - 12, 2) or "&nbsp;", sig_ps)],
             [Spacer(1, 0.04 * inch)],
             [Paragraph(f"<b>{label}</b>", sig_lbl)],
         ], colWidths=[lw])

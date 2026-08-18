@@ -13,7 +13,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import ParagraphStyle
 from dateutil.parser import parse as dateutil_parse
 
-from pdf_generators.utils import get_static_path
+from pdf_generators.utils import get_static_path, clip_to_lines
 
 logger = logging.getLogger(__name__)
 
@@ -147,11 +147,19 @@ def build_cash_voucher_pdf(buffer, pr_details: dict, cv_details: dict):
         for idx in range(0, len(rows), 2):
             left  = rows[idx]
             right = rows[idx + 1] if idx + 1 < len(rows) else ("", "")
-            table_rows.append([
-                Paragraph(left[0],              ls),
-                Paragraph(str(left[1] or ""),  vs),
-                Paragraph(right[0],             ls),
-                Paragraph(str(right[1] or ""), vs),
+        # A243 — CLIP THE VALUE. This table's rows cannot split, and ReportLab grows a cell rather
+        # than clipping it, so a long free-text field (Purpose above all) makes the row taller than
+        # the frame and the build raises LayoutError -> the route answers 500 and the document does
+        # not exist. Measured: 1,600 characters in `purpose` was enough, which is one pasted
+        # paragraph. Identical bug to the one A238 fixed in travel_allowance_pdf; the helper is
+        # shared now rather than copied a fourth time. Eight lines is far more than any of these
+        # fields needs and leaves a wide margin under the frame.
+        _vw = (frame_w / 4) * 1.2 - 12              # the value column, less its 6pt padding
+        table_rows.append([
+                Paragraph(left[0],                             ls),
+                Paragraph(clip_to_lines(left[1],  vs, _vw, 8), vs),
+                Paragraph(right[0],                            ls),
+                Paragraph(clip_to_lines(right[1], vs, _vw, 8), vs),
             ])
         cw = frame_w / 4
         t = Table(table_rows, colWidths=[cw * 0.8, cw * 1.2, cw * 0.8, cw * 1.2])
@@ -210,13 +218,14 @@ def build_cash_voucher_pdf(buffer, pr_details: dict, cv_details: dict):
     je_rows = [
         je_header,
         [
-            Paragraph(acct_charged or "Expense Account", vs),
-            Paragraph(particulars, vs),
+            # A243 — same reason as the value cells above: this row cannot split either.
+            Paragraph(clip_to_lines(acct_charged or "Expense Account", vs, frame_w * 0.28, 4), vs),
+            Paragraph(clip_to_lines(particulars, vs, frame_w * 0.42, 6), vs),
             Paragraph(f"{currency} {debit_amt}", ParagraphStyle("jv", fontName="Helvetica", fontSize=9, alignment=2, leading=12)),
             Paragraph("", vs),
         ],
         [
-            Paragraph(credit_acct, vs),
+            Paragraph(clip_to_lines(credit_acct, vs, frame_w * 0.28, 4), vs),
             Paragraph("Payment released", vs),
             Paragraph("", vs),
             Paragraph(f"{currency} {amount_fmt}", ParagraphStyle("jv2", fontName="Helvetica", fontSize=9, alignment=2, leading=12)),
@@ -282,8 +291,8 @@ def build_cash_voucher_pdf(buffer, pr_details: dict, cv_details: dict):
         t = Table([
             [Spacer(1, 0.35 * inch)],
             [uline],
-            [Paragraph(name or "&nbsp;", sig_nm)],
-            [Paragraph(pos  or "&nbsp;", sig_ps)],
+            [Paragraph(clip_to_lines(name, sig_nm, lw - 12, 2) or "&nbsp;", sig_nm)],
+            [Paragraph(clip_to_lines(pos,  sig_ps, lw - 12, 2) or "&nbsp;", sig_ps)],
             [Spacer(1, 0.04 * inch)],
             [Paragraph(f"<b>{label}</b>", sig_lbl)],
         ], colWidths=[lw])
