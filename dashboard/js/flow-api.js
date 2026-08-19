@@ -171,6 +171,8 @@ const FLOW_SECURED_ACTIONS = [
   // flowSecret, and the server refused it: the quotation-owner backfill has been unreachable
   // from the UI ever since. Fails closed, so no hole — just a dead feature. A243 restored it.
   'runQuotationSentAtBackfill', 'runQuotationOwnerBackfill',
+  // A243 — reattributing a quotation decides whose tracker it appears in and whose commission it feeds.
+  'setQuotationSalesperson',
   // A226 — both rewrite who a purchase request belongs to, which is what the tracker filters by.
   'runPricingRequestOwnerBackfill', 'setPricingRequestSalesperson'
 ];

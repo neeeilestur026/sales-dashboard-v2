@@ -619,6 +619,9 @@ SECURED_ACTIONS = [
     # flowSecret, and the server refused it: the quotation-owner backfill has been unreachable
     # from the UI ever since. Fails closed, so no hole — just a dead feature. A243 restored it.
     "runQuotationSentAtBackfill", "runQuotationOwnerBackfill",
+    # A243 — correcting who a quotation belongs to decides whose tracker it appears in and whose
+    # commission it feeds, so the role must come from the session, not the browser.
+    "setQuotationSalesperson",
     # A226 — reattributing a purchase request decides whose tracker it appears in, so the role has to
     # come from the session. Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS.
     "runPricingRequestOwnerBackfill", "setPricingRequestSalesperson",

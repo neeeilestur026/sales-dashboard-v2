@@ -181,5 +181,50 @@ console.log('\n== the five real mismatches from the live book ==');
                  'Created By': 'Kimberlyn Blones' }), 'Kimberlyn Blones');
 }
 
+/* ── A243 — CORRECTING AN OWNER THAT WAS RECORDED WRONGLY ──────────────────────────────────────
+ *
+ * The precedence above is what makes a correction on the sheet stick: a recorded Salesperson beats
+ * the initials in the number. The flip side is that a WRONG recorded value is equally sticky, and
+ * until A243 nothing in the app could change it — previewQuotationOwners skips any row that already
+ * carries one ("a recorded owner is never touched", which is right for a backfill), and there was no
+ * per-quotation setter, only the pricing-request twin.
+ *
+ * The live case: both rows numbered 2026-457 were typed by Kimberlyn Blones and carried the owner
+ * "Neil", a bare first name matching no account. getQuotations scopes a rep's list by OWNER, so they
+ * were invisible to every sales rep — including Neil Estur, whose account name is not "Neil" — and
+ * visible only to oversight roles, which send no filter at all. Nothing warned anybody. */
+console.log('\n== A243: a recorded owner is sticky, which is why it must be correctable ==');
+{
+  const SET = (() => {
+    const a = SRC.indexOf('function setQuotationSalesperson(');
+    let d = 0;
+    for (let k = a; k < SRC.length; k++) {
+      if (SRC[k] === '{') d++;
+      else if (SRC[k] === '}') { d--; if (!d) return SRC.slice(a, k + 1); }
+    }
+    return '';
+  })();
+  ok('setQuotationSalesperson exists at all', SET.length > 0);
+
+  /* The bug, restated as an assertion: a recorded owner wins over the initials, so "Neil" on a
+     -NE- numbered quotation stays "Neil" and no backfill will ever move it. */
+  eq('a wrongly recorded owner beats the initials and the typist',
+     _quoOwner({ 'Quotation No': '2026-457-NE-ECC-WELDING_OUTFIT',
+                 'Created By': 'Kimberlyn Blones', 'Salesperson': 'Neil' }), 'Neil');
+  eq('  clearing it falls back to the initials, not to the typist',
+     _quoOwner({ 'Quotation No': '2026-457-NE-ECC-WELDING_OUTFIT',
+                 'Created By': 'Kimberlyn Blones', 'Salesperson': '' }),
+     _quoOwner({ 'Quotation No': '2026-457-NE-ECC-WELDING_OUTFIT', 'Created By': 'Kimberlyn Blones' }));
+
+  // The guard is the same one its pricing-request twin uses: oversight only, role from the session.
+  ['director', 'management', 'admin', 'accounting'].forEach(r =>
+    ok('  ' + r + ' may reattribute', SET.includes("'" + r + "'")));
+  ok('  a sales rep may not reattribute their own deal', !/'sales'/.test(SET));
+  ok('  it refuses without a quotationNo', SET.includes('quotationNo required'));
+  ok('  it refuses a quotation that does not exist', SET.includes('not found'));
+  ok('  and it reports what the owner WAS, so a wrong correction can be undone',
+     SET.includes('previous: was'));
+}
+
 console.log(fail ? `\n${fail} FAILED` : '\nall good');
 process.exit(fail ? 1 : 0);
