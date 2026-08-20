@@ -61,14 +61,35 @@ function arReconcile(arRows, invRows) {
   viaSo.forEach(a => { if (a._via && S(a._via.invNo)) claimed[S(a._via.invNo)] = 1; });
   const unaged = invs.filter(v => !claimed[S(v.invNo)]);
 
-  const year = v => S(v.date).slice(0, 4);
+  /* A249 — THE BASELINE IS WHAT MAKES THIS ACTIONABLE.
+   *
+   * The AR ledger begins the day it was bulk-imported — 48 of the 55 rows share one timestamp, a
+   * snapshot of what was still owed that day. balance-sheet.js states the policy for everything
+   * before it: "Migrated (legacy) invoices/receiving are historical records for P&L reporting only —
+   * the real cash/inventory/AR they represent predates the new-system baseline ... so they are
+   * EXCLUDED here to keep Assets = Liabilities + Equity intact."
+   *
+   * So a pre-baseline invoice without a receivable is behaving as designed, and reporting 65 of them
+   * as a problem is how a warning becomes wallpaper. Only invoices dated ON OR AFTER the baseline
+   * were supposed to produce one. That is 9 today, not 65 — and ₱1.98M, not ₱37.3M.
+   *
+   * DERIVED, never hardcoded: it moves with the book, and an empty AR ledger puts everything in the
+   * live tier rather than silently declaring the whole book settled. */
+  const days = ars.map(a => S(a.createdAt).slice(0, 10)).filter(Boolean).sort();
+  const baseline = days.length ? days[0] : '';
+  const isLive = v => !baseline || S(v.date).slice(0, 10) >= baseline;
+
+  const unagedLive = unaged.filter(isLive);
+  const unagedHistory = unaged.filter(v => !isLive(v));
+  const val = list => Math.round(list.reduce((t, v) => t + N(v.totalSales), 0) * 100) / 100;
   return {
-    direct, viaSo, unresolved, unaged,
-    unagedValue: Math.round(unaged.reduce((t, v) => t + N(v.totalSales), 0) * 100) / 100,
-    unagedRecent: unaged.filter(v => year(v) >= '2026'),
-    unagedOlder: unaged.filter(v => year(v) < '2026'),
+    direct, viaSo, unresolved, unaged, baseline,
+    unagedValue: val(unaged),
+    unagedLive, unagedLiveValue: val(unagedLive),
+    unagedHistory, unagedHistoryValue: val(unagedHistory),
     unresolvedAllPaid: unresolved.length > 0 &&
-      unresolved.every(a => S(a.status).toLowerCase() === 'paid')
+      unresolved.every(a => S(a.status).toLowerCase() === 'paid'),
+    unresolvedValue: Math.round(unresolved.reduce((t, a) => t + N(a.amountPHP), 0) * 100) / 100
   };
 }
 
@@ -106,23 +127,19 @@ function arReconcileBanner() {
   const esc = v => flowEsc(v);
   const out = [];
 
-  if (r.unaged.length) {
-    const recent = r.unagedRecent.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (r.unagedLive.length) {
+    const rows = r.unagedLive.slice().sort((a2, b2) => String(a2.date).localeCompare(String(b2.date)));
     out.push(`<div style="border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;
         padding:0.6rem 0.8rem;margin-bottom:0.6rem;font-size:0.8rem;">
       <div style="font-weight:700;margin-bottom:0.3rem;">
-        ⚠ ${r.unaged.length} invoice(s) totalling ${money(r.unagedValue)} have no receivable here</div>
-      <div style="margin-bottom:0.35rem;">They are not on this page at all, so they are in no aging
-        bucket and no outstanding total. Nothing was written to fix this — none of them carries any
-        collection history, so creating receivables would assert money owed that the system cannot
-        evidence either way.</div>
-      ${recent.length ? `<div style="margin-top:0.3rem;"><strong>${recent.length} from 2026:</strong>
-        ${recent.map(v => `<div style="margin-left:0.4rem;">${esc(v.invNo)} · ${esc(String(v.customer || '').slice(0, 34))}
-          · ${esc(String(v.date).slice(0, 10))} · ${money(v.totalSales)}</div>`).join('')}</div>` : ''}
-      ${r.unagedOlder.length ? `<div style="margin-top:0.3rem;color:#7f1d1d;">
-        and ${r.unagedOlder.length} from 2025 or earlier
-        (${money(r.unagedOlder.reduce((t, v) => t + flowNum(v.totalSales), 0))}) — migration-era
-        history, listed here for completeness rather than as work.</div>` : ''}
+        ⚠ ${r.unagedLive.length} invoice(s) totalling ${money(r.unagedLiveValue)} should have a
+        receivable and do not</div>
+      <div style="margin-bottom:0.35rem;">Dated on or after ${esc(r.baseline)}, when this ledger
+        begins — so they are not migration history. They are in no aging bucket and no outstanding
+        total.</div>
+      ${rows.map(v => `<div style="margin-left:0.4rem;">${esc(v.invNo)} ·
+        ${esc(String(v.customer || '').slice(0, 34))} · ${esc(String(v.date).slice(0, 10))} ·
+        ${money(v.totalSales)}</div>`).join('')}
     </div>`);
   }
 
@@ -131,15 +148,29 @@ function arReconcileBanner() {
         padding:0.55rem 0.8rem;margin-bottom:0.6rem;font-size:0.78rem;">
       <strong>${r.viaSo.length} receivable(s) are matched to their invoice through the sales order,
       not the invoice number.</strong> They carry the older INV-YYYY-NNN numbering while invoices now
-      use INV-YYYYMM-NNN, so the number matches nothing even though the invoice exists. The link is
-      inferred, and only where exactly one invoice claims that order — never where it is ambiguous.</div>`);
+      use INV-YYYYMM-NNN. The link is inferred, and only where exactly one invoice claims that
+      order — never where it is ambiguous.</div>`);
   }
 
+  /* The two lines below account for money without calling it work. Both are stated once, in muted
+     type, because they are explanations rather than tasks — and an explanation repeated in red is
+     how people learn to stop reading the banner. */
+  const notes = [];
+  if (r.unagedHistory.length) {
+    notes.push(`${r.unagedHistory.length} invoice(s) (${money(r.unagedHistoryValue)}) predate
+      ${esc(r.baseline)} and have no receivable by design — migrated records are historical for P&amp;L
+      only, and the receivable they represented is already carried by this ledger's opening import.`);
+  }
   if (r.unresolved.length) {
+    notes.push(`${r.unresolved.length} legacy receivable(s) (${money(r.unresolvedValue)}) name an
+      invoice that does not exist and carry no sales order, so they can never roll up to an
+      order${r.unresolvedAllPaid ? ' — all settled, nothing to chase' : ''}.`);
+  }
+  if (notes.length) {
     out.push(`<div style="color:var(--text-muted,#64748b);font-size:0.75rem;margin-bottom:0.6rem;">
-      ${r.unresolved.length} legacy receivable(s) name an invoice that does not exist and carry no
-      sales order, so they cannot be matched to anything${r.unresolvedAllPaid
-        ? ' — all of them are settled, so there is nothing to chase' : ''}.</div>`);
+      ${notes.map(t => `<div style="margin-bottom:0.2rem;">${t}</div>`).join('')}
+      <div style="color:var(--text-muted,#94a3b8);">Baseline ${esc(r.baseline)} is the earliest row in
+        this ledger, derived rather than fixed.</div></div>`);
   }
   return out.join('');
 }

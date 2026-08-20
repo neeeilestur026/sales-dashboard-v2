@@ -46,7 +46,8 @@ vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../dashboard/js/flow
                 ctx, { filename: 'flow-ar-aging.js' });
 const R = ctx.arReconcile;
 
-const ar = o => Object.assign({ arNo: 'AR-1', invNo: '', soNo: '', amountPHP: 100, status: 'Unpaid' }, o);
+const ar = o => Object.assign({ arNo: 'AR-1', invNo: '', soNo: '', amountPHP: 100,
+                               status: 'Unpaid', createdAt: '2026-06-23' }, o);
 const iv = o => Object.assign({ invNo: 'INV-1', soNo: '', customer: 'C', date: '2026-07-01',
                                 totalSales: 100, voided: false }, o);
 
@@ -108,12 +109,38 @@ console.log('\n== every AR row lands in exactly one bucket ==');
      r.direct.length + r.viaSo.length + r.unresolved.length, rows.length);
 }
 
-console.log('\n== the year split, which decides what the banner lists ==');
+console.log('\n== A249: the BASELINE decides what is a defect and what is history ==');
 {
-  const r = R([], [iv({ invNo: 'A', date: '2025-03-01', totalSales: 10 }),
-                   iv({ invNo: 'B', date: '2026-07-01', totalSales: 20 })]);
-  eq('2026 is listed individually', r.unagedRecent.length, 1);
-  eq('  older is summarised', r.unagedOlder.length, 1);
+  /* balance-sheet.js states the policy: migrated records predate the new-system baseline and are
+     excluded on purpose. So a pre-baseline invoice with no receivable is CORRECT, and reporting it
+     turns the banner into wallpaper. Only on-or-after the baseline is a real defect. */
+  const ledger = [ar({ arNo: 'AR-B', invNo: 'INV-SEED', soNo: 'SO-SEED', createdAt: '2026-06-23' })];
+  const invs = [iv({ invNo: 'INV-SEED', soNo: 'SO-SEED', date: '2026-06-23' }),
+                iv({ invNo: 'OLD', date: '2025-03-01', totalSales: 10 }),
+                iv({ invNo: 'NEW', date: '2026-07-01', totalSales: 20 })];
+  const r = R(ledger, invs);
+  eq('the baseline is derived from the earliest receivable', r.baseline, '2026-06-23');
+  eq('a post-baseline invoice with no AR is a DEFECT', r.unagedLive.map(v => v.invNo), ['NEW']);
+  eq('  and is valued', r.unagedLiveValue, 20);
+  eq('a pre-baseline one is history, not a defect', r.unagedHistory.map(v => v.invNo), ['OLD']);
+  eq('  the two tiers still sum to the whole', r.unagedLive.length + r.unagedHistory.length, r.unaged.length);
+
+  /* THE BOUNDARY. An invoice dated exactly ON the baseline was issued the day the ledger opened, so
+     it should have produced a receivable. Off by one here moves millions between "chase this" and
+     "already settled". */
+  const onDay = R(ledger, [iv({ invNo: 'INV-SEED', soNo: 'SO-SEED', date: '2026-06-23' }),
+                           iv({ invNo: 'EDGE', date: '2026-06-23', totalSales: 5 })]);
+  eq('an invoice dated ON the baseline is live, not history',
+     onDay.unagedLive.map(v => v.invNo), ['EDGE']);
+  const dayBefore = R(ledger, [iv({ invNo: 'INV-SEED', soNo: 'SO-SEED', date: '2026-06-23' }),
+                               iv({ invNo: 'EDGE2', date: '2026-06-22', totalSales: 5 })]);
+  eq('  the day before is history', dayBefore.unagedHistory.map(v => v.invNo), ['EDGE2']);
+
+  /* An empty ledger must not declare the whole book settled — the safe direction is to treat
+     everything as live and let a person look. */
+  const none = R([], [iv({ invNo: 'X', date: '2020-01-01', totalSales: 1 })]);
+  eq('no receivables at all -> everything is live, nothing is written off', none.unagedHistory.length, 0);
+  eq('  and it appears as a defect', none.unagedLive.length, 1);
 }
 
 console.log('\n== it never breaks the ledger ==');
@@ -148,6 +175,15 @@ console.log('\n== the live book, if a snapshot is present ==');
        r.unaged.every(v => String(v.createdBy || '').indexOf('Migrated') >= 0),
        r.unaged.filter(v => String(v.createdBy || '').indexOf('Migrated') < 0)
         .map(v => v.invNo + ' by ' + v.createdBy));
+    console.log(`     baseline ${r.baseline} · live defects ${r.unagedLive.length} ` +
+                `(₱${r.unagedLiveValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}) · ` +
+                `pre-baseline history ${r.unagedHistory.length}`);
+    /* The whole point of A249: the actionable number is small. If this ever grows, something is
+       creating post-baseline invoices without receivables again. */
+    ok('the live-defect tier is the small one', r.unagedLive.length < r.unagedHistory.length,
+       { live: r.unagedLive.length, history: r.unagedHistory.length });
+    eq('  the two tiers account for every unaged invoice',
+       r.unagedLive.length + r.unagedHistory.length, r.unaged.length);
     ok('the legacy unresolved rows are all settled', r.unresolvedAllPaid === true);
   }
 }
@@ -168,6 +204,19 @@ console.log('\n== the server-side Voided filters this depends on ==');
   ok('  and ignores VOIDED collections', /c\['Voided'\][\s\S]{0,40}'true'/.test(bf));
   ok('correctCollection ignores voided siblings when checking over-collection',
      /Voided/.test(body('correctCollection')));
+
+  /* A249 — the three server fixes this page's numbers depend on. */
+  ok('the migrated-invoice delete never touches a VOIDED invoice',
+     /Voided[\s\S]{0,30}!==\s*'true'/.test(body('_deleteMigratedInvoiceForSO')));
+  ok('regeneration REUSES the invoice number instead of re-minting it',
+     /existing\.rowIndex/.test(body('_writeMigratedRecordsForSO')));
+  /* Checks for a WRITE, not a mention — the function's comment explains at length why it must not
+     create one, and matching the bare sheet name would fail on the explanation itself. */
+  ok('  and still does not WRITE an AR row (that belongs to the scoped backfill)',
+     !/_append\(\s*'ARAging'|ARAging'\s*\)\.appendRow/.test(body('_writeMigratedRecordsForSO')));
+  ok("saveSOCostDetails passes 'COGS Type' to the writer",
+     /'COGS Type':\s*cogsType/.test(body('saveSOCostDetails')));
+  ok('backfillMissingAR accepts an invNos scope', /p\.invNos/.test(body('backfillMissingAR')));
 }
 
 console.log('\n' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));

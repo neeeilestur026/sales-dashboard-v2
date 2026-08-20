@@ -618,6 +618,9 @@ SECURED_ACTIONS = [
     # mirror, so `_flowIsSecured` said no, the browser posted it straight to /exec with no
     # flowSecret, and the server refused it: the quotation-owner backfill has been unreachable
     # from the UI ever since. Fails closed, so no hole — just a dead feature. A243 restored it.
+    # A249 — backfillMissingAR creates receivables off a browser-supplied call and had no role check
+    # of its own. Minting debt should require a real signed-in session, like every other money action.
+    "backfillMissingAR",
     "runQuotationSentAtBackfill", "runQuotationOwnerBackfill",
     # A243 — correcting who a quotation belongs to decides whose tracker it appears in and whose
     # commission it feeds, so the role must come from the session, not the browser.
