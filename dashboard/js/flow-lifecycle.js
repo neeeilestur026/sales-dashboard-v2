@@ -66,7 +66,13 @@ async function llSetFolder() {
 
 async function llBackfill(action, label) {
   const msg = document.getElementById('llSetupMsg');
-  if (!confirm('Run ' + label + ' backfill now? This is idempotent (safe to re-run).')) return;
+  /* A248 — this used to promise "idempotent (safe to re-run)". It is keyed on what already
+     exists, so a straight re-run is usually harmless — but saveSOCostDetails re-mints migrated
+     invoice numbers, and a re-run after that creates a SECOND receivable for the same sale.
+     A confirm that overstates safety is worse than one that says nothing, because it is read
+     as permission. */
+  if (!confirm('Run ' + label + ' backfill now?\n\nIt only creates what is missing, but it does '
+      + 'write to the ledger — check the result before running it again.')) return;
   msg.textContent = 'Running ' + label + '…'; msg.style.color = '';
   try {
     const r = await postFlow(action, {});

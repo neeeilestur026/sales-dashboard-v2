@@ -73,6 +73,93 @@ console.log('\n== every _append writes exactly SCHEMA-many values ==');
   ok('every _append matches its sheet width', bad.length === 0, bad.join('\n         '));
 }
 
+/* ── every BARE appendRow, resolved to its sheet ───────────────────────────────────────────────
+ *
+ * A248 — THE HOLE THIS FILE HAD. The scan above only sees `_append('Sheet', [...])`, where the sheet
+ * is named right there in the call. But a dozen writers use the other form:
+ *
+ *     var invSh = _sheet('Invoices');
+ *     invSh.appendRow([...]);
+ *
+ * and those were invisible to this audit — which is the exact class of corruption it exists to stop.
+ * One of them was already short: backfillMigratedRecords wrote EIGHT values into the ten-wide
+ * Invoices sheet. Harmless in that instance (the two missing columns are Voided / Void Reason, which
+ * want to be blank), but nothing was checking, and the next one might land a figure in the wrong
+ * column instead.
+ *
+ * Resolution is textual and deliberately conservative: find `var X = _sheet('Name')` bindings, then
+ * check every `X.appendRow([...])`. A variable that cannot be resolved to a sheet is REPORTED, not
+ * skipped — an unauditable positional writer is exactly what let this one hide. */
+console.log('\n== every bare appendRow writes exactly SCHEMA-many values ==');
+{
+  /* NEAREST PRECEDING BINDING, not a file-global map. `var sh = _sheet(...)` is rebound in a dozen
+     functions to a dozen different sheets, so a global map resolves to whichever came last and would
+     audit half the writers against the wrong schema — worse than not auditing them. Taking the
+     closest binding above the call is how a reader resolves it, and is right for every shape in this
+     file (each binding sits at the top of the function that uses it). */
+  const binds = [];
+  let m;
+  /* Also catches the SECOND and later declarators of `var a = _sheet('X'), b = _sheet('Y');` —
+     three writers bind their item sheet that way, and anchoring on var/let/const alone missed
+     every one of them. */
+  const bindRe = /([A-Za-z_$][\w$]*)\s*=\s*_sheet\(\s*'([A-Za-z]+)'\s*\)/g;
+  while ((m = bindRe.exec(clean))) binds.push({ at: m.index, name: m[1], sheet: m[2] });
+  /* Identify a writer by the FUNCTION it sits in, not by line number. An exception list keyed on
+     line numbers breaks the moment anything above it is edited — which it did, on the very first
+     unrelated change. The function name is what a person would use to describe the writer anyway. */
+  const fnStarts = [];
+  { const fre = /\nfunction\s+([A-Za-z_$][\w$]*)\s*\(/g; let f;
+    while ((f = fre.exec(clean))) fnStarts.push({ at: f.index, name: f[1] }); }
+  const fnAt = (at) => {
+    let best = null;
+    for (const f of fnStarts) if (f.at < at && (!best || f.at > best.at)) best = f;
+    return best ? best.name : '(top level)';
+  };
+  const resolve = (name, at) => {
+    let best = null;
+    for (const b of binds) { if (b.name === name && b.at < at && (!best || b.at > best.at)) best = b; }
+    return best && best.sheet;
+  };
+  const callRe = /([A-Za-z_$][\w$]*)\.appendRow\(\s*\[/g;
+  let checked = 0, bad = [], unresolved = [];
+  while ((m = callRe.exec(clean))) {
+    const v = m[1], sheet = resolve(v, m.index);
+    const line = lineOf(m.index);
+    if (!sheet) { unresolved.push(v + ' @line ' + line); continue; }
+    if (!SCHEMA[sheet]) { unresolved.push(v + ' -> ' + sheet + ' @line ' + line + ' (not a SCHEMA sheet)'); continue; }
+    const n = arity(clean, m.index + m[0].length - 1);
+    checked++;
+    if (n !== SCHEMA[sheet].length) {
+      bad.push({ key: fnAt(m.index) + '/' + sheet, sheet: sheet, fn: fnAt(m.index), n: n, line: line,
+                 text: sheet + ' in ' + fnAt(m.index) + '() @line ' + line + ': writes ' + n +
+                       ', SCHEMA is ' + SCHEMA[sheet].length });
+    }
+  }
+  console.log('     bare appendRow call sites resolved: ' + checked);
+  /* The deliberate short writers live in importPricingSubmissions and are pinned by name below, so
+     they are excluded here rather than silently tolerated. */
+  /* DELIBERATE SHORT WRITERS. Short is safe ONLY when every missing column is trailing — the values
+     written still land in the right cells and the tail is blank. Each one is listed with the columns
+     it omits, so a future short write that drops a MIDDLE column fails here instead of quietly
+     shifting a figure one cell left. Verified column by column against SCHEMA when this was added. */
+  const DELIBERATE = {
+    'importPricingSubmissions/PricingRequests': 18,      // legacy import: no Plant Site / Salesperson
+    'importPricingSubmissions/PricingRequestItems': 14,  // ...and no Orig No/Name, VAT note or Item ID
+    'importSalesOrders/SalesOrders': 9,                  // migrated SO: no Client PO Date / PO Received / Client PO No
+    'importSOCostDetails/SalesOrders': 9,                // same shape
+    'importSalesOrders/SalesOrderItems': 6,              // migrated line: no Item ID, a legacy line has none
+    'backfillMigratedRecords/Invoices': 8                // migrated invoice: no Voided / Void Reason, blank = not voided
+  };
+  /* An exception must match the EXACT arity it was granted for. Widening a deliberate short write —
+     say from 8 to 9 — is a change worth failing on, because the ninth value lands in a column nobody
+     checked. */
+  const real = bad.filter(b => DELIBERATE[b.key] !== b.n);
+  ok('every resolvable bare appendRow matches its sheet width, or is a documented short writer',
+     real.length === 0, real.map(b => b.text).join('\n         '));
+  ok('every bare appendRow could be resolved to a sheet', unresolved.length === 0,
+     'unauditable positional writers: ' + unresolved.join(', '));
+}
+
 /* ── the DELIBERATE short writers ──────────────────────────────────────────────────────────────
    Two importers write short on purpose, because a migrated record genuinely has no value for the
    trailing columns. Pinned by NAME and COUNT so they cannot drift either — pr-owner.js:63 records

@@ -133,7 +133,20 @@ async function voidCollectionAction(collectionNo) {
   if (reason === null) return;
   if (!reason.trim()) { alert('A reason is required to void a collection.'); return; }
   try {
-    const res = await postFlow('voidCollection', { collectionNo, reason: reason.trim() });
+    const payload = { collectionNo, reason: reason.trim() };
+    let res = await postFlow('voidCollection', payload);
+    /* A248 — THE SERVER OFFERS A CONFIRM AND THIS NEVER ANSWERED IT.
+       A207 warns before reversing cash that a commission claim is already holding, naming the peso
+       impact, and its own comment is explicit: "The void is never blocked: accounting has a
+       legitimate correction to make and must be able to make it." But this handler treated the
+       needsConfirm reply as a failure and alert()ed it as an error, so any collection held by a
+       claim was UN-VOIDABLE from the app — the opposite of what the server intends, and with no way
+       for the user to tell the difference between "confirm this" and "you cannot do this".
+       flow-ar-aging.js:200 has always done this correctly for its own overCollect confirm. */
+    if (res && !res.success && res.needsConfirm === 'commissionClaimed') {
+      if (!confirm(res.message + '\n\nVoid it anyway?')) return;
+      res = await postFlow('voidCollection', Object.assign({}, payload, { confirmCommissionImpact: true }));
+    }
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not void this collection.');
     alert(res.message);
     await loadCollections();
