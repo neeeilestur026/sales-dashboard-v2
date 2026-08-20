@@ -10,6 +10,7 @@
 let _scePrefill = null;
 let _sceOnSaved = null;
 let _sceBank = null;      // A224: getSOBankCharges for the order currently open, or null
+let _sceReadOnly = false; // A244: opened to READ the breakdown, not to change it
 
 const _SCE_FIELDS = [
   ['purchaseOfGoods', 'Purchase of Goods', 'both'],
@@ -32,7 +33,7 @@ function _sceEl() {
   el.className = 'flow-modal-overlay open';
   el.innerHTML = `
     <div class="flow-modal" style="max-width:640px;">
-      <h3>Edit SO Costs</h3>
+      <h3 id="sceTitle">Edit SO Costs</h3>
       <div class="sub" id="sceSub">—</div>
       <div class="flow-form" style="margin-top:0.5rem;">
         <div><label>Sales (revenue)</label><input type="number" step="any" id="sceSales" oninput="_sceRecalc()"></div>
@@ -66,10 +67,22 @@ function _sceEl() {
  *   dutiesAndTaxes, bankChargeShipping, shippingCompany, shippingCost, localCharges,
  *   deliveryToOffice, deliveryToClient }
  * onSaved: callback(result) after a successful save.
+ * opts:    { readOnly: true } opens the same breakdown to READ.
+ *
+ * A244 — WHY A READ-ONLY MODE EXISTS. flow-sales-orders.js rendered the Costs button only when the
+ * viewer flag was false, so management — who are viewer-only on every flow page by A231 — had no way
+ * to see a cost breakdown at all. But A231's rule is "management looks, does not touch"; it was never
+ * "management cannot look". Removing the button denied the looking as well as the touching.
+ *
+ * Hiding the button is not what enforces the rule and never was: postFlow refuses any non-get action
+ * while viewer-only (flow-api.js), so the save is already blocked at the door whatever the markup
+ * says. This mode simply stops offering an edit that would be refused, while letting the numbers be
+ * read — which is what somebody reviewing gross profit actually needs.
  */
-function openSoCostEditor(prefill, onSaved) {
+function openSoCostEditor(prefill, onSaved, opts) {
   _scePrefill = prefill || {};
   _sceOnSaved = onSaved || null;
+  _sceReadOnly = !!(opts && opts.readOnly);
   const el = _sceEl();
   document.getElementById('sceSub').textContent =
     `${flowEsc(_scePrefill.soNo || '')}${_scePrefill.customer ? ' · ' + flowEsc(_scePrefill.customer) : ''}`;
@@ -82,8 +95,32 @@ function openSoCostEditor(prefill, onSaved) {
     `<div data-scope="${f[2]}"><label>${f[1]}</label><input type="number" step="any" id="sce_${f[0]}" value="${flowNum(_scePrefill[f[0]]) || ''}" oninput="_sceRecalc()"></div>`
   ).join('');
   el.classList.add('open');
+  /* Applied on EVERY open, not at build time: _sceEl() constructs the modal once and caches it, so a
+     read-only open followed by an editable one would otherwise leave the inputs disabled. */
+  _sceApplyMode();
   _sceRecalc();
   _sceLoadBankCharges(_scePrefill.soNo);
+}
+
+/** Put the modal into read or edit mode. Everything here is presentation — the write itself is
+ *  refused by postFlow when viewer-only, and by _sceSave's own guard below. */
+function _sceApplyMode() {
+  const ro = _sceReadOnly;
+  const el = document.getElementById('soCostEditorModal');
+  if (!el) return;
+  const t = document.getElementById('sceTitle');
+  if (t) t.textContent = ro ? 'SO Costs' : 'Edit SO Costs';
+  el.querySelectorAll('.flow-form input, .flow-form select').forEach(i => {
+    i.disabled = ro;
+    // A disabled field still has to be legible — this is the whole point of the mode.
+    i.style.opacity = ro ? '1' : '';
+    i.style.background = ro ? 'var(--bg-inset, #f8fafc)' : '';
+    i.style.cursor = ro ? 'default' : '';
+  });
+  const save = document.getElementById('sceSaveBtn');
+  if (save) save.style.display = ro ? 'none' : '';
+  const cancel = el.querySelector('.flow-modal-foot .btn-secondary');
+  if (cancel) cancel.textContent = ro ? 'Close' : 'Cancel';
 }
 
 /* ── A224 — the bank charges this order's payments actually recorded ───────────────────────────────
@@ -167,6 +204,10 @@ function _sceRecalc() {
 }
 
 async function _sceSave() {
+  // A244 — the button is hidden in read-only mode, so reaching here means the DOM was tampered with
+  // or a stale handler fired. postFlow would refuse it anyway; refusing here too keeps the reason
+  // legible instead of surfacing as a generic viewer-only error.
+  if (_sceReadOnly) return;
   const btn = document.getElementById('sceSaveBtn');
   const msg = document.getElementById('sceMsg');
   const rec = {

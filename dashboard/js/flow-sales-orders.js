@@ -465,7 +465,7 @@ function renderSOs() {
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
     <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
-    <td style="white-space:nowrap;">${soViewer ? '' : `<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>Costs</button>`}
+    <td style="white-space:nowrap;">${`<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>${soViewer ? 'View costs' : 'Costs'}</button>`}
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
     <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button>`}</td></tr>`).join('')}</tbody></table>`;
@@ -544,5 +544,12 @@ function soEditCost(no) {
     purchaseOfGoods: 0, bankChargeCOGS: 0, dutiesAndTaxes: 0, bankChargeShipping: 0,
     shippingCost: 0, localCharges: 0, deliveryToOffice: 0, deliveryToClient: 0,
   };
+  /* A244 — a viewer opens the SAME breakdown, read-only.
+     This used to be gated out of the markup entirely (`soViewer ? '' : <button>`), which meant
+     management could see a Total COGS figure in the table and had no way to find out what it was
+     made of. A231's rule is "management looks, does not touch" — removing the button denied the
+     looking too. postFlow already refuses the save for a viewer, so the read costs nothing.
+     No onSaved callback in that mode: there is nothing to save and therefore nothing to reload. */
+  if (soViewer) { openSoCostEditor(prefill, null, { readOnly: true }); return; }
   openSoCostEditor(prefill, () => loadSOs());
 }
