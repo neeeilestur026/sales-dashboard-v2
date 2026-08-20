@@ -3,6 +3,7 @@ let apData = [];
 let apSession = null;
 let apCanDelete = false;   // A145: only admin/accounting may remove a stale AP row
 let apReqByNo = {};        // A224: PR No → the payment request, so the row knows its method + status
+let apAnomalies = null;    // A247: previewAPAgingAnomalies, or null when it could not be read
 
 document.addEventListener('DOMContentLoaded', async () => {
   apSession = requireOversight();
@@ -25,10 +26,17 @@ async function loadAP() {
     /* A224 — the payment requests come with the payables. The AP row already carries prNo and
        prStatus, but not the PAYMENT METHOD, and the method is what decides who may release the
        money — so without this the Pay button could not apply the same test the server applies. */
-    const [res, reqs] = await Promise.all([
+    /* A247 — the anomaly sweep rides along. It is read-only and unsecured, and it is caught
+       separately so that an older backend without the handler, or any failure at all, costs nothing:
+       the banner simply does not appear and the ledger renders exactly as before. Same best-effort
+       shape so-cost-editor.js uses for its bank-charge lookup, and for the same reason — a
+       convenience beside the data must never be able to stop the data. */
+    const [res, reqs, anom] = await Promise.all([
       fetchFlow('getAPAging'),
-      fetchFlow('getPaymentRequests', { type: 'PO' }).catch(() => ({ data: [] }))
+      fetchFlow('getPaymentRequests', { type: 'PO' }).catch(() => ({ data: [] })),
+      fetchFlow('previewAPAgingAnomalies').catch(() => null)
     ]);
+    apAnomalies = (anom && anom.success) ? anom : null;
     apData = (res && res.data) || [];
     apReqByNo = {};
     ((reqs && reqs.data) || []).forEach(r => { apReqByNo[String(r.prNo)] = r; });
@@ -41,6 +49,78 @@ function badgeClass(s) {
   if (s === 'paid') return 'b-paid';
   if (s === 'partial') return 'b-partial';
   return 'b-unpaid';
+}
+
+/* ── A247 — SURFACE THE SWEEP THAT NOBODY COULD SEE ───────────────────────────────────────────────
+ *
+ * previewAPAgingAnomalies has existed, worked, and been wired to NO PAGE AT ALL. It is read-only and
+ * unsecured, so nothing was stopping it being shown — it simply never was.
+ *
+ * That is how AP-202607-001 sat at ₱446,393.80 for 720 USD — an implied ₱619.99/USD, against a paid
+ * figure of ₱46,393.80 that was right all along. The row DID carry a red implied-rate cell, but a
+ * settled payable lives inside the collapsed "Settled payables" block, so the loudest wrong number
+ * on the book was behind a fold. ₱400,000 of phantom debt, invisible.
+ *
+ * THE RANKING IS THE WHOLE POINT. The sweep flags four rows today and they are not the same kind of
+ * thing; showing them as one list would train people to ignore it:
+ *
+ *   · a TYPO       — blocking, and not explainable as a fee. AP-202607-001. This needs a person.
+ *   · a BANK CHARGE— paid slightly over the payable on a foreign wire. A219 is explicit that this is
+ *                    a real cost with nowhere else to sit and must NOT be "corrected" away, so it is
+ *                    reported as explained, not as an error.
+ *   · a NOTE       — non-blocking. AP-202607-007 is a PHP order whose payable is 12% higher because
+ *                    VAT was typed onto it; A219 says flagging that as wrong is overreach.
+ *
+ * Best-effort throughout: an older backend has no such handler, and a convenience beside the ledger
+ * must never be able to stop the ledger rendering. */
+function apAnomalyBanner() {
+  const a = apAnomalies;
+  if (!a || !a.success || !Array.isArray(a.data) || !a.data.length) return '';
+  const money = v => flowMoney(flowNum(v), 'PHP');
+  const esc = s2 => flowEsc(s2);
+
+  // A row that is null or not an object cannot be described; drop it rather than throw. This banner
+  // sits above the ledger and must never be the reason the ledger fails to draw.
+  const rows  = a.data.filter(r => r && typeof r === 'object');
+  const typos = rows.filter(r => r.blocking && !r.likelyBankCharge);
+  const fees  = rows.filter(r => r.likelyBankCharge);
+  const notes = rows.filter(r => !r.blocking && !r.likelyBankCharge);
+  const out = [];
+
+  if (typos.length) {
+    out.push(`<div class="lv-warn" style="border:1px solid #fecaca;background:#fef2f2;color:#991b1b;
+        border-radius:10px;padding:0.6rem 0.8rem;margin-bottom:0.6rem;font-size:0.8rem;">
+        <div style="font-weight:700;margin-bottom:0.3rem;">
+          ⚠ ${typos.length} payable(s) do not reconcile with what was paid</div>
+        ${typos.map(r => `<div style="margin-top:0.25rem;">
+            <strong>${esc(r.apNo)}</strong> · ${esc(r.supplier || '')} —
+            payable ${money(r.amountPHP)}, paid ${money(r.paidPHP)}${
+              r.impliedRate ? ` · implied <strong>₱${r.impliedRate}/${esc(r.currency)}</strong>` : ''}
+            <div style="color:#7f1d1d;">${esc(r.why || '')}</div></div>`).join('')}
+      </div>`);
+  }
+  if (fees.length) {
+    /* Deliberately NOT red, and deliberately not called an error. The bank charge is OUR cost and
+       must never reduce what the supplier is owed — A219 found ₱2,070.60 and ₱465.77 of exactly this
+       folded into "paid" with nowhere else to go. Reported so it is visible, never so it is fixed. */
+    out.push(`<div class="lv-warn" style="border:1px solid #fed7aa;background:#fffbeb;color:#92400e;
+        border-radius:10px;padding:0.55rem 0.8rem;margin-bottom:0.6rem;font-size:0.78rem;">
+        <strong>${fees.length} payable(s) were paid slightly over, most likely a bank charge${
+          a.bankChargeTotal ? ` — ${money(a.bankChargeTotal)} in total` : ''}.</strong>
+        ${fees.map(r => `${esc(r.apNo)} (${money(r.bankChargePHP)})`).join(', ')}.
+        This is a real cost on a foreign transfer with nowhere else to be recorded, not an error —
+        leave it alone.</div>`);
+  }
+  if (notes.length) {
+    out.push(`<div style="color:var(--text-muted,#64748b);font-size:0.75rem;margin-bottom:0.6rem;">
+        ${notes.map(r => `${esc(r.apNo)}: ${esc(r.why || '')}`).join(' · ')}</div>`);
+  }
+  if (out.length) {
+    out.push(`<div style="color:var(--text-muted,#94a3b8);font-size:0.72rem;margin-bottom:0.7rem;">
+        Checked ${a.checked} payable(s). This looks at settled rows too, which is where a wrong figure
+        hides — a settled payable sits inside the collapsed block below.</div>`);
+  }
+  return out.join('');
 }
 
 function render() {
@@ -63,7 +143,8 @@ function render() {
     ? `<table class="flow-table flow-items">${apHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';
 
   c.innerHTML =
-    `<div class="lv-sec-title">Open payables <span class="lv-sub">· ${open.length} listed · the totals above cover exactly these</span></div>`
+    apAnomalyBanner()
+    + `<div class="lv-sec-title">Open payables <span class="lv-sub">· ${open.length} listed · the totals above cover exactly these</span></div>`
     + openTable
     /* A224 — this said "paid" and summed Amount (PHP), the PAYABLE. Two different facts, and A221
        exists because they were confused for each other once already. On the live book it reported
