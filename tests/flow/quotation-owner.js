@@ -226,5 +226,65 @@ console.log('\n== A243: a recorded owner is sticky, which is why it must be corr
      SET.includes('previous: was'));
 }
 
+/* ── A246 — A REP CAN FIND WHAT THEY TYPED ─────────────────────────────────────────────────────
+ *
+ * A218 scoped a rep's quotation list on the OWNER because filtering on 'Created By' hid their own
+ * deals whenever somebody else typed one. Owner ALONE has the mirror fault, and it is just as bad:
+ * A218's own measurement says one person typed 46 of 85 while owning 27, so ~19 quotations were
+ * invisible to the only person who could correct them.
+ *
+ * It surfaced looking like a different bug. A rep could not find quotation 2026-457, retyped it, and
+ * got "Quotation No already exists" with nothing explaining why she could not see a record she had
+ * created herself — both rows carried an owner of "Neil", a bare first name matching no account, so
+ * they belonged to nobody and showed for nobody.
+ *
+ * The scope is now owner OR creator. It exposes nothing new: a person gains sight only of rows they
+ * typed. Attribution is untouched — the owner still decides whose tracker, whose commission, whose
+ * number on the board. */
+console.log('\n== A246: scoped to owner OR creator ==');
+{
+  const { load, call } = require('./gasload.js');
+  const store = {
+    Quotations: [
+      { 'Quotation No': 'Q-OWN',  'Customer': 'A', 'Status': 'Draft', 'Total': 100,
+        'Created By': 'Gerald Lucena',    'Salesperson': 'Kimberlyn Blones' },
+      { 'Quotation No': 'Q-TYPED','Customer': 'B', 'Status': 'Draft', 'Total': 200,
+        'Created By': 'Kimberlyn Blones', 'Salesperson': 'Crystal Gayle' },
+      { 'Quotation No': 'Q-NEITHER','Customer': 'C', 'Status': 'Draft', 'Total': 300,
+        'Created By': 'Gerald Lucena',    'Salesperson': 'Gerald Lucena' },
+      /* The live shape that caused the report: typed by her, owned by a name that is nobody. */
+      { 'Quotation No': '2026-457-NE-ECC-OUTFIT_CUTTING', 'Customer': 'EAGLE CEMENT',
+        'Status': 'Pending Admin', 'Total': 27377.78,
+        'Created By': 'Kimberlyn Blones', 'Salesperson': 'Neil' }
+    ],
+    QuotationItems: []
+  };
+  const ctx = load(null, store);
+  const seen = call(ctx, 'getQuotations', { createdBy: 'Kimberlyn Blones' })
+                 .data.map(q => q.quotationNo).sort();
+  eq('she sees the one she OWNS', seen.includes('Q-OWN'), true);
+  eq('  and the one she TYPED for somebody else', seen.includes('Q-TYPED'), true);
+  eq('  and the one owned by a name that is nobody', seen.includes('2026-457-NE-ECC-OUTFIT_CUTTING'), true);
+  eq('  but NOT one that is neither hers nor typed by her', seen.includes('Q-NEITHER'), false);
+
+  // The owner's own view is unchanged — A218's fix still stands.
+  const gl = call(ctx, 'getQuotations', { createdBy: 'Gerald Lucena' })
+               .data.map(q => q.quotationNo).sort();
+  eq('the other rep still sees his own deal', gl.includes('Q-NEITHER'), true);
+  eq('  and the one he typed for her', gl.includes('Q-OWN'), true);
+  eq('  but not hers that he never touched', gl.includes('Q-TYPED'), false);
+
+  /* The clash message is the other half: when a number IS taken, say by whom and in what state,
+     so a rep who cannot see it is not left guessing. */
+  const clash = call(ctx, 'createQuotation', {
+    quotationNo: '2026-457-NE-ECC-OUTFIT_CUTTING', customer: 'EAGLE CEMENT',
+    items: JSON.stringify([{ itemName: 'x', qty: 1, price: 1 }]), createdBy: 'Kimberlyn Blones' });
+  eq('a duplicate number is still refused', clash.success, false);
+  ok('  and the message names the owner', /belongs to Neil/.test(clash.message || ''), clash.message);
+  ok('  and the status', /Pending Admin/.test(clash.message || ''), clash.message);
+  ok('  and says what to do instead', /edit it rather than creating a second/.test(clash.message || ''),
+     clash.message);
+}
+
 console.log(fail ? `\n${fail} FAILED` : '\nall good');
 process.exit(fail ? 1 : 0);
