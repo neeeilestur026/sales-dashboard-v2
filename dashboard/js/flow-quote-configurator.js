@@ -93,6 +93,10 @@ let qcPreviewPhotos = false;      // include images in the NEXT completed previe
                 approve-gate escapable: an approver facing a stale/unverified PDF has no Edit and
                 could not use one anyway. */
 let qcMode = 'edit';
+/* A251 — the pricing request the quotation being EDITED was built from. Management reprices the
+   request, not the quotation, so without this the new prices have no route into the document the
+   client is actually going to receive. */
+let qcEditPrNo = '';
 
 const QC_VAT_PCT = 0.12;
 const QC_DEBOUNCE = 500;
@@ -142,6 +146,7 @@ function qcToggleCreate(open) {
 /* Clear the builder back to a blank quotation (leaves the remembered doc defaults in place). */
 function qcResetForm() {
   qcQuotationNo = '';
+  qcEditPrNo = '';                                        // A251
   qcDesignVersion = 2;          // A241 — a brand-new quotation is born on the new design
   qcFromPr = '';
   qcLocked = false;
@@ -211,6 +216,7 @@ function qcSyncLock() {
   }
   const hint = document.getElementById('qcModeHint');
   if (hint) hint.style.display = (qcMode === 'document') ? '' : 'none';
+  qcSyncRefreshBtn();                                     // A251
 }
 
 /* Edit/Revise from the history: load a saved quotation into the builder so the same surface that
@@ -223,6 +229,7 @@ function qcLoadExisting(q) {
   qcResetForm();
   qcMode = mode;
   qcQuotationNo = String(q.quotationNo || '');
+  qcEditPrNo = String(q.prNo || '');                      // A251
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
   set('qcNo', q.quotationNo);
   set('qcDate', dt(q.date));
@@ -459,6 +466,22 @@ function qcOnChange() { qcRenderTotals(); qcSchedulePreview(); }
 
 // ── the process-flow path ───────────────────────────────────────────────────
 
+/* A251 — one request, fetched the way this page has always fetched it: the sales-scoped list first,
+   then the unscoped one, because an admin-raised PR is not in a rep's scoped list. Shared by the
+   ?fromPR path and by the price refresh, so the two can never disagree about which record is meant. */
+async function qcFetchPr(prNo) {
+  const want = String(prNo || '');
+  if (!want) return null;
+  const scoped = qcRole === 'sales' ? { requestedBy: qcSession.name } : {};
+  let res = await fetchFlow('getPricingRequests', scoped);
+  let pr = ((res && res.data) || []).find(p => String(p.prNo) === want);
+  if (!pr && qcRole === 'sales') {
+    res = await fetchFlow('getPricingRequests', {});
+    pr = ((res && res.data) || []).find(p => String(p.prNo) === want);
+  }
+  return pr || null;
+}
+
 /* ?fromPR=<prNo>. The rep contributes only the quotation number, subject, discount and the layout —
    every line is management's, at management's price. */
 async function qcLoadFromPR(prNo) {
@@ -467,13 +490,7 @@ async function qcLoadFromPR(prNo) {
   qcLocked = true;          // ...but every line is management's, rebuilt server-side
   qcSyncLock();
   try {
-    const scoped = qcRole === 'sales' ? { requestedBy: qcSession.name } : {};
-    let res = await fetchFlow('getPricingRequests', scoped);
-    let pr = ((res && res.data) || []).find(p => String(p.prNo) === qcFromPr);
-    if (!pr && qcRole === 'sales') {                      // admin-raised PRs aren't in the scoped list
-      res = await fetchFlow('getPricingRequests', {});
-      pr = ((res && res.data) || []).find(p => String(p.prNo) === qcFromPr);
-    }
+    const pr = await qcFetchPr(qcFromPr);
     if (!pr) { qcMsg('Purchase Request ' + qcFromPr + ' was not found, or is not returned to you.', false); return; }
 
     document.getElementById('qcCustomer').value = pr.customer || '';
@@ -539,12 +556,31 @@ async function qcLoadFromPR(prNo) {
         if (i.prTaken && i.prQuotedOn && wentTo.indexOf(i.prQuotedOn) < 0) wentTo.push(i.prQuotedOn);
       });
       const esc2 = (typeof flowEsc === 'function') ? flowEsc : (x => x);
-      qcBanner('Nothing left to quote on <strong>' + esc2(qcFromPr) + '</strong>. All '
-        + included.length + ' item(s) are already out on '
-        + (wentTo.length ? wentTo.map(n => '<strong>' + esc2(n) + '</strong>').join(' and ')
-                         : 'an earlier quotation')
-        + '. To change what the client was sent, open that quotation and revise it — creating a '
-        + 'second one here would duplicate the same items.', 'warn');
+      /* A251 — a repriced request lands here, and "nothing to do" is the wrong answer: the rep came
+         to get the new price onto the document. If exactly one of the holding quotations is still
+         editable, offer to refresh THAT one rather than leaving them to raise a duplicate. */
+      const list = (typeof qList !== 'undefined' && Array.isArray(qList)) ? qList : [];
+      const editable = wentTo.filter(no => {
+        const q = list.find(x => String(x.quotationNo) === String(no));
+        const st = q && String(q.status || 'Draft');
+        return st === 'Draft' || st === 'Rejected';
+      });
+      const where = wentTo.length
+        ? wentTo.map(n => '<strong>' + esc2(n) + '</strong>').join(' and ')
+        : 'an earlier quotation';
+      if (editable.length === 1) {
+        qcBanner('All ' + included.length + ' item(s) on <strong>' + esc2(qcFromPr)
+          + '</strong> are already on ' + where + '. If the request was repriced, update that '
+          + 'quotation instead of raising a second one for the same items — one document, one number, '
+          + 'and it goes back through approval.<br><button type="button" class="btn btn-primary btn-sm" '
+          + 'style="margin-top:.5rem;" onclick="qcOpenAndRefresh(\'' + esc2(editable[0]).replace(/'/g, "\\'")
+          + '\')">Open ' + esc2(editable[0]) + ' and update its prices</button>', 'warn');
+      } else {
+        qcBanner('Nothing left to quote on <strong>' + esc2(qcFromPr) + '</strong>. All '
+          + included.length + ' item(s) are already out on ' + where
+          + '. To change what the client was sent, reopen that quotation with Revise — creating a '
+          + 'second one here would duplicate the same items.', 'warn');
+      }
       const fb = document.getElementById('qcFinalizeBtn');
       if (fb) { fb.disabled = true; fb.title = 'Every item on this request has already been quoted.'; }
       qcOnChange();
@@ -568,6 +604,112 @@ async function qcLoadFromPR(prNo) {
   } catch (e) {
     qcMsg('Could not load ' + qcFromPr + ' — ' + (e.message || 'unknown error'), false);
   }
+}
+
+/* ── A251: pull management's current prices into the quotation being edited ──────────────────────
+   Management reprices the REQUEST. Nothing carried that back into the quotation the client is going
+   to receive, so a repriced request left the rep with two bad options: send the stale figure, or
+   raise a second quotation for the same items. This is the third: refresh in place, one document.
+
+   PAIRING. createQuotationFromPR rebuilds every line server-side from PricingRequestItems, in the
+   request's own order, and `itemId` is empty on both sides of this book — so position is the only
+   key there is. Position alone is exactly the kind of guess that silently reprices the wrong line,
+   so it is corroborated: the counts must agree AND every paired line must carry the same name. If
+   either test fails this refuses and changes nothing, rather than repricing by luck.
+
+   PRICE ONLY. Quantity is the client's requirement and a rep may have deliberately changed it (on
+   PR-202608-058 the quotation says 18 commissioning days where the request says 20). Overwriting
+   that would alter the offer, so differences are REPORTED and left alone. */
+function qcPairWithPr(prItems) {
+  const included = (prItems || []).filter(i => i && i.included);
+  if (included.length !== qcItems.length) {
+    return { ok: false, why: 'The request now has ' + included.length + ' included item(s) but this '
+      + 'quotation has ' + qcItems.length + '. Lines were added or removed, so they can no longer be '
+      + 'matched up safely — open the request and rebuild the quotation instead.' };
+  }
+  const norm = v => String(v == null ? '' : v).trim().toLowerCase();
+  for (let n = 0; n < included.length; n++) {
+    const a = norm(qcItems[n].itemName || qcItems[n].itemNo);
+    const b = norm(included[n].itemName || included[n].itemNo);
+    if (a !== b) {
+      return { ok: false, why: 'Line ' + (n + 1) + ' does not match: the quotation says "'
+        + (qcItems[n].itemName || qcItems[n].itemNo) + '" and the request says "'
+        + (included[n].itemName || included[n].itemNo) + '". Refusing to reprice by position alone.' };
+    }
+  }
+  return { ok: true, rows: included };
+}
+
+async function qcRefreshPricesFromPR() {
+  if (qcMode !== 'edit' || !qcQuotationNo || !qcEditPrNo) return;
+  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
+  const M = n => (typeof flowMoney === 'function') ? flowMoney(n, 'PHP') : ('PHP ' + n.toFixed(2));
+  const btn = document.getElementById('qcRefreshPrBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  try {
+    const pr = await qcFetchPr(qcEditPrNo);
+    if (!pr) { qcMsg('Could not read ' + qcEditPrNo + ' — it was not found, or is not returned to you.', false); return; }
+    const pair = qcPairWithPr(pr.items);
+    if (!pair.ok) { qcMsg(pair.why, false); return; }
+
+    const priceHits = [], qtyDiffs = [];
+    let oldTotal = 0, newTotal = 0;
+    pair.rows.forEach((src, n) => {
+      const it = qcItems[n];
+      const was = num(it.price), now = num(src.finalPrice);
+      const q = num(it.qty);
+      oldTotal += q * was; newTotal += q * now;
+      if (Math.abs(was - now) > 0.005) priceHits.push({ n, name: it.itemName || it.itemNo, was, now });
+      if (Math.abs(q - num(src.qty)) > 1e-9) qtyDiffs.push({ name: it.itemName || it.itemNo, q, pq: num(src.qty) });
+    });
+
+    if (!priceHits.length) {
+      qcMsg('Already up to date — every line matches ' + qcEditPrNo + "'s current prices."
+        + (qtyDiffs.length ? ' (' + qtyDiffs.length + ' quantity difference(s) left as they are.)' : ''), true);
+      return;
+    }
+    const lines = priceHits.slice(0, 8).map(h =>
+      '  • ' + h.name + '\n      ' + M(h.was) + '  →  ' + M(h.now)).join('\n');
+    const more = priceHits.length > 8 ? '\n  …and ' + (priceHits.length - 8) + ' more' : '';
+    const qtyNote = qtyDiffs.length
+      ? '\n\nQuantities are NOT changed. ' + qtyDiffs.length + ' line(s) differ from the request:\n'
+        + qtyDiffs.map(d => '  • ' + d.name + ': quotation ' + d.q + ', request ' + d.pq).join('\n')
+      : '';
+    const msg = 'Update ' + qcQuotationNo + ' to the current prices on ' + qcEditPrNo + '?\n\n'
+      + priceHits.length + ' of ' + qcItems.length + ' line(s) change:\n' + lines + more
+      + '\n\nQuotation total  ' + M(oldTotal) + '  →  ' + M(newTotal)
+      + '\n           change  ' + M(newTotal - oldTotal) + qtyNote
+      + '\n\nNothing is saved yet — review it, then press Finalize.';
+    if (!confirm(msg)) return;
+
+    priceHits.forEach(h => { qcItems[h.n].price = h.now; });
+    qcRenderItems();
+    qcOnChange();
+    qcMsg(priceHits.length + ' line(s) repriced from ' + qcEditPrNo + ' — total is now ' + M(newTotal)
+      + '. Press Finalize to save; a repriced quotation goes back through approval.', true);
+  } catch (e) {
+    qcMsg('Could not refresh the prices — ' + (e.message || 'unknown error'), false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Update prices from the request'; }
+  }
+}
+
+/* A251 — the button only makes sense on a quotation that (a) is being edited, and (b) came from a
+   pricing request. Anything else has no upstream price to pull. */
+function qcSyncRefreshBtn() {
+  const b = document.getElementById('qcRefreshPrBtn');
+  if (!b) return;
+  const on = qcMode === 'edit' && !!qcQuotationNo && !!qcEditPrNo && !qcFromPr;
+  b.style.display = on ? '' : 'none';
+  b.title = on ? 'Pull the current prices from ' + qcEditPrNo + ' into this quotation' : '';
+}
+
+/* A251 — open a quotation for editing and immediately offer its refreshed prices. This is the way
+   out of a fully-quoted request: the rep wanted the repriced document, not a second one. */
+function qcOpenAndRefresh(no) {
+  if (typeof qcOpen !== 'function') return;
+  qcOpen(no, 'edit');
+  setTimeout(() => { qcRefreshPricesFromPR(); }, 0);
 }
 
 function qcBanner(html, tone) {
