@@ -529,6 +529,28 @@ async function qcLoadFromPR(prNo) {
     qcPartial = true;
     qcRenderItems();
 
+    /* A251 — the fully-quoted request. Every line has already gone out, so there is nothing this
+       page can create: the table renders entirely disabled and the total is PHP 0.00, which reads
+       as a broken page rather than a finished one. Say so plainly, name where the items went, and
+       take away the Finalize button rather than leaving one that can only refuse. */
+    if (!rem.open.length) {
+      const wentTo = [];
+      qcItems.forEach(i => {
+        if (i.prTaken && i.prQuotedOn && wentTo.indexOf(i.prQuotedOn) < 0) wentTo.push(i.prQuotedOn);
+      });
+      const esc2 = (typeof flowEsc === 'function') ? flowEsc : (x => x);
+      qcBanner('Nothing left to quote on <strong>' + esc2(qcFromPr) + '</strong>. All '
+        + included.length + ' item(s) are already out on '
+        + (wentTo.length ? wentTo.map(n => '<strong>' + esc2(n) + '</strong>').join(' and ')
+                         : 'an earlier quotation')
+        + '. To change what the client was sent, open that quotation and revise it — creating a '
+        + 'second one here would duplicate the same items.', 'warn');
+      const fb = document.getElementById('qcFinalizeBtn');
+      if (fb) { fb.disabled = true; fb.title = 'Every item on this request has already been quoted.'; }
+      qcOnChange();
+      return;
+    }
+
     /* Say what this quotation will contain BEFORE the rep presses anything. A partial quotation is
        a deliberate act; discovering afterwards that two lines did not go is how a client ends up
        waiting on an item nobody remembers. */
@@ -548,10 +570,15 @@ async function qcLoadFromPR(prNo) {
   }
 }
 
-function qcBanner(html) {
+function qcBanner(html, tone) {
   const el = document.getElementById('qcMsg');
+  // A251 — 'warn' is for the request that has nothing left to give: not an error, but not business
+  // as usual either, and it must not look like the ordinary blue "here is your request" note.
+  const skin = tone === 'warn'
+    ? 'background:#fffbeb;color:#92400e;border:1px solid #fcd34d;'
+    : 'background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe;';
   el.innerHTML = '<div style="margin:.5rem 0 1rem;padding:.65rem .9rem;border-radius:10px;font-size:.86rem;'
-    + 'background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe;">' + html + '</div>';
+    + skin + '">' + html + '</div>';
 }
 
 async function qcLoadInventory() {
@@ -633,8 +660,13 @@ function qcRenderItems() {
   const selCell = (i) => {
     if (!(qcPartial && qcPartialUI)) return '';
     if (i.prTaken) {
-      return `<td class="num" title="Already quoted on ${esc(i.prQuotedOn)}">
-                <span style="font-size:.68rem;color:#94a3b8;white-space:nowrap;">✓ ${esc(i.prQuotedOn)}</span></td>`;
+      /* A251 — this used to print the whole quotation number with white-space:nowrap inside a 5%
+         column, so it overflowed and sat on top of Item No and Description; a 12-line request was
+         unreadable. The cell states the fact and clips; the number is in the tooltip and is named
+         once in the banner, which is where a rep looks to answer "where did this item go". */
+      return `<td class="num" title="Already quoted on ${esc(i.prQuotedOn)}"
+                  style="text-align:center;">
+                <span style="font-size:.9rem;color:#94a3b8;display:block;overflow:hidden;">✓</span></td>`;
     }
     const warn = i.prPriced ? '' : ' title="Management has not priced this item — it would print as free."';
     return `<td class="num"><input type="checkbox"${i.qtSel ? ' checked' : ''}${warn}
@@ -938,7 +970,14 @@ function qcRenderTotals() {
   const m = n => (typeof flowMoney === 'function') ? flowMoney(n, 'PHP') : ('PHP ' + n.toFixed(2));
   const label = t.opt === 'inclusive' ? 'Total (VAT Inclusive)'
               : t.opt === 'zero' ? 'Total (Zero-Rated)' : 'Total (VAT Exclusive)';
-  let html = `<div class="row"><span>Subtotal (VAT Exclusive)</span><span class="v">${m(t.gross)}</span></div>`;
+  /* A251 — a PHP 0.00 total with every row greyed out is arithmetically right and looks like a
+     fault. Name the reason beside the figure, not only in the banner at the top of a long page. */
+  let html = '';
+  if (qcPartial && qcPartialUI && !qcQuotedItems().length) {
+    html += `<div class="row" style="color:#92400e;"><span>No items are ticked — nothing to total</span>
+      <span class="v" style="font-size:.72rem;">every line is already on another quotation</span></div>`;
+  }
+  html += `<div class="row"><span>Subtotal (VAT Exclusive)</span><span class="v">${m(t.gross)}</span></div>`;
   if (t.pct > 0) {
     html += `<div class="row disc"><span>Less: Discount (${t.pct}%)</span><span class="v">− ${m(t.discount)}</span></div>`;
     html += `<div class="row"><span>Net</span><span class="v">${m(t.net)}</span></div>`;
