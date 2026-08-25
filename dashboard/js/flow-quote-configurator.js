@@ -617,9 +617,11 @@ async function qcLoadFromPR(prNo) {
    so it is corroborated: the counts must agree AND every paired line must carry the same name. If
    either test fails this refuses and changes nothing, rather than repricing by luck.
 
-   PRICE ONLY. Quantity is the client's requirement and a rep may have deliberately changed it (on
-   PR-202608-058 the quotation says 18 commissioning days where the request says 20). Overwriting
-   that would alter the offer, so differences are REPORTED and left alone. */
+   PRICE **AND** QUANTITY. This began as price-only, on the reasoning that a rep might have set a
+   quantity deliberately. That was wrong: the request is management's record of the deal, and on
+   PR-202608-058 the quotation carried 18 commissioning days against the request's 20, which put the
+   document PHP 692,770 under the figure the business had agreed. Both fields come across, and both
+   are itemised in the confirmation so nothing moves without the rep seeing it. */
 function qcPairWithPr(prItems) {
   const included = (prItems || []).filter(i => i && i.included);
   if (included.length !== qcItems.length) {
@@ -652,40 +654,41 @@ async function qcRefreshPricesFromPR() {
     const pair = qcPairWithPr(pr.items);
     if (!pair.ok) { qcMsg(pair.why, false); return; }
 
-    const priceHits = [], qtyDiffs = [];
+    const hits = [];
     let oldTotal = 0, newTotal = 0;
     pair.rows.forEach((src, n) => {
       const it = qcItems[n];
-      const was = num(it.price), now = num(src.finalPrice);
-      const q = num(it.qty);
-      oldTotal += q * was; newTotal += q * now;
-      if (Math.abs(was - now) > 0.005) priceHits.push({ n, name: it.itemName || it.itemNo, was, now });
-      if (Math.abs(q - num(src.qty)) > 1e-9) qtyDiffs.push({ name: it.itemName || it.itemNo, q, pq: num(src.qty) });
+      const wasP = num(it.price), nowP = num(src.finalPrice);
+      const wasQ = num(it.qty), nowQ = num(src.qty);
+      oldTotal += wasQ * wasP; newTotal += nowQ * nowP;
+      if (Math.abs(wasP - nowP) > 0.005 || Math.abs(wasQ - nowQ) > 1e-9) {
+        hits.push({ n, name: it.itemName || it.itemNo, wasP, nowP, wasQ, nowQ });
+      }
     });
 
-    if (!priceHits.length) {
-      qcMsg('Already up to date — every line matches ' + qcEditPrNo + "'s current prices."
-        + (qtyDiffs.length ? ' (' + qtyDiffs.length + ' quantity difference(s) left as they are.)' : ''), true);
+    if (!hits.length) {
+      qcMsg('Already up to date — every line matches ' + qcEditPrNo + '.', true);
       return;
     }
-    const lines = priceHits.slice(0, 8).map(h =>
-      '  • ' + h.name + '\n      ' + M(h.was) + '  →  ' + M(h.now)).join('\n');
-    const more = priceHits.length > 8 ? '\n  …and ' + (priceHits.length - 8) + ' more' : '';
-    const qtyNote = qtyDiffs.length
-      ? '\n\nQuantities are NOT changed. ' + qtyDiffs.length + ' line(s) differ from the request:\n'
-        + qtyDiffs.map(d => '  • ' + d.name + ': quotation ' + d.q + ', request ' + d.pq).join('\n')
-      : '';
-    const msg = 'Update ' + qcQuotationNo + ' to the current prices on ' + qcEditPrNo + '?\n\n'
-      + priceHits.length + ' of ' + qcItems.length + ' line(s) change:\n' + lines + more
+    const say = h => {
+      const bits = [];
+      if (Math.abs(h.wasQ - h.nowQ) > 1e-9) bits.push('qty ' + h.wasQ + ' → ' + h.nowQ);
+      if (Math.abs(h.wasP - h.nowP) > 0.005) bits.push(M(h.wasP) + ' → ' + M(h.nowP));
+      return '  • ' + h.name + '\n      ' + bits.join('   ·   ');
+    };
+    const lines = hits.slice(0, 8).map(say).join('\n');
+    const more = hits.length > 8 ? '\n  …and ' + (hits.length - 8) + ' more' : '';
+    const msg = 'Update ' + qcQuotationNo + ' to match ' + qcEditPrNo + '?\n\n'
+      + hits.length + ' of ' + qcItems.length + ' line(s) change:\n' + lines + more
       + '\n\nQuotation total  ' + M(oldTotal) + '  →  ' + M(newTotal)
-      + '\n           change  ' + M(newTotal - oldTotal) + qtyNote
+      + '\n           change  ' + M(newTotal - oldTotal)
       + '\n\nNothing is saved yet — review it, then press Finalize.';
     if (!confirm(msg)) return;
 
-    priceHits.forEach(h => { qcItems[h.n].price = h.now; });
+    hits.forEach(h => { qcItems[h.n].price = h.nowP; qcItems[h.n].qty = h.nowQ; });
     qcRenderItems();
     qcOnChange();
-    qcMsg(priceHits.length + ' line(s) repriced from ' + qcEditPrNo + ' — total is now ' + M(newTotal)
+    qcMsg(hits.length + ' line(s) updated from ' + qcEditPrNo + ' — total is now ' + M(newTotal)
       + '. Press Finalize to save; a repriced quotation goes back through approval.', true);
   } catch (e) {
     qcMsg('Could not refresh the prices — ' + (e.message || 'unknown error'), false);
@@ -701,7 +704,7 @@ function qcSyncRefreshBtn() {
   if (!b) return;
   const on = qcMode === 'edit' && !!qcQuotationNo && !!qcEditPrNo && !qcFromPr;
   b.style.display = on ? '' : 'none';
-  b.title = on ? 'Pull the current prices from ' + qcEditPrNo + ' into this quotation' : '';
+  b.title = on ? 'Pull the current quantities and prices from ' + qcEditPrNo + ' into this quotation' : '';
 }
 
 /* A251 — open a quotation for editing and immediately offer its refreshed prices. This is the way

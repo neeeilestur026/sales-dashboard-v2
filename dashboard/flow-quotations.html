@@ -246,10 +246,12 @@
               <div class="qc-actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="qcAddBtn" onclick="qcAddRow()">+ Add item</button>
                 <!-- A251 — management reprices the REQUEST; nothing carried that back into the
-                     quotation the client receives. This pulls the current prices in, in place, so a
-                     repriced request does not need a second quotation for the same items. -->
+                     quotation the client receives. This pulls the current quantities AND prices in,
+                     in place, so a repriced request does not need a second quotation for the same
+                     items. Quantity is included deliberately: leaving it out left REV1 of
+                     2026-449-NE-ACIC-GENSETS PHP 692,770 under the agreed figure. -->
                 <button type="button" class="btn btn-secondary btn-sm" id="qcRefreshPrBtn"
-                        style="display:none;" onclick="qcRefreshPricesFromPR()">Update prices from the request</button>
+                        style="display:none;" onclick="qcRefreshPricesFromPR()">Update from the request</button>
               </div>
 
               <!-- live, no server round trip -->
