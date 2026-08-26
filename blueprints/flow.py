@@ -570,6 +570,7 @@ SECURED_ACTIONS = [
     "deleteQuotation", "deleteSalesOrder", "deletePurchaseOrder", "deletePaymentRequest",
     # A220 — a rename re-keys fourteen sheets and every money record on the order.
     "renameSalesOrder",
+    "renameInvoice",
     "deleteAPEntry", "updateAPAging", "recordCollection", "correctCollection",
     "voidCollection", "voidInvoice",
     # A190 — must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.

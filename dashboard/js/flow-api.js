@@ -129,6 +129,7 @@ const FLOW_SECURED_ACTIONS = [
   'deleteQuotation', 'deleteSalesOrder', 'deletePurchaseOrder', 'deletePaymentRequest',
   // A220 — a rename re-keys fourteen sheets and every money record on the order.
   'renameSalesOrder',
+  'renameInvoice',
   'deleteAPEntry', 'updateAPAging', 'recordCollection', 'correctCollection',
   'voidCollection', 'voidInvoice',
   // A190 — mirrors _SECURED (FlowAPI.gs) and SECURED_ACTIONS (blueprints/flow.py). If this list

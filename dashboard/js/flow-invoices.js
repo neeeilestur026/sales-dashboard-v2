@@ -4,6 +4,7 @@ let ivInventory = [];
 let ivCurrent = null;
 let ivSession = null;
 let ivCanVoid = false;   // A158: the void action needs FlowAPI v94
+let ivCanRename = false; // A252: renaming the invoice number needs FlowAPI v142
 let ivViewer = false;    // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,7 +22,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // A158: voiding an invoice needs the v94 backend — gate it so it can't fail with 'Unknown action'.
   try { ivCanVoid = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(94) : false; }
   catch (e) { ivCanVoid = false; }
+  /* A252 — same gate, same reason: against an older backend renameInvoice is an unknown action, so
+     the button must not be offered at all rather than fail after the user has typed a number. */
+  try { ivCanRename = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(142) : false; }
+  catch (e) { ivCanRename = false; }
   if (ivViewer) ivCanVoid = false;   // A231 — one flag decides the button, as on flow-collections
+  if (ivViewer) ivCanRename = false;
   document.getElementById('date').value = flowToday();
   await Promise.all([loadSOOptions(), loadInventory()]);
   await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
@@ -189,9 +195,39 @@ async function loadInvoices() {
       <td class="num">${flowMoney(v.totalSales, 'PHP')}</td><td class="num">${flowMoney(v.totalCOGS, 'PHP')}</td>
       <td class="num">${flowMoney(v.totalSales - v.totalCOGS, 'PHP')}</td><td>${v.items.length}</td>
       <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Invoice","${flowEsc(v.invNo)}")'>Docs</button>${
+        ivCanRename ? `<button class="link-btn" style="margin-left:0.4rem;" title="Put your own invoice number on this record" onclick='renameInvoiceAction(${JSON.stringify(String(v.invNo))})'>Edit No</button>` : ''
+      }${
         ivCanVoid ? `<button class="link-btn del-btn" style="margin-left:0.4rem;" onclick='voidInvoiceAction(${JSON.stringify(String(v.invNo))})'>Void</button>` : ''
       }</td></tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+}
+
+/* A252 — put the business's own invoice number on the record. The number is a key, not a label:
+   the receivable, the collections against it, the line items, any commission claim, the filed
+   documents and the GL entry all point at the string. The server re-keys them together, refuses a
+   number already in use (case-insensitively) and refuses outright while a commission claim is in
+   flight — so this asks, then reports exactly what moved. */
+async function renameInvoiceAction(invNo) {
+  const next = prompt(
+    `Invoice number for this record?\n\nCurrently: ${invNo}\n\n`
+    + 'Everything that points at this invoice moves with it — the receivable, its collections, the\n'
+    + 'line items, filed documents and the journal entry.', invNo);
+  if (next === null) return;
+  const newInvNo = String(next).trim();
+  if (!newInvNo) { alert('An invoice number is required.'); return; }
+  if (newInvNo === String(invNo)) return;
+  try {
+    let res = await postFlow('renameInvoice', { invNo, newInvNo });
+    /* Documents filed against the invoice get their own confirm from the server, so the person
+       renaming is told what follows the number before it moves. */
+    if (res && !res.success && res.needsConfirm === 'renameDocs') {
+      if (!confirm(res.message)) return;
+      res = await postFlow('renameInvoice', { invNo, newInvNo, confirmDocs: 'true' });
+    }
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not rename this invoice.');
+    alert(res.message);
+    await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  } catch (e) { alert(e.message); }
 }
 
 /* A158 — reverse an invoice issued in error. Refused once anything has been collected against it,
