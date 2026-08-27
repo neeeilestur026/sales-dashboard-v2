@@ -104,8 +104,10 @@ ok('  and hidden from the viewer role', /if \(ivViewer\) ivCanRename = false;/.t
 ok('the docs confirm is retried honestly', /confirmDocs: 'true'/.test(ui));
 ok('the list reloads after a rename', /renameInvoiceAction[\s\S]{0,1400}await loadInvoices\(\)/.test(ui));
 
-const V = (SRC.match(/var FLOW_VERSION = (\d+)/) || [])[1];
-eq('\nFLOW_VERSION', Number(V), 142);
+/* A floor, not an equality. renameInvoice shipped in 142 and every later version still carries it;
+   asserting equality made this test fail the moment 143 shipped, which is noise, not a regression. */
+const V = Number((SRC.match(/var FLOW_VERSION = (\d+)/) || [])[1]);
+ok('\nFLOW_VERSION >= 142 (where renameInvoice shipped) — got ' + V, V >= 142);
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);

@@ -629,17 +629,27 @@ function qcPairWithPr(prItems) {
       + 'quotation has ' + qcItems.length + '. Lines were added or removed, so they can no longer be '
       + 'matched up safely — open the request and rebuild the quotation instead.' };
   }
+  /* A255 — A NAME THAT DIFFERS IS NOT AUTOMATICALLY A MISPAIR ANY MORE.
+     Management can now re-specify a line — change its model number and description as well as its
+     price — so the two sides legitimately disagree on exactly the case this refresh exists to carry.
+     Refusing outright, as this did, dead-ends the one flow the rep needs.
+     Neither is it safe to wave through: position is still the only key, and a genuine misalignment
+     looks the same. So a line where NEITHER the model nor the name still corresponds is reported as
+     a re-specification for the rep to confirm, with both texts shown. Counts disagreeing remains a
+     hard refusal — that is a real structural mismatch, not an edit. */
   const norm = v => String(v == null ? '' : v).trim().toLowerCase();
+  const respec = [];
   for (let n = 0; n < included.length; n++) {
-    const a = norm(qcItems[n].itemName || qcItems[n].itemNo);
-    const b = norm(included[n].itemName || included[n].itemNo);
-    if (a !== b) {
-      return { ok: false, why: 'Line ' + (n + 1) + ' does not match: the quotation says "'
-        + (qcItems[n].itemName || qcItems[n].itemNo) + '" and the request says "'
-        + (included[n].itemName || included[n].itemNo) + '". Refusing to reprice by position alone.' };
+    const aNo = norm(qcItems[n].itemNo), bNo = norm(included[n].itemNo);
+    const aNm = norm(qcItems[n].itemName), bNm = norm(included[n].itemName);
+    const corroborated = (aNo && aNo === bNo) || (aNm && aNm === bNm);
+    if (!corroborated) {
+      respec.push({ n,
+        wasNo: qcItems[n].itemNo, wasName: qcItems[n].itemName,
+        nowNo: included[n].itemNo, nowName: included[n].itemName });
     }
   }
-  return { ok: true, rows: included };
+  return { ok: true, rows: included, respec: respec };
 }
 
 async function qcRefreshPricesFromPR() {
@@ -656,13 +666,20 @@ async function qcRefreshPricesFromPR() {
 
     const hits = [];
     let oldTotal = 0, newTotal = 0;
+    const T = v => String(v == null ? '' : v).trim();
     pair.rows.forEach((src, n) => {
       const it = qcItems[n];
       const wasP = num(it.price), nowP = num(src.finalPrice);
       const wasQ = num(it.qty), nowQ = num(src.qty);
+      /* A255 — the model and description move too. They are management's specification of what is
+         being sold, and the quotation is the document the client reads. */
+      const nowNo = T(src.itemNo) || T(it.itemNo);
+      const nowNm = T(src.itemName) || T(it.itemName);
       oldTotal += wasQ * wasP; newTotal += nowQ * nowP;
-      if (Math.abs(wasP - nowP) > 0.005 || Math.abs(wasQ - nowQ) > 1e-9) {
-        hits.push({ n, name: it.itemName || it.itemNo, wasP, nowP, wasQ, nowQ });
+      if (Math.abs(wasP - nowP) > 0.005 || Math.abs(wasQ - nowQ) > 1e-9
+          || nowNo !== T(it.itemNo) || nowNm !== T(it.itemName)) {
+        hits.push({ n, name: it.itemName || it.itemNo, wasP, nowP, wasQ, nowQ,
+                    wasNo: T(it.itemNo), nowNo, wasNm: T(it.itemName), nowNm });
       }
     });
 
@@ -672,20 +689,33 @@ async function qcRefreshPricesFromPR() {
     }
     const say = h => {
       const bits = [];
+      if (h.wasNo !== h.nowNo) bits.push('model ' + (h.wasNo || '—') + ' → ' + (h.nowNo || '—'));
+      if (h.wasNm !== h.nowNm) bits.push('renamed to "' + h.nowNm + '"');
       if (Math.abs(h.wasQ - h.nowQ) > 1e-9) bits.push('qty ' + h.wasQ + ' → ' + h.nowQ);
       if (Math.abs(h.wasP - h.nowP) > 0.005) bits.push(M(h.wasP) + ' → ' + M(h.nowP));
-      return '  • ' + h.name + '\n      ' + bits.join('   ·   ');
+      return '  • ' + h.name + '\n      ' + bits.join('\n      ');
     };
     const lines = hits.slice(0, 8).map(say).join('\n');
     const more = hits.length > 8 ? '\n  …and ' + (hits.length - 8) + ' more' : '';
+    /* A255 — a line whose model AND name both moved cannot be corroborated by either, so position is
+       all that is left. Say so explicitly rather than applying it quietly. */
+    const rs = (pair.respec || []).length
+      ? '\n\nRE-SPECIFIED — neither the model nor the description still matches on '
+        + pair.respec.length + ' line(s), so these are paired by position alone. Check them:\n'
+        + pair.respec.map(r => '  • line ' + (r.n + 1) + ': was ' + (r.wasNo || '—') + ' "' + r.wasName
+            + '"\n      now ' + (r.nowNo || '—') + ' "' + r.nowName + '"').join('\n')
+      : '';
     const msg = 'Update ' + qcQuotationNo + ' to match ' + qcEditPrNo + '?\n\n'
-      + hits.length + ' of ' + qcItems.length + ' line(s) change:\n' + lines + more
+      + hits.length + ' of ' + qcItems.length + ' line(s) change:\n' + lines + more + rs
       + '\n\nQuotation total  ' + M(oldTotal) + '  →  ' + M(newTotal)
       + '\n           change  ' + M(newTotal - oldTotal)
       + '\n\nNothing is saved yet — review it, then press Finalize.';
     if (!confirm(msg)) return;
 
-    hits.forEach(h => { qcItems[h.n].price = h.nowP; qcItems[h.n].qty = h.nowQ; });
+    hits.forEach(h => {
+      qcItems[h.n].price = h.nowP; qcItems[h.n].qty = h.nowQ;
+      qcItems[h.n].itemNo = h.nowNo; qcItems[h.n].itemName = h.nowNm;   // A255
+    });
     qcRenderItems();
     qcOnChange();
     qcMsg(hits.length + ' line(s) updated from ' + qcEditPrNo + ' — total is now ' + M(newTotal)

@@ -9,10 +9,13 @@
  *
  * The rules pinned here, because each one is a way to put a wrong number on a client's document:
  *
- *   1. PAIRING IS CORROBORATED, NEVER GUESSED. `itemId` is empty on both sides of this book, so
- *      position is the only key there is — and position alone silently reprices the wrong line the
- *      first time anyone inserts an item. The counts must agree AND every paired line must carry the
- *      same name; if either fails the refresh REFUSES and changes nothing.
+ *   1. PAIRING IS CORROBORATED, NEVER GUESSED — BUT A RE-SPECIFICATION IS NOT A MISPAIR.
+ *      `itemId` is empty on both sides of this book, so position is the only key there is. A count
+ *      mismatch is still a hard refusal: that is structural. But since A255 management can change a
+ *      line's model AND description as well as its price, so the two sides legitimately disagree on
+ *      exactly the case this refresh exists to carry. A line corroborated by EITHER its model or its
+ *      name passes; a line corroborated by neither is REPORTED as a re-specification for the rep to
+ *      confirm, with both texts shown, rather than dead-ending the flow.
  *
  *   2. QUANTITY COMES ACROSS TOO. This shipped price-only first, on the reasoning that a rep might
  *      have set a quantity deliberately. That was wrong, and it is the bug this file now guards:
@@ -40,12 +43,13 @@ function pair(qcItems, prItems) {
   const included = (prItems || []).filter(i => i && i.included);
   if (included.length !== qcItems.length) return { ok: false, why: 'count' };
   const norm = v => String(v == null ? '' : v).trim().toLowerCase();
+  const respec = [];
   for (let n = 0; n < included.length; n++) {
-    if (norm(qcItems[n].itemName || qcItems[n].itemNo) !== norm(included[n].itemName || included[n].itemNo)) {
-      return { ok: false, why: 'name@' + n };
-    }
+    const aNo = norm(qcItems[n].itemNo), bNo = norm(included[n].itemNo);
+    const aNm = norm(qcItems[n].itemName), bNm = norm(included[n].itemName);
+    if (!((aNo && aNo === bNo) || (aNm && aNm === bNm))) respec.push({ n });
   }
-  return { ok: true, rows: included };
+  return { ok: true, rows: included, respec };
 }
 const N = v => (v === '' || v == null) ? 0 : (parseFloat(v) || 0);
 function diff(qcItems, rows) {
@@ -108,30 +112,45 @@ eq('  VAT-inc lands on the agreed 142,351,811.93',
 ok('  price-only would have been PHP 692,770.92 short',
    Math.abs((d1.newT * 1.12) - 141659041.01 - 692770.92) < 0.05);
 
-console.log('\n2 · pairing REFUSES rather than guessing');
-ok('a line removed from the request -> refused',
-   !pair(QUO, PR.slice(0, 3)).ok);
+console.log('\n2 · a COUNT mismatch is still a hard refusal');
+ok('a line removed from the request -> refused', !pair(QUO, PR.slice(0, 3)).ok);
 ok('an extra included line -> refused',
    !pair(QUO, PR.concat([{ included: true, itemName: 'New line', qty: 1, finalPrice: 5 }])).ok);
-const shuffled = PR.map(x => Object.assign({}, x));
-shuffled[1] = Object.assign({}, shuffled[1], { itemName: 'Something else entirely' });
-ok('a name that no longer agrees -> refused', !pair(QUO, shuffled).ok);
-ok('  and it names the offending line', pair(QUO, shuffled).why === 'name@1');
 ok('an EXCLUDED line is ignored, not counted',
    pair(QUO, PR.concat([{ included: false, itemName: 'Deferred', qty: 1, finalPrice: 9 }])).ok);
 
-console.log('\n3 · a request that has not moved');
+console.log('\n3 · A255 — a re-specified line is reported, not refused');
+const renamed = PR.map(x => Object.assign({}, x));
+renamed[1] = Object.assign({}, renamed[1], { itemName: 'Renamed but same model' });
+const pr1 = pair(QUO, renamed);
+ok('description changed, model still matches -> passes clean', pr1.ok && pr1.respec.length === 0);
+const bothChanged = PR.map(x => Object.assign({}, x));
+bothChanged[1] = Object.assign({}, bothChanged[1], { itemNo: 'PH82K', itemName: 'PULLER KIT, 8 TON' });
+const pr2 = pair(QUO, bothChanged);
+ok('model AND description changed -> still proceeds', pr2.ok);
+eq('  but the line is flagged for the rep', pr2.respec.length, 1);
+eq('  and it names which line', pr2.respec[0].n, 1);
+const modelOnly = PR.map(x => Object.assign({}, x));
+modelOnly[1] = Object.assign({}, modelOnly[1], { itemNo: 'PH82K' });
+ok('model changed, description still matches -> passes clean', pair(QUO, modelOnly).respec.length === 0);
+
+console.log('\n4 · a request that has not moved');
 const same = QUO.map((q, n) => Object.assign({ included: true }, PR[n], { finalPrice: q.price, qty: q.qty }));
 const d3 = diff(QUO, pair(QUO, same).rows);
 eq('nothing moves', d3.hits.length, 0);
 eq('total unchanged', d3.newT, d3.oldT);
 
-console.log('\n4 · the source still implements these rules');
+console.log('\n5 · the source still implements these rules');
 const src = fs.readFileSync(path.join(__dirname, '../../dashboard/js/flow-quote-configurator.js'), 'utf8');
 ok('qcPairWithPr exists', /function qcPairWithPr\(/.test(src));
 ok('  it filters on included', /\.filter\(i => i && i\.included\)/.test(src));
 ok('  it compares counts', /included\.length !== qcItems\.length/.test(src));
-ok('  it corroborates by name', /Refusing to reprice by position alone/.test(src));
+ok('  a count mismatch is still refused', /Lines were added or removed/.test(src));
+ok('  it corroborates by model OR name', /\(aNo && aNo === bNo\) \|\| \(aNm && aNm === bNm\)/.test(src));
+ok('  a re-specified line is collected, not refused', /respec\.push\(/.test(src));
+ok('  and surfaced in the confirmation', /RE-SPECIFIED/.test(src));
+ok('  the refresh carries model and description too',
+   /qcItems\[h\.n\]\.itemNo = h\.nowNo; qcItems\[h\.n\]\.itemName = h\.nowNm;/.test(src));
 ok('qcRefreshPricesFromPR exists', /async function qcRefreshPricesFromPR\(/.test(src));
 ok('  it writes BOTH price and qty', /qcItems\[h\.n\]\.price = h\.nowP; qcItems\[h\.n\]\.qty = h\.nowQ;/.test(src));
 ok('  the confirmation itemises a qty move', /qty ' \+ h\.wasQ \+ ' → ' \+ h\.nowQ/.test(src));
@@ -140,6 +159,24 @@ ok('  it requires edit mode and a PR', /qcMode !== 'edit' \|\| !qcQuotationNo \|
 ok('the button is hidden off the edit-with-PR path', /const on = qcMode === 'edit' && !!qcQuotationNo && !!qcEditPrNo && !qcFromPr;/.test(src));
 ok('the fully-quoted banner offers the refresh', /qcOpenAndRefresh/.test(src));
 ok('qcEditPrNo is cleared on reset', /qcEditPrNo = '';\s*\/\/ A251/.test(src));
+
+console.log('\n6 · A255 — management\'s re-specification reaches the item row');
+const GS = fs.readFileSync(path.join(__dirname, '../../apps-script/FlowAPI.gs'), 'utf8');
+const _i = GS.indexOf('function setMgmtPricing(p)');
+const smp = GS.slice(_i, _i + 9000);
+ok('Item No (col 3) is written', /getRange\(row\.rowIndex, 3, 1, 1\)/.test(smp));
+ok('Item Name (col 4) is written', /getRange\(row\.rowIndex, 4, 1, 1\)/.test(smp));
+ok('  only when SENT — an absent field leaves the stored value alone',
+   /u\.itemNo !== undefined/.test(smp) && /u\.itemName !== undefined/.test(smp));
+ok('  and only when NON-BLANK — never blanks a real item name (A174)',
+   /String\(u\.itemNo\)\.trim\(\) !== ''/.test(smp) && /String\(u\.itemName\)\.trim\(\) !== ''/.test(smp));
+const PRJS = fs.readFileSync(path.join(__dirname, '../../dashboard/js/flow-pricing-request.js'), 'utf8');
+ok('the browser sends them in items[], not only in the history blob',
+   /itemNo: mEl \? String\(mEl\.value \|\| ''\)\.trim\(\) : ''/.test(PRJS));
+ok('  and the description too',
+   /itemName: nEl \? String\(nEl\.value \|\| ''\)\.trim\(\) : ''/.test(PRJS));
+const _v = Number((GS.match(/var FLOW_VERSION = (\d+)/) || [])[1]);
+ok('FLOW_VERSION is at least 143 (where this shipped) — got ' + _v, _v >= 143);
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);

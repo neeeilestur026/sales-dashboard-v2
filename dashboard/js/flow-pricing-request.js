@@ -1291,7 +1291,16 @@ async function savePricing() {
       currency: principal ? principal.currency : 'PHP',
       supplierPrice: round2(_peNum(tr, '.pe-buy')),
       cbm: _peNum(tr, '.pe-cbm'),
-      qty: _peNum(tr, '.pe-qty')
+      qty: _peNum(tr, '.pe-qty'),
+      /* A255 — THE MODEL AND DESCRIPTION MANAGEMENT ACTUALLY TYPED.
+         These fields are editable on this screen and were being written ONLY into `breakdown`, which
+         becomes Priced Items JSON — a history blob nothing downstream reads. The item row kept the
+         original text, so a re-specified line came back to sales, and printed on the client's
+         quotation, as the OLD model number and description at the NEW price. On PR-202608-011 line 1
+         management sold PH82K "PULLER KIT, 8 TON" and the quotation said PH83C "HYDR GEAR PULL, 8
+         TON". Blank is never sent as a change — the server leaves a field it did not receive. */
+      itemNo: mEl ? String(mEl.value || '').trim() : '',
+      itemName: nEl ? String(nEl.value || '').trim() : ''
     });
     breakdown.push({
       line: (line != null && line !== '') ? flowNum(line) : '',   // A159: unique per request — two 'N/A' lines no longer overwrite each other
