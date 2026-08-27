@@ -86,7 +86,13 @@
         <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
           <button class="btn btn-sm btn-secondary" id="llBtnShip" onclick="llBackfill('backfillShipments','lifecycle rows')">Backfill lifecycle rows (all SOs)</button>
           <button class="btn btn-sm btn-secondary" id="llBtnPdf" onclick="llBackfill('backfillPdfDocuments','PDF registrations')">Register existing PDFs</button>
-          <button class="btn btn-sm btn-secondary" id="llBtnAr" onclick="llBackfill('backfillMissingAR','AR rows')">Backfill missing AR rows</button>
+          <!-- A254 — the unscoped "Backfill missing AR rows" button was REMOVED. It called
+               backfillMissingAR with no scope, and unscoped that function creates a receivable for
+               every invoice lacking one: 95 rows worth PHP 49,748,568.78, of which 85 are
+               pre-baseline history already represented in the June snapshot. Pressing it would have
+               taken AR outstanding from PHP 1,551,625.14 to PHP 51,300,193.91 by billing the same
+               money twice. The scoped control now lives on the AR aging page, next to the banner
+               that identifies exactly which invoices are genuinely missing one. -->
         </div>
         <div id="llSetupMsg" style="margin-top:0.5rem;font-size:0.82rem;"></div>
       </details>

@@ -120,6 +120,51 @@ function arNewestFirst(a, b) {
 /* The banner. Same ranking discipline as the AP anomaly banner (flow-ap-aging.js, A247): a gap that
    needs a person is red, an inferred-but-sound link is amber, settled history is a muted footnote.
    Showing all three as one list is how a warning becomes wallpaper. */
+/* A254 — CREATE THE MISSING RECEIVABLES, AND ONLY THOSE.
+ *
+ * backfillMissingAR takes an `invNos` scope (A249) and nothing ever sent it. The one button that
+ * called it — on the lifecycle page — sent an empty payload, and unscoped the function creates a
+ * receivable for EVERY invoice lacking one: 95 rows, PHP 49,748,568.78, of which 85 are
+ * pre-baseline history already carried by the June snapshot. That button is gone; this is its
+ * replacement, and the difference is the scope.
+ *
+ * The list is `unagedLive` — the same set the banner above is printing, so what you press is what
+ * you were just shown, and it cannot drift from it. Two exclusions come for free by construction:
+ * pre-baseline invoices (the architecture excludes them on purpose) and invoices whose receivable
+ * is already attached through the sales order under the older INV-YYYY-NNN numbering. Backfilling
+ * that second group would raise a SECOND receivable for a sale already carried, because the server
+ * matches on invoice number alone and cannot see the sales-order link.
+ *
+ * The action is _SECURED: it mints debt, so it needs a real signed-in session and is refused to a
+ * direct call. Management and director reach this page as viewers, so they never see the button. */
+async function arBackfillLive() {
+  const r = arReconcile(arData, arInvoices);
+  if (!r.unagedLive.length) { alert('Nothing to create — every live invoice already has a receivable.'); return; }
+  const money = v => flowMoney(flowNum(v), 'PHP');
+  const rows = r.unagedLive.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const list = rows.map(v => '  • ' + v.invNo + '   ' + String(v.date).slice(0, 10) + '   '
+    + String(v.customer || '').slice(0, 30) + '   ' + money(v.totalSales)).join('\n');
+  if (!confirm('Create ' + rows.length + ' receivable(s), ' + money(r.unagedLiveValue) + ' in total?\n\n'
+      + list + '\n\nThese are invoices dated on or after ' + r.baseline + ', when this ledger begins.\n'
+      + 'Pre-baseline history is NOT included, and neither is any invoice whose receivable is\n'
+      + 'already attached through its sales order.\n\nThis writes to the ledger.')) return;
+
+  const btn = document.getElementById('arBackfillBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+  try {
+    const res = await postFlow('backfillMissingAR', {
+      invNos: JSON.stringify(rows.map(v => String(v.invNo)))
+    });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not create the receivables.');
+    alert(res.message);
+    await loadAR();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Create these receivables'; }
+  }
+}
+
 function arReconcileBanner() {
   if (!arInvoices) return '';                      // invoices could not be read — say nothing
   const r = arReconcile(arData, arInvoices);
@@ -140,6 +185,12 @@ function arReconcileBanner() {
       ${rows.map(v => `<div style="margin-left:0.4rem;">${esc(v.invNo)} ·
         ${esc(String(v.customer || '').slice(0, 34))} · ${esc(String(v.date).slice(0, 10))} ·
         ${money(v.totalSales)}</div>`).join('')}
+      ${(arSession && (arSession.role === 'admin' || arSession.role === 'accounting'))
+        ? `<button type="button" id="arBackfillBtn" class="btn btn-sm btn-primary"
+             style="margin-top:0.5rem;" onclick="arBackfillLive()"
+             title="Creates a receivable for exactly the invoices listed above — nothing else"
+           >Create these receivables</button>`
+        : ''}
     </div>`);
   }
 
