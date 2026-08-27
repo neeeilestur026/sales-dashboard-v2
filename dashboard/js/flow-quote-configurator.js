@@ -181,9 +181,29 @@ function qcNewQuotation() {
 /* A176 — the single opener the history row uses, for both jobs.
    mode 'edit'     → change the quotation (Draft/Rejected, sales/admin).
    mode 'document' → regenerate/refile its PDF only, at any status, for any role. */
-function qcOpen(no, mode, record) {
-  const q = record || (typeof qList !== 'undefined'
-    ? qList.find(x => String(x.quotationNo) === String(no)) : null);
+/* A257 — RE-READ THE RECORD BEFORE EDITING IT.
+   This used to open whatever `qList` held. `qList` is an in-memory array filled once on page load
+   and refreshed only by an explicit action, so a page left open goes stale without limit — the 60s
+   read cache does not help, because nothing re-reads. Editing from a stale copy then writes it back:
+   updateQuotation rewrites every line from the payload, so the rep silently reverts whatever changed
+   in the meantime and sees the OLD description with a price they know is right, which is exactly how
+   2026-426-KIM-SPI presented. Re-reading costs one request and removes the whole class of problem.
+   Falls back to the cached row if the read fails — better to edit a stale record than to be unable
+   to open it at all — and says so rather than pretending it is current. */
+async function qcOpen(no, mode, record) {
+  let q = record || null;
+  if (!q) {
+    try {
+      const r = await fetchFlow('getQuotations', {}, { fresh: true });
+      q = ((r && r.data) || []).find(x => String(x.quotationNo) === String(no)) || null;
+      if (typeof qList !== 'undefined' && Array.isArray(qList) && r && r.data) qList = r.data;
+    } catch (e) {
+      q = (typeof qList !== 'undefined')
+        ? qList.find(x => String(x.quotationNo) === String(no)) : null;
+      if (q) qcMsg('Could not re-read ' + no + ' just now — editing the copy this page already had. '
+        + 'Reload before saving if someone else may have changed it.', false);
+    }
+  }
   if (!q) { alert('Quotation ' + no + ' is not in the list — hit Refresh and try again.'); return; }
   qcMode = (mode === 'document') ? 'document' : 'edit';
   qcToggleCreate(true);
@@ -739,10 +759,10 @@ function qcSyncRefreshBtn() {
 
 /* A251 — open a quotation for editing and immediately offer its refreshed prices. This is the way
    out of a fully-quoted request: the rep wanted the repriced document, not a second one. */
-function qcOpenAndRefresh(no) {
+async function qcOpenAndRefresh(no) {
   if (typeof qcOpen !== 'function') return;
-  qcOpen(no, 'edit');
-  setTimeout(() => { qcRefreshPricesFromPR(); }, 0);
+  await qcOpen(no, 'edit');            // A257 — qcOpen re-reads, so this must wait for it
+  qcRefreshPricesFromPR();
 }
 
 function qcBanner(html, tone) {
