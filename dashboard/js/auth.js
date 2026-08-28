@@ -1472,4 +1472,15 @@ function _renderMemoQueue(queue, idx, dismissed, dismissedKey, checkKey, today) 
   });
 }
 
-setTimeout(() => { _showMemoModalsIfNeeded(); }, 2500);
+/* A258 — THE MEMO POPUP IS OFF.
+   auth.js loads on every page, so this fired a full-screen modal 2.5s after EVERY navigation until
+   the reader dismissed each memo one by one — over the page they had just opened to work in. It
+   landed on top of the quotation builder, the AR aging screen and the flow pages alike.
+
+   The memos themselves are untouched: they are still written, still targeted, still listed on
+   hr-memos.html, and the notification bell still counts them. Only the interruption is gone.
+
+   Left in place rather than deleted — _showMemoModalsIfNeeded and _renderMemoQueue still work, so
+   restoring the popup is uncommenting one line, and any future "show me unread memos" button can
+   call it directly. */
+// setTimeout(() => { _showMemoModalsIfNeeded(); }, 2500);
