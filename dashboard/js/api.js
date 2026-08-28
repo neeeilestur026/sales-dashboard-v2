@@ -1252,6 +1252,16 @@ function apiSavePayrollHours(period, rows) {
   return fetchFromAPI({ action: 'savePayrollHours', period, rows: JSON.stringify(rows) }, { noCache: true });
 }
 
+/* A259 — the company holiday calendar for a cutoff. Same shape as the hours pair above; noCache
+   for the same reason, since payroll is edited and re-read in one sitting. */
+function apiGetPayrollHolidays(period) {
+  return fetchFromAPI({ action: 'getPayrollHolidays', period }, { noCache: true });
+}
+
+function apiSavePayrollHolidays(period, rows) {
+  return fetchFromAPI({ action: 'savePayrollHolidays', period, rows: JSON.stringify(rows) }, { noCache: true });
+}
+
 function apiGetPayrollRegister(period) {
   return fetchFromAPI({ action: 'getPayrollRegister', period }, { noCache: true });
 }

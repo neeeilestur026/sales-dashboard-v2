@@ -606,6 +606,12 @@ function doGet(e) {
       case 'savePayrollHours':
         result = handleSavePayrollHours(params);
         break;
+      case 'getPayrollHolidays':                  // A259
+        result = handleGetPayrollHolidays(params);
+        break;
+      case 'savePayrollHolidays':                 // A259
+        result = handleSavePayrollHolidays(params);
+        break;
       case 'getPayrollRegister':
         result = handleGetPayrollRegister(params);
         break;
@@ -2822,6 +2828,9 @@ function doPost(e) {
         break;
       case 'savePayrollHours':
         result = handleSavePayrollHours(body);
+        break;
+      case 'savePayrollHolidays':                 // A259
+        result = handleSavePayrollHolidays(body);
         break;
       case 'savePayrollRegister':
         result = handleSavePayrollRegister(body);
@@ -11554,6 +11563,65 @@ function handleSavePayrollHours(params) {
     }
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
+}
+
+/* A259 — THE COMPANY HOLIDAY CALENDAR.
+   Keyed by DATE, not by employee: a holiday is a property of the day, and one toggle marks it for
+   everyone. It also has to be keyed this way to pay an UNWORKED regular holiday at all — the
+   per-employee alternative would need a zero-hour Payroll Hours row per person per holiday, and
+   handleSavePayrollHours deliberately drops those (`if (!hrs) continue`). Nothing about the hours
+   sheet changes because of this. */
+function _payrollHolidaysSheet() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  return _getOrCreateSheet(ss, 'Payroll Holidays', [
+    'Period', 'Date', 'Type'
+  ]);
+}
+
+function handleGetPayrollHolidays(params) {
+  try {
+    var period = String(params.period || '');
+    var sheet  = _payrollHolidaysSheet();
+    var data   = sheet.getDataRange().getValues();
+    if (data.length < 2) return { success: true, data: [] };
+    var results = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0]) continue;
+      if (period && String(row[0]) !== period) continue;
+      var dv = row[1];
+      var dateStr = (dv instanceof Date) ? formatDate(dv) : String(dv || '');
+      if (!dateStr) continue;
+      results.push({ period: String(row[0]), date: dateStr, type: String(row[2] || '') });
+    }
+    return { success: true, data: results };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+function handleSavePayrollHolidays(params) {
+  try {
+    var period = String(params.period || '');
+    var rows   = JSON.parse(params.rows || '[]');
+    if (!period) return { success: false, message: 'Period required.' };
+    var sheet = _payrollHolidaysSheet();
+    var data  = sheet.getDataRange().getValues();
+    // Replace this period wholesale, exactly as handleSavePayrollHours does — the client always
+    // sends the complete calendar for the period, so a removed holiday must disappear.
+    for (var i = data.length; i >= 2; i--) {
+      if (String(data[i - 1][0]) === period) sheet.deleteRow(i);
+    }
+    for (var j = 0; j < rows.length; j++) {
+      var r = rows[j];
+      var d = String(r.date || '').trim();
+      var t = String(r.type || '').trim();
+      // Only the two recognised types are stored; anything else means "ordinary day", which is the
+      // absence of a row rather than a row saying so.
+      if (!d) continue;
+      if (t !== 'Regular Holiday' && t !== 'Special Non-Working') continue;
+      sheet.appendRow([period, d, t]);
+    }
+    return { success: true, saved: rows.length };
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
 function handleGetPayrollRegister(params) {

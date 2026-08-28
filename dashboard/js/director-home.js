@@ -16,8 +16,39 @@ let _incentivesA = {};     // { "EmployeeName": total of ACTIVE incentives }
 let _incentivesB = {};
 let _incentiveRowsA = {};  // { "EmployeeName": [ row, … ] }
 let _incentiveRowsB = {};
+/* A259 — THE COMPANY HOLIDAY CALENDAR, one entry per DATE. A holiday belongs to the day, not to a
+   person, so one toggle marks it for everyone. Keying it by date is also what makes an UNWORKED
+   regular holiday payable: the per-employee alternative would need a zero-hour Payroll Hours row per
+   person per holiday, and both the client filter in saveHours and handleSavePayrollHours drop those.
+     { "YYYY-MM-DD": "Regular Holiday" | "Special Non-Working" } */
+let _holidaysA = {};
+let _holidaysB = {};
+/* The three rates, named once. HOL_REG and HOL_SPE are the DOLE premiums for a worked holiday;
+   UNWORKED_REG is the day's basic pay an employee receives on a regular holiday they did not work.
+   A special non-working day carries no such entitlement — no work, no pay — which is why there is no
+   UNWORKED_SPE. */
+const _RATE_OT          = 1.25;
+const _RATE_HOL_REG     = 2.00;
+const _RATE_HOL_SPE     = 1.30;
+const _HOL_REG          = 'Regular Holiday';
+const _HOL_SPE          = 'Special Non-Working';
 let _currentYear  = null;
 let _currentMonth = null;
+
+/** The calendar for a cutoff. One accessor so nothing has to remember which map is which. */
+function _holidayMap(cutoff) { return cutoff === 'A' ? _holidaysA : _holidaysB; }
+
+/** What kind of day this is: 'Regular Holiday', 'Special Non-Working', or '' for an ordinary day.
+ *  A259 — legacy Payroll Hours rows carry dayType 'Holiday' from before the calendar existed; they
+ *  keep their original x2 meaning, so no stored row changes value under this feature. */
+function _dayTypeFor(cutoff, dateStr, entry) {
+  const cal = _holidayMap(cutoff)[dateStr];
+  if (cal === _HOL_REG || cal === _HOL_SPE) return cal;
+  const legacy = String((entry || {}).dayType || '');
+  if (legacy === 'Holiday' || legacy === _HOL_REG) return _HOL_REG;
+  if (legacy === _HOL_SPE) return _HOL_SPE;
+  return '';
+}
 
 // ── Init ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -89,17 +120,23 @@ async function loadPeriod() {
 
   // Load hours and register for both cutoffs. A transient backend failure must render an
   // inline error, not abort as an unhandled rejection leaving the grids stuck on the intro text.
-  let hA, hB, rA, rB, iA, iB;
+  let hA, hB, rA, rB, iA, iB, xA, xB;
   try {
     /* A229 — the two incentive reads join THIS Promise.all rather than awaiting after it. Six
        round trips to Apps Script in parallel is already slow; two more in sequence would be felt. */
-    [hA, hB, rA, rB, iA, iB] = await Promise.all([
+    [hA, hB, rA, rB, iA, iB, xA, xB] = await Promise.all([
       apiGetPayrollHours(periodA),
       apiGetPayrollHours(periodB),
       apiGetPayrollRegister(periodA),
       apiGetPayrollRegister(periodB),
       apiGetPayrollIncentives({ period: periodA }),
-      apiGetPayrollIncentives({ period: periodB })
+      apiGetPayrollIncentives({ period: periodB }),
+      /* A259 — the holiday calendars ride the same Promise.all for the reason A229 gives about the
+         incentive reads: these round trips are slow, and two more in sequence would be felt. A
+         backend that does not know the action yet resolves to no holidays, which is the old
+         behaviour exactly. */
+      apiGetPayrollHolidays(periodA).catch(() => ({ data: [] })),
+      apiGetPayrollHolidays(periodB).catch(() => ({ data: [] }))
     ]);
   } catch (e) {
     ['hoursAGrid', 'payAGrid', 'hoursBGrid', 'payBGrid'].forEach(id => {
@@ -121,6 +158,11 @@ async function loadPeriod() {
 
   _registerB = {};
   (rB.data || []).forEach(r => { _registerB[r.employee] = r; });
+
+  _holidaysA = {};
+  (((xA && xA.data) || [])).forEach(r => { if (r && r.date && r.type) _holidaysA[r.date] = r.type; });
+  _holidaysB = {};
+  (((xB && xB.data) || [])).forEach(r => { if (r && r.date && r.type) _holidaysB[r.date] = r.type; });
 
   _applyIncentives('A', (iA && iA.data) || []);
   _applyIncentives('B', (iB && iB.data) || []);
@@ -489,21 +531,37 @@ function renderHoursGrid(cutoff) {
       <button class="btn-sm" onclick="fillAllHours('${cutoff}',8)">8h All Weekdays</button>
       <button class="btn-sm" onclick="fillAllHours('${cutoff}',9)">9h All Weekdays</button>
       <button class="btn-sm" onclick="fillAllHours('${cutoff}',0)">Clear All</button>
-      <span style="font-size:0.73rem;color:var(--text-muted);margin-left:0.5rem;">Enter hours per day (e.g. 8, 8.5, 10). Reg = up to 8hrs, OT = beyond 8hrs. Sundays auto-skip.</span>
+      <span style="font-size:0.73rem;color:var(--text-muted);margin-left:0.5rem;">Enter hours per day (e.g. 8, 8.5, 10). Reg = up to 8hrs, OT = beyond 8hrs. Sundays auto-skip.
+        <strong>Click a date heading</strong> to mark it <span style="color:#fde68a;">Special 130%</span> or <span style="color:#fecaca;">Regular 200%</span>; a regular holiday nobody works still pays one day.</span>
     </div>`;
 
   html += `<table class="pay-table" id="hoursTable${cutoff}">
     <thead><tr>
       <th class="sticky" style="min-width:140px;">Employee</th>`;
 
+  /* A259 — each date header is a toggle: ordinary -> Special 130% -> Regular 200% -> ordinary.
+     Company-wide, because a holiday belongs to the day. Sundays keep their non-input cells but can
+     still be toggled — an unworked regular holiday falling on a Sunday is still payable. */
+  const cal = _holidayMap(cutoff);
   dates.forEach(dt => {
-    const style = dt.isSunday ? 'color:#64748b;background:rgba(0,0,0,0.15);' : '';
-    html += `<th style="text-align:center;${style}min-width:52px;">${dt.label}</th>`;
+    const type = cal[dt.dateStr] || '';
+    const tint = type === _HOL_REG ? 'background:rgba(239,68,68,0.22);color:#fecaca;'
+               : type === _HOL_SPE ? 'background:rgba(245,158,11,0.22);color:#fde68a;'
+               : (dt.isSunday ? 'color:#64748b;background:rgba(0,0,0,0.15);' : '');
+    const tag = type === _HOL_REG ? '<div style="font-size:0.6rem;font-weight:700;">REG 200%</div>'
+              : type === _HOL_SPE ? '<div style="font-size:0.6rem;font-weight:700;">SPE 130%</div>'
+              : '';
+    const tip = type ? 'Marked ' + type + ' — click to change'
+                     : 'Ordinary day — click to mark a holiday';
+    html += `<th style="text-align:center;${tint}min-width:52px;cursor:pointer;user-select:none;"
+      title="${tip}" onclick="toggleHoliday('${cutoff}','${dt.dateStr}')">${dt.label}${tag}</th>`;
   });
 
   html += `<th class="num" style="min-width:60px;">Reg Hrs</th>
            <th class="num" style="min-width:55px;">OT Hrs</th>
+           <th class="num" style="min-width:58px;" title="Hours worked on a holiday">Hol Hrs</th>
            <th class="num" style="min-width:80px;">Basic Pay</th>
+           <th class="num" style="min-width:85px;" title="Regular 200% + Special 130% + unworked regular holidays">Holiday Pay</th>
            <th class="num" style="min-width:75px;">OT Pay</th>
            <th style="min-width:60px;">Fill</th>
     </tr></thead><tbody>`;
@@ -520,8 +578,14 @@ function renderHoursGrid(cutoff) {
       const key    = empName + '|' + dt.dateStr;
       const stored = hoursMap[key] || {};
       const hrs    = parseFloat(stored.hours) || 0;
-      rowRegHrs   += Math.min(hrs, 8);
-      rowOTHrs    += Math.max(hrs - 8, 0);
+      /* A259 — DEFECT FIX. This split hours into regular/OT with no regard for the day type while
+         _payEarnings diverted holiday hours away entirely, so the grid would have shown Basic Pay
+         for hours the payslip pays as Holiday. Invisible until holidays existed; wrong the moment
+         they did. */
+      if (!_dayTypeFor(cutoff, dt.dateStr, stored)) {
+        rowRegHrs += Math.min(hrs, 8);
+        rowOTHrs  += Math.max(hrs - 8, 0);
+      }
       const val    = hrs > 0 ? hrs : '';
 
       if (dt.isSunday) {
@@ -537,11 +601,14 @@ function renderHoursGrid(cutoff) {
     });
 
     const k = _empKey(empName);
+    const e = _payEarnings(emp, cutoff);      // A259 — one definition, so the grid cannot drift
     html += `
       <td class="num computed" id="regHrs_${cutoff}_${k}">${rowRegHrs > 0 ? rowRegHrs.toFixed(1) : '—'}</td>
       <td class="num computed" id="otHrs_${cutoff}_${k}">${rowOTHrs > 0 ? rowOTHrs.toFixed(1) : '—'}</td>
-      <td class="num computed highlight" id="basicPay_${cutoff}_${k}">${peso(rowRegHrs * hourlyRate)}</td>
-      <td class="num computed highlight" id="otPay_${cutoff}_${k}">${rowOTHrs > 0 ? peso(rowOTHrs * hourlyRate * 1.25) : '—'}</td>
+      <td class="num computed" id="holHrs_${cutoff}_${k}" title="Hours worked on a holiday">${e.holidayHrs > 0 ? e.holidayHrs.toFixed(1) : '—'}</td>
+      <td class="num computed highlight" id="basicPay_${cutoff}_${k}">${peso(e.basicPay)}</td>
+      <td class="num computed highlight" id="holPay_${cutoff}_${k}" title="Regular 200% + Special 130% + unworked regular holidays">${e.holidayPay > 0 ? peso(e.holidayPay) : '—'}</td>
+      <td class="num computed highlight" id="otPay_${cutoff}_${k}">${e.otHrs > 0 ? peso(e.otPay) : '—'}</td>
       <td><button class="btn-sm" onclick="fillRowHours('${cutoff}','${esc(empName)}',8)" style="font-size:0.7rem;padding:0.2rem 0.5rem;">8h</button></td>
     </tr>`;
   });
@@ -609,6 +676,10 @@ function _computePaySlip(emp, cutoff) {
     empName, hourlyRate: e.hourlyRate, dailyRate: emp.dailyRate,
     regHrs: e.regHrs, otHrs: e.otHrs, holidayHrs: e.holidayHrs,
     basicPay: e.basicPay, holidayPay: e.holidayPay, otPay: e.otPay,
+    // A259 — the breakdown, so the payslip can name the rate it applied instead of guessing
+    regHolHrs: e.regHolHrs, regHolPay: e.regHolPay,
+    speHolHrs: e.speHolHrs, speHolPay: e.speHolPay,
+    unworkedHolDays: e.unworkedHolDays, unworkedHolPay: e.unworkedHolPay,
     otherIncome: e.otherIncome, incentive: e.incentive, grossPay,
     pagibig, sss, philhealth, advances, wtax, totalDed, netPay: grossPay - totalDed,
   };
@@ -623,6 +694,23 @@ function _payslipHtml(emp, cutoff) {
   // Fixed 2-column table rows: the amount column has a set width so it can never run off the page edge.
   const row = (label, val, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td class="l">${esc(label)}</td><td class="r">${val}</td></tr>`;
   const money = (label, val, cls) => row(label, peso(val), cls);
+  /* A259 — the rate is no longer hard-coded into the label. This said "Holiday (Nh x2)" whatever
+     had actually been applied, which is wrong on every special non-working day. Only the lines that
+     carry money are printed; a period with no holidays shows a single zero Holiday line exactly as
+     it always did, so nothing changes on an ordinary payslip. */
+  /* The label column is nowrap with an ellipsis at 58% of a 296px receipt — about 26 characters at
+     11px Courier. "Regular Holiday (8.0 hrs x2)" overflows it and renders as "Regular Holiday (8.0
+     hr…", which hides the very rate the line exists to state. A compact hour form keeps every label
+     inside the column instead of widening a rule that ~100 filed payslips lay out against. */
+  const hc = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + 'h';
+  const holidayRows = (s.regHolPay || s.speHolPay || s.unworkedHolPay)
+    ? [
+        s.regHolPay      ? money('Reg Holiday (' + hc(s.regHolHrs) + ' x2)', s.regHolPay) : '',
+        s.speHolPay      ? money('Spcl Holiday (' + hc(s.speHolHrs) + ' x1.3)', s.speHolPay) : '',
+        s.unworkedHolPay ? money('Unworked Holiday (' + s.unworkedHolDays + ' day'
+                                 + (s.unworkedHolDays === 1 ? '' : 's') + ')', s.unworkedHolPay) : ''
+      ].filter(Boolean).join('')
+    : money('Holiday', s.holidayPay);
   return `<div class="payslip">
     <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
       <img class="ps-logo" src="${location.origin}/images/logo-login.png" alt="" onerror="this.style.display='none'">
@@ -645,7 +733,7 @@ function _payslipHtml(emp, cutoff) {
     <table class="ps-t"><tbody>
       ${money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
       ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
-      ${money('Holiday (' + hn(s.holidayHrs) + ' x2)', s.holidayPay)}
+      ${holidayRows}
       ${money('Other Income', s.otherIncome)}
       ${money('Incentive', s.incentive)}
       ${money('GROSS PAY', s.grossPay, 'sub')}
@@ -776,6 +864,20 @@ function _onHoursInput(input) {
   _recomputeEmpTotals(empName, cutoff);
 }
 
+/* A259 — cycle a date through ordinary -> Special 130% -> Regular 200% -> ordinary.
+   Re-renders the whole grid rather than patching one column: every employee's Reg/OT/Holiday totals
+   change when a day changes type, and patching a subset is how a grid comes to disagree with the
+   payslip. The calendar is saved with the hours, so nothing is written until the user saves. */
+function toggleHoliday(cutoff, dateStr) {
+  const cal = _holidayMap(cutoff);
+  const cur = cal[dateStr] || '';
+  if (cur === '') cal[dateStr] = _HOL_SPE;
+  else if (cur === _HOL_SPE) cal[dateStr] = _HOL_REG;
+  else delete cal[dateStr];
+  renderHoursGrid(cutoff);
+  try { renderPayGrid(cutoff); } catch (e) { /* pay grid refreshes on its own tab */ }
+}
+
 // Fill a single employee's row for all non-Sunday days
 function fillRowHours(cutoff, empName, hrs) {
   const hoursMap = cutoff === 'A' ? _hoursA : _hoursB;
@@ -808,27 +910,20 @@ function fillAllHours(cutoff, hrs) {
 function _recomputeEmpTotals(empName, cutoff) {
   const emp = _employees.find(e => (e.lastName + ', ' + e.firstName) === empName);
   if (!emp) return;
-  const hourlyRate = emp.dailyRate / 8;
-  const hoursMap   = cutoff === 'A' ? _hoursA : _hoursB;
 
-  let regHrs = 0, otHrs = 0;
-  Object.keys(hoursMap).forEach(key => {
-    if (!key.startsWith(empName + '|')) return;
-    const hrs = parseFloat(hoursMap[key].hours) || 0;
-    regHrs += Math.min(hrs, 8);
-    otHrs  += Math.max(hrs - 8, 0);
-  });
-
-  const k  = _empKey(empName);
-  const rh = document.getElementById(`regHrs_${cutoff}_${k}`);
-  const oh = document.getElementById(`otHrs_${cutoff}_${k}`);
-  const bp = document.getElementById(`basicPay_${cutoff}_${k}`);
-  const op = document.getElementById(`otPay_${cutoff}_${k}`);
-
-  if (rh) rh.textContent = regHrs > 0 ? regHrs.toFixed(1) : '—';
-  if (oh) oh.textContent = otHrs  > 0 ? otHrs.toFixed(1)  : '—';
-  if (bp) bp.textContent = peso(regHrs * hourlyRate);
-  if (op) op.textContent = otHrs > 0 ? peso(otHrs * hourlyRate * 1.25) : '—';
+  /* A259 — DEFECT FIX, the live half of the one in renderHoursGrid. This recomputed reg/OT from
+     every stored row with no regard for the day type, so typing hours into a holiday column moved
+     the money into Basic Pay on screen while the payslip paid it as Holiday. Both now read the same
+     _payEarnings, so the grid cannot say one thing and the payslip another. */
+  const e = _payEarnings(emp, cutoff);
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  const k = _empKey(empName);
+  set(`regHrs_${cutoff}_${k}`,   e.regHrs     > 0 ? e.regHrs.toFixed(1)     : '—');
+  set(`otHrs_${cutoff}_${k}`,    e.otHrs      > 0 ? e.otHrs.toFixed(1)      : '—');
+  set(`holHrs_${cutoff}_${k}`,   e.holidayHrs > 0 ? e.holidayHrs.toFixed(1) : '—');
+  set(`basicPay_${cutoff}_${k}`, peso(e.basicPay));
+  set(`holPay_${cutoff}_${k}`,   e.holidayPay > 0 ? peso(e.holidayPay)      : '—');
+  set(`otPay_${cutoff}_${k}`,    e.otHrs      > 0 ? peso(e.otPay)           : '—');
 }
 
 // ── Save Hours ────────────────────────────────────────────────
@@ -841,6 +936,19 @@ async function saveHours(cutoff) {
   try {
     const res = await apiSavePayrollHours(period, rows);
     if (!res.success) { alert('Error saving hours: ' + (res.message || 'Unknown error')); return; }
+    /* A259 — the holiday calendar saves with the hours, so one button means one consistent state.
+       Sent whole: the server replaces the period, so a holiday the user un-toggled disappears.
+       An older backend that does not know the action leaves the calendar unsaved and says so
+       rather than reporting a success the sheet does not have. */
+    const holRows = Object.keys(_holidayMap(cutoff)).map(d => ({ date: d, type: _holidayMap(cutoff)[d] }));
+    try {
+      const hres = await apiSavePayrollHolidays(period, holRows);
+      if (!hres || !hres.success) {
+        alert('Hours saved, but the holiday markings did not: ' + ((hres && hres.message) || 'unknown error'));
+      }
+    } catch (err2) {
+      alert('Hours saved, but the holiday markings did not: ' + err2.message);
+    }
   } catch (err) {
     alert('Error saving hours: ' + err.message);
     return;
@@ -1123,36 +1231,45 @@ function _buildCutoffHtml(cutoff) {
 
   const p = v => '₱' + (Number(v)||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  /* A259 — the approval document must SHOW which days were holidays, or an approver is asked to
+     sign off a Holiday Pay figure with nothing on the page explaining where it came from. */
+  const calS = _holidayMap(cutoff);
   let tsHead = `<tr><th>Employee</th>`;
-  dates.forEach(dt => { tsHead += `<th${dt.isSunday ? ' class="sun"' : ''}>${dt.label}</th>`; });
-  tsHead += `<th>Reg Hrs</th><th>OT Hrs</th><th>Basic Pay</th><th>OT Pay</th></tr>`;
+  dates.forEach(dt => {
+    const t = calS[dt.dateStr] || '';
+    const mark = t === _HOL_REG ? '<br><span style="font-size:8px;">REG 200%</span>'
+               : t === _HOL_SPE ? '<br><span style="font-size:8px;">SPE 130%</span>' : '';
+    tsHead += `<th${dt.isSunday ? ' class="sun"' : ''}>${dt.label}${mark}</th>`;
+  });
+  tsHead += `<th>Reg Hrs</th><th>OT Hrs</th><th>Hol Hrs</th><th>Basic Pay</th><th>Holiday Pay</th><th>OT Pay</th></tr>`;
 
   let tsBody = '';
-  let totReg = 0, totOT = 0, totBasic = 0, totOTPay = 0;
+  let totReg = 0, totOT = 0, totHol = 0, totBasic = 0, totHolPay = 0, totOTPay = 0;
 
   _employees.forEach(emp => {
-    const empName    = emp.lastName + ', ' + emp.firstName;
-    const hourlyRate = emp.dailyRate / 8;
-    let regHrs = 0, otHrs = 0;
+    const empName = emp.lastName + ', ' + emp.firstName;
+    /* A259 — DEFECT FIX, the third copy of it. This split reg/OT with Math.min(hrs,8) regardless of
+       the day type, so the approval document would have shown Basic Pay for hours the payslip and
+       the register pay as Holiday — the one page an approver signs. It now reads the same
+       _payEarnings as everything else. */
+    const te = _payEarnings(emp, cutoff);
 
     let row = `<tr><td class="name">${empName}</td>`;
     dates.forEach(dt => {
       const key  = empName + '|' + dt.dateStr;
       const hrs  = parseFloat((hoursMap[key] || {}).hours) || 0;
-      regHrs    += Math.min(hrs, 8);
-      otHrs     += Math.max(hrs - 8, 0);
       row       += dt.isSunday
         ? `<td class="sun">—</td>`
         : `<td class="num">${hrs > 0 ? hrs : ''}</td>`;
     });
-    const basic = regHrs * hourlyRate;
-    const otPay = otHrs  * hourlyRate * 1.25;
-    totReg   += regHrs; totOT    += otHrs;
-    totBasic += basic;  totOTPay += otPay;
-    row += `<td class="num">${regHrs > 0 ? regHrs.toFixed(1) : '—'}</td>
-            <td class="num">${otHrs  > 0 ? otHrs.toFixed(1)  : '—'}</td>
-            <td class="num">${p(basic)}</td>
-            <td class="num">${otHrs > 0 ? p(otPay) : '—'}</td></tr>`;
+    totReg    += te.regHrs;    totOT     += te.otHrs;    totHol    += te.holidayHrs;
+    totBasic  += te.basicPay;  totHolPay += te.holidayPay; totOTPay += te.otPay;
+    row += `<td class="num">${te.regHrs     > 0 ? te.regHrs.toFixed(1)     : '—'}</td>
+            <td class="num">${te.otHrs      > 0 ? te.otHrs.toFixed(1)      : '—'}</td>
+            <td class="num">${te.holidayHrs > 0 ? te.holidayHrs.toFixed(1) : '—'}</td>
+            <td class="num">${p(te.basicPay)}</td>
+            <td class="num">${te.holidayPay > 0 ? p(te.holidayPay) : '—'}</td>
+            <td class="num">${te.otHrs      > 0 ? p(te.otPay)      : '—'}</td></tr>`;
     tsBody += row;
   });
 
@@ -1160,7 +1277,9 @@ function _buildCutoffHtml(cutoff) {
     <td colspan="${dates.length + 1}">TOTAL</td>
     <td class="num">${totReg.toFixed(1)}</td>
     <td class="num">${totOT.toFixed(1)}</td>
+    <td class="num">${totHol.toFixed(1)}</td>
     <td class="num">${p(totBasic)}</td>
+    <td class="num">${totHolPay > 0 ? p(totHolPay) : '—'}</td>
     <td class="num">${totOTPay > 0 ? p(totOTPay) : '—'}</td>
   </tr>`;
 
@@ -1319,6 +1438,10 @@ function _buildCutoffHtml(cutoff) {
       employeeCount: employeeCount,
       totalRegHours: totReg,
       totalOTHours: totOT,
+      /* A259 — the approval record carried no holiday figure at all, so the totals stored against a
+         submitted cutoff could not explain their own gross once holidays existed. */
+      totalHolidayHours: totHol,
+      totalHolidayPay: gHol,
       grossPay: gGross,
       totalDeductions: gDed,
       netPay: gNet,
@@ -1437,21 +1560,60 @@ async function voidIncentive(incentiveId, cutoff) {
   } catch (e) { alert(e.message); }
 }
 
+/* A259 — EARNINGS, INCLUDING HOLIDAYS. Walks the cutoff's DATES rather than only the hours rows,
+   because a regular holiday nobody worked still has to be paid and has no hours row to find.
+
+     Regular Holiday, worked     hrs x hourly x 2.00
+     Regular Holiday, NOT worked          dailyRate  (the entitlement; no hours exist to multiply)
+     Special Non-Working, worked  hrs x hourly x 1.30
+     Special Non-Working, not     nothing — no work, no pay
+     ordinary day                 min(hrs,8) regular, the rest at 1.25
+
+   Hours on a holiday are paid at the flat premium with no 8-hour split, which is what the original
+   x2 code did and what the user confirmed. `holidayHrs` and `holidayPay` keep their old meaning as
+   the COMBINED totals, so the payslip, the pay grid, the approval snapshot and saveRegister all keep
+   working untouched; the breakdown rides alongside for the payslip that wants to name the rates. */
 function _payEarnings(emp, cutoff) {
   const empName = emp.lastName + ', ' + emp.firstName;
   const hourlyRate = emp.dailyRate / 8;
   const hoursMap = cutoff === 'A' ? _hoursA : _hoursB;
-  let regHrs = 0, otHrs = 0, holidayHrs = 0;
+  let regHrs = 0, otHrs = 0;
+  let regHolHrs = 0, regHolPay = 0, speHolHrs = 0, speHolPay = 0;
+  let unworkedHolDays = 0, unworkedHolPay = 0;
+
+  _buildDateRange(cutoff).forEach(dt => {
+    const entry = hoursMap[empName + '|' + dt.dateStr];
+    const hrs = parseFloat((entry || {}).hours) || 0;
+    const type = _dayTypeFor(cutoff, dt.dateStr, entry);
+    if (type === _HOL_REG) {
+      if (hrs > 0) { regHolHrs += hrs; regHolPay += hrs * hourlyRate * _RATE_HOL_REG; }
+      else { unworkedHolDays += 1; unworkedHolPay += emp.dailyRate; }
+    } else if (type === _HOL_SPE) {
+      if (hrs > 0) { speHolHrs += hrs; speHolPay += hrs * hourlyRate * _RATE_HOL_SPE; }
+    } else {
+      regHrs += Math.min(hrs, 8);
+      otHrs  += Math.max(hrs - 8, 0);
+    }
+  });
+
+  /* A holiday row outside the rendered range would otherwise be dropped silently. There should be
+     none — the grid only writes dates it drew — but a stale row from an edited cutoff definition
+     must still be paid as ordinary time rather than vanish from the total. */
+  const seen = {};
+  _buildDateRange(cutoff).forEach(dt => { seen[dt.dateStr] = 1; });
   Object.keys(hoursMap).forEach(key => {
     if (!key.startsWith(empName + '|')) return;
-    const entry = hoursMap[key];
-    const hrs = parseFloat(entry.hours) || 0;
-    if (entry.dayType === 'Holiday') holidayHrs += hrs;
-    else { regHrs += Math.min(hrs, 8); otHrs += Math.max(hrs - 8, 0); }
+    const d = key.slice(empName.length + 1);
+    if (seen[d]) return;
+    const hrs = parseFloat(hoursMap[key].hours) || 0;
+    regHrs += Math.min(hrs, 8);
+    otHrs  += Math.max(hrs - 8, 0);
   });
+
+  const holidayHrs = regHolHrs + speHolHrs;
   const basicPay = regHrs * hourlyRate;
-  const holidayPay = holidayHrs * hourlyRate * 2;
-  const otPay = otHrs * hourlyRate * 1.25;
+  const holidayPay = regHolPay + speHolPay + unworkedHolPay;
+  const otPay = otHrs * hourlyRate * _RATE_OT;
   // Other Income is the STANDING allowance on the employee row, and it is 2nd-cutoff only. Untouched.
   const otherIncome = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
   const incentive = _incentiveFor(empName, cutoff);
@@ -1459,6 +1621,8 @@ function _payEarnings(emp, cutoff) {
   return {
     empName, hourlyRate, regHrs, otHrs, holidayHrs,
     basicPay, holidayPay, otPay, otherIncome, incentive,
+    // A259 — the breakdown behind `holidayPay`, so a payslip can name the rate it actually applied
+    regHolHrs, regHolPay, speHolHrs, speHolPay, unworkedHolDays, unworkedHolPay,
     statBase,                       // what SSS / PhilHealth are computed from — no incentive
     grossPay: statBase + incentive  // what the employee is actually paid
   };
