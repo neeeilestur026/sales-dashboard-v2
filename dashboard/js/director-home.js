@@ -817,8 +817,14 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure, opts) {
 
   const doc = iframe.contentDocument || iframe.contentWindow.document;
   doc.open();
+  /* A261 — `fitContent` treats bodyPx as a MINIMUM and lets the body grow to whatever the content
+     actually needs, so the page derived from scrollWidth below can never be narrower than the
+     document. A payslip is a fixed-width receipt and keeps the exact width it asks for. */
+  const widthCss = opts.fitContent
+    ? 'width:max-content;min-width:' + bodyPx + 'px;'
+    : 'width:' + bodyPx + 'px;';
   doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + css +
-    ' body{margin:0;background:#fff;width:' + bodyPx + 'px;}</style></head><body>' + innerHtml + '</body></html>');
+    ' body{margin:0;background:#fff;' + widthCss + '}</style></head><body>' + innerHtml + '</body></html>');
   doc.close();
   const win = iframe.contentWindow;
 
@@ -1239,6 +1245,7 @@ function exportCutoff(cutoff) {
        then sized from the RENDERED width, so a wider cutoff simply produces a wider page instead of
        a cropped one. */
     bodyPx: 1400,
+    fitContent: true,     // a wider cutoff makes a wider page rather than a cropped one
     what: 'payroll'
   });
 }

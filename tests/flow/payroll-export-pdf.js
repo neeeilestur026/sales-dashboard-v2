@@ -57,6 +57,11 @@ ok('images are awaited before capture', /const pending = imgs\.filter\(im => !im
 ok('the iframe is cleaned up on failure too', /catch \(err\) \{ cleanup\(\);/.test(r));
 ok('and by a safety net if save never resolves', /setTimeout\(cleanup, 15000\);/.test(r));
 ok('a failure names which document failed', /opts\.what \|\| 'payslip'/.test(r));
+/* The page is derived from scrollWidth, so a body pinned to a fixed width can only ever report that
+   width — a wider document would be cropped rather than paginated. fitContent makes bodyPx a floor. */
+ok('fitContent lets the body grow past its floor', /width:max-content;min-width:/.test(r));
+ok('  and a payslip still gets its exact fixed width', /'width:' \+ bodyPx \+ 'px;'/.test(r));
+ok('the cutoff export asks for it', /fitContent: true/.test(fn));
 
 console.log('\n5 · the button still points at it');
 const HTML = fs.readFileSync(path.join(__dirname, '../../dashboard/director-home.html'), 'utf8');
