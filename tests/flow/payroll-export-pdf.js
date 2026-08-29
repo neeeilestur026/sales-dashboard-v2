@@ -63,7 +63,25 @@ ok('fitContent lets the body grow past its floor', /width:max-content;min-width:
 ok('  and a payslip still gets its exact fixed width', /'width:' \+ bodyPx \+ 'px;'/.test(r));
 ok('the cutoff export asks for it', /fitContent: true/.test(fn));
 
-console.log('\n5 · the button still points at it');
+console.log('\n5 · A262 — the capture is sized from the measured document');
+/* Left to itself html2canvas sized the capture from html2pdf's own page-derived container and took
+   874px of a 1400px document — 62% — which was then stretched across the page. Verified on the real
+   PDF: the embedded image is now 1400x873, aspect 1.6037, matching the document exactly. */
+ok('html2canvas is given an explicit size', /canvasOpts\.width = wpx; canvasOpts\.height = hpx;/.test(r));
+ok('  and a matching window size', /canvasOpts\.windowWidth = wpx; canvasOpts\.windowHeight = hpx;/.test(r));
+ok('  guarded on non-zero, because html2pdf mutates the body while rendering',
+   /if \(wpx > 0 && hpx > 0\) \{/.test(r));
+ok('  the options object is built before the call, not inlined', /const canvasOpts = \{ scale: 3/.test(r));
+
+console.log('\n6 · A262 — the page orientation follows the document shape');
+/* jsPDF normalises format to orientation, so a hard-coded 'portrait' swapped [382, 243] into a
+   243x382 page and squeezed the wide payroll onto a third of a tall sheet. Verified on the real
+   PDF: 382x243 landscape, image drawn at 370x230.7mm = 96.9% x 94.9% of the page. */
+ok('orientation is derived, not hard-coded',
+   /orientation: pageW > pageH \? 'landscape' : 'portrait'/.test(r));
+ok('  and nothing hard-codes portrait any more', !/orientation: 'portrait' \}/.test(r));
+
+console.log('\n7 · the button still points at it');
 const HTML = fs.readFileSync(path.join(__dirname, '../../dashboard/director-home.html'), 'utf8');
 ok('Export PDF calls exportCutoff for both cutoffs',
    (HTML.match(/onclick="exportCutoff\('[AB]'\)"/g) || []).length >= 2);

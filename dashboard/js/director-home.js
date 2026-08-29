@@ -837,11 +837,34 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure, opts) {
       const hpx = win.document.body.scrollHeight || 1000;
       const pageW = Math.round(wpx * px2mm) + margin * 2;
       const pageH = singleMeasure ? Math.max(120, Math.round(hpx * px2mm) + margin * 2) : (opts.pageH || 245);
+      /* A262 — TELL html2canvas HOW BIG THE DOCUMENT IS.
+         Left to itself it sizes the capture from html2pdf's own page-derived container, and for a
+         document wider than that container it silently captures only part of it: on the live August
+         2026 payroll the body is 1400px wide and the canvas came out 874px — 62% — which html2pdf
+         then stretched across the full page. That is the cropped export, and it is why every column
+         past the 23rd and the third signature block were missing.
+
+         The measurements above already exist to size the page; they size the capture too. Guarded on
+         non-zero because html2pdf MUTATES the body while rendering — reading scrollWidth back
+         afterwards returns 0 — and passing a zero here would be worse than passing nothing.
+
+         Payslips are unaffected either way (296px, well inside the container): measured 401x619
+         before and 400x618 after. */
+      const canvasOpts = { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false };
+      if (wpx > 0 && hpx > 0) {
+        canvasOpts.width = wpx; canvasOpts.height = hpx;
+        canvasOpts.windowWidth = wpx; canvasOpts.windowHeight = hpx;
+      }
       win.html2pdf().set({
         margin: margin, filename,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false },
-        jsPDF: { unit: 'mm', format: [pageW, pageH], orientation: 'portrait' },
+        html2canvas: canvasOpts,
+        /* A262 — jsPDF NORMALISES the format to the orientation, so a hard-coded 'portrait' swaps a
+           wide format: [382, 243] came back as a 243 x 382 page, and the payroll — which is wider
+           than it is tall — was squeezed onto a third of a tall sheet. Derive it from the shape we
+           actually measured. A payslip is taller than wide and stays portrait, unchanged. */
+        jsPDF: { unit: 'mm', format: [pageW, pageH],
+                 orientation: pageW > pageH ? 'landscape' : 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(win.document.body).save()
         .then(() => setTimeout(cleanup, 1500))
