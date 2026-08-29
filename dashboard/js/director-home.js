@@ -35,6 +35,12 @@ const _HOL_SPE          = 'Special Non-Working';
 let _currentYear  = null;
 let _currentMonth = null;
 
+/* A260 — a fixed-salary employee is paid a set amount per cutoff whatever their hours, and takes no
+   statutory contribution. Anything that is not exactly 'Fixed' is hourly, so a blank pay type on
+   every row written before this feature keeps its original behaviour with no migration. */
+function _isFixedPay(emp) { return String((emp || {}).payType || '') === 'Fixed'; }
+function _fixedAmount(emp) { return parseFloat((emp || {}).fixedAmount) || 0; }
+
 /** The calendar for a cutoff. One accessor so nothing has to remember which map is which. */
 function _holidayMap(cutoff) { return cutoff === 'A' ? _holidaysA : _holidaysB; }
 
@@ -197,7 +203,7 @@ async function loadEmployees() {
 function renderEETable() {
   const tbody = document.getElementById('eeBody');
   if (!_employees.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);">No employees. Add one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);">No employees. Add one above.</td></tr>';
     return;
   }
   tbody.innerHTML = _employees.map((e, i) => `
@@ -205,8 +211,11 @@ function renderEETable() {
       <td>${i + 1}</td>
       <td>${esc(e.lastName)}</td>
       <td>${esc(e.firstName)}</td>
-      <td class="num">${peso(e.dailyRate)}</td>
-      <td class="num">${peso(e.hourlyRate)}</td>
+      <td>${_isFixedPay(e)
+            ? `<span title="Fixed salary per cutoff — no Pag-IBIG, SSS or PhilHealth, and holiday pay does not apply" style="font-weight:700;color:#0f766e;">FIXED ${peso(e.fixedAmount)}</span>`
+            : '<span style="color:var(--text-muted,#64748b);">Hourly</span>'}</td>
+      <td class="num">${_isFixedPay(e) ? '—' : peso(e.dailyRate)}</td>
+      <td class="num">${_isFixedPay(e) ? '—' : peso(e.hourlyRate)}</td>
       <td class="num">${peso(e.otherIncome)}</td>
       <td class="num">${peso(e.hdmfAmount)}</td>
       <td>${esc(e.status)}</td>
@@ -231,6 +240,17 @@ function _eeActor() { try { return (JSON.parse(localStorage.getItem('session') |
 
 /* Reveal the effective-date/reason block only when a PAY field differs from what was stored. Adding a
    new employee (no original) never shows it — the starting rate is an initial record, not a change. */
+/* A260 — a fixed employee's Daily Rate is not used for pay, so showing both boxes with equal weight
+   invites someone to keep them in step and wonder which one counts. Only the one that decides the
+   pay is shown; the other keeps its stored value untouched. */
+function _eeSyncPayType() {
+  const fixed = document.getElementById('eePayType').value === 'Fixed';
+  const fr = document.getElementById('eeFixedRow'), dr = document.getElementById('eeDailyRow');
+  if (fr) fr.style.display = fixed ? '' : 'none';
+  if (dr) dr.style.display = fixed ? 'none' : '';
+  _eeCheckPayChange();
+}
+
 function _eeCheckPayChange() {
   const block = document.getElementById('eePayChange');
   if (!block) return;
@@ -238,13 +258,18 @@ function _eeCheckPayChange() {
   const dr = parseFloat(document.getElementById('eeDailyRate').value) || 0;
   const oi = parseFloat(document.getElementById('eeOtherIncome').value) || 0;
   const hd = parseFloat(document.getElementById('eeHdmf').value) || 0;
-  const changed = dr !== _eeOrig.dailyRate || oi !== _eeOrig.otherIncome || hd !== _eeOrig.hdmf;
+  const fx = parseFloat((document.getElementById('eeFixedAmount') || {}).value) || 0;   // A260
+  const changed = dr !== _eeOrig.dailyRate || oi !== _eeOrig.otherIncome || hd !== _eeOrig.hdmf
+                  || (_eeOrig.fixed !== null && _eeOrig.fixed !== undefined && fx !== _eeOrig.fixed);
   block.style.display = changed ? '' : 'none';
   if (changed) {
     const parts = [];
     if (dr !== _eeOrig.dailyRate) parts.push(`daily rate ${peso(_eeOrig.dailyRate)} → ${peso(dr)}`);
     if (oi !== _eeOrig.otherIncome) parts.push(`other income ${peso(_eeOrig.otherIncome)} → ${peso(oi)}`);
     if (hd !== _eeOrig.hdmf) parts.push(`HDMF ${peso(_eeOrig.hdmf)} → ${peso(hd)}`);
+    if (_eeOrig.fixed !== null && _eeOrig.fixed !== undefined && fx !== _eeOrig.fixed) {
+      parts.push(`fixed salary ${peso(_eeOrig.fixed)} → ${peso(fx)}`);          // A260
+    }
     document.getElementById('eePayChangeMsg').textContent = 'Pay change (' + parts.join(', ') + ') — recorded in the salary history';
   }
 }
@@ -254,7 +279,7 @@ function openEEModal(idx) {
   document.getElementById('eeEffectiveDate').value = _eeToday();
   document.getElementById('eeReason').value = '';
   if (idx === null) {
-    _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null };   // a new employee has no prior pay
+    _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null, fixed: null };   // a new employee has no prior pay
     document.getElementById('eeModalTitle').textContent = 'Add Employee';
     document.getElementById('eeEditId').value     = '';
     document.getElementById('eeLastName').value   = '';
@@ -263,9 +288,12 @@ function openEEModal(idx) {
     document.getElementById('eeOtherIncome').value = '';
     document.getElementById('eeHdmf').value       = '';
     document.getElementById('eeStatus').value     = 'Active';
+    document.getElementById('eePayType').value    = 'Hourly';        // A260
+    document.getElementById('eeFixedAmount').value = '';
   } else {
     const e = _employees[idx];
-    _eeOrig = { dailyRate: e.dailyRate || 0, otherIncome: e.otherIncome || 0, hdmf: e.hdmfAmount || 0 };
+    _eeOrig = { dailyRate: e.dailyRate || 0, otherIncome: e.otherIncome || 0, hdmf: e.hdmfAmount || 0,
+                fixed: e.fixedAmount || 0 };                          // A260
     document.getElementById('eeModalTitle').textContent = 'Edit Employee';
     document.getElementById('eeEditId').value     = e.id;
     document.getElementById('eeLastName').value   = e.lastName;
@@ -274,9 +302,12 @@ function openEEModal(idx) {
     document.getElementById('eeOtherIncome').value = e.otherIncome;
     document.getElementById('eeHdmf').value       = e.hdmfAmount;
     document.getElementById('eeStatus').value     = e.status;
+    document.getElementById('eePayType').value    = _isFixedPay(e) ? 'Fixed' : 'Hourly';   // A260
+    document.getElementById('eeFixedAmount').value = e.fixedAmount || '';
   }
+  _eeSyncPayType();                                                   // A260
   _eeCheckPayChange();
-  ['eeDailyRate', 'eeOtherIncome', 'eeHdmf'].forEach(id => {
+  ['eeDailyRate', 'eeOtherIncome', 'eeHdmf', 'eeFixedAmount'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.oninput = _eeCheckPayChange;
   });
@@ -296,6 +327,8 @@ async function saveEE() {
     otherIncome: document.getElementById('eeOtherIncome').value,
     hdmfAmount:  document.getElementById('eeHdmf').value,
     status:      document.getElementById('eeStatus').value,
+    payType:     document.getElementById('eePayType').value,             // A260
+    fixedAmount: document.getElementById('eeFixedAmount').value,
     // A198 — passed through so the backend stamps the history row; ignored when nothing pay-related changed.
     effectiveDate: document.getElementById('eeEffectiveDate').value || _eeToday(),
     reason:        document.getElementById('eeReason').value.trim(),
@@ -664,16 +697,11 @@ function _computePaySlip(emp, cutoff) {
   const e = _payEarnings(emp, cutoff);                 // A229 — one definition of the earnings half
   const empName = e.empName;
   const grossPay = e.grossPay;
-  const registerMap = cutoff === 'A' ? _registerA : _registerB;
-  const saved = registerMap[empName] || {};
-  const pagibig = +(saved.pagibig !== undefined ? saved.pagibig : (emp.hdmfAmount || 100));
-  const sss = +(saved.sss !== undefined ? saved.sss : _calcSSS(e.statBase));
-  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase));
-  const advances = +(saved.advances !== undefined ? saved.advances : 0);
-  const wtax = +(saved.wtax !== undefined ? saved.wtax : 0);
-  const totalDed = pagibig + sss + philhealth + advances + wtax;
+  const d = _payDeductions(emp, cutoff);          // A260 — one definition of the deduction half
+  const { pagibig, sss, philhealth, advances, wtax, totalDed } = d;
   return {
     empName, hourlyRate: e.hourlyRate, dailyRate: emp.dailyRate,
+    isFixed: e.isFixed, fixedAmount: e.fixedAmount, recordedHrs: e.recordedHrs,  // A260
     regHrs: e.regHrs, otHrs: e.otHrs, holidayHrs: e.holidayHrs,
     basicPay: e.basicPay, holidayPay: e.holidayPay, otPay: e.otPay,
     // A259 — the breakdown, so the payslip can name the rate it applied instead of guessing
@@ -719,19 +747,24 @@ function _payslipHtml(emp, cutoff) {
     <div class="ps-kv"><b>Employee:</b> ${esc(s.empName)}</div>
     <div class="ps-kv"><b>Period:</b> ${esc(pr.label)}</div>
     <div class="ps-kv"><b>Coverage:</b> ${esc(pr.range)}</div>
-    <div class="ps-kv"><b>Rate:</b> ${peso(s.dailyRate)}/day &middot; ${peso(s.hourlyRate)}/hr</div>
+    ${s.isFixed
+      ? `<div class="ps-kv"><b>Rate:</b> ${peso(s.fixedAmount)} fixed / cutoff</div>
+         <div class="ps-kv" style="font-weight:700;">FIXED SALARY &mdash; hours not applied</div>`
+      : `<div class="ps-kv"><b>Rate:</b> ${peso(s.dailyRate)}/day &middot; ${peso(s.hourlyRate)}/hr</div>`}
     <div class="ps-sep"></div>
     <div class="ps-sec">Hours Worked</div>
     <table class="ps-t"><tbody>
-      ${row('Regular', hn(s.regHrs))}
-      ${row('Overtime', hn(s.otHrs))}
-      ${row('Holiday', hn(s.holidayHrs))}
-      ${row('Total Hours', hn(totalHrs), 'sub')}
+      ${s.isFixed
+        ? row('Hours Recorded', hn(s.recordedHrs), 'sub')
+        : `${row('Regular', hn(s.regHrs))}
+           ${row('Overtime', hn(s.otHrs))}
+           ${row('Holiday', hn(s.holidayHrs))}
+           ${row('Total Hours', hn(totalHrs), 'sub')}`}
     </tbody></table>
     <div class="ps-sep"></div>
     <div class="ps-sec">Earnings</div>
     <table class="ps-t"><tbody>
-      ${money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
+      ${s.isFixed ? money('Fixed Salary', s.basicPay) : money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
       ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
       ${holidayRows}
       ${money('Other Income', s.otherIncome)}
@@ -1022,15 +1055,8 @@ function renderPayGrid(cutoff) {
     const basicPay = e.basicPay, holidayPay = e.holidayPay, otPay = e.otPay;
     const otherIncome = e.otherIncome, incentive = e.incentive, grossPay = e.grossPay;
 
-    // Statutory deductions — use stored overrides if present. statBase excludes the incentive.
-    const saved = registerMap[empName] || {};
-    const pagibig    = saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100);
-    const sss        = saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase);
-    const philhealth = saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase);
-    const advances   = saved.advances   !== undefined ? saved.advances   : 0;
-    const wtax       = saved.wtax       !== undefined ? saved.wtax       : 0;
-
-    const totalDed = pagibig + sss + philhealth + advances + wtax;
+    // A260 — one definition of the deduction half, waiver included.
+    const { pagibig, sss, philhealth, advances, wtax, totalDed } = _payDeductions(emp, cutoff);
     const netPay   = grossPay - totalDed;
 
     totBasic += basicPay; totHol += holidayPay; totOT += otPay; totOther += otherIncome;
@@ -1059,9 +1085,16 @@ function renderPayGrid(cutoff) {
       <td class="num computed">${peso(otherIncome)}</td>
       ${incCell}
       <td class="num computed highlight">${peso(grossPay)}</td>
-      <td class="num"><input type="number" min="0" step="0.01" value="${pagibig.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="pagibig" onchange="_updateRegCell(this)" style="width:75px;"></td>
-      <td class="num"><input type="number" min="0" step="0.01" value="${sss.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="sss" onchange="_updateRegCell(this)" style="width:75px;"></td>
-      <td class="num"><input type="number" min="0" step="0.01" value="${philhealth.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="philhealth" onchange="_updateRegCell(this)" style="width:75px;"></td>
+      ${/* A260 — a fixed-salary employee takes no statutory contribution. The cells are shown
+             READ-ONLY at zero rather than left editable: an input the maths ignores is a trap, and
+             typing into it would look like it had been applied. */''}
+      ${_isFixedPay(emp)
+        ? `<td class="num" title="Waived — fixed salary">0.00</td>
+           <td class="num" title="Waived — fixed salary">0.00</td>
+           <td class="num" title="Waived — fixed salary">0.00</td>`
+        : `<td class="num"><input type="number" min="0" step="0.01" value="${pagibig.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="pagibig" onchange="_updateRegCell(this)" style="width:75px;"></td>
+           <td class="num"><input type="number" min="0" step="0.01" value="${sss.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="sss" onchange="_updateRegCell(this)" style="width:75px;"></td>
+           <td class="num"><input type="number" min="0" step="0.01" value="${philhealth.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="philhealth" onchange="_updateRegCell(this)" style="width:75px;"></td>`}
       <td class="num"><input type="number" min="0" step="0.01" value="${advances.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="advances" onchange="_updateRegCell(this)" style="width:75px;"></td>
       <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" style="width:75px;"></td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
@@ -1140,6 +1173,7 @@ async function saveRegister(cutoff) {
        ledger and discards anything the client claims. */
     const e = _payEarnings(emp, cutoff);
     const saved = registerMap[e.empName] || {};
+    const d = _payDeductions(emp, cutoff);        // A260 — one definition, and computed once
 
     return {
       employee:    e.empName,
@@ -1147,9 +1181,9 @@ async function saveRegister(cutoff) {
       holidayPay:  e.holidayPay,
       otPay:       e.otPay,
       otherIncome: e.otherIncome,
-      pagibig:     saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100),
-      sss:         saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase),
-      philhealth:  saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase),
+      pagibig:     d.pagibig,
+      sss:         d.sss,
+      philhealth:  d.philhealth,
       advances:    saved.advances   || 0,
       wtax:        saved.wtax       || 0
     };
@@ -1254,7 +1288,10 @@ function _buildCutoffHtml(cutoff) {
        _payEarnings as everything else. */
     const te = _payEarnings(emp, cutoff);
 
-    let row = `<tr><td class="name">${empName}</td>`;
+    /* A260 — an approver reading this timesheet must not be left wondering why a manager's Basic
+       Pay does not follow from the hours beside it. */
+    let row = `<tr><td class="name">${empName}${_isFixedPay(emp)
+      ? ' <span style="font-size:8px;font-weight:700;">FIXED</span>' : ''}</td>`;
     dates.forEach(dt => {
       const key  = empName + '|' + dt.dateStr;
       const hrs  = parseFloat((hoursMap[key] || {}).hours) || 0;
@@ -1294,9 +1331,9 @@ function _buildCutoffHtml(cutoff) {
     const otherIncome = e.otherIncome, incentive = e.incentive, grossPay = e.grossPay;
     const regHrs = e.regHrs, otHrs = e.otHrs;
     const saved       = registerMap[empName] || {};
-    const pagibig     = saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100);
-    const sss         = saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase);
-    const philhealth  = saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase);
+    // A260 — one definition, so the page management signs cannot disagree with the payslip.
+    const dd = _payDeductions(emp, cutoff);
+    const pagibig = dd.pagibig, sss = dd.sss, philhealth = dd.philhealth;
     const advances    = saved.advances   || 0;
     const wtax        = saved.wtax       || 0;
     const totalDed    = pagibig + sss + philhealth + advances + wtax;
@@ -1577,6 +1614,35 @@ function _payEarnings(emp, cutoff) {
   const empName = emp.lastName + ', ' + emp.firstName;
   const hourlyRate = emp.dailyRate / 8;
   const hoursMap = cutoff === 'A' ? _hoursA : _hoursB;
+
+  /* A260 — A FIXED SALARY IS THE WHOLE EARNING. Hours may still be recorded for attendance and
+     simply do not affect pay, and EVERY holiday figure is forced to zero rather than left
+     uncomputed: a fixed salary already covers the holiday, so a premium on top would pay it twice,
+     and the pay grid and approval document print holidayPay directly. */
+  if (_isFixedPay(emp)) {
+    const fixed = _fixedAmount(emp);
+    /* Attendance is still recorded for a fixed employee, and the payslip must not claim they worked
+       nothing. `recordedHrs` is shown in the Hours Worked block and used NOWHERE in the arithmetic —
+       reporting 0.0 hrs to someone who worked eight is a false statement on a document they keep. */
+    let recordedHrs = 0;
+    _buildDateRange(cutoff).forEach(dt => {
+      recordedHrs += parseFloat((hoursMap[empName + '|' + dt.dateStr] || {}).hours) || 0;
+    });
+    const otherIncomeF = cutoff === 'B' ? (emp.otherIncome || 0) : 0;
+    const incentiveF = _incentiveFor(empName, cutoff);
+    const statBaseF = fixed + otherIncomeF;
+    return {
+      empName, hourlyRate, regHrs: 0, otHrs: 0, holidayHrs: 0,
+      basicPay: fixed, holidayPay: 0, otPay: 0,
+      otherIncome: otherIncomeF, incentive: incentiveF,
+      regHolHrs: 0, regHolPay: 0, speHolHrs: 0, speHolPay: 0,
+      unworkedHolDays: 0, unworkedHolPay: 0,
+      isFixed: true, fixedAmount: fixed, recordedHrs,
+      statBase: statBaseF,
+      grossPay: statBaseF + incentiveF
+    };
+  }
+
   let regHrs = 0, otHrs = 0;
   let regHolHrs = 0, regHolPay = 0, speHolHrs = 0, speHolPay = 0;
   let unworkedHolDays = 0, unworkedHolPay = 0;
@@ -1623,9 +1689,39 @@ function _payEarnings(emp, cutoff) {
     basicPay, holidayPay, otPay, otherIncome, incentive,
     // A259 — the breakdown behind `holidayPay`, so a payslip can name the rate it actually applied
     regHolHrs, regHolPay, speHolHrs, speHolPay, unworkedHolDays, unworkedHolPay,
+    isFixed: false, fixedAmount: 0, recordedHrs: 0,                              // A260
     statBase,                       // what SSS / PhilHealth are computed from — no incentive
     grossPay: statBase + incentive  // what the employee is actually paid
   };
+}
+
+/* ── A260 — ONE definition of what is deducted from an employee in a cutoff ─────────────────────
+ *
+ * This arithmetic was copy-pasted at FOUR call sites — the payslip, the on-screen grid, the register
+ * save and the approval snapshot — which is the same shape as the defect A259 had to fix in three
+ * places for hours. It is also exactly where the fixed-salary waiver applies, and waiving it in
+ * three of four would put a deduction on the payslip that the register does not have.
+ *
+ * A FIXED-SALARY employee takes no statutory contribution: Pag-IBIG, SSS and PhilHealth are zero.
+ * A stored register override for those three is deliberately IGNORED rather than trusted — a figure
+ * saved while the employee was still hourly would otherwise keep being deducted after the switch.
+ * Withholding tax and cash advances are read exactly as before: an advance is a loan being repaid
+ * and tax is a legal obligation, neither of which a pay type changes. */
+function _payDeductions(emp, cutoff) {
+  const empName = emp.lastName + ', ' + emp.firstName;
+  const registerMap = cutoff === 'A' ? _registerA : _registerB;
+  const saved = registerMap[empName] || {};
+  const advances = +(saved.advances !== undefined ? saved.advances : 0);
+  const wtax     = +(saved.wtax     !== undefined ? saved.wtax     : 0);
+  if (_isFixedPay(emp)) {
+    return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax, totalDed: advances + wtax };
+  }
+  const e = _payEarnings(emp, cutoff);
+  const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100));
+  const sss        = +(saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase));
+  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase));
+  return { pagibig, sss, philhealth, advances, wtax,
+           totalDed: pagibig + sss + philhealth + advances + wtax };
 }
 
 /** @param monthlyBasic the STATUTORY base (_payEarnings().statBase) — deliberately not gross. */

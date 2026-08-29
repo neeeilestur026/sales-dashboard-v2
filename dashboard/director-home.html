@@ -216,9 +216,9 @@
         </div>
         <table class="pay-table" id="eeTable">
           <thead>
-            <tr><th>#</th><th>Last Name</th><th>First Name</th><th class="num">Daily Rate (₱)</th><th class="num">Hourly Rate (₱)</th><th class="num">Other Income (₱)</th><th class="num">HDMF Amt</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>#</th><th>Last Name</th><th>First Name</th><th>Pay</th><th class="num">Daily Rate (₱)</th><th class="num">Hourly Rate (₱)</th><th class="num">Other Income (₱)</th><th class="num">HDMF Amt</th><th>Status</th><th>Actions</th></tr>
           </thead>
-          <tbody id="eeBody"><tr><td colspan="9" style="text-align:center;color:var(--ink2);">Loading employees...</td></tr></tbody>
+          <tbody id="eeBody"><tr><td colspan="10" style="text-align:center;color:var(--ink2);">Loading employees...</td></tr></tbody>
         </table>
         <!-- A198 — recent salary changes across everyone, so a raise is visible at a glance -->
         <div style="margin-top:1rem;">
@@ -313,7 +313,22 @@
       <input type="hidden" id="eeEditId">
       <div class="form-row"><label>Last Name</label><input type="text" id="eeLastName" placeholder="e.g. ESTUR"></div>
       <div class="form-row"><label>First Name</label><input type="text" id="eeFirstName" placeholder="e.g. NEIL MONDANO"></div>
-      <div class="form-row"><label>Daily Rate (₱)</label><input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00"></div>
+      <!-- A260 — a managerial employee paid a set amount per cutoff regardless of hours, and taking
+           no statutory contribution. Sits above Daily Rate because it decides whether Daily Rate
+           matters at all. -->
+      <div class="form-row"><label>Pay Type</label>
+        <select id="eePayType" onchange="_eeSyncPayType()">
+          <option value="Hourly">Hourly — paid from recorded hours</option>
+          <option value="Fixed">Fixed salary — same amount every cutoff</option>
+        </select></div>
+      <div class="form-row" id="eeFixedRow" style="display:none;">
+        <label>Fixed Amount (₱) — per cutoff, twice a month</label>
+        <input type="number" id="eeFixedAmount" min="0" step="0.01" placeholder="0.00" oninput="_eeCheckPayChange()">
+        <div style="font-size:0.72rem;color:var(--ink2,#64748b);margin-top:0.2rem;">
+          Paid in full on both cutoffs whatever the hours. No Pag-IBIG, SSS or PhilHealth; holiday
+          pay does not apply. Withholding tax, cash advances and incentives still do.</div>
+      </div>
+      <div class="form-row" id="eeDailyRow"><label>Daily Rate (₱)</label><input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00"></div>
       <div class="form-row"><label>Other Income (₱) — e.g. allowances, per 2nd cutoff</label><input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00"></div>
       <div class="form-row"><label>HDMF / Pag-IBIG Amount (₱)</label><input type="number" id="eeHdmf" min="0" step="0.01" placeholder="100.00"></div>
       <div class="form-row"><label>Status</label><select id="eeStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>

@@ -11218,8 +11218,14 @@ function handleBackfillHistory(body) {
 
 function _payrollEmployeesSheet() {
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  /* A260 — 'Pay Type' and 'Fixed Amount' are appended AFTER Status and must stay there. Every
+     reader of this sheet indexes positionally: handleGetPayrollEmployees reads row[5] for Status
+     and handleGet13thMonthPay reads er[5] for the same. Inserting a column ahead of Status would
+     shift both silently, and the 13th-month report would begin reading a pay type as an employment
+     status. A blank Pay Type means Hourly, so no existing row needs migrating. */
   return _getOrCreateSheet(ss, 'Payroll Employees', [
-    'Last Name', 'First Name', 'Daily Rate', 'Other Income', 'HDMF Amount', 'Status'
+    'Last Name', 'First Name', 'Daily Rate', 'Other Income', 'HDMF Amount', 'Status',
+    'Pay Type', 'Fixed Amount'
   ]);
 }
 function _payrollHoursSheet() {
@@ -11482,7 +11488,10 @@ function handleGetPayrollEmployees() {
         name: String(row[0]||'') + ', ' + String(row[1]||''),
         dailyRate: dr, hourlyRate: dr > 0 ? dr/8 : 0,
         otherIncome: parseFloat(row[3])||0, hdmfAmount: parseFloat(row[4])||0,
-        status: String(row[5]||'Active') });
+        status: String(row[5]||'Active'),
+        // A260 — blank is Hourly, which is what every row written before this existed carries.
+        payType: (String(row[6]||'') === 'Fixed') ? 'Fixed' : 'Hourly',
+        fixedAmount: parseFloat(row[7])||0 });
     }
     return { success: true, data: results };
   } catch(e) { return { success: false, message: e.message }; }
@@ -11496,8 +11505,12 @@ function handleSavePayrollEmployee(params) {
     var newRate  = parseFloat(params.dailyRate)||0,
         newOther = parseFloat(params.otherIncome)||0,
         newHdmf  = parseFloat(params.hdmfAmount)||0;
+    // A260 — anything that is not exactly 'Fixed' is Hourly, so a missing field cannot flip someone
+    // onto a fixed salary by accident.
+    var newType  = (String(params.payType||'') === 'Fixed') ? 'Fixed' : 'Hourly',
+        newFixed = parseFloat(params.fixedAmount)||0;
     var row   = [params.lastName||'', params.firstName||'',
-      newRate, newOther, newHdmf, params.status||'Active'];
+      newRate, newOther, newHdmf, params.status||'Active', newType, newFixed];
     var empName = String(params.lastName||'') + ', ' + String(params.firstName||'');
     var isEdit = (id > 0 && id < data.length);
 
@@ -11508,11 +11521,17 @@ function handleSavePayrollEmployee(params) {
       if (newRate  !== oldRate)  _logPayrollRateChange(empName, 'Daily Rate',   oldRate,  newRate,  params, false);
       if (newOther !== oldOther) _logPayrollRateChange(empName, 'Other Income', oldOther, newOther, params, false);
       if (newHdmf  !== oldHdmf)  _logPayrollRateChange(empName, 'HDMF Amount',  oldHdmf,  newHdmf,  params, false);
+      /* A260 — a fixed-salary manager is still a candidate for a raise, so the fixed amount is
+         diffed and logged exactly as the daily rate is. Without this their increases would be the
+         only pay changes in the company with no audit trail. */
+      var oldFixed = parseFloat(prev[7])||0;
+      if (newFixed !== oldFixed) _logPayrollRateChange(empName, 'Fixed Amount', oldFixed, newFixed, params, false);
       sheet.getRange(id+1,1,1,row.length).setValues([row]);
     } else {
       sheet.appendRow(row);
       // A new hire's starting rate is an initial record, not a "change".
       if (newRate > 0) _logPayrollRateChange(empName, 'Daily Rate', 0, newRate, params, true);
+      if (newFixed > 0) _logPayrollRateChange(empName, 'Fixed Amount', 0, newFixed, params, true);   // A260
     }
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
