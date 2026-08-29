@@ -186,6 +186,14 @@ ok('the grid no longer splits holiday hours into reg/OT',
 ok('the calendar is saved with the hours', /apiSavePayrollHolidays\(period, holRows\)/.test(S));
 ok('a backend without the action degrades to no holidays',
    /apiGetPayrollHolidays\(periodA\)\.catch\(\(\) => \(\{ data: \[\] \}\)\)/.test(S));
+/* A save must go out as a POST like every other save. Missing from NO_CACHE_ACTIONS it was routed
+   as a GET — it still reached the handler, but a GET that writes is retryable by a browser or proxy
+   in ways a POST is not, and the payload rides in the URL. */
+const API = fs.readFileSync(path.join(__dirname, '../../dashboard/js/api.js'), 'utf8');
+const noCacheActions = API.slice(API.indexOf('const NO_CACHE_ACTIONS'), API.indexOf('const NO_CACHE_READS'));
+ok('savePayrollHolidays is a mutation, so it POSTs', /'savePayrollHolidays'/.test(noCacheActions));
+ok('getPayrollHolidays never serves a cached read',
+   /'getPayrollHolidays'/.test(API.slice(API.indexOf('const NO_CACHE_READS'), API.indexOf('const NO_CACHE_READS') + 700)));
 
 console.log('\n12 · the backend stores only the two recognised types');
 const GS = fs.readFileSync(path.join(__dirname, '../../apps-script/Code.gs'), 'utf8');
