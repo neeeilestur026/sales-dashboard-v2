@@ -800,17 +800,25 @@ const _HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1
 // whitespace); false uses a fixed page with page-breaks (one receipt per page for "all").
 const _PS_BODY_PX = 400;   // receipt render width in px (~106mm at 96dpi — "a little wider" than 80mm)
 
-function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
+/* A261 — `opts` lets a caller supply its own stylesheet and body width so the payroll cutoff can
+   reuse this instead of owning a second, worse PDF path. Everything that makes this function worth
+   reusing stays: the page is sized from the RENDERED content so nothing is cropped, images are
+   waited for before capture, and the iframe is cleaned up on every exit including failure.
+   Omitting opts reproduces the payslip behaviour byte for byte. */
+function _renderPayslipPdf(innerHtml, filename, singleMeasure, opts) {
+  opts = opts || {};
+  const css    = (opts.css !== undefined) ? opts.css : _PAYSLIP_CSS;
+  const bodyPx = opts.bodyPx || _PS_BODY_PX;
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:' + (_PS_BODY_PX + 40) + 'px;height:1600px;opacity:0;border:0;z-index:-1;';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:' + (bodyPx + 40) + 'px;height:1600px;opacity:0;border:0;z-index:-1;';
   document.body.appendChild(iframe);
   let done = false;
   const cleanup = () => { if (!done) { done = true; try { document.body.removeChild(iframe); } catch (e) {} } };
 
   const doc = iframe.contentDocument || iframe.contentWindow.document;
   doc.open();
-  doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _PAYSLIP_CSS +
-    ' body{margin:0;background:#fff;width:' + _PS_BODY_PX + 'px;}</style></head><body>' + innerHtml + '</body></html>');
+  doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + css +
+    ' body{margin:0;background:#fff;width:' + bodyPx + 'px;}</style></head><body>' + innerHtml + '</body></html>');
   doc.close();
   const win = iframe.contentWindow;
 
@@ -819,10 +827,10 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
       // Derive the PDF page from the ACTUAL rendered content size (1px = 1/96in) so the page is exactly
       // as wide as the content — html2pdf renders unscaled, so a too-narrow page crops the right column.
       const px2mm = 25.4 / 96, margin = 6;
-      const wpx = win.document.body.scrollWidth || _PS_BODY_PX;
+      const wpx = win.document.body.scrollWidth || bodyPx;
       const hpx = win.document.body.scrollHeight || 1000;
       const pageW = Math.round(wpx * px2mm) + margin * 2;
-      const pageH = singleMeasure ? Math.max(120, Math.round(hpx * px2mm) + margin * 2) : 245;
+      const pageH = singleMeasure ? Math.max(120, Math.round(hpx * px2mm) + margin * 2) : (opts.pageH || 245);
       win.html2pdf().set({
         margin: margin, filename,
         image: { type: 'jpeg', quality: 0.98 },
@@ -831,8 +839,8 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure) {
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(win.document.body).save()
         .then(() => setTimeout(cleanup, 1500))
-        .catch((err) => { cleanup(); alert('Failed to generate the payslip PDF: ' + (err && err.message || err)); });
-    } catch (err) { cleanup(); alert('Failed to generate the payslip PDF.'); }
+        .catch((err) => { cleanup(); alert('Failed to generate the ' + (opts.what || 'payslip') + ' PDF: ' + (err && err.message || err)); });
+    } catch (err) { cleanup(); alert('Failed to generate the ' + (opts.what || 'payslip') + ' PDF.'); }
   }));
 
   // Wait for images (the logo) to finish loading before capturing, else html2canvas paints them blank.
@@ -1209,13 +1217,30 @@ async function saveRegister(cutoff) {
 }
 
 // ── Export to PDF ─────────────────────────────────────────────
+/* A261 — this DOWNLOADS a PDF, which is what the button has always claimed to do.
+   It used to open a blank tab, write the document into it and call window.print(). That is a print
+   dialog, not an export: nothing reaches the user's folder unless they then choose "Save as PDF",
+   and if the popup or the injected script is blocked they are left looking at a tab of HTML with no
+   idea what went wrong. The payslips have downloaded properly since A178 through _renderPayslipPdf;
+   this now uses the same path, with the cutoff document's own stylesheet.
+
+   The snapshot HTML itself is UNTOUCHED — it is what submitCutoffForApproval sends to Management,
+   so the styles and body are read out of it rather than the builder being restructured. */
 function exportCutoff(cutoff) {
-  var built = _buildCutoffHtml(cutoff);
+  const built = _buildCutoffHtml(cutoff);
   if (!built) return;
-  var html = built.html.replace('</body>', '<script>window.onload = function(){ window.print(); }<\/script></body>');
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
+  const css  = (built.html.match(/<style>([\s\S]*?)<\/style>/i) || [, ''])[1];
+  const body = (built.html.match(/<body[^>]*>([\s\S]*?)<\/body>/i) || [, ''])[1];
+  if (!body) { alert('Could not build the payroll document — nothing to export.'); return; }
+  const safe = (built.period || 'payroll').replace(/[^A-Za-z0-9._-]+/g, '-');
+  _renderPayslipPdf(body, 'Payroll_' + safe + '.pdf', true, {
+    css: css,
+    /* Wide enough that the timesheet's date columns lay out at their natural width — the page is
+       then sized from the RENDERED width, so a wider cutoff simply produces a wider page instead of
+       a cropped one. */
+    bodyPx: 1400,
+    what: 'payroll'
+  });
 }
 
 // ── Submit for Approval ───────────────────────────────────────
