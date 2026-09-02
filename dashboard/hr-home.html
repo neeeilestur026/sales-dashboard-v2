@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HR-Marketing Dashboard — Home</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/daily-reports.css">
   <style>
     /* Alert Banner */
     .alert-banner { display:none; padding:0.75rem 1rem; border-radius:10px; font-size:0.82rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem; }
@@ -320,11 +322,62 @@
         </div>
       </div>
     </div>
+
+    <!-- A264: 🗒️ Daily Reports — same section as the management home, same ids so
+         js/management-flow.js drives it here unchanged. -->
+    <div class="mgmt-newsec" id="newsec-daily-reports" style="margin-top:1.5rem;">
+      <h2 style="cursor:pointer;" onclick="mgmtToggleNewsec('newsec-daily-reports')">🗒️ Daily Reports
+        <span class="is-state" id="mgmtDrMeta" style="margin-left:auto;font-weight:400;"></span>
+        <span class="newsec-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </h2>
+      <div class="is-controls">
+        <label style="font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">Date</label>
+        <input type="date" id="mgmtDrDate">
+        <input type="text" id="mgmtDrSearch" placeholder="Search user…">
+      </div>
+      <div class="dr-tiles">
+        <div class="dr-tile"><div class="l">Active Users</div><div class="v" id="mgmtDrUsers">0</div></div>
+        <div class="dr-tile"><div class="l">Movements</div><div class="v" id="mgmtDrMovements">0</div></div>
+        <div class="dr-tile"><div class="l">Documents</div><div class="v" id="mgmtDrDocs">0</div></div>
+        <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="mgmtDrSales">₱0.00</div></div>
+        <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
+      </div>
+      <div id="mgmtDrBody"><div class="mf-empty">Loading…</div></div>
+
+      <!-- Team Weekly Report: per-user task charts for the Mon–Sun week of the picked date (A110) -->
+      <div style="margin-top:1.4rem;border-top:1px solid var(--border,#e2e8f0);padding-top:1rem;">
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <h3 style="font-size:0.95rem;font-weight:700;margin:0;">📊 Team Weekly Report</h3>
+          <span id="mfTwRange" style="font-size:0.8rem;color:var(--text-muted,#64748b);"></span>
+          <span style="margin-left:auto;display:inline-flex;gap:0.35rem;">
+            <button class="btn btn-sm btn-secondary" onclick="mfTwNav(-1)" title="Previous week">◀</button>
+            <button class="btn btn-sm btn-secondary" id="mfTwReset" onclick="mfTwNav(0)" style="display:none;" title="Back to this week">↺</button>
+            <button class="btn btn-sm btn-secondary" id="mfTwNext" onclick="mfTwNav(1)" title="Next week">▶</button>
+            <button class="btn btn-sm btn-primary" id="mfTwPdfBtn" onclick="mfTwPdf()" disabled>📄 View / Save PDF</button>
+          </span>
+        </div>
+        <div id="mfTwBody"><div class="mf-empty">Loading team weekly report…</div></div>
+      </div>
+    </div>
   </main>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
   <script src="js/hr-home.js"></script>
+  <!-- A264: Daily Reports section — same module stack the management home uses. -->
+  <script src="js/report-render.js"></script>
+  <script src="js/report-pdf.js"></script>
+  <script src="js/team-performance.js"></script>
+  <script src="js/management-flow.js"></script>
+  <script>
+    // Collapse/expand a .mgmt-newsec by clicking its header (mirrors management-home.html).
+    function mgmtToggleNewsec(id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('collapsed');
+    }
+  </script>
+
   <script>
     (function setDate() {
       const tl = document.getElementById('todayLabel');

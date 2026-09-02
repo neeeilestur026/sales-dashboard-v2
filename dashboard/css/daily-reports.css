@@ -1,0 +1,51 @@
+/* ═══════════════════════════════════════════════
+   daily-reports.css — the 🗒️ Daily Reports section, extracted so the management, HR and
+   marketing home pages render it identically from ONE stylesheet.
+
+   A264: the section was previously styled by rules inlined in management-home.html, which is
+   why it could not simply be dropped onto another page. management-home.html keeps its inline
+   copy (those same selectors also dress its income-statement and inventory cards); this file
+   carries only what the Daily Reports block itself needs.
+   ═══════════════════════════════════════════════ */
+
+/* Section shell — collapsible card */
+.mgmt-newsec { background:var(--bg-card,#fff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.2rem 1.4rem; margin-bottom:1.25rem; box-shadow:var(--shadow-sm,0 1px 3px rgba(15,23,42,0.06)); }
+.mgmt-newsec > h2 { margin:0 0 0.9rem; font-size:1.05rem; font-weight:700; color:var(--text-primary,#0f172a); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.newsec-chevron { display:inline-flex; transition:transform 0.25s ease; color:var(--text-muted,#64748b); }
+.mgmt-newsec.collapsed .newsec-chevron { transform:rotate(-90deg); }
+.mgmt-newsec.collapsed > h2 { margin-bottom:0; }
+.mgmt-newsec.collapsed > :not(h2) { display:none; }
+
+/* Date + search controls */
+.is-controls { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:0.9rem; }
+.is-controls select, .is-controls input { padding:0.4rem 0.7rem; border:1px solid var(--border,#e2e8f0); border-radius:8px; font-size:0.85rem; background:#fff; color:var(--text-primary,#0f172a); }
+.is-state { font-size:0.74rem; color:var(--text-muted,#64748b); }
+
+/* Empty / loading state */
+.mf-empty { padding:1.2rem; text-align:center; color:var(--text-muted,#64748b); font-style:italic; font-size:0.86rem; }
+
+/* The five counter tiles */
+.dr-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:0.6rem; margin-bottom:0.9rem; }
+.dr-tile { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.6rem 0.8rem; text-align:center; }
+.dr-tile .l { font-size:0.64rem; text-transform:uppercase; color:var(--text-muted,#64748b); font-weight:700; }
+.dr-tile .v { font-size:1.05rem; font-weight:800; color:var(--text-primary,#0f172a); margin-top:0.2rem; font-variant-numeric:tabular-nums; }
+
+/* Per-user expandable report */
+.urep { border:1px solid var(--border,#e2e8f0); border-radius:10px; margin-bottom:0.6rem; overflow:hidden; background:#fff; }
+.urep > summary { list-style:none; cursor:pointer; padding:0.7rem 0.9rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; background:var(--bg-inset,#f8fafc); }
+.urep > summary::-webkit-details-marker { display:none; }
+.uname { font-weight:700; color:var(--text-primary,#0f172a); }
+.ustat { font-size:0.76rem; color:var(--text-muted,#64748b); }
+.urep-body { padding:0.8rem 0.9rem; }
+.umods { display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.6rem; }
+.urep-note { margin-top:0.6rem; font-size:0.82rem; color:var(--text-secondary,#475569); background:var(--bg-inset,#f8fafc); padding:0.5rem 0.7rem; border-radius:8px; }
+.mod-badge { display:inline-block; padding:0.12rem 0.5rem; border-radius:999px; font-size:0.68rem; font-weight:700; background:var(--accent-light,#ccfbf1); color:var(--accent-dark,#0f766e); white-space:nowrap; }
+.act-chip { display:inline-block; padding:0.1rem 0.45rem; border-radius:6px; font-size:0.7rem; font-weight:600; background:var(--bg-inset,#f1f5f9); color:var(--text-secondary,#475569); }
+
+/* Activity table inside an expanded report */
+.flow-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+.flow-table th { text-align:left; padding:0.45rem 0.6rem; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; border-bottom:1px solid var(--border,#e2e8f0); }
+.flow-table td { padding:0.45rem 0.6rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-primary,#0f172a); }
+.flow-table td.num, .flow-table th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+.link-btn { background:none; border:none; padding:0; color:var(--accent,#0d9488); font-weight:600; cursor:pointer; font-size:inherit; text-decoration:underline; }
