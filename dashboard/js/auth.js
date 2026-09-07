@@ -1069,7 +1069,9 @@ async function flowComputeActions(session) {
 
   // Quotations awaiting MY approval.
   if (isAdmin || isMgmt || isDir) {
-    const stage = isAdmin ? 'Pending Admin' : 'Pending Management';
+    // A267 — admin → director → management. Each tier is shown only its own queue; surfacing
+    // another tier's backlog trains people to ignore the badge.
+    const stage = isAdmin ? 'Pending Admin' : (isDir ? 'Pending Director' : 'Pending Management');
     jobs.push(fetchFlow('getQuotations').then(r => {
       const n = ((r && r.data) || []).filter(q => q.status === stage).length;
       if (n) add('report', '#f97316', n + ' quotation(s) awaiting your approval', 'flow-quotations.html');

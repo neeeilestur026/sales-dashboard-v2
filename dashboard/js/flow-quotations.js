@@ -754,11 +754,23 @@ function openReviewModal(no) {
   const q = qList.find(x => String(x.quotationNo) === String(no));
   if (!q) return;
   const role = qSession.role, st = q.status || 'Draft';
+  /* A267 — the chain is admin → director → management, management last. Each role sees Approve
+     only at its OWN stage: a director approving no longer closes the quotation. */
   const isApprover = (role === 'admin' && st === 'Pending Admin') ||
-    ((role === 'management' || role === 'director') && st === 'Pending Management');
+    (role === 'director' && st === 'Pending Director') ||
+    (role === 'management' && st === 'Pending Management');
   document.getElementById('qrTitle').textContent = q.quotationNo;
+  /* A267 — name the purchase request this was quoted from, and link straight to it. The PR number
+     is not cost data, so every role sees it; the cost/margin breakdown below stays gated to
+     accounting, management and director. Without this an approver had no way to check the
+     quotation against what was actually requested. */
+  const prLink = q.prNo
+    ? ` · <a href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}" target="_blank"
+           style="color:var(--accent,#0d9488);font-weight:700;text-decoration:none;"
+           title="Open the purchase request this quotation was priced from">📋 ${flowEsc(q.prNo)} ↗</a>`
+    : ` · <span style="color:#b45309;font-weight:600;" title="No purchase request is linked, so the quoted prices cannot be checked against a request">⚠ no purchase request linked</span>`;
   document.getElementById('qrSub').innerHTML =
-    `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}`;
+    `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}${prLink}`;
   const items = q.items || [];
   const qDisc = Math.max(0, Math.min(100, flowNum(q.discountPct) || 0));
   const discRows = qDisc > 0

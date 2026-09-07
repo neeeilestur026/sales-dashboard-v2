@@ -62,7 +62,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Runs LAST so loadInventory()/loadClients() above are already warm.
   const fromInquiry = new URLSearchParams(location.search).get('fromInquiry');
   if (fromInquiry) await prLoadFromInquiry(fromInquiry);
+  // A267 — ?pr=PR-… arrives from the quotation approval modal, so an approver can see the request
+  // the prices were quoted from. Only an identifier travels in the URL, per the house convention.
+  const focusPr = new URLSearchParams(location.search).get('pr');
+  if (focusPr) prFocusRow(focusPr);
 });
+
+/** A267 — scroll to one request in the list and flash it, so arriving from a deep link lands on the
+ *  row rather than the top of a long table. Retries briefly: the lists render asynchronously. */
+function prFocusRow(prNo, tries) {
+  tries = tries === undefined ? 20 : tries;
+  const want = String(prNo).trim().toLowerCase();
+  const row = [...document.querySelectorAll('td:first-child')]
+    .find(td => td.textContent.trim().toLowerCase() === want);
+  if (!row) { if (tries > 0) setTimeout(() => prFocusRow(prNo, tries - 1), 250); return; }
+  const tr = row.closest('tr');
+  /* The list is grouped into collapsible <details> per rep / per stage, and the target is usually
+     inside a CLOSED one — the row exists in the DOM but has no layout, so every scroll attempt was
+     aiming at a phantom position (it reported top:6213 inside a 1603px document). Open every
+     ancestor group first. */
+  for (let el = tr.parentElement; el; el = el.parentElement) {
+    if (el.tagName === 'DETAILS') el.open = true;
+  }
+  tr.style.transition = 'background 0.4s ease';
+  tr.style.background = 'rgba(245,158,11,0.28)';
+  /* The lists above this row keep rendering after the row itself exists — a single scrollIntoView
+     landed correctly and was then pushed 6,000px down the page. Re-settle a few times, and hold the
+     highlight until the last one, so the row is both in view AND still marked when we stop. */
+  /* window.scrollTo, not scrollIntoView: the row sits inside horizontally-scrollable wrappers, so
+     scrollIntoView moved THOSE and left the window at 0. Explicit, and 'auto' rather than 'smooth'
+     because a smooth scroll is animation-frame driven and does not run in a background tab —
+     between them the deep link silently failed to land at all. Repeated because the lists above
+     keep rendering after this row exists and push it down. */
+  const goTo = () => {
+    const r = tr.getBoundingClientRect();
+    window.scrollTo({ top: Math.max(0, window.scrollY + r.top - (window.innerHeight / 2)), behavior: 'auto' });
+  };
+  [0, 700, 1600, 2800].forEach(d => setTimeout(goTo, d));
+  setTimeout(() => { tr.style.background = ''; }, 5200);
+}
 
 /* ── A169: Product Finder hand-off ────────────────────────────────────────────
    The Product Finder writes the chosen product onto its inquiry (localStorage, synchronously) and
