@@ -481,16 +481,10 @@ function soStatusBadge(status) {
   return `<span class="flow-badge ${cls}">${flowEsc(v || '—')}</span>`;
 }
 
-/* A266 — size the list so its BOTTOM lands at the bottom of the window, making it the only
-   scrolling region. A fixed `calc(100vh - Npx)` cannot do this: the container's top moves as the
-   form opens and closes, and a guessed offset left the page itself scrolling by 300px. */
-function soFitList() {
-  const c = document.getElementById('listContainer');
-  if (!c) return;
-  if (window.innerWidth <= 1000) { c.style.maxHeight = ''; return; }   // narrow: let the page scroll
-  const top = c.getBoundingClientRect().top + window.scrollY;
-  c.style.maxHeight = Math.max(240, window.innerHeight - top - 40) + 'px';
-}
+/* A268 — this started here and now lives in flow-api.js as flowFitScroll, because receiving,
+   invoices and collections want the same behaviour. Kept as a named wrapper so the existing call
+   sites (renderSOs, toggleSOForm) read the same. */
+function soFitList() { flowFitScroll('listContainer', { min: 240 }); }
 window.addEventListener('resize', soFitList);
 document.addEventListener('DOMContentLoaded', () => {
   const card = document.getElementById('formCard'), b = document.getElementById('formBody');

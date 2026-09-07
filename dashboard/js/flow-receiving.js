@@ -10,6 +10,10 @@ let rcSession = null;
 let rcViewer = false;        // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
+  /* A268 — collapse the form so the list below can own the screen and be the only thing that
+     scrolls. Without this the list starts below the fold and there is no height to give it. */
+  flowFormToggleInit('New Receiving', () => flowFitScroll('listContainer'));
+
   rcSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!rcSession) return;
   rcViewer = isFlowViewerRole(rcSession);
@@ -242,4 +246,8 @@ async function loadReceiving() {
       <td class="num">${flowMoney(m.vat, 'PHP')}</td><td class="num">${flowMoney(m.totalShipping, 'PHP')}</td><td>${m.items.length}</td>
       <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Receiving","${flowEsc(m.mrNo)}")'>Docs</button></td></tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  finally { setTimeout(() => flowFitScroll('listContainer'), 0); }   // A268: size the list to the window
 }
+
+// A268 — keep the locked list sized when the window changes.
+window.addEventListener('resize', () => flowFitScroll('listContainer'));

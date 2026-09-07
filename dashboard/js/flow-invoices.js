@@ -8,6 +8,10 @@ let ivCanRename = false; // A252: renaming the invoice number needs FlowAPI v142
 let ivViewer = false;    // A231: management looks, does not touch
 
 document.addEventListener('DOMContentLoaded', async () => {
+  /* A268 — collapse the form so the list below can own the screen and be the only thing that
+     scrolls. Without this the list starts below the fold and there is no height to give it. */
+  flowFormToggleInit('New Invoice', () => flowFitScroll('listContainer'));
+
   ivSession = requireFlowOperations();                  // A231 — management admitted as a viewer
   if (!ivSession) return;
   ivViewer = isFlowViewerRole(ivSession);
@@ -200,6 +204,7 @@ async function loadInvoices() {
         ivCanVoid ? `<button class="link-btn del-btn" style="margin-left:0.4rem;" onclick='voidInvoiceAction(${JSON.stringify(String(v.invNo))})'>Void</button>` : ''
       }</td></tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  finally { setTimeout(() => flowFitScroll('listContainer'), 0); }   // A268: size the list to the window
 }
 
 /* A252 — put the business's own invoice number on the record. The number is a key, not a label:
@@ -245,3 +250,6 @@ async function voidInvoiceAction(invNo) {
     await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) { alert(e.message); }
 }
+
+// A268 — keep the locked list sized when the window changes.
+window.addEventListener('resize', () => flowFitScroll('listContainer'));

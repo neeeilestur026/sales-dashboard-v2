@@ -75,7 +75,15 @@ function _filteredAR() {
     (!yr || _yr(a.createdAt) === yr) && (!mo || _mo(a.createdAt) === mo));
 }
 
+/* A268 — both lists are sized to the window after every render, so the page itself does not
+   scroll. Wrapped rather than edited inline because _renderLists has early returns on the two
+   empty states and the fit has to happen on every path. */
 function render() {
+  try { _renderLists(); }
+  finally { setTimeout(() => flowFitScroll(['arContainer', 'container'], { share: 0.4 }), 0); }
+}
+
+function _renderLists() {
   const cols = _filteredCols();
   const ars = _filteredAR();
 
@@ -152,3 +160,6 @@ async function voidCollectionAction(collectionNo) {
     await loadCollections();
   } catch (e) { alert(e.message); }
 }
+
+// A268 — keep the locked list sized when the window changes.
+window.addEventListener('resize', () => flowFitScroll(['arContainer', 'container'], { share: 0.4 }));

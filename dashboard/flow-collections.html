@@ -50,12 +50,13 @@
 
     <div class="chart-card" style="margin-bottom:1.25rem;">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.5rem;">Receivables — invoice status</h3>
-      <div id="arContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+      <!-- A268: the only scrolling region on this page — see flowFitScroll in flow-api.js. -->
+      <div class="flow-scroll" id="arContainer"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
 
     <div class="chart-card">
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.5rem;">Collection Ledger <span id="kpiCount" style="font-weight:500;color:var(--text-muted,#64748b);font-size:0.8rem;"></span></h3>
-      <div id="container" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+      <div class="flow-scroll" id="container"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>
 

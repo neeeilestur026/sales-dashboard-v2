@@ -74,7 +74,8 @@
         <h3 style="font-size:0.95rem;font-weight:600;">Receiving History</h3>
         <button class="btn btn-sm btn-secondary" onclick="loadReceiving()">Refresh</button>
       </div>
-      <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+      <!-- A268: the only scrolling region on this page — see flowFitScroll in flow-api.js. -->
+      <div class="flow-scroll" id="listContainer"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>
 

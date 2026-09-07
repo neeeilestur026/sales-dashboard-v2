@@ -1490,3 +1490,112 @@ function flowDownscaleImage(file, maxPx, quality) {
     reader.readAsDataURL(file);
   });
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   A268 — locked-scroll lists.
+
+   Size one or more `.flow-scroll` containers so the block they form ends at the
+   bottom of the window: the list scrolls inside its card and the PAGE does not.
+   Promoted out of flow-sales-orders.js, where it started life, because four pages
+   now want it and a fixed `calc(100vh - Npx)` cannot do the job — a container's
+   top moves as forms open and close, and a guessed offset left the page scrolling.
+
+   Pass one id, or several (collections has two lists in one column). Measured, not
+   guessed: max-heights are zeroed first so the surrounding chrome — headings, card
+   padding, the gap between cards — is measured rather than estimated, then the
+   remaining height is shared out.
+
+   Below 1000px the caps are released and the page scrolls normally, matching the
+   media-query idiom already used by .prt-rail and .mi-rail.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function flowFitScroll(ids, opts) {
+  const o = opts || {};
+  const els = (Array.isArray(ids) ? ids : [ids])
+    .map(id => (typeof id === 'string' ? document.getElementById(id) : id))
+    .filter(Boolean);
+  if (!els.length) return;
+
+  if (window.innerWidth <= (o.minWidth || 1000)) {
+    els.forEach(e => { e.style.maxHeight = ''; });
+    return;
+  }
+  // Collapse to nothing so what remains between first-top and last-bottom is pure chrome.
+  els.forEach(e => { e.style.maxHeight = '0px'; });
+  const top = els[0].getBoundingClientRect().top + window.scrollY;
+  const chrome = (els[els.length - 1].getBoundingClientRect().bottom + window.scrollY) - top;
+
+  const avail = window.innerHeight - top - (o.gap === undefined ? 40 : o.gap) - chrome;
+  const floor = o.min || 160;
+  if (avail < floor * els.length) {           // too short to be worth locking — let the page scroll
+    els.forEach(e => { e.style.maxHeight = ''; });
+    return;
+  }
+  if (els.length === 1) {
+    els[0].style.maxHeight = Math.round(avail) + 'px';
+    return;
+  }
+  /* Several lists: give each its natural height where it fits, and hand what is left to the
+     last one, so a short first list does not strand empty space above a long second one. */
+  let left = avail;
+  els.forEach((e, i) => {
+    if (i === els.length - 1) { e.style.maxHeight = Math.round(Math.max(floor, left)) + 'px'; return; }
+    const want = Math.min(e.scrollHeight, Math.max(floor, avail * (o.share || 0.4)));
+    const give = Math.max(floor, Math.min(want, left - floor));
+    e.style.maxHeight = Math.round(give) + 'px';
+    left -= give;
+  });
+}
+
+/** Re-fit on resize for every page that asked for it. Registered once. */
+function flowFitScrollOn(ids, opts) {
+  const run = () => flowFitScroll(ids, opts);
+  window.addEventListener('resize', run);
+  return run;
+}
+
+/* A268 — the collapsible "New …" form that makes a locked list possible. Without it the list starts
+   below the fold (receiving measured a top of 931px in a 900px window) and there is simply no height
+   to give it. Generalised from flow-sales-orders.js, which did this first.
+
+   Call flowFormToggleInit(label) once on load; it wraps everything after the card's <h3> in a
+   collapsed #formBody and adds the toggle. Pages keep calling flowFormToggle(true) when they load a
+   record for editing. */
+function flowFormToggleInit(label, onChange) {
+  const card = document.getElementById('formCard');
+  if (!card || document.getElementById('formBody')) return;
+  const h3 = card.querySelector('h3');
+  if (!h3) return;
+  const body = document.createElement('div');
+  body.id = 'formBody';
+  body.hidden = true;
+  body.style.marginTop = '0.75rem';
+  while (h3.nextSibling) body.appendChild(h3.nextSibling);   // everything after the heading
+  card.appendChild(body);
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:0.75rem;';
+  h3.style.margin = '0';
+  card.insertBefore(bar, card.firstChild);
+  bar.appendChild(h3);
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.id = 'formToggle'; btn.className = 'btn btn-sm btn-primary';
+  btn.style.marginLeft = 'auto';
+  btn.dataset.openLabel = '+ ' + (label || 'New');
+  btn.textContent = btn.dataset.openLabel;
+  btn.onclick = () => flowFormToggle(undefined, onChange);
+  bar.appendChild(btn);
+  card.classList.add('so-form-collapsed');
+  if (onChange) onChange();
+}
+
+function flowFormToggle(force, onChange) {
+  const body = document.getElementById('formBody');
+  const btn = document.getElementById('formToggle');
+  const card = document.getElementById('formCard');
+  if (!body) return;
+  const show = (force === undefined) ? body.hidden : !!force;
+  body.hidden = !show;
+  if (btn) btn.textContent = show ? '× Close form' : (btn.dataset.openLabel || '+ New');
+  if (card) card.classList.toggle('so-form-collapsed', !show);
+  if (onChange) onChange();
+}
