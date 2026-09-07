@@ -124,7 +124,9 @@
         <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="mgmtDrSales">₱0.00</div></div>
         <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
       </div>
-      <div id="mgmtDrBody"><div class="mf-empty">Loading…</div></div>
+      <!-- A266: bounded so a long roster scrolls inside the card instead of running the page to
+           4,000px. Management keeps its own unbounded copy — that page is a scrolling overview. -->
+      <div class="flow-scroll" id="mgmtDrBody" style="max-height:440px;padding:0.5rem;"><div class="mf-empty">Loading…</div></div>
 
       <!-- Team Weekly Report: per-user task charts for the Mon–Sun week of the picked date (A110) -->
       <div style="margin-top:1.4rem;border-top:1px solid var(--border,#e2e8f0);padding-top:1rem;">
