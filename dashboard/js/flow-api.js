@@ -63,7 +63,10 @@ async function fetchFlow(action, params = {}, opts = {}) {
     let lastErr;
     for (let i = 0; i < attempts; i++) {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 30000);
+      /* A270 — was 30s while postFlow already allowed 60s, and this path retries FOUR times: a read
+         that takes 36s (getShipments did, before the server-side fix) was aborted and retried for two
+         minutes before the page gave up, instead of simply succeeding once. Matched to postFlow. */
+      const timer = setTimeout(() => ctrl.abort(), 60000);
       try {
         const res = await fetch(`${FLOW_API_URL}?${q}`, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
         clearTimeout(timer);
