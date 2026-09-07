@@ -3,6 +3,12 @@ let soQuotations = [];
 let soList = [];
 let soCds = {};        // soNo → SOCostDetails record (for the COGS column + Costs editor prefill)
 let soHasPO = {};      // A145: soNo → true when a purchase order references it (no-PO nudge)
+/* A266 — the Status column is the manual Open/Delivered field and says nothing about the money:
+   105 of 108 orders read "Delivered" while 29 of them were never collected. These three ledgers
+   drive a second, derived Process column so the chain state is visible without opening anything. */
+let soInvBy = {};      // soNo → live (non-voided) invoices
+let soArBy = {};       // soNo → AR rows
+let soColBy = {};      // soNo → collections
 let soSession = null;
 let soOrigNo = '';     // A220: the number the open record had when it was loaded, so an edited SO No
                        // is recognised as a RENAME and routed to renameSalesOrder, not to an update.
@@ -378,16 +384,33 @@ async function loadSOs() {
   const c = document.getElementById('listContainer');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const [res, cdRes, poRes] = await Promise.all([
+    const [res, cdRes, poRes, invRes, arRes, colRes] = await Promise.all([
       fetchFlow('getSalesOrders'),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),   // A145: which SOs have a PO
+      fetchFlow('getInvoices').catch(() => ({ data: [] })),         // A266: the Process column
+      fetchFlow('getARAging').catch(() => ({ data: [] })),
+      fetchFlow('getCollections').catch(() => ({ data: [] })),
     ]);
     soList = (res && res.data) || [];
     soCds = {};
     ((cdRes && cdRes.data) || []).forEach(cd => { soCds[String(cd.soNo)] = cd; });
     soHasPO = {};
     ((poRes && poRes.data) || []).forEach(po => { if (po.soNo) soHasPO[String(po.soNo)] = true; });
+    // A266 — index the three money ledgers by SO No for soProcessState().
+    soInvBy = {}; soArBy = {}; soColBy = {};
+    ((invRes && invRes.data) || []).forEach(i => {
+      if (!i.soNo || i.voided) return;                       // a voided invoice is not an invoice
+      (soInvBy[String(i.soNo)] = soInvBy[String(i.soNo)] || []).push(i);
+    });
+    ((arRes && arRes.data) || []).forEach(a => {
+      if (!a.soNo) return;
+      (soArBy[String(a.soNo)] = soArBy[String(a.soNo)] || []).push(a);
+    });
+    ((colRes && colRes.data) || []).forEach(c => {
+      if (!c.soNo) return;
+      (soColBy[String(c.soNo)] = soColBy[String(c.soNo)] || []).push(c);
+    });
     // Most recent sales order first (by date, then SO number).
     soList.sort((a, b) =>
       (flowDate(b.date) || '').localeCompare(flowDate(a.date) || '') ||
@@ -425,6 +448,68 @@ function buildSOFilters() {
   }
 }
 
+/* A266 — where the order actually is, derived from the chain. Mirrors the audit exactly:
+   an AR row that is settled AND has a payment against it is Collected; an AR row on its own is
+   Awaiting payment; a live invoice with no AR row is Invoiced; nothing downstream is No invoice. */
+function soProcessState(soNo) {
+  const k = String(soNo);
+  const ars = soArBy[k] || [], cols = soColBy[k] || [], invs = soInvBy[k] || [];
+  if (ars.length) {
+    const outstanding = ars.reduce((t, a) => t + _soNum(a.outstanding), 0);
+    if (outstanding <= 0.01 && cols.length) {
+      return { label: 'Collected', cls: 'b-proc-collected', title: 'Invoiced, receivable settled and payment recorded.' };
+    }
+    return { label: 'Awaiting payment', cls: 'b-proc-awaiting',
+             title: `In AR aging — ${flowMoney(outstanding, 'PHP')} still owed.` };
+  }
+  if (invs.length) {
+    const billed = invs.reduce((t, i) => t + _soNum(i.totalSales), 0);
+    return { label: 'Invoiced', cls: 'b-proc-invoiced',
+             title: `Invoiced ${flowMoney(billed, 'PHP')} but no AR aging row — the receivable is not being tracked.` };
+  }
+  return { label: 'No invoice', cls: 'b-proc-noinv', title: 'Nothing downstream: no invoice, no receivable, no payment.' };
+}
+
+function _soNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+/* A266 — every status used to render with the same `b-open` class, so Open and Delivered were
+   indistinguishable. Unknown values fall back to the neutral slate rather than mis-colouring. */
+function soStatusBadge(status) {
+  const v = String(status || '').trim();
+  const cls = { Open: 'b-status-open', Delivered: 'b-status-delivered',
+                Invoiced: 'b-status-invoiced', Closed: 'b-status-closed' }[v] || 'b-status-closed';
+  return `<span class="flow-badge ${cls}">${flowEsc(v || '—')}</span>`;
+}
+
+/* A266 — size the list so its BOTTOM lands at the bottom of the window, making it the only
+   scrolling region. A fixed `calc(100vh - Npx)` cannot do this: the container's top moves as the
+   form opens and closes, and a guessed offset left the page itself scrolling by 300px. */
+function soFitList() {
+  const c = document.getElementById('listContainer');
+  if (!c) return;
+  if (window.innerWidth <= 1000) { c.style.maxHeight = ''; return; }   // narrow: let the page scroll
+  const top = c.getBoundingClientRect().top + window.scrollY;
+  c.style.maxHeight = Math.max(240, window.innerHeight - top - 40) + 'px';
+}
+window.addEventListener('resize', soFitList);
+document.addEventListener('DOMContentLoaded', () => {
+  const card = document.getElementById('formCard'), b = document.getElementById('formBody');
+  if (card && b && b.hidden) card.classList.add('so-form-collapsed');
+});
+
+/* A266 — the form is collapsed by default; this opens it, and editSO() forces it open. */
+function toggleSOForm(force) {
+  const body = document.getElementById('formBody');
+  const btn = document.getElementById('formToggle');
+  if (!body) return;
+  const show = (force === undefined) ? body.hidden : !!force;
+  body.hidden = !show;
+  if (btn) btn.textContent = show ? '× Close form' : '+ New Sales Order';
+  const card = document.getElementById('formCard');
+  if (card) card.classList.toggle('so-form-collapsed', !show);
+  soFitList();                       // the list's top just moved
+}
+
 // International / Local supplier label badge (blank → em dash).
 function soTypeBadge(t) {
   const v = String(t || '');
@@ -460,11 +545,12 @@ function renderSOs() {
   });
   const meta = document.getElementById('soFilterMeta');
   if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
+  setTimeout(soFitList, 0);   // A266: after the rows exist
   if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
-  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
+  c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Process</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
-    <td><span class="flow-badge b-open">${flowEsc(s.status)}</span></td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
+    <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
     <td style="white-space:nowrap;">${`<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>${soViewer ? 'View costs' : 'Costs'}</button>`}
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
@@ -476,6 +562,8 @@ function editSO(no) {
   // while `no` arrives as a string from the inline onclick — strict === would miss them.
   const s = soList.find(x => String(x.soNo) === String(no));
   if (!s) return;
+  // A266 — the form starts collapsed, so editing must open it or the click does nothing visible.
+  if (typeof toggleSOForm === 'function') toggleSOForm(true);
   document.getElementById('soNo').value = s.soNo;
   const ni = document.getElementById('soNoInput');
   /* A220 — the SO number IS the record key (fourteen sheets, the Drive folder, the commission

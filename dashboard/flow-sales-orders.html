@@ -20,8 +20,15 @@
     </div>
     <div class="flow-nav" id="flowNav"></div>
 
+    <!-- A266: the form is collapsed by default so the list below can own the whole screen and be
+         the only thing that scrolls. editSO() re-opens it. -->
     <div class="chart-card" style="margin-bottom:1.25rem;" id="formCard">
-      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Sales Order</h3>
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;margin:0;" id="formTitle">New Sales Order</h3>
+        <button type="button" class="btn btn-sm btn-primary" id="formToggle" onclick="toggleSOForm()"
+                style="margin-left:auto;">+ New Sales Order</button>
+      </div>
+      <div id="formBody" hidden style="margin-top:0.75rem;">
       <input type="hidden" id="soNo" value="">
       <div class="flow-form">
         <div><label>SO No * <span style="font-weight:400;color:var(--text-muted,#64748b);">(the client's PO number — required)</span></label><input type="text" id="soNoInput" required placeholder="e.g. 180100003867 / PDC1811…"></div>
@@ -73,6 +80,7 @@
         <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
       </div>
       <div id="formMsg" class="flow-msg" style="display:none;"></div>
+      </div><!-- /#formBody -->
     </div>
 
     <div class="chart-card">
@@ -93,7 +101,10 @@
         <select id="soCustomer" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;"><option value="">All customers</option></select>
         <span id="soFilterMeta" style="margin-left:auto;font-size:0.78rem;color:var(--text-muted,#64748b);"></span>
       </div>
-      <div id="listContainer" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
+      <!-- A266: this div is the ONLY scrolling region. It must stay a child of the card, never the
+           card itself — bento-skin-v2 puts overflow:hidden on .chart-card and .chart-card:hover
+           applies a transform, either of which would capture the sticky <thead>. -->
+      <div class="flow-scroll" id="listContainer" style="max-height:calc(100vh - 300px);"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>
   </main>
 

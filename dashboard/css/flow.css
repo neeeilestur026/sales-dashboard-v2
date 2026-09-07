@@ -27,6 +27,38 @@
 .b-partial { background: rgba(249,115,22,0.12); color: #f97316; }
 .b-paid { background: rgba(34,197,94,0.12); color: #16a34a; }
 .b-open { background: rgba(59,130,246,0.12); color: #3b82f6; }
+
+/* A266 — the sales-order list had ONE badge class for every status, so a delivered order and an
+   open one were the same blue. Status is the manual field (did the goods leave); Process is derived
+   from the chain (where the money is). Green is reserved for Process/Collected alone, so "paid" is
+   readable from colour without reading the word. */
+.b-status-open       { background: rgba(59,130,246,0.12);  color: #2563eb; }
+.b-status-delivered  { background: rgba(100,116,139,0.16); color: #475569; }
+.b-status-invoiced   { background: rgba(14,165,233,0.14);  color: #0369a1; }
+.b-status-closed     { background: rgba(51,65,85,0.20);    color: #1e293b; }
+.b-proc-noinv        { background: rgba(239,68,68,0.12);   color: #dc2626; }
+.b-proc-invoiced     { background: rgba(139,92,246,0.16);  color: #6d28d9; }
+.b-proc-awaiting     { background: rgba(245,158,11,0.16);  color: #b45309; }
+.b-proc-collected    { background: rgba(34,197,94,0.14);   color: #15803d; }
+
+/* A266 — a bounded table scroller, so `.flow-table thead th` (already position:sticky below) finally
+   has a scrolling ancestor to stick to. Promoted from `.mf-invscroll`, which was defined inline in
+   management-home.html only and therefore rendered unstyled on hr-home and marketing-home.
+   MUST be its own element, never the .chart-card: bento-skin-v2 sets overflow:hidden on that card
+   and .chart-card:hover applies a transform — either one would capture the sticky header. */
+/* A266 — when the form is collapsed it is just a title and a button, so drop it to a slim bar and
+   hand the height back to the list. */
+.so-form-collapsed { padding: 0.7rem 1.25rem !important; margin-bottom: 0.75rem !important; }
+
+.flow-scroll { overflow: auto; border: 1px solid var(--border,#e2e8f0); border-radius: 10px; }
+.flow-scroll table { margin: 0; }
+/* The header is already `position:sticky` (see below); it only needs an opaque background, or the
+   rows scroll through it. `border-collapse: collapse` is left alone — sticky engages fine with it. */
+.flow-scroll .flow-table thead th {
+  background: var(--bg-card,#fff);
+  box-shadow: inset 0 -1px 0 var(--border,#e2e8f0);
+}
+@media (max-width: 1000px) { .flow-scroll { max-height: none !important; } }
 /* Approval workflow */
 .b-draft { background: var(--bg-inset,#eef2f6); color: var(--text-secondary,#475569); }
 .b-pending { background: rgba(245,158,11,0.14); color: #b45309; }
