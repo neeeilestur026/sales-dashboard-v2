@@ -67,25 +67,35 @@ function render() {
   const c = document.getElementById('container');
   const fit = () => setTimeout(() => flowFitScroll('container'), 0);   // A273
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No items.</p>'; fit(); return; }
-  // Sales see a simple identifier list (no sensitive cost columns); admin/accounting see the full costed table.
+  /* A274 — two column sets, because the Catalog and the Stocks hold different things. Measured on
+     the live 994: every one of the Catalog's 896 rows has zero balance, zero cost and zero total,
+     so showing it five money columns was five columns of blanks on 90% of the table — and that,
+     with 622-character descriptions, is what forced the horizontal scroll. Sales already saw a
+     three-column list, so that view and the Catalog are now the same renderer. */
   const invSlim = invSession.role === 'sales';
-  const head = invSlim
-    ? `<th>Item No</th><th>Description</th><th></th>`
-    : `<th>Item No</th><th>Description</th><th class="num">Balance</th><th class="num">Purchase/Unit</th>
-       <th class="num">Shipping/Unit</th><th class="num">Landed/Unit</th><th class="num">Total Landed</th><th>Cur</th><th></th>`;
-  const group = (label, list, sub) => `
+  const actCol = invReadOnly ? '' : '<col class="c-act">';
+  const actTh = invReadOnly ? '' : '<th></th>';   // read-only rows emit no <td>, so no <th> either
+
+  const stockCols = `<colgroup><col class="c-item"><col><col class="c-onhand"><col class="c-cost">
+      <col class="c-total">${actCol}</colgroup>`;
+  const stockHead = `<th>Item No</th><th>Description</th><th class="num">On hand</th>
+      <th>Cost / unit</th><th class="num">Total landed</th>${actTh}`;
+  const listCols = `<colgroup><col class="c-item"><col>${actCol}</colgroup>`;
+  const listHead = `<th>Item No</th><th>Description</th>${actTh}`;
+
+  const group = (label, list, sub, kind) => `
     <div style="font-size:0.9rem;font-weight:700;margin:0 0 0.5rem;display:flex;align-items:center;gap:0.5rem;">
       ${label}
       <span style="font-weight:600;font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;background:var(--bg-inset,#eef2f6);color:var(--text-secondary,#475569);">${list.length}</span>
       ${sub ? `<span style="font-weight:500;font-size:0.75rem;color:var(--text-muted,#64748b);">${sub}</span>` : ''}
     </div>
     ${list.length
-      /* A273 — this used to wrap each table in <div style="overflow-x:auto">. `overflow-x:auto`
-         forces overflow-y to compute to auto as well, which made THAT div the sticky header's
-         nearest scrolling ancestor — and since it has no height limit it never scrolls, so the
-         header had nothing to pin to and simply scrolled away. The #container .flow-scroll around
-         both tables already scrolls in both directions. */
-      ? `<table class="flow-table"><thead><tr>${head}</tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table>`
+      /* A273 — do NOT wrap this table in an overflow container. `overflow-x:auto` forces overflow-y
+         to auto as well, which makes the wrapper the sticky header's scroll ancestor; having no
+         height limit it never scrolls, so the header stops pinning. #container already scrolls. */
+      ? `<table class="flow-table inv-table">${kind === 'stock' ? stockCols : listCols}
+           <thead><tr>${kind === 'stock' ? stockHead : listHead}</tr></thead>
+           <tbody>${list.map(kind === 'stock' ? invStockRow : invListRow).join('')}</tbody></table>`
       : '<p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
   const typed = rows.some(r => r.type === 'Stock' || r.type === 'Catalog');
   if (typed) {
@@ -95,39 +105,78 @@ function render() {
     const catalog = rows.filter(r => r.type !== 'Stock');
     const units = stock.reduce((s, r) => s + flowNum(r.balance), 0);
     c.innerHTML =
-      group('📦 Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`) +
+      group('📦 Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`, invSlim ? 'list' : 'stock') +
       `<div style="height:1.1rem;"></div>` +
-      group('📋 Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order');
+      group('📋 Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order', 'list');
   } else {
     // Pre-classification fallback (backend not yet on v79): keep the ordered/not-ordered split.
     const notOrdered = rows.filter(r => !invIsOrdered(r));
     const ordered = rows.filter(invIsOrdered);
     c.innerHTML =
-      group('🟠 Not yet ordered', notOrdered) +
+      group('🟠 Not yet ordered', notOrdered, '', 'list') +
       `<div style="height:1.1rem;"></div>` +
-      group('✅ Ordered · has a purchase order', ordered);
+      group('✅ Ordered · has a purchase order', ordered, '', invSlim ? 'list' : 'stock');
   }
   fit();          // A273 — both branches above land here
 }
 
-function rowHtml(r) {
-  // Read-only (management/director): no action buttons.
-  const actions = invReadOnly ? '<td></td>' : `<td style="white-space:nowrap;">
+/* A274 — one cell each for identity and description, shared by both row shapes. */
+function invItemCell(r) {
+  const no = String(r.itemNo || '').trim();
+  // 618 of 994 items carry no real number; a muted dash reads better than the literal "N/A".
+  return no && no.toUpperCase() !== 'N/A'
+    ? `<td class="inv-item">${flowEsc(no)}</td>`
+    : `<td class="inv-item inv-muted">—</td>`;
+}
+
+/* Clamped only when the text is long enough to need it (~2 lines at this width), so short rows are
+   not given a pointer cursor and a "more" affordance that do nothing. The toggle is delegated from
+   #container — 994 inline onclick attributes would be a lot of markup for one class flip. */
+function invDescCell(r) {
+  const d = String(r.description || '');
+  const long = d.length > 120;
+  return `<td><div class="inv-desc${long ? ' clamp' : ''}">${flowEsc(d)}</div>` +
+    `${long ? '<span class="inv-more"></span>' : ''}</td>`;
+}
+
+function invActionsCell(r) {
+  if (invReadOnly) return '';
+  return `<td style="white-space:nowrap;">
       <button class="link-btn" onclick='editItem(${r.rowIndex})'>Edit</button>
       ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex}, ${JSON.stringify(String(r.itemNo || ''))})' style="margin-left:0.5rem;">Delete</button>` : ''}
     </td>`;
-  if (invSession.role === 'sales') {
-    return `<tr><td>${flowEsc(r.itemNo)}</td><td>${flowEsc(r.description)}</td>${actions}</tr>`;
-  }
-  return `<tr>
-    <td>${flowEsc(r.itemNo)}</td><td>${flowEsc(r.description)}</td>
-    <td class="num">${flowNum(r.balance).toLocaleString()}</td>
-    <td class="num">${flowMoney(r.purchasePrice, r.currency)}</td>
-    <td class="num">${flowMoney(r.shippingCost, r.currency)}</td>
-    <td class="num">${flowMoney(r.landedCost, r.currency)}</td>
-    <td class="num">${flowMoney(r.totalLanded, r.currency)}</td>
-    <td>${flowEsc(r.currency)}</td>
-    ${actions}</tr>`;
+}
+
+/** Catalog + the sales slim view: identity only. No row here has a balance, cost or total. */
+function invListRow(r) {
+  return `<tr>${invItemCell(r)}${invDescCell(r)}${invActionsCell(r)}</tr>`;
+}
+
+/** Stocks: balance and cost matter, but only 10 of 98 rows carry any cost at all — so an item with
+ *  none shows an empty cell rather than three zeros. */
+function invStockRow(r) {
+  const bal = flowNum(r.balance);
+  const landed = flowNum(r.landedCost);
+  const purch = flowNum(r.purchasePrice);
+  const ship = flowNum(r.shippingCost);
+  const total = flowNum(r.totalLanded);
+  // Currency is PHP on all 994 rows today, so it gets no column — but say so inline if that changes.
+  const cur = String(r.currency || 'PHP').trim();
+  const curTag = cur && cur !== 'PHP' ? ` <span class="flow-badge" style="background:rgba(37,99,235,0.12);color:#1d4ed8;">${flowEsc(cur)}</span>` : '';
+
+  const parts = [];
+  if (purch) parts.push(`purchase ${flowMoney(purch, cur)}`);
+  if (ship) parts.push(`shipping ${flowMoney(ship, cur)}`);
+  const cost = landed || purch || ship
+    ? `<div class="inv-cost"><span class="v">${flowMoney(landed || purch, cur)}</span>${curTag}
+         ${parts.length ? `<span class="b">${parts.join(' · ')}</span>` : ''}</div>`
+    : '<span class="inv-muted">—</span>';
+
+  return `<tr>${invItemCell(r)}${invDescCell(r)}
+    <td class="num">${bal ? bal.toLocaleString() : '<span class="inv-muted">—</span>'}</td>
+    <td>${cost}</td>
+    <td class="num">${total ? flowMoney(total, cur) : '<span class="inv-muted">—</span>'}</td>
+    ${invActionsCell(r)}</tr>`;
 }
 
 function editItem(rowIndex) {
@@ -256,3 +305,14 @@ async function findDuplicates() {
 
 // A273 — keep the locked list sized when the window changes.
 window.addEventListener('resize', () => flowFitScroll('container'));
+
+/* A274 — expand a clamped description. Delegated so the markup stays clean across ~1,000 rows. */
+document.addEventListener('click', function (e) {
+  if (!e.target.closest) return;
+  // Either the clamped text itself or the "more" link beside it.
+  const more = e.target.closest('.inv-more');
+  const d = more ? more.previousElementSibling : e.target.closest('.inv-desc.clamp');
+  if (!d || !d.classList.contains('clamp')) return;
+  d.classList.toggle('open');
+  flowFitScroll('container');        // the row just changed height
+});

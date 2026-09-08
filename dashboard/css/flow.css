@@ -172,3 +172,67 @@
 .urep-note { margin-top: 0.7rem; padding: 0.6rem 0.8rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 0.84rem; color: #78350f; white-space: pre-wrap; }
 .umods { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
     
+/* ═══════════════════════════════════════════════════════════════════════════════
+   A274 — the inventory table. It ran off the screen sideways: 9 columns, one of
+   them holding descriptions up to 622 characters. `table-layout: fixed` with a
+   width on every column except the description is what stops that — the text
+   wraps instead of pushing the table wider.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.inv-table { table-layout: fixed; width: 100%; }
+.inv-table th, .inv-table td { vertical-align: top; }
+
+.inv-table col.c-item   { width: 140px; }
+.inv-table col.c-onhand { width: 92px; }
+.inv-table col.c-cost   { width: 156px; }
+.inv-table col.c-total  { width: 132px; }
+.inv-table col.c-act    { width: 118px; }
+/* the description column is deliberately given no width — it takes what is left */
+
+/* Item numbers reach 58 characters, and 618 of 994 items have none at all. */
+/* The skin puts `white-space: nowrap` on flow-table cells, which is right for money columns and
+   wrong for these two: it kept a 279-character description on ONE clipped line, so the two-line
+   clamp had nothing to clamp. */
+.inv-item { font-weight: 600; overflow-wrap: anywhere; white-space: normal; }
+.inv-muted { color: var(--text-muted, #64748b); }
+
+/* Clamped to two lines; the class is only applied to descriptions long enough to
+   need it, so short rows do not get a pointer cursor that does nothing. */
+.inv-desc { overflow-wrap: anywhere; line-height: 1.45; white-space: normal; }
+/* max-height, not -webkit-line-clamp: `display:-webkit-box` computed to `flow-root` in this
+   engine, so the clamp silently did nothing and the div collapsed to a single line. Two lines at
+   1.45 line-height is 2.9em; the explicit line-height matters because the inherited one was
+   `normal`, which is not a number this can be multiplied by. */
+.inv-desc.clamp {
+  max-height: 2.9em;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+/* The affordance sits OUTSIDE the clamped box — inside it, `overflow:hidden` would clip it away
+   on exactly the rows that need it. */
+.inv-desc.clamp + .inv-more {
+  display: inline-block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent, #0d9488);
+  cursor: pointer;
+  user-select: none;
+}
+.inv-desc.clamp + .inv-more::after { content: '⌄ more'; }
+.inv-desc.clamp.open + .inv-more::after { content: '⌃ less'; }
+.inv-desc.clamp.open {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Landed cost is the figure; purchase and shipping sit under it. 88 of 98 stock
+   items have no cost at all, and those render nothing rather than three zeros. */
+.inv-cost .v { font-variant-numeric: tabular-nums; }
+.inv-cost .b {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted, #64748b);
+  margin-top: 0.1rem;
+  overflow-wrap: anywhere;
+}
