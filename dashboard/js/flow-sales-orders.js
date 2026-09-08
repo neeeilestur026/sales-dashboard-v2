@@ -448,6 +448,49 @@ function buildSOFilters() {
   }
 }
 
+/* A271 — the lines behind an order, and what each was priced at. Management asked for this: the
+   list showed only an item COUNT, and the one place the lines existed was the edit form, which a
+   viewer role cannot open at all. Read-only, so every role on this page can use it. */
+function soViewItems(no) {
+  const s = soList.find(x => String(x.soNo) === String(no));
+  if (!s) return;
+  const items = s.items || [];
+  document.getElementById('soItemsTitle').textContent = s.soNo;
+  const cd = soCds[String(s.soNo)];
+  document.getElementById('soItemsSub').innerHTML =
+    `${flowEsc(s.customer)} · ${flowDate(s.date)} · ${soStatusBadge(s.status)} ` +
+    `${soTypeBadge(s.supplierType)}` +
+    (s.quotationNo ? ` · from quotation ${flowEsc(s.quotationNo)}` : '') +
+    (cd ? ` · recorded COGS ${flowMoney(cd.totalCOGS, 'PHP')}` : '');
+  const body = document.getElementById('soItemsBody');
+  if (!items.length) {
+    body.innerHTML = '<p style="color:var(--text-muted,#64748b);">This order has no line items recorded.</p>';
+  } else {
+    let total = 0;
+    const rows = items.map((it, i) => {
+      const line = flowNum(it.qty) * flowNum(it.price);
+      total += line;
+      return `<tr><td class="num">${i + 1}</td><td>${flowEsc(it.itemNo)}</td><td>${flowEsc(it.itemName)}</td>
+        <td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td>
+        <td class="num">${flowMoney(line, 'PHP')}</td></tr>`;
+    }).join('');
+    // The order header carries its own total; show both when they disagree rather than hiding it.
+    const header = flowNum(s.total);
+    const drift = Math.abs(header - total) > 0.01
+      ? `<tr><td colspan="5" style="color:#b45309;">Order total recorded on the header</td>
+           <td class="num" style="color:#b45309;">${flowMoney(header, 'PHP')}</td></tr>` : '';
+    body.innerHTML = `<table class="flow-table"><thead><tr><th class="num">#</th><th>Item No</th>
+      <th>Description</th><th class="num">Qty</th><th class="num">Price/Unit</th><th class="num">Line Total</th>
+      </tr></thead><tbody>${rows}
+      <tr style="font-weight:700;background:var(--bg-inset,#f8fafc);">
+        <td colspan="5">Total of ${items.length} line${items.length === 1 ? '' : 's'}</td>
+        <td class="num">${flowMoney(total, 'PHP')}</td></tr>${drift}</tbody></table>`;
+  }
+  document.getElementById('soItemsModal').classList.add('open');
+}
+
+function closeSoItems() { document.getElementById('soItemsModal').classList.remove('open'); }
+
 /* A266 — where the order actually is, derived from the chain. Mirrors the audit exactly:
    an AR row that is settled AND has a payment against it is Collected; an AR row on its own is
    Awaiting payment; a live invoice with no AR row is Invoiced; nothing downstream is No invoice. */
@@ -543,8 +586,8 @@ function renderSOs() {
   if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
   if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Process</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
-    <tr><td>${flowEsc(s.soNo)}${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
-    <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td>${s.items.length}</td>
+    <tr><td><button class="link-btn" style="font-weight:600;" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${flowEsc(s.soNo)}</button>${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
+    <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td><button class="link-btn" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${s.items.length}</button></td>
     <td style="white-space:nowrap;">${`<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>${soViewer ? 'View costs' : 'Costs'}</button>`}
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>

@@ -754,11 +754,10 @@ function openReviewModal(no) {
   const q = qList.find(x => String(x.quotationNo) === String(no));
   if (!q) return;
   const role = qSession.role, st = q.status || 'Draft';
-  /* A267 — the chain is admin → director → management, management last. Each role sees Approve
-     only at its OWN stage: a director approving no longer closes the quotation. */
+  /* A271 — the chain is admin → management; the director does not approve quotations. Legacy
+     'Pending Director' rows are still management's to clear, so they are not stranded. */
   const isApprover = (role === 'admin' && st === 'Pending Admin') ||
-    (role === 'director' && st === 'Pending Director') ||
-    (role === 'management' && st === 'Pending Management');
+    (role === 'management' && (st === 'Pending Management' || st === 'Pending Director'));
   document.getElementById('qrTitle').textContent = q.quotationNo;
   /* A267 — name the purchase request this was quoted from, and link straight to it. The PR number
      is not cost data, so every role sees it; the cost/margin breakdown below stays gated to

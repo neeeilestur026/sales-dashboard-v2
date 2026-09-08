@@ -609,7 +609,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'management') {
     const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226
-    const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-inventory', 'management-sales-orders', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223
+    const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
     const mAcctPages = ['leave-request', 'change-password'];
     /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
        entry here is absent from Approvals and Financials above, so nothing appears in two menus.
@@ -662,7 +662,8 @@ function renderNavbar(activePage) {
           <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
-          <a href="management-sales-orders.html" class="${activePage === 'management-sales-orders' ? 'active' : ''}">Sales Orders</a>
+          <!-- A271 — management-sales-orders.html removed from management's nav. Sales Orders —
+               Operations below is the one page, and it now shows the lines and prices on click. -->
         </div>
       </div>
       <div class="nav-dropdown">
@@ -674,8 +675,6 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="flow-home.html" class="${activePage === 'flow-home' ? 'active' : ''}">Overview</a>
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
-          <!-- A231: labelled to disambiguate. Financials above has "Sales Orders" pointing at
-               management-sales-orders.html, which is the oversight summary, not this one. -->
           <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders — Operations</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Materials Receiving</a>
           <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
@@ -1068,12 +1067,12 @@ async function flowComputeActions(session) {
   }
 
   // Quotations awaiting MY approval.
-  if (isAdmin || isMgmt || isDir) {
-    // A267 — admin → director → management. Each tier is shown only its own queue; surfacing
-    // another tier's backlog trains people to ignore the badge.
-    const stage = isAdmin ? 'Pending Admin' : (isDir ? 'Pending Director' : 'Pending Management');
+  // A271 — admin → management only; the director no longer approves quotations, so no badge for
+  // them here. Management also picks up any legacy 'Pending Director' row.
+  if (isAdmin || isMgmt) {
+    const stages = isAdmin ? ['Pending Admin'] : ['Pending Management', 'Pending Director'];
     jobs.push(fetchFlow('getQuotations').then(r => {
-      const n = ((r && r.data) || []).filter(q => q.status === stage).length;
+      const n = ((r && r.data) || []).filter(q => stages.indexOf(q.status) !== -1).length;
       if (n) add('report', '#f97316', n + ' quotation(s) awaiting your approval', 'flow-quotations.html');
     }).catch(() => {}));
   }

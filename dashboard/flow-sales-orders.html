@@ -108,6 +108,20 @@
     </div>
   </main>
 
+  <!-- A271 — the lines behind an order. Management asked to see the items and each price without
+       opening the edit form, which viewer roles cannot use at all. Opened from the SO number or the
+       item count on any row. -->
+  <div class="flow-modal-overlay" id="soItemsModal">
+    <div class="flow-modal" style="width:min(860px,100%);">
+      <h3 id="soItemsTitle">Sales Order</h3>
+      <div class="sub" id="soItemsSub">—</div>
+      <div id="soItemsBody" style="overflow-x:auto;"></div>
+      <div class="flow-modal-foot" style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem;">
+        <button type="button" class="btn btn-secondary" onclick="closeSoItems()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>

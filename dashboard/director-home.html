@@ -421,9 +421,9 @@
         fetchFlow('getQuotations').catch(() => ({ data: [] })),
         fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
       ]).then(([q, po]) => {
-        // A267 — quotations now reach the director BEFORE management, at 'Pending Director'.
+        // A271 — the director no longer approves quotations, so this chip stays at zero for them.
         // Purchase orders are unchanged: that chain still ends at 'Pending Management'.
-        const qn = ((q && q.data) || []).filter(x => x.status === 'Pending Director').length;
+        const qn = 0;
         const pn = ((po && po.data) || []).filter(x => x.status === 'Pending Management').length;
         const el = document.getElementById('flowApprovalStrip');
         if (!el || (qn + pn === 0)) return;

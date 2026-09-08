@@ -1146,7 +1146,7 @@ function _renderSoTable(orders) {
   if (!listEl) return;
   if (!orders.length) {
     listEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);">No sales orders match this filter.</div>' +
-      '<div style="text-align:right;margin-top:0.75rem;"><a href="management-sales-orders.html" style="color:#3b82f6;font-size:0.8rem;text-decoration:none;">Open Full Sales Orders Page &rarr;</a></div>';
+      '<div style="text-align:right;margin-top:0.75rem;"><a href="flow-sales-orders.html" style="color:#3b82f6;font-size:0.8rem;text-decoration:none;">Open Sales Orders &rarr;</a></div>';   // A271
     return;
   }
   orders.sort(function (a, b) { return _soDateValue(b) - _soDateValue(a); });
@@ -1179,7 +1179,7 @@ function _renderSoTable(orders) {
       '</tr>';
   });
   html += '</tbody></table>';
-  html += '<div style="text-align:right;margin-top:0.75rem;"><a href="management-sales-orders.html" style="color:#3b82f6;font-size:0.8rem;text-decoration:none;">View All ' + orders.length + ' Orders &rarr;</a></div>';
+  html += '<div style="text-align:right;margin-top:0.75rem;"><a href="flow-sales-orders.html" style="color:#3b82f6;font-size:0.8rem;text-decoration:none;">View All ' + orders.length + ' Orders &rarr;</a></div>';   // A271
   listEl.innerHTML = html;
 }
 
