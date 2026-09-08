@@ -71,7 +71,8 @@
         <button class="btn btn-sm btn-secondary" onclick="loadInventory()">Refresh</button>
       </div>
       <div id="dupReport" style="display:none;"></div>
-      <div id="container" style="overflow-x:auto;">
+      <!-- A273: the only scrolling region on this page — see flowFitScroll in flow-api.js. -->
+      <div class="flow-scroll" id="container">
         <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
       </div>
     </div>

@@ -1563,8 +1563,10 @@ function flowFitScrollOn(ids, opts) {
    Call flowFormToggleInit(label) once on load; it wraps everything after the card's <h3> in a
    collapsed #formBody and adds the toggle. Pages keep calling flowFormToggle(true) when they load a
    record for editing. */
-function flowFormToggleInit(label, onChange) {
-  const card = document.getElementById('formCard');
+function flowFormToggleInit(label, onChange, cardId) {
+  // A273 — the card id is a parameter because flow-inventory names its card invFormCard, not
+  // formCard. flowFormToggle finds the body by id, so only the lookup here has to vary.
+  const card = document.getElementById(cardId || 'formCard');
   if (!card || document.getElementById('formBody')) return;
   const h3 = card.querySelector('h3');
   if (!h3) return;
@@ -1594,7 +1596,7 @@ function flowFormToggleInit(label, onChange) {
 function flowFormToggle(force, onChange) {
   const body = document.getElementById('formBody');
   const btn = document.getElementById('formToggle');
-  const card = document.getElementById('formCard');
+  const card = body ? body.closest('.chart-card') : null;
   if (!body) return;
   const show = (force === undefined) ? body.hidden : !!force;
   body.hidden = !show;

@@ -21,6 +21,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (invReadOnly) {
     const form = document.getElementById('invFormCard');
     if (form) form.style.display = 'none';
+  } else {
+    /* A273 — collapse the form so the catalogue below owns the screen and is the only thing that
+       scrolls. Read-only roles skip this: their form is hidden outright, so there is nothing to
+       collapse and the list already starts high. */
+    flowFormToggleInit('Add Item', () => flowFitScroll('container'), 'invFormCard');
   }
   document.getElementById('currency').innerHTML = FLOW_CURRENCIES.map(c => `<option>${c}</option>`).join('');
   // Admin/accounting classify items (Stock vs Catalog); sales adds are always Catalog (quoting items).
@@ -60,7 +65,8 @@ function render() {
   const q = (document.getElementById('search').value || '').toLowerCase();
   const rows = invData.filter(r => !q || String(r.itemNo).toLowerCase().includes(q) || String(r.description).toLowerCase().includes(q));
   const c = document.getElementById('container');
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No items.</p>'; return; }
+  const fit = () => setTimeout(() => flowFitScroll('container'), 0);   // A273
+  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No items.</p>'; fit(); return; }
   // Sales see a simple identifier list (no sensitive cost columns); admin/accounting see the full costed table.
   const invSlim = invSession.role === 'sales';
   const head = invSlim
@@ -74,7 +80,12 @@ function render() {
       ${sub ? `<span style="font-weight:500;font-size:0.75rem;color:var(--text-muted,#64748b);">${sub}</span>` : ''}
     </div>
     ${list.length
-      ? `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>${head}</tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table></div>`
+      /* A273 — this used to wrap each table in <div style="overflow-x:auto">. `overflow-x:auto`
+         forces overflow-y to compute to auto as well, which made THAT div the sticky header's
+         nearest scrolling ancestor — and since it has no height limit it never scrolls, so the
+         header had nothing to pin to and simply scrolled away. The #container .flow-scroll around
+         both tables already scrolls in both directions. */
+      ? `<table class="flow-table"><thead><tr>${head}</tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table>`
       : '<p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
   const typed = rows.some(r => r.type === 'Stock' || r.type === 'Catalog');
   if (typed) {
@@ -96,6 +107,7 @@ function render() {
       `<div style="height:1.1rem;"></div>` +
       group('✅ Ordered · has a purchase order', ordered);
   }
+  fit();          // A273 — both branches above land here
 }
 
 function rowHtml(r) {
@@ -121,6 +133,8 @@ function rowHtml(r) {
 function editItem(rowIndex) {
   const r = invData.find(x => x.rowIndex === rowIndex);
   if (!r) return;
+  // A273 — the form starts collapsed, so editing must open it or the click does nothing visible.
+  if (typeof flowFormToggle === 'function') flowFormToggle(true);
   document.getElementById('rowIndex').value = r.rowIndex;
   document.getElementById('itemNo').value = r.itemNo;
   document.getElementById('description').value = r.description;
@@ -205,6 +219,7 @@ async function findDuplicates() {
   if (!box) return;
   box.style.display = '';
   box.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Scanning...</span></div>';
+  flowFitScroll('container');        // A273 — the report just took height above the list
   try {
     const r = await fetchFlow('findDuplicateInventory');
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not scan the catalogue.');
@@ -238,3 +253,6 @@ async function findDuplicates() {
     box.innerHTML = `<p style="color:#ef4444;padding:0.6rem 0;">${flowEsc(e.message)}</p>`;
   }
 }
+
+// A273 — keep the locked list sized when the window changes.
+window.addEventListener('resize', () => flowFitScroll('container'));
