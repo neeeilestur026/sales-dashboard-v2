@@ -274,6 +274,45 @@ img {
 .nav-dropdown:hover .nav-dropdown-menu {
   display: block;
 }
+
+/* A272 — the Process Flow menu carries 31 links. As a single column it ran off the bottom of the
+   screen, so the last entries could not be reached at all. `.mega` lays the same links out in
+   labelled columns that fit on one screen; it stays a plain list on narrow windows. */
+.nav-dropdown-menu.mega {
+  min-width: min(880px, calc(100vw - 2rem));
+  padding: 0.85rem 1rem 1rem;
+  display: none;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 0.15rem 1.4rem;
+}
+.nav-dropdown:hover .nav-dropdown-menu.mega { display: grid; }
+/* Right-align the panel when the button sits in the right half, so it cannot overflow the window. */
+.nav-dropdown-menu.mega.from-right { left: auto; right: 0; }
+.nav-dropdown-menu.mega .dd-group {
+  grid-column: span 1;
+  break-inside: avoid;
+  margin-bottom: 0.5rem;
+}
+.nav-dropdown-menu.mega .dd-title {
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted, #64748b);
+  padding: 0.4rem 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  margin-bottom: 0.2rem;
+}
+.nav-dropdown-menu.mega a { padding: 0.34rem 0.5rem; border-radius: 6px; font-size: 0.8rem; }
+
+@media (max-width: 940px) {
+  .nav-dropdown-menu.mega {
+    grid-template-columns: 1fr;
+    min-width: 240px;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+  }
+}
 .nav-dropdown-menu a {
   display: block;
   padding: 0.55rem 1rem;
