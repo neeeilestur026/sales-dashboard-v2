@@ -160,11 +160,8 @@ async function loadPeriod() {
   _hoursB = {};
   (hB.data || []).forEach(r => { _hoursB[r.employee + '|' + r.date] = r; });
 
-  _registerA = {};
-  (rA.data || []).forEach(r => { _registerA[r.employee] = r; });
-
-  _registerB = {};
-  (rB.data || []).forEach(r => { _registerB[r.employee] = r; });
+  _applyRegisterResponse('A', rA);
+  _applyRegisterResponse('B', rB);
 
   _holidaysA = {};
   (((xA && xA.data) || [])).forEach(r => { if (r && r.date && r.type) _holidaysA[r.date] = r.type; });
@@ -1061,23 +1058,50 @@ async function saveHours(cutoff) {
    alongside the stored rows and the grid falls back to it, marked as unsaved. */
 let _sdDueA = {}, _sdDueB = {};
 let _sdDraftsA = [], _sdDraftsB = [];
+let _sdStaleA = false, _sdStaleB = false;
+
+/* A275 — THE ONLY PLACE A REGISTER RESPONSE IS UNPACKED.
+ *
+ * There are two paths into the pay grid — loadPeriod (the Load button) and _refreshRegister (after a
+ * save) — and they each built the register map with their own copy of the same two lines. When the
+ * salary-deduction projection arrived it was wired into the second one only, so the figure appeared
+ * after a save and never on Load, which is the path everybody actually uses. Splitting the response
+ * across two readers is what made that possible, so now there is one. */
+function _applyRegisterResponse(cutoff, res) {
+  const map = cutoff === 'A' ? _registerA : _registerB;
+  Object.keys(map).forEach(k => delete map[k]);
+  ((res && res.data) || []).forEach(r => { map[r.employee] = r; });
+
+  const due = (res && res.salaryDeductionDue) || {};
+  const drafts = (res && res.salaryDeductionDrafts) || [];
+  /* An OLD backend returns neither key. That is not "no deductions" — it is "this build does not
+     know what a deduction is", and the two look identical on screen. Recorded so the grid can say
+     which it is instead of showing an empty column and letting everyone guess. */
+  const stale = !res || res.salaryDeductionDue === undefined;
+  if (cutoff === 'A') { _sdDueA = due; _sdDraftsA = drafts; _sdStaleA = stale; }
+  else { _sdDueB = due; _sdDraftsB = drafts; _sdStaleB = stale; }
+}
 
 async function _refreshRegister(cutoff) {
   const period = _currentYear + '-' + _currentMonth + '-' + cutoff;
-  const res = await apiGetPayrollRegister(period);
-  const map = cutoff === 'A' ? _registerA : _registerB;
-  Object.keys(map).forEach(k => delete map[k]);
-  (res.data || []).forEach(r => { map[r.employee] = r; });
-  const due = res.salaryDeductionDue || {};
-  const drafts = res.salaryDeductionDrafts || [];
-  if (cutoff === 'A') { _sdDueA = due; _sdDraftsA = drafts; }
-  else { _sdDueB = due; _sdDraftsB = drafts; }
+  _applyRegisterResponse(cutoff, await apiGetPayrollRegister(period));
 }
 
 /* A275 — a Draft deducts nothing, so a deduction someone set up but never activated is completely
    invisible on this screen. That is the single most likely reason for "I made one and the column is
    still empty", so the grid says it out loud rather than leaving them to find it. */
 function _sdDraftNotice(cutoff) {
+  /* An out-of-date Apps Script and "nobody owes anything" produce the identical empty column, and
+     telling them apart cost a deploy cycle. The response itself says which: a build that knows about
+     salary deductions always sends the key, even when it is empty. */
+  if (cutoff === 'A' ? _sdStaleA : _sdStaleB) {
+    return `<div style="margin:0 0 0.7rem;padding:0.6rem 0.8rem;border:1px solid #fca5a5;background:#fef2f2;
+        border-radius:10px;font:400 0.8rem/1.5 'Inter',sans-serif;color:#7f1d1d;">
+        <strong>Salary deductions are not in the backend that is running.</strong>
+        This screen is newer than the Apps Script it is talking to, so the column will stay empty.
+        Paste <code>apps-script/Code.gs</code> and redeploy, then click Load again.
+      </div>`;
+  }
   const drafts = cutoff === 'A' ? _sdDraftsA : _sdDraftsB;
   if (!drafts.length) return '';
   const list = drafts.map(d =>

@@ -29,6 +29,7 @@ function boot() {
   const nodes = {};
   const el = (id) => (nodes[id] = nodes[id] || {
     id, innerHTML: '', textContent: '', value: '', style: {}, dataset: {}, disabled: false,
+    selectedIndex: 0, options: [{ text: 'September' }],
     classList: { add() {}, remove() {}, contains: () => false },
     querySelector: () => null, querySelectorAll: () => [], appendChild() {}, addEventListener() {},
     setAttribute() {}, getAttribute: () => null
@@ -57,6 +58,8 @@ this.__t = {
   payslip: (emp, cutoff) => _payslipHtml(emp, cutoff),
   deductions: (emp, cutoff) => _payDeductions(emp, cutoff),
   render: () => renderSalaryDeductions(),
+  loadPeriod: () => loadPeriod(),
+  dueMap: (cutoff) => (cutoff === 'A' ? _sdDueA : _sdDueB),
   project: () => _sdProject(),
   label: (p) => _sdLabel(p),
   nextCutoff: (p) => _sdNextCutoff(p)
@@ -67,6 +70,10 @@ this.__t = {
 const EMP = { lastName: 'Lucena', firstName: 'Gerald', dailyRate: 1000, otherIncome: 0,
   hdmfAmount: 100, status: 'Active', payType: 'Hourly', fixedAmount: 0 };
 
+/* One async main: a section that awaits must not be able to end the file early. A bare top-level
+ * `return` inside a block exits the MODULE in CommonJS, which silently skipped every section after
+ * it and still printed no failure — a suite that can quietly stop testing is worse than no suite. */
+async function main() {
 // ─────────────────────────────────────────────────────────────
 section('1 · the cutoff a person reads, not the key a machine reads');
 {
@@ -151,6 +158,43 @@ section('2b · a cutoff nobody has saved yet still shows what is coming off');
   eq('when the pay is already fully committed the preview takes nothing', tight.salaryDeduction, 0);
   ok('  so the preview never deepens a negative net on its own',
      tight.totalDed === 100000);
+}
+
+// ─────────────────────────────────────────────────────────────
+section('2a · the Load button — the path everybody actually uses');
+{
+  /* THE SECOND HALF OF THE SAME BUG. There are two ways into the pay grid: Load (loadPeriod) and the
+     refresh after a save (_refreshRegister). The projection was wired into the second one only, so
+     the figure appeared after saving and never on Load — which is the one people use. Both now go
+     through _applyRegisterResponse, and this drives the real loadPeriod to prove it. */
+  const ctx = boot(); const t = ctx.__t;
+  t.el('payMonth').value = '09';
+  t.el('payYear').value = 2026;
+  t.setEmployees([EMP]);
+
+  const dueFixture = { 'Lucena, Gerald': { amount: 2916.25, hasRow: false,
+    lines: [{ deductionNo: 'DED-202609-001', item: 'Lenovo laptop', amount: 2916.25,
+              remainingBefore: 34995, totalAmount: 34995 }] } };
+  ctx.apiGetPayrollHours = async () => ({ data: [] });
+  ctx.apiGetPayrollIncentives = async () => ({ data: [] });
+  ctx.apiGetPayrollHolidays = async () => ({ data: [] });
+  ctx.apiGetPayrollRegister = async (period) => ({ success: true, data: [],
+    salaryDeductionDue: period.slice(-1) === 'A' ? dueFixture : {}, salaryDeductionDrafts: [] });
+
+  await t.loadPeriod();
+  eq('Load fills the projection for the 1st cutoff',
+     (t.dueMap('A')['Lucena, Gerald'] || {}).amount, 2916.25);
+  eq('  and the deduction reaches the grid', t.deductions(EMP, 'A').salaryDeduction, 2916.25);
+  has('  which renders it in the table', t.el('payAGrid').innerHTML, '2,916.25');
+  eq('the 2nd cutoff correctly has none', t.deductions(EMP, 'B').salaryDeduction, 0);
+
+  /* An old Apps Script sends neither key. That must read as "the backend is behind", not as
+     "nobody owes anything" — the two were indistinguishable and cost a deploy cycle to tell apart. */
+  ctx.apiGetPayrollRegister = async () => ({ success: true, data: [] });
+  await t.loadPeriod();
+  has('an out-of-date backend says so on the grid',
+      t.el('payAGrid').innerHTML, 'not in the backend that is running');
+  has('  and names the file to paste', t.el('payAGrid').innerHTML, 'Code.gs');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -279,5 +323,12 @@ section('5 · the projection shown while the form is typed');
   has('and it says the end date can move', h, 'carries forward');
 }
 
-console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ok'));
-process.exit(FAIL ? 1 : 0);
+}
+
+main().then(() => {
+  console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ok'));
+  process.exit(FAIL ? 1 : 0);
+}).catch(err => {
+  console.error('  FAIL suite threw\n     ' + (err && err.stack || err));
+  process.exit(1);
+});
