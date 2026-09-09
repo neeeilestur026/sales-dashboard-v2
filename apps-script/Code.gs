@@ -30,6 +30,16 @@
   to create the 5 PM daily activity alert.
 */
 
+/* A275 — WHICH BUILD IS ACTUALLY LIVE.
+ *
+ * FlowAPI.gs has carried FLOW_VERSION for exactly this reason; Code.gs never had one, so "the
+ * feature does not work" and "the file was never pasted" looked identical from the outside and cost
+ * a round trip to tell apart. Bump this whenever Code.gs changes in a way anyone might ask about.
+ *   Check it:  <exec url>?action=getCodeVersion
+ *
+ *   1 — A275 salary deductions, and the payroll-approval row-index guard that had to precede them. */
+var CODE_VERSION = 1;
+
 // ─── Configuration ───────────────────────────────────────────
 var USERS_SHEET_ID = '';
 var LOGIN_TRACKER_SHEET_ID = ''; // Create a separate Google Sheet for login logs
@@ -706,6 +716,10 @@ function doGet(e) {
         result = handleGetAuditLogFilterValues(params);
         break;
 
+      case 'getCodeVersion':                       // A275 — is the pasted build the current one?
+        result = { success: true, version: CODE_VERSION,
+                   hasSalaryDeductions: (typeof handleGetSalaryDeductions === 'function') };
+        break;
       case 'validateSession':
         result = handleValidateSession(params);
         break;
@@ -11800,6 +11814,26 @@ function _sdSum(list) {
   var c = 0; for (var i = 0; list && i < list.length; i++) c += _sdC(list[i].amount); return _sdP(c);
 }
 
+/* Deductions that WOULD be running this cutoff if anyone had activated them. Scoped to the period,
+   so a draft dated next year does not nag about a cutoff it has nothing to do with. */
+function _sdDraftsFor(period) {
+  var out = [];
+  if (!_sdValidPeriod(period)) return out;
+  var half = period.slice(-1);
+  try {
+    var rows = _salaryDeductionsSheet().getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      var d = _sdRowToObj(rows[i], i + 1);
+      if (!d.deductionNo || d.status !== 'Draft') continue;
+      if (d.cadence === 'First Cutoff Only' && half !== 'A') continue;
+      if (d.startPeriod && period < d.startPeriod) continue;
+      out.push({ deductionNo: d.deductionNo, employee: d.employee, item: d.item,
+                 hasForm: !!d.formDocLink });
+    }
+  } catch (e) { /* no sheet yet means no drafts */ }
+  return out;
+}
+
 /** Is this cutoff already approved? Asked before a register save is allowed to rewrite it. */
 function _sdPeriodApproved(period) {
   try {
@@ -12265,13 +12299,16 @@ function handleGetPayrollRegister(params) {
     var period = String(params.period||'');
     var sheet  = _payrollRegisterSheet();
     var data   = sheet.getDataRange().getValues();
-    if (data.length < 2) return { success: true, data: [] };
+    /* A275 — NO EARLY RETURN ON AN EMPTY SHEET. It used to bail here with `data: []`, which is the
+       one case that matters most: a brand-new register and a cutoff nobody has saved yet still has
+       deductions due, and returning before computing them is what left the column blank. */
     /* A275 — the per-agreement breakdown behind column 16, so the payslip can NAME what the money
        went to instead of printing a bare figure the employee cannot check. Computed once for the
        whole period, and only when one was asked for. */
     var sdDue = _sdValidPeriod(period) ? _salaryDeductionDueFor(period) : null;
     var results = [];
-    for (var i = 1; i < data.length; i++) {
+    var sdSeen = {};
+    for (var i = 1; i < data.length && data.length >= 2; i++) {
       var row = data[i];
       if (!row[0]) continue;
       if (period && String(row[0]) !== period) continue;
@@ -12286,13 +12323,45 @@ function handleGetPayrollRegister(params) {
            Safe by construction; no backfill needed. Column 16 (A275) is the same shape. */
         incentive: parseFloat(row[14])||0,
         salaryDeduction: parseFloat(row[15])||0,
+        /* A275 — '' / undefined means this row was written before column 16 existed, or by a build
+           that did not know about it. A real 0 means the save ran and this employee owed nothing.
+           The grid has to tell them apart: the first should fall back to the projection, the second
+           is the answer. `parseFloat(undefined)||0` collapses both, so the distinction is made here
+           where the raw cell is still visible. */
+        salaryDeductionStored: (row[15] === '' || row[15] === undefined || row[15] === null)
+          ? null : (parseFloat(row[15]) || 0),
         /* Split the STORED total back into its agreements with the same allocation the save used, so
            the payslip lines always add up to the deduction they sit under. */
         salaryDeductionLines: sdDue
           ? _sdAllocate(sdDue[String(row[1]||'')] || [], _sdC(parseFloat(row[15])||0))
           : [] });
+      sdSeen[String(row[1]||'')] = true;
     }
-    return { success: true, data: results };
+    /* A275 — WHAT WOULD BE DEDUCTED, for a cutoff nobody has saved yet.
+     *
+     * The register is written by handleSavePayrollRegister and nowhere else, so a period that has
+     * never been saved has no rows at all — and the grid, which reads only those rows, showed a
+     * blank deduction column. The first thing anyone does is load the cutoff and look, which is
+     * exactly the moment there is nothing to read. The same hole swallows a period saved before
+     * column 16 existed.
+     *
+     * So the projection ships alongside the stored rows and the grid falls back to it, marked as not
+     * yet saved. Uncapped here on purpose: affordability depends on the other five deductions, which
+     * live in the browser until the save posts them. The client caps the TOTAL, which is all Net Pay
+     * needs and is exactly what _sdAllocate would arrive at server-side. */
+    var due = {};
+    if (sdDue) {
+      for (var emp in sdDue) {
+        if (!Object.prototype.hasOwnProperty.call(sdDue, emp)) continue;
+        due[emp] = { amount: _sdSum(sdDue[emp]), lines: sdDue[emp], hasRow: !!sdSeen[emp] };
+      }
+    }
+    /* A275 — DRAFTS ARE INVISIBLE FROM HERE, and that is the trap. A Draft deducts nothing by
+       design, so someone who set one up and never attached the signed form sees an empty column and
+       concludes the feature is broken. The pay grid cannot show what it is not told about, so the
+       drafts ride along and it says so in one line. */
+    return { success: true, data: results, salaryDeductionDue: due,
+             salaryDeductionDrafts: _sdDraftsFor(period) };
   } catch(e) { return { success: false, message: e.message }; }
 }
 

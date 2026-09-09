@@ -47,6 +47,10 @@ function boot() {
 this.__t = {
   el: (id) => this.document.getElementById(id),
   setRegister: (cutoff, map) => { if (cutoff === 'A') _registerA = map; else _registerB = map; },
+  setDue: (cutoff, map) => { if (cutoff === 'A') _sdDueA = map; else _sdDueB = map; },
+  setHours: (cutoff, map) => { if (cutoff === 'A') _hoursA = map; else _hoursB = map; },
+  setDrafts: (cutoff, list) => { if (cutoff === 'A') _sdDraftsA = list; else _sdDraftsB = list; },
+  draftNotice: (cutoff) => _sdDraftNotice(cutoff),
   setEmployees: (list) => { _employees = list; },
   setDeductions: (list) => { _deductions = list; },
   setPeriod: (y, m) => { _currentYear = y; _currentMonth = m; },
@@ -79,9 +83,10 @@ section('1 · the cutoff a person reads, not the key a machine reads');
 section('2 · the deduction reaches the pay grid and the totals');
 {
   const ctx = boot(); const t = ctx.__t;
+  t.setPeriod(2026, '09');
   t.setEmployees([EMP]);
   t.setRegister('A', { 'Lucena, Gerald': { employee: 'Lucena, Gerald', pagibig: 100, sss: 450,
-    philhealth: 250, advances: 0, wtax: 0, salaryDeduction: 2916.25,
+    philhealth: 250, advances: 0, wtax: 0, salaryDeductionStored: 2916.25,
     salaryDeductionLines: [{ deductionNo: 'DED-202609-001', item: 'Lenovo laptop',
       amount: 2916.25, remainingBefore: 34995, totalAmount: 34995 }] } });
   const d = t.deductions(EMP, 'A');
@@ -99,13 +104,87 @@ section('2 · the deduction reaches the pay grid and the totals');
 }
 
 // ─────────────────────────────────────────────────────────────
+section('2b · a cutoff nobody has saved yet still shows what is coming off');
+{
+  /* THE BUG THIS PINS. The register is written only by a save, so the first time anyone loads a
+     cutoff there are no rows to read and the deduction column was blank — at exactly the moment
+     someone opens Pay A to check that the deduction they just set up is really there. The server
+     now sends the projection with the read and this is the fallback that uses it. */
+  const ctx = boot(); const t = ctx.__t;
+  t.setPeriod(2026, '09');
+  t.setEmployees([EMP]);
+  t.setRegister('A', {});                       // nothing saved — the state after Load
+  t.setDue('A', { 'Lucena, Gerald': { amount: 2916.25, hasRow: false,
+    lines: [{ deductionNo: 'DED-202609-001', item: 'Lenovo laptop', amount: 2916.25,
+              remainingBefore: 34995, totalAmount: 34995 }] } });
+
+  const d = t.deductions(EMP, 'A');
+  eq('the deduction shows before the register is ever saved', d.salaryDeduction, 2916.25);
+  ok('  and is flagged as not yet saved', d.salaryDeductionProvisional === true);
+  eq('  Total Deductions already reflects it', d.totalDed, d.pagibig + d.sss + d.philhealth + 2916.25);
+  has('  the payslip names it too', t.payslip(EMP, 'A'), 'Lenovo laptop');
+
+  /* A row written before column 16 existed reads as blank, not as a real zero — it must fall back
+     to the projection too, or every period saved before the deploy stays empty for ever. */
+  t.setRegister('A', { 'Lucena, Gerald': { pagibig: 100, sss: 450, philhealth: 250,
+    advances: 0, wtax: 0, salaryDeductionStored: null } });
+  eq('a pre-deploy register row falls back to the projection',
+     t.deductions(EMP, 'A').salaryDeduction, 2916.25);
+
+  /* A saved zero is an ANSWER, not a gap: that employee owed nothing this cutoff. */
+  t.setRegister('A', { 'Lucena, Gerald': { pagibig: 100, sss: 450, philhealth: 250,
+    advances: 0, wtax: 0, salaryDeductionStored: 0 } });
+  const zero = t.deductions(EMP, 'A');
+  eq('but a saved zero is respected, not overridden', zero.salaryDeduction, 0);
+  ok('  and is not flagged provisional', zero.salaryDeductionProvisional === false);
+
+  /* The provisional figure is capped by what the pay can bear, so the preview matches the save. */
+  /* Real pay, but every peso of it already committed: the preview must give up the deduction rather
+     than push the payslip under. Hours are needed for gross to be non-zero, so this is asserted
+     through _payEarnings' own inputs rather than by faking a number. */
+  t.setHours('A', {
+    'Lucena, Gerald|2026-09-01': { employee: 'Lucena, Gerald', date: '2026-09-01', dayType: 'Regular', hours: 8 },
+    'Lucena, Gerald|2026-09-02': { employee: 'Lucena, Gerald', date: '2026-09-02', dayType: 'Regular', hours: 8 } });
+  t.setRegister('A', { 'Lucena, Gerald': { pagibig: 0, sss: 0, philhealth: 0,
+    advances: 100000, wtax: 0 } });
+  const tight = t.deductions(EMP, 'A');
+  eq('when the pay is already fully committed the preview takes nothing', tight.salaryDeduction, 0);
+  ok('  so the preview never deepens a negative net on its own',
+     tight.totalDed === 100000);
+}
+
+// ─────────────────────────────────────────────────────────────
+section('2c · a deduction left in Draft says so on the pay grid');
+{
+  /* A Draft deducts nothing on purpose, which makes it indistinguishable from a broken feature: the
+     column is simply empty and there is nowhere on this screen that explains why. */
+  const t = boot().__t;
+  eq('no drafts, no banner', t.draftNotice('A'), '');
+
+  t.setDrafts('A', [{ deductionNo: 'DED-202609-002', employee: 'Reyes, Gayle',
+    item: 'Company phone', hasForm: false }]);
+  const n = t.draftNotice('A');
+  has('the banner names how many', n, '1 salary deduction not active yet');
+  has('  who it is for', n, 'Reyes, Gayle');
+  has('  what it is', n, 'Company phone');
+  has('  why it is not running', n, 'no signed form attached');
+  has('  and where to go', n, "switchPayTab('deductions')");
+
+  t.setDrafts('A', [{ deductionNo: 'D1', employee: 'A, B', item: 'X', hasForm: true },
+                    { deductionNo: 'D2', employee: 'C, D', item: 'Y', hasForm: true }]);
+  has('two drafts read as plural', t.draftNotice('A'), '2 salary deductions not active yet');
+  ok('  and a draft that HAS its form is not accused of missing one',
+     t.draftNotice('A').indexOf('no signed form') === -1);
+}
+
+// ─────────────────────────────────────────────────────────────
 section('3 · the payslip names what the money went to');
 {
   const ctx = boot(); const t = ctx.__t;
   t.setPeriod(2026, '09');
   t.setEmployees([EMP]);
   t.setRegister('A', { 'Lucena, Gerald': { pagibig: 100, sss: 450, philhealth: 250,
-    advances: 0, wtax: 0, salaryDeduction: 2916.25,
+    advances: 0, wtax: 0, salaryDeductionStored: 2916.25,
     salaryDeductionLines: [{ deductionNo: 'DED-202609-001', item: 'Lenovo laptop',
       amount: 2916.25, remainingBefore: 34995, totalAmount: 34995 }] } });
   const html = t.payslip(EMP, 'A');
@@ -119,7 +198,7 @@ section('3 · the payslip names what the money went to');
      html.indexOf('Salary Deduction') < html.indexOf('Withholding Tax'));
 
   t.setRegister('A', { 'Lucena, Gerald': { pagibig: 0, sss: 0, philhealth: 0, advances: 0, wtax: 0,
-    salaryDeduction: 3416.25, salaryDeductionLines: [
+    salaryDeductionStored: 3416.25, salaryDeductionLines: [
       { deductionNo: 'D1', item: 'Lenovo laptop', amount: 2916.25, remainingBefore: 34995, totalAmount: 34995 },
       { deductionNo: 'D2', item: 'Company phone', amount: 500, remainingBefore: 6000, totalAmount: 6000 }] } });
   const two = t.payslip(EMP, 'A');
@@ -127,7 +206,7 @@ section('3 · the payslip names what the money went to');
   has('  each named', two, 'Company phone');
 
   t.setRegister('A', { 'Lucena, Gerald': { pagibig: 0, sss: 0, philhealth: 0, advances: 0, wtax: 0,
-    salaryDeduction: 0, salaryDeductionLines: [] } });
+    salaryDeductionStored: 0, salaryDeductionLines: [] } });
   has('with no deduction the line still prints at zero, like every other', t.payslip(EMP, 'A'), 'Salary Deduction');
 }
 

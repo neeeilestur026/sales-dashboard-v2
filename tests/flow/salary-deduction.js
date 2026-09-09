@@ -362,5 +362,60 @@ section('12 · the payslip can name what the money went to');
      tight.salaryDeductionLines[0].amount, tight.salaryDeduction);
 }
 
+// ─────────────────────────────────────────────────────────────
+section('13 · a cutoff nobody has saved yet already knows what is due');
+{
+  /* THE REGRESSION. handleGetPayrollRegister returns rows written by a SAVE, so the first time
+     anyone loads a cutoff there is nothing to read — which is exactly when they look. */
+  const ctx = boot();
+  const no = agree(ctx);
+  const reg = ctx.handleGetPayrollRegister({ period: '2026-09-A' });
+  eq('the register genuinely has no rows yet', (reg.data || []).length, 0);
+  eq('but the read still says what is due', reg.salaryDeductionDue['Lucena, Gerald'].amount, 2916.25);
+  eq('  naming the agreement', reg.salaryDeductionDue['Lucena, Gerald'].lines[0].item, 'Lenovo laptop');
+  ok('  and marks that no register row backs it yet',
+     reg.salaryDeductionDue['Lucena, Gerald'].hasRow === false);
+
+  saveReg(ctx, '2026-09-A', 40000);
+  const after = ctx.handleGetPayrollRegister({ period: '2026-09-A' });
+  eq('after a save the stored figure is authoritative', after.data[0].salaryDeductionStored, 2916.25);
+  ok('  and the row is flagged as backing it', after.salaryDeductionDue['Lucena, Gerald'].hasRow === true);
+
+  /* A saved zero and a never-computed cell must not look the same to the grid. */
+  const ctx2 = boot();
+  saveReg(ctx2, '2026-09-A', 40000);                       // nobody has any deduction
+  eq('an employee with no deduction stores a real zero',
+     ctx2.handleGetPayrollRegister({ period: '2026-09-A' }).data[0].salaryDeductionStored, 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+section('14 · drafts are reported, so an inactive agreement is not mistaken for a broken one');
+{
+  const ctx = boot();
+  agree(ctx, { leaveDraft: true });
+  const reg = ctx.handleGetPayrollRegister({ period: '2026-09-A' });
+  eq('the draft is reported against the cutoff it would run on', reg.salaryDeductionDrafts.length, 1);
+  eq('  with no amount due, because a draft deducts nothing',
+     Object.keys(reg.salaryDeductionDue).length, 0);
+  ok('  and it is flagged as having no signed form', reg.salaryDeductionDrafts[0].hasForm === false);
+
+  const b = ctx.handleGetPayrollRegister({ period: '2026-09-B' });
+  eq('a 1st-cutoff-only draft is not reported against a 2nd cutoff', b.salaryDeductionDrafts.length, 0);
+
+  const early = ctx.handleGetPayrollRegister({ period: '2026-08-A' });
+  eq('nor against a cutoff before it starts', early.salaryDeductionDrafts.length, 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+section('15 · the build answers which build it is');
+{
+  const ctx = boot();
+  const v = ctx.doGet({ parameter: { action: 'getCodeVersion' } });
+  const body = JSON.parse(v.getContent());   // doGet returns createTextOutput(..).setMimeType(..)
+  ok('getCodeVersion answers', body.success === true);
+  ok('  with a version', typeof body.version === 'number' && body.version >= 1);
+  ok('  and confirms salary deductions are in this build', body.hasSalaryDeductions === true);
+}
+
 console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ok'));
 process.exit(FAIL ? 1 : 0);

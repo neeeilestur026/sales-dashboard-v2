@@ -1055,12 +1055,40 @@ async function saveHours(cutoff) {
 }
 
 // ── Pay grid ─────────────────────────────────────────────────
+/* A275 — what WOULD come off this cutoff, for a period nobody has saved yet.
+   The register is written only by a save, so a freshly loaded cutoff has no rows and the deduction
+   column read blank — which is the first thing anyone looks at. The server sends the projection
+   alongside the stored rows and the grid falls back to it, marked as unsaved. */
+let _sdDueA = {}, _sdDueB = {};
+let _sdDraftsA = [], _sdDraftsB = [];
+
 async function _refreshRegister(cutoff) {
   const period = _currentYear + '-' + _currentMonth + '-' + cutoff;
   const res = await apiGetPayrollRegister(period);
   const map = cutoff === 'A' ? _registerA : _registerB;
   Object.keys(map).forEach(k => delete map[k]);
   (res.data || []).forEach(r => { map[r.employee] = r; });
+  const due = res.salaryDeductionDue || {};
+  const drafts = res.salaryDeductionDrafts || [];
+  if (cutoff === 'A') { _sdDueA = due; _sdDraftsA = drafts; }
+  else { _sdDueB = due; _sdDraftsB = drafts; }
+}
+
+/* A275 — a Draft deducts nothing, so a deduction someone set up but never activated is completely
+   invisible on this screen. That is the single most likely reason for "I made one and the column is
+   still empty", so the grid says it out loud rather than leaving them to find it. */
+function _sdDraftNotice(cutoff) {
+  const drafts = cutoff === 'A' ? _sdDraftsA : _sdDraftsB;
+  if (!drafts.length) return '';
+  const list = drafts.map(d =>
+    `${esc(d.employee)} — ${esc(d.item || d.deductionNo)}${d.hasForm ? '' : ' (no signed form attached)'}`).join('; ');
+  return `<div style="margin:0 0 0.7rem;padding:0.6rem 0.8rem;border:1px solid #fcd34d;background:#fffbeb;
+      border-radius:10px;font:400 0.8rem/1.5 'Inter',sans-serif;color:#78350f;">
+      <strong>${drafts.length} salary deduction${drafts.length === 1 ? '' : 's'} not active yet</strong>
+      — nothing is being deducted for ${list}.
+      <a href="#" onclick="switchPayTab('deductions');return false;" style="color:#78350f;font-weight:700;">Open Salary Deductions</a>
+      to attach the signed form and activate.
+    </div>`;
 }
 
 function renderPayGrid(cutoff) {
@@ -1081,7 +1109,7 @@ function renderPayGrid(cutoff) {
     return;
   }
 
-  let html = `<table class="pay-table">
+  let html = _sdDraftNotice(cutoff) + `<table class="pay-table">
     <thead><tr>
       <th class="sticky">Employee</th>
       <th class="num">Basic Pay</th>
@@ -1114,7 +1142,7 @@ function renderPayGrid(cutoff) {
 
     // A260 — one definition of the deduction half, waiver included.
     const { pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
-            totalDed } = _payDeductions(emp, cutoff);
+            salaryDeductionProvisional, totalDed } = _payDeductions(emp, cutoff);
     const netPay   = grossPay - totalDed;
 
     totBasic += basicPay; totHol += holidayPay; totOT += otPay; totOther += otherIncome;
@@ -1134,11 +1162,14 @@ function renderPayGrid(cutoff) {
        the server sets it during the save, and it has nowhere to put the item or the balance that make
        it meaningful. Clicking opens the agreement instead. */
     const sdTip = salaryDeductionLines.length
-      ? salaryDeductionLines.map(l => `${l.item || 'Deduction'} — ${peso(l.amount)}`).join(' · ')
+      ? salaryDeductionLines.map(l => `${l.item || 'Deduction'} — ${peso(l.amount)}`).join(' · ') +
+        (salaryDeductionProvisional ? ' — not saved to this cutoff yet; Save Pay Register to apply it' : '')
       : 'No salary deduction this cutoff';
     const sdCell = `<td class="num computed" style="white-space:nowrap;" title="${esc(sdTip)}">
         ${salaryDeduction > 0
-          ? `<a href="#" onclick="switchPayTab('deductions');return false;" style="font-weight:700;text-decoration:none;">${peso(salaryDeduction)}</a>`
+          ? `<a href="#" onclick="switchPayTab('deductions');return false;"
+                style="font-weight:700;text-decoration:none;${salaryDeductionProvisional ? 'font-style:italic;opacity:0.75;' : ''}">${peso(salaryDeduction)}</a>${
+             salaryDeductionProvisional ? '<span title="Not saved to this cutoff yet" style="color:#b45309;font-weight:700;"> *</span>' : ''}`
           : '<span style="color:var(--text-muted);">—</span>'}
       </td>`;
     /* Advances is described in this file as "a loan being repaid", which is exactly what someone
@@ -1841,26 +1872,67 @@ function _payDeductions(emp, cutoff) {
   const saved = registerMap[empName] || {};
   const advances = +(saved.advances !== undefined ? saved.advances : 0);
   const wtax     = +(saved.wtax     !== undefined ? saved.wtax     : 0);
-  /* A275 — READ, never computed. Everything else here has a client-side default because it is a
-     function of this cutoff alone; a salary deduction is not. It depends on every posting ever made
-     against the agreement, on the other five deductions in this same cutoff, and on whether the
-     period has been approved — so the browser cannot know it, and a guess here would end up in the
-     PDF Management signs. The server computes it during the save and this reads the result back.
-     Before the first save of a period it is legitimately 0, and the column says "on save". */
-  const salaryDeduction = +(saved.salaryDeduction !== undefined ? saved.salaryDeduction : 0);
-  const salaryDeductionLines = saved.salaryDeductionLines || [];
+  /* A275 — the SCHEDULE is never computed here. It depends on every posting ever made against the
+     agreement and on whether the cutoff was approved, so the browser cannot know it and a guess
+     would end up in the PDF Management signs. The server owns it, and this reads it back:
+
+       • a saved cutoff  → salaryDeductionStored is the figure, full stop;
+       • an unsaved one  → the server's projection for the period, shown as provisional.
+
+     The one calculation done here is the AFFORDABILITY CAP, and only on the provisional path: the
+     five deductions above are still being typed and have not reached the server, so it cannot know
+     what is left to give. Capping the TOTAL is all Net Pay needs, and it lands on exactly the figure
+     _sdAllocate arrives at server-side — that function distributes across agreements but still sums
+     to min(total due, cap). So the preview and the save agree by construction. */
+  const dueMap = cutoff === 'A' ? _sdDueA : _sdDueB;
+  const due = dueMap[empName] || null;
+  const stored = saved.salaryDeductionStored;
+  const isStored = (stored !== undefined && stored !== null);
+
   if (_isFixedPay(emp)) {
     /* A260 — no statutory contribution, but a fixed-salary manager still repays what they bought:
        a deduction is a loan being repaid, which a pay type does not change. */
-    return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax, salaryDeduction, salaryDeductionLines,
-             totalDed: advances + wtax + salaryDeduction };
+    const eF = _payEarnings(emp, cutoff);
+    const sdF = isStored ? stored
+      : _sdPreview((due && due.amount) || 0, eF.grossPay || 0, advances + wtax);
+    return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax,
+             salaryDeduction: sdF, salaryDeductionLines: _sdLinesFor(saved, due, isStored),
+             salaryDeductionProvisional: !isStored && sdF > 0,
+             totalDed: advances + wtax + sdF };
   }
   const e = _payEarnings(emp, cutoff);
   const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100));
   const sss        = +(saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase));
   const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase));
-  return { pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
+  const salaryDeduction = isStored ? stored
+    : _sdPreview((due && due.amount) || 0, e.grossPay || 0,
+                 pagibig + sss + philhealth + advances + wtax);
+  return { pagibig, sss, philhealth, advances, wtax, salaryDeduction,
+           salaryDeductionLines: _sdLinesFor(saved, due, isStored),
+           salaryDeductionProvisional: !isStored && salaryDeduction > 0,
            totalDed: pagibig + sss + philhealth + advances + wtax + salaryDeduction };
+}
+
+/* What to SHOW for a cutoff that has not been saved yet.
+ *
+ * Capped by what the pay can still bear, so the preview lands on the same figure the save will —
+ * _sdAllocate distributes across agreements but still sums to min(total due, cap).
+ *
+ * WITH ONE EXCEPTION: gross is 0 until the hours are entered, and capping against that would hide
+ * the deduction completely at exactly the moment someone opens the cutoff to check it is set up.
+ * So with no pay yet, the scheduled amount is shown. Nothing is lost by it — the grid already prints
+ * a negative net for a zero-hour employee, because Pag-IBIG, SSS and PhilHealth all apply at their
+ * floors regardless — and the save caps for real once there are hours behind it. */
+function _sdPreview(scheduled, grossPay, otherDeductions) {
+  if (!(scheduled > 0)) return 0;
+  if (!(grossPay > 0)) return scheduled;
+  return Math.min(scheduled, Math.max(0, grossPay - otherDeductions));
+}
+
+/** The per-agreement breakdown: the server's allocation once saved, the raw projection before. */
+function _sdLinesFor(saved, due, isStored) {
+  if (isStored) return saved.salaryDeductionLines || [];
+  return (due && due.lines) || [];
 }
 
 /** @param monthlyBasic the STATUTORY base (_payEarnings().statBase) — deliberately not gross. */
