@@ -635,6 +635,29 @@ function doGet(e) {
       case 'voidPayrollIncentive':
         result = handleVoidPayrollIncentive(params);
         break;
+      /* A275 — salary deductions. Registered on BOTH doors for the same reason the incentive
+         writes are: api.js routes a NO_CACHE_ACTION through POST, but the GET path stays reachable. */
+      case 'getSalaryDeductions':
+        result = handleGetSalaryDeductions(params);
+        break;
+      case 'getMySalaryDeductions':
+        result = handleGetMySalaryDeductions(params);
+        break;
+      case 'saveSalaryDeduction':
+        result = handleSaveSalaryDeduction(params);
+        break;
+      case 'attachSalaryDeductionForm':
+        result = handleAttachSalaryDeductionForm(params);
+        break;
+      case 'activateSalaryDeduction':
+        result = handleActivateSalaryDeduction(params);
+        break;
+      case 'cancelSalaryDeduction':
+        result = handleCancelSalaryDeduction(params);
+        break;
+      case 'voidSalaryDeductionPosting':
+        result = handleVoidSalaryDeductionPosting(params);
+        break;
       case 'getBankAccounts':
         result = handleGetBankAccounts();
         break;
@@ -2846,6 +2869,22 @@ function doPost(e) {
         break;
       case 'decidePayrollApproval':
         result = handleDecidePayrollApproval(body);
+        break;
+      // A275 — salary deduction writes; the reads are registered on doGet.
+      case 'saveSalaryDeduction':
+        result = handleSaveSalaryDeduction(body);
+        break;
+      case 'attachSalaryDeductionForm':
+        result = handleAttachSalaryDeductionForm(body);
+        break;
+      case 'activateSalaryDeduction':
+        result = handleActivateSalaryDeduction(body);
+        break;
+      case 'cancelSalaryDeduction':
+        result = handleCancelSalaryDeduction(body);
+        break;
+      case 'voidSalaryDeductionPosting':
+        result = handleVoidSalaryDeductionPosting(body);
         break;
       case 'saveBankAccount':
         result = handleSaveBankAccount(body);
@@ -11254,11 +11293,18 @@ function _payrollRegisterSheet() {
   var sheet = _getOrCreateSheet(ss, 'Payroll Register', [
     'Period', 'Employee', 'Basic Pay', 'Holiday Pay', 'OT Pay',
     'Other Income', 'Gross Pay', 'Pag-IBIG', 'SSS', 'PhilHealth',
-    'Advances', 'WTax', 'Total Deductions', 'Net Pay', 'Incentive'
+    'Advances', 'WTax', 'Total Deductions', 'Net Pay', 'Incentive', 'Salary Deduction'
   ]);
   try {
     if (sheet.getLastColumn() < 15 || !String(sheet.getRange(1, 15).getValue()).trim()) {
       sheet.getRange(1, 15).setValue('Incentive');
+    }
+    /* A275 — column 16, APPENDED for the same reason column 15 was: every read of this sheet is
+       positional, so inserting 'Salary Deduction' anywhere sensible on screen would shift Gross Pay
+       into the Pag-IBIG slot on every existing row. The array above covers a fresh spreadsheet, this
+       covers the live one; neither alone is enough, and both are idempotent. */
+    if (sheet.getLastColumn() < 16 || !String(sheet.getRange(1, 16).getValue()).trim()) {
+      sheet.getRange(1, 16).setValue('Salary Deduction');
     }
   } catch (e) { /* labelling is cosmetic — a failure must not block payroll */ }
   return sheet;
@@ -11526,6 +11572,14 @@ function handleSavePayrollEmployee(params) {
          only pay changes in the company with no audit trail. */
       var oldFixed = parseFloat(prev[7])||0;
       if (newFixed !== oldFixed) _logPayrollRateChange(empName, 'Fixed Amount', oldFixed, newFixed, params, false);
+      /* A275 — "Last, First" IS the payroll key: the register, the hours grid, the incentive ledger
+         and now the salary-deduction ledger are all keyed on this string, and it is edited in place.
+         A married name changed here used to orphan every one of them silently. Only the deduction
+         ledger is re-keyed — it is the one that decides how much comes out of someone's pay, and a
+         deduction pointing at a name nobody has any more simply stops collecting with a balance
+         outstanding and no error. */
+      var oldName = String(prev[0]||'') + ', ' + String(prev[1]||'');
+      if (oldName !== empName) _sdRenameEmployee(oldName, empName);
       sheet.getRange(id+1,1,1,row.length).setValues([row]);
     } else {
       sheet.appendRow(row);
@@ -11544,6 +11598,569 @@ function handleDeletePayrollEmployee(params) {
     _payrollEmployeesSheet().deleteRow(id+1);
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   A275 — SALARY DEDUCTIONS. An employee buys something from the company and repays it from payroll.
+
+   THE POSTINGS SHEET IS THE ONLY TRUTH. The register's 'Salary Deduction' column is a MIRROR,
+   recomputed on every save and never trusted from the client — the same arrangement A229 built for
+   incentives, and for the same reason: handleSavePayrollRegister DELETES every row for the period
+   and re-appends, so a balance that lived in the register would be destroyed by a routine save the
+   moment the employee dropped off the active list. A history a save can delete is not a history.
+
+   THERE IS NO SCHEDULE TABLE. A running balance instead:
+
+       remaining    = Total − Σ(active postings)
+       availableNet = max(0, gross − every other deduction)
+       due(period)  = min(perCutoffAmount, remaining, availableNet)
+
+   That is the whole engine, and three things fall out of it for free:
+     • the FINAL payment is exact — min(..., remaining) lands on the remainder, so rounding never
+       has to be reasoned about and there is no "last instalment absorbs the difference" special case;
+     • CARRY-FORWARD is automatic — a short cutoff leaves a bigger balance, so the schedule simply
+       runs into extra cutoffs and the per-cutoff figure never rises, which is what was agreed;
+     • a VOID or a negative correction re-opens the balance correctly, which a fixed instalment
+       table cannot do.
+   The instalment count is therefore a PROJECTION for display. Remaining is always money, never
+   `instalments − count(postings)`.
+
+   WHY 'due' EXCLUDES THIS PERIOD'S OWN POSTING RATHER THAN COUNTING BACKWARDS. Once a period is
+   approved it has a posting. If the projection counted it as "already paid" a re-save of that period
+   would compute the NEXT instalment and quietly overwrite the figure on the page Management signed.
+   So postings for the period being computed are excluded from the balance, and if one exists it is
+   MIRRORED rather than re-projected. Postings first, projection second, in that order.
+
+   POSTED ON APPROVAL, NOT ON SAVE. The register is a draft that can be re-saved any number of times;
+   only Payroll Approvals says money was agreed. The write is an upsert on 'Deduction No | Period'
+   under a script lock, so approving twice — a double click, a stale modal — banks once.
+
+   DRAFT IS THE APPROVAL WORKFLOW. There is no approval chain by design: the paper form is signed
+   before any of this is typed. What replaces it is that a Draft deducts NOTHING and cannot be
+   activated until the signed authorization is attached. That one status is the only thing standing
+   between "a signed agreement" and "money coming out of someone's pay", so it is enforced here on
+   the record's own data rather than on a flag the browser passes in.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+var _SD_CADENCES = ['Every Cutoff', 'First Cutoff Only'];
+
+function _salaryDeductionsSheet() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  return _getOrCreateSheet(ss, 'Salary Deductions', [
+    'Deduction No', 'Employee', 'Username', 'Item', 'Purpose', 'Total Amount',
+    'Per-Cutoff Amount', 'Cadence', 'Start Period', 'Status',
+    'Form Doc Link', 'Form Doc Id', 'Form File Name',
+    'Created By', 'Created At', 'Closed By', 'Closed At', 'Notes'
+  ]);
+}
+
+function _salaryDeductionPostingsSheet() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  return _getOrCreateSheet(ss, 'Salary Deduction Postings', [
+    'Posting ID', 'Deduction No', 'Period', 'Employee', 'Amount',
+    'Posted At', 'Posted By', 'Status', 'Notes'
+  ]);
+}
+
+/** 'YYYY-MM-A' / 'YYYY-MM-B'. A is the 1st cutoff, B the 2nd — the mirror of flowCutoffKey. */
+function _sdValidPeriod(p) { return /^\d{4}-\d{2}-[AB]$/.test(String(p || '')); }
+
+/* Period keys sort correctly as plain strings: 'A' < 'B' alphabetically and the year-month prefix is
+   zero padded, so '2026-09-A' < '2026-09-B' < '2026-10-A'. No date parsing anywhere in this module. */
+function _sdCutoffNext(period) {
+  if (!_sdValidPeriod(period)) return '';
+  var y = parseInt(period.slice(0, 4), 10), m = parseInt(period.slice(5, 7), 10), h = period.slice(-1);
+  if (h === 'A') return period.slice(0, 8) + 'B';
+  m += 1; if (m === 13) { m = 1; y += 1; }
+  return y + '-' + (m < 10 ? '0' + m : String(m)) + '-A';
+}
+
+/** Money in whole centavos, so nothing accumulates a floating-point tail across twelve cutoffs. */
+function _sdC(n) { return Math.round((parseFloat(n) || 0) * 100); }
+function _sdP(c) { return (c || 0) / 100; }
+
+/** DED-YYYYMM-nnn. Readable, because it also names the Drive folder people browse. */
+function _newDeductionNo(sheet) {
+  var stem = 'DED-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMM') + '-';
+  var last = sheet.getLastRow(), max = 0;
+  if (last >= 2) {
+    var vals = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var s = String(vals[i][0] || '');
+      if (s.indexOf(stem) === 0) {
+        var n = parseInt(s.substring(stem.length), 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    }
+  }
+  var next = max + 1;
+  return stem + (next < 10 ? '00' : next < 100 ? '0' : '') + next;
+}
+
+function _sdRowToObj(r, rowIndex) {
+  return {
+    rowIndex: rowIndex,
+    deductionNo: String(r[0] || ''), employee: String(r[1] || ''), username: String(r[2] || ''),
+    item: String(r[3] || ''), purpose: String(r[4] || ''),
+    totalAmount: parseFloat(r[5]) || 0, perCutoffAmount: parseFloat(r[6]) || 0,
+    cadence: String(r[7] || ''), startPeriod: String(r[8] || ''), status: String(r[9] || ''),
+    formDocLink: String(r[10] || ''), formDocId: String(r[11] || ''), formFileName: String(r[12] || ''),
+    createdBy: String(r[13] || ''), createdAt: String(r[14] || ''),
+    closedBy: String(r[15] || ''), closedAt: String(r[16] || ''), notes: String(r[17] || '')
+  };
+}
+
+/** Every active posting, grouped by deduction. One read; every caller here needs the whole set. */
+function _sdPostingsByDeduction() {
+  var map = {};
+  try {
+    var data = _salaryDeductionPostingsSheet().getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (String(r[7] || '') === 'Voided') continue;
+      var no = String(r[1] || '');
+      if (!no) continue;
+      if (!map[no]) map[no] = [];
+      map[no].push({ postingId: String(r[0] || ''), period: String(r[2] || ''),
+        employee: String(r[3] || ''), amount: parseFloat(r[4]) || 0, postedAt: String(r[5] || '') });
+    }
+  } catch (e) { /* no sheet yet means no postings, which is a valid answer of zero */ }
+  return map;
+}
+
+function _sdPaidTotal(list) {
+  var c = 0; for (var i = 0; list && i < list.length; i++) c += _sdC(list[i].amount); return c;
+}
+
+/* What each employee owes THIS period, before any affordability cap, in agreement order.
+ *
+ * Returns { 'Last, First': [ {deductionNo, item, amount, remainingBefore, posted} ] }.
+ * Read once per caller — handleSavePayrollRegister is already O(rows) deleteRow round trips and must
+ * not gain two sheet reads per row on top of that. */
+function _salaryDeductionDueFor(period) {
+  var out = {};
+  if (!_sdValidPeriod(period)) return out;
+  var half = period.slice(-1);
+  var rows, postings;
+  try {
+    rows = _salaryDeductionsSheet().getDataRange().getValues();
+    postings = _sdPostingsByDeduction();
+  } catch (e) { return out; }
+
+  for (var i = 1; i < rows.length; i++) {
+    var d = _sdRowToObj(rows[i], i + 1);
+    if (!d.deductionNo || d.status !== 'Active') continue;              // Draft and Cancelled take nothing
+    if (d.cadence === 'First Cutoff Only' && half !== 'A') continue;    // the cadence is what was signed
+    if (d.startPeriod && period < d.startPeriod) continue;
+
+    var mine = postings[d.deductionNo] || [];
+    var postedHere = null, paidOtherC = 0;
+    for (var j = 0; j < mine.length; j++) {
+      if (mine[j].period === period) { postedHere = mine[j]; continue; }
+      paidOtherC += _sdC(mine[j].amount);
+    }
+    var totalC = _sdC(d.totalAmount);
+    var remainingC = Math.max(0, totalC - paidOtherC);
+    if (remainingC <= 0 && !postedHere) continue;                       // fully repaid
+
+    /* A posted period is MIRRORED, never re-projected — see the header note. */
+    var dueC = postedHere ? _sdC(postedHere.amount)
+                          : Math.min(_sdC(d.perCutoffAmount), remainingC);
+    if (dueC <= 0) continue;
+
+    if (!out[d.employee]) out[d.employee] = [];
+    out[d.employee].push({
+      deductionNo: d.deductionNo, item: d.item, amount: _sdP(dueC),
+      remainingBefore: _sdP(remainingC), totalAmount: d.totalAmount,
+      posted: !!postedHere
+    });
+  }
+  return out;
+}
+
+/* Fit a period's deductions inside what the pay can actually bear, OLDEST AGREEMENT FIRST.
+ *
+ * One deterministic allocation used by both the register save (capping at available net) and the
+ * register read (reproducing the stored total as per-item lines for the payslip). If the two used
+ * different rules the payslip would not add up to the deduction it sits under. */
+function _sdAllocate(list, capC) {
+  var out = [], leftC = Math.max(0, capC);
+  for (var i = 0; list && i < list.length; i++) {
+    var wantC = _sdC(list[i].amount);
+    var takeC = Math.min(wantC, leftC);
+    leftC -= takeC;
+    if (takeC <= 0) continue;
+    out.push({ deductionNo: list[i].deductionNo, item: list[i].item, amount: _sdP(takeC),
+      remainingBefore: list[i].remainingBefore, totalAmount: list[i].totalAmount });
+  }
+  return out;
+}
+
+function _sdSum(list) {
+  var c = 0; for (var i = 0; list && i < list.length; i++) c += _sdC(list[i].amount); return _sdP(c);
+}
+
+/** Is this cutoff already approved? Asked before a register save is allowed to rewrite it. */
+function _sdPeriodApproved(period) {
+  try {
+    var data = _payrollApprovalsSheet().getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '') === period && String(data[i][4] || '') === 'Approved') return true;
+    }
+  } catch (e) { /* no approvals sheet means nothing is approved */ }
+  return false;
+}
+
+// ─── Reads ────────────────────────────────────────────────────
+
+/* Everyone's balances. Salary data, so it is gated on a real session rather than on the shared
+   doGet check, which validates the token only IF ONE IS PRESENT ("grace period for old clients")
+   and would let an unauthenticated caller read every employee's debt by omitting it. */
+function handleGetSalaryDeductions(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in to view salary deductions.', authError: true };
+    var role = String(session.role || '').toLowerCase();
+    if (['director', 'management', 'admin', 'hr'].indexOf(role) === -1) {
+      return { success: false, message: 'Not permitted.' };
+    }
+    var rows = _salaryDeductionsSheet().getDataRange().getValues();
+    var postings = _sdPostingsByDeduction();
+    var wantEmp = String((params && params.employee) || '').trim();
+    var out = [];
+    for (var i = 1; i < rows.length; i++) {
+      var d = _sdRowToObj(rows[i], i + 1);
+      if (!d.deductionNo) continue;
+      if (wantEmp && d.employee !== wantEmp) continue;
+      out.push(_sdDecorate(d, postings[d.deductionNo] || []));
+    }
+    return { success: true, data: out, cadences: _SD_CADENCES };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* The employee's own record. The username comes from the SESSION and any username the client sent is
+   ignored — the whole point of the card is that it shows you your own debt and nobody else's. */
+function handleGetMySalaryDeductions(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var me = String(session.username || '').trim().toLowerCase();
+    if (!me) return { success: true, data: [] };
+    var rows = _salaryDeductionsSheet().getDataRange().getValues();
+    var postings = _sdPostingsByDeduction();
+    var out = [];
+    for (var i = 1; i < rows.length; i++) {
+      var d = _sdRowToObj(rows[i], i + 1);
+      if (!d.deductionNo || String(d.username || '').trim().toLowerCase() !== me) continue;
+      if (d.status === 'Cancelled') continue;
+      out.push(_sdDecorate(d, postings[d.deductionNo] || []));
+    }
+    return { success: true, data: out };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/** The stored agreement plus everything derived from the postings. Nothing derived is ever stored. */
+function _sdDecorate(d, mine) {
+  var totalC = _sdC(d.totalAmount);
+  var paidC  = _sdPaidTotal(mine);
+  var remainC = Math.max(0, totalC - paidC);
+  var perC = _sdC(d.perCutoffAmount);
+  mine.sort(function (a, b) { return a.period < b.period ? -1 : a.period > b.period ? 1 : 0; });
+
+  /* Projected, not promised: a short cutoff pushes the end out, so this is recomputed from what is
+     actually left rather than read off a stored instalment count. */
+  var left = perC > 0 ? Math.ceil(remainC / perC) : 0;
+  var nextPeriod = '', endPeriod = '';
+  if (d.status === 'Active' && remainC > 0 && perC > 0) {
+    var cursor = mine.length ? _sdCutoffNext(mine[mine.length - 1].period)
+                             : (d.startPeriod || '');
+    var guard = 0;
+    while (cursor && guard++ < 200 && d.cadence === 'First Cutoff Only' && cursor.slice(-1) !== 'A') {
+      cursor = _sdCutoffNext(cursor);
+    }
+    nextPeriod = cursor;
+    var walk = cursor, steps = left, g2 = 0;
+    while (walk && steps > 1 && g2++ < 400) {
+      walk = _sdCutoffNext(walk);
+      if (d.cadence === 'First Cutoff Only' && walk.slice(-1) !== 'A') continue;
+      steps--;
+    }
+    endPeriod = walk;
+  }
+  return {
+    rowIndex: d.rowIndex, deductionNo: d.deductionNo, employee: d.employee, username: d.username,
+    item: d.item, purpose: d.purpose, totalAmount: d.totalAmount, perCutoffAmount: d.perCutoffAmount,
+    cadence: d.cadence, startPeriod: d.startPeriod, status: d.status,
+    formDocLink: d.formDocLink, formDocId: d.formDocId, formFileName: d.formFileName,
+    createdBy: d.createdBy, createdAt: d.createdAt, closedBy: d.closedBy, closedAt: d.closedAt,
+    notes: d.notes,
+    paid: _sdP(paidC), remaining: _sdP(remainC),
+    settled: remainC <= 0,                       // derived, never stored — a void must re-open it
+    postingCount: mine.length, instalmentsLeft: left,
+    nextPeriod: nextPeriod, projectedEndPeriod: endPeriod,
+    postings: mine
+  };
+}
+
+// ─── Writes ───────────────────────────────────────────────────
+
+/* Follow a payroll rename into the deduction ledger. Best-effort by design: the rename itself has
+   already been decided by the caller and must not be blocked by a bookkeeping follow-up. */
+function _sdRenameEmployee(oldName, newName) {
+  try {
+    if (!oldName || !newName || oldName === newName) return;
+    var sheet = _salaryDeductionsSheet();
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][1] || '') === oldName) sheet.getRange(i + 1, 2).setValue(newName);
+    }
+    var ps = _salaryDeductionPostingsSheet();
+    var pd = ps.getDataRange().getValues();
+    for (var j = 1; j < pd.length; j++) {
+      if (String(pd[j][3] || '') === oldName) ps.getRange(j + 1, 4).setValue(newName);
+    }
+  } catch (e) { /* a rename that cannot be followed is logged nowhere useful from here */ }
+}
+
+function _sdFindRow(sheet, dedNo) {
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0] || '') === dedNo) return { rowIndex: i + 1, obj: _sdRowToObj(data[i], i + 1) };
+  }
+  return null;
+}
+
+/* Create or edit an agreement. New records are always Draft: activation is a separate, gated step.
+ *
+ * Total and per-cutoff are the only two money fields stored. The instalment count is NOT — it is
+ * total ÷ per-cutoff, and storing all three means that after any edit two of them disagree and
+ * nobody can say which one the employee signed. */
+function handleSaveSalaryDeduction(params) {
+  var lock = LockService.getScriptLock();
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var role = String(session.role || '').toLowerCase();
+    if (['director', 'management', 'admin', 'hr'].indexOf(role) === -1) {
+      return { success: false, message: 'Not permitted.' };
+    }
+
+    var dedNo    = String((params && params.deductionNo) || '').trim();
+    var employee = String((params && params.employee) || '').trim();
+    var username = String((params && params.username) || '').trim();
+    var item     = String((params && params.item) || '').trim();
+    var total    = parseFloat((params && params.totalAmount) || 0) || 0;
+    var per      = parseFloat((params && params.perCutoffAmount) || 0) || 0;
+    var cadence  = String((params && params.cadence) || '').trim();
+    var start    = String((params && params.startPeriod) || '').trim();
+
+    if (!employee) return { success: false, message: 'Employee is required.' };
+    if (!username) return { success: false, message: 'Pick the login account this employee signs in with.' };
+    if (!item)     return { success: false, message: 'What was bought is required.' };
+    if (!(total > 0)) return { success: false, message: 'Total amount must be more than zero.' };
+    if (!(per > 0))   return { success: false, message: 'Per-cutoff amount must be more than zero.' };
+    if (per > total)  return { success: false, message: 'The per-cutoff amount cannot exceed the total.' };
+    if (_SD_CADENCES.indexOf(cadence) === -1) {
+      return { success: false, message: 'Cadence must be "Every Cutoff" or "First Cutoff Only".' };
+    }
+    if (!_sdValidPeriod(start)) return { success: false, message: 'First cutoff must look like 2026-09-A.' };
+    /* A 1st-cutoff-only agreement that starts on a B is a contradiction the schedule cannot honour —
+       it would silently begin one cutoff later than the date on the signed form. */
+    if (cadence === 'First Cutoff Only' && start.slice(-1) !== 'A') {
+      return { success: false, message: 'A 1st-cutoff-only deduction has to start on a 1st cutoff (…-A).' };
+    }
+
+    lock.waitLock(20000);
+    var sheet = _salaryDeductionsSheet();
+    var actor = String(session.fullName || session.username || '');
+    var now = new Date().toISOString();
+
+    if (dedNo) {
+      var found = _sdFindRow(sheet, dedNo);
+      if (!found) return { success: false, message: 'Deduction ' + dedNo + ' not found.' };
+      if (found.obj.status === 'Cancelled') return { success: false, message: 'That deduction is cancelled.' };
+      /* Money already taken pins the total: lowering it below what has been collected would make
+         "remaining" negative, and the correction path for an over-collection is a NEGATIVE POSTING,
+         which leaves a trace. Editing the total would not. */
+      var paidC = _sdPaidTotal((_sdPostingsByDeduction()[dedNo] || []));
+      if (_sdC(total) < paidC) {
+        return { success: false, message: 'Already collected ' + _sdP(paidC).toFixed(2) +
+          '. Lower the total below that with a negative correction, not an edit.' };
+      }
+      sheet.getRange(found.rowIndex, 2, 1, 8).setValues([[employee, username, item,
+        String((params && params.purpose) || ''), total, per, cadence, start]]);
+      if (params && params.notes !== undefined) sheet.getRange(found.rowIndex, 18).setValue(String(params.notes));
+      return { success: true, deductionNo: dedNo, message: 'Salary deduction updated.' };
+    }
+
+    var newNo = _newDeductionNo(sheet);
+    sheet.appendRow([newNo, employee, username, item, String((params && params.purpose) || ''),
+      total, per, cadence, start, 'Draft', '', '', '', actor, now, '', '',
+      String((params && params.notes) || '')]);
+    return { success: true, deductionNo: newNo,
+      message: 'Draft created. Attach the signed form, then activate it.' };
+  } catch (e) {
+    return { success: false, message: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e2) {}
+  }
+}
+
+/* Record the signed authorization against the deduction.
+ *
+ * The file itself lives in the FlowAPI spreadsheet's Documents registry — a different deployment
+ * this script cannot read. So the link is copied onto the record here, and THAT is what activation
+ * checks. Keeping the evidence on the record rather than trusting a flag from the browser is what
+ * makes the Draft gate mean anything. */
+function handleAttachSalaryDeductionForm(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var dedNo = String((params && params.deductionNo) || '').trim();
+    var link  = String((params && params.link) || '').trim();
+    if (!dedNo) return { success: false, message: 'deductionNo required.' };
+    if (!link)  return { success: false, message: 'link required.' };
+    var sheet = _salaryDeductionsSheet();
+    var found = _sdFindRow(sheet, dedNo);
+    if (!found) return { success: false, message: 'Deduction ' + dedNo + ' not found.' };
+    sheet.getRange(found.rowIndex, 11, 1, 3).setValues([[link,
+      String((params && params.docId) || ''), String((params && params.fileName) || '')]]);
+    return { success: true, message: 'Signed form recorded.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Draft -> Active. The only thing standing between a signed agreement and money leaving someone's
+   pay, so the authorization has to actually be on the record. */
+function handleActivateSalaryDeduction(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var role = String(session.role || '').toLowerCase();
+    if (['director', 'management', 'admin', 'hr'].indexOf(role) === -1) {
+      return { success: false, message: 'Not permitted.' };
+    }
+    var dedNo = String((params && params.deductionNo) || '').trim();
+    if (!dedNo) return { success: false, message: 'deductionNo required.' };
+    var sheet = _salaryDeductionsSheet();
+    var found = _sdFindRow(sheet, dedNo);
+    if (!found) return { success: false, message: 'Deduction ' + dedNo + ' not found.' };
+    if (found.obj.status === 'Active') return { success: true, message: 'Already active.' };
+    if (found.obj.status === 'Cancelled') return { success: false, message: 'That deduction is cancelled.' };
+    if (!found.obj.formDocLink) {
+      return { success: false, message: 'Attach the signed authorization form before activating — ' +
+        'nothing may be deducted from someone’s pay without it on file.' };
+    }
+    sheet.getRange(found.rowIndex, 10).setValue('Active');
+    return { success: true, message: 'Deduction is now active.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Stop collecting. Postings are left ALONE — they were real money that really came out of a payslip.
+   A leftover balance on a cancelled deduction is a receivable, which is exactly what the form's
+   resignation clause is about, so it stays visible rather than being zeroed. */
+function handleCancelSalaryDeduction(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var role = String(session.role || '').toLowerCase();
+    if (['director', 'management', 'admin', 'hr'].indexOf(role) === -1) {
+      return { success: false, message: 'Not permitted.' };
+    }
+    var dedNo = String((params && params.deductionNo) || '').trim();
+    if (!dedNo) return { success: false, message: 'deductionNo required.' };
+    var sheet = _salaryDeductionsSheet();
+    var found = _sdFindRow(sheet, dedNo);
+    if (!found) return { success: false, message: 'Deduction ' + dedNo + ' not found.' };
+    sheet.getRange(found.rowIndex, 10).setValue('Cancelled');
+    sheet.getRange(found.rowIndex, 16, 1, 2).setValues([[
+      String(session.fullName || session.username || ''), new Date().toISOString()]]);
+    if (params && params.reason) {
+      var prior = String(sheet.getRange(found.rowIndex, 18).getValue() || '');
+      sheet.getRange(found.rowIndex, 18).setValue(
+        (prior ? prior + ' | ' : '') + 'Cancelled: ' + String(params.reason));
+    }
+    return { success: true, message: 'Deduction cancelled.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Void a posting, never delete it — the A229 rule. Voiding re-opens the balance, which is why
+   `settled` is derived on every read instead of being stored as a status. */
+function handleVoidSalaryDeductionPosting(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var role = String(session.role || '').toLowerCase();
+    if (['director', 'management', 'admin'].indexOf(role) === -1) {
+      return { success: false, message: 'Not permitted.' };
+    }
+    var id = String((params && params.postingId) || '').trim();
+    if (!id) return { success: false, message: 'postingId required.' };
+    var sheet = _salaryDeductionPostingsSheet();
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '') !== id) continue;
+      if (String(data[i][7] || '') === 'Voided') return { success: true, message: 'Already voided.' };
+      sheet.getRange(i + 1, 8).setValue('Voided');
+      var note = 'Voided by ' + String(session.fullName || session.username || '') +
+        ' on ' + new Date().toISOString() + (params.reason ? ' — ' + String(params.reason) : '');
+      var prior = String(data[i][8] || '');
+      sheet.getRange(i + 1, 9).setValue(prior ? prior + ' | ' + note : note);
+      return { success: true, message: 'Posting voided; the balance is re-opened.' };
+    }
+    return { success: false, message: 'Posting ' + id + ' not found.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Bank the deductions for an approved cutoff, taking the figures from the REGISTER — what was
+ * approved is what is banked, not a fresh projection that could have moved in between.
+ *
+ * Idempotent on 'Deduction No | Period' under a script lock. Two racing approvals (a double click, a
+ * stale modal reopened) would otherwise both read "no posting" and both append. Payroll has never
+ * taken a lock before; this is the first thing here that writes money twice if it loses the race. */
+function _sdPostForPeriod(period, actor) {
+  var lock = LockService.getScriptLock();
+  try {
+    if (!_sdValidPeriod(period)) return { posted: 0, skipped: 0 };
+    lock.waitLock(30000);
+
+    var regRows = _payrollRegisterSheet().getDataRange().getValues();
+    var regTotalByEmp = {};
+    for (var i = 1; i < regRows.length; i++) {
+      if (String(regRows[i][0] || '') !== period) continue;
+      var amt = parseFloat(regRows[i][15]) || 0;                 // column 16 — the approved figure
+      if (amt > 0) regTotalByEmp[String(regRows[i][1] || '')] = amt;
+    }
+
+    var due = _salaryDeductionDueFor(period);
+    var sheet = _salaryDeductionPostingsSheet();
+    var existing = {};
+    var pdata = sheet.getDataRange().getValues();
+    for (var p = 1; p < pdata.length; p++) {
+      if (String(pdata[p][7] || '') === 'Voided') continue;
+      existing[String(pdata[p][1] || '') + '|' + String(pdata[p][2] || '')] = true;
+    }
+
+    var now = new Date().toISOString(), posted = 0, skipped = 0;
+    for (var emp in regTotalByEmp) {
+      if (!Object.prototype.hasOwnProperty.call(regTotalByEmp, emp)) continue;
+      /* Split the approved total back across the agreements the same way the save built it up, so a
+         capped cutoff lands on the oldest agreement first and the postings still add to the payslip. */
+      var lines = _sdAllocate(due[emp] || [], _sdC(regTotalByEmp[emp]));
+      for (var k = 0; k < lines.length; k++) {
+        var key = lines[k].deductionNo + '|' + period;
+        if (existing[key]) { skipped++; continue; }
+        sheet.appendRow(['SDP-' + Date.now() + '-' + Math.floor(Math.random() * 9000 + 1000),
+          lines[k].deductionNo, period, emp, lines[k].amount, now, actor || '', 'Active', '']);
+        existing[key] = true;
+        posted++;
+      }
+    }
+    return { posted: posted, skipped: skipped };
+  } catch (e) {
+    return { posted: 0, skipped: 0, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e2) {}
+  }
 }
 
 function handleGetPayrollHours(params) {
@@ -11649,6 +12266,10 @@ function handleGetPayrollRegister(params) {
     var sheet  = _payrollRegisterSheet();
     var data   = sheet.getDataRange().getValues();
     if (data.length < 2) return { success: true, data: [] };
+    /* A275 — the per-agreement breakdown behind column 16, so the payslip can NAME what the money
+       went to instead of printing a bare figure the employee cannot check. Computed once for the
+       whole period, and only when one was asked for. */
+    var sdDue = _sdValidPeriod(period) ? _salaryDeductionDueFor(period) : null;
     var results = [];
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
@@ -11662,8 +12283,14 @@ function handleGetPayrollRegister(params) {
         advances: parseFloat(row[10])||0, wtax: parseFloat(row[11])||0,
         totalDeductions: parseFloat(row[12])||0, netPay: parseFloat(row[13])||0,
         /* A229 — column 15. A legacy 14-wide row has no row[14], so this reads undefined -> 0.
-           Safe by construction; no backfill needed. */
-        incentive: parseFloat(row[14])||0 });
+           Safe by construction; no backfill needed. Column 16 (A275) is the same shape. */
+        incentive: parseFloat(row[14])||0,
+        salaryDeduction: parseFloat(row[15])||0,
+        /* Split the STORED total back into its agreements with the same allocation the save used, so
+           the payslip lines always add up to the deduction they sit under. */
+        salaryDeductionLines: sdDue
+          ? _sdAllocate(sdDue[String(row[1]||'')] || [], _sdC(parseFloat(row[15])||0))
+          : [] });
     }
     return { success: true, data: results };
   } catch(e) { return { success: false, message: e.message }; }
@@ -11674,11 +12301,20 @@ function handleSavePayrollRegister(params) {
     var period = String(params.period||'');
     var rows   = JSON.parse(params.rows||'[]');
     if (!period) return { success: false, message: 'Period required.' };
+    /* A275 — an approved cutoff is signed and its deductions are banked. Re-saving it would rewrite
+       the figures on the page Management put their name to, and re-project a deduction whose money
+       has already been taken. Advances and WTax were rewritable after approval before this; posting
+       money onto an unguarded period is what makes that no longer acceptable. */
+    if (_sdPeriodApproved(period)) {
+      return { success: false, message: 'That cutoff has been approved and can no longer be edited.' };
+    }
     var sheet = _payrollRegisterSheet();
     var data  = sheet.getDataRange().getValues();
     /* A229 — read the ledger ONCE, before the loop. This handler is already O(rows) deleteRow round
-       trips; a per-row sheet read on top of that would double an already slow save. */
+       trips; a per-row sheet read on top of that would double an already slow save. A275 reads its
+       own ledger the same way, for the same reason. */
     var incMap = _incentiveTotalsFor(period);
+    var sdDue  = _salaryDeductionDueFor(period);
     for (var i = data.length; i >= 2; i--) { if (String(data[i-1][0]) === period) sheet.deleteRow(i); }
     for (var j = 0; j < rows.length; j++) {
       var r = rows[j];
@@ -11692,8 +12328,17 @@ function handleSavePayrollRegister(params) {
           gross=basic+hol+ot+other+inc,
           pag=parseFloat(r.pagibig)||0, sss=parseFloat(r.sss)||0,
           phic=parseFloat(r.philhealth)||0, adv=parseFloat(r.advances)||0,
-          wtax=parseFloat(r.wtax)||0, totDed=pag+sss+phic+adv+wtax;
-      sheet.appendRow([period,r.employee,basic,hol,ot,other,gross,pag,sss,phic,adv,wtax,totDed,gross-totDed,inc]);
+          wtax=parseFloat(r.wtax)||0, otherDed=pag+sss+phic+adv+wtax;
+      /* A275 — computed LAST, because it is a function of the other five: a deduction may only take
+         what the pay can still bear. Anything the client sent is discarded, exactly as the incentive
+         is — the ledger is the authority and the browser has no way to know the balance.
+         This is also the only deduction here with a floor. If the statutory five already exceed
+         gross, availableNet is zero and this contributes nothing rather than deepening the hole. */
+      var availableNetC = Math.max(0, _sdC(gross) - _sdC(otherDed));
+      var sdLines = _sdAllocate(sdDue[String(r.employee || '')] || [], availableNetC);
+      var sd = _sdSum(sdLines);
+      var totDed = otherDed + sd;
+      sheet.appendRow([period,r.employee,basic,hol,ot,other,gross,pag,sss,phic,adv,wtax,totDed,gross-totDed,inc,sd]);
     }
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
@@ -12244,8 +12889,19 @@ function handleSubmitPayrollForApproval(params) {
     var snapshotHtml = String(params.snapshotHtml || '');
     if (!period || !submittedBy) return { success: false, message: 'period and submittedBy required.' };
     var sheet = _payrollApprovalsSheet();
-    // Replace any prior pending submission for the same period
     var data = sheet.getDataRange().getValues();
+    /* A275 — APPROVED IS TERMINAL PER PERIOD.
+       Without this a cutoff could go Approved -> re-submitted -> Rejected and hold both rows at once,
+       and "is this period approved?" would have two answers. It is asked by the salary-deduction
+       posting, so it has to have exactly one. Re-submitting an approved cutoff is also almost always
+       a mistake rather than an intention. */
+    for (var a = 1; a < data.length; a++) {
+      if (String(data[a][0]) === period && String(data[a][4]) === 'Approved') {
+        return { success: false, message: 'That cutoff was already approved on ' +
+          (String(data[a][6] || '') || 'an earlier date') + '. It cannot be submitted again.' };
+      }
+    }
+    // Replace any prior pending submission for the same period
     for (var i = data.length; i >= 2; i--) {
       if (String(data[i-1][0]) === period && String(data[i-1][4]) === 'For Approval') {
         sheet.deleteRow(i);
@@ -12446,16 +13102,44 @@ function _uploadLeaveRequestPdfToDrive(params) {
   }
 }
 
+/* A275 — THE ROW INDEX IS NOT A KEY, AND THIS DECIDES MONEY.
+ *
+ * handleSubmitPayrollForApproval DELETES prior 'For Approval' rows before appending, so every
+ * rowIndex below a deleted row moves up by one. management-home.js renders the Approve button from a
+ * cache captured when the list was drawn; if the director re-submits anything in between, that index
+ * now points at a DIFFERENT period's row. This handler used to write to it blind.
+ *
+ * Before A275 that produced a wrong status and a wrong PDF. Now that approval also banks a salary
+ * deduction, it would deduct against the wrong cutoff, silently, from a real person's pay. So the
+ * client must state which period it believes it is deciding, and a disagreement is refused rather
+ * than resolved — there is no safe guess about which of the two the approver meant.
+ *
+ * `period` is optional ONLY so an older cached client cannot be locked out mid-session; when it is
+ * absent the write proceeds as before. Every current caller sends it. */
 function handleDecidePayrollApproval(params) {
   try {
     var rowIndex   = parseInt(params.rowIndex, 10);
     var decision   = String(params.decision || '').trim();   // 'Approved' or 'Rejected'
     var approvedBy = String(params.approvedBy || '').trim();
     var notes      = String(params.notes || '').trim();
+    var expectPeriod = String(params.period || '').trim();
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'rowIndex required.' };
     if (decision !== 'Approved' && decision !== 'Rejected') return { success: false, message: 'invalid decision.' };
     if (!approvedBy) return { success: false, message: 'approvedBy required.' };
     var sheet = _payrollApprovalsSheet();
+    if (rowIndex > sheet.getLastRow()) {
+      return { success: false, message: 'That approval request is no longer there. Refresh the list and try again.' };
+    }
+    var guardRow = sheet.getRange(rowIndex, 1, 1, 5).getValues()[0];
+    var rowPeriod = String(guardRow[0] || '').trim();
+    var rowStatus = String(guardRow[4] || '').trim();
+    if (expectPeriod && rowPeriod !== expectPeriod) {
+      return { success: false, message: 'This list is out of date — that row is now ' + (rowPeriod || 'blank') +
+        ', not ' + expectPeriod + '. Refresh and try again.' };
+    }
+    if (rowStatus !== 'For Approval') {
+      return { success: false, message: 'That cutoff is already ' + (rowStatus || 'not pending') + '.' };
+    }
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     sheet.getRange(rowIndex, 5).setValue(decision);
     sheet.getRange(rowIndex, 6).setValue(approvedBy);
@@ -12463,12 +13147,18 @@ function handleDecidePayrollApproval(params) {
     if (notes) sheet.getRange(rowIndex, 8).setValue(notes);
 
     var uploadInfo = null;
+    var sdPosted = null;
     if (decision === 'Approved') {
       var row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
       var period = String(row[0] || '');
       var cutoffLabel = String(row[1] || '');
       var snapshotHtml = String(row[9] || '');
       var pdfBase64 = String(params.pdfBase64 || '');
+      /* A275 — bank the salary deductions for this cutoff BEFORE the PDF. The archive is best-effort
+         (the folder id is not even set), and a Drive failure must never leave money unbanked while
+         the cutoff reads Approved. Idempotent on 'Deduction No | Period', so a second approval of the
+         same period — a double click, a modal reopened — records nothing further. */
+      sdPosted = _sdPostForPeriod(period, approvedBy);
       uploadInfo = _uploadPayrollPdfToDrive(period, cutoffLabel, snapshotHtml, pdfBase64);
       if (uploadInfo && uploadInfo.success) {
         var existingNotes = String(sheet.getRange(rowIndex, 8).getValue() || '');
@@ -12476,7 +13166,7 @@ function handleDecidePayrollApproval(params) {
         sheet.getRange(rowIndex, 8).setValue(existingNotes ? (existingNotes + ' | ' + driveNote) : driveNote);
       }
     }
-    return { success: true, upload: uploadInfo };
+    return { success: true, upload: uploadInfo, salaryDeductions: sdPosted };
   } catch(e) { return { success: false, message: e.message }; }
 }
 

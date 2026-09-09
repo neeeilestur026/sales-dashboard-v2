@@ -3589,7 +3589,15 @@ var _DOC_RULES = [
   { stage: 'ap_bank_advice', module: 'AP Aging',   type: 'debit_memo',
     label: 'Bank advice / debit memo',            applies: 'both',  gate: null, vocabOnly: true },
   { stage: 'ap_supplier_invoice', module: 'AP Aging', type: 'supplier sales invoice',
-    label: "Supplier's invoice or statement",     applies: 'both',  gate: null, vocabOnly: true }
+    label: "Supplier's invoice or statement",     applies: 'both',  gate: null, vocabOnly: true },
+
+  /* A275 — vocabulary only. These gate nothing in the sales-order flow; they exist so the shared
+     documents picker offers real names on a salary deduction. _flowDocsFillTypes filters the rule
+     list by module, so without an entry here the module's only option is "Other…". */
+  { stage: 'salary_deduction', module: 'Salary Deduction', type: 'salary deduction authorization',
+    label: 'Signed salary deduction form',        applies: 'both',  gate: null, vocabOnly: true },
+  { stage: 'salary_deduction', module: 'Salary Deduction', type: 'purchase receipt',
+    label: 'Receipt for the item bought',         applies: 'both',  gate: null, vocabOnly: true }
 ];
 
 /* Doc Type is free text and 71 of 234 live rows are blank, so a rule that demanded an exact string
@@ -6190,7 +6198,10 @@ function _docSubfolder(module, docType) {
    sales order, so the client tree would file it under _Unknown Client, where it would sit among
    genuinely mis-filed client documents and be swept along by every future migration. These get their
    own branch, one folder per record. Nothing that existed before A214 reaches this map. */
-var _DOC_INTERNAL_MODULES = { 'Travel Replenishment': ['_Internal', 'Travel Allowance'] };
+var _DOC_INTERNAL_MODULES = { 'Travel Replenishment': ['_Internal', 'Travel Allowance'],
+  /* A275 — a salary deduction has no customer and no sales order either. Its signed
+     authorization and receipts get their own branch, one folder per DED number. */
+  'Salary Deduction': ['_Internal', 'Salary Deductions'] };
 
 // ── Which sales order, and therefore which client ────────────────────────────
 /* _soDocChain() walks SO -> documents; this walks it back. Targeted lookups rather than a full index,

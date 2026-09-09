@@ -99,7 +99,22 @@
     .form-row label{font:700 .74rem 'Inter',sans-serif;color:#475569;}
     .form-row input,.form-row select{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:.55rem .75rem;font-size:.85rem;}
     .form-row input:focus,.form-row select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--accent-ring);}
-    .modal-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem;}
+    .modal-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem;align-items:center;}
+    /* A275 — salary deductions. Same visual language as the EE modal above; its own class names so a
+       change to one cannot silently restyle the other. */
+    .sd-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);padding:1rem;}
+    .sd-overlay .modal-box{background:#fff;border:1px solid var(--line);border-radius:20px;padding:1.6rem;width:min(660px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 18px 50px rgba(15,23,42,.25);}
+    .sd-overlay h3{font:800 1.05rem 'Inter',sans-serif;color:var(--ink);}
+    .sd-form{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
+    .sd-form label{display:flex;flex-direction:column;gap:.3rem;font:700 .74rem 'Inter',sans-serif;color:#475569;}
+    .sd-form label:nth-child(3),.sd-form label:nth-child(4){grid-column:1/-1;}
+    .sd-form input,.sd-form select{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:.55rem .75rem;font:400 .85rem 'Inter',sans-serif;}
+    .sd-form input:focus,.sd-form select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--accent-ring);}
+    .sd-hint{font:400 .72rem/1.4 'Inter',sans-serif;color:var(--ink2);}
+    .sd-projection{margin-top:.9rem;padding:.7rem .85rem;border:1px solid var(--line);border-left:3px solid var(--ac);border-radius:10px;background:#f8fafc;font:400 .82rem/1.55 'Inter',sans-serif;color:var(--ink);}
+    .sd-projection:empty{display:none;}
+    .sd-docs{margin-top:.9rem;padding-top:.8rem;border-top:1px solid var(--line);font:400 .82rem 'Inter',sans-serif;color:var(--ink);}
+    @media (max-width:560px){.sd-form{grid-template-columns:1fr;}}
   </style>
 </head>
 <body>
@@ -129,6 +144,7 @@
       <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;">⚑ What needs you</h3>
       <div id="flowActionCenter"></div>
     </div>
+    <div class="chart-card" id="myDeductionCard" style="margin:0 0 1.1rem;padding:1rem 1.2rem;background:#fff;border:1px solid var(--border,#e2e8f0);border-radius:14px;display:none;"></div>
     <script>document.addEventListener('DOMContentLoaded', function () { if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300); });</script>
 
     <!-- A215 — the team's quotation worklist. The SAME engine the rep sees, grouped by whose work it
@@ -205,6 +221,7 @@
       <button class="pay-tab" onclick="switchPayTab('hoursB')" id="tabHoursB"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours B · 2nd Cutoff</button>
       <button class="pay-tab" onclick="switchPayTab('payB')" id="tabPayB"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay B · 2nd Cutoff</button>
       <button class="pay-tab" onclick="switchPayTab('thirteenth')" id="tabThirteenth"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>13th Month</button>
+      <button class="pay-tab" onclick="switchPayTab('deductions')" id="tabDeductions"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>Salary Deductions</button>
     </div>
 
     <!-- EE Panel -->
@@ -304,7 +321,29 @@
         </table>
       </div>
     </div>
+
+    <!-- A275 — Salary Deductions: an employee buys something and repays it from payroll -->
+    <div class="pay-panel" id="panelDeductions">
+      <div class="pay-card">
+        <div class="ee-toolbar" style="flex-wrap:wrap;gap:.5rem;">
+          <h3 style="margin:0;">Salary Deductions</h3>
+          <div style="display:flex;gap:.5rem;align-items:center;">
+            <button class="btn-sm" onclick="loadSalaryDeductions()">Refresh</button>
+            <button class="btn-sm primary" onclick="openDeductionModal('')">+ New Deduction</button>
+          </div>
+        </div>
+        <p style="font:400 .78rem/1.5 'Inter',sans-serif;color:var(--ink2);margin:.3rem 0 .8rem;">
+          Each record is a signed authorization already agreed on paper. The instalment appears in the
+          pay register as <strong>Salary Ded.</strong> and on the payslip by name. A cutoff that cannot
+          cover the full amount takes what it can and the rest carries forward — the per-cutoff figure
+          never rises. Money is counted as collected only when the cutoff is <em>approved</em>.
+        </p>
+        <div id="sdBody"><div style="padding:1rem;color:var(--ink2);">Loading…</div></div>
+      </div>
+    </div>
   </div>
+
+  <div class="sd-overlay" id="sdModal"></div>
 
   <!-- EE Add/Edit Modal -->
   <div class="ee-overlay" id="eeOverlay">
@@ -399,8 +438,10 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>   <!-- A275: receipts on a salary deduction -->
   <script src="js/quotation-worklist.js"></script>
   <script src="js/quotation-team-worklist.js"></script>
   <script src="js/director-home.js"></script>

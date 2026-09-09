@@ -3318,7 +3318,7 @@ async function decidePayrollApproval(decision) {
   }
 
   try {
-    var res = await apiDecidePayrollApproval(rec.rowIndex, decision, approvedBy, notes, pdfBase64);
+    var res = await apiDecidePayrollApproval(rec.rowIndex, decision, approvedBy, notes, pdfBase64, rec.period);
     if (res && res.success) {
       // On approval, auto-log the cutoff to the flow Expenses (Operating · Salaries and wages).
       if (decision === 'Approved') { _logPayrollExpense(rec, approvedBy); }

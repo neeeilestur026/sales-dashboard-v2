@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ── Tab switching ─────────────────────────────────────────────
-const _TAB_MAP = { ee: 'EE', hoursA: 'HoursA', payA: 'PayA', hoursB: 'HoursB', payB: 'PayB', thirteenth: 'Thirteenth' };
+const _TAB_MAP = { ee: 'EE', hoursA: 'HoursA', payA: 'PayA', hoursB: 'HoursB', payB: 'PayB', thirteenth: 'Thirteenth', deductions: 'Deductions' };
 
 function switchPayTab(tab) {
   Object.keys(_TAB_MAP).forEach(t => {
@@ -89,6 +89,7 @@ function switchPayTab(tab) {
     _initThirteenthYearSelector();
     load13thMonth();
   }
+  if (tab === 'deductions') loadSalaryDeductions();   // A275 — loaded on demand, like the 13th month
 }
 
 // ── Period Load ───────────────────────────────────────────────
@@ -698,7 +699,7 @@ function _computePaySlip(emp, cutoff) {
   const empName = e.empName;
   const grossPay = e.grossPay;
   const d = _payDeductions(emp, cutoff);          // A260 — one definition of the deduction half
-  const { pagibig, sss, philhealth, advances, wtax, totalDed } = d;
+  const { pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines, totalDed } = d;
   return {
     empName, hourlyRate: e.hourlyRate, dailyRate: emp.dailyRate,
     isFixed: e.isFixed, fixedAmount: e.fixedAmount, recordedHrs: e.recordedHrs,  // A260
@@ -709,7 +710,8 @@ function _computePaySlip(emp, cutoff) {
     speHolHrs: e.speHolHrs, speHolPay: e.speHolPay,
     unworkedHolDays: e.unworkedHolDays, unworkedHolPay: e.unworkedHolPay,
     otherIncome: e.otherIncome, incentive: e.incentive, grossPay,
-    pagibig, sss, philhealth, advances, wtax, totalDed, netPay: grossPay - totalDed,
+    pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
+    totalDed, netPay: grossPay - totalDed,
   };
 }
 
@@ -731,6 +733,22 @@ function _payslipHtml(emp, cutoff) {
      hr…", which hides the very rate the line exists to state. A compact hour form keeps every label
      inside the column instead of widening a rule that ~100 filed payslips lay out against. */
   const hc = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + 'h';
+  /* A275 — one line per agreement, NAMED, with what is still owed underneath.
+     A bare "Salary Deduction 2,916.25" is exactly the figure an employee cannot check, and the whole
+     reason the paper form exists is that they agreed to a specific total. Two concurrent deductions
+     therefore print as two lines rather than one sum — `money()` renders one label and one figure, so
+     the balance rides along as a sub-row of its own. */
+  const sdRows = (s.salaryDeductionLines && s.salaryDeductionLines.length)
+    ? s.salaryDeductionLines.map(l => {
+        const left = (l.remainingBefore || 0) - (l.amount || 0);
+        const sub = (l.totalAmount)
+          ? `<tr><td class="l" style="padding-left:10px;font-size:0.86em;opacity:0.75;">${
+               esc(l.item || 'Salary deduction')} &middot; ${peso(left)} left of ${peso(l.totalAmount)}</td>
+             <td class="r"></td></tr>`
+          : '';
+        return money('Salary Deduction', l.amount) + sub;
+      }).join('')
+    : money('Salary Deduction', s.salaryDeduction || 0);
   const holidayRows = (s.regHolPay || s.speHolPay || s.unworkedHolPay)
     ? [
         s.regHolPay      ? money('Reg Holiday (' + hc(s.regHolHrs) + ' x2)', s.regHolPay) : '',
@@ -778,6 +796,7 @@ function _payslipHtml(emp, cutoff) {
       ${money('SSS', s.sss)}
       ${money('PhilHealth', s.philhealth)}
       ${money('Advances', s.advances)}
+      ${sdRows}
       ${money('Withholding Tax', s.wtax)}
       ${money('TOTAL DEDUCTIONS', s.totalDed, 'sub')}
     </tbody></table>
@@ -1075,6 +1094,7 @@ function renderPayGrid(cutoff) {
       <th class="num">SSS</th>
       <th class="num">PhilHealth</th>
       <th class="num">Advances</th>
+      <th class="num" title="Set by the salary-deduction agreement — recalculated on save">Salary Ded.</th>
       <th class="num">WTax</th>
       <th class="num">Total Ded.</th>
       <th class="num highlight">Net Pay</th>
@@ -1083,7 +1103,7 @@ function renderPayGrid(cutoff) {
     <tbody>`;
 
   let totBasic=0, totHol=0, totOT=0, totOther=0, totInc=0, totGross=0,
-      totPag=0, totSSS=0, totPHIC=0, totAdv=0, totWTax=0, totDed=0, totNet=0;
+      totPag=0, totSSS=0, totPHIC=0, totAdv=0, totWTax=0, totDed=0, totNet=0, totSalDed=0;
 
   activeEE.forEach(emp => {
     const e = _payEarnings(emp, cutoff);            // A229 — one definition of the earnings half
@@ -1093,13 +1113,15 @@ function renderPayGrid(cutoff) {
     const otherIncome = e.otherIncome, incentive = e.incentive, grossPay = e.grossPay;
 
     // A260 — one definition of the deduction half, waiver included.
-    const { pagibig, sss, philhealth, advances, wtax, totalDed } = _payDeductions(emp, cutoff);
+    const { pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
+            totalDed } = _payDeductions(emp, cutoff);
     const netPay   = grossPay - totalDed;
 
     totBasic += basicPay; totHol += holidayPay; totOT += otPay; totOther += otherIncome;
     totInc += incentive;
     totGross += grossPay; totPag += pagibig; totSSS += sss; totPHIC += philhealth;
     totAdv += advances; totWTax += wtax; totDed += totalDed; totNet += netPay;
+    totSalDed += salaryDeduction;
 
     const k = _empKey(empName);
 
@@ -1107,6 +1129,24 @@ function renderPayGrid(cutoff) {
        An inline number box would say "type it and it saves with the register", which is the opposite
        of how this works, and it has nowhere to put the category or the reason that make the
        per-employee record worth having. */
+    /* A275 — computed, like Incentive and unlike the Advances box beside it. An input here would say
+       "type it and it saves", which is the opposite of how this works: the figure is the agreement's,
+       the server sets it during the save, and it has nowhere to put the item or the balance that make
+       it meaningful. Clicking opens the agreement instead. */
+    const sdTip = salaryDeductionLines.length
+      ? salaryDeductionLines.map(l => `${l.item || 'Deduction'} — ${peso(l.amount)}`).join(' · ')
+      : 'No salary deduction this cutoff';
+    const sdCell = `<td class="num computed" style="white-space:nowrap;" title="${esc(sdTip)}">
+        ${salaryDeduction > 0
+          ? `<a href="#" onclick="switchPayTab('deductions');return false;" style="font-weight:700;text-decoration:none;">${peso(salaryDeduction)}</a>`
+          : '<span style="color:var(--text-muted);">—</span>'}
+      </td>`;
+    /* Advances is described in this file as "a loan being repaid", which is exactly what someone
+       typed the laptop instalment into before this feature existed. Both columns now exist side by
+       side, so the one that is easy to double-enter says so on hover. */
+    const advTitle = salaryDeduction > 0
+      ? ' title="This employee already has a salary deduction this cutoff — do not re-enter it here."'
+      : '';
     const incCell = `<td class="num computed" style="white-space:nowrap;">
         ${incentive > 0 ? `<span style="font-weight:700;">${peso(incentive)}</span>` : '<span style="color:var(--text-muted);">—</span>'}
         <button class="btn-sm" title="Add an incentive for this cutoff"
@@ -1132,7 +1172,8 @@ function renderPayGrid(cutoff) {
         : `<td class="num"><input type="number" min="0" step="0.01" value="${pagibig.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="pagibig" onchange="_updateRegCell(this)" style="width:75px;"></td>
            <td class="num"><input type="number" min="0" step="0.01" value="${sss.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="sss" onchange="_updateRegCell(this)" style="width:75px;"></td>
            <td class="num"><input type="number" min="0" step="0.01" value="${philhealth.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="philhealth" onchange="_updateRegCell(this)" style="width:75px;"></td>`}
-      <td class="num"><input type="number" min="0" step="0.01" value="${advances.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="advances" onchange="_updateRegCell(this)" style="width:75px;"></td>
+      <td class="num"><input type="number" min="0" step="0.01" value="${advances.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="advances" onchange="_updateRegCell(this)" style="width:75px;"${advTitle}></td>
+      ${sdCell}
       <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" style="width:75px;"></td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
       <td class="num highlight" id="netPay_${cutoff}_${k}">${peso(netPay)}</td>
@@ -1152,6 +1193,7 @@ function renderPayGrid(cutoff) {
     <td class="num">${peso(totSSS)}</td>
     <td class="num">${peso(totPHIC)}</td>
     <td class="num">${peso(totAdv)}</td>
+    <td class="num">${peso(totSalDed)}</td>
     <td class="num">${peso(totWTax)}</td>
     <td class="num">${peso(totDed)}</td>
     <td class="num">${peso(totNet)}</td>
@@ -1186,7 +1228,8 @@ function _updateRegCell(input) {
   const phic = parseFloat(saved.philhealth) || 0;
   const adv  = parseFloat(saved.advances)   || 0;
   const wt   = parseFloat(saved.wtax)       || 0;
-  const totDed = pag + sss + phic + adv + wt;
+  const sdn  = parseFloat(saved.salaryDeduction) || 0;   // A275 — server-set; unchanged by typing here
+  const totDed = pag + sss + phic + adv + wt + sdn;
   const netPay = grossPay - totDed;
 
   const k = _empKey(empName);
@@ -1207,7 +1250,10 @@ async function saveRegister(cutoff) {
     /* A229 — one definition of the earnings half. The statutory defaults must match exactly what was
        displayed, so saving never changes a number on screen — which is why both this and the grid
        pass `statBase`, not gross. The incentive is NOT sent: the server recomputes it from the
-       ledger and discards anything the client claims. */
+       ledger and discards anything the client claims.
+       A275 — the salary deduction is not sent either, and for a stronger reason: it is a function of
+       the five deductions below it and of every posting ever made, so the browser has no way to know
+       it. The server computes it here and the grid reads it back. */
     const e = _payEarnings(emp, cutoff);
     const saved = registerMap[e.empName] || {};
     const d = _payDeductions(emp, cutoff);        // A260 — one definition, and computed once
@@ -1228,10 +1274,10 @@ async function saveRegister(cutoff) {
 
   try {
     const res = await apiSavePayrollRegister(period, rows);
-    if (!res.success) { alert('Error saving pay register: ' + (res.message || 'Unknown error')); return; }
+    if (!res.success) { alert('Error saving pay register: ' + (res.message || 'Unknown error')); return false; }
   } catch (err) {
     alert('Error saving pay register: ' + err.message);
-    return;
+    return false;
   }
 
   // Reload saved state back into memory so edits reflect what's actually stored
@@ -1243,6 +1289,7 @@ async function saveRegister(cutoff) {
   const msgEl = document.getElementById('savePay' + cutoff + 'Msg');
   msgEl.style.display = 'inline';
   setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
+  return true;   // A275 — submitCutoffForApproval depends on knowing this landed
 }
 
 // ── Export to PDF ─────────────────────────────────────────────
@@ -1274,14 +1321,34 @@ function exportCutoff(cutoff) {
 }
 
 // ── Submit for Approval ───────────────────────────────────────
+/* A275 — SAVE BEFORE YOU SUBMIT.
+ *
+ * _buildCutoffHtml reads the in-memory register, and this snapshot becomes the PDF that Management
+ * signs and Drive archives. Nothing forced the register to have been SAVED first, so a director who
+ * edited a cell and hit Submit sent a document that did not match the stored register — the approved
+ * PDF and the books disagreed, with no sign of it anywhere.
+ *
+ * A275 makes that worse if left alone: the salary-deduction figure is computed on the server during
+ * the save, so an unsaved period would submit a document with the deduction missing entirely and then
+ * bank money that the signed page never showed. So the save happens first, the register is re-read,
+ * and only then is the snapshot built. */
 async function submitCutoffForApproval(cutoff) {
   if (!_currentYear || !_currentMonth) { alert('Load a period first.'); return; }
+  const btn = document.getElementById('submitApproval' + cutoff + 'Btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving register...'; }
+  const saved = await saveRegister(cutoff);
+  if (!saved) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit for Approval'; }
+    return;   // saveRegister has already said why
+  }
   const built = _buildCutoffHtml(cutoff);
-  if (!built) return;
-  if (!confirm('Submit ' + built.cutoffLabel + ' (' + built.period + ') to Management for approval?')) return;
+  if (!built) { if (btn) { btn.disabled = false; btn.textContent = 'Submit for Approval'; } return; }
+  if (!confirm('Submit ' + built.cutoffLabel + ' (' + built.period + ') to Management for approval?')) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit for Approval'; }
+    return;
+  }
   const session = (typeof getSession === 'function') ? getSession() : null;
   const submittedBy = (session && (session.name || session.username)) || 'Director';
-  const btn = document.getElementById('submitApproval' + cutoff + 'Btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   try {
     const res = await apiSubmitPayrollForApproval({
@@ -1376,7 +1443,7 @@ function _buildCutoffHtml(cutoff) {
   </tr>`;
 
   let prBody = '';
-  let gBasic=0,gHol=0,gOT=0,gOther=0,gInc=0,gGross=0,gPag=0,gSSS=0,gPHIC=0,gAdv=0,gWTax=0,gDed=0,gNet=0;
+  let gBasic=0,gHol=0,gOT=0,gOther=0,gInc=0,gGross=0,gPag=0,gSSS=0,gPHIC=0,gAdv=0,gWTax=0,gDed=0,gNet=0,gSalDed=0;
   let employeeCount = 0;
 
   _employees.forEach(emp => {
@@ -1391,13 +1458,14 @@ function _buildCutoffHtml(cutoff) {
     const pagibig = dd.pagibig, sss = dd.sss, philhealth = dd.philhealth;
     const advances    = saved.advances   || 0;
     const wtax        = saved.wtax       || 0;
-    const totalDed    = pagibig + sss + philhealth + advances + wtax;
+    const salaryDed   = dd.salaryDeduction || 0;      // A275 — server-set during the register save
+    const totalDed    = pagibig + sss + philhealth + advances + wtax + salaryDed;
     const netPay      = grossPay - totalDed;
 
     employeeCount++;
     gBasic+=basicPay; gHol+=holidayPay; gOT+=otPay; gOther+=otherIncome; gInc+=incentive;
     gGross+=grossPay; gPag+=pagibig; gSSS+=sss; gPHIC+=philhealth;
-    gAdv+=advances; gWTax+=wtax; gDed+=totalDed; gNet+=netPay;
+    gAdv+=advances; gWTax+=wtax; gDed+=totalDed; gNet+=netPay; gSalDed+=salaryDed;
 
     prBody += `<tr>
       <td class="name">${empName}</td>
@@ -1411,6 +1479,7 @@ function _buildCutoffHtml(cutoff) {
       <td class="num">${sss > 0 ? p(sss) : '—'}</td>
       <td class="num">${philhealth > 0 ? p(philhealth) : '—'}</td>
       <td class="num">${advances > 0 ? p(advances) : '—'}</td>
+      <td class="num">${salaryDed > 0 ? p(salaryDed) : '—'}</td>
       <td class="num">${wtax > 0 ? p(wtax) : '—'}</td>
       <td class="num">${p(totalDed)}</td>
       <td class="num bold green">${p(netPay)}</td>
@@ -1429,6 +1498,7 @@ function _buildCutoffHtml(cutoff) {
     <td class="num">${p(gSSS)}</td>
     <td class="num">${p(gPHIC)}</td>
     <td class="num">${gAdv > 0 ? p(gAdv) : '—'}</td>
+    <td class="num">${gSalDed > 0 ? p(gSalDed) : '—'}</td>
     <td class="num">${gWTax > 0 ? p(gWTax) : '—'}</td>
     <td class="num">${p(gDed)}</td>
     <td class="num bold green">${p(gNet)}</td>
@@ -1491,7 +1561,7 @@ function _buildCutoffHtml(cutoff) {
       <th>Employee</th>
       <th>Basic Pay</th><th>Hol. Pay</th><th>OT Pay</th><th>Other Inc.</th><th>Incentive</th>
       <th>Gross Pay</th>
-      <th>Pag-IBIG</th><th>SSS</th><th>PhilHealth</th><th>Advances</th><th>WTax</th>
+      <th>Pag-IBIG</th><th>SSS</th><th>PhilHealth</th><th>Advances</th><th>Salary Ded.</th><th>WTax</th>
       <th>Total Ded.</th><th>Net Pay</th>
     </tr>
   </thead>
@@ -1536,6 +1606,9 @@ function _buildCutoffHtml(cutoff) {
       totalHolidayPay: gHol,
       grossPay: gGross,
       totalDeductions: gDed,
+      /* A275 — named in the totals for the same reason A259 added the holiday figure: an aggregate
+         that cannot explain its own components is not an approval record. */
+      totalSalaryDeductions: gSalDed,
       netPay: gNet,
       employerShare: employerShare,
       totalPayrollCost: gGross + employerShare
@@ -1768,15 +1841,26 @@ function _payDeductions(emp, cutoff) {
   const saved = registerMap[empName] || {};
   const advances = +(saved.advances !== undefined ? saved.advances : 0);
   const wtax     = +(saved.wtax     !== undefined ? saved.wtax     : 0);
+  /* A275 — READ, never computed. Everything else here has a client-side default because it is a
+     function of this cutoff alone; a salary deduction is not. It depends on every posting ever made
+     against the agreement, on the other five deductions in this same cutoff, and on whether the
+     period has been approved — so the browser cannot know it, and a guess here would end up in the
+     PDF Management signs. The server computes it during the save and this reads the result back.
+     Before the first save of a period it is legitimately 0, and the column says "on save". */
+  const salaryDeduction = +(saved.salaryDeduction !== undefined ? saved.salaryDeduction : 0);
+  const salaryDeductionLines = saved.salaryDeductionLines || [];
   if (_isFixedPay(emp)) {
-    return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax, totalDed: advances + wtax };
+    /* A260 — no statutory contribution, but a fixed-salary manager still repays what they bought:
+       a deduction is a loan being repaid, which a pay type does not change. */
+    return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax, salaryDeduction, salaryDeductionLines,
+             totalDed: advances + wtax + salaryDeduction };
   }
   const e = _payEarnings(emp, cutoff);
   const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100));
   const sss        = +(saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase));
   const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase));
-  return { pagibig, sss, philhealth, advances, wtax,
-           totalDed: pagibig + sss + philhealth + advances + wtax };
+  return { pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
+           totalDed: pagibig + sss + philhealth + advances + wtax + salaryDeduction };
 }
 
 /** @param monthlyBasic the STATUTORY base (_payEarnings().statBase) — deliberately not gross. */
@@ -1963,4 +2047,359 @@ function print13thMonth() {
   if (!win) { alert('Pop-up blocked. Allow pop-ups to print.'); return; }
   win.document.write(html);
   win.document.close();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   A275 — SALARY DEDUCTIONS TAB.
+
+   Nothing here computes money. The schedule, the balance and the per-cutoff figure all come from the
+   server, because they depend on postings and on the rest of the cutoff's deductions — see the
+   header note on _payDeductions. What this screen does is capture the agreement, hold the signed
+   form against it, and show where the repayment has got to.
+
+   The projection under the form is the exception, and it is labelled as one: it is arithmetic on two
+   numbers the user is typing, shown so the totals on the paper form can be checked BEFORE saving.
+   The form this replaces had a total, a monthly figure and a month count that disagreed with each
+   other three ways, and nobody noticed for a year.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+let _deductions = [];
+let _sdEditingNo = '';
+
+function _sdPeso(n) { return '₱' + (Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+/** '2026-09-A' → '1st Cutoff · September 2026'. The mirror of flowCutoffRange's label. */
+function _sdLabel(period) {
+  if (!/^\d{4}-\d{2}-[AB]$/.test(String(period || ''))) return period || '—';
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const mo = names[parseInt(period.slice(5, 7), 10) - 1] || '';
+  return (period.slice(-1) === 'A' ? '1st' : '2nd') + ' Cutoff · ' + mo + ' ' + period.slice(0, 4);
+}
+
+function _sdNextCutoff(period) {
+  if (typeof flowCutoffNext === 'function') return flowCutoffNext(period);
+  let y = parseInt(period.slice(0, 4), 10), m = parseInt(period.slice(5, 7), 10);
+  if (period.slice(-1) === 'A') return period.slice(0, 8) + 'B';
+  m += 1; if (m === 13) { m = 1; y += 1; }
+  return y + '-' + String(m).padStart(2, '0') + '-A';
+}
+
+async function loadSalaryDeductions() {
+  const body = document.getElementById('sdBody');
+  if (!body) return;
+  body.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Loading…</div>';
+  try {
+    const res = await apiGetSalaryDeductions();
+    if (!res.success) { body.innerHTML = `<div style="padding:1rem;color:#dc2626;">${esc(res.message || 'Could not load salary deductions.')}</div>`; return; }
+    _deductions = res.data || [];
+    renderSalaryDeductions();
+  } catch (err) {
+    body.innerHTML = `<div style="padding:1rem;color:#dc2626;">${esc(err.message)}</div>`;
+  }
+}
+
+function renderSalaryDeductions() {
+  const body = document.getElementById('sdBody');
+  if (!body) return;
+  if (!_deductions.length) {
+    body.innerHTML = '<div style="padding:1.4rem;text-align:center;color:var(--text-muted);">' +
+      'No salary deductions yet. “+ New Deduction” records one from a signed authorization form.</div>';
+    return;
+  }
+  const badge = (st) => {
+    const c = st === 'Active' ? '#0f766e' : st === 'Draft' ? '#b45309' : '#64748b';
+    return `<span style="background:${c}18;color:${c};font-weight:700;font-size:0.74rem;padding:2px 8px;border-radius:999px;">${esc(st)}</span>`;
+  };
+  let html = `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead><tr>
+      <th>Deduction</th><th>Employee</th><th>Item</th>
+      <th class="num">Total</th><th class="num">Per cutoff</th><th>Cadence</th>
+      <th class="num">Paid</th><th class="num">Remaining</th><th>Next</th><th>Status</th><th>Form</th><th></th>
+    </tr></thead><tbody>`;
+  _deductions.forEach(d => {
+    const pct = d.totalAmount > 0 ? Math.min(100, Math.round((d.paid / d.totalAmount) * 100)) : 0;
+    html += `<tr>
+      <td><strong>${esc(d.deductionNo)}</strong></td>
+      <td>${esc(d.employee)}<div style="font-size:0.74rem;color:var(--text-muted);">${esc(d.username)}</div></td>
+      <td>${esc(d.item)}</td>
+      <td class="num">${_sdPeso(d.totalAmount)}</td>
+      <td class="num">${_sdPeso(d.perCutoffAmount)}</td>
+      <td>${d.cadence === 'First Cutoff Only' ? '1st cutoff only' : 'Every cutoff'}</td>
+      <td class="num">${_sdPeso(d.paid)}
+        <div style="height:4px;background:var(--border,#e2e8f0);border-radius:3px;margin-top:3px;">
+          <div style="height:4px;width:${pct}%;background:#0f766e;border-radius:3px;"></div></div></td>
+      <td class="num"><strong>${_sdPeso(d.remaining)}</strong></td>
+      <td>${d.status === 'Active' && d.remaining > 0
+            ? `${esc(_sdLabel(d.nextPeriod))}<div style="font-size:0.74rem;color:var(--text-muted);">${d.instalmentsLeft} left · ends ${esc(_sdLabel(d.projectedEndPeriod))}</div>`
+            : '<span style="color:var(--text-muted);">—</span>'}</td>
+      <td>${badge(d.settled && d.status === 'Active' ? 'Settled' : d.status)}</td>
+      <td>${d.formDocLink
+            ? `<a href="${esc(d.formDocLink)}" target="_blank" class="link-btn">signed form</a>`
+            : '<span style="color:#b45309;">not attached</span>'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn-sm" onclick="openDeductionModal('${esc(d.deductionNo)}')">Open</button>
+      </td>
+    </tr>`;
+  });
+  body.innerHTML = html + '</tbody></table>';
+}
+
+// ── The agreement form ────────────────────────────────────────
+
+function openDeductionModal(dedNo) {
+  _sdEditingNo = dedNo || '';
+  const d = dedNo ? _deductions.filter(x => x.deductionNo === dedNo)[0] : null;
+  const employees = (_employees || []).map(e => e.lastName + ', ' + e.firstName);
+  if (d && employees.indexOf(d.employee) === -1) employees.unshift(d.employee);
+
+  /* The login account is a SEPARATE choice from the payroll employee, and it is not guessed.
+     Payroll knows people as "Last, First", the login roster knows them as a display name, and the
+     two lists have never been joined — FlowAPI says so in as many words: "a silent mis-match pays
+     the wrong person". The dropdown is pre-selected by name similarity and must be confirmed. */
+  const opts = (arr, sel) => arr.map(v =>
+    `<option value="${esc(v)}"${v === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+
+  const el = document.getElementById('sdModal');
+  el.innerHTML = `
+    <div class="modal-box" style="max-width:660px;">
+      <h3 style="margin:0 0 0.2rem;">${d ? esc(d.deductionNo) : 'New Salary Deduction'}</h3>
+      <p style="margin:0 0 1rem;color:var(--text-muted);font-size:0.82rem;">
+        Records an authorization that has already been signed on paper. Nothing is deducted until the
+        signed form is attached and the record is activated.</p>
+      <div class="sd-form">
+        <label>Employee (payroll)
+          <select id="sdEmployee">${opts(employees, d ? d.employee : '')}</select></label>
+        <label>Login account
+          <select id="sdUsername"><option value="">— pick the account they sign in with —</option></select>
+          <span class="sd-hint" id="sdUserHint"></span></label>
+        <label>Item bought
+          <input type="text" id="sdItem" value="${d ? esc(d.item) : ''}" placeholder="Lenovo MT 82XQ IdeaPad Slim 3"></label>
+        <label>Purpose / reason
+          <input type="text" id="sdPurpose" value="${d ? esc(d.purpose) : ''}" placeholder="Request to buy laptop (MOP — salary deduction)"></label>
+        <label>Total to deduct
+          <input type="number" step="0.01" min="0" id="sdTotal" value="${d ? d.totalAmount : ''}" oninput="_sdProject()"></label>
+        <label>Amount per cutoff
+          <input type="number" step="0.01" min="0" id="sdPer" value="${d ? d.perCutoffAmount : ''}" oninput="_sdProject()"></label>
+        <label>When
+          <select id="sdCadence" onchange="_sdProject()">
+            <option value="First Cutoff Only"${!d || d.cadence === 'First Cutoff Only' ? ' selected' : ''}>Every 1st cutoff only</option>
+            <option value="Every Cutoff"${d && d.cadence === 'Every Cutoff' ? ' selected' : ''}>Every cutoff</option>
+          </select></label>
+        <label>First deduction
+          <select id="sdStart" onchange="_sdProject()"></select></label>
+      </div>
+      <div id="sdProjection" class="sd-projection"></div>
+      ${d ? `
+        <div class="sd-docs">
+          <div><strong>Signed authorization</strong>
+            ${d.formDocLink ? `— <a href="${esc(d.formDocLink)}" target="_blank">${esc(d.formFileName || 'view')}</a>`
+                            : '<span style="color:#b45309;"> — not attached yet</span>'}</div>
+          <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button class="btn-sm" onclick="sdAttachForm('${esc(d.deductionNo)}')">Attach signed form</button>
+            <button class="btn-sm" onclick="sdOpenDocs('${esc(d.deductionNo)}')">Receipts &amp; other documents</button>
+          </div>
+        </div>
+        ${d.postings && d.postings.length ? `
+          <div class="sd-docs"><strong>Collected so far</strong>
+            <table class="pay-table" style="width:100%;font-size:0.8rem;margin-top:0.4rem;">
+              <thead><tr><th>Cutoff</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+              ${d.postings.map(pg => `<tr><td>${esc(_sdLabel(pg.period))}</td>
+                 <td class="num">${_sdPeso(pg.amount)}</td>
+                 <td><button class="btn-sm" onclick="sdVoidPosting('${esc(pg.postingId)}')">Void</button></td></tr>`).join('')}
+            </tbody></table></div>` : ''}
+      ` : ''}
+      <div class="modal-actions">
+        ${d && d.status === 'Draft' ? `<button class="btn-sm primary" onclick="sdActivate('${esc(d.deductionNo)}')">Activate</button>` : ''}
+        ${d && d.status === 'Active' ? `<button class="btn-sm" onclick="sdCancel('${esc(d.deductionNo)}')">Stop collecting</button>` : ''}
+        <span style="flex:1;"></span>
+        <button class="btn-sm" onclick="closeDeductionModal()">Close</button>
+        ${d && d.status === 'Cancelled' ? '' : '<button class="btn-sm primary" onclick="sdSave()">Save</button>'}
+      </div>
+    </div>`;
+  el.style.display = 'flex';
+  _sdFillStartPeriods(d ? d.startPeriod : '');
+  _sdFillUsernames(d ? d.username : '');
+  _sdProject();
+}
+
+function closeDeductionModal() {
+  const el = document.getElementById('sdModal');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  _sdEditingNo = '';
+}
+
+/** Two years of cutoffs from the one this month falls in — a deduction never starts in the past. */
+function _sdFillStartPeriods(selected) {
+  const sel = document.getElementById('sdStart');
+  if (!sel) return;
+  let cur = (typeof flowCutoffKeyFor === 'function') ? flowCutoffKeyFor(new Date()) : '';
+  if (!cur) {
+    const now = new Date();
+    cur = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-A';
+  }
+  const out = [];
+  if (selected && selected < cur) out.push(selected);          // keep an existing record's own start
+  let k = cur;
+  for (let i = 0; i < 48; i++) { out.push(k); k = _sdNextCutoff(k); }
+  sel.innerHTML = out.map(p =>
+    `<option value="${p}"${p === selected ? ' selected' : ''}>${esc(_sdLabel(p))}</option>`).join('');
+}
+
+/** The login roster, so the account is chosen rather than inferred. */
+async function _sdFillUsernames(selected) {
+  const sel = document.getElementById('sdUsername');
+  const hint = document.getElementById('sdUserHint');
+  if (!sel) return;
+  let users = [];
+  try {
+    const res = await apiGetUsers();
+    users = (res && res.data) || res.users || [];
+  } catch (e) { users = []; }
+  if (!users.length) {
+    sel.innerHTML = `<option value="${esc(selected || '')}">${esc(selected || '— roster unavailable —')}</option>`;
+    if (hint) hint.textContent = 'Could not load the login roster; the stored account is kept.';
+    return;
+  }
+  sel.innerHTML = '<option value="">— pick the account they sign in with —</option>' +
+    users.map(u => {
+      const un = u.username || '';
+      const nm = u.fullName || u.name || un;
+      return `<option value="${esc(un)}"${un === selected ? ' selected' : ''}>${esc(nm)} (${esc(un)})</option>`;
+    }).join('');
+  if (!selected) _sdSuggestUsername(users);
+  else if (hint) hint.textContent = '';
+}
+
+/* Pre-select by name similarity, and SAY that it is a suggestion. The payroll key is "Last, First"
+   and the roster holds "First Last", so this compares the word sets rather than the strings. */
+function _sdSuggestUsername(users) {
+  const hint = document.getElementById('sdUserHint');
+  const empSel = document.getElementById('sdEmployee');
+  const sel = document.getElementById('sdUsername');
+  if (!empSel || !sel) return;
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+  const want = norm(empSel.value);
+  const hit = users.filter(u => norm(u.fullName || u.name) === want)[0];
+  if (hit) {
+    sel.value = hit.username;
+    if (hint) hint.textContent = 'Suggested from the name — check it is the right account.';
+  } else if (hint) {
+    hint.textContent = 'No login matches that name. Pick the account deliberately.';
+  }
+}
+
+/* What the agreement will actually do, before it is saved. Deliberately arithmetic on the two typed
+   numbers only — it does not know about shortfalls, which is exactly why it says "projected". */
+function _sdProject() {
+  const box = document.getElementById('sdProjection');
+  if (!box) return;
+  const total = parseFloat((document.getElementById('sdTotal') || {}).value) || 0;
+  const per   = parseFloat((document.getElementById('sdPer') || {}).value) || 0;
+  const cad   = (document.getElementById('sdCadence') || {}).value || 'First Cutoff Only';
+  const start = (document.getElementById('sdStart') || {}).value || '';
+  if (!(total > 0) || !(per > 0) || !start) { box.innerHTML = ''; return; }
+  if (per > total) {
+    box.innerHTML = '<span style="color:#dc2626;">The per-cutoff amount is more than the total.</span>';
+    return;
+  }
+  const n = Math.ceil(Math.round(total * 100) / Math.round(per * 100));
+  const lastC = Math.round(total * 100) - Math.round(per * 100) * (n - 1);
+  let k = start, count = 0, end = start, guard = 0;
+  while (count < n && guard++ < 400) {
+    if (cad === 'Every Cutoff' || k.slice(-1) === 'A') { count++; end = k; }
+    if (count < n) k = _sdNextCutoff(k);
+  }
+  box.innerHTML = `<strong>${n}</strong> deduction${n === 1 ? '' : 's'} of <strong>${_sdPeso(per)}</strong>` +
+    (lastC !== Math.round(per * 100) ? `, the last one <strong>${_sdPeso(lastC / 100)}</strong>` : '') +
+    `, ${cad === 'Every Cutoff' ? 'every cutoff' : 'every 1st cutoff'},<br>` +
+    `from <strong>${esc(_sdLabel(start))}</strong> to <strong>${esc(_sdLabel(end))}</strong>. ` +
+    `They add up to exactly ${_sdPeso(total)}.` +
+    `<div class="sd-hint">Projected — a cutoff that cannot cover the full amount takes what it can and the rest carries forward, so the end date can move.</div>`;
+}
+
+async function sdSave() {
+  const payload = {
+    deductionNo: _sdEditingNo,
+    employee: (document.getElementById('sdEmployee') || {}).value || '',
+    username: (document.getElementById('sdUsername') || {}).value || '',
+    item: (document.getElementById('sdItem') || {}).value || '',
+    purpose: (document.getElementById('sdPurpose') || {}).value || '',
+    totalAmount: (document.getElementById('sdTotal') || {}).value || 0,
+    perCutoffAmount: (document.getElementById('sdPer') || {}).value || 0,
+    cadence: (document.getElementById('sdCadence') || {}).value || '',
+    startPeriod: (document.getElementById('sdStart') || {}).value || ''
+  };
+  try {
+    const res = await apiSaveSalaryDeduction(payload);
+    if (!res.success) { alert(res.message || 'Could not save.'); return; }
+    await loadSalaryDeductions();
+    if (!_sdEditingNo && res.deductionNo) openDeductionModal(res.deductionNo);   // straight on to the form
+    else closeDeductionModal();
+  } catch (err) { alert('Error: ' + err.message); }
+}
+
+async function sdActivate(dedNo) {
+  const res = await apiActivateSalaryDeduction(dedNo);
+  if (!res.success) { alert(res.message || 'Could not activate.'); return; }
+  await loadSalaryDeductions();
+  openDeductionModal(dedNo);
+}
+
+async function sdCancel(dedNo) {
+  const d = _deductions.filter(x => x.deductionNo === dedNo)[0];
+  const owed = d ? _sdPeso(d.remaining) : '';
+  const reason = prompt('Stop collecting ' + dedNo + '?' +
+    (d && d.remaining > 0 ? '\n\n' + owed + ' is still outstanding and stays on the record as a balance owed.' : '') +
+    '\n\nReason:');
+  if (reason === null) return;
+  const res = await apiCancelSalaryDeduction(dedNo, reason);
+  if (!res.success) { alert(res.message || 'Could not cancel.'); return; }
+  await loadSalaryDeductions();
+  closeDeductionModal();
+}
+
+async function sdVoidPosting(postingId) {
+  const reason = prompt('Void this collection? The record is kept and struck out, and the balance re-opens.\n\nReason:');
+  if (reason === null) return;
+  const res = await apiVoidSalaryDeductionPosting(postingId, reason);
+  if (!res.success) { alert(res.message || 'Could not void.'); return; }
+  const no = _sdEditingNo;
+  await loadSalaryDeductions();
+  if (no) openDeductionModal(no);
+}
+
+/* The file goes to the FlowAPI Documents registry — a different Apps Script deployment — and the
+   resulting link is then copied onto the deduction record, because activation is gated on it and
+   Code.gs cannot see FlowAPI's spreadsheet to check for itself. */
+function sdAttachForm(dedNo) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.doc,.docx,image/*';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > (typeof FLOW_DOC_MAX_MB === 'number' ? FLOW_DOC_MAX_MB : 10) * 1024 * 1024) {
+      alert('That file is larger than the ' + (FLOW_DOC_MAX_MB || 10) + 'MB limit.');
+      return;
+    }
+    try {
+      const dataUrl = await fileToDataURL(file);
+      const res = await postFlow('addDocument', {
+        module: 'Salary Deduction', refNo: dedNo, docType: 'salary deduction authorization',
+        fileName: file.name, fileBase64: String(dataUrl).split(',')[1],
+        mimeType: file.type || 'application/octet-stream'
+      });
+      if (!res || !res.success) { alert('Upload failed: ' + ((res && res.message) || 'unknown error')); return; }
+      const rec = await apiAttachSalaryDeductionForm(dedNo, res.link, res.docId, file.name);
+      if (!rec.success) { alert('Uploaded, but could not record it: ' + rec.message); return; }
+      await loadSalaryDeductions();
+      openDeductionModal(dedNo);
+    } catch (err) { alert('Error: ' + err.message); }
+  };
+  input.click();
+}
+
+/** Receipts and anything else — the shared registry panel, unchanged. */
+function sdOpenDocs(dedNo) {
+  if (typeof openDocsModal !== 'function') { alert('The documents panel is not loaded on this page.'); return; }
+  openDocsModal('Salary Deduction', dedNo, 'Salary deduction ' + dedNo, 'purchase receipt');
 }
