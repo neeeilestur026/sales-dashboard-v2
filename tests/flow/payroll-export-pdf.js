@@ -81,6 +81,29 @@ ok('orientation is derived, not hard-coded',
    /orientation: pageW > pageH \? 'landscape' : 'portrait'/.test(r));
 ok('  and nothing hard-codes portrait any more', !/orientation: 'portrait' \}/.test(r));
 
+/* A275 — the two things the generated PDF actually proved.
+ *
+ * Both were found by extracting the PDF and measuring it, not by reading the DOM: the receipt's
+ * whole 12px left padding was missing from the raster (leftmost ink at column 0 instead of 36, and
+ * 330 rows of glyphs sliced into), and every payslip carried a second page holding one row of
+ * pixels. Neither is reachable from Node — html2canvas needs a browser — so they are pinned here at
+ * the source level, which is the difference between "someone will re-break this silently" and not. */
+console.log('\n6b · A275 — the capture origin is pinned, and the page is never smaller than its art');
+ok('the capture origin is pinned so the clone and the bounds cannot disagree',
+   /canvasOpts\.x = 0; canvasOpts\.y = 0;/.test(r));
+ok('  including the scroll offsets', /canvasOpts\.scrollX = 0; canvasOpts\.scrollY = 0;/.test(r));
+ok('the page rounds UP to the artwork, never down',
+   /const pageW = Math\.ceil\(wpx \* px2mm\) \+ margin \* 2;/.test(r));
+ok('  and the measured height carries a millimetre for rasterising rounding',
+   /Math\.ceil\(hpx \* px2mm\) \+ margin \* 2 \+ 1/.test(r));
+ok('  nothing rounds the page DOWN any more', !/Math\.round\(wpx \* px2mm\)/.test(r));
+/* Not "the string 296px is absent" — the corrections themselves quote it to explain what was wrong.
+   What must be gone is the two places that ASSERTED it as the receipt's width, because that figure
+   is what convinced A262 the payslip was out of range of its own change. */
+ok('nothing still claims the receipt is 296px wide', !/of a 296px receipt/.test(SRC));
+ok('  nor that 296px sits well inside the container', !/\(296px, well inside/.test(SRC));
+ok('  and the real width is stated where it matters', /_PS_BODY_PX = 400/.test(SRC));
+
 console.log('\n7 · the button still points at it');
 const HTML = fs.readFileSync(path.join(__dirname, '../../dashboard/director-home.html'), 'utf8');
 ok('Export PDF calls exportCutoff for both cutoffs',

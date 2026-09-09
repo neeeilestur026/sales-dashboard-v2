@@ -729,10 +729,13 @@ function _payslipHtml(emp, cutoff) {
      had actually been applied, which is wrong on every special non-working day. Only the lines that
      carry money are printed; a period with no holidays shows a single zero Holiday line exactly as
      it always did, so nothing changes on an ordinary payslip. */
-  /* The label column is nowrap with an ellipsis at 58% of a 296px receipt — about 26 characters at
-     11px Courier. "Regular Holiday (8.0 hrs x2)" overflows it and renders as "Regular Holiday (8.0
-     hr…", which hides the very rate the line exists to state. A compact hour form keeps every label
-     inside the column instead of widening a rule that ~100 filed payslips lay out against. */
+  /* The label column is nowrap with an ellipsis at 58% of the receipt — on the real 400px width that
+     is 210px, about 31 characters at 11px Courier. "Regular Holiday (8.0 hrs x2)" overflows it and
+     renders as "Regular Holiday (8.0 hr…", which hides the very rate the line exists to state. A
+     compact hour form keeps every label inside the column instead of widening a rule that ~100 filed
+     payslips lay out against.
+     (A275 — this said "296px". _PS_BODY_PX has been 400 since it was introduced; the same wrong
+     figure in the render comment below is what made A262 believe payslips were unaffected by it.) */
   const hc = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + 'h';
   /* A275 — one line per agreement, NAMED, with what is still owed underneath.
      A bare "Salary Deduction 2,916.25" is exactly the figure an employee cannot check, and the whole
@@ -854,8 +857,15 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure, opts) {
       const px2mm = 25.4 / 96, margin = 6;
       const wpx = win.document.body.scrollWidth || bodyPx;
       const hpx = win.document.body.scrollHeight || 1000;
-      const pageW = Math.round(wpx * px2mm) + margin * 2;
-      const pageH = singleMeasure ? Math.max(120, Math.round(hpx * px2mm) + margin * 2) : (opts.pageH || 245);
+      /* A275 — CEIL, NOT ROUND, PLUS A MILLIMETRE.
+         Rounding down made the page fractionally SMALLER than the artwork it was sized for, and this
+         page has no other slack — html2pdf then paginates on the overflow. A payslip measured 687px
+         tall, the canvas came back 2061px, html2pdf's page held 2060, and every payslip carried a
+         second page containing a single row of pixels. The 1mm is for that rasterising rounding: the
+         canvas height is not exactly hpx * scale, so matching the page to the CSS height to the
+         nearest millimetre is not close enough. */
+      const pageW = Math.ceil(wpx * px2mm) + margin * 2;
+      const pageH = singleMeasure ? Math.max(120, Math.ceil(hpx * px2mm) + margin * 2 + 1) : (opts.pageH || 245);
       /* A262 — TELL html2canvas HOW BIG THE DOCUMENT IS.
          Left to itself it sizes the capture from html2pdf's own page-derived container, and for a
          document wider than that container it silently captures only part of it: on the live August
@@ -867,12 +877,24 @@ function _renderPayslipPdf(innerHtml, filename, singleMeasure, opts) {
          non-zero because html2pdf MUTATES the body while rendering — reading scrollWidth back
          afterwards returns 0 — and passing a zero here would be worse than passing nothing.
 
-         Payslips are unaffected either way (296px, well inside the container): measured 401x619
-         before and 400x618 after. */
+         Payslips are unaffected either way: measured 401x619 before and 400x618 after.
+
+         A275 — that "unaffected" was wrong, and the measurement above says so: 401x619 -> 400x618 is
+         the clone being re-laid-out, not a no-op. The guard `wpx > 0 && hpx > 0` is always true, so
+         the payslip took this change too, and with x/y left to default it lost its entire 12px left
+         padding and a slice of every left-aligned glyph. The origin is now pinned below. The original
+         note here also called the receipt 296px; _PS_BODY_PX has been 400 since it was introduced,
+         so the "well inside the container" reasoning was never true of the width it describes. */
       const canvasOpts = { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false };
       if (wpx > 0 && hpx > 0) {
         canvasOpts.width = wpx; canvasOpts.height = hpx;
         canvasOpts.windowWidth = wpx; canvasOpts.windowHeight = hpx;
+        /* A275 — PIN THE CAPTURE ORIGIN. Giving html2canvas a width/height without an origin leaves
+           x/y defaulting to the element's measured bounds, which were taken in the real 440px iframe
+           while windowWidth re-lays the clone out at 400px. The two disagree, the capture window
+           lands to the right of the artwork, and the left edge is sliced off. */
+        canvasOpts.x = 0; canvasOpts.y = 0;
+        canvasOpts.scrollX = 0; canvasOpts.scrollY = 0;
       }
       win.html2pdf().set({
         margin: margin, filename,
