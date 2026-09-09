@@ -56,6 +56,7 @@ this.__t = {
   setDeductions: (list) => { _deductions = list; },
   setPeriod: (y, m) => { _currentYear = y; _currentMonth = m; },
   payslip: (emp, cutoff) => _payslipHtml(emp, cutoff),
+  payslipCss: () => _PAYSLIP_CSS,
   deductions: (emp, cutoff) => _payDeductions(emp, cutoff),
   render: () => renderSalaryDeductions(),
   loadPeriod: () => loadPeriod(),
@@ -252,6 +253,22 @@ section('3 · the payslip names what the money went to');
   t.setRegister('A', { 'Lucena, Gerald': { pagibig: 0, sss: 0, philhealth: 0, advances: 0, wtax: 0,
     salaryDeductionStored: 0, salaryDeductionLines: [] } });
   has('with no deduction the line still prints at zero, like every other', t.payslip(EMP, 'A'), 'Salary Deduction');
+
+  /* THE SUB-LINE MUST NOT BE A .l CELL. `.ps-t td.l` is white-space:nowrap + overflow:hidden inside a
+     table-layout:fixed table, so on the 400px receipt it cut the sentence dead at about 37 characters
+     — the shipped payslip read "ASUS VIVOBOOK 15 · P47,911.87 left of" and simply stopped. It has to
+     span both columns and wrap. */
+  t.setRegister('A', { 'Lucena, Gerald': { pagibig: 0, sss: 0, philhealth: 0, advances: 0, wtax: 0,
+    salaryDeductionStored: 2083.13, salaryDeductionLines: [{ deductionNo: 'D1',
+      item: 'LENOVO MT 82XQ IDEAPADSLIM 3 15IAH8 i5-12450H 16GB 512GB SSD',
+      amount: 2083.13, remainingBefore: 50000, totalAmount: 250000 }] } });
+  const wide = t.payslip(EMP, 'A');
+  has('the sub-line spans both columns', wide, 'colspan="2"');
+  has('  in a wrapping cell of its own', wide, 'class="ps-note"');
+  ok('  and never in the clipping .l cell',
+     wide.indexOf('class="l" style="padding-left') === -1);
+  has('  so the whole sentence survives a long product name', wide, 'left of ₱250,000.00');
+  has('the stylesheet lets that cell wrap', t.payslipCss(), 'td.ps-note { white-space:normal');
 }
 
 // ─────────────────────────────────────────────────────────────

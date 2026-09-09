@@ -667,6 +667,10 @@ const _PAYSLIP_CSS = `
 .payslip .ps-t { width:100%; border-collapse:collapse; table-layout:fixed; }
 .payslip .ps-t td { padding:1px 0; font-size:11px; vertical-align:top; }
 .payslip .ps-t td.l { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px; }
+/* A275 — the deduction's sub-line. It CANNOT be a .l cell: that is nowrap + overflow:hidden inside a
+   table-layout:fixed table, so on a 400px receipt it silently cut the sentence at about 37 characters
+   — "ASUS VIVOBOOK 15 · P47,911.87 left of" and then nothing. This spans both columns and wraps. */
+.payslip .ps-t td.ps-note { white-space:normal; word-break:break-word; padding:0 0 2px 10px; font-size:9px; line-height:1.35; color:#333; }
 .payslip .ps-t td.r { width:42%; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .payslip .ps-t tr.sub td { font-weight:800; }
 .payslip .ps-net-t td { font-weight:800; font-size:14px; padding:3px 0; }
@@ -739,9 +743,8 @@ function _payslipHtml(emp, cutoff) {
     ? s.salaryDeductionLines.map(l => {
         const left = (l.remainingBefore || 0) - (l.amount || 0);
         const sub = (l.totalAmount)
-          ? `<tr><td class="l" style="padding-left:10px;font-size:0.86em;opacity:0.75;">${
-               esc(l.item || 'Salary deduction')} &middot; ${peso(left)} left of ${peso(l.totalAmount)}</td>
-             <td class="r"></td></tr>`
+          ? `<tr><td class="ps-note" colspan="2">${esc(l.item || 'Salary deduction')} &middot; ${
+               peso(left)} left of ${peso(l.totalAmount)}</td></tr>`
           : '';
         return money('Salary Deduction', l.amount) + sub;
       }).join('')
