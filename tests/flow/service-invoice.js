@@ -154,5 +154,44 @@ section('6 · the trial balance can actually see the new accounts');
   eq('  and the deposit its own', find('2100').creditBalance, 20000);
 }
 
+// ─────────────────────────────────────────────────────────────
+section('7 · the type survives the whole chain');
+{
+  /* The gap this closes: the columns were being WRITTEN and never READ BACK, so the browser could not
+     tell a hire from a sale, the builder could not open in the right mode, and an order made from a
+     service quotation silently became a supply order — which is the one mistake that ends with the
+     invoice destroying the tool's stock. */
+  const store = {
+    Quotations: [{ 'Quotation No': 'Q1', 'Customer': 'ACME', 'Type': 'Service', 'Service Kind': 'Rental' }],
+    QuotationItems: [{ 'Quotation No': 'Q1', 'Item Name': 'RENTAL', 'Quoted Qty': 7,
+                       'Quoted Price': 8500, 'UOM': 'DAYS', 'Charge Kind': 'Rental',
+                       'Rate Basis': 'Day', 'Duration': 7 }],
+    SalesOrders: [], SalesOrderItems: [], Clients: [], Shipments: [], Documents: [], ActivityLog: [],
+    Inventory: [], Invoices: [], InvoiceItems: [], ARAging: [], Journal: []
+  };
+  const ctx = load(undefined, store);
+
+  const q = (call(ctx, 'getQuotations', {}).data || [])[0] || {};
+  eq('the quotation reads back as a service', q.type, 'Service');
+  eq('  with its kind', q.serviceKind, 'Rental');
+  eq('  and the line keeps its basis', q.items[0].rateBasis, 'Day');
+  eq('  and its duration', q.items[0].duration, 7);
+
+  // No type passed — the order must take it from the quotation rather than silently becoming a sale.
+  const so = call(ctx, 'createSalesOrder', { customer: 'ACME', quotationNo: 'Q1', createdBy: 'me',
+    items: JSON.stringify([{ itemName: 'RENTAL', qty: 7, price: 8500,
+                             chargeKind: 'Rental', rateBasis: 'Day', duration: 7 }]) });
+  ok('the order is created', so.success === true, so);
+  const soRow = (call(ctx, 'getSalesOrders', {}).data || [])[0] || {};
+  eq('it INHERITED the type without being told', soRow.type, 'Service');
+  eq('  and the line kept its charge kind', soRow.items[0].chargeKind, 'Rental');
+
+  const inv = call(ctx, 'createInvoice', { customer: 'ACME', soNo: soRow.soNo, confirmNoDocs: true,
+    items: JSON.stringify([{ itemName: 'RENTAL', qty: 7, price: 8500 }]) });
+  ok('and the invoice bills it as a service', inv.success === true, inv);
+  eq('  crediting service revenue', jsum(store, '4100', 'cr'), 59500);
+  eq('  with no COGS', jsum(store, '5000', 'dr'), 0);
+}
+
 console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ok'));
 process.exit(FAIL ? 1 : 0);

@@ -113,6 +113,24 @@ var SCHEMA = {
   SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date', 'Client PO No', 'Type', 'Service Kind'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID', 'Charge Kind', 'Rate Basis', 'Duration'],
 
+  /* ── A276 — THE HIRE REGISTER: which tool is with which client, and when it is due back ────────
+     Two sheets because a hire is one agreement covering N physically separate tools, and it is the
+     TOOL that goes overdue, not the agreement. One row per unit is what lets a client return three
+     of four wrenches and still be chased for the fourth.
+
+     This is deliberately NOT in Inventory. That sheet's Type is 'Stock' or 'Catalog' and both mean
+     goods held for resale; a hire fleet is a third thing. More to the point Inventory is one row per
+     item number carrying a single fungible balance, and a fleet is N individually identified units —
+     'the one with the cracked housing' is a fact about a unit, not about a quantity.
+
+     'Status' on a unit is Out | Returned | Lost. OVERDUE IS NOT STORED: it is Due Date < today and
+     not yet returned, derived on every read. A stored overdue flag is wrong the morning after it is
+     written and nothing comes along to correct it. */
+  Hires:     ['Hire No', 'SO No', 'Quotation No', 'Customer', 'Start Date', 'Due Date', 'Status',
+              'Deposit Held', 'Created By', 'Created At', 'Closed By', 'Closed At', 'Notes'],
+  HireUnits: ['Hire No', 'Line', 'Item Name', 'Qty', 'Asset Ref', 'Out Date', 'Due Date',
+              'Returned Date', 'Condition', 'Status', 'Notes'],
+
   //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
   /* A222: 'Total (PHP) Est' and 'FX Basis' appended at the END (house convention).
      The peso total has ALWAYS been typed at PO time — a foreign PO is refused without it — and has
@@ -582,6 +600,11 @@ function _json(obj) {
    Enforcement is OFF until the FLOW_MUTATION_SECRET Script Property is set, so this version can be
    pasted safely before the server side is confirmed live — set the property to switch it on. */
 var _SECURED = {
+  /* A276 — a hire decides physical custody of a tool and the fate of a refundable deposit, both of
+     which answer to WHO is asking. Dispatching a wrench and declaring one returned are statements
+     about company property; unsecured, the browser names the actor and the register records whatever
+     it was told. Reads stay open: getHires exposes no more than the flow pages already do. */
+  createHire: 1, dispatchHireUnit: 1, returnHireUnit: 1, closeHire: 1,
   approveQuotation: 1, rejectQuotation: 1, approvePO: 1, rejectPO: 1,
   approvePaymentRequest: 1, rejectPaymentRequest: 1, markPaymentRequestPaid: 1,
   /* A225 — raising and editing a PO payment request now decide something, so identity must stop
@@ -1231,12 +1254,18 @@ function getQuotations(p) {
       sentAtBasis: String(q['Sent At Basis'] || ''),
       snoozeUntil: q['Snooze Until'] || '', snoozeReason: String(q['Snooze Reason'] || ''),
       rowIndex: q.rowIndex,
+      /* A276 — without these the browser cannot tell a hire from a sale, so the builder could not
+         open in the right mode and the PDF route could not choose the right document. Writing the
+         columns without reading them back left the feature half-wired. */
+      type: String(q['Type'] || '').trim(), serviceKind: String(q['Service Kind'] || '').trim(),
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
         origItemNo: r['Orig Item No'] || '', origItemName: r['Orig Item Name'] || '',
         vat: r['Supplier VAT'] || '', uom: r['UOM'] || '', lineKey: r['Line Key'] || '',
-        optionNo: String(r['Option No'] || '').trim() }; })   // A205
+        optionNo: String(r['Option No'] || '').trim(),   // A205
+        chargeKind: String(r['Charge Kind'] || '').trim(), rateBasis: String(r['Rate Basis'] || '').trim(),
+        duration: _num(r['Duration']) }; })              // A276
     };
   }) };
 }
@@ -1669,9 +1698,13 @@ function getSalesOrders() {
       supplierType: s['Supplier Type'] || '', rowIndex: s.rowIndex,
       clientPoDate: s['Client PO Date'] || '', poReceivedDate: s['PO Received Date'] || '',   // A186
       clientPoNo: s['Client PO No'] || '',                                                    // A193
+      // A276 — the order's own type, which is what createInvoice reads to know a hire from a sale.
+      type: String(s['Type'] || '').trim(), serviceKind: String(s['Service Kind'] || '').trim(),
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
-        price: _num(r['Price/Unit']), total: _num(r['Total Price']) }; })
+        price: _num(r['Price/Unit']), total: _num(r['Total Price']),
+        chargeKind: String(r['Charge Kind'] || '').trim(), rateBasis: String(r['Rate Basis'] || '').trim(),
+        duration: _num(r['Duration']) }; })              // A276
     };
   }) };
 }
@@ -1690,14 +1723,17 @@ function createSalesOrder(p) {
   var no = p.soNo || _nextNumber('SalesOrders', 1, 'SO');
   var total = 0;
   items.forEach(function (it) { total += _num(it.qty) * _num(it.price); });
+  var _soType = _orderTypeFrom(p);
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
     total, p.createdBy || '', _now(), p.supplierType || '',
     p.clientPoDate || '', p.poReceivedDate || '',     // A186
     p.clientPoNo || '',                               // A193
     /* A276 — Type · Service Kind carried down from the quotation. This is what createInvoice reads
        to know a hire from a sale, so an order that loses it bills a rental as goods and destroys the
-       tool's stock. Blank is Supply, which is every order made before A276. */
-    String(p.quoteType || p.type || '').trim(), String(p.serviceKind || '').trim()]);
+       tool's stock. Blank is Supply, which is every order made before A276.
+       READ FROM THE QUOTATION when the caller did not say: the type is a fact about the deal that was
+       quoted, and making the browser remember to resend it is how an order silently becomes a sale. */
+    _soType.type, _soType.kind]);
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || '',   // A159 Item ID
@@ -4046,6 +4082,23 @@ function _addTermDays(date, terms) {
 var _SERVICE_CHARGE_KINDS = { 'rental': 1, 'hire': 1, 'mobilization': 1, 'demobilization': 1,
                               'operator': 1, 'technician': 1, 'consumable': 1, 'service': 1,
                               'labor': 1, 'labour': 1 };
+
+/* A276 — an order's type: what the caller said, or failing that what the quotation it came from
+   says. The quotation is the deal that was agreed, so it is the better authority than a browser
+   that may simply have forgotten to pass the field on. */
+function _orderTypeFrom(p) {
+  var t = String((p && (p.quoteType || p.type)) || '').trim();
+  var k = String((p && p.serviceKind) || '').trim();
+  if (t) return { type: t, kind: k };
+  var qNo = String((p && p.quotationNo) || '').trim();
+  if (!qNo) return { type: '', kind: '' };
+  try {
+    var q = _rows('Quotations').filter(function (r) {
+      return String(r['Quotation No']).trim() === qNo; })[0];
+    if (!q) return { type: '', kind: '' };
+    return { type: String(q['Type'] || '').trim(), kind: k || String(q['Service Kind'] || '').trim() };
+  } catch (e) { return { type: '', kind: '' }; }
+}
 
 /** True when the sales order behind an invoice is a service order. Blank/unknown SO -> false. */
 function _soIsService(soNo) {
@@ -11373,6 +11426,8 @@ function getTravelReceipts(p) {
 //  ACTIVITY LOG  (auto-logs every mutation → Accounting Daily Report)
 // ════════════════════════════════════════════════════════════════════════════
 var _MODULE_MAP = {
+  createHire: ['Hire', 'Opened'], dispatchHireUnit: ['Hire', 'Dispatched'],
+  returnHireUnit: ['Hire', 'Returned'], closeHire: ['Hire', 'Closed'],
   saveSupplier: ['Supplier', 'Saved'], deleteSupplier: ['Supplier', 'Removed'],
   saveClient: ['Client', 'Saved'], deleteClient: ['Client', 'Removed'],
   addInventoryItem: ['Inventory', 'Added'], updateInventoryItem: ['Inventory', 'Updated'], deleteInventoryItem: ['Inventory', 'Deleted'],
@@ -12768,6 +12823,266 @@ function deleteClient(p) {
   return { success: true, customer: String(p.customer || ''), message: 'Client "' + String(p.customer || '') + '" removed.' };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   A276 — THE HIRE REGISTER. What is out, with whom, and when it is due back.
+
+   A hire is one agreement over N physically separate tools, and it is the TOOL that goes overdue,
+   not the agreement — so HireUnits carries one row per unit and a client can return three of four
+   wrenches while still being chased for the fourth.
+
+   OVERDUE IS DERIVED, NEVER STORED. `Due Date < today and not yet returned`, computed on every read.
+   A stored overdue flag is wrong the morning after it is written and nothing ever comes to correct
+   it; the same rule the salary deduction had to learn about a stored 'Completed'.
+
+   THE HIRE'S OWN STATUS IS ALSO DERIVED from its units — Reserved before anything goes out, On Hire
+   while any unit is, Returned once all are back, and Closed only when someone deliberately closes it
+   (which is the point at which the deposit is dealt with). Two places recording the same fact is how
+   they come to disagree.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+var _HIRE_UNIT_STATUSES = { 'Out': 1, 'Returned': 1, 'Lost': 1 };
+
+/* Column number for a header, derived from SCHEMA rather than counted by hand. Hard-coded positions
+   are what the width trap punishes: append a column and every literal after it writes to the wrong
+   place, silently. */
+function _hireCol(sheet, header) { return SCHEMA[sheet].indexOf(header) + 1; }
+
+/** A count of tools: a whole number, at least one. Nonsense becomes one rather than being invented. */
+function _hireQty(v) {
+  var n = Math.floor(_num(v));
+  return n > 0 ? n : 1;
+}
+
+/** YYYY-MM-DD for comparison. Dates arrive as strings from the sheet and Dates from _now(). */
+function _hireDay(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var s = String(v).trim();
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[0];
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function _hireToday() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/** Due back = out date + the hire period, reusing the same helper AR uses for payment terms. */
+function _hireDueDate(startDate, periodText) {
+  var d = _addTermDays(startDate || _now(), periodText);
+  return d ? _hireDay(d) : '';
+}
+
+function _hireUnitsFor(hireNo) {
+  return _rows('HireUnits').filter(function (r) {
+    return String(r['Hire No']).trim() === String(hireNo).trim(); });
+}
+
+/** One unit, with `overdue` and `daysOverdue` worked out rather than read. */
+function _hireUnitOut(r, today) {
+  var due = _hireDay(r['Due Date']);
+  var returned = _hireDay(r['Returned Date']);
+  var status = String(r['Status'] || '').trim() || 'Reserved';
+  var overdue = (status === 'Out') && !!due && !returned && due < today;
+  var days = 0;
+  if (overdue) {
+    days = Math.round((new Date(today).getTime() - new Date(due).getTime()) / 86400000);
+    if (!(days > 0)) days = 0;
+  }
+  return { hireNo: String(r['Hire No'] || ''), line: _num(r['Line']),
+           itemName: String(r['Item Name'] || ''), qty: _num(r['Qty']),
+           assetRef: String(r['Asset Ref'] || ''), outDate: _hireDay(r['Out Date']),
+           dueDate: due, returnedDate: returned,
+           condition: String(r['Condition'] || ''), status: status,
+           notes: String(r['Notes'] || ''), overdue: overdue, daysOverdue: days };
+}
+
+/** Reserved | On Hire | Returned | Closed — derived from the units, never from a stored field. */
+function _hireDerivedStatus(stored, units) {
+  if (String(stored || '').trim() === 'Closed') return 'Closed';
+  if (String(stored || '').trim() === 'Cancelled') return 'Cancelled';
+  if (!units.length) return 'Reserved';
+  var anyOut = units.some(function (u) { return u.status === 'Out'; });
+  if (anyOut) return 'On Hire';
+  var anyMoved = units.some(function (u) { return u.outDate; });
+  return anyMoved ? 'Returned' : 'Reserved';
+}
+
+function getHires(p) {
+  try {
+    var today = _hireToday();
+    var wantNo = String((p && p.hireNo) || '').trim();
+    var wantStatus = String((p && p.status) || '').trim();
+    var byHire = {};
+    _rows('HireUnits').forEach(function (r) {
+      var k = String(r['Hire No'] || '').trim();
+      if (!k) return;
+      (byHire[k] = byHire[k] || []).push(_hireUnitOut(r, today));
+    });
+    var out = _rows('Hires').map(function (r) {
+      var no = String(r['Hire No'] || '');
+      var units = (byHire[no] || []).sort(function (a, b) { return a.line - b.line; });
+      var status = _hireDerivedStatus(r['Status'], units);
+      var overdue = units.filter(function (u) { return u.overdue; });
+      return { hireNo: no, soNo: String(r['SO No'] || ''), quotationNo: String(r['Quotation No'] || ''),
+               customer: String(r['Customer'] || ''), startDate: _hireDay(r['Start Date']),
+               dueDate: _hireDay(r['Due Date']), status: status, storedStatus: String(r['Status'] || ''),
+               depositHeld: _num(r['Deposit Held']), createdBy: String(r['Created By'] || ''),
+               createdAt: String(r['Created At'] || ''), closedBy: String(r['Closed By'] || ''),
+               closedAt: String(r['Closed At'] || ''), notes: String(r['Notes'] || ''),
+               units: units, unitCount: units.length,
+               outCount: units.filter(function (u) { return u.status === 'Out'; }).length,
+               overdueCount: overdue.length,
+               maxDaysOverdue: overdue.reduce(function (a, u) { return Math.max(a, u.daysOverdue); }, 0) };
+    }).filter(function (h) {
+      if (wantNo && h.hireNo !== wantNo) return false;
+      if (wantStatus && h.status !== wantStatus) return false;
+      return true;
+    });
+    return { success: true, data: out, today: today };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Open a hire against a sales order. The units are the tools themselves — one row each, so they can
+   come back separately. Nothing is "out" yet: that is dispatchHireUnit's job, because the date a tool
+   physically leaves is not the date somebody typed the agreement. */
+function createHire(p) {
+  try {
+    var soNo = String((p && p.soNo) || '').trim();
+    var customer = String((p && p.customer) || '').trim();
+    var units = [];
+    /* Anything that is not an ARRAY of tools is no tools. `JSON.parse('null')` succeeds and returns
+       null, so the length check below used to throw and the caller saw "Cannot read properties of
+       null" — an internal error message in front of a user, for an input we already know how to
+       refuse politely. */
+    try {
+      var parsed = JSON.parse((p && p.units) || '[]');
+      units = Array.isArray(parsed) ? parsed : [];
+    } catch (e) { units = []; }
+    if (!customer) return { success: false, message: 'Customer is required.' };
+    if (!units.length) return { success: false, message: 'A hire needs at least one tool.' };
+    var unnamed = units.filter(function (u) {
+      return !String((u && u.itemName) || '').trim(); }).length;
+    if (unnamed) return { success: false, message: unnamed + ' tool(s) have no name.' };
+
+    var start = _hireDay(p.startDate) || _hireToday();
+    var period = String((p && p.hirePeriod) || '').trim();
+    var due = _hireDay(p.dueDate) || _hireDueDate(start, period);
+    if (due && due < start) {
+      return { success: false, message: 'The due date is before the hire starts.' };
+    }
+    var no = _nextNumber('Hires', 1, 'HIRE');
+    _append('Hires', [no, soNo, String((p && p.quotationNo) || ''), customer, start, due,
+      'Reserved', _num(p.depositHeld) || 0, String((p && p.actorName) || p.createdBy || ''),
+      _now(), '', '', String((p && p.notes) || '')]);
+    units.forEach(function (u, i) {
+      /* Status is BLANK, not 'Out'. Opening a hire is paperwork; the tool is still on the shelf until
+         dispatchHireUnit says it left. Writing 'Out' here made a brand-new hire report On Hire with
+         nothing having moved, and would have started an overdue clock on a wrench still in the rack. */
+      /* A COUNT OF TOOLS IS A WHOLE POSITIVE NUMBER. `_num(u.qty) || 1` turned 0 into 1 but let -4
+         through untouched, so a hire could be opened for minus four wrenches — and minus four
+         wrenches can never be returned, which would leave the hire permanently un-closable. */
+      _append('HireUnits', [no, i + 1, String(u.itemName || ''), _hireQty(u.qty),
+        String(u.assetRef || ''), '', due, '', '', '', String(u.notes || '')]);
+    });
+    return { success: true, hireNo: no, message: 'Hire ' + no + ' opened with ' + units.length + ' tool(s).' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/** The tool physically leaves. Stamps the out date and re-bases the due date on it. */
+function dispatchHireUnit(p) {
+  try {
+    var hireNo = String((p && p.hireNo) || '').trim();
+    var line = _num(p && p.line);
+    if (!hireNo || !(line > 0)) return { success: false, message: 'hireNo and line are required.' };
+    var sh = _sheet('HireUnits');
+    var rows = _rows('HireUnits');
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i]['Hire No']).trim() !== hireNo || _num(rows[i]['Line']) !== line) continue;
+      if (_hireDay(rows[i]['Returned Date'])) {
+        return { success: false, message: 'That tool has already come back.' };
+      }
+      var out = _hireDay(p.outDate) || _hireToday();
+      var due = _hireDay(p.dueDate);
+      if (!due) {
+        /* The clock starts when the tool LEAVES, not when the paperwork was typed — a hire agreed on
+           Monday and collected on Thursday is not three days used up. */
+        var hire = _rows('Hires').filter(function (r) {
+          return String(r['Hire No']).trim() === hireNo; })[0];
+        var period = String((p && p.hirePeriod) || '').trim();
+        due = period ? _hireDueDate(out, period) : _hireDay(hire && hire['Due Date']);
+      }
+      var r = rows[i].rowIndex;
+      var cOut = _hireCol('HireUnits', 'Out Date');
+      sh.getRange(r, cOut, 1, 2).setValues([[out, due || _hireDay(rows[i]['Due Date'])]]);
+      sh.getRange(r, _hireCol('HireUnits', 'Status'), 1, 1).setValues([['Out']]);
+      return { success: true, message: 'Dispatched ' + out + (due ? ', due back ' + due : '') + '.' };
+    }
+    return { success: false, message: 'Line ' + line + ' of ' + hireNo + ' not found.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* The tool comes back. Condition is recorded here rather than inferred, because it is what decides
+   whether the deposit is returned in full — and a note written weeks later is not evidence. */
+function returnHireUnit(p) {
+  try {
+    var hireNo = String((p && p.hireNo) || '').trim();
+    var line = _num(p && p.line);
+    if (!hireNo || !(line > 0)) return { success: false, message: 'hireNo and line are required.' };
+    var status = String((p && p.status) || 'Returned').trim();
+    if (status !== 'Returned' && status !== 'Lost') {
+      return { success: false, message: 'A tool comes back Returned or it is Lost.' };
+    }
+    var sh = _sheet('HireUnits');
+    var rows = _rows('HireUnits');
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i]['Hire No']).trim() !== hireNo || _num(rows[i]['Line']) !== line) continue;
+      if (_hireDay(rows[i]['Returned Date']) && !p.confirmReturnAgain) {
+        return { success: false, needsConfirm: 'alreadyReturned',
+          message: 'That tool was already marked back on ' + _hireDay(rows[i]['Returned Date']) +
+                   '. Confirm to overwrite.' };
+      }
+      var r = rows[i].rowIndex;
+      /* A LOST tool has no return date. Stamping one would make it look like it came back, and the
+         derived status would read the hire as finished with a tool still missing.
+         Returned Date · Condition · Status · Notes are contiguous, so this is ONE write. */
+      var when = status === 'Lost' ? '' : (_hireDay(p.returnedDate) || _hireToday());
+      var notes = p.notes !== undefined ? String(p.notes) : String(rows[i]['Notes'] || '');
+      sh.getRange(r, _hireCol('HireUnits', 'Returned Date'), 1, 4)
+        .setValues([[when, String((p && p.condition) || ''), status, notes]]);
+      return { success: true, message: status === 'Lost' ? 'Marked lost.' : 'Marked returned.' };
+    }
+    return { success: false, message: 'Line ' + line + ' of ' + hireNo + ' not found.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Close a hire. This is the moment the deposit is settled, so it refuses while any tool is still out
+   — closing over a missing wrench is exactly how a deposit gets refunded for a tool nobody has. */
+function closeHire(p) {
+  try {
+    var hireNo = String((p && p.hireNo) || '').trim();
+    if (!hireNo) return { success: false, message: 'hireNo is required.' };
+    var hire = _rows('Hires').filter(function (r) {
+      return String(r['Hire No']).trim() === hireNo; })[0];
+    if (!hire) return { success: false, message: hireNo + ' not found.' };
+    var units = _hireUnitsFor(hireNo).map(function (r) { return _hireUnitOut(r, _hireToday()); });
+    var still = units.filter(function (u) { return u.status === 'Out'; });
+    if (still.length && !p.confirmOpenUnits) {
+      return { success: false, needsConfirm: 'unitsStillOut',
+        message: still.length + ' tool(s) still out: ' +
+          still.map(function (u) { return u.itemName + (u.assetRef ? ' (' + u.assetRef + ')' : ''); }).join('; ') +
+          '. Mark them returned or lost first, or confirm to close anyway.' };
+    }
+    _setCellByKey('Hires', 'Hire No', hireNo, 'Status', 'Closed');
+    _setCellByKey('Hires', 'Hire No', hireNo, 'Closed By', String((p && p.actorName) || ''));
+    _setCellByKey('Hires', 'Hire No', hireNo, 'Closed At', _now());
+    if (p.notes !== undefined) _setCellByKey('Hires', 'Hire No', hireNo, 'Notes', String(p.notes));
+    return { success: true, message: 'Hire ' + hireNo + ' closed.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+
 var HANDLERS = {
   getVersion: getVersion,
   getSuppliers: getSuppliers, saveSupplier: saveSupplier, deleteSupplier: deleteSupplier,
@@ -12892,11 +13207,17 @@ var HANDLERS = {
   previewDriveMigrationReport: previewDriveMigrationReport, setupFlowDrive: setupFlowDrive,
   buildDriveSkeletonAll: buildDriveSkeletonAll, runDriveMigrationAll: runDriveMigrationAll,
   verifyDriveIntegrity: verifyDriveIntegrity,
-  cleanupLegacyFolders: cleanupLegacyFolders, cleanupLegacyFoldersApply: cleanupLegacyFoldersApply
+  cleanupLegacyFolders: cleanupLegacyFolders, cleanupLegacyFoldersApply: cleanupLegacyFoldersApply,
+  // A276 — the hire register
+  getHires: getHires, createHire: createHire, dispatchHireUnit: dispatchHireUnit,
+  returnHireUnit: returnHireUnit, closeHire: closeHire
 };
 
 // Actions that mutate the sheets (run under a script lock).
 var MUTATIONS = {
+  // A276 — every hire write. The lock matters here for the same reason A243 gives: these read a row,
+  // decide from it and write back, so two dispatches racing on one unit would both read 'not out'.
+  createHire: 1, dispatchHireUnit: 1, returnHireUnit: 1, closeHire: 1,
   addInventoryItem: 1, updateInventoryItem: 1, deleteInventoryItem: 1,
   importInventory: 1, classifyInventory: 1,
   createQuotation: 1, updateQuotation: 1, deleteQuotation: 1, reorderQuotationItems: 1,

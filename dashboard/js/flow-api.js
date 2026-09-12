@@ -124,6 +124,10 @@ function _flowIdempotentAction(action) {
    ever advisory: the browser could claim any role it liked. Keep this list in step with SECURED_ACTIONS
    in blueprints/flow.py and _SECURED in FlowAPI.gs. */
 const FLOW_SECURED_ACTIONS = [
+  // A276 — the hire register. Drift between this list and the other two fails CLOSED: the
+  // browser posts direct, the server refuses for want of a flowSecret, and the feature is
+  // silently dead — which is exactly what happened to runQuotationOwnerBackfill in A218.
+  'createHire', 'dispatchHireUnit', 'returnHireUnit', 'closeHire',
   'approveQuotation', 'rejectQuotation', 'approvePO', 'rejectPO',
   'approvePaymentRequest', 'rejectPaymentRequest', 'markPaymentRequestPaid',
   // A225 — admin/accounting only, enforced server-side, so identity comes from the session.
