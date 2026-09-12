@@ -222,7 +222,11 @@ console.log('\n== the money-bearing widths ==');
 [['CommissionRequests', 42, 'decides what a person is paid'],
  ['SOCostDetails', 18, 'the gross-profit record; saveSOCostDetails is a FULL-ROW overwrite'],
  ['DailyReports', 24, 'no test mentioned this sheet at all before A243'],
- ['Quotations', 27, 'A218 appended Salesperson'],
+ ['Quotations', 29, 'A276 appended Type + Service Kind'],
+ ['SalesOrders', 14, 'A276 appended Type + Service Kind — createInvoice reads Type to know a hire from a sale'],
+ ['SalesOrderItems', 10, 'A276 appended Charge Kind + Rate Basis + Duration'],
+ ['QuotationItems', 16, 'A276 appended Charge Kind + Rate Basis + Duration'],
+ ['Invoices', 11, 'A276 appended Total Deposit — refundable, deliberately outside Total Sales'],
  ['PricingRequestItems', 19, 'A242 appended Quoted On'],
  ['PaymentRequests', 41, ''], ['PurchaseOrders', 17, ''], ['APAging', 13, ''],
  ['Expenses', 17, ''], ['Shipments', 16, ''], ['QuotationEmails', 18, ''], ['WeeklyItineraries', 16, '']]

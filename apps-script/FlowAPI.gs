@@ -74,7 +74,14 @@ var SCHEMA = {
                    // throws that segment away. Read it through _quoOwner, never directly: blank on
                    // every legacy row until the backfill runs, and _quoOwner falls back to the
                    // initials and then to 'Created By'.
-                   'Salesperson'],
+                   'Salesperson',
+                   /* A276 — WHICH DOCUMENT THIS IS. Blank or 'Supply' is the sale of goods, which is
+                      every one of the ~102 existing rows; 'Service' is the hire of a tool or work
+                      done, and is what makes the renderer print SERVICE QUOTATION with a duration
+                      and a rate instead of a qty and a unit price. 'Service Kind' narrows it —
+                      'Rental' today, with repair and calibration to come. Blank-is-supply is
+                      deliberate: it means no migration and no risk to a single live record. */
+                   'Type', 'Service Kind'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   //    A172: 'Line Key' is a per-line id that survives reordering. Row position can't identify a line
   //    once lines move, and Item ID isn't unique when a quote carries two lines of the same product —
@@ -83,9 +90,15 @@ var SCHEMA = {
   //    MUTUALLY EXCLUSIVE group — the client picks one option, so those lines are NEVER summed
   //    together. See _quotationTotal below; getting this wrong overstates the deal by the value of
   //    every option the client will not buy.
+  /* A276 — the last three are the hire shape. A supply line leaves all three blank and behaves
+     exactly as it always has, which is what lets ~102 live quotations carry on untouched.
+       Charge Kind  Rental | Mobilization | Operator | Consumable | Deposit   (blank = a supply line)
+       Rate Basis   Day | Week | Month                (meaningful on Rental and Operator)
+       Duration     how many of those units
+     A hire has TWO multipliers where a sale has one: how many tools, and for how long. */
   QuotationItems: ['Quotation No', 'Item No', 'Item Name', 'Quoted Qty', 'Quoted Price', 'Line Total',
                    'Orig Item No', 'Orig Item Name', 'Supplier VAT', 'UOM', 'Item ID', 'Line Key',
-                   'Option No'],
+                   'Option No', 'Charge Kind', 'Rate Basis', 'Duration'],
 
   // A186: 'Client PO Date' is the date printed on the customer's own PO; 'PO Received Date' is when
   // it actually reached us. They routinely differ by days, and only the second one is ours to know.
@@ -95,8 +108,10 @@ var SCHEMA = {
   //    client's PO number (A145 — the rep types it in), so this stays blank and the Drive folder is
   //    named from SO No alone. Fill it only when the two genuinely differ, e.g. on a system-generated
   //    SO-YYYYMM-NNN whose client PO arrived later.
-  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date', 'Client PO No'],
-  SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID'],
+  //    A276: 'Type' is 'Service' for the hire of a tool, blank or 'Supply' for the sale of goods.
+  //    It is what stops createInvoice destroying stock for a rental — see _invLineKind there.
+  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date', 'Client PO No', 'Type', 'Service Kind'],
+  SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID', 'Charge Kind', 'Rate Basis', 'Duration'],
 
   //    A145: 'Exchange Rate' persists the FX rate used for the PHP estimate (was sent then dropped).
   /* A222: 'Total (PHP) Est' and 'FX Basis' appended at the END (house convention).
@@ -122,8 +137,11 @@ var SCHEMA = {
 
   // A158: 'Voided'/'Void Reason' appended at the END — a mis-issued invoice had no reversal at all,
   // so the only fix was editing the sheet by hand. Voided rows are excluded from getInvoices by default.
+  //    A276: 'Total Deposit' is refundable money held, NOT revenue — 'Total Sales' deliberately
+  //    excludes it so management reporting, which reads that column rather than the ledger, cannot
+  //    count a deposit as income. Appended at the END; every legacy row reads it as blank -> 0.
   Invoices:     ['INV No', 'SO No', 'Date', 'Customer', 'Total Sales', 'Total COGS', 'Created By', 'Created At',
-                 'Voided', 'Void Reason'],
+                 'Voided', 'Void Reason', 'Total Deposit'],
   InvoiceItems: ['INV No', 'Item No', 'Item Name', 'Qty', 'Selling Price', 'Line Sales', 'Landed Cost/Unit', 'Line COGS',
                  'Item ID'],
 
@@ -418,9 +436,18 @@ var COA = [
   ['1600', 'Creditable Withholding Tax', 'Asset', 'Debit'],
   ['2010', 'Accounts Payable', 'Liability', 'Credit'],
   ['4000', 'Sales', 'Revenue', 'Credit'],
+  /* A276 — hiring a tool out is not selling one, and a refundable deposit is not income at all.
+     BOTH HAVE TO BE LISTED HERE, not merely posted to: getTrialBalance sums the WHOLE Journal into
+     `sums` and then emits `COA.map(...)`, so a line posted to a code this array does not contain is
+     counted and then silently thrown away — the trial balance still foots while omitting real money.
+     2100 is a LIABILITY: the deposit is the client's money, held against loss or damage and given
+     back when the tool returns in condition. Crediting it to Sales would overstate revenue on every
+     hire and understate it again on refund. */
+  ['2100', 'Customer Deposits', 'Liability', 'Credit'],
+  ['4100', 'Service Revenue', 'Revenue', 'Credit'],
   ['5000', 'Cost of Goods Sold', 'Expense', 'Debit']
 ];
-var ACC = { CASH: '1010', AR: '1200', INV: '1300', CLEARING: '1400', INPUT_VAT: '1500', CWT: '1600', AP: '2010', SALES: '4000', COGS: '5000' };
+var ACC = { CASH: '1010', AR: '1200', INV: '1300', CLEARING: '1400', INPUT_VAT: '1500', CWT: '1600', AP: '2010', SALES: '4000', COGS: '5000', DEPOSITS: '2100', SERVICE: '4100' };
 function _accName(code) { for (var i = 0; i < COA.length; i++) if (COA[i][0] === code) return COA[i][1]; return code; }
 
 // ── Spreadsheet / sheet helpers ──────────────────────────────────────────────
@@ -1392,7 +1419,10 @@ function createQuotation(p) {
     /* A218 Salesperson — WHOSE deal, not who typed it. Falls back to the creator, because a
        quotation someone files for themselves is the common case and the two are then the same
        person; the configurator sends p.salesperson when they differ. */
-    p.salesperson || p.createdBy || '']);
+    p.salesperson || p.createdBy || '',
+    /* A276 — Type · Service Kind. Blank is a supply quotation, which is what every caller that has
+       not heard of A276 sends, so nothing about the existing document changes. */
+    String(p.quoteType || '').trim(), String(p.serviceKind || '').trim()]);
                     // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No /
                     // A172 Layout JSON / A205 Recommended Option / A208 x3 / A215 x3 / A218 x1.
                     // 27 values — this array MUST stay exactly SCHEMA.Quotations.length wide.
@@ -1400,7 +1430,11 @@ function createQuotation(p) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
             it.itemId || '', it.lineKey || _lineKey(),
-            _quotationOptionKey(it)];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID, A172 Line Key, A205 Option No
+            _quotationOptionKey(it),
+            /* A276 — the hire shape. A supply line sends none of these and stores three blanks, which
+               is what every existing line already reads back as. */
+            String(it.chargeKind || '').trim(), String(it.rateBasis || '').trim(),
+            _num(it.duration) || ''];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID, A172 Line Key, A205 Option No, A276 hire
   });
   _refStore('createQuotation', p.clientRef, no);
   return { success: true, quotationNo: no, message: 'Quotation created.' };
@@ -1555,7 +1589,11 @@ function updateQuotation(p) {
                  uom: r['UOM'] || '', itemId: r['Item ID'] || '', lineKey: r['Line Key'] || '',
                  // A205: omit this and a RENAME rewrites every line with a blank Option No,
                  // silently collapsing an alternative-offers quotation into ordinary summed lines.
-                 optionNo: r['Option No'] || '' };
+                 optionNo: r['Option No'] || '',
+                 // A276 — same reason as the Option No note above: omit these and a RENAME rewrites
+                 // every line as a supply line, turning a hire quotation back into a sale.
+                 chargeKind: r['Charge Kind'] || '', rateBasis: r['Rate Basis'] || '',
+                 duration: r['Duration'] || '' };
       });
   }
   if (p.items !== undefined || newNo !== String(no)) _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
@@ -1565,7 +1603,11 @@ function updateQuotation(p) {
     return [newNo, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '', it.itemId || '',
             it.lineKey || _lineKey(),
-            _quotationOptionKey(it)];   // A205 Option No — widened in step with createQuotation
+            _quotationOptionKey(it),
+            // A276 — hire columns. Omitting them here would blank the rate basis and duration on
+            // every edit, exactly as the A147 note above says the old 8-column write did to UOM.
+            String(it.chargeKind || '').trim(), String(it.rateBasis || '').trim(),
+            _num(it.duration) || ''];   // A205 Option No — widened in step with createQuotation
   });
   if (newNo !== String(no)) {
     // Sales orders built from this quotation keep their link.
@@ -1651,10 +1693,18 @@ function createSalesOrder(p) {
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
     total, p.createdBy || '', _now(), p.supplierType || '',
     p.clientPoDate || '', p.poReceivedDate || '',     // A186
-    p.clientPoNo || '']);                             // A193
+    p.clientPoNo || '',                               // A193
+    /* A276 — Type · Service Kind carried down from the quotation. This is what createInvoice reads
+       to know a hire from a sale, so an order that loses it bills a rental as goods and destroys the
+       tool's stock. Blank is Supply, which is every order made before A276. */
+    String(p.quoteType || p.type || '').trim(), String(p.serviceKind || '').trim()]);
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.itemId || ''];   // A159 Item ID
+            it.itemId || '',   // A159 Item ID
+            /* A276 — the hire shape follows the line down from the quotation, so the invoice can tell
+               a rental line from a sale even on an order that mixes the two. */
+            String(it.chargeKind || '').trim(), String(it.rateBasis || '').trim(),
+            _num(it.duration) || ''];
   });
   // A151: create the SO Lifecycle (shipment) timeline for EVERY order — including back-dated ones —
   // so every SO has a single end-to-end lifecycle record (track + nudge; the auto-derived stages are
@@ -1933,7 +1983,11 @@ function updateSalesOrder(p) {
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
-            it.itemId || ''];   // A159 Item ID
+            it.itemId || '',   // A159 Item ID
+            /* A276 — the hire shape follows the line down from the quotation, so the invoice can tell
+               a rental line from a sale even on an order that mixes the two. */
+            String(it.chargeKind || '').trim(), String(it.rateBasis || '').trim(),
+            _num(it.duration) || ''];
   });
   // A193: an edit is where a quotation link (or a Client PO No, which renames the folder) usually
   // appears, so re-file here too. Idempotent — a file already in place is left alone.
@@ -3973,10 +4027,56 @@ function _addTermDays(date, terms) {
   return d;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   A276 — IS THIS LINE A SALE, A SERVICE, OR MONEY WE ARE ONLY HOLDING?
+
+   Three answers, and they differ in what they touch:
+
+     'goods'    the sale of a thing. Decrements stock, books COGS against Inventory, credits 4000.
+     'service'  the hire of a tool or work done. Touches NO stock and has NO cost of sale — the tool
+                comes back. Credits 4100.
+     'deposit'  refundable, and not income at all. Credits the 2100 liability, and is deliberately
+                kept out of 'Total Sales' so the P&L cannot count it as revenue.
+
+   THE ORDER DECIDES, NOT THE LINE. A sales order marked Service makes every line on it a service
+   line unless the line names itself otherwise, because the order is what was agreed and the browser
+   is not. A line may still carry its own charge kind — an invoice raised with no order behind it has
+   nothing else to go on — but it cannot turn a hire back into a sale by omission.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+var _SERVICE_CHARGE_KINDS = { 'rental': 1, 'hire': 1, 'mobilization': 1, 'demobilization': 1,
+                              'operator': 1, 'technician': 1, 'consumable': 1, 'service': 1,
+                              'labor': 1, 'labour': 1 };
+
+/** True when the sales order behind an invoice is a service order. Blank/unknown SO -> false. */
+function _soIsService(soNo) {
+  var no = String(soNo || '').trim();
+  if (!no) return false;
+  try {
+    var row = _rows('SalesOrders').filter(function (r) {
+      return String(r['SO No']).trim() === no; })[0];
+    return !!row && String(row['Type'] || '').trim().toLowerCase() === 'service';
+  } catch (e) { return false; }
+}
+
+/** 'goods' | 'service' | 'deposit' for one invoice line. */
+function _invLineKind(it, soIsService) {
+  var kind = String((it && it.chargeKind) || '').trim().toLowerCase();
+  if (kind === 'deposit') return 'deposit';
+  if (_SERVICE_CHARGE_KINDS[kind]) return 'service';
+  if (kind) return 'goods';                 // an explicit supply kind overrides the order
+  return soIsService ? 'service' : 'goods';
+}
+
 function createInvoice(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  /* A276 — is this a HIRE? Read from the sales order, not from the line, because the order is what
+     was agreed and the browser is not. A line may still name its own charge kind (an invoice with no
+     order behind it has nothing else to go on), but when the order says Service every line on it is
+     one unless it says otherwise. */
+  var _soService = _soIsService(p.soNo);
+  var _kindOf = function (it) { return _invLineKind(it, _soService); };
   var dup = _refSeen('createInvoice', p.clientRef);
   if (dup) return { success: true, invNo: dup, duplicate: true, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
 
@@ -3994,6 +4094,10 @@ function createInvoice(p) {
   if (!p.confirmShort) {
     var short = [];
     items.forEach(function (it) {
+      /* A276 — a hire line's quantity is a number of DAYS. Comparing it with an on-hand balance asks
+         whether we have seven torque wrenches when we are billing one for a week, so every rental
+         invoice would have demanded a short-stock confirmation it had no business asking for. */
+      if (_kindOf(it) !== 'goods') return;
       var inv = _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
       var have = inv ? _num(inv['Available Balance']) : 0;
       var want = _num(it.qty);
@@ -4033,29 +4137,55 @@ function createInvoice(p) {
   }
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
   var totalSales = 0, totalCOGS = 0, zeroCogsLines = 0, ambiguousLines = 0;
+  /* A276 — revenue is split three ways now. Goods and service are both income and both belong in
+     'Total Sales' (management reporting reads that column, not the ledger, so a hire that stayed out
+     of it would simply not appear in the P&L). A DEPOSIT is none of it: it is the client's money and
+     it is tracked separately all the way to the journal. */
+  var goodsSales = 0, serviceSales = 0, depositTotal = 0;
   var sh = _sheet('InvoiceItems');
   var lines = items.map(function (it) {
+    var kind = _kindOf(it);
+    var qty = _num(it.qty), price = _num(it.price);
+    var lineSales = qty * price;
+    /* A276 — A HIRE CONSUMES NOTHING, so it has no cost basis and nothing to cost it against. Before
+       this, a rental line looked up a landed cost it could never have, booked COGS against Inventory
+       for a tool that was coming back, and counted as a line "issued with no cost basis" in the
+       warning the rep sees on every invoice. */
+    if (kind !== 'goods') {
+      if (kind === 'deposit') depositTotal += lineSales; else serviceSales += lineSales;
+      if (kind !== 'deposit') totalSales += lineSales;
+      return [no, it.itemNo, it.itemName, qty, price, lineSales, 0, 0, it.itemId || ''];
+    }
     // A159: resolve by id (then description) so each product costs from ITS OWN landed cost.
     var inv = _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
     if (inv && inv._ambiguous) ambiguousLines++;
     var landed = inv ? _num(inv['Landed Cost/Unit']) : 0;
-    var qty = _num(it.qty), price = _num(it.price);
-    var lineSales = qty * price, lineCOGS = qty * landed;
+    var lineCOGS = qty * landed;
     if (qty > 0 && !(landed > 0)) zeroCogsLines++;   // A145: line issued with no cost basis → COGS 0
-    totalSales += lineSales; totalCOGS += lineCOGS;
+    totalSales += lineSales; totalCOGS += lineCOGS; goodsSales += lineSales;
     return [no, it.itemNo, it.itemName, qty, price, lineSales, landed, lineCOGS,
             (inv && inv['Item ID']) || it.itemId || ''];   // A159: the id we actually costed from
   });
   _append('Invoices', [no, p.soNo || '', p.date || _now(), p.customer, totalSales, totalCOGS, p.createdBy || '', _now(),
-    '', '']);   // A158 trailing: Voided / Void Reason
+    '', '', depositTotal]);   // A158 trailing: Voided / Void Reason. A276: + Total Deposit
   items.forEach(function (it, i) {
     sh.appendRow(lines[i]);
+    /* A276 — THE BUG THIS WHOLE PART EXISTS FOR. A hire line's quantity is its DURATION, so billing a
+       seven-day rental used to remove seven units of the tool from stock — permanently, for a tool
+       that never left the building and is coming back anyway. Nothing moves for a service line. */
+    if (_kindOf(it) !== 'goods') return;
     _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null, it.itemId); // deduct stock
   });
-  // GL entry 1: Dr Accounts Receivable / Cr Sales.  Entry 2: Dr COGS / Cr Inventory.
+  /* GL entry 1: Dr Accounts Receivable / Cr Sales.  Entry 2: Dr COGS / Cr Inventory.
+     A276 — the receivable is everything the client owes INCLUDING the deposit, because they do have
+     to remit it; the credits split it back out into what we earned and what we are merely holding.
+     _postJournal drops any line that is zero on both sides, so a pure goods invoice posts exactly
+     the two entries it always did and its journal rows are unchanged. */
   _postJournal('INV', no, p.date || _now(), 'PHP', [
-    { account: ACC.AR, debit: totalSales, memo: 'Invoice ' + no + ' — ' + p.customer },
-    { account: ACC.SALES, credit: totalSales, memo: 'Sales ' + no },
+    { account: ACC.AR, debit: totalSales + depositTotal, memo: 'Invoice ' + no + ' — ' + p.customer },
+    { account: ACC.SALES, credit: goodsSales, memo: 'Sales ' + no },
+    { account: ACC.SERVICE, credit: serviceSales, memo: 'Service revenue ' + no },
+    { account: ACC.DEPOSITS, credit: depositTotal, memo: 'Refundable deposit held — ' + no },
     { account: ACC.COGS, debit: totalCOGS, memo: 'COGS ' + no },
     { account: ACC.INV, credit: totalCOGS, memo: 'Inventory issued ' + no }
   ]);
@@ -4064,7 +4194,9 @@ function createInvoice(p) {
   // so accounting doesn't hand-type it. Blank/unparseable terms → blank due date (today's behaviour).
   var arDue = _addTermDays(p.date || _now(), _clientTerms(p.customer));
   var arNo = _nextNumber('ARAging', 1, 'AR');
-  _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales, 0, 'Unpaid', arDue, '', _now(), _now()]);
+  /* A276 — the receivable is what the client must REMIT, which includes a deposit they will get back
+     later. Leaving it out would show the invoice as short-paid for ever once they pay in full. */
+  _append('ARAging', [arNo, no, p.soNo || '', p.customer, totalSales + depositTotal, 0, 'Unpaid', arDue, '', _now(), _now()]);
   _refStore('createInvoice', p.clientRef, no);
   return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines,
     ambiguousLines: ambiguousLines,
@@ -10102,21 +10234,23 @@ function seedCommissionDemo(p) {
     'sales', '', who, now, d.subject, 0, '', '', '', '', '', '',
     now, 'demo@example.invalid', '',
     '', '', '',
-    who                                    // A218 Salesperson — 27 values (the width trap: this
-  ]);                                      // writer and createQuotation must move together)
+    who,                                   // A218 Salesperson
+    '', ''                                 // A276 Type · Service Kind — 29 values (the width trap:
+  ]);                                      // this writer and createQuotation must move together)
   _append('QuotationItems', [
     d.quotationNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat,
-    d.itemNo, d.itemName, 'VAT Excl', 'unit', '', 'DEMO-LINE-1', ''        // 13 values
+    d.itemNo, d.itemName, 'VAT Excl', 'unit', '', 'DEMO-LINE-1', '',
+    '', '', ''                                                             // A276: 16 values
   ]);
   _append('SalesOrders', [
     d.soNo, d.quotationNo, today, d.customer, 'Delivered', d.exVat, who, now,
-    'Local', today, today, ''                                              // 12 values
+    'Local', today, today, '', '', ''                                      // A276: 14 values
   ]);
   _append('SalesOrderItems', [
-    d.soNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat, ''                  // 7 values
+    d.soNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat, '', '', '', ''      // A276: 10 values
   ]);
   _append('Invoices', [
-    d.invNo, d.soNo, today, d.customer, d.exVat, 0, who, now, '', ''       // 10 values
+    d.invNo, d.soNo, today, d.customer, d.exVat, 0, who, now, '', '', 0     // A276: 11 values
   ]);
   _append('ARAging', [
     d.arNo, d.invNo, d.soNo, d.customer, d.gross, d.gross, 'Paid',
