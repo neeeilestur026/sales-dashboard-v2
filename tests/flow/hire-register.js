@@ -27,9 +27,17 @@ const eq = (l, got, want) => ok(l + ' = ' + JSON.stringify(want),
   { got, want });
 const section = (t) => console.log('\n' + t);
 
+/* LOCAL date, not UTC. The code asks Utilities.formatDate for "today" and gasload stubs that with
+   the local date parts — its own comment says so: "the tests build dates in local time and read them
+   back the same way, so a real tz conversion here would make assertions depend on the machine."
+   Building these with toISOString() is a UTC date, so on a UTC+8 machine every one of them was a day
+   behind what the code called today. That suite passed when it was written and failed the next
+   morning, which is worse than not having it: a test that depends on the hour is not a test. */
 const day = (offset) => {
-  const d = new Date(); d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 };
 
 function boot() {
@@ -192,6 +200,32 @@ section('7 · the awkward calls');
        confirmReturnAgain: true }).success === true);
   ok('dispatching a tool that already came back is refused',
      call(ctx, 'dispatchHireUnit', { hireNo: no, line: 1 }).success === false);
+}
+
+// ─────────────────────────────────────────────────────────────
+section('8 · the date arithmetic does not depend on where the server thinks it is');
+{
+  /* Fixed dates, no "today" — so this section is deterministic at any hour, in any zone.
+     WHY IT EXISTS: _addTermDays parses 'YYYY-MM-DD' as UTC MIDNIGHT and then adds days with LOCAL
+     date parts. West of UTC those disagree and a seven-day hire came back due on day six. Harmless
+     for the AR due dates it was written for, since this project's timezone is east of UTC — but a
+     hire's due date is the date a customer gets chased on, and "right as long as nobody moves the
+     script timezone" is not a property to rely on.
+     Run this file under TZ=America/New_York to see the bug this pins. */
+  const { ctx } = boot();
+  const add = ctx._hireAddDays;
+  eq('seven days on', add('2026-09-12', 7), '2026-09-19');
+  eq('across a month end', add('2026-09-28', 7), '2026-10-05');
+  eq('across a year end', add('2026-12-29', 5), '2027-01-03');
+  eq('a leap day is a real day', add('2028-02-27', 3), '2028-03-01');
+  eq('a non-leap February is not', add('2027-02-27', 3), '2027-03-02');
+  eq('zero days is the same day', add('2026-09-12', 0), '2026-09-12');
+  eq('rubbish in, blank out', add('not a date', 7), '');
+
+  const due = ctx._hireDueDate('2026-09-12', '7 days');
+  eq('a hire period reads the number out of the words', due, '2026-09-19');
+  eq('  and an unparseable period yields nothing rather than a guess',
+     ctx._hireDueDate('2026-09-12', 'ASAP'), '');
 }
 
 console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ok'));

@@ -12868,10 +12868,32 @@ function _hireToday() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
-/** Due back = out date + the hire period, reusing the same helper AR uses for payment terms. */
+/* Due back = out date + the hire period.
+ *
+ * NOT _addTermDays, and the reason is worth stating. That helper does `new Date('2026-09-12')`, which
+ * javascript parses as UTC MIDNIGHT, and then `d.setDate(d.getDate() + n)`, which works on LOCAL date
+ * parts. West of UTC those two disagree and the answer comes out a day early. It is harmless for the
+ * AR due dates it was written for — this project's timezone is Manila, east of UTC — but a hire's due
+ * date is the date somebody is chased on, and "correct as long as nobody moves the script timezone"
+ * is not a property worth relying on.
+ *
+ * So the arithmetic is done on the date PARTS: a local Date built from y/m/d, days added by the
+ * calendar, read back the same way. Month and year rollover come free from the Date constructor, and
+ * the result no longer depends on where the runtime thinks it is. */
+function _hireAddDays(ymd, n) {
+  var m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m || !isFinite(n)) return '';
+  var d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10) + n);
+  var p = function (x) { return (x < 10 ? '0' : '') + x; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
 function _hireDueDate(startDate, periodText) {
-  var d = _addTermDays(startDate || _now(), periodText);
-  return d ? _hireDay(d) : '';
+  var start = _hireDay(startDate) || _hireToday();
+  var m = String(periodText || '').match(/\d+/);
+  var n = m ? parseInt(m[0], 10) : 0;
+  if (!(n > 0)) return '';
+  return _hireAddDays(start, n);
 }
 
 function _hireUnitsFor(hireNo) {
