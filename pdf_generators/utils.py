@@ -203,6 +203,21 @@ def get_static_path(*parts):
 # CAREFUL if you rename it. quotation_parser._ITEM_STOP holds prefixes that END the item table
 # ("SCOPEOFSUPPLY", "EXCLUSIONS", …). This heading must NOT start with any of them, or the importer
 # will stop reading items at the first one. The parser asserts exactly that next to _ITEM_STOP.
+# A276 — the document titles. "QUOTATION" is what ~102 existing records render and must not move;
+# a SERVICE QUOTATION is the same document quoting work or the hire of a tool rather than the sale
+# of one. Held here beside the headings for the same reason they are: the renderer draws them and
+# quotation_parser has to recognise them coming back.
+QUO_DOC_TITLE = "QUOTATION"
+QUO_SERVICE_DOC_TITLE = "SERVICE QUOTATION"
+
+# A276 — a service item's inclusions carry no item number. A240 put one on the supply heading so five
+# repetitions stopped reading as a repeated title; a service quotation has a handful of lines, each
+# visually its own block under its own photo, so the number is noise there.
+QUO_SERVICE_ITEM_HEADING = "INCLUSIONS"
+
+# A276 — the prose conditions of a hire, which the four-up strip below it has no room for.
+QUO_SERVICE_TERMS_HEADING = "RENTAL TERMS & CONDITIONS"
+
 QUO_SCOPE_INTABLE_HEADING = "INCLUSIONS — SCOPE OF SUPPLY"
 
 # A240 — the heading over ONE item's own scope block, e.g. "ITEM 01 — SCOPE OF SUPPLY". This reverses

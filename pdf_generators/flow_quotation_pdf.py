@@ -35,7 +35,9 @@ from PIL import Image as PILImage
 
 # A213 — shared with quotation_parser.py, which has to recognise this heading to know that the rows
 # under it belong to no item. One constant, so the two cannot drift.
-from pdf_generators.utils import (QUO_SCOPE_INTABLE_HEADING, QUO_SCOPE_ITEM_HEADING_FMT,
+from pdf_generators.utils import (QUO_DOC_TITLE, QUO_SERVICE_DOC_TITLE,
+                                  QUO_SERVICE_ITEM_HEADING, QUO_SERVICE_TERMS_HEADING,
+                                  QUO_SCOPE_INTABLE_HEADING, QUO_SCOPE_ITEM_HEADING_FMT,
                                   QUO_HIDDEN_PRICE_NOTE_FMT, QUO_LETTERHEAD_NAME,
                                   QUO_GROUP_TAG_RANGE_FMT, QUO_GROUP_TAG_ONE_FMT,
                                   QUO_INCLUDED_WORD)
@@ -671,12 +673,13 @@ HEADER_LOCK_H = (96 - 14) * PX   # fixed header zone the flow reserves (logo bot
 
 
 class _QuoTemplate(BaseDocTemplate):
-    def __init__(self, buf, footer_left, footer_right, ref_no="", **kw):
+    def __init__(self, buf, footer_left, footer_right, ref_no="", title=QUO_DOC_TITLE, **kw):
         super().__init__(buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
                          topMargin=TOP_MARGIN, bottomMargin=BOTTOM_MARGIN, **kw)
         self._footer_left = footer_left
         self._footer_right = footer_right
         self._ref_no = ref_no
+        self._title = title or QUO_DOC_TITLE
         frame = Frame(MARGIN, BOTTOM_MARGIN, CONTENT_W, PAGE_H - TOP_MARGIN - BOTTOM_MARGIN,
                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
         self.addPageTemplates([PageTemplate(id="quo", frames=[frame], onPage=self._on_page)])
@@ -694,11 +697,13 @@ class _QuoTemplate(BaseDocTemplate):
         """Logo + QUOTATION title + reference chip at FIXED coordinates (page 1 only) —
         nothing in the content flow can ever move them."""
         top = PAGE_H - TOP_MARGIN                  # top of the header zone
+        logo_w = LOGO_H                            # A276 — a fallback width for the title fit below
         try:
             pil = PILImage.open(_LOGO_PATH)
             iw, ih = pil.size
             h = LOGO_H
             w = h * (iw / ih) if ih else h
+            logo_w = w
             # start LOGO_RISE above the zone (inside the top margin) so the bigger logo
             # doesn't push the content down or move the locked title/chip
             canvas.drawImage(_LOGO_PATH, MARGIN, top + LOGO_RISE - h, w, h,
@@ -709,9 +714,18 @@ class _QuoTemplate(BaseDocTemplate):
             canvas.setFont(ARCH_B, 16 * PX)
             canvas.drawString(MARGIN, top - 16 * PX, COMPANY_NAME)
             canvas.restoreState()
+        # A276 — THE TITLE IS NO LONGER ALWAYS "QUOTATION".
+        #
+        # "SERVICE QUOTATION" is nearly twice as wide and shares this row with the logo, so the size
+        # steps down until it clears it. "QUOTATION" is unaffected — it already fits at 46px, so the
+        # loop body never executes and the ~102 existing quotations render byte-for-byte as before.
+        # That is the whole reason this shrinks rather than the title being set smaller outright.
         title_size = 46 * PX
+        avail = PAGE_W - MARGIN - (MARGIN + logo_w + 12 * PX)
+        while title_size > 20 * PX and pdfmetrics.stringWidth(self._title, ARCH_XB, title_size) > avail:
+            title_size -= 0.5 * PX
         title_y = top - title_size * 0.82
-        title_w = pdfmetrics.stringWidth("QUOTATION", ARCH_XB, title_size)
+        title_w = pdfmetrics.stringWidth(self._title, ARCH_XB, title_size)
         title_x = PAGE_W - MARGIN - title_w
         canvas.saveState()
         try:
@@ -720,7 +734,7 @@ class _QuoTemplate(BaseDocTemplate):
             txt = canvas.beginText(title_x, title_y)
             txt.setTextRenderMode(7)
             txt.setFont(ARCH_XB, title_size)
-            txt.textLine("QUOTATION")
+            txt.textLine(self._title)
             canvas.drawText(txt)
             canvas.linearGradient(title_x, title_y + title_size * 0.75,
                                   title_x + title_w, title_y - title_size * 0.1,
@@ -728,7 +742,7 @@ class _QuoTemplate(BaseDocTemplate):
         except Exception:
             canvas.setFillColor(ACCENT)
             canvas.setFont(ARCH_XB, title_size)
-            canvas.drawRightString(PAGE_W - MARGIN, title_y, "QUOTATION")
+            canvas.drawRightString(PAGE_W - MARGIN, title_y, self._title)
         canvas.restoreState()
         _draw_ref_chip(canvas, PAGE_W - MARGIN, top - title_size * 0.95 - 6 * PX, self._ref_no)
 
@@ -1146,6 +1160,24 @@ def _note_rows(title, body, width, indent=0.0):
     return out
 
 
+# A276 — "/ DAY" under a hire rate, and nothing under a flat one.
+#
+# A rate is only per-something when the duration beside it is a span of TIME. The same table also
+# carries mobilization at 1 LOT and consumables by the piece, where the amount is simply the amount —
+# printing "/ LOT" there would invite the reader to multiply it by a quantity that is already 1.
+# Singular on purpose: the client is told the price of ONE day, beside a duration of seven.
+_RATE_BASIS = {"DAY": "DAY", "DAYS": "DAY", "WEEK": "WEEK", "WEEKS": "WEEK",
+               "MONTH": "MONTH", "MONTHS": "MONTH", "HOUR": "HOUR", "HOURS": "HOUR",
+               "MANDAY": "MANDAY", "MANDAYS": "MANDAY", "SHIFT": "SHIFT", "SHIFTS": "SHIFT"}
+
+
+def _rate_basis_label(uom):
+    """'DAYS' -> '/ DAY'. Anything that is not a unit of time returns '' and prints nothing."""
+    key = str(uom or "").strip().upper().rstrip(".")
+    unit = _RATE_BASIS.get(key)
+    return ("/ " + unit) if unit else ""
+
+
 def _bullet_block(heading, bullets, edge, width, columns=1, size=11.5, leading=1.7):
     """Uppercase heading + hairline rule, then a bordered card with a 3px left edge.
 
@@ -1252,7 +1284,8 @@ def _options_block(label, options, width):
 def build_quotation_pdf_bytes(items, images, client_details, terms_and_conditions,
                               summary_table_data, desc_mode="short", note="",
                               scope=None, exclusions=None, options=None,
-                              recommended_option="", design_version=1):
+                              recommended_option="", design_version=1,
+                              doc_type="supply", service_terms=None):
     """Render the quotation PDF (v2 layout) and return its bytes.
 
     `scope` / `exclusions` are lists of {"text", "bold"}; `options` a list of
@@ -1266,6 +1299,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     the output is byte-identical to before — which matters, because ~100 live quotations depend on
     that path being untouched."""
     cd = client_details or {}
+    # A276 — SERVICE vs SUPPLY, resolved once and consulted at each divergence point, exactly as the
+    # design version below is. The company hires its tools out as well as selling them, and a hire is
+    # a rate over a duration rather than a price per piece — a different document, not a different
+    # renderer. Anything other than "service" is the supply document, so a caller that has never
+    # heard of this argument gets byte-identical output and the ~102 live quotations are untouched.
+    is_service = str(doc_type or "").strip().lower() == "service"
     # A241 — resolved ONCE, then consulted at each divergence point. Design 1 is what every quotation
     # rendered before A241 and is what ~102 existing records keep until someone edits them.
     th = _theme(design_version)
@@ -1283,7 +1322,8 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     footer_right = "  ·  ".join(x for x in footer_bits if x)
 
     buf = BytesIO()
-    doc = _QuoTemplate(buf, COMPANY_NAME, footer_right, ref_no=cd.get("reference_no"))
+    doc = _QuoTemplate(buf, COMPANY_NAME, footer_right, ref_no=cd.get("reference_no"),
+                       title=QUO_SERVICE_DOC_TITLE if is_service else QUO_DOC_TITLE)
     story = []
 
     # ── Row A: LOCKED header zone — logo + QUOTATION + chip are drawn by the page template at
@@ -1347,12 +1387,21 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # (Brand strip moved to the BOTTOM of the document — see the tail block.)
 
     # ── Items table ──
-    col_w = [36 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
+    # A276 — "DURATION" is eight characters where "QTY" is three, and at 70px it wrapped to
+    # "DURATIO / N" in the header. The extra width comes out of the description column, which has the
+    # most to give; the supply layout keeps its exact numbers so its bytes do not move.
+    col_w = [36 * PX, 0, (88 if is_service else 70) * PX, 110 * PX, 120 * PX]
     col_w[1] = CONTENT_W - col_w[0] - col_w[2] - col_w[3] - col_w[4]
     head_l = _ps("thL", 11, colors.white, ARCH_B)
     head_r = _ps("thR", 11, colors.white, ARCH_B, align=2)
-    rows = [[Paragraph("#", head_l), Paragraph("ITEM &amp; DESCRIPTION", head_l),
-             Paragraph("QTY", head_r), Paragraph("UNIT PRICE", head_r), Paragraph("AMOUNT", head_r)]]
+    # A276 — same five-column geometry, different words. A hire line's quantity IS its duration and
+    # its unit price IS its rate, so the cells underneath need no new machinery: only the headings
+    # change, plus the per-unit suffix on the rate below.
+    _h_desc = "SERVICE &amp; DESCRIPTION" if is_service else "ITEM &amp; DESCRIPTION"
+    _h_qty = "DURATION" if is_service else "QTY"
+    _h_price = "RATE" if is_service else "UNIT PRICE"
+    rows = [[Paragraph("#", head_l), Paragraph(_h_desc, head_l),
+             Paragraph(_h_qty, head_r), Paragraph(_h_price, head_r), Paragraph("AMOUNT", head_r)]]
 
     title_st = _ps("itTitle", 13, HEADING, ARCH_SB, leading_mult=1.3)
     sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.28)
@@ -1572,7 +1621,11 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             idx_txt = f"{int(no):02d}"
         except Exception:
             idx_txt = str(no)
-        qty_cell = [Paragraph(f"{float(it.get('quantity') or 0):.1f}", qty_st),
+        # A276 — a duration prints as a whole number: "7 DAYS", not "7.0 DAYS". Half-days stay
+        # representable, so 1.5 still reads 1.5. The supply column keeps its fixed one decimal.
+        _qv = float(it.get('quantity') or 0)
+        _qtxt = (f"{_qv:g}" if is_service else f"{_qv:.1f}")
+        qty_cell = [Paragraph(_qtxt, qty_st),
                     Paragraph(str(it.get("uom") or "pc(s)"), uom_st)]
         _k = _opt_key(it)
         if _k:
@@ -1608,6 +1661,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         else:
             price_cell = Paragraph(_fmt(it.get("total_amount")), price_st)
             amount_cell = Paragraph(_fmt(it.get("total_unit_price")), amt_st)
+            # A276 — "8,500.00" over "/ DAY". Only for a TIME unit: a mobilization line priced per LOT
+            # is a flat charge, and "/ LOT" would invite the reader to multiply it by something.
+            if is_service:
+                _per = _rate_basis_label(it.get("uom"))
+                if _per:
+                    price_cell = [price_cell, Paragraph(_esc(_per), uom_st)]
         if th.bands and _grp_of(it):
             member_row_idx.append(len(rows))
         rows.append([idx_cell, desc_cell, qty_cell, price_cell, amount_cell])
@@ -1632,9 +1691,14 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # item's rows stop being its product name, and without one every line of the note is
         # concatenated onto that name on re-import. Slightly broad as a label there, but a poisoned
         # name is not visible the way a slightly broad heading is.
+        # A276 — a service line's block is titled INCLUSIONS, with no item number. A240 added the
+        # number so five repetitions of one title stopped reading as noise; a service quotation has a
+        # handful of lines, each already separated by its own photo and rule, so the number is the
+        # noise there instead.
+        _scope_head = (QUO_SERVICE_ITEM_HEADING if is_service
+                       else QUO_SCOPE_ITEM_HEADING_FMT % idx_txt)
         own = _scope_rows(bullets, scope_w, per_item=True, indent=scope_indent,
-                          heading=(QUO_SCOPE_ITEM_HEADING_FMT % idx_txt
-                                   if (bullets or blocks) else None))
+                          heading=(_scope_head if (bullets or blocks) else None))
         own = own + blocks
         if own:
             # A fixed gap above the first bullet and below the last, so a block never touches the
@@ -1827,10 +1891,27 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             story.append(blk)
             story.append(Spacer(1, 8 * PX))
 
+    # ── A276 — Rental terms, above the four-up strip ──
+    # The strip answers four fixed questions in four narrow cells. A hire's conditions are prose —
+    # who carries the risk while the tool is on site, what counts as a chargeable day, what happens
+    # if it comes back damaged — and none of that fits a cell a quarter of the page wide. So it is a
+    # bullet block of its own, reusing the same card the scope and exclusions blocks are built from.
+    if is_service:
+        _svc_terms = _bullet_block(QUO_SERVICE_TERMS_HEADING, service_terms, ACCENT, CONTENT_W,
+                                   size=11, leading=1.6)
+        if _svc_terms is not None:
+            story.append(_svc_terms)
+            story.append(Spacer(1, 8 * PX))
+
     # ── Terms strip ──
     term_cells = []
-    for label, key in [("VALIDITY", "validity"), ("DELIVERY", "delivery"),
-                       ("PAYMENT", "payment"), ("WARRANTY", "warranty")]:
+    # A276 — a hire has no delivery lead time and no factory warranty. It has an availability window
+    # and the support that comes with the tool, so the same four cells carry different questions.
+    _term_pairs = ([("VALIDITY", "validity"), ("AVAILABILITY", "availability"),
+                    ("PAYMENT", "payment"), ("SUPPORT", "support")] if is_service else
+                   [("VALIDITY", "validity"), ("DELIVERY", "delivery"),
+                    ("PAYMENT", "payment"), ("WARRANTY", "warranty")])
+    for label, key in _term_pairs:
         # cap: an extreme term would make this single unsplittable row taller than a page
         term_txt = str(terms.get(key) or "—")
         if len(term_txt) > 280:
