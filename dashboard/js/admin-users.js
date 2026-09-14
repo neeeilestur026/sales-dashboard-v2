@@ -157,7 +157,7 @@ function renderUsersTable() {
     '</tr></thead><tbody>';
 
   usersData.forEach(u => {
-    const roleCls = u.role === 'admin' ? 'role-admin' : u.role === 'accounting' ? 'role-accounting' : u.role === 'management' ? 'role-management' : u.role === 'director' ? 'role-director' : u.role === 'hr' ? 'role-hr' : 'role-sales';
+    const roleCls = u.role === 'admin' ? 'role-admin' : u.role === 'accounting' ? 'role-accounting' : u.role === 'management' ? 'role-management' : u.role === 'director' ? 'role-director' : u.role === 'hr' ? 'role-hr'  : u.role === 'marketing' ? 'role-marketing' : u.role === 'leadgen' ? 'role-leadgen' : 'role-sales';
     const trainBadge = u.trainingMode
       ? '<span class="role-badge" style="background:linear-gradient(90deg,#f59e0b,#f97316);color:#ffffff;font-weight:700;letter-spacing:0.03em;box-shadow:0 1px 3px rgba(245,158,11,0.4);">TRAINING MODE</span>'
       : '<span style="color:var(--text-muted,#64748b);font-size:0.8rem;">—</span>';

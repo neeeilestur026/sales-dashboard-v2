@@ -44,13 +44,16 @@ const TP_ROLE_TASKS = {
   admin: [['Emails', 'emails'], ['Purchase Orders', 'Purchase Order'], ['Sales Orders', 'Sales Order'],
           ['Shipments', 'Shipment'], ['Payment Requests', 'Payment Request'],
           ['Pricing Requests', 'Pricing Request'], ['Other', 'other']],
+  // A277 — the lead-gen role's day, as the daily report sees it: calls and emails from the same
+  // counters as sales, lead-gen movements by module. The eight quota numbers live on its own page.
+  leadgen: [['Calls', 'calls'], ['Emails', 'emails'], ['Lead Gen', 'Lead Gen'], ['Other', 'other']],
   default: [['Calls', 'calls'], ['Client Visits', 'visits'], ['Emails', 'emails'], ['Quotations', 'Quotation'],
             ['Purchase Requests', 'Pricing Request'], ['Sales Orders', 'Sales Order'],
             ['Purchase Orders', 'Purchase Order'], ['Invoices', 'Invoice'], ['Other', 'other']],
 };
 const _TP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const _TP_ROLE_CHIP = { sales: '#0d9488', accounting: '#7c3aed', admin: '#2563eb',
-  management: '#b45309', director: '#b45309', marketing: '#db2777', hr: '#0891b2' };
+  management: '#b45309', director: '#b45309', marketing: '#db2777', hr: '#0891b2', leadgen: '#4f46e5' };
 const _TP_DOC_ACTIONS = ['Created', 'Issued', 'Received', 'Added'];
 
 function _tpRoleOf(name) { return _tpRoles[_tpKey(name)] || ''; }
@@ -411,7 +414,7 @@ function tpRenderCompact() {
    it would need another seven activity fetches, and a made-up number is worse than none.
    ═══════════════════════════════════════════════════════════════════════════ */
 const _TP_ROLE_LABEL = { sales: 'Sales', accounting: 'Accounting', admin: 'Admin',
-  marketing: 'Marketing', management: 'Management', director: 'Director', hr: 'HR' };
+  marketing: 'Marketing', management: 'Management', director: 'Director', hr: 'HR', leadgen: 'Lead Gen' };
 
 function _tpInitials(name) {
   return String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';

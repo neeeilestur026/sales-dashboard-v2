@@ -560,6 +560,9 @@ def payment_request_pdf():
 # Mirrors _SECURED in FlowAPI.gs. Kept as a list the client also fetches (/flow/secured-actions)
 # so the two can't silently drift apart.
 SECURED_ACTIONS = [
+    # A277 — the lead-gen rows are one person's performance record; the actor is the session.
+    # Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
+    "saveLeadgenRecord", "deleteLeadgenRecord", "logSalesCall", "deleteSalesCall",
     # A276 — the hire register: custody of a tool and the fate of a deposit both answer to
     # who is asking, so identity is stamped by the server rather than claimed by the browser.
     "createHire", "dispatchHireUnit", "returnHireUnit", "closeHire",

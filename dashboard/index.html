@@ -61,14 +61,10 @@
     // Auto-redirect if already logged in
     (function() {
       const session = getSession();
-      if (session) {
-        if (session.role === 'admin') window.location.href = 'admin.html';
-        else if (session.role === 'accounting') window.location.href = 'accounting-home.html';
-        else if (session.role === 'management') window.location.href = 'management-home.html';
-        else if (session.role === 'director') window.location.href = 'director-home.html';
-        else if (session.role === 'hr') window.location.href = 'hr-home.html';
-        else window.location.href = 'dashboard.html';
-      }
+      /* A277 — was a hand-rolled copy of _homeForRole that had drifted: it had no 'marketing'
+         branch, so a marketing user reopening the tab landed on the sales dashboard and was
+         bounced. The fresh-login path below already used the real one. */
+      if (session) window.location.href = _homeForRole(session.role);
     })();
 
     async function handleLogin(e) {

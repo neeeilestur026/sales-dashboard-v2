@@ -60,6 +60,7 @@ function _homeForRole(role) {
   if (role === 'director') return 'director-home.html';
   if (role === 'hr') return 'hr-home.html';
   if (role === 'marketing') return 'marketing-home.html';
+  if (role === 'leadgen') return 'leadgen-home.html';      // A277 — see requireLeadgenAccess
   return 'dashboard.html';
 }
 
@@ -314,6 +315,29 @@ function requireMarketing() {
   return session;
 }
 
+/* A277 — the lead-generation dashboard: the leadgen user (full edit) plus director / management /
+   admin (read-only oversight). Modelled on the marketing pair above, with one difference that
+   matters: a role missing from _homeForRole is not "denied", it is bounced between dashboard.html's
+   requireSales() and _homeForRole() forever — so 'leadgen' went into _homeForRole BEFORE this page
+   existed, and any new role must do the same. */
+function requireLeadgenAccess() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (!['leadgen', 'director', 'management', 'admin'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
+/** Require the leadgen role exactly (own daily report). Oversight roles use all-daily-reports. */
+function requireLeadgen() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (session.role !== 'leadgen') { window.location.href = _homeForRole(session.role); return null; }
+  return session;
+}
+
 /**
  * Require director role — redirect others to their home page
  */
@@ -437,7 +461,7 @@ function renderNavbar(activePage) {
 
   const initials = session.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const brandText = session.role === 'admin' ? 'Admin Dashboard' : session.role === 'accounting' ? 'Accounting Dashboard' : session.role === 'management' ? 'Management Dashboard' : session.role === 'director' ? 'Director Dashboard' : session.role === 'hr' ? 'HR-Marketing Dashboard' : session.role === 'marketing' ? 'Marketing Dashboard' : 'Sales Dashboard';
+  const brandText = session.role === 'admin' ? 'Admin Dashboard' : session.role === 'accounting' ? 'Accounting Dashboard' : session.role === 'management' ? 'Management Dashboard' : session.role === 'director' ? 'Director Dashboard' : session.role === 'hr' ? 'HR-Marketing Dashboard' : session.role === 'marketing' ? 'Marketing Dashboard' : session.role === 'leadgen' ? 'Lead Generation' : 'Sales Dashboard';
 
   let navLinks = '';
   if (session.role === 'admin') {
@@ -474,6 +498,10 @@ function renderNavbar(activePage) {
       <a href="marketing-home.html" class="${activePage === 'marketing-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         Marketing
+      </a>
+      <a href="leadgen-home.html" class="${activePage === 'leadgen-home' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        Lead Gen
       </a>
       <div class="nav-dropdown">
         <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder') ? 'active' : ''}">
@@ -719,6 +747,10 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         Marketing
       </a>
+      <a href="leadgen-home.html" class="${activePage === 'leadgen-home' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        Lead Gen
+      </a>
       <div class="nav-dropdown">
         <button class="nav-dropdown-btn ${mAcctActive}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -809,6 +841,34 @@ function renderNavbar(activePage) {
           <a href="director-emails.html" class="${activePage === 'director-emails' ? 'active' : ''}">Email</a>
           <a href="email-setup.html" class="${activePage === 'email-setup' ? 'active' : ''}">Connect Email</a>
           <a href="pf-admin.html" class="${activePage === 'pf-admin' ? 'active' : ''}">PF Data Admin</a>
+          <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
+        </div>
+      </div>`;
+  } else if (session.role === 'leadgen') {
+    // A277 — three links and an account menu. Deliberately no Process Flow dropdown: the role's
+    // whole surface is its own page, and the sales nav below is what an unlisted role would get.
+    const acctActive = ['email-setup', 'change-password'].includes(activePage);
+    navLinks = `
+      <a href="leadgen-home.html" class="${activePage === 'leadgen-home' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="leadgen-daily-report.html" class="${activePage === 'leadgen-daily-report' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Daily Report
+      </a>
+      <a href="leave-request.html" class="${activePage === 'leave-request' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Leave Request
+      </a>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn ${acctActive ? 'active' : ''}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Account
+          <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="email-setup.html" class="${activePage === 'email-setup' ? 'active' : ''}">Email Setup</a>
           <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
         </div>
       </div>`;
