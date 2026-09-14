@@ -31,6 +31,29 @@
     .task-list label { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.45rem; font-size: 0.86rem; color: var(--text-secondary); cursor: pointer; }
     .task-list label.done { background: var(--bg-inset); color: var(--text-muted); text-decoration: line-through; }
     .task-list input { margin-top: 0.2rem; }
+    /* A277-2 — the verified checklist */
+    .ev { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 0.5rem; background: var(--bg-card); }
+    .ev > summary { list-style: none; display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; cursor: pointer; font-size: 0.86rem; }
+    .ev > summary::-webkit-details-marker { display: none; }
+    .ev-box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 800; flex-shrink: 0; }
+    .ev-done .ev-box { background: #dcfce7; border-color: #86efac; color: #15803d; }
+    .ev-part .ev-box { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
+    .ev-title { flex: 1; min-width: 0; font-weight: 600; color: var(--text-primary); }
+    .ev-title small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--text-muted); }
+    .ev-pill { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
+    .ev-done .ev-pill { background: #dcfce7; color: #15803d; } .ev-part .ev-pill { background: #fef3c7; color: #b45309; }
+    .ev-list { margin: 0; padding: 0 0.7rem 0.6rem 2.5rem; font-size: 0.8rem; color: var(--text-secondary); }
+    .ev-list li { padding: 0.22rem 0; border-top: 1px dashed var(--border); }
+    .ev-list li b { color: var(--text-primary); font-weight: 600; }
+    .ev-dim { color: var(--text-muted); }
+    .ev-mark { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; margin-right: 0.4rem; white-space: nowrap; }
+    .ev-ok { background: #dcfce7; color: #15803d; } .ev-no { background: #fee2e2; color: #b91c1c; } .ev-unk { background: var(--bg-inset); color: var(--text-muted); }
+    .ev-batch { padding: 0 0.7rem 0.4rem 2.5rem; }
+    .ev-batch-h { font-size: 0.78rem; color: var(--text-secondary); padding: 0.35rem 0 0.1rem; }
+    .ev-batch .ev-list { padding-left: 0.6rem; }
+    .ev-none { padding: 0 0.7rem 0.6rem 2.5rem; font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
+    .ev-note { padding: 0 0.7rem 0.3rem 2.5rem; font-size: 0.76rem; } .ev-warn { color: #b45309; font-weight: 600; }
+    @media print { .ev { break-inside: avoid; } .ev > summary { cursor: default; } }
     @media print {
       .navbar, .no-print { display: none !important; }
       body { background: #fff; }
@@ -71,7 +94,7 @@
           </div>
 
           <div class="dr-sect">
-            <div class="dr-sect-title">Daily Lead-Gen Tasks <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);">Personal checklist — resets daily</span></div>
+            <div class="dr-sect-title">Daily tasks — verified against the records <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;text-transform:none;letter-spacing:0;">nothing to tick: each task lists what was logged, and emails are checked in the Sent folder</span></div>
             <div class="task-list" id="taskList"></div>
           </div>
 

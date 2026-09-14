@@ -281,7 +281,8 @@ def build_leadgen_lead_pdf_bytes(payload):
         nxt = (nxt + " · " if nxt else "") + _s(l.get("nextStepDate"))
     story += block("Next step", nxt)
     if l.get("presentationDate"):
-        story += block("Presentation", _s(l.get("presentationDate")) + ((" (booked " + _s(l.get("bookedOn")) + ")") if l.get("bookedOn") else ""))
+        story += block("Presentation", _s(l.get("presentationDate")) + ((" (booked " + _s(l.get("bookedOn")) + ")") if l.get("bookedOn") else "")
+                       + ((" · attendees: " + _s(l.get("attendees"))) if l.get("attendees") else ""))
     if l.get("status") == "Returned":
         story += block("Returned by the rep on " + _s(l.get("returnedOn")), _s(l.get("returnReason")))
     if l.get("notes"):

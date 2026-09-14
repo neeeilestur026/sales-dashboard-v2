@@ -63,7 +63,7 @@ const LG_UI = {
     fields: [['plantNo', 'Plant *', 'plant'], ['contactNo', 'Contact', 'contact'], ['status', 'Status', 'select', LG_ENUM.leadStatus], ['handedTo', 'Handed to (username)', 'text'],
              ['rightPerson', 'Right person', 'check'], ['ownMaintenance', 'Runs its own maintenance', 'check'], ['flangedOrHydraulic', 'Has flanged / hydraulic work', 'check'], ['saidYes', 'Said yes to a presentation or asked for a quote', 'check'],
              ['pain', 'Pain', 'text', null, 'full'], ['whatTheySaid', 'What they said', 'textarea', null, 'full'], ['nextStep', 'Next step', 'text'], ['nextStepDate', 'Next step date', 'date'],
-             ['presentationDate', 'Presentation date', 'date'], ['notes', 'Notes', 'textarea', null, 'full']],
+             ['presentationDate', 'Presentation date', 'date'], ['attendees', 'Attendees (presentation)', 'text'], ['notes', 'Notes', 'textarea', null, 'full']],
     required: ['plantNo'], filters: ['territory', 'status'],
   },
   accred: {
@@ -459,7 +459,7 @@ function renderLeadCards(rows) {
       ${l.pain ? `<div class="kv"><b>Pain:</b> ${flowEsc(l.pain)}</div>` : ''}
       ${l.whatTheySaid ? `<div class="kv"><b>They said:</b> ${flowEsc(l.whatTheySaid)}</div>` : ''}
       ${l.nextStep || l.nextStepDate ? `<div class="kv"><b>Next:</b> ${flowEsc(l.nextStep || '')}${l.nextStepDate ? ' · ' + flowEsc(l.nextStepDate) : ''}</div>` : ''}
-      ${l.presentationDate ? `<div class="kv"><b>Presentation:</b> ${flowEsc(l.presentationDate)}${l.bookedOn ? ' (booked ' + flowEsc(l.bookedOn) + ')' : ''}</div>` : ''}
+      ${l.presentationDate ? `<div class="kv"><b>Presentation:</b> ${flowEsc(l.presentationDate)}${l.bookedOn ? ' (booked ' + flowEsc(l.bookedOn) + ')' : ''}${l.attendees ? ' · ' + flowEsc(l.attendees) : ''}</div>` : ''}
       ${l.status === 'Returned' ? `<div class="kv" style="color:#b91c1c"><b>Returned ${flowEsc(l.returnedOn)}:</b> ${flowEsc(l.returnReason)}</div>` : ''}
       <div class="foot"><button type="button" class="lg-mini" data-pdf="${flowEsc(l.leadNo)}">📄 Lead sheet</button>${lgCanEdit ? `<button type="button" class="lg-mini" data-edit="${l.rowIndex}">Edit</button><button type="button" class="lg-mini" data-del="${l.rowIndex}">✕</button>` : ''}</div>
     </div>`).join('')}</div>`;

@@ -23,7 +23,7 @@ const contact = (c, plantNo, over) => save(c, 'contacts', Object.assign({ plantN
 {
   sec('1 · plumbing');
   const c = load();
-  ok('FLOW_VERSION 150', c.FLOW_VERSION === 150, c.FLOW_VERSION);
+  ok('FLOW_VERSION 151', c.FLOW_VERSION === 151, c.FLOW_VERSION);
   ['getLeadgen', 'getLeadgenCounts', 'getLeadgenFollowups', 'saveLeadgenRecord', 'deleteLeadgenRecord'].forEach(a =>
     ok(a + ' in HANDLERS', typeof c.HANDLERS[a] === 'function'));
   ['saveLeadgenRecord', 'deleteLeadgenRecord', 'logSalesCall', 'deleteSalesCall'].forEach(a =>
@@ -525,6 +525,39 @@ const contact = (c, plantNo, over) => save(c, 'contacts', Object.assign({ plantN
   nos.push(contact(c2, p2, { name: 'C61', email: 'c61@x.example' }).id);
   r = save(c2, 'batches', { kind: 'Intro', contactNos: nos });
   ok('61 is refused', !r.success && /at most 60/.test(r.message), r);
+}
+
+/* ── 17 · getLeadgenDay: the evidence under each number is exactly the rows that made it ──── */
+{
+  sec('17 · getLeadgenDay');
+  const c = load();
+  const today = c._lgDay(), yday = c._lgAddDays(today, -1);
+  settings(c, { lgRepLuzon: 'gerald' });
+  const p1 = plant(c).id, p2 = plant(c, { company: 'Apex Mining', plantSite: 'Maco', sector: 'Mining', territory: 'VisMin' }).id;
+  const c1 = contact(c, p1, { emailVerified: 'Pattern' }).id, c2 = contact(c, p1, { name: 'M. Cruz', email: 'm.cruz@x.example' }).id;
+  c.__store.LgPlants[1]['Researched On'] = yday;                                   // yesterday's plant
+  const b = save(c, 'batches', { kind: 'Intro', contactNos: [c1, c2], timeSlot: '08:30' });
+  save(c, 'batches', { kind: 'Follow-up', contactNos: [c1] });
+  call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: c2, outcome: 'Interested', notes: 'asked for a deck' }, LG));
+  call(c, 'logSalesCall', Object.assign({ kind: 'Follow-up', contactNo: c1, outcome: 'Referred' }, LG));
+  const lead = save(c, 'leads', { plantNo: p1, contactNo: c1, rightPerson: true, ownMaintenance: true, flangedOrHydraulic: true, saidYes: true, pain: 'leaks' });
+  save(c, 'leads', { rowIndex: 2, leadNo: lead.id, status: 'Presentation Booked', presentationDate: '2026-12-01', attendees: 'R. Santos, plant manager, Gerald' });
+  const d = call(c, 'getLeadgenDay', {});
+  ok('plants: today\'s one, with its details; yesterday\'s excluded', d.success && d.plants.length === 1 && d.plants[0].company === 'Holcim Philippines' && d.plants[0].sector === 'Cement' && d.plants[0].province === 'Bulacan', d.plants);
+  ok('contacts verified today: c1 only, carrying its company and site', d.contacts.length === 1 && d.contacts[0].contactNo === c1 && d.contacts[0].company === 'Holcim Philippines' && d.contacts[0].plantSite === 'Bulacan' && d.contacts[0].emailVerified === 'Pattern', d.contacts);
+  ok('the intro batch lists both contacts with name, email and company', d.introBatches.length === 1 && d.introBatches[0].timeSlot === '08:30' && d.introBatches[0].contacts.length === 2 && d.introBatches[0].contacts[1].email === 'm.cruz@x.example' && d.introBatches[0].contacts[1].company === 'Holcim Philippines', d.introBatches);
+  ok('the follow-up batch is separate', d.followupBatches.length === 1 && d.followupBatches[0].contacts.length === 1);
+  ok('cold call: who, company, outcome, notes', d.coldCalls.length === 1 && d.coldCalls[0].contact === 'M. Cruz' && d.coldCalls[0].company === 'Holcim Philippines' && d.coldCalls[0].outcome === 'Interested' && d.coldCalls[0].notes === 'asked for a deck', d.coldCalls);
+  ok('follow-up call is separate', d.followupCalls.length === 1 && d.followupCalls[0].contact === 'R. Santos');
+  ok('lead handed off today, with contact and rep', d.leads.length === 1 && d.leads[0].contactName === 'R. Santos' && d.leads[0].handedTo === 'gerald' && d.leads[0].pain === 'leaks', d.leads);
+  ok('presentation booked today: plant, date, attendees', d.meetings.length === 1 && d.meetings[0].plantSite === 'Bulacan' && d.meetings[0].presentationDate === '2026-12-01' && d.meetings[0].attendees === 'R. Santos, plant manager, Gerald', d.meetings);
+  const dy = call(c, 'getLeadgenDay', { date: yday });
+  ok('yesterday shows yesterday\'s plant and nothing else', dy.plants.length === 1 && dy.plants[0].plantNo === p2 && dy.introBatches.length === 0 && dy.coldCalls.length === 0 && dy.leads.length === 0, dy);
+  const k = call(c, 'getLeadgenCounts', {});
+  ok('the evidence counts match the counter exactly', k.day.plants === d.plants.length && k.day.contacts === d.contacts.length && k.day.introEmails === d.introBatches[0].contacts.length && k.day.followupEmails === 1 && k.day.coldCalls === 1 && k.day.followupCalls === 1 && k.day.leads === 1 && k.day.meetings === 1, k.day);
+  call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'batches', id: b.id, rowIndex: 2 }, LG));
+  ok('a removed batch is out of the evidence too', call(c, 'getLeadgenDay', {}).introBatches.length === 0);
+  ok('a user filter scopes it', call(c, 'getLeadgenDay', { user: 'Nobody' }).plants.length === 0);
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));
