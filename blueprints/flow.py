@@ -563,7 +563,10 @@ def payment_request_pdf():
 SECURED_ACTIONS = [
     # A277 — the lead-gen rows are one person's performance record; the actor is the session.
     # Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
-    "saveLeadgenRecord", "deleteLeadgenRecord", "logSalesCall", "deleteSalesCall",
+    # A277-3 — logSalesCall/deleteSalesCall deliberately NOT here: they are existing actions the
+    # deployed report.html already calls, and securing them before the client shipped refused every
+    # rep's call log live. See the deploy-order note in FlowAPI.gs _SECURED.
+    "saveLeadgenRecord", "deleteLeadgenRecord",
     # A276 — the hire register: custody of a tool and the fate of a deposit both answer to
     # who is asking, so identity is stamped by the server rather than claimed by the browser.
     "createHire", "dispatchHireUnit", "returnHireUnit", "closeHire",

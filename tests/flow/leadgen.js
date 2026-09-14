@@ -17,17 +17,20 @@ const DIR = { actorRole: 'director', actorName: 'The Director', actorUsername: '
 const save = (c, entity, rec, who, extra) => call(c, 'saveLeadgenRecord', Object.assign({ entity, record: JSON.stringify(rec) }, who || LG, extra || {}));
 const settings = (c, patch) => call(c, 'setFlowSettings', Object.assign({ settings: JSON.stringify(patch) }, DIR));
 const plant = (c, over, who, extra) => save(c, 'plants', Object.assign({ company: 'Holcim Philippines', plantSite: 'Bulacan', sector: 'Cement', province: 'Bulacan', territory: 'Luzon' }, over || {}), who, extra);
-const contact = (c, plantNo, over) => save(c, 'contacts', Object.assign({ plantNo, name: 'R. Santos', role: 'Maintenance / O&M Head', email: 'r.santos@holcim.example' }, over || {}));
+const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.assign({ plantNo, name: 'R. Santos', role: 'Maintenance / O&M Head', email: 'r.santos@holcim.example' }, over || {}), who, extra);
 
 /* ── 1 · plumbing ─────────────────────────────────────────────────────────────────────────── */
 {
   sec('1 · plumbing');
   const c = load();
-  ok('FLOW_VERSION 151', c.FLOW_VERSION === 151, c.FLOW_VERSION);
+  ok('FLOW_VERSION 152', c.FLOW_VERSION === 152, c.FLOW_VERSION);
   ['getLeadgen', 'getLeadgenCounts', 'getLeadgenFollowups', 'saveLeadgenRecord', 'deleteLeadgenRecord'].forEach(a =>
     ok(a + ' in HANDLERS', typeof c.HANDLERS[a] === 'function'));
-  ['saveLeadgenRecord', 'deleteLeadgenRecord', 'logSalesCall', 'deleteSalesCall'].forEach(a =>
+  ['saveLeadgenRecord', 'deleteLeadgenRecord'].forEach(a =>
     ok(a + ' is MUTATIONS + _SECURED + _MODULE_MAP', c.MUTATIONS[a] === 1 && c._SECURED[a] === 1 && !!c._MODULE_MAP[a]));
+  ['logSalesCall', 'deleteSalesCall'].forEach(a =>
+    ok(a + ' takes the lock and logs, but is NOT secured — the deployed report.html calls it directly, and securing it before the client ships refuses every rep\'s call log (A277-3)',
+       c.MUTATIONS[a] === 1 && !!c._MODULE_MAP[a] && c._SECURED[a] === undefined));
   ok('Clients is 12 wide and ends in Stage', c.SCHEMA.Clients.length === 12 && c.SCHEMA.Clients[11] === 'Stage');
   ok('SalesCalls is 10 wide, Kind + Contact No appended', c.SCHEMA.SalesCalls.slice(8).join() === 'Kind,Contact No');
   ok('LgTouches carries no Deleted On (it follows its batch)', c.SCHEMA.LgTouches.indexOf('Deleted On') === -1);
@@ -558,6 +561,33 @@ const contact = (c, plantNo, over) => save(c, 'contacts', Object.assign({ plantN
   call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'batches', id: b.id, rowIndex: 2 }, LG));
   ok('a removed batch is out of the evidence too', call(c, 'getLeadgenDay', {}).introBatches.length === 0);
   ok('a user filter scopes it', call(c, 'getLeadgenDay', { user: 'Nobody' }).plants.length === 0);
+}
+
+/* ── 18 · the live break: what the DEPLOYED browser sends, against a script that enforces ───── */
+{
+  sec('18 · a direct post from the deployed client (A277-3)');
+  const c = load();
+  c.__props.FLOW_MUTATION_SECRET = 's3cret';        // enforcement ON, as it is in production
+  const pn = plant(c, {}, LG, { flowSecret: 's3cret' }).id;
+  const cn = contact(c, pn, {}, LG, { flowSecret: 's3cret' }).id;
+
+  /* report.html posts straight to /exec with actorName from localStorage and NO flowSecret — it
+     has no idea the action was secured, because only its own FLOW_SECURED_ACTIONS decides. This is
+     the exact call that alerted "This action must be performed through the app (signed in)". */
+  let r = call(c, 'logSalesCall', { contact: 'Somebody', company: 'Local Supply', outcome: 'Connected', actorName: 'Gerald', actorRole: 'sales' });
+  ok('a rep\'s plain call log goes through again', r.success, r);
+  r = call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: cn, outcome: 'No answer' }, LG));
+  ok('…and so does the lead-gen call', r.success, r);
+  r = call(c, 'deleteSalesCall', { rowIndex: 2, actorRole: 'sales', actorName: 'Gerald' });
+  ok('…and removing one', r.success, r);
+
+  // The new actions stay shut: nothing deployed calls them, so there is no one to break.
+  r = call(c, 'saveLeadgenRecord', { entity: 'plants', record: JSON.stringify({ company: 'Spoof', sector: 'Cement', territory: 'Luzon' }), actorName: 'Not Ana', actorRole: 'leadgen' });
+  ok('saveLeadgenRecord without the secret is still refused', !r.success && /through the app/.test(r.message), r);
+  r = call(c, 'deleteLeadgenRecord', { entity: 'plants', id: pn, rowIndex: 2, actorName: 'x', actorRole: 'leadgen' });
+  ok('deleteLeadgenRecord without the secret is still refused', !r.success && /through the app/.test(r.message), r);
+  r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: JSON.stringify({ company: 'Via Flask', sector: 'Cement', territory: 'Luzon' }) }, LG, { flowSecret: 's3cret' }));
+  ok('…and go through when Flask stamps the secret', r.success, r);
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));

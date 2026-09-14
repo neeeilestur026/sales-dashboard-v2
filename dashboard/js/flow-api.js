@@ -128,8 +128,10 @@ const FLOW_SECURED_ACTIONS = [
   // browser posts direct, the server refuses for want of a flowSecret, and the feature is
   // silently dead — which is exactly what happened to runQuotationOwnerBackfill in A218.
   'createHire', 'dispatchHireUnit', 'returnHireUnit', 'closeHire',
-  // A277 — the lead-gen writes and the call log they share with the reps. Same drift rule.
-  'saveLeadgenRecord', 'deleteLeadgenRecord', 'logSalesCall', 'deleteSalesCall',
+  /* A277 — the lead-gen writes. Same drift rule. A277-3: logSalesCall/deleteSalesCall are NOT
+     here — securing an action the deployed client already calls breaks it the moment FlowAPI.gs
+     is pasted, which is exactly what happened to the reps' call log. */
+  'saveLeadgenRecord', 'deleteLeadgenRecord',
   'approveQuotation', 'rejectQuotation', 'approvePO', 'rejectPO',
   'approvePaymentRequest', 'rejectPaymentRequest', 'markPaymentRequestPaid',
   // A225 — admin/accounting only, enforced server-side, so identity comes from the session.
