@@ -91,6 +91,8 @@
       <div id="flowActionCenter"></div>
     </div>
     <div class="b-card" id="myDeductionCard" style="padding:18px 20px;margin-bottom:16px;display:none;"></div>
+    <!-- A277: leads the lead-gen user handed to this rep. Id-driven (js/leads-for-you.js); hides itself when empty. -->
+    <div class="b-card" id="leadsForYou" style="padding:18px 20px;margin-bottom:16px;display:none;"></div>
 
     <!-- ROW A: anchor pipeline · KPI tiles · target donut · mini stack -->
     <div class="b-row">
@@ -254,6 +256,7 @@
   <script src="js/api.js"></script>
   <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
   <script src="js/flow-api.js"></script>
+  <script src="js/leads-for-you.js"></script>   <!-- A277: after flow-api.js — it reads through fetchFlow -->
   <script src="js/auth.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/training-mode.js"></script>

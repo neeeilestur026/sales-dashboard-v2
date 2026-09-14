@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Generation</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/bento-skin-director.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/daily-reports.css">
+  <style>
+    /* ── A277 Lead Generation — the dashboard.html bento scope, verbatim tokens, plus one gradient
+          hero from marketing-home. Indigo, light-only; there is no dark mode anywhere in the system. ── */
+    body{background:#eef1f5 !important;font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+    .main-content{
+      --ac:#4f46e5; --acd:#3730a3; --ac-hover:#4338ca; --soft:#e0e7ff;
+      --page:#f3f5f7; --card:#fff; --tile2:#eef2f6; --line:#d7dce3;
+      --ink:#111827; --ink2:#8b93a1;
+      --ok:#15803d; --okbg:#dcfce7; --warn:#b45309; --warnbg:#fef3c7; --bad:#b91c1c; --badbg:#fee2e2;
+      background:radial-gradient(1000px 500px at 12% -8%,#eef1f5,#f3f5f7 60%) !important;
+      min-height:100vh; padding:104px 28px 40px !important; max-width:1320px; margin:0 auto;
+    }
+    @media (max-width:900px){ .main-content{ padding:96px 16px 32px !important; } }
+    .bento-h1{font:800 26px/1 'Inter',sans-serif;letter-spacing:-.02em;color:var(--ink)}
+    .bento-sub{font:400 13.5px 'Inter',sans-serif;color:var(--ink2);margin-top:7px}
+    .b-card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+      box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35);
+      transition:transform .18s cubic-bezier(.4,0,.2,1),box-shadow .25s cubic-bezier(.4,0,.2,1),border-color .2s}
+    .b-ic{border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .b-pill{border-radius:999px;display:inline-flex;align-items:center;gap:7px}
+    .b-btn{border-radius:999px;padding:11px 20px;font:600 13px 'Inter',sans-serif;color:#fff;border:none;cursor:pointer;
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 88%,#fff),var(--ac));
+      box-shadow:0 6px 16px -8px color-mix(in srgb,var(--ac) 80%,transparent);
+      transition:transform .18s cubic-bezier(.4,0,.2,1),filter .18s}
+    .b-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+    .b-btn:active{transform:scale(.97)}
+    .b-btn:disabled{opacity:.55;cursor:default;transform:none}
+    .b-btn.sec{background:var(--card);color:var(--ink) !important;border:1px solid var(--line);box-shadow:none}
+    .b-btn.hero{background:#fff;color:var(--acd) !important;box-shadow:0 6px 16px -10px rgba(0,0,0,.4)}
+    .b-tabnum{font-variant-numeric:tabular-nums}
+    .b-lbl{font:600 11px 'Inter',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+    @media (prefers-reduced-motion:reduce){.b-card,.b-btn{transition:none}}
+
+    /* hero */
+    .lg-hero{background:linear-gradient(135deg,var(--ac),var(--acd));border-radius:22px;padding:22px 26px;color:#fff;
+      display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
+      box-shadow:0 14px 34px -18px rgba(79,70,229,.7);margin-bottom:16px}
+    .lg-hero .left{display:flex;align-items:center;gap:16px;min-width:0}
+    .lg-hero .datechip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:8px 16px 8px 8px;gap:12px}
+    .lg-hero .datechip .b-ic{width:40px;height:40px;background:#fff;color:var(--acd);font:800 18px 'Inter',sans-serif}
+    .lg-hero .datechip small{display:block;font:600 11px/1.2 'Inter',sans-serif;opacity:.85}
+    .lg-hero .datechip b{display:block;font:700 12.5px/1.2 'Inter',sans-serif}
+    .lg-hero h1{font:800 26px/1 'Inter',sans-serif;letter-spacing:-.02em;margin:0;color:#fff}
+    .lg-hero p{margin:7px 0 0;font:400 13.5px 'Inter',sans-serif;opacity:.88}
+    .lg-hero .right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .lg-hero .wk{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:9px 14px;font:600 12.5px 'Inter',sans-serif}
+    .lg-hero .wk i{width:8px;height:8px;border-radius:50%;background:#a5f3c8;display:inline-block}
+    .lg-hero .ro{background:rgba(255,255,255,.14);padding:6px 12px;font:600 11px 'Inter',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+
+    .lg-sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .lg-meta{font:500 12px 'Inter',sans-serif;color:var(--ink2)}
+    .lg-count{background:var(--soft);color:var(--acd);padding:3px 10px;font:700 11.5px 'Inter',sans-serif}
+
+    /* the eight */
+    .lg-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+    @media (max-width:1180px){.lg-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:520px){.lg-tiles{grid-template-columns:1fr}}
+    .lg-tile{padding:16px 18px;position:relative;min-width:0;text-align:left;font-family:'Inter',sans-serif}
+    button.lg-tile{cursor:pointer;width:100%}
+    button.lg-tile:hover{transform:translateY(-3px);box-shadow:0 18px 36px -18px rgba(15,23,42,.45);border-color:color-mix(in srgb,var(--ac) 40%,var(--line))}
+    button.lg-tile:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+    .lg-tile .t{display:flex;align-items:center;gap:8px;font:600 12px 'Inter',sans-serif;color:var(--ink2);padding-right:72px;min-height:26px}
+    .lg-tile .t span+span{line-height:1.2}
+    .lg-tile .t .ic{width:26px;height:26px;background:var(--tile2);font-size:13px}
+    .lg-tile .n{margin-top:10px;font:800 28px/1 'Inter',sans-serif;color:var(--ink)}
+    .lg-tile .n small{font:600 14px 'Inter',sans-serif;color:var(--ink2);margin-left:4px}
+    .lg-tile .st{position:absolute;top:14px;right:14px;padding:3px 9px;border-radius:999px;font:700 10.5px 'Inter',sans-serif;letter-spacing:.03em}
+    .st-met{background:var(--okbg);color:var(--ok)} .st-pace{background:var(--soft);color:var(--acd)}
+    .st-behind{background:var(--warnbg);color:var(--warn)} .st-off{background:var(--tile2);color:var(--ink2)}
+    .lg-bar{height:8px;border-radius:999px;background:var(--tile2);overflow:hidden;margin-top:12px}
+    .lg-bar i{display:block;height:100%;border-radius:999px;transition:width .6s ease}
+    .lg-tile .sub{margin-top:8px;font:500 11.5px 'Inter',sans-serif;color:var(--ink2);min-height:14px}
+
+    /* follow-ups + week */
+    .lg-two{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:16px}
+    @media (max-width:1000px){.lg-two{grid-template-columns:1fr}}
+    .lg-panel{padding:18px 20px}
+    .fu{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+    .fu:last-child{border-bottom:none}
+    .fu .stg{flex-shrink:0;width:66px;text-align:center;padding:4px 0;border-radius:8px;font:700 11px 'Inter',sans-serif}
+    .stg-d3{background:var(--soft);color:var(--acd)} .stg-d7{background:#ede9fe;color:#6d28d9} .stg-d14{background:var(--warnbg);color:var(--warn)}
+    .stg-rev{background:var(--tile2);color:var(--ink2)} .stg-rep{background:var(--okbg);color:var(--ok)}
+    .fu .who{flex:1;min-width:0;font:500 12.5px 'Inter',sans-serif;color:var(--ink2)}
+    .fu .who b{display:block;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fu .who .late{color:var(--bad);font-weight:600}
+    .fu .act{display:flex;gap:6px;flex-shrink:0}
+    .lg-mini{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 9px;font:600 11.5px 'Inter',sans-serif;color:var(--ink);cursor:pointer}
+    .lg-mini:hover{border-color:var(--ac);color:var(--acd)}
+    .lg-mini.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+    .lg-empty{padding:18px 0;text-align:center;font:400 12.5px 'Inter',sans-serif;color:var(--ink2)}
+    .wk-row{display:grid;grid-template-columns:118px 1fr 84px;gap:10px;align-items:center;padding:6px 0;font:500 12.5px 'Inter',sans-serif;color:var(--ink2)}
+    .wk-row .v{text-align:right;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+    .wk-row .lg-bar{margin-top:0;height:7px}
+    .wk-rate{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font:500 12.5px 'Inter',sans-serif;color:var(--ink2)}
+    .wk-rate b{font:800 18px 'Inter',sans-serif;color:var(--ink)}
+    .strip{display:flex;gap:6px;margin-top:12px}
+    .strip .d{flex:1;text-align:center;border-radius:10px;padding:7px 0 6px;background:var(--tile2);font:600 10.5px 'Inter',sans-serif;color:var(--ink2);line-height:1.25}
+    .strip .d b{display:block;font:800 12px 'Inter',sans-serif;color:var(--ink)}
+    .strip .d.met{background:var(--okbg);color:var(--ok)} .strip .d.met b{color:var(--ok)}
+    .strip .d.part{background:var(--warnbg);color:var(--warn)} .strip .d.part b{color:var(--warn)}
+    .strip .d.off{opacity:.45} .strip .d.today{outline:2px solid var(--ac);outline-offset:-2px}
+    .strip .d.future{background:transparent;border:1px dashed var(--line)}
+    .lg-week-foot{display:flex;justify-content:flex-end;margin-top:14px}
+
+    /* trackers — the marketing tab/panel shape, indigo */
+    .mkt-tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
+    .mkt-tab{padding:.5rem 1rem;border-radius:10px;font:700 .82rem 'Inter',sans-serif;cursor:pointer;
+      border:1px solid var(--line);background:#fff;color:#475569;transition:all .14s ease}
+    .mkt-tab:hover{color:var(--acd);border-color:var(--ac)}
+    .mkt-tab.active{background:var(--ac);color:#fff;border-color:var(--ac);box-shadow:0 2px 8px rgba(79,70,229,.28)}
+    .mkt-tab .cnt{font-size:.7rem;opacity:.8;margin-left:.3rem}
+    .panel-toolbar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.9rem}
+    .panel-toolbar h3{margin:0;font:700 1rem 'Inter',sans-serif;color:var(--ink)}
+    .panel-toolbar input[type=text],.panel-toolbar select{padding:.45rem .6rem;border:1px solid var(--line);border-radius:8px;font-size:.84rem;background:#fff}
+    .panel-toolbar .spacer{margin-left:auto}
+    .mkt-act{background:none;border:1px solid var(--line);border-radius:6px;padding:.18rem .5rem;cursor:pointer;font-size:.74rem;color:#475569}
+    .mkt-act:hover{border-color:var(--ac);color:var(--acd)}
+    .mkt-badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.68rem;font-weight:700}
+    .b-new{background:rgba(100,116,139,.16);color:#475569} .b-good{background:var(--okbg);color:var(--ok)}
+    .b-warm{background:var(--warnbg);color:var(--warn)} .b-info{background:var(--soft);color:var(--acd)} .b-bad{background:var(--badbg);color:var(--bad)}
+    .mkt-form{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+    .mkt-form .full{grid-column:1 / -1}
+    .mkt-form label{display:block;font:700 .72rem 'Inter',sans-serif;color:#475569;margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.03em}
+    .mkt-form input,.mkt-form select,.mkt-form textarea{width:100%;box-sizing:border-box;padding:.5rem .6rem;border:1px solid var(--line);border-radius:8px;font-size:.86rem;background:#fff;font-family:inherit}
+    .mkt-form textarea{min-height:60px;resize:vertical}
+    .mkt-form .chk{display:flex;align-items:center;gap:.5rem;font:500 .84rem 'Inter',sans-serif;color:var(--ink);text-transform:none;letter-spacing:0;padding:.45rem 0}
+    .mkt-form .chk input{width:auto;margin:0}
+    @media (max-width:640px){.mkt-form{grid-template-columns:1fr}}
+    .lead-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+    .lead{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;font:400 12.5px/1.5 'Inter',sans-serif;color:var(--ink2)}
+    .lead h4{margin:0;font:700 14px 'Inter',sans-serif;color:var(--ink)}
+    .lead .kv{margin-top:8px} .lead .kv b{color:var(--ink);font-weight:600}
+    .lead .q{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px} .lead .q span{font:600 10.5px 'Inter',sans-serif;padding:2px 7px;border-radius:6px;background:var(--okbg);color:var(--ok)}
+    .lead .q span.no{background:var(--badbg);color:var(--bad)}
+    .lead .foot{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
+
+    /* the dock */
+    .lg-dock{max-width:760px}
+    .dock-tabs{display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap}
+    .dock-tab{padding:.4rem .85rem;border-radius:999px;font:700 .78rem 'Inter',sans-serif;cursor:pointer;border:1px solid var(--line, #d7dce3);background:#fff;color:#475569}
+    .dock-tab.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
+    .pick{max-height:250px;overflow:auto;border:1px solid var(--line, #d7dce3);border-radius:10px;padding:6px;background:#fff}
+    .pick label{display:flex;gap:8px;align-items:center;padding:5px 7px;border-radius:6px;font:500 12.5px 'Inter',sans-serif;color:#111827;cursor:pointer;text-transform:none;letter-spacing:0;margin:0}
+    .pick label:hover{background:#eef2f6} .pick label input{width:auto;margin:0}
+    .pick label small{color:#8b93a1;margin-left:auto;white-space:nowrap}
+    .pick-tools{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem}
+    .pick-tools input,.pick-tools select{width:auto;flex:1;min-width:120px}
+    .pick-tools .cnt{font:700 12px 'Inter',sans-serif;color:#3730a3;white-space:nowrap}
+    .dock-hint{font:400 11.5px 'Inter',sans-serif;color:#8b93a1;margin-top:.5rem}
+    .settings-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem}
+    @media (max-width:640px){.settings-grid{grid-template-columns:1fr 1fr}}
+    .days{display:flex;gap:.4rem;flex-wrap:wrap}
+    .days label{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .6rem;border:1px solid var(--line, #d7dce3);border-radius:8px;font:600 12px 'Inter',sans-serif;text-transform:none;letter-spacing:0;margin:0;cursor:pointer}
+    .days label input{width:auto;margin:0}
+  </style>
+</head>
+<body>
+  <header class="navbar" id="navbar"></header>
+
+  <main class="main-content">
+    <!-- HERO -->
+    <div class="lg-hero">
+      <div class="left">
+        <span class="b-pill datechip"><span class="b-ic" id="dateDay">—</span><span><small id="dateDow">&nbsp;</small><b id="dateMon">&nbsp;</b></span></span>
+        <div>
+          <h1 id="greeting">Good morning</h1>
+          <p id="subline">Lead Generation</p>
+        </div>
+      </div>
+      <div class="right">
+        <span class="b-pill wk" id="weekPill"><i></i><span id="weekPillText">Week — · —</span></span>
+        <span class="b-pill ro" id="roTag" style="display:none;">Read-only</span>
+        <button type="button" class="b-btn sec" id="settingsBtn" style="display:none;">⚙ Quotas &amp; week</button>
+        <button type="button" class="b-btn hero" id="logBtn">+ Log activity</button>
+      </div>
+    </div>
+
+    <!-- what needs you today — the shared action strip, id-driven -->
+    <div class="b-card" id="flowActionCenterCard" style="padding:18px 20px;margin-bottom:16px">
+      <div class="b-lbl" style="margin-bottom:8px">⚑ What needs you today</div>
+      <div id="flowActionCenter"></div>
+    </div>
+    <div class="b-card" id="myDeductionCard" style="padding:18px 20px;margin-bottom:16px;display:none;"></div>
+
+    <!-- TODAY'S EIGHT -->
+    <div id="tiles-anchor"></div>
+    <div class="lg-sec-h"><span class="b-lbl">Today's eight</span><span class="lg-meta" id="tilesMeta">Loading…</span></div>
+    <div class="lg-tiles" id="tiles"></div>
+
+    <!-- FOLLOW-UPS + THIS WEEK -->
+    <div class="lg-two">
+      <div class="b-card lg-panel" id="followups-anchor">
+        <div class="lg-sec-h"><span class="b-lbl">Follow-ups due today</span><span class="b-pill lg-count" id="fuCount">0</span></div>
+        <div id="followups"><div class="lg-empty">Loading…</div></div>
+      </div>
+      <div class="b-card lg-panel">
+        <div class="lg-sec-h"><span class="b-lbl">This week</span><span class="lg-meta" id="weekMeta"></span></div>
+        <div id="week"></div>
+        <div class="lg-week-foot"><button type="button" class="b-btn sec" id="fridayPdfBtn">📄 Friday report → PDF</button></div>
+      </div>
+    </div>
+
+    <!-- TRACKERS -->
+    <div class="b-card lg-panel" style="margin-top:16px" id="trackers">
+      <div class="mkt-tabs" id="tabs"></div>
+      <div id="panels"></div>
+    </div>
+    <div id="msg" class="flow-msg" style="display:none;margin-top:0.8rem;"></div>
+
+    <!-- A264: Daily Reports — same ids as the management home, so js/management-flow.js drives it
+         unchanged. Removed from the DOM for the leadgen user; it is the oversight roles' view. -->
+    <div class="mgmt-newsec" id="newsec-daily-reports" style="margin-top:1.5rem;">
+      <h2 style="cursor:pointer;" onclick="mgmtToggleNewsec('newsec-daily-reports')">🗒️ Daily Reports
+        <span class="is-state" id="mgmtDrMeta" style="margin-left:auto;font-weight:400;"></span>
+        <span class="newsec-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </h2>
+      <div class="is-controls">
+        <label style="font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">Date</label>
+        <input type="date" id="mgmtDrDate">
+        <input type="text" id="mgmtDrSearch" placeholder="Search user…">
+      </div>
+      <div class="dr-tiles">
+        <div class="dr-tile"><div class="l">Active Users</div><div class="v" id="mgmtDrUsers">0</div></div>
+        <div class="dr-tile"><div class="l">Movements</div><div class="v" id="mgmtDrMovements">0</div></div>
+        <div class="dr-tile"><div class="l">Documents</div><div class="v" id="mgmtDrDocs">0</div></div>
+        <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="mgmtDrSales">₱0.00</div></div>
+        <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
+      </div>
+      <div class="flow-scroll" id="mgmtDrBody" style="max-height:440px;padding:0.5rem;"><div class="mf-empty">Loading…</div></div>
+      <div style="margin-top:1.4rem;border-top:1px solid var(--border,#e2e8f0);padding-top:1rem;">
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <h3 style="font-size:0.95rem;font-weight:700;margin:0;">📊 Team Weekly Report</h3>
+          <span id="mfTwRange" style="font-size:0.8rem;color:var(--text-muted,#64748b);"></span>
+          <span style="margin-left:auto;display:inline-flex;gap:0.35rem;">
+            <button class="btn btn-sm btn-secondary" onclick="mfTwNav(-1)" title="Previous week">◀</button>
+            <button class="btn btn-sm btn-secondary" id="mfTwReset" onclick="mfTwNav(0)" style="display:none;" title="Back to this week">↺</button>
+            <button class="btn btn-sm btn-secondary" id="mfTwNext" onclick="mfTwNav(1)" title="Next week">▶</button>
+            <button class="btn btn-sm btn-primary" id="mfTwPdfBtn" onclick="mfTwPdf()" disabled>📄 View / Save PDF</button>
+          </span>
+        </div>
+        <div id="mfTwBody"><div class="mf-empty">Loading team weekly report…</div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- LOG ACTIVITY dock — Call · Email batch · Plant · Contact -->
+  <div class="flow-modal-overlay" id="dock">
+    <div class="flow-modal lg-dock">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem;">
+        <h3 style="margin:0;">Log activity</h3>
+        <span class="lg-meta" id="dockHint"></span>
+      </div>
+      <div class="dock-tabs" id="dockTabs"></div>
+      <form id="dockForm" autocomplete="off">
+        <div class="mkt-form" id="dockFields"></div>
+        <div id="dockMsg" class="flow-msg" style="display:none;"></div>
+        <div class="flow-modal-foot">
+          <label class="dock-hint" style="margin-right:auto;display:inline-flex;align-items:center;gap:.4rem;"><input type="checkbox" id="dockKeep" checked> keep open for the next one</label>
+          <button type="button" class="btn btn-secondary" id="dockClose">Close</button>
+          <button type="submit" class="btn btn-primary" id="dockSave">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit modal for the trackers -->
+  <div class="flow-modal-overlay" id="recModal">
+    <div class="flow-modal" style="max-width:680px;">
+      <h3 id="recModalTitle">Edit</h3>
+      <input type="hidden" id="recEntity"><input type="hidden" id="recRowIndex"><input type="hidden" id="recId">
+      <form id="recForm2" autocomplete="off">
+        <div class="mkt-form" id="recForm"></div>
+        <div id="recFormMsg" class="flow-msg" style="display:none;"></div>
+        <div class="flow-modal-foot">
+          <button type="button" class="btn btn-secondary" id="recCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="recSaveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Quotas & working week — director / management -->
+  <div class="flow-modal-overlay" id="setModal">
+    <div class="flow-modal" style="max-width:720px;">
+      <h3>Quotas &amp; the working week</h3>
+      <p class="dock-hint" style="margin:-.3rem 0 .9rem;">Per working day. The weekly target is the daily quota × the working days in that week, holidays removed.</p>
+      <form id="setForm" autocomplete="off">
+        <div class="mkt-form">
+          <div class="full"><div class="settings-grid" id="setQuotas"></div></div>
+          <div><label>Max emails per batch</label><input type="number" min="1" id="setMaxBatch"></div>
+          <div><label>Reply-rate aim (%)</label><input type="number" min="0" step="0.1" id="setReplyAim"></div>
+          <div class="full"><label>Working days</label><div class="days" id="setDays"></div></div>
+          <div class="full"><label>Holidays (yyyy-mm-dd, comma-separated)</label><input type="text" id="setHolidays" placeholder="2026-12-25, 2026-12-30"></div>
+          <div class="full"><label>Sector cycle (one per week, repeating)</label><input type="text" id="setCycle" placeholder="Cement,Mining,Power,Water"></div>
+          <div><label>Luzon rep (login username)</label><select id="setRepLuzon"></select></div>
+          <div><label>VisMin rep (login username)</label><select id="setRepVisMin"></select></div>
+        </div>
+        <div id="setMsg" class="flow-msg" style="display:none;"></div>
+        <div class="flow-modal-foot">
+          <button type="button" class="btn btn-secondary" id="setCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="setSave">Save settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/leadgen-home.js"></script>
+  <!-- A264: Daily Reports section — same module stack the management home uses. -->
+  <script src="js/report-render.js"></script>
+  <script src="js/report-pdf.js"></script>
+  <script src="js/team-performance.js"></script>
+  <script src="js/management-flow.js"></script>
+  <script>
+    function mgmtToggleNewsec(id) { var el = document.getElementById(id); if (el) el.classList.toggle('collapsed'); }
+    document.addEventListener('DOMContentLoaded', function () { if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300); });
+  </script>
+</body>
+</html>

@@ -24,6 +24,7 @@ from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
 from pdf_generators.travel_allowance_pdf import build_travel_allowance_pdf_bytes
+from pdf_generators.leadgen_report_pdf import build_leadgen_week_pdf_bytes, build_leadgen_lead_pdf_bytes   # A277
 from pdf_generators.utils import sanitize_filename, ph_date_ymd, ph_date_long
 from blueprints.session_auth import validate_session, display_name_for, INTERNAL_SHARED_SECRET
 
@@ -865,6 +866,36 @@ def stamp_po_received():
 
 
 # ── A214: the travel-allowance pack ───────────────────────────────────────────
+# ── A277 — the two lead-generation documents ─────────────────────────────────
+# DELIBERATELY PURE, like the travel pack: the page posts the exact payload it drew from
+# (getLeadgenCounts / a getLeadgen lead row), nothing is re-read here, so the document agrees with
+# the screen by construction.
+@flow_bp.route("/flow/leadgen-report-pdf", methods=["POST"])
+def leadgen_report_pdf():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        pdf_bytes = build_leadgen_week_pdf_bytes(data)
+    except Exception as e:
+        logger.exception("Lead-gen weekly report PDF failed")
+        return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
+    week = (data.get("week") or {}) if isinstance(data, dict) else {}
+    stem = sanitize_filename(_s(week.get("start")) or "week")
+    return _pdf_response(pdf_bytes, f"LeadGen_Week_{stem}.pdf")
+
+
+@flow_bp.route("/flow/leadgen-lead-pdf", methods=["POST"])
+def leadgen_lead_pdf():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        pdf_bytes = build_leadgen_lead_pdf_bytes(data)
+    except Exception as e:
+        logger.exception("Lead sheet PDF failed")
+        return jsonify({"success": False, "message": f"PDF error: {e}"}), 500
+    lead = (data.get("lead") or {}) if isinstance(data, dict) else {}
+    stem = sanitize_filename(_s(lead.get("leadNo")) or "lead")
+    return _pdf_response(pdf_bytes, f"Lead_{stem}.pdf")
+
+
 @flow_bp.route("/flow/travel-allowance-pdf", methods=["POST"])
 def travel_allowance_pdf():
     """Render a travel replenishment as its three-page pack (+ receipt annex).

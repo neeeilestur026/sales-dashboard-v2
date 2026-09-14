@@ -363,6 +363,8 @@ const contact = (c, plantNo, over) => save(c, 'contacts', Object.assign({ plantN
   ok('the re-hand is not counted as today\'s lead', k.day.leads === 1, k.day);
   const g = call(c, 'getLeadgen', { entity: 'leads', handedTo: 'kim' });
   ok('getLeadgen filters leads by rep username', g.data.leads.length === 2 && g.data.leads.every(l => l.handedTo === 'kim') && g.data.leads[0].rightPerson === true, g.data.leads.map(l => l.leadNo));
+  const hl = g.data.leads.find(l => l.contactNo);
+  ok('a lead carries its plant and contact for the rep\'s panel', hl && hl.company === 'Holcim Philippines' && hl.plantSite === 'Bulacan' && hl.contactName === 'R. Santos' && hl.contactMobile === '0917' && hl.sector === 'Cement', hl);
   r = save(c, 'leads', { plantNo: p1, contactNo: 'CTC-000000-000', rightPerson: true, ownMaintenance: true, flangedOrHydraulic: true, saidYes: true });
   ok('an unknown contact on a lead is refused', !r.success, r);
 }
@@ -472,6 +474,57 @@ const contact = (c, plantNo, over) => save(c, 'contacts', Object.assign({ plantN
   ok('defaults are merged', d.lgQuotaMeetings === 1 && d.lgMaxBatch === 60 && d.quotationFollowUpDays === 7);
   const k = call(c, 'getLeadgenCounts', { weekStart: '2026-12-21' });
   ok('the counter sees the six-day week minus Christmas', k.week.workingDays.length === 5 && k.week.workingDays.indexOf('2026-12-25') === -1 && k.week.workingDays.indexOf('2026-12-26') !== -1, k.week.workingDays);
+}
+
+/* ── 16 · adversarial: the shapes a retrying browser, a stale tab or a curious user can send ─── */
+{
+  sec('16 · adversarial');
+  const c = load();
+  const today = c._lgDay();
+  let r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: '[]' }, LG));
+  ok('a JSON array as the record is refused, not written', !r.success, r);
+  r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: '5' }, LG));
+  ok('a JSON number as the record is refused', !r.success, r);
+  r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: '{bad' }, LG));
+  ok('broken JSON is refused', !r.success && /JSON/.test(r.message), r);
+  r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'touches', record: '{}' }, LG));
+  ok('the touches sheet cannot be written by hand', !r.success, r);
+  r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: JSON.stringify({ company: '   ', sector: 'Cement', territory: 'Luzon' }) }, LG));
+  ok('a whitespace company is "required"', !r.success && /Company is required/.test(r.message), r);
+  r = plant(c, {}, { actorRole: 'LEADGEN', actorName: 'Ana Reyes' });
+  ok('role comparison is case-insensitive', r.success, r);
+  const pn = r.id;
+  r = save(c, 'contacts', { rowIndex: 2, contactNo: 'CTC-x', plantNo: pn, name: 'X' });
+  ok('a contact update aimed at a plant row (rowIndex 2 of the wrong sheet) is refused', !r.success, r);
+  r = save(c, 'contacts', { plantNo: pn, name: '<script>alert(1)</script>', email: 'a@b.example', role: 'Other' });
+  ok('markup is stored verbatim (the page escapes on render)', r.success && c.__store.LgContacts[0]['Name'] === '<script>alert(1)</script>');
+  const cn = r.id;
+  r = save(c, 'batches', { kind: 'Intro', contactNos: '  ' + cn + ' ,, ' + cn + '\n ' + cn + '  ' });
+  ok('a messy contact list still dedupes to one', r.success && c.__store.LgEmailBatch[0]['Count'] === 1, c.__store.LgEmailBatch[0]);
+  r = save(c, 'batches', { kind: 'Intro', contactNos: { a: 1 } });
+  ok('an object where a list was expected is refused', !r.success, r);
+  r = save(c, 'batches', { kind: 'Intro', contactNos: [cn], date: '2026-9-1' });
+  ok('a malformed date is refused, not silently today', !r.success && /not a date/.test(r.message), r);
+  r = save(c, 'batches', { kind: 'Intro', contactNos: [cn], date: new Date(2026, 8, 14, 23, 59).toISOString() });
+  ok('an ISO datetime typed as a date is accepted through _lgDayOf or refused as future — never a crash', typeof r.success === 'boolean', r);
+  r = call(c, 'getLeadgenCounts', { date: 'garbage', weekStart: 'x', user: 12 });
+  ok('garbage filters fall back to today and no user filter', r.success && r.date === today, r);
+  r = call(c, 'getLeadgenFollowups', { date: '2026-13-45' });
+  ok('an impossible date still answers', r.success, r);
+  r = call(c, 'getLeadgen', { entity: 'nope' });
+  ok('an unknown entity returns an empty map, not an error', r.success && Object.keys(r.data).length === 0, r);
+  r = call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'plants', id: pn, rowIndex: '2; DROP' }, LG));
+  ok('a non-numeric rowIndex that parseInt salvages still has to match the id', r.success, r);
+  // sixty contacts in one batch: within the limit, sixty touches, sixty intro stamps
+  const c2 = load();
+  const p2 = plant(c2).id;
+  const nos = [];
+  for (let i = 0; i < 60; i++) nos.push(contact(c2, p2, { name: 'C' + i, email: 'c' + i + '@x.example' }).id);
+  r = save(c2, 'batches', { kind: 'Intro', contactNos: nos });
+  ok('a full 60-contact batch: 60 touches, 60 intro stamps, Count 60', r.success && c2.__store.LgTouches.length === 60 && c2.__store.LgContacts.every(x => x['Intro Sent'] === c2._lgDay()) && c2.__store.LgEmailBatch[0]['Count'] === 60, r);
+  nos.push(contact(c2, p2, { name: 'C61', email: 'c61@x.example' }).id);
+  r = save(c2, 'batches', { kind: 'Intro', contactNos: nos });
+  ok('61 is refused', !r.success && /at most 60/.test(r.message), r);
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));

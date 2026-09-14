@@ -7882,6 +7882,12 @@ function _lgYes(v) { return v === true || /^(yes|true|1|y)$/i.test(String(v || '
 function getLeadgen(p) {
   p = p || {};
   var out = {}, only = String(p.entity || '');
+  /* Contacts, leads and accreditations carry their plant's company/site/sector, and a lead its
+     contact's name and details, so the rep's "leads for you" panel and the lead sheet are ONE read
+     rather than three on every dashboard load. Built once per call, only when needed. */
+  var pm = null, cm = null;
+  var plantMap = function () { if (!pm) { pm = {}; _lgRows('plants').forEach(function (r) { pm[String(r['Plant No'])] = r; }); } return pm; };
+  var contactMap = function () { if (!cm) { cm = {}; _lgRows('contacts').forEach(function (r) { cm[String(r['Contact No'])] = r; }); } return cm; };
   Object.keys(LEADGEN).forEach(function (k) {
     if (LEADGEN[k].internal && only !== k) return;
     if (only && k !== only) return;
@@ -7889,6 +7895,23 @@ function getLeadgen(p) {
     if (p.plantNo) rows = rows.filter(function (r) { return String(r.plantNo || '') === String(p.plantNo); });
     if (k === 'leads' && p.handedTo) rows = rows.filter(function (r) { return String(r.handedTo || '') === String(p.handedTo); });
     if (p.status) rows = rows.filter(function (r) { return String(r.status || '') === String(p.status); });
+    if (k === 'contacts' || k === 'leads' || k === 'accred') {
+      rows.forEach(function (r) {
+        var pl = plantMap()[String(r.plantNo)];
+        if (!pl) return;
+        if (!r.company) r.company = String(pl['Company'] || '');
+        r.plantSite = String(pl['Plant / Site'] || ''); r.sector = String(pl['Sector'] || '');
+        r.province = String(pl['Province'] || '');
+        if (!r.territory) r.territory = String(pl['Territory'] || '');
+      });
+    }
+    if (k === 'leads') {
+      rows.forEach(function (r) {
+        var ct = r.contactNo ? contactMap()[String(r.contactNo)] : null;
+        r.contactName = ct ? String(ct['Name'] || '') : ''; r.contactRole = ct ? String(ct['Role'] || '') : '';
+        r.contactEmail = ct ? String(ct['Email'] || '') : ''; r.contactMobile = ct ? String(ct['Mobile'] || '') : '';
+      });
+    }
     out[k] = rows;
   });
   return { success: true, data: out, today: _lgDay() };

@@ -1417,6 +1417,42 @@ async function flowComputeActions(session) {
     }).catch(() => {}));
   }
 
+  /* A277 — the lead-gen role's strip: what the follow-up reader says is due, accreditations
+     inside 30 days of expiry, leads the rep has not moved in a week, and — from 2pm — any of the
+     eight quotas still behind. Three reads, all server-derived; the page draws the same numbers. */
+  if (role === 'leadgen') {
+    jobs.push(fetchFlow('getLeadgenFollowups').then(r => {
+      const n = ((r && r.data) || []).length;
+      if (n) add('report', '#4f46e5', n + ' follow-up' + (n === 1 ? '' : 's') + ' due today', 'leadgen-home.html#followups');
+    }).catch(() => {}));
+    jobs.push(fetchFlow('getLeadgen').then(r => {
+      const d = (r && r.data) || {};
+      const today = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+      const soon = (d.accred || []).filter(a => a.expiry && a.status === 'Approved' && !_stale(a.expiry, 0) && (new Date(a.expiry) - new Date(today)) / 86400000 <= 30).length;
+      if (soon) add('urgent', '#f97316', soon + ' accreditation' + (soon === 1 ? '' : 's') + ' expiring within 30 days', 'leadgen-home.html#accred');
+      const stuck = (d.leads || []).filter(l => l.status === 'Handed Off' && _stale(l.handedOffOn, 7)).length;
+      if (stuck) add('report', '#b45309', stuck + ' handed-off lead' + (stuck === 1 ? '' : 's') + ' with no rep movement after a week', 'leadgen-home.html#leads');
+      const back = (d.leads || []).filter(l => l.status === 'Returned').length;
+      if (back) add('urgent', '#ef4444', back + ' lead' + (back === 1 ? '' : 's') + ' returned by the rep — re-qualify or close', 'leadgen-home.html#leads');
+    }).catch(() => {}));
+    jobs.push(fetchFlow('getLeadgenCounts', {}, { fresh: true }).then(k => {
+      if (!k || !k.success || !k.day || !k.day.working) return;
+      const hour = parseInt(String(k.hour || '00:00').slice(0, 2), 10);
+      if (hour < 14) return;                       // the morning is for doing, not for being nagged
+      const labels = { plants: 'plants', contacts: 'contacts', introEmails: 'intro emails', followupEmails: 'follow-up emails',
+                       coldCalls: 'cold calls', followupCalls: 'follow-up calls', leads: 'leads', meetings: 'meetings' };
+      const behind = Object.keys(labels).filter(x => (k.quotas[x] || 0) > 0 && (k.day[x] || 0) < k.quotas[x]);
+      if (behind.length) add('report', '#d97706', 'Behind on ' + behind.map(x => (k.quotas[x] - k.day[x]) + ' ' + labels[x]).join(', '), 'leadgen-home.html#tiles');
+    }).catch(() => {}));
+  }
+  // A277 — the rep's side of the hand-off: leads the lead-gen user has put in their name.
+  if (isSales && session.username) {
+    jobs.push(fetchFlow('getLeadgen', { entity: 'leads', handedTo: session.username, status: 'Handed Off' }).then(r => {
+      const n = ((r && r.data && r.data.leads) || []).length;
+      if (n) add('report', '#4f46e5', n + ' qualified lead' + (n === 1 ? '' : 's') + ' handed to you — book the presentation', 'dashboard.html#leadsForYou');
+    }).catch(() => {}));
+  }
+
   await Promise.all(jobs);
   return items;
 }
