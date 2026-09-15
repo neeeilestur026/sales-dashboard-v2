@@ -4,6 +4,7 @@ let ivInventory = [];
 let ivCurrent = null;
 let ivSession = null;
 let ivCanVoid = false;   // A158: the void action needs FlowAPI v94
+let ivCanVat = false;    // A278: storing a VAT rate needs FlowAPI v153
 let ivCanRename = false; // A252: renaming the invoice number needs FlowAPI v142
 let ivViewer = false;    // A231: management looks, does not touch
 
@@ -30,6 +31,15 @@ document.addEventListener('DOMContentLoaded', async () => {
      the button must not be offered at all rather than fail after the user has typed a number. */
   try { ivCanRename = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(142) : false; }
   catch (e) { ivCanRename = false; }
+  /* A278 — same gate, and here it is what makes the deploy safe in either order. Against a v152
+     backend the VAT field stays hidden and saveInvoice sends no rate, so shipping this page before
+     FlowAPI.gs is pasted changes nothing at all on screen or on the sheet. */
+  try { ivCanVat = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(153) : false; }
+  catch (e) { ivCanVat = false; }
+  if (ivCanVat) ['vatBlock', 'vatRow', 'dueRow'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = '';
+  });
+  vatRepairVisible();
   if (ivViewer) ivCanVoid = false;   // A231 — one flag decides the button, as on flow-collections
   if (ivViewer) ivCanRename = false;
   document.getElementById('date').value = flowToday();
@@ -104,6 +114,14 @@ function renderItems() {
   recalc();
 }
 
+/** A278 — the same rounding rule as createInvoice: once, on the total, to the centavo. */
+function ivVatOf(net) {
+  if (!ivCanVat) return 0;
+  const el = document.getElementById('vatRate');
+  const rate = el ? flowNum(el.value) : 0;
+  return Math.round(net * (rate / 100) * 100) / 100;
+}
+
 function recalc() {
   let sales = 0, cogs = 0;
   document.querySelectorAll('#itemRows tr').forEach((tr, i) => {
@@ -116,6 +134,10 @@ function recalc() {
     tr.querySelector('.lineCOGS').textContent = lc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     sales += ls; cogs += lc;
   });
+  const money2 = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const vat = ivVatOf(sales);
+  document.getElementById('totalVat').textContent = money2(vat);
+  document.getElementById('totalDue').textContent = money2(sales + vat);
   document.getElementById('totalSales').textContent = sales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   document.getElementById('totalCOGS').textContent = cogs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   document.getElementById('grossProfit').textContent = (sales - cogs).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -150,6 +172,8 @@ async function saveInvoice() {
     createdBy: ivSession.name, items: JSON.stringify(items),
     clientRef: flowClientRef()                              // idempotent create (safe retry)
   };
+  // A278 — omitted entirely against an older backend, where it would be an unread parameter.
+  if (ivCanVat) payload.vatRate = flowNum(document.getElementById('vatRate').value);
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     let res = await postFlow('createInvoice', payload);
@@ -183,7 +207,9 @@ function resetForm() {
   const ivn = document.getElementById('invNo'); if (ivn) ivn.value = '';
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
-  ['totalSales', 'totalCOGS', 'grossProfit'].forEach(id => document.getElementById(id).textContent = '0.00');
+  const vr = document.getElementById('vatRate'); if (vr) vr.value = '12';   // A278
+  ['totalSales', 'totalCOGS', 'grossProfit', 'totalVat', 'totalDue']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0.00'; });
   document.getElementById('formMsg').style.display = 'none';
 }
 
@@ -194,9 +220,12 @@ async function loadInvoices() {
     const res = await fetchFlow('getInvoices');
     const list = (res && res.data) || [];
     if (!list.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No invoices yet.</p>'; return; }
-    c.innerHTML = `<table class="flow-table"><thead><tr><th>INV No</th><th>SO</th><th>Date</th><th>Customer</th><th class="num">Sales</th><th class="num">COGS</th><th class="num">Gross Profit</th><th>Items</th><th></th></tr></thead><tbody>${list.map(v => `
+    c.innerHTML = `<table class="flow-table"><thead><tr><th>INV No</th><th>SO</th><th>Date</th><th>Customer</th><th class="num">Net Sales</th><th class="num">VAT</th><th class="num">Total Due</th><th class="num">COGS</th><th class="num">Gross Profit</th><th>Items</th><th></th></tr></thead><tbody>${list.map(v => `
       <tr><td>${flowEsc(v.invNo)}</td><td>${flowEsc(v.soNo)}</td><td>${flowDate(v.date)}</td><td>${flowEsc(v.customer)}</td>
-      <td class="num">${flowMoney(v.totalSales, 'PHP')}</td><td class="num">${flowMoney(v.totalCOGS, 'PHP')}</td>
+      <td class="num">${flowMoney(v.totalSales, 'PHP')}</td>
+      <td class="num">${flowMoney(v.vat || 0, 'PHP')}</td>
+      <td class="num">${flowMoney(v.totalDue != null ? v.totalDue : v.totalSales, 'PHP')}</td>
+      <td class="num">${flowMoney(v.totalCOGS, 'PHP')}</td>
       <td class="num">${flowMoney(v.totalSales - v.totalCOGS, 'PHP')}</td><td>${v.items.length}</td>
       <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Invoice","${flowEsc(v.invNo)}")'>Docs</button>${
         ivCanRename ? `<button class="link-btn" style="margin-left:0.4rem;" title="Put your own invoice number on this record" onclick='renameInvoiceAction(${JSON.stringify(String(v.invNo))})'>Edit No</button>` : ''
@@ -253,3 +282,81 @@ async function voidInvoiceAction(invNo) {
 
 // A268 — keep the locked list sized when the window changes.
 window.addEventListener('resize', () => flowFitScroll('listContainer'));
+
+/* ── A278 · repairing receivables raised before output VAT ───────────────────────────────────────
+   Preview first, always. The server IMPUTES the rate — those invoices never recorded one — so the
+   assumption is shown per row and the apply step names the invoices explicitly rather than offering
+   a "fix everything" button on a money ledger. */
+let vrRows = [];
+
+function vatRepairVisible() {
+  const card = document.getElementById('vatRepairCard');
+  if (!card) return;
+  const mayFix = ivSession && ['admin', 'accounting', 'director'].indexOf(String(ivSession.role)) !== -1;
+  if (ivCanVat && mayFix && !ivViewer) card.style.display = '';
+}
+
+async function vatRepairPreview() {
+  const btn = document.getElementById('vrPreviewBtn'), body = document.getElementById('vrBody');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try {
+    const rate = flowNum(document.getElementById('vrRate').value);
+    const res = await fetchFlow('previewInvoiceVatRepair', { rate }, { fresh: true });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Could not read the receivables.');
+    vrRows = res.rows || [];
+    if (!vrRows.length) {
+      body.innerHTML = `<div style="font-size:0.85rem;color:var(--text-muted,#64748b);">Nothing to repair — no receivable matches an invoice that was booked net of VAT.${
+        (res.skipped || []).length ? ` (${res.skipped.length} row(s) are out of scope.)` : ''}</div>`;
+      return;
+    }
+    const cat = { unpaid: 'Unpaid', overCollected: 'Over-collected', partial: 'Part-paid' };
+    body.innerHTML = `
+      <div style="font-size:0.82rem;color:#b45309;font-weight:600;margin-bottom:.5rem;">${flowEsc(res.message)}</div>
+      <div style="overflow-x:auto;"><table class="flow-table">
+        <thead><tr><th style="width:2rem;"><input type="checkbox" id="vrAll" onclick="vrToggleAll(this)"></th>
+          <th>Invoice</th><th>Customer</th><th>Date</th><th>State</th>
+          <th class="num">Receivable now</th><th class="num">+ VAT (imputed)</th><th class="num">After</th><th class="num">Outstanding after</th></tr></thead>
+        <tbody>${vrRows.map((r, i) => `<tr${r.ambiguous ? ' style="background:rgba(245,158,11,0.10);"' : ''}>
+          <td><input type="checkbox" class="vr-pick" data-i="${i}"></td>
+          <td>${flowEsc(r.invNo)}${r.ambiguous ? ` <span class="lv-warn" title="${flowEsc(r.ambiguousWhy.join('; '))}">⚠</span>` : ''}</td>
+          <td>${flowEsc(r.customer)}</td><td>${flowEsc(String(r.date).slice(0, 10))}</td>
+          <td>${flowEsc(cat[r.category] || r.category)}</td>
+          <td class="num">${flowMoney(r.amountNow, 'PHP')}</td>
+          <td class="num">${flowMoney(r.imputedVat, 'PHP')} <span style="color:var(--text-muted,#64748b);">@${r.imputedRate}%</span></td>
+          <td class="num">${flowMoney(r.amountAfter, 'PHP')}</td>
+          <td class="num">${flowMoney(r.outstandingAfter, 'PHP')}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div class="flow-actions" style="margin-top:.6rem;">
+        <button type="button" class="btn btn-sm btn-primary primary" id="vrApplyBtn" onclick="vatRepairApply()">Repair the ticked invoices</button>
+        <span style="font-size:0.78rem;color:var(--text-muted,#64748b);">Rows shaded amber need confirming — the sales order carries more than one live invoice, or the invoice more than one receivable.</span>
+      </div>`;
+  } catch (e) { flowMsg('vrMsg', e.message, false); }
+  finally { btn.disabled = false; btn.textContent = 'Preview'; }
+}
+
+function vrToggleAll(cb) {
+  document.querySelectorAll('.vr-pick').forEach(x => { x.checked = cb.checked; });
+}
+
+async function vatRepairApply() {
+  const picked = Array.from(document.querySelectorAll('.vr-pick:checked')).map(x => vrRows[Number(x.getAttribute('data-i'))]);
+  if (!picked.length) { flowMsg('vrMsg', 'Tick the invoices to repair.', false); return; }
+  const amb = picked.filter(r => r.ambiguous);
+  const total = picked.reduce((s, r) => s + flowNum(r.imputedVat), 0);
+  if (!confirm(`Repair ${picked.length} invoice(s)?\n\nTheir receivables rise by ${flowMoney(total, 'PHP')} in total, the VAT is stamped on each invoice, and each journal entry is corrected.\n\nThis IMPUTES the rate — these invoices never recorded one.${
+      amb.length ? `\n\n${amb.length} of them need confirming: ${amb.map(r => r.invNo).join(', ')}.` : ''}`)) return;
+  const btn = document.getElementById('vrApplyBtn');
+  btn.disabled = true; btn.textContent = 'Repairing…';
+  try {
+    const res = await postFlow('applyInvoiceVatRepair', {
+      invNos: JSON.stringify(picked.map(r => r.invNo)),
+      rate: flowNum(document.getElementById('vrRate').value),
+      confirmAmbiguous: amb.length > 0
+    });
+    if (!res || !res.success) throw new Error((res && res.message) || 'The repair failed.');
+    flowMsg('vrMsg', res.message, true);
+    await vatRepairPreview();
+    await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  } catch (e) { flowMsg('vrMsg', e.message, false); }
+  finally { btn.disabled = false; btn.textContent = 'Repair the ticked invoices'; }
+}

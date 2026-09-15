@@ -97,7 +97,13 @@ function renderBS() {
   const totalAssets = cash + ar + inventory + purchClearing + otherAssets;
 
   const ap = apOutstanding;
-  const totalLiabilities = ap;
+  /* A278 — OUTPUT VAT IS A LIABILITY, and leaving it out was not a harmless omission. `equity` a
+     line below is a PLUG (assets minus liabilities), so the balanced check is true by construction:
+     without this line the VAT collected for the BIR was silently booked as equity and the page
+     still printed ✓. Pre-A278 invoices carry a blank VAT cell, which the DTO reports as 0, so this
+     grows only as VAT-bearing invoices are raised or repaired. */
+  const outputVat = d.invs.reduce((s, v) => s + _bn(v.vat), 0);
+  const totalLiabilities = ap + outputVat;
   const equity = totalAssets - totalLiabilities;
 
   document.getElementById('bsMeta').textContent =
@@ -155,6 +161,7 @@ function renderBS() {
 
       <tr><td class="bs-section" colspan="2">Liabilities</td></tr>
       ${line('Accounts Payable', ap)}
+      ${outputVat > 0.005 ? line('Output VAT Payable', outputVat) : ''}
       ${sub('Outstanding payables (AP aging, PHP)', apOutstanding)}
       <tr class="bs-total"><td>TOTAL LIABILITIES</td><td class="n">${_bm(totalLiabilities)}</td></tr>
 

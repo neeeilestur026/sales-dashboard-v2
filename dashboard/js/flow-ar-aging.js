@@ -81,7 +81,9 @@ function arReconcile(arRows, invRows) {
 
   const unagedLive = unaged.filter(isLive);
   const unagedHistory = unaged.filter(v => !isLive(v));
-  const val = list => Math.round(list.reduce((t, v) => t + N(v.totalSales), 0) * 100) / 100;
+  /* A278 — the receivable that OUGHT to exist is the gross, not the net revenue. totalDue falls
+     back to totalSales so an un-pasted backend still reports a coherent figure. */
+  const val = list => Math.round(list.reduce((t, v) => t + N(v.totalDue != null ? v.totalDue : v.totalSales), 0) * 100) / 100;
   return {
     direct, viaSo, unresolved, unaged, baseline,
     unagedValue: val(unaged),
@@ -143,7 +145,7 @@ async function arBackfillLive() {
   const money = v => flowMoney(flowNum(v), 'PHP');
   const rows = r.unagedLive.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const list = rows.map(v => '  • ' + v.invNo + '   ' + String(v.date).slice(0, 10) + '   '
-    + String(v.customer || '').slice(0, 30) + '   ' + money(v.totalSales)).join('\n');
+    + String(v.customer || '').slice(0, 30) + '   ' + money(v.totalDue != null ? v.totalDue : v.totalSales)).join('\n');
   if (!confirm('Create ' + rows.length + ' receivable(s), ' + money(r.unagedLiveValue) + ' in total?\n\n'
       + list + '\n\nThese are invoices dated on or after ' + r.baseline + ', when this ledger begins.\n'
       + 'Pre-baseline history is NOT included, and neither is any invoice whose receivable is\n'
@@ -184,7 +186,7 @@ function arReconcileBanner() {
         total.</div>
       ${rows.map(v => `<div style="margin-left:0.4rem;">${esc(v.invNo)} ·
         ${esc(String(v.customer || '').slice(0, 34))} · ${esc(String(v.date).slice(0, 10))} ·
-        ${money(v.totalSales)}</div>`).join('')}
+        ${money(v.totalDue != null ? v.totalDue : v.totalSales)}</div>`).join('')}
       ${(arSession && (arSession.role === 'admin' || arSession.role === 'accounting'))
         ? `<button type="button" id="arBackfillBtn" class="btn btn-sm btn-primary"
              style="margin-top:0.5rem;" onclick="arBackfillLive()"
@@ -292,7 +294,11 @@ function rowHtml(r) {
   // A157: an over-collected row is why a total can stop matching its column — say so on the row.
   const over = arOverCollected(r);
   const warn = over > 0.005
-    ? ` <span class="lv-warn" title="Collected ${flowMoney(over, 'PHP')} more than the amount due — usually withholding tax recorded as cash. Correct the collection split.">⚠ over ${flowMoney(over, 'PHP')}</span>` : '';
+    /* A278 — this used to say the excess was "usually withholding tax". That was the wrong
+        diagnosis and acting on it booked output VAT into Creditable Tax 2307: until A278 the
+        receivable was booked NET while the client paid GROSS, so a correct full payment looked
+        over-collected by 12%. On a receivable raised before A278, the fix is the VAT repair. */
+    ? ` <span class="lv-warn" title="Collected ${flowMoney(over, 'PHP')} more than the amount due. If this receivable was raised before VAT was recorded on invoices, its amount is net of VAT — run the invoice VAT repair. Otherwise it is a genuine overpayment or a mis-split collection.">⚠ over ${flowMoney(over, 'PHP')}</span>` : '';
   return `<tr data-ar="${flowEsc(r.arNo)}">
     <td>${flowEsc(r.arNo)}</td><td>${flowEsc(r.invNo)}</td><td>${flowEsc(r.soNo)}</td><td>${flowEsc(r.customer)}</td>
     <td class="num">${flowMoney(r.amountPHP, 'PHP')}</td>
