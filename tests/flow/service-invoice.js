@@ -62,7 +62,13 @@ section('1 · a goods invoice behaves exactly as it always did');
   eq('sales are credited', jsum(store, '4000', 'cr'), 120000);
   eq('COGS is booked', jsum(store, '5000', 'dr'), 80000);
   eq('  against inventory', jsum(store, '1300', 'cr'), 80000);
-  eq('the receivable is the sale', Number(store.ARAging[0]['Amount (PHP)']), 120000);
+  /* A278 — the receivable is the GROSS. Revenue did NOT move: the three assertions below are the
+     regression proof for that, and they are the whole reason 'Total Sales' was left alone. */
+  eq('the receivable is the sale plus its VAT', Number(store.ARAging[0]['Amount (PHP)']), 134400);
+  eq('  and Total Sales is still the NET revenue', Number(store.Invoices[0]['Total Sales']), 120000);
+  eq('  with the VAT recorded beside it', Number(store.Invoices[0]['VAT']), 14400);
+  eq('  at the rate it was charged', Number(store.Invoices[0]['VAT Rate']), 12);
+  eq('  credited to output VAT', jsum(store, '2200', 'cr'), 14400);
   eq('nothing reaches service revenue', jsum(store, '4100', 'cr'), 0);
   eq('nothing reaches customer deposits', jsum(store, '2100', 'cr'), 0);
 }
@@ -81,8 +87,9 @@ section('2 · a hire invoice moves no stock and books no cost');
   eq('  and inventory is not credited', jsum(store, '1300', 'cr'), 0);
   eq('service revenue carries the hire', jsum(store, '4100', 'cr'), 99000);
   eq('  and nothing lands in goods sales', jsum(store, '4000', 'cr'), 0);
-  eq('the receivable is the whole hire', Number(store.ARAging[0]['Amount (PHP)']), 99000);
-  eq('Total Sales records it as revenue', Number(store.Invoices[0]['Total Sales']), 99000);
+  eq('the receivable is the whole hire plus its VAT', Number(store.ARAging[0]['Amount (PHP)']), 110880);
+  // A278 — unchanged, and now doing real work: a hire's revenue is still booked NET.
+  eq('Total Sales records it as revenue, net of VAT', Number(store.Invoices[0]['Total Sales']), 99000);
   eq('  with no COGS', Number(store.Invoices[0]['Total COGS']), 0);
 }
 
@@ -116,10 +123,14 @@ section('4 · a deposit is held, not earned');
   eq('  and never touches revenue', jsum(store, '4000', 'cr') + jsum(store, '4100', 'cr'), 84000);
   eq('Total Sales excludes it', Number(store.Invoices[0]['Total Sales']), 84000);
   eq('  but it is recorded on the invoice', Number(store.Invoices[0]['Total Deposit']), 20000);
-  eq('the client still owes it, so the receivable includes it',
-     Number(store.ARAging[0]['Amount (PHP)']), 104000);
+  /* A278 — A DEPOSIT IS NOT VATABLE. It is the client's money held against damage, not
+     consideration for a supply, so the VAT is 12% of the 84,000 of revenue and NOT of the 104,000
+     the client remits. 12,480 would be the wrong answer here. */
+  eq('the VAT is charged on the revenue only', jsum(store, '2200', 'cr'), 10080);
+  eq('the client still owes it, so the receivable includes it — plus VAT on the hire',
+     Number(store.ARAging[0]['Amount (PHP)']), 114080);
   eq('the entry balances', jsum(store, '1200', 'dr'),
-     jsum(store, '4000', 'cr') + jsum(store, '4100', 'cr') + jsum(store, '2100', 'cr'));
+     jsum(store, '4000', 'cr') + jsum(store, '4100', 'cr') + jsum(store, '2200', 'cr') + jsum(store, '2100', 'cr'));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -149,9 +160,12 @@ section('6 · the trial balance can actually see the new accounts');
   const codes = (tb.data || tb.rows || []).map(r => String(r.code));
   ok('4100 Service Revenue is listed', codes.indexOf('4100') !== -1, codes);
   ok('2100 Customer Deposits is listed', codes.indexOf('2100') !== -1, codes);
+  // A278 — listed, not merely posted to: COA.map() silently drops a code that is missing from COA.
+  ok('2200 Output VAT Payable is listed', codes.indexOf('2200') !== -1, codes);
   const find = (c) => (tb.data || tb.rows || []).filter(r => String(r.code) === c)[0] || {};
   eq('  service revenue carries its balance', find('4100').creditBalance, 84000);
   eq('  and the deposit its own', find('2100').creditBalance, 20000);
+  eq('  and the output VAT is visible rather than buried in 1200', find('2200').creditBalance, 10080);
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -185,6 +185,8 @@ const FLOW_SECURED_ACTIONS = [
   // A249 — backfillMissingAR creates receivables off a browser-supplied call and had no role check
   // of its own. Minting debt should require a real signed-in session, like every other money action.
   'backfillMissingAR',
+  // A278 — the VAT repair moves receivables and rewrites journal entries.
+  'applyInvoiceVatRepair',
   'runQuotationSentAtBackfill', 'runQuotationOwnerBackfill',
   // A243 — reattributing a quotation decides whose tracker it appears in and whose commission it feeds.
   'setQuotationSalesperson',

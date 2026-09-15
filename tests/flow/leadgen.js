@@ -23,7 +23,9 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
 {
   sec('1 · plumbing');
   const c = load();
-  ok('FLOW_VERSION 152', c.FLOW_VERSION === 152, c.FLOW_VERSION);
+  // A floor, not an equality: lead-gen needs v152+ pasted, and pinning the exact number made every
+  // later feature's version bump fail this suite for no reason (it did, on A278).
+  ok('FLOW_VERSION is at least 152', c.FLOW_VERSION >= 152, c.FLOW_VERSION);
   ['getLeadgen', 'getLeadgenCounts', 'getLeadgenFollowups', 'saveLeadgenRecord', 'deleteLeadgenRecord'].forEach(a =>
     ok(a + ' in HANDLERS', typeof c.HANDLERS[a] === 'function'));
   ['saveLeadgenRecord', 'deleteLeadgenRecord'].forEach(a =>

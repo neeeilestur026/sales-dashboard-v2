@@ -148,7 +148,8 @@ console.log('\n== every bare appendRow writes exactly SCHEMA-many values ==');
     'importSalesOrders/SalesOrders': 9,                  // migrated SO: no Client PO Date / PO Received / Client PO No
     'importSOCostDetails/SalesOrders': 9,                // same shape
     'importSalesOrders/SalesOrderItems': 6,              // migrated line: no Item ID, a legacy line has none
-    'backfillMigratedRecords/Invoices': 8                // migrated invoice: no Voided / Void Reason, blank = not voided
+    'backfillMigratedRecords/Invoices': 8                // migrated invoice: no Voided / Void Reason, no Total Deposit, and
+                                                        // A278: no VAT Rate / VAT either — blank = not voided, no deposit, no VAT charged
   };
   /* An exception must match the EXACT arity it was granted for. Widening a deliberate short write —
      say from 8 to 9 — is a change worth failing on, because the ninth value lands in a column nobody
@@ -230,7 +231,7 @@ console.log('\n== the money-bearing widths ==');
  ['SalesOrders', 14, 'A276 appended Type + Service Kind — createInvoice reads Type to know a hire from a sale'],
  ['SalesOrderItems', 10, 'A276 appended Charge Kind + Rate Basis + Duration'],
  ['QuotationItems', 16, 'A276 appended Charge Kind + Rate Basis + Duration'],
- ['Invoices', 11, 'A276 appended Total Deposit — refundable, deliberately outside Total Sales'],
+ ['Invoices', 13, 'A278 appended VAT Rate + VAT — Total Sales stays NET (revenue); the RECEIVABLE and the GL carry the gross'],
  ['PricingRequestItems', 19, 'A242 appended Quoted On'],
  ['PaymentRequests', 41, ''], ['PurchaseOrders', 17, ''], ['APAging', 13, ''],
  ['Expenses', 17, ''], ['Shipments', 16, ''], ['QuotationEmails', 18, ''], ['WeeklyItineraries', 16, '']]
