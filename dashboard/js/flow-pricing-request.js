@@ -4,9 +4,16 @@
 let prSession = null;
 let prInventory = [];
 let prList = [];
-let prRole = '';          // 'sales' | 'admin' | 'management' | 'accounting' | 'director'
+let prRole = '';          // 'sales' | 'leadgen' | 'admin' | 'management' | 'accounting' | 'director'
 let prFilter = '';        // active status filter for the list
 let prOversight = false;  // accounting/director: see all reps (grouped) + act on any stage
+/* A280 — the ONE question this page branches on eight times: does this person RAISE requests of
+   their own, or oversee everybody's? True for sales and lead-gen, and — because flowOwnsRecordsOnly
+   is the negation of a positive oversight list — for any role nobody has classified yet. That
+   default matters more here than on the list pages: the branch such a role used to fall into was
+   setupRoleUI's bare `else // management`, which is the always-on pricing engine, a queue filtered
+   to 'For Mgmt Pricing', and no create form at all. */
+let prIsRequester = false;
 let canSource = false;    // may run sourcing + verification
 let canPrice = false;     // may run management pricing
 
@@ -43,13 +50,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!prSession) return;
   prRole = prSession.role;
   // Capabilities: accounting & director are full-access oversight (can act on any stage + see all reps).
+  prIsRequester = flowOwnsRecordsOnly(prRole);
   prOversight = prRole === 'accounting' || prRole === 'director';
   canSource = prRole === 'admin' || prOversight;       // sourcing + verification (admin side)
   canPrice = prRole === 'management' || prOversight;    // management final pricing
   renderNavbar('flow-pricing-request');
-  renderSteps(prRole === 'sales' ? 0 : prRole === 'management' ? 2 : 1);
+  renderSteps(prIsRequester ? 0 : prRole === 'management' ? 2 : 1);
   setupRoleUI();
-  if (prRole === 'sales' || prRole === 'admin') {
+  if (prIsRequester || prRole === 'admin') {
     document.getElementById('date').value = flowToday();
     await Promise.all([loadInventory(), loadClients()]);
     const cust = document.getElementById('customer');
@@ -128,14 +136,14 @@ function prInquiryBanner(html, tone) {
 }
 
 async function prLoadFromInquiry(id) {
-  if (prRole !== 'sales' && prRole !== 'admin') {
+  if (!prIsRequester && prRole !== 'admin') {
     prInquiryBanner('This Product Finder result can only be turned into a purchase request by sales or admin.', 'warn');
     return;
   }
   let inq = prLocalInquiry(id);
   if (!inq) {                                   // different device / cleared storage → ask the backend
     try {
-      const res = await fetchFlow('getPfInquiries', prRole === 'sales' ? { user: prSession.name } : {}, { fresh: true });
+      const res = await fetchFlow('getPfInquiries', prIsRequester ? { user: prSession.name } : {}, { fresh: true });
       inq = ((res && res.data) || []).find(x => x && x.id === id) || null;
       if (inq && typeof inq.itemsJson === 'string' && inq.itemsJson) {
         try { inq.items = JSON.parse(inq.itemsJson); } catch (e) { inq.items = []; }
@@ -182,7 +190,14 @@ function setupRoleUI() {
   const blurb = document.getElementById('roleBlurb');
   const listTitle = document.getElementById('listTitle');
   const seg = document.getElementById('filterSeg');
-  if (prRole === 'sales') {
+  /* A280 — REQUESTER FIRST, AND THE MANAGEMENT BRANCH IS NAMED.
+     Management used to be the bare `else`, which made it the fate of every role this chain did not
+     recognise: the pricing engine revealed, a queue nobody could clear, and no create form. Naming
+     it costs one `if` and turns "a role we forgot" into the requester branch — correct for anyone
+     who raises requests and harmless for anyone who does not. The title and blurb below are left
+     byte-identical: they are already role-neutral and true for a lead-gen user, who does raise the
+     request, does have admin source it and management price it, and does get it back to quote. */
+  if (prIsRequester) {
     document.getElementById('salesFormCard').style.display = '';
     listTitle.textContent = 'My Requests';
     blurb.textContent = 'Create a purchase request from inventory items. Admin sources suppliers and management prices it; when it returns you can build the quotation.';
@@ -206,7 +221,7 @@ function setupRoleUI() {
     seg.innerHTML = segBtns(['Requested,Sourcing', 'Mgmt Priced', 'Returned to Sales', ''],
                             ['To Source', 'To Verify', 'For Quotation', 'All']);
     prFilter = 'Requested,Sourcing';
-  } else { // management
+  } else if (prRole === 'management') {
     listTitle.textContent = 'Pricing Queue';
     blurb.textContent = 'The pricing engine is always available below — open a request to price it, or reload a past pricing to re-price. Final prices return to admin.';
     seg.innerHTML = segBtns(['For Mgmt Pricing', ''], ['To Price', 'All']);
@@ -221,6 +236,15 @@ function setupRoleUI() {
       flowVersionAtLeast(110).then(ok => { const rb = document.getElementById('peRejectBtn'); if (rb && ok) rb.style.display = ''; });
     }
     renderMgmtEngineShell();
+  } else {
+    /* A280 — belt and braces. A role the guard admitted and none of the four branches claims gets a
+       read-only list that SAYS it is read-only, rather than a half-initialised page. It should be
+       unreachable: prIsRequester above catches anything that is not one of the four oversight
+       roles. If this ever renders, the guard and FLOW_OVERSIGHT_ROLES have drifted apart. */
+    listTitle.textContent = 'Purchase Requests';
+    blurb.textContent = 'Read-only — this role has no queue on this page.';
+    seg.innerHTML = segBtns([''], ['All']);
+    prFilter = '';
   }
 }
 
@@ -502,7 +526,7 @@ async function loadRequests() {
   const c = document.getElementById('listContainer');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const params = prRole === 'sales' ? { requestedBy: prSession.name } : {};
+    const params = prIsRequester ? { requestedBy: prSession.name } : {};
     const res = await fetchFlow('getPricingRequests', params);
     prList = (res && res.data) || [];
     renderList();
@@ -613,10 +637,10 @@ function rowActions(r) {
     ? ` <a class="link-btn" href="${flowEsc(r.pdfLink)}" target="_blank" style="margin-left:0.5rem;">View PDF</a>` : '';
   // Recovery: if the auto-save on creation missed (no pdfLink), let the owner / admin regenerate it
   // from any status — otherwise a transient Drive blip strands the PR without a PDF until it returns.
-  const canRegen = canSource || (prRole === 'sales' && String(r.requestedBy) === String(prSession.name));
+  const canRegen = canSource || (prIsRequester && String(r.requestedBy) === String(prSession.name));
   if (!r.pdfLink && canRegen)
     return open + docs + ` <button class="link-btn" onclick='openPdf("${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">Generate PR PDF</button>`;
-  if (prRole === 'sales' && r.status === 'Returned to Sales')
+  if (prIsRequester && r.status === 'Returned to Sales')
     return open + docs + ` <button class="link-btn" onclick='openPdf("${flowEsc(r.prNo)}")' style="margin-left:0.5rem;">PR PDF</button>` + view;
   return open + docs + view;
 }
@@ -655,7 +679,7 @@ function openPr(no) {
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       ${srcEditBtn(no)}
       <button class="btn btn-primary" onclick="verifyReturn()">Verify &amp; Return to Sales</button>`;
-  } else if (r.status === 'Returned to Sales' && (prRole === 'sales' || prRole === 'admin')) {
+  } else if (r.status === 'Returned to Sales' && (prIsRequester || prRole === 'admin')) {
     /* A192: was `prRole === 'admin' && r.requestedBy === prSession.name`. Tying the only
        Create-Quotation button in the system to one exact name string is what stranded
        PR-202607-242 and PR-202607-295: rename the user, add a trailing space, or have them leave,
@@ -671,7 +695,7 @@ function openPr(no) {
   } else {
     body.innerHTML = readonlyTable(r, false);
     // Same recovery affordance as the list: regenerate a missing PDF from any status.
-    const canRegen = canSource || (prRole === 'sales' && String(r.requestedBy) === String(prSession.name));
+    const canRegen = canSource || (prIsRequester && String(r.requestedBy) === String(prSession.name));
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       ${canSource ? srcEditBtn(no) : ''}
       ${!r.pdfLink && canRegen ? `<button class="btn btn-secondary" onclick="openPdf('${flowEsc(no)}')">Generate PR PDF</button>` : ''}

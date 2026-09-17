@@ -593,6 +593,7 @@ function mfSubmissionHtml(sub) {
       <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${_mfe(_mfTime(sub.submittedAt))}${_mfn(sub.submitCount) > 1 ? ` · updated ${_mfn(sub.submitCount)}×` : ''}</span>
       <span style="margin-left:auto;">${review}</span>
     </div>
+    ${typeof flowReportCountersHtml === 'function' ? flowReportCountersHtml(sub) : ''}
     ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
   </div>`;
 }

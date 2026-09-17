@@ -219,7 +219,7 @@ function renderTiles() {
     } else if (key === 'attempts') sub = 'calls + emails + LinkedIn, combined';
     else if (key === 'conversations') sub = 'calls that reached the decision-maker';
     else if (key === 'crm') sub = n ? n + ' record' + (n === 1 ? '' : 's') + ' touched today' : 'nothing logged yet';
-    else if (key === 'eod') sub = n ? 'submitted to the Director ✓' : 'not submitted yet — open the daily report';
+    else if (key === 'eod') sub = n ? 'submitted to Management ✓' : 'not submitted yet — open the daily report';
     else if (key === 'scheduled') sub = 'follow-up calls booked + presentations';
     const tag = lgCanEdit ? 'button type="button"' : 'div';
     return `<${tag} class="b-card lg-tile" data-dock="${dock}" ${lgCanEdit ? `title="${key === 'eod' ? 'Open the daily report' : 'Log ' + label.toLowerCase()}"` : ''}>

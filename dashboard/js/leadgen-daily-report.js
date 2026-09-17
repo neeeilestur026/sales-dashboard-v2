@@ -1,7 +1,7 @@
 /* leadgen-daily-report.js — A277 · the lead-gen user's auto daily report. Pattern B, like
    marketing-daily-report.js: the TIMELINE is the day's ActivityLog (modules Lead Gen and Call); the
    SUMMARY TILES are getLeadgenCounts({date}) — counted from the stamp columns on the rows, never off
-   the timeline, so the number here is the number the dashboard showed and the director signs off.
+   the timeline, so the number here is the number the dashboard showed and management signs off.
 
    A277-2 — THE CHECKLIST VERIFIES ITSELF. There is nothing to tick. Each of the eight tasks is
    drawn from getLeadgenDay({date}) — the plants themselves, the contacts verified, every email
@@ -21,7 +21,7 @@ const DAILY_TASKS = [
   ['suppliers', 'Research 5–10 local suppliers', 'company, category, location, contact'],
   ['accounts', 'Research 10–15 new target accounts in detail', 'sector, province, territory, equipment, source'],
   ['crm', 'Update the CRM with all activity', 'every record touched today'],
-  ['eod', 'Submit the end-of-day report to the Director', 'this page, submitted'],
+  ['eod', 'Submit the end-of-day report to Management', 'this page, submitted'],
   ['scheduled', 'Schedule and confirm 1–3 meetings or follow-up calls', 'calls booked for coming days, presentations booked'],
 ];
 const WEEKLY_TASKS = [
@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refreshBtn').addEventListener('click', load);
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
-  document.getElementById('submitBtn').addEventListener('click', submitToDirector);
+  document.getElementById('submitBtn').addEventListener('click', submitToManagement);
   load();
   const poll = setInterval(() => { if (document.visibilityState === 'visible' && _date() === flowToday()) refreshLive(); }, 60000);
   window.addEventListener('pagehide', () => clearInterval(poll));
@@ -150,7 +150,7 @@ function _evidence(key, d) {
   if (key === 'crm') return `<div class="ev-none" style="font-style:normal;">${d.crm || 0} record${d.crm === 1 ? '' : 's'} created, edited or logged today — see the timeline below.</div>`;
   if (key === 'eod') {
     const e = d.eod;
-    return `<div class="ev-none" style="font-style:normal;">${e ? `Submitted ${_esc(String(e.submittedAt).slice(0, 16).replace('T', ' '))}${e.submitCount > 1 ? ' (updated ' + (e.submitCount - 1) + '×)' : ''} · ${_esc(e.status)}${e.reviewedBy ? ' by ' + _esc(e.reviewedBy) : ''}` : 'Not submitted yet — write your highlights below and press <b>Submit to Director</b>.'}</div>`;
+    return `<div class="ev-none" style="font-style:normal;">${e ? `Submitted ${_esc(String(e.submittedAt).slice(0, 16).replace('T', ' '))}${e.submitCount > 1 ? ' (updated ' + (e.submitCount - 1) + '×)' : ''} · ${_esc(e.status)}${e.reviewedBy ? ' by ' + _esc(e.reviewedBy) : ''}` : 'Not submitted yet — write your highlights below and press <b>Submit to Management</b>.'}</div>`;
   }
   if (key === 'scheduled') return `<ul class="ev-list">${(d.scheduledCalls || []).map(c => li(`📞 <b>${_esc(c.name)}</b> · ${_esc(c.company)}${c.plantSite ? ' — ' + _esc(c.plantSite) : ''} · call booked for <b>${_esc(c.nextCallDate)}</b>`)).join('')}${(d.meetings || []).map(l => li(`📅 <b>${_esc(l.company)}</b>${l.plantSite ? ' — ' + _esc(l.plantSite) : ''} · presentation <b>${_esc(l.presentationDate || 'date not set')}</b> · attendees: ${_esc(l.attendees || (l.contactName ? l.contactName + (l.handedTo ? ', ' + l.handedTo : '') : 'not recorded'))}`)).join('')}</ul>`;
   if (key === 'plants') return `<ul class="ev-list">${d.plants.map(p => li(`<b>${_esc(p.company)}</b>${p.plantSite ? ' — ' + _esc(p.plantSite) : ''} · ${_esc(p.sector)} · ${_esc(p.province || '—')} · ${_esc(p.territory)}${p.source ? ' · <span class="ev-dim">source: ' + _esc(p.source) + '</span>' : ''}${p.equipment ? ' · <span class="ev-dim">' + _esc(p.equipment) + '</span>' : ''}`)).join('')}</ul>`;
@@ -200,8 +200,8 @@ function renderVerified() {
   }).join('');
 }
 
-/* ── A279 · submit to the Director, through the flow the reps already use ──────────────────── */
-async function submitToDirector() {
+/* ── A279 · submit to Management, through the flow the reps already use ──────────────────── */
+async function submitToManagement() {
   const btn = document.getElementById('submitBtn'), msg = document.getElementById('notesMsg');
   btn.disabled = true; btn.textContent = 'Submitting…';
   try {
@@ -217,7 +217,7 @@ async function submitToDirector() {
     await Promise.all([loadCounts(), loadDay()]);
     render(); renderVerified();
   } catch (e) { msg.textContent = e.message; }
-  finally { btn.disabled = false; btn.textContent = 'Submit to Director'; setTimeout(() => { msg.textContent = ''; }, 4000); }
+  finally { btn.disabled = false; btn.textContent = 'Submit to Management'; setTimeout(() => { msg.textContent = ''; }, 4000); }
 }
 
 async function loadEmails() {

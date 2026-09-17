@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * merely pre-selected the rep's name in a dropdown they could change back to "Everyone" — the rows
  * were already in the browser. */
 function qbIsOversight() {
-  return String(qbSession.role || '').toLowerCase() !== 'sales';
+  return flowIsOversightRole(qbSession);   // A280 — one copy, in auth.js
 }
 
 async function qbLoad(fresh) {

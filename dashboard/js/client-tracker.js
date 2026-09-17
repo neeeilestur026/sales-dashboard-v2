@@ -24,7 +24,7 @@ function _cte(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(
  *  rep sees the whole book. Three copies of this test would eventually disagree, and the most
  *  permissive one would quietly become the policy — so it is written the same way in each. */
 function qctIsOversight() {
-  return String((ctSession || {}).role || '').toLowerCase() !== 'sales';
+  return flowIsOversightRole(ctSession);   // A280 — one copy, in auth.js
 }
 
 document.addEventListener('DOMContentLoaded', () => {

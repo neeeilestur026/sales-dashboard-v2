@@ -13,7 +13,11 @@ let poCanCreate = false;   // admin/accounting create POs; management/director a
 document.addEventListener('DOMContentLoaded', async () => {
   poSession = requireQuotationAccess();   // admin/accounting/management/director (+ sales bounced below)
   if (!poSession) return;
-  if (poSession.role === 'sales') { window.location.href = 'dashboard.html'; return; }
+  /* A280 — WAS `role === 'sales'`, and requireQuotationAccess above admits lead-gen now. A role
+     that owns its own records has no business on the purchase-order book: every row carries the
+     supplier, the currency and the FC cost. Spelled as the predicate so the next role added to that
+     guard is bounced here by default rather than by somebody remembering to add it. */
+  if (flowOwnsRecordsOnly(poSession)) { window.location.href = _homeForRole(poSession.role); return; }
   poCanCreate = poSession.role === 'admin' || poSession.role === 'accounting';
   renderNavbar('flow-purchase-orders');
   renderFlowNav('flow-purchase-orders.html');

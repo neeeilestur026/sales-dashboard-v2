@@ -492,10 +492,10 @@ function qcOnChange() { qcRenderTotals(); qcSchedulePreview(); }
 async function qcFetchPr(prNo) {
   const want = String(prNo || '');
   if (!want) return null;
-  const scoped = qcRole === 'sales' ? { requestedBy: qcSession.name } : {};
+  const scoped = flowOwnsRecordsOnly(qcRole) ? { requestedBy: qcSession.name } : {};   // A280
   let res = await fetchFlow('getPricingRequests', scoped);
   let pr = ((res && res.data) || []).find(p => String(p.prNo) === want);
-  if (!pr && qcRole === 'sales') {
+  if (!pr && flowOwnsRecordsOnly(qcRole)) {
     res = await fetchFlow('getPricingRequests', {});
     pr = ((res && res.data) || []).find(p => String(p.prNo) === want);
   }
@@ -1876,7 +1876,10 @@ async function qcFillSalespeople(pick) {
   try {
     const r = await apiGetUsers();
     names = ((r && r.data) || [])
-      .filter(u => ['sales', 'admin', 'director', 'management'].indexOf(String(u.role || '').toLowerCase()) !== -1)
+      // A280 — lead-gen owns quotations too; without it an admin reassigning one silently drops
+      // the real owner from the dropdown (the qcSession.name fallback below hides this from the
+      // owner themselves, but not from anyone else).
+      .filter(u => ['sales', 'leadgen', 'admin', 'director', 'management'].indexOf(String(u.role || '').toLowerCase()) !== -1)
       .map(u => String(u.name || u.fullName || u.username || '').trim())
       .filter(Boolean);
   } catch (e) { names = []; }

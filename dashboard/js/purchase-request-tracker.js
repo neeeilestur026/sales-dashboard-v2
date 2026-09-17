@@ -40,14 +40,19 @@ const PRT_ICON = {
  *  quotation-board.js:71 and client-tracker.js:62 all state — written the same way so the most
  *  permissive copy can never quietly become the policy. */
 function prtIsOversight() {
-  return String((prtSession || {}).role || '').toLowerCase() !== 'sales';
+  return flowIsOversightRole(prtSession);   // A280 — one copy, in auth.js
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   prtSession = requirePricingFlowAccess();
   if (!prtSession) return;
   renderNavbar('purchase-request-tracker');
-  if (typeof renderFlowNav === 'function') renderFlowNav('purchase-request-tracker.html');
+  /* A280 — the flow strip is 23 chips of Ledger, AP Aging, Payment Register and Balance Sheet, and
+     it is ROLE-BLIND (flow-api.js says so itself). Every one of those pages bounces a rep, so this
+     was always a strip of dead ends on the one flow page a rep actually lives on — and it is a
+     VISIBLE div here, unlike flow-quotations.html where the same element is hidden. Oversight keeps
+     it; everyone else loses a row of links they could never open. */
+  if (flowIsOversightRole(prtSession) && typeof renderFlowNav === 'function') renderFlowNav('purchase-request-tracker.html');
   const pb = document.getElementById('prtPrint');
   if (pb) pb.addEventListener('click', () => window.print());
   document.querySelectorAll('#prtViews button').forEach(b => {

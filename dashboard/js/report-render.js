@@ -139,6 +139,65 @@ function flowRollupActivity(entries) {
 
 /** Distinct-task counts derived from a rolled-up task list (or raw entries). */
 const _RR_DOC_VERBS = ['Created', 'Issued', 'Received', 'Added'];
+/* ── A280 · A SUBMITTED REPORT'S OWN COUNTERS ────────────────────────────────────────────────
+ *
+ * 'Counts JSON' is not one shape. A sales, admin or accounting report submits
+ * flowActivityCounts().byModule — module names the card ALREADY draws as mod-badges two lines up,
+ * so a generic Object.entries() dump would print the same numbers twice, three lines apart.
+ * Accounting's `metrics` are PESO AMOUNTS, which as bare integers read as counts of things. And a
+ * lead-gen report carries fifteen keys, one of which ('working') is a BOOLEAN.
+ *
+ * So: a per-role map, keyed and ORDERED, and silence for a role with no entry. That keeps this
+ * additive — a role that starts sending counts renders nothing until somebody writes down what its
+ * keys mean, which is the right default for a number on a manager's screen. The map is CODE, not
+ * data, so it applies to every report already sitting in the sheet; a metricsJson the page supplied
+ * would only ever describe reports submitted after the change.
+ *
+ * Why lead-gen needs it at all: only saveLeadgenRecord/deleteLeadgenRecord are in _MODULE_MAP, so a
+ * full lead-gen day produces almost no ActivityLog rows and the card's Movements and task columns
+ * read near-zero. These eight ARE the day.
+ *
+ * 'eod' is deliberately absent — it is 1 by definition on a card that exists, and the card's own
+ * header already says when it was submitted. So are the weekly extras (leads, meetings,
+ * intelUpdates, introEmails, replies, suppliersHandedOff): getLeadgenCounts returns them per-day so
+ * the week can be summed, and a Tuesday's `leads: 0` is a wrong-looking zero, not information. They
+ * belong on the Friday report, where they already are.
+ */
+const FLOW_REPORT_COUNTERS = {
+  leadgen: [
+    ['attempts',      'Outbound attempts'],
+    ['conversations', 'Decision-makers reached'],
+    ['emails',        'Prospecting emails'],
+    ['linkedin',      'LinkedIn touches'],
+    ['suppliers',     'Suppliers researched'],
+    ['accounts',      'Target accounts researched'],
+    ['crm',           'CRM records touched'],
+    ['scheduled',     'Meetings / calls scheduled'],
+  ],
+};
+
+/** The counters worth showing for one submitted report, as [label, value] pairs — or [], never a
+ *  generic dump. A key absent from the payload is skipped rather than rendered as 0. */
+function flowReportCounters(sub) {
+  const map = FLOW_REPORT_COUNTERS[String((sub && sub.role) || '').toLowerCase()];
+  if (!map || !sub || !sub.counts) return [];
+  return map
+    .filter(([k]) => sub.counts[k] !== undefined && sub.counts[k] !== null && typeof sub.counts[k] !== 'boolean')
+    .map(([k, label]) => [label, _rrNum(sub.counts[k])]);
+}
+
+/** The chip row itself, so the management card and the all-reports list cannot drift apart. The
+ *  shape deliberately matches the chips the person saw on their own page before submitting. */
+function flowReportCountersHtml(sub) {
+  const rows = flowReportCounters(sub);
+  if (!rows.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">'
+    + rows.map(([l, v]) => `<span style="display:inline-flex;gap:0.3rem;align-items:baseline;padding:0.2rem 0.55rem;`
+        + `border-radius:999px;background:var(--bg-inset,#f1f5f9);font-size:0.75rem;">`
+        + `<b style="font-size:0.85rem;">${v}</b><span style="color:var(--text-muted,#64748b);">${_rrEsc(l)}</span></span>`).join('')
+    + '</div>';
+}
+
 function flowActivityCounts(entriesOrTasks) {
   const tasks = (entriesOrTasks && entriesOrTasks.length && entriesOrTasks[0] && entriesOrTasks[0].actions)
     ? entriesOrTasks : flowRollupActivity(entriesOrTasks);

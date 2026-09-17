@@ -287,6 +287,7 @@ function adrSubmissionHtml(sub) {
       <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${_e(_time(sub.submittedAt))}${(parseFloat(sub.submitCount) || 0) > 1 ? ` · updated ${parseFloat(sub.submitCount)}×` : ''}</span>
       ${sub.status === 'Reviewed' ? `<span style="margin-left:auto;font-size:0.75rem;color:#0d9488;font-weight:700;">✓ Reviewed by ${_e(sub.reviewedBy)}</span>` : ''}
     </div>
+    ${typeof flowReportCountersHtml === 'function' ? flowReportCountersHtml(sub) : ''}
     ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
   </div>`;
 }

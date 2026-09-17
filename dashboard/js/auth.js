@@ -168,8 +168,47 @@ function isFlowViewerRole(session) {
   return !!session && session.role === 'management';
 }
 
+/* ── A280 · WHO SEES EVERYONE'S RECORDS, AND WHO SEES ONLY THEIR OWN ─────────────────────────
+ *
+ * ONE answer, stated once, for quotations, purchase requests, the board, the tracker, the client
+ * tracker and the quote configurator. Every one of those files used to carry its own copy spelled
+ * `role !== 'sales'`, and three of them already carried a comment warning that the copies would
+ * eventually disagree and the most permissive one would quietly become the policy.
+ *
+ * IT IS THE SPELLING THAT WAS DANGEROUS, NOT THE DUPLICATION. `!== 'sales'` has a default: a role
+ * nobody considered is treated as OVERSIGHT and handed every rep's book. Adding 'leadgen' to the
+ * two guards below would have done exactly that — silently, with no error anywhere, on six pages.
+ *
+ * So the list here is the OVERSIGHT list, enumerated POSITIVELY, and own-scope is its negation.
+ * The default is now the safe one: an unrecognised role sees only records carrying its own name,
+ * which is at worst an empty page and never somebody else's prices. Widening oversight has to be a
+ * deliberate edit to THIS array; it can no longer happen by omission.
+ *
+ * FLOW_OWN_SCOPE_ROLES is documentation, not the decision — nothing branches on it. It names the
+ * roles we EXPECT on the other side so tests/flow/role-scope.js can assert the two lists are
+ * disjoint and together cover every role _homeForRole knows.
+ *
+ * ADVISORY CLIENT SCOPE, NOT A SECURITY BOUNDARY. getQuotations and getPricingRequests are not in
+ * _SECURED, so the server takes the browser's word for the name it filters on. That is the same
+ * limitation the quotation list has always had (quotation-board.js says so too) and the fix belongs
+ * in the backend, not in a seventh copy of the test out here.
+ */
+const FLOW_OVERSIGHT_ROLES = ['admin', 'accounting', 'management', 'director'];
+const FLOW_OWN_SCOPE_ROLES = ['sales', 'leadgen'];
+
+/** Accepts a role string OR a session object — half the call sites have one, half the other. */
+function _flowRoleOf(x) {
+  const r = (x && typeof x === 'object') ? x.role : x;
+  return String(r == null ? '' : r).trim().toLowerCase();
+}
+/** True when this person may see every rep's records. */
+function flowIsOversightRole(x) { return FLOW_OVERSIGHT_ROLES.indexOf(_flowRoleOf(x)) !== -1; }
+/** True when this person owns their records and sees only their own — sales, lead-gen, and by
+ *  design any role we have not classified yet. */
+function flowOwnsRecordsOnly(x) { return !flowIsOversightRole(x); }
+
 /**
- * Require quotation access — sales (own only) plus all oversight roles
+ * Require quotation access — sales and lead-gen (own only) plus all oversight roles
  * (admin, accounting, management, director) who see/edit every rep's quotations.
  */
 function requireQuotationAccess() {
@@ -178,7 +217,7 @@ function requireQuotationAccess() {
     window.location.href = 'index.html';
     return null;
   }
-  if (!['admin', 'accounting', 'management', 'director', 'sales'].includes(session.role)) {
+  if (!FLOW_OVERSIGHT_ROLES.concat(FLOW_OWN_SCOPE_ROLES).includes(_flowRoleOf(session))) {
     window.location.href = _homeForRole(session.role);
     return null;
   }
@@ -186,8 +225,11 @@ function requireQuotationAccess() {
 }
 
 /**
- * Require access to the Pricing/Purchase Request flow — sales (own only) plus all
+ * Require access to the Pricing/Purchase Request flow — sales and lead-gen (own only) plus all
  * oversight roles (admin, accounting, management, director).
+ *
+ * A280 — this guard also fronts purchase-request-tracker.html. Widening it was not enough on its
+ * own: the pages behind it decided capability with `role !== 'sales'`, so see flowIsOversightRole.
  */
 function requirePricingFlowAccess() {
   const session = getSession();
@@ -195,7 +237,7 @@ function requirePricingFlowAccess() {
     window.location.href = 'index.html';
     return null;
   }
-  if (!['admin', 'accounting', 'management', 'director', 'sales'].includes(session.role)) {
+  if (!FLOW_OVERSIGHT_ROLES.concat(FLOW_OWN_SCOPE_ROLES).includes(_flowRoleOf(session))) {
     window.location.href = _homeForRole(session.role);
     return null;
   }
@@ -847,7 +889,13 @@ function renderNavbar(activePage) {
   } else if (session.role === 'leadgen') {
     // A277 — three links and an account menu. Deliberately no Process Flow dropdown: the role's
     // whole surface is its own page, and the sales nav below is what an unlisted role would get.
+    /* A280 — plus Work. A lead-gen user raises purchase requests and builds the quotations that come
+       out of them exactly as a rep does, scoped to their own name. They get the rep's four pages and
+       ONLY those: Product Finder, Inventory, Weekly Itinerary, Travel, Commissions and My Emails are
+       rep surfaces this role has no claim on, and a link to a page the guard bounces is worse than
+       no link at all. */
     const acctActive = ['email-setup', 'change-password'].includes(activePage);
+    const workActive = ['flow-pricing-request', 'purchase-request-tracker', 'flow-quotations', 'quotation-board'].includes(activePage);
     navLinks = `
       <a href="leadgen-home.html" class="${activePage === 'leadgen-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -857,6 +905,19 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Daily Report
       </a>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn ${workActive ? 'active' : ''}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+          Work
+          <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
+          <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
+          <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
+          <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
+        </div>
+      </div>
       <a href="leave-request.html" class="${activePage === 'leave-request' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Leave Request
@@ -1115,6 +1176,10 @@ async function flowComputeActions(session) {
   const add = (icon, color, text, link) => items.push({ icon, color, text, link });
   const isMgmt = role === 'management', isDir = role === 'director';
   const isAdmin = role === 'admin', isAcct = role === 'accounting', isSales = role === 'sales';
+  /* A280 — the quotation/PR nudges belong to whoever RAISES them, which is now sales and lead-gen.
+     Used only for that block; the itinerary, travel, commission and leads-handed-to-you nudges stay
+     `isSales`, because those are rep surfaces a lead-gen user has no page for. */
+  const isRep = flowOwnsRecordsOnly(role);
   // "Past due" only when a due date is set and is before today (precise, low-noise).
   const _pastDue = (d) => {
     if (!d) return false;
@@ -1373,7 +1438,7 @@ async function flowComputeActions(session) {
     }).catch(() => {}));
   }
   // Sales: my returned pricing requests, my approved/rejected quotations, my sent quotes with no SO.
-  if (isSales) {
+  if (isRep) {          // A280 — sales and lead-gen both raise these
     jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
       // A242 — same on the rep's own home: a partly-quoted request still has items to quote.
       const n = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales' || p.status === 'Partly Quoted').length;

@@ -39,7 +39,7 @@ let qClientRefs = {};   // A208: customer -> their own RFQ reference
 document.addEventListener('DOMContentLoaded', async () => {
   qSession = requireQuotationAccess();
   if (!qSession) return;
-  qIsOversight = qSession.role !== 'sales';
+  qIsOversight = flowIsOversightRole(qSession);   // A280 — one copy, in auth.js
   qCanSeeCosts = ['accounting', 'management', 'director'].indexOf(qSession.role) >= 0;   // A191
   qAdmin = qSession.role === 'admin';
   renderNavbar('flow-quotations');
@@ -586,7 +586,12 @@ function renderQuotationList() {
 function quotationActions(q) {
   const no = flowEsc(q.quotationNo);
   const role = qSession.role, st = q.status || 'Draft';
-  const isSales = role === 'sales', isAdmin = role === 'admin';
+  /* A280 — `isRep`, not `isSales`: a lead-gen user builds quotations from their own purchase
+     requests exactly as a rep does, so every affordance below that meant "this is your own work"
+     has to reach them. Edit and Delete are the ones that mattered — they gated on the role alone
+     with no isCreator beside them (Submit and Revise both have one), so a lead-gen user would have
+     built a quotation from a returned PR, landed on a Draft, and had no way to correct it. */
+  const isRep = flowOwnsRecordsOnly(role), isAdmin = role === 'admin';
   const isCreator = String(q.createdBy) === String(qSession.name);
   const editable = st === 'Draft' || st === 'Rejected';
   // Approved/Sent are finished states — the way back in is Revise (audited, and re-enters approval),
@@ -597,25 +602,25 @@ function quotationActions(q) {
   let a = `<button class="link-btn" onclick='openReviewModal("${no}")'>Review</button>`
     + B(`openDocsModal("Quotation","${no}")`, 'Docs');
   // Submit / re-submit while Draft or Rejected — the creator, admin, or accounting.
-  if (editable && (isCreator || isAdmin || isSales || role === 'accounting'))
+  if (editable && (isCreator || isAdmin || isRep || role === 'accounting'))
     a += B(`submitQuotationAction("${no}")`, st === 'Rejected' ? 'Re-submit' : 'Submit');
   /* A176 — Edit and PDF were two buttons doing different jobs on the same row, which read as
      duplication. They are now ONE surface: whoever may change the quotation gets Edit (record +
      document); everyone else gets PDF, which opens the same builder with the figures locked and
      rebuilds the document only. Never both — and never neither, because an approver staring at a
      stale PDF must always be able to regenerate it (A123 blocks Approve until they do). */
-  if (editable && (isSales || isAdmin)) a += B(`editQuotation("${no}")`, 'Edit');
+  if (editable && (isCreator || isRep || isAdmin)) a += B(`editQuotation("${no}")`, 'Edit');
   else a += B(`qcOpen("${no}","document")`, 'PDF');
-  if ((isSales || isAdmin) && editable) a += B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
+  if ((isCreator || isRep || isAdmin) && editable) a += B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
   // Client came back asking for a different price? Reopen it — creator, sales or admin.
-  if (reopenable && (isCreator || isSales || isAdmin)) a += B(`reviseQuotationAction("${no}")`, 'Revise');
+  if (reopenable && (isCreator || isRep || isAdmin)) a += B(`reviseQuotationAction("${no}")`, 'Revise');
   // A145: Send-to-Client is offered to the CREATOR and to admin/management/director — not sales-only —
   // so an admin- or management-created quotation doesn't strand at Approved with no one able to send it.
-  const canSend = isCreator || isSales || isAdmin || role === 'management' || role === 'director';
+  const canSend = isCreator || isRep || isAdmin || role === 'management' || role === 'director';
   if (canSend && st === 'Approved') a += B(`sendQuotationAction("${no}")`, 'Send to Client');
   // A152: close a quotation the client never pursued (soft) — or reopen a closed one.
   const closed = Q_CLOSED.indexOf(st) !== -1;
-  const canClose = isCreator || isSales || isAdmin || role === 'management' || role === 'director';
+  const canClose = isCreator || isRep || isAdmin || role === 'management' || role === 'director';
   const wonHasSO = qHasSO[String(q.quotationNo)];   // pursued into an SO → can't be "not pursued"
   if (qCanClose && canClose) {
     if (closed) a += B(`reopenQuotationAction("${no}")`, 'Reopen', 'reopen-btn');

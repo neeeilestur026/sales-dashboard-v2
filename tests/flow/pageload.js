@@ -20,6 +20,7 @@ const D = path.join(__dirname, '..', '..', 'dashboard') + '/';
 function page(jsFiles, htmlFile, session, opts) {
   opts = opts || {};
   const calls = [];
+  const params = [];   // A280 — {action, params} per backend call
   const els = {};
   const html = fs.readFileSync(D + htmlFile, 'utf8');
 
@@ -30,16 +31,27 @@ function page(jsFiles, htmlFile, session, opts) {
                 disabled: false, style: { display: hidden ? 'none' : '' },
                 classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
                 getAttribute: () => null, setAttribute: () => {}, addEventListener: () => {},
-                scrollIntoView: () => {}, querySelector: () => null, querySelectorAll: () => [] };
+                scrollIntoView: () => {}, querySelector: () => null, querySelectorAll: () => [],
+                /* A280 — a page that BUILDS something needs these. They landed the moment the create
+                   form started being built for a role that had never reached it, which is the point:
+                   a stub that cannot append is a stub that can only test pages doing nothing. */
+                appendChild() {}, removeChild() {}, remove() {}, insertAdjacentHTML() {},
+                closest: () => null, focus() {}, click() {}, children: [], rows: [], options: [],
+                dataset: {} };
   });
 
   const ctx = {
     console,
     document: {
       getElementById: id => els[id] || null,
-      addEventListener: (e, f) => { ctx.__boot = f; },
+      /* A280 — BY EVENT NAME. auth.js registers a module-level 'click' listener, so an unguarded
+         capture makes THAT the page's boot and the suite tests nothing. */
+      addEventListener: (e, f) => { if (e === 'DOMContentLoaded') ctx.__boot = f; },
       querySelectorAll: () => [], querySelector: () => null,
-      createElement: () => ({ style: {}, appendChild() {}, setAttribute() {} }),
+      createElement: () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+                              innerHTML: '', textContent: '', value: '', appendChild() {}, removeChild() {}, remove() {},
+                              insertAdjacentHTML() {}, setAttribute() {}, getAttribute: () => null,
+                              addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] }),
       body: { innerHTML: '', appendChild() {} }
     },
     /* Reads ctx.__session on EVERY call, not the value captured at construction. A suite that renders
@@ -61,8 +73,12 @@ function page(jsFiles, htmlFile, session, opts) {
   vm.runInContext(fs.readFileSync(D + 'js/flow-api.js', 'utf8'), ctx);
 
   vm.runInContext(
-    'fetchFlow = function(a,p){ __calls.push(a); return Promise.resolve({success:true,data:(__data&&__data[a])||[]}); };' +
-    'postFlow  = function(a,p){ __calls.push("POST:"+a); return Promise.resolve({success:true,data:(__data&&__data[a])||[]}); };' +
+    /* A280 — the calls list records PARAMS too. "sales sees only their own" is a claim about the
+       scope a page asked for, and until now the harness recorded only the action name, so the one
+       thing worth proving was the one thing it could not say. __calls stays an array of strings so
+       every existing assertion keeps working; __params is the parallel record. */
+    'fetchFlow = function(a,p){ __calls.push(a); __params.push({action:a, params:p||{}}); return Promise.resolve({success:true,data:(__data&&__data[a])||[]}); };' +
+    'postFlow  = function(a,p){ __calls.push("POST:"+a); __params.push({action:a, params:p||{}}); return Promise.resolve({success:true,data:(__data&&__data[a])||[]}); };' +
     'flowVersionAtLeast = function(){ return Promise.resolve(true); };' +
     '_flowConfigured = function(){ return true; };' +
     'requireAuth = function(){ return __session; };' +
@@ -71,13 +87,29 @@ function page(jsFiles, htmlFile, session, opts) {
     'requireOversight = function(){ return __session; };' +
     'requireTravelAccess = function(){ return __session; };' +
     'requireQuotationAccess = function(){ return __session; };' +
+    'requirePricingFlowAccess = function(){ return __session; };' +
     'renderNavbar = function(){}; renderFlowNav = function(){};', ctx);
 
-  ctx.__calls = calls; ctx.__session = session; ctx.__data = opts.data || {};
+  ctx.__calls = calls; ctx.__params = params; ctx.__session = session; ctx.__data = opts.data || {};
+
+  /* A280 — opts.withAuth loads the REAL dashboard/js/auth.js, for pages that now call a predicate
+     defined there (flowOwnsRecordsOnly / flowIsOversightRole). Opt-in, because auth.js also defines
+     the require* guards and would replace the stubs above — which is exactly what a role-scope suite
+     wants and exactly what an existing suite does not. It has two module-level side effects, a click
+     listener and a 2s notification poll; the listener is handled by the event-name guard above, and
+     the poll is discarded by clearing the call lists immediately after. */
+  if (opts.withAuth) {
+    vm.runInContext(fs.readFileSync(D + 'js/auth.js', 'utf8'), ctx);
+    vm.runInContext('renderNavbar = function(){}; renderFlowNav = function(){};', ctx);
+    calls.length = 0; params.length = 0;
+  }
+
   (jsFiles || []).forEach(f => vm.runInContext(fs.readFileSync(D + f, 'utf8'), ctx));
 
   return {
-    ctx, els, calls,
+    ctx, els, calls, params,
+    /** The params a given action was called with, or null. */
+    paramsFor: (action) => (params.filter(x => x.action === action)[0] || {}).params || null,
     boot: async () => {
       if (ctx.__boot) await ctx.__boot();
       await new Promise(r => setImmediate(r));      // let the awaited loads actually run

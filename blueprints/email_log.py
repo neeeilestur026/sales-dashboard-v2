@@ -680,6 +680,23 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
 # ── Routes ────────────────────────────────────────────────────────
 
 
+# A280 — THE ROLES THAT MAY ASK ABOUT SOMEBODY ELSE'S MAILBOX. ONE list, because there are two
+# endpoints: /api/email/users hands out the roster and /api/email/today serves the mail, and if the
+# two ever disagree the mismatch is SILENT AND WRONG rather than loud — email_today falls back to
+# the CALLER'S OWN mailbox (see `lookup_user` below), which the dashboard then files under the
+# target's display name. Every card would show one person's sent mail as everybody's.
+#
+# 'hr' is here because the HR dashboard carries the same 🗒️ Daily Reports section the management
+# dashboard does (hr-home.html, driven by the same management-flow.js). Without it that section
+# 403s: every email column reads "unavailable" and team-performance.js's _tpRoles stays empty, so
+# every person's task chart falls back to the generic mix instead of their role's.
+#
+# This is a real widening: HR gains every non-director employee's sent-mail timestamps, recipients
+# and subjects. Never bodies, and the director is excluded from the fan-out by the dashboard itself.
+# Decided deliberately, because that section was built to show exactly this.
+EMAIL_OVERSIGHT_ROLES = ("admin", "accounting", "management", "director", "hr")
+
+
 @email_log_bp.route("/api/email/setup", methods=["POST"])
 def email_setup():
     _cfg = _email_config_problem()
@@ -772,7 +789,7 @@ def email_today():
     # Which date's sent mail to fetch (default today). Validate strictly.
     req_date = (body.get("date") or request.args.get("date") or "").strip()
     target_date = req_date if re.fullmatch(r"\d{4}-\d{2}-\d{2}", req_date) else None
-    oversight = str(session.get("role", "")).lower() in ("admin", "accounting", "management", "director")
+    oversight = str(session.get("role", "")).lower() in EMAIL_OVERSIGHT_ROLES
     lookup_user = target_user if (target_user and oversight) else session["username"]
     enc_blob = _get_enc_creds(lookup_user)
     if not enc_blob:
@@ -838,7 +855,7 @@ def email_users():
     session = _validate_session(token)
     if not session:
         return jsonify({"success": False, "message": "Invalid session"}), 401
-    if str(session.get("role", "")).lower() not in ("admin", "accounting", "management", "director"):
+    if str(session.get("role", "")).lower() not in EMAIL_OVERSIGHT_ROLES:
         return jsonify({"success": False, "message": "Forbidden (oversight roles only)"}), 403
 
     now = time.time()
