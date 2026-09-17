@@ -14,6 +14,7 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 
 const LG = { actorRole: 'leadgen', actorName: 'Ana Reyes', actorUsername: 'ana' };
 const DIR = { actorRole: 'director', actorName: 'The Director', actorUsername: 'director' };
+const callp = (kind, contactNo, outcome, reached) => Object.assign({ kind, contactNo, outcome, reached: reached || 'Decision-maker' }, LG);
 const save = (c, entity, rec, who, extra) => call(c, 'saveLeadgenRecord', Object.assign({ entity, record: JSON.stringify(rec) }, who || LG, extra || {}));
 const settings = (c, patch) => call(c, 'setFlowSettings', Object.assign({ settings: JSON.stringify(patch) }, DIR));
 const plant = (c, over, who, extra) => save(c, 'plants', Object.assign({ company: 'Holcim Philippines', plantSite: 'Bulacan', sector: 'Cement', province: 'Bulacan', territory: 'Luzon' }, over || {}), who, extra);
@@ -34,7 +35,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
     ok(a + ' takes the lock and logs, but is NOT secured — the deployed report.html calls it directly, and securing it before the client ships refuses every rep\'s call log (A277-3)',
        c.MUTATIONS[a] === 1 && !!c._MODULE_MAP[a] && c._SECURED[a] === undefined));
   ok('Clients is 12 wide and ends in Stage', c.SCHEMA.Clients.length === 12 && c.SCHEMA.Clients[11] === 'Stage');
-  ok('SalesCalls is 10 wide, Kind + Contact No appended', c.SCHEMA.SalesCalls.slice(8).join() === 'Kind,Contact No');
+  ok('SalesCalls is 11 wide, Kind + Contact No + Reached appended', c.SCHEMA.SalesCalls.slice(8).join() === 'Kind,Contact No,Reached');
   ok('LgTouches carries no Deleted On (it follows its batch)', c.SCHEMA.LgTouches.indexOf('Deleted On') === -1);
 }
 
@@ -189,7 +190,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ok('an edit adds no touches', touchesBefore === 2 + 2 + 1 + 1, touchesBefore);   // two intros × 2, the director's, the one-day-back
 }
 
-/* ── 7 · the counter ──────────────────────────────────────────────────────────────────────── */
+/* ── 7 · the counter: the nine daily items ────────────────────────────────────────────────── */
 {
   sec('7 · getLeadgenCounts');
   const c = load();
@@ -197,32 +198,39 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   settings(c, { lgRepLuzon: 'gerald', lgRepVisMin: 'kim' });
   const p1 = plant(c).id, p2 = plant(c, { plantSite: 'La Union' }).id, p3 = plant(c, { plantSite: 'Davao', territory: 'VisMin' }).id;
   const c1 = contact(c, p1, { emailVerified: 'Pattern' }).id, c2 = contact(c, p1, { name: 'B', email: 'b@x.example' }).id;
-  save(c, 'batches', { kind: 'Intro', contactNos: [c1, c2] });
-  save(c, 'batches', { kind: 'Follow-up', contactNos: [c1] });
-  call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: c1, outcome: 'No answer' }, LG));
-  call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: c2, outcome: 'Interested' }, LG));
-  call(c, 'logSalesCall', Object.assign({ kind: 'Follow-up', contactNo: c1, outcome: 'Referred' }, LG));
+  save(c, 'batches', { kind: 'Intro', contactNos: [c1, c2] });                       // 2 email touches
+  save(c, 'batches', { kind: 'Follow-up', contactNos: [c1] });                       // 1
+  call(c, 'logSalesCall', callp('Cold', c1, 'No answer', 'Voicemail / no answer'));
+  call(c, 'logSalesCall', callp('Cold', c2, 'Interested', 'Decision-maker'));
+  call(c, 'logSalesCall', callp('Follow-up', c1, 'Referred', 'Gatekeeper'));
   call(c, 'logSalesCall', Object.assign({ contact: 'Rep call', outcome: 'Connected' }, { actorRole: 'sales', actorName: 'Gerald' }));
+  save(c, 'linkedin', { contactNo: c2, kind: 'Connection request' });
+  save(c, 'linkedin', { contactNo: c1, kind: 'Message' });
+  save(c, 'suppliers', { company: 'Bulacan Bolts Trading', category: 'Fasteners', location: 'Bulacan' });
+  save(c, 'contacts', { rowIndex: 2, contactNo: c1, nextCallDate: c._lgAddDays(today, 2) });   // a call booked
   const lead = save(c, 'leads', { plantNo: p1, contactNo: c1, rightPerson: true, ownMaintenance: 'Yes', flangedOrHydraulic: 1, saidYes: 'yes', pain: 'leaks' });
   ok('lead handed off', lead.success && lead.handedTo === 'gerald', lead);
   save(c, 'leads', { rowIndex: 2, leadNo: lead.id, status: 'Presentation Booked', presentationDate: '2026-12-01' });
-  // one deleted plant, one edited plant
   call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'plants', id: p3, rowIndex: 4 }, LG));
   save(c, 'plants', { rowIndex: 2, plantNo: p1, notes: 'edited twice' });
   save(c, 'plants', { rowIndex: 2, plantNo: p1, notes: 'edited thrice' });
+  call(c, 'submitDailyReport', { user: 'Ana Reyes', role: 'leadgen', date: today, clientRef: 'DR-1', actorName: 'Ana Reyes', actorRole: 'leadgen' });
   const k = call(c, 'getLeadgenCounts', {});
-  ok('today: plants 2 (one deleted, one edited twice counts once)', k.success && k.day.plants === 2, k.day);
-  ok('today: contacts verified 1', k.day.contacts === 1, k.day);
-  ok('today: intro emails 2, follow-up emails 1', k.day.introEmails === 2 && k.day.followupEmails === 1, k.day);
-  ok('today: cold calls 2, follow-up calls 1 — the rep\'s plain call counts nowhere', k.day.coldCalls === 2 && k.day.followupCalls === 1, k.day);
-  ok('today: leads 1, meetings 1', k.day.leads === 1 && k.day.meetings === 1, k.day);
-  ok('quotas come from settings', k.quotas.plants === 15 && k.quotas.meetings === 1, k.quotas);
-  ok('server date and hour are returned', k.today === today && /^\d\d:\d\d$/.test(k.hour), [k.today, k.hour]);
-  ok('reps come back by username', k.reps.Luzon === 'gerald' && k.reps.VisMin === 'kim', k.reps);
-  ok('the week starts on a Monday and has 7 days', k.week.days.length === 7 && c._lgDow(k.week.start) === 'Mon', k.week);
-  // getLeadgen({user}) scoping
+  ok('attempts = 3 calls + 3 emails + 2 LinkedIn = 8; the rep\'s plain call counts nowhere', k.success && k.day.attempts === 8, k.day);
+  ok('conversations = the one call that reached the decision-maker', k.day.conversations === 1, k.day);
+  ok('emails 3 (intro + follow-up alike), linkedin 2', k.day.emails === 3 && k.day.linkedin === 2, k.day);
+  ok('suppliers 1, accounts 2 (one deleted; one edited twice counts once)', k.day.suppliers === 1 && k.day.accounts === 2, k.day);
+  ok('crm: something was logged', k.day.crm > 0, k.day);
+  ok('eod: the report was submitted', k.day.eod === 1, k.day);
+  ok('scheduled = 1 call booked + 1 presentation booked = 2', k.day.scheduled === 2, k.day);
+  ok('the weekly items ride along per day: leads 1, meetings 1, intel updates 1', k.day.leads === 1 && k.day.meetings === 1 && k.day.intelUpdates === 1, k.day);
+  ok('quotas are ranges from settings', k.quotas.attempts === 40 && k.quotasMax.attempts === 50 && k.quotas.eod === 1, [k.quotas, k.quotasMax]);
+  ok('server date and hour are returned', k.today === today && /^\d\d:\d\d$/.test(k.hour));
+  ok('reps by username', k.reps.Luzon === 'gerald' && k.reps.VisMin === 'kim');
+  ok('the week starts on a Monday', k.week.days.length === 7 && c._lgDow(k.week.start) === 'Mon');
+  ok('the weekly panel: active accounts is a state, leads a range', k.week.weekly.activeAccounts.value === 2 && k.week.weekly.activeAccounts.min === 20 && k.week.weekly.leads.min === 10 && k.week.weekly.leads.max === 20, k.week.weekly);
   const k2 = call(c, 'getLeadgenCounts', { user: 'Nobody' });
-  ok('a user filter scopes the counts', k2.day.plants === 0 && k2.day.coldCalls === 0, k2.day);
+  ok('a user filter scopes everything, the report included', k2.day.accounts === 0 && k2.day.attempts === 0 && k2.day.eod === 0, k2.day);
 }
 
 /* ── 8 · the week: working days, holidays, Saturday, reply rate ──────────────────────────── */
@@ -230,30 +238,30 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   sec('8 · the week');
   const c = load();
   const seed = (sheet, obj) => (c.__store[sheet] = c.__store[sheet] || []).push(obj);
-  c._sheet('LgPlants'); c._sheet('LgContacts'); c._sheet('LgEmailBatch'); c._sheet('LgLeads'); c._sheet('SalesCalls');
-  // week of Mon 2026-09-07 … Sun 2026-09-13
+  ['LgPlants', 'LgContacts', 'LgTouches', 'LgEmailBatch', 'LgLeads', 'LgSuppliers', 'SalesCalls'].forEach(x => c._sheet(x));
   ['2026-09-07', '2026-09-07', '2026-09-09', '2026-09-12', '2026-09-13'].forEach((d, i) =>
-    seed('LgPlants', { 'Plant No': 'PLT-' + i, 'Company': 'C' + i, 'Researched On': d, 'Deleted On': '', 'Created By': 'Ana' }));
-  seed('LgEmailBatch', { 'Batch No': 'B1', 'Kind': 'Intro', 'Count': 40, 'Sent On': '2026-09-08', 'Deleted On': '', 'Created By': 'Ana' });
-  seed('LgEmailBatch', { 'Batch No': 'B2', 'Kind': 'Intro', 'Count': 10, 'Sent On': '2026-09-12', 'Deleted On': '', 'Created By': 'Ana' });   // Saturday
-  seed('LgEmailBatch', { 'Batch No': 'B3', 'Kind': 'Intro', 'Count': 5, 'Sent On': '2026-09-08', 'Deleted On': '2026-09-08', 'Created By': 'Ana' });
-  seed('LgContacts', { 'Contact No': 'C1', 'Replied On': '2026-09-10', 'Verified On': '2026-09-10', 'Deleted On': '', 'Created By': 'Ana' });
-  seed('LgContacts', { 'Contact No': 'C2', 'Replied On': '2026-09-11', 'Verified On': '', 'Deleted On': '', 'Created By': 'Ana' });
-  seed('LgContacts', { 'Contact No': 'C3', 'Replied On': '2026-09-14', 'Verified On': '', 'Deleted On': '', 'Created By': 'Ana' });      // next week
+    seed('LgPlants', { 'Plant No': 'PLT-' + i, 'Company': 'C' + i, 'Status': 'Active', 'Researched On': d, 'Deleted On': '', 'Created By': 'Ana' }));
+  seed('LgEmailBatch', { 'Batch No': 'B3', 'Kind': 'Intro', 'Sent On': '2026-09-08', 'Deleted On': '2026-09-08', 'Created By': 'Ana' });
+  for (let i = 0; i < 40; i++) seed('LgTouches', { 'Touch No': 'B1#' + i, 'Contact No': 'K' + i, 'Channel': 'Email', 'Kind': 'Intro', 'Ref No': 'B1', 'Sent On': '2026-09-08', 'Created By': 'Ana' });
+  for (let i = 0; i < 10; i++) seed('LgTouches', { 'Touch No': 'B2#' + i, 'Contact No': 'K' + i, 'Channel': 'Email', 'Kind': 'Intro', 'Ref No': 'B2', 'Sent On': '2026-09-12', 'Created By': 'Ana' });   // Saturday
+  for (let i = 0; i < 5; i++) seed('LgTouches', { 'Touch No': 'B3#' + i, 'Contact No': 'K' + i, 'Channel': 'Email', 'Kind': 'Intro', 'Ref No': 'B3', 'Sent On': '2026-09-08', 'Created By': 'Ana' });   // removed batch
+  seed('LgTouches', { 'Touch No': 'LI-1', 'Contact No': 'K1', 'Channel': 'LinkedIn', 'Kind': 'Message', 'Ref No': 'LI-1', 'Sent On': '2026-09-10', 'Created By': 'Ana' });
+  seed('LgContacts', { 'Contact No': 'C1', 'Replied On': '2026-09-10', 'Deleted On': '', 'Created By': 'Ana' });
+  seed('LgContacts', { 'Contact No': 'C2', 'Replied On': '2026-09-11', 'Deleted On': '', 'Created By': 'Ana' });
+  seed('LgContacts', { 'Contact No': 'C3', 'Replied On': '2026-09-14', 'Deleted On': '', 'Created By': 'Ana' });      // next week
+  seed('LgSuppliers', { 'Supplier No': 'S1', 'Company': 'X', 'Handed Off On': '2026-09-10', 'Deleted On': '', 'Created By': 'Ana' });
   let w = call(c, 'getLeadgenCounts', { weekStart: '2026-09-07' });
   ok('five working days by default', w.week.workingDays.length === 5, w.week.workingDays);
-  ok('weekly targets are daily × working days', w.week.targets.plants === 75 && w.week.targets.introEmails === 200, w.week.targets);
-  ok('plants: Mon 2 + Wed 1 = 3; Saturday and Sunday count toward nothing', w.week.totals.plants === 3, w.week.totals);
-  ok('Saturday is still drawn on the strip', w.week.byDay['2026-09-12'].plants === 1 && w.week.byDay['2026-09-12'].working === false, w.week.byDay['2026-09-12']);
-  ok('intro emails 40 — the Saturday 10 and the deleted 5 are out', w.week.totals.introEmails === 40, w.week.totals);
+  ok('weekly targets are daily min × working days, with a max beside them', w.week.targets.attempts === 200 && w.week.targetsMax.attempts === 250, [w.week.targets, w.week.targetsMax]);
+  ok('accounts: Mon 2 + Wed 1 = 3; Saturday and Sunday count toward nothing', w.week.totals.accounts === 3, w.week.totals);
+  ok('Saturday is still drawn on the strip', w.week.byDay['2026-09-12'].accounts === 1 && w.week.byDay['2026-09-12'].working === false);
+  ok('emails 40 — the Saturday 10 and the removed batch\'s 5 are out; attempts adds the LinkedIn message', w.week.totals.emails === 40 && w.week.totals.attempts === 41, w.week.totals);
   ok('reply rate = 2 replies ÷ 40 intros = 5%', w.week.replies === 2 && w.week.replyRate === 5, w.week);
+  ok('suppliers handed off this week: 1 of 25–50', w.week.weekly.suppliersHandedOff.value === 1 && w.week.weekly.suppliersHandedOff.min === 25, w.week.weekly);
   settings(c, { lgHolidays: '2026-09-09', lgWorkingDays: 'Mon,Tue,Wed,Thu,Fri' });
   w = call(c, 'getLeadgenCounts', { weekStart: '2026-09-07' });
-  ok('a holiday drops a working day and the target', w.week.workingDays.length === 4 && w.week.targets.plants === 60, w.week);
-  ok('…and the holiday\'s row counts toward nothing', w.week.totals.plants === 2, w.week.totals);
-  ok('holidays are echoed', w.holidays.join() === '2026-09-09', w.holidays);
-  w = call(c, 'getLeadgenCounts', { date: '2026-09-10' });
-  ok('a date inside the week resolves the same week', w.week.start === '2026-09-07' && w.date === '2026-09-10', w.week.start);
+  ok('a holiday drops a working day and the target', w.week.workingDays.length === 4 && w.week.targets.accounts === 40, w.week);
+  ok('…and the holiday\'s row counts toward nothing', w.week.totals.accounts === 2, w.week.totals);
   ok('no intros → reply rate null, not NaN', call(c, 'getLeadgenCounts', { weekStart: '2026-10-05' }).week.replyRate === null);
 }
 
@@ -419,15 +427,17 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   r = call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: 'CTC-x', outcome: 'No answer' }, LG));
   ok('an unknown contact is refused', !r.success, r);
   r = call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: cn, outcome: 'No answer' }, LG));
+  ok('a lead-gen call must say who was reached (A279)', !r.success && /who you reached/.test(r.message), r);
+  r = call(c, 'logSalesCall', callp('Cold', cn, 'No answer', 'Voicemail / no answer'));
   const row = c.__store.SalesCalls[0];
-  ok('the call row is 10 wide, named from the contact, dated today', r.success && row.__arity === 10 && row['Kind'] === 'Cold' && row['Contact No'] === cn && row['Contact'] === 'R. Santos' && row['Company'] === 'Holcim Philippines' && row['Date'] === today, row);
+  ok('the call row is 11 wide, named from the contact, dated today, with who was reached', r.success && row.__arity === 11 && row['Kind'] === 'Cold' && row['Contact No'] === cn && row['Contact'] === 'R. Santos' && row['Company'] === 'Holcim Philippines' && row['Date'] === today && row['Reached'] === 'Voicemail / no answer', row);
   ok('one touch, keyed on the call', c.__store.LgTouches.length === 1 && c.__store.LgTouches[0]['Ref No'] === r.callNo && c.__store.LgTouches[0]['Channel'] === 'Call');
-  r = call(c, 'logSalesCall', Object.assign({ kind: 'Follow-up', contactNo: cn, outcome: 'Wrong person' }, LG));
+  r = call(c, 'logSalesCall', callp('Follow-up', cn, 'Wrong person', 'Gatekeeper'));
   ok('"Wrong person" flips a New contact to Wrong Person', c.__store.LgContacts[0]['Status'] === 'Wrong Person', c.__store.LgContacts[0]);
-  r = call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: cn, outcome: 'No answer', date: c._lgAddDays(today, 1) }, LG));
+  r = call(c, 'logSalesCall', Object.assign(callp('Cold', cn, 'No answer', 'Voicemail / no answer'), { date: c._lgAddDays(today, 1) }));
   ok('a future call date is refused', !r.success && /future/.test(r.message), r);
   r = call(c, 'logSalesCall', { contact: 'Somebody', company: 'Somewhere', outcome: 'Connected', actorRole: 'sales', actorName: 'Gerald' });
-  ok('a rep\'s plain call is unchanged: free outcome, blank kind, no touch', r.success && c.__store.SalesCalls[2]['Kind'] === '' && c.__store.SalesCalls[2].__arity === 10 && c.__store.LgTouches.length === 2, c.__store.SalesCalls[2]);
+  ok('a rep\'s plain call is unchanged: free outcome, blank kind, no reached, no touch', r.success && c.__store.SalesCalls[2]['Kind'] === '' && c.__store.SalesCalls[2]['Reached'] === '' && c.__store.SalesCalls[2].__arity === 11 && c.__store.LgTouches.length === 2, c.__store.SalesCalls[2]);
   const g = call(c, 'getSalesCalls', { kind: 'Cold' });
   ok('getSalesCalls filters by kind and exposes it', g.data.length === 1 && g.data[0].kind === 'Cold' && g.data[0].contactNo === cn, g.data);
   const first = c.__store.SalesCalls[0]['Call No'];
@@ -453,7 +463,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ok('a rep cannot delete', !r.success, r);
   r = call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'plants', id: p1, rowIndex: 2 }, LG));
   ok('today\'s plant is soft-deleted', r.success && c.__store.LgPlants[0]['Deleted On'] === today && c.__store.LgPlants.length === 2, c.__store.LgPlants[0]);
-  ok('…gone from getLeadgen and from the count', call(c, 'getLeadgen', { entity: 'plants' }).data.plants.length === 1 && call(c, 'getLeadgenCounts', {}).day.plants === 1);
+  ok('…gone from getLeadgen and from the count', call(c, 'getLeadgen', { entity: 'plants' }).data.plants.length === 1 && call(c, 'getLeadgenCounts', {}).day.accounts === 1);
   r = call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'plants', id: p1, rowIndex: 2 }, LG));
   ok('deleting twice is a no-op, not an error', r.success && /already/.test(r.message), r);
   c.__store.LgPlants[1]['Researched On'] = c._lgAddDays(today, -1);
@@ -476,7 +486,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ok('a date string stays a string (parseFloat would have made it 2026)', d.lgHolidays === '2026-12-25', d.lgHolidays);
   ok('a numeric string becomes a number', d.lgQuotaPlants === 12);
   ok('a list stays a list', d.lgWorkingDays === 'Mon,Tue,Wed,Thu,Fri,Sat');
-  ok('defaults are merged', d.lgQuotaMeetings === 1 && d.lgMaxBatch === 60 && d.quotationFollowUpDays === 7);
+  ok('defaults are merged', d.lgQuotaEod === 1 && d.lgQuotaAttemptsMax === 50 && d.lgMaxBatch === 60 && d.quotationFollowUpDays === 7);
   const k = call(c, 'getLeadgenCounts', { weekStart: '2026-12-21' });
   ok('the counter sees the six-day week minus Christmas', k.week.workingDays.length === 5 && k.week.workingDays.indexOf('2026-12-25') === -1 && k.week.workingDays.indexOf('2026-12-26') !== -1, k.week.workingDays);
 }
@@ -532,7 +542,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ok('61 is refused', !r.success && /at most 60/.test(r.message), r);
 }
 
-/* ── 17 · getLeadgenDay: the evidence under each number is exactly the rows that made it ──── */
+/* ── 17 · getLeadgenDay: the evidence under each of the nine is exactly the rows that made it ── */
 {
   sec('17 · getLeadgenDay');
   const c = load();
@@ -540,29 +550,34 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   settings(c, { lgRepLuzon: 'gerald' });
   const p1 = plant(c).id, p2 = plant(c, { company: 'Apex Mining', plantSite: 'Maco', sector: 'Mining', territory: 'VisMin' }).id;
   const c1 = contact(c, p1, { emailVerified: 'Pattern' }).id, c2 = contact(c, p1, { name: 'M. Cruz', email: 'm.cruz@x.example' }).id;
-  c.__store.LgPlants[1]['Researched On'] = yday;                                   // yesterday's plant
-  const b = save(c, 'batches', { kind: 'Intro', contactNos: [c1, c2], timeSlot: '08:30' });
-  save(c, 'batches', { kind: 'Follow-up', contactNos: [c1] });
-  call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: c2, outcome: 'Interested', notes: 'asked for a deck' }, LG));
-  call(c, 'logSalesCall', Object.assign({ kind: 'Follow-up', contactNo: c1, outcome: 'Referred' }, LG));
+  c.__store.LgPlants[1]['Researched On'] = yday;
+  save(c, 'batches', { kind: 'Intro', contactNos: [c1, c2], timeSlot: '08:30' });
+  call(c, 'logSalesCall', Object.assign(callp('Cold', c2, 'Interested', 'Decision-maker'), { notes: 'asked for a deck' }));
+  call(c, 'logSalesCall', callp('Follow-up', c1, 'Referred', 'Gatekeeper'));
+  save(c, 'linkedin', { contactNo: c2, kind: 'Connection request' });
+  save(c, 'suppliers', { company: 'Bulacan Bolts Trading', category: 'Fasteners', location: 'Bulacan', contact: 'Mr. Reyes' });
+  save(c, 'contacts', { rowIndex: 2, contactNo: c1, nextCallDate: c._lgAddDays(today, 1) });
   const lead = save(c, 'leads', { plantNo: p1, contactNo: c1, rightPerson: true, ownMaintenance: true, flangedOrHydraulic: true, saidYes: true, pain: 'leaks' });
   save(c, 'leads', { rowIndex: 2, leadNo: lead.id, status: 'Presentation Booked', presentationDate: '2026-12-01', attendees: 'R. Santos, plant manager, Gerald' });
+  call(c, 'submitDailyReport', { user: 'Ana Reyes', role: 'leadgen', date: today, highlights: 'good day', clientRef: 'DR-2', actorName: 'Ana Reyes', actorRole: 'leadgen' });
   const d = call(c, 'getLeadgenDay', {});
-  ok('plants: today\'s one, with its details; yesterday\'s excluded', d.success && d.plants.length === 1 && d.plants[0].company === 'Holcim Philippines' && d.plants[0].sector === 'Cement' && d.plants[0].province === 'Bulacan', d.plants);
-  ok('contacts verified today: c1 only, carrying its company and site', d.contacts.length === 1 && d.contacts[0].contactNo === c1 && d.contacts[0].company === 'Holcim Philippines' && d.contacts[0].plantSite === 'Bulacan' && d.contacts[0].emailVerified === 'Pattern', d.contacts);
-  ok('the intro batch lists both contacts with name, email and company', d.introBatches.length === 1 && d.introBatches[0].timeSlot === '08:30' && d.introBatches[0].contacts.length === 2 && d.introBatches[0].contacts[1].email === 'm.cruz@x.example' && d.introBatches[0].contacts[1].company === 'Holcim Philippines', d.introBatches);
-  ok('the follow-up batch is separate', d.followupBatches.length === 1 && d.followupBatches[0].contacts.length === 1);
-  ok('cold call: who, company, outcome, notes', d.coldCalls.length === 1 && d.coldCalls[0].contact === 'M. Cruz' && d.coldCalls[0].company === 'Holcim Philippines' && d.coldCalls[0].outcome === 'Interested' && d.coldCalls[0].notes === 'asked for a deck', d.coldCalls);
-  ok('follow-up call is separate', d.followupCalls.length === 1 && d.followupCalls[0].contact === 'R. Santos');
-  ok('lead handed off today, with contact and rep', d.leads.length === 1 && d.leads[0].contactName === 'R. Santos' && d.leads[0].handedTo === 'gerald' && d.leads[0].pain === 'leaks', d.leads);
-  ok('presentation booked today: plant, date, attendees', d.meetings.length === 1 && d.meetings[0].plantSite === 'Bulacan' && d.meetings[0].presentationDate === '2026-12-01' && d.meetings[0].attendees === 'R. Santos, plant manager, Gerald', d.meetings);
+  ok('accounts: today\'s one, with its details; yesterday\'s excluded', d.success && d.accounts.length === 1 && d.accounts[0].company === 'Holcim Philippines' && d.accounts[0].sector === 'Cement', d.accounts);
+  ok('suppliers researched today, with contact and location', d.suppliers.length === 1 && d.suppliers[0].company === 'Bulacan Bolts Trading' && d.suppliers[0].contact === 'Mr. Reyes' && d.suppliers[0].location === 'Bulacan', d.suppliers);
+  ok('the intro batch lists both contacts with name, email and company', d.introBatches.length === 1 && d.introBatches[0].contacts.length === 2 && d.introBatches[0].contacts[1].email === 'm.cruz@x.example', d.introBatches);
+  ok('every call, with who was reached', d.calls.length === 2 && d.calls.every(x => x.reached) && d.calls[0].company === 'Holcim Philippines', d.calls);
+  ok('conversations: only the decision-maker call, with its note', d.conversations.length === 1 && d.conversations[0].contact === 'M. Cruz' && d.conversations[0].notes === 'asked for a deck', d.conversations);
+  ok('linkedin: the request, with the contact and company', d.linkedin.length === 1 && d.linkedin[0].kind === 'Connection request' && d.linkedin[0].name === 'M. Cruz' && d.linkedin[0].company === 'Holcim Philippines', d.linkedin);
+  ok('scheduled calls: the contact and the day booked', d.scheduledCalls.length === 1 && d.scheduledCalls[0].nextCallDate === c._lgAddDays(today, 1) && d.scheduledCalls[0].name === 'R. Santos', d.scheduledCalls);
+  ok('presentation booked today: plant, date, attendees', d.meetings.length === 1 && d.meetings[0].plantSite === 'Bulacan' && d.meetings[0].attendees === 'R. Santos, plant manager, Gerald', d.meetings);
+  ok('the end-of-day report: submitted, once', d.eod && d.eod.status === 'Submitted' && d.eod.submitCount === 1, d.eod);
+  ok('crm: things were logged', d.crm > 0, d.crm);
   const dy = call(c, 'getLeadgenDay', { date: yday });
-  ok('yesterday shows yesterday\'s plant and nothing else', dy.plants.length === 1 && dy.plants[0].plantNo === p2 && dy.introBatches.length === 0 && dy.coldCalls.length === 0 && dy.leads.length === 0, dy);
+  ok('yesterday shows yesterday\'s account and nothing else', dy.accounts.length === 1 && dy.accounts[0].plantNo === p2 && dy.calls.length === 0 && dy.linkedin.length === 0 && dy.eod === null, dy);
   const k = call(c, 'getLeadgenCounts', {});
-  ok('the evidence counts match the counter exactly', k.day.plants === d.plants.length && k.day.contacts === d.contacts.length && k.day.introEmails === d.introBatches[0].contacts.length && k.day.followupEmails === 1 && k.day.coldCalls === 1 && k.day.followupCalls === 1 && k.day.leads === 1 && k.day.meetings === 1, k.day);
-  call(c, 'deleteLeadgenRecord', Object.assign({ entity: 'batches', id: b.id, rowIndex: 2 }, LG));
-  ok('a removed batch is out of the evidence too', call(c, 'getLeadgenDay', {}).introBatches.length === 0);
-  ok('a user filter scopes it', call(c, 'getLeadgenDay', { user: 'Nobody' }).plants.length === 0);
+  ok('the evidence counts match the counter exactly',
+     k.day.accounts === d.accounts.length && k.day.suppliers === d.suppliers.length && k.day.conversations === d.conversations.length &&
+     k.day.linkedin === d.linkedin.length && k.day.emails === d.introBatches[0].contacts.length && k.day.attempts === d.calls.length + k.day.emails + k.day.linkedin &&
+     k.day.scheduled === d.scheduledCalls.length + d.meetings.length && k.day.eod === 1, [k.day, d]);
 }
 
 /* ── 18 · the live break: what the DEPLOYED browser sends, against a script that enforces ───── */
@@ -578,7 +593,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
      the exact call that alerted "This action must be performed through the app (signed in)". */
   let r = call(c, 'logSalesCall', { contact: 'Somebody', company: 'Local Supply', outcome: 'Connected', actorName: 'Gerald', actorRole: 'sales' });
   ok('a rep\'s plain call log goes through again', r.success, r);
-  r = call(c, 'logSalesCall', Object.assign({ kind: 'Cold', contactNo: cn, outcome: 'No answer' }, LG));
+  r = call(c, 'logSalesCall', callp('Cold', cn, 'No answer', 'Voicemail / no answer'));
   ok('…and so does the lead-gen call', r.success, r);
   r = call(c, 'deleteSalesCall', { rowIndex: 2, actorRole: 'sales', actorName: 'Gerald' });
   ok('…and removing one', r.success, r);
@@ -590,6 +605,105 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ok('deleteLeadgenRecord without the secret is still refused', !r.success && /through the app/.test(r.message), r);
   r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: JSON.stringify({ company: 'Via Flask', sector: 'Cement', territory: 'Luzon' }) }, LG, { flowSecret: 's3cret' }));
   ok('…and go through when Flask stamps the secret', r.success, r);
+}
+
+/* ── 19 · LinkedIn is a logged channel ─────────────────────────────────────────────────────── */
+{
+  sec('19 · LinkedIn');
+  const c = load();
+  const today = c._lgDay();
+  const pn = plant(c).id, cn = contact(c, pn, { linkedin: 'https://linkedin.com/in/rsantos' }).id;
+  let r = save(c, 'linkedin', { contactNo: 'CTC-x', kind: 'Message' });
+  ok('an unknown contact is refused', !r.success, r);
+  r = save(c, 'linkedin', { contactNo: cn, kind: 'Poke' });
+  ok('an unknown kind is refused with the list', !r.success && /Connection request/.test(r.message), r);
+  r = save(c, 'linkedin', { contactNo: cn, kind: 'Connection request' }, LG, { clientRef: 'LI-1' });
+  ok('a request is one touch on the contact, dated today', r.success && c.__store.LgTouches.length === 1 && c.__store.LgTouches[0]['Channel'] === 'LinkedIn' && c.__store.LgTouches[0]['Kind'] === 'Connection request' && c.__store.LgTouches[0]['Sent On'] === today, c.__store.LgTouches);
+  const again = save(c, 'linkedin', { contactNo: cn, kind: 'Connection request' }, LG, { clientRef: 'LI-1' });
+  ok('a replayed clientRef logs once', again.success && again.replayed === true && c.__store.LgTouches.length === 1);
+  r = save(c, 'linkedin', { contactNo: cn, kind: 'Message' }, { actorRole: 'sales', actorName: 'G' });
+  ok('a rep cannot log a lead-gen touch', !r.success, r);
+  r = save(c, 'linkedin', { contactNo: cn, kind: 'Message', date: c._lgAddDays(today, 1) });
+  ok('a future date is refused', !r.success && /future/.test(r.message), r);
+  c.__store.LgContacts[0]['Intro Sent'] = c._lgAddDays(today, -10);
+  const due = call(c, 'getLeadgenFollowups', {}).data;
+  ok('a LinkedIn touch counts as a follow-up in the cadence', due.length === 1 && due[0].stage === 'Day 7', due);
+}
+
+/* ── 20 · local suppliers, and handing one to procurement ─────────────────────────────────── */
+{
+  sec('20 · suppliers');
+  const c = load();
+  const today = c._lgDay();
+  c._sheet('Suppliers');
+  c.__store.Suppliers.push({ 'Supplier': 'Bulacan Bolts Trading', 'Bank Name': 'BDO', 'Account Name': 'BBT', 'Account Number': '123', 'Payment Method': 'TT', 'Currency': 'PHP', 'TIN': '', 'Address': '', 'Notes': '', 'Updated By': 'acct', 'Updated At': 'x' });
+  let r = save(c, 'suppliers', { company: '', category: 'Fasteners' });
+  ok('a company is required', !r.success, r);
+  r = save(c, 'suppliers', { company: 'Bulacan Bolts Trading', category: 'Fasteners', location: 'Bulacan', status: 'Hot' });
+  ok('an unknown status is refused', !r.success && /Status must be one of/.test(r.message), r);
+  r = save(c, 'suppliers', { company: 'Bulacan Bolts Trading', category: 'Fasteners', location: 'Bulacan', contact: 'Mr. Reyes' }, LG, { clientRef: 'S-1' });
+  ok('researched today, status Researching, nothing qualified yet', r.success && c.__store.LgSuppliers[0]['Researched On'] === today && c.__store.LgSuppliers[0]['Status'] === 'Researching' && c.__store.LgSuppliers[0]['Qualified On'] === '' && c.__store.LgSuppliers[0]['Handed Off On'] === '', c.__store.LgSuppliers[0]);
+  const id = r.id;
+  r = save(c, 'suppliers', { company: '  bulacan bolts  trading ', category: 'x' });
+  ok('the same supplier spelled differently is refused', !r.success && /Already listed as/.test(r.message), r);
+  r = save(c, 'suppliers', { rowIndex: 2, supplierNo: id, status: 'Qualified' });
+  ok('→ Qualified stamps Qualified On', r.success && c.__store.LgSuppliers[0]['Qualified On'] === today && c.__store.LgSuppliers[0]['Handed Off On'] === '', c.__store.LgSuppliers[0]);
+  ok('…and touches nothing in the Suppliers master yet', c.__store.Suppliers.length === 1 && c.__store.Suppliers[0]['Address'] === '');
+  c.__store.LgSuppliers[0]['Qualified On'] = '2026-01-05';
+  r = save(c, 'suppliers', { rowIndex: 2, supplierNo: id, status: 'Handed Off' });
+  ok('→ Handed Off stamps Handed Off On and keeps the first Qualified On', r.success && c.__store.LgSuppliers[0]['Handed Off On'] === today && c.__store.LgSuppliers[0]['Qualified On'] === '2026-01-05', c.__store.LgSuppliers[0]);
+  const sup = c.__store.Suppliers[0];
+  ok('the hand-off fills the blank address in the Suppliers master and leaves the bank details alone', sup['Address'] === 'Bulacan' && sup['Bank Name'] === 'BDO' && sup['Account Number'] === '123' && /Lead-gen prospect/.test(sup['Notes']) && c.__store.Suppliers.length === 1, sup);
+  ok('the result says so', r.supplier === 'Bulacan Bolts Trading' && r.supplierCreated === false, r);
+  r = save(c, 'suppliers', { company: 'Cebu Hydraulics', location: 'Cebu', status: 'Handed Off' });
+  ok('a brand-new supplier handed off straight away lands in the master as a new row', r.success && r.supplierCreated === true && c.__store.Suppliers.length === 2 && c.__store.Suppliers[1]['Supplier'] === 'Cebu Hydraulics' && c.__store.Suppliers[1]['Address'] === 'Cebu', c.__store.Suppliers[1]);
+  ok('…and counts as both qualified and handed off today', c.__store.LgSuppliers[1]['Qualified On'] === today && c.__store.LgSuppliers[1]['Handed Off On'] === today);
+  const k = call(c, 'getLeadgenCounts', {});
+  ok('the counter: 2 researched today, 2 handed off this week', k.day.suppliers === 2 && k.week.weekly.suppliersHandedOff.value === 2, [k.day, k.week.weekly]);
+  const g = call(c, 'getLeadgen', { entity: 'suppliers' });
+  ok('getLeadgen lists them with dates as strings', g.data.suppliers.length === 2 && g.data.suppliers[0].handedOffOn === today);
+}
+
+/* ── 21 · scheduled calls and intel updates ────────────────────────────────────────────────── */
+{
+  sec('21 · scheduling and research updates');
+  const c = load();
+  const today = c._lgDay(), tmrw = c._lgAddDays(today, 1);
+  const pn = plant(c).id, cn = contact(c, pn).id;
+  let r = save(c, 'contacts', { rowIndex: 2, contactNo: cn, nextCallDate: tmrw });
+  ok('booking a call stamps Scheduled On today and keeps the date', r.success && c.__store.LgContacts[0]['Scheduled On'] === today && c.__store.LgContacts[0]['Next Call Date'] === tmrw, c.__store.LgContacts[0]);
+  c.__store.LgContacts[0]['Scheduled On'] = '2026-01-05';
+  r = save(c, 'contacts', { rowIndex: 2, contactNo: cn, notes: 'unrelated edit' });
+  ok('an unrelated edit does not re-stamp it', c.__store.LgContacts[0]['Scheduled On'] === '2026-01-05');
+  r = save(c, 'contacts', { rowIndex: 2, contactNo: cn, nextCallDate: c._lgAddDays(today, 3) });
+  ok('moving the call re-stamps — it is a new act of scheduling', c.__store.LgContacts[0]['Scheduled On'] === today);
+  ok('not due before the day', call(c, 'getLeadgenFollowups', { date: c._lgAddDays(today, 2) }).data.length === 0);
+  let due = call(c, 'getLeadgenFollowups', { date: c._lgAddDays(today, 3) }).data;
+  ok('on the day it is the first thing listed', due.length === 1 && due[0].stage === 'Scheduled call' && due[0].nextCallDate === c._lgAddDays(today, 3), due);
+  ok('…and still listed if missed', call(c, 'getLeadgenFollowups', { date: c._lgAddDays(today, 5) }).data[0].overdue === 2);
+  c.__store.LgTouches = c.__store.LgTouches || [];
+  c.__store.LgTouches.push({ 'Touch No': 'x', 'Contact No': cn, 'Channel': 'Call', 'Kind': 'Follow-up', 'Ref No': 'x', 'Sent On': c._lgAddDays(today, 3), 'Created By': 'Ana' });
+  ok('the call, once made, clears it', call(c, 'getLeadgenFollowups', { date: c._lgAddDays(today, 5) }).data.length === 0);
+  ok('a fresh account has no intel update', c.__store.LgPlants[0]['Intel Updated On'] === '');
+  r = save(c, 'plants', { rowIndex: 2, plantNo: pn, province: 'Bulacan' });
+  ok('an edit that is not research does not stamp it', c.__store.LgPlants[0]['Intel Updated On'] === '');
+  r = save(c, 'plants', { rowIndex: 2, plantNo: pn, equipment: 'Kiln line 2 due for overhaul Q1' });
+  ok('new intelligence on an existing account stamps Intel Updated On', c.__store.LgPlants[0]['Intel Updated On'] === today, c.__store.LgPlants[0]);
+  ok('…and the counter sees it', call(c, 'getLeadgenCounts', {}).day.intelUpdates === 1);
+}
+
+/* ── 22 · the end-of-day report is the reps' own submit flow ───────────────────────────────── */
+{
+  sec('22 · end-of-day report');
+  const c = load();
+  const today = c._lgDay();
+  ok('before submitting, eod is 0', call(c, 'getLeadgenCounts', {}).day.eod === 0);
+  const r = call(c, 'submitDailyReport', { user: 'Ana Reyes', role: 'leadgen', date: today, highlights: 'Two decision-makers reached', plan: 'Call Holcim back', countsJson: '{"attempts":41}', clientRef: 'DR-9', actorName: 'Ana Reyes', actorRole: 'leadgen' });
+  ok('it submits through the same flow the reps use', r.success && r.submitCount === 1, r);
+  ok('eod is 1', call(c, 'getLeadgenCounts', {}).day.eod === 1);
+  ok('a second submission is an update, still one report', call(c, 'submitDailyReport', { user: 'Ana Reyes', role: 'leadgen', date: today, clientRef: 'DR-10', actorName: 'Ana Reyes', actorRole: 'leadgen' }).submitCount === 2 && c.__store.DailyReports.length === 1);
+  ok('the Director sees it in the reports list', call(c, 'getDailyReports', { date: today }).data.length === 1);
+  ok('a sales rep\'s report does not count as the lead-gen one', (() => { call(c, 'submitDailyReport', { user: 'Gerald', role: 'sales', date: today, clientRef: 'DR-11', actorName: 'Gerald', actorRole: 'sales' }); return call(c, 'getLeadgenCounts', { user: 'Gerald' }).day.eod === 0; })());
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));

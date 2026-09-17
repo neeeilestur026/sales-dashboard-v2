@@ -46,20 +46,23 @@ this.__t = {
 }
 
 const DAYS = ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20'];
+const Q = { attempts: 40, conversations: 5, emails: 25, linkedin: 5, suppliers: 5, accounts: 10, crm: 1, eod: 1, scheduled: 1 };
+const QX = { attempts: 50, conversations: 10, emails: 30, linkedin: 10, suppliers: 10, accounts: 15, crm: 1, eod: 1, scheduled: 3 };
+const dayOf = (o) => Object.assign({ attempts: 0, conversations: 0, emails: 0, linkedin: 0, suppliers: 0, accounts: 0, crm: 0, eod: 0, scheduled: 0, leads: 0, meetings: 0, introEmails: 0, replies: 0, working: true }, o);
+const MET = dayOf({ attempts: 45, conversations: 6, emails: 28, linkedin: 7, suppliers: 5, accounts: 12, crm: 30, eod: 1, scheduled: 2, leads: 3, meetings: 1 });
 const counts = (over) => Object.assign({
   success: true, today: '2026-09-16', hour: '10:00', date: '2026-09-16',
-  day: { plants: 9, contacts: 14, introEmails: 40, followupEmails: 12, coldCalls: 17, followupCalls: 4, leads: 2, meetings: 1, replies: 1, working: true },
-  quotas: { plants: 15, contacts: 20, introEmails: 40, followupEmails: 30, coldCalls: 20, followupCalls: 10, leads: 3, meetings: 1 },
+  day: dayOf({ attempts: 12, conversations: 1, emails: 8, linkedin: 2, suppliers: 1, accounts: 4, crm: 9, eod: 0, scheduled: 1, leads: 0, meetings: 0 }),
+  quotas: Q, quotasMax: QX,
   week: { start: DAYS[0], end: DAYS[6], days: DAYS, workingDays: DAYS.slice(0, 5),
-    targets: { plants: 75, contacts: 100, introEmails: 200, followupEmails: 150, coldCalls: 100, followupCalls: 50, leads: 15, meetings: 5 },
-    totals: { plants: 41, contacts: 50, introEmails: 120, followupEmails: 60, coldCalls: 55, followupCalls: 20, leads: 9, meetings: 3 },
-    byDay: { '2026-09-14': { plants: 15, contacts: 20, introEmails: 40, followupEmails: 30, coldCalls: 20, followupCalls: 10, leads: 3, meetings: 1, working: true },
-             '2026-09-15': { plants: 17, contacts: 16, introEmails: 40, followupEmails: 18, coldCalls: 18, followupCalls: 6, leads: 4, meetings: 1, working: true },
-             '2026-09-16': { plants: 9, contacts: 14, introEmails: 40, followupEmails: 12, coldCalls: 17, followupCalls: 4, leads: 2, meetings: 1, working: true },
-             '2026-09-17': { plants: 0, contacts: 0, introEmails: 0, followupEmails: 0, coldCalls: 0, followupCalls: 0, leads: 0, meetings: 0, working: true },
-             '2026-09-18': { plants: 0, contacts: 0, introEmails: 0, followupEmails: 0, coldCalls: 0, followupCalls: 0, leads: 0, meetings: 0, working: true },
-             '2026-09-19': { plants: 2, contacts: 0, introEmails: 0, followupEmails: 0, coldCalls: 0, followupCalls: 0, leads: 0, meetings: 0, working: false },
-             '2026-09-20': { plants: 0, contacts: 0, introEmails: 0, followupEmails: 0, coldCalls: 0, followupCalls: 0, leads: 0, meetings: 0, working: false } },
+    targets: Object.fromEntries(Object.keys(Q).map(k => [k, Q[k] * 5])), targetsMax: Object.fromEntries(Object.keys(QX).map(k => [k, QX[k] * 5])),
+    totals: dayOf({ attempts: 100, conversations: 12, emails: 60, linkedin: 15, suppliers: 9, accounts: 26, crm: 60, eod: 2, scheduled: 4, leads: 5, meetings: 2 }),
+    byDay: { '2026-09-14': MET,
+             '2026-09-15': dayOf({ attempts: 43, conversations: 3, emails: 24, linkedin: 6, suppliers: 3, accounts: 10, crm: 20, eod: 1, scheduled: 1 }),
+             '2026-09-16': dayOf({ attempts: 12, conversations: 1, emails: 8, linkedin: 2, suppliers: 1, accounts: 4, crm: 9, eod: 0, scheduled: 1 }),
+             '2026-09-17': dayOf({}), '2026-09-18': dayOf({}),
+             '2026-09-19': dayOf({ accounts: 2, working: false }), '2026-09-20': dayOf({ working: false }) },
+    weekly: { activeAccounts: { value: 24, min: 20, max: 30 }, leads: { value: 5, min: 10, max: 20 }, suppliersHandedOff: { value: 3, min: 25, max: 50 }, intelUpdates: { value: 2, min: 0, max: 0 }, meetings: { value: 2, min: 0, max: 0 } },
     replies: 5, replyRate: 4.2, replyRateAim: 8 },
   sector: { name: 'Power', index: 3, of: 4 }, reps: { Luzon: 'gerald', VisMin: 'kim' },
   workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], holidays: [], maxBatch: 60
@@ -82,19 +85,20 @@ const counts = (over) => Object.assign({
   const c = boot(); c.__t.setCanEdit(true); c.__t.setCounts(counts()); c.__t.setMailbox({ ok: true, seen: 37 });
   c.__t.renderTiles();
   const h = c.__t.el('tiles').innerHTML;
-  ok('eight tiles', (h.match(/class="b-card lg-tile"/g) || []).length === 8, h.slice(0, 300));
-  ok('plants draws 9 / 15', /Plants researched[\s\S]*?9<small>\/ 15<\/small>/.test(h));
-  ok('intro emails is met with a tick', /st-met">✓ met<\/span>[\s\S]*?Intro emails/.test(h));
-  ok('plants at 10:00 is behind (9 of 15 with 2/9 of the day gone → expected 3.3 → on pace)', /st-pace">on pace<\/span>[\s\S]*?Plants researched/.test(h));
-  ok('follow-up emails 12 / 30 at 10:00 is on pace', /st-pace">on pace<\/span>[\s\S]*?Follow-up emails/.test(h));
-  ok('the mailbox reconciliation sits under intro emails', h.indexOf('mailbox saw 37 to listed contacts') !== -1);
-  ok('leads tile names the reps', h.indexOf('gerald / kim') !== -1);
+  ok('nine tiles', (h.match(/class="b-card lg-tile"/g) || []).length === 9, h.slice(0, 300));
+  ok('attempts draws 12 / 40–50 — a range, met at the first', /Outbound attempts[\s\S]*?12<small>\/ 40–50<\/small>/.test(h));
+  ok('attempts at 10:00 is on pace (12 of 40 with 2/9 of the day gone)', /st-pace">on pace<\/span>[\s\S]*?Outbound attempts/.test(h));
+  ok('the mailbox reconciliation sits under prospecting emails', /Prospecting emails[\s\S]*?mailbox saw 37 to listed contacts/.test(h));
+  ok('the end-of-day tile says it is not submitted', /End-of-day report[\s\S]*?—<small><\/small>[\s\S]*?not submitted yet/.test(h), h.match(/End-of-day report[\s\S]{0,300}/));
+  ok('CRM updated shows records touched', h.indexOf('9 records touched today') !== -1);
   ok('tiles are buttons that open the dock when editable', /<button type="button" class="b-card lg-tile" data-dock="call"/.test(h));
-  ok('every value is the server\'s, not recomputed: 17 / 20 cold calls', /17<small>\/ 20<\/small>/.test(h));
+  ok('the eod tile is a button too, routed to the report', /data-dock="eod"/.test(h));
   ok('nothing rendered from new Date(): the header hour is the server\'s', c.__t.el('tilesMeta').textContent.indexOf('server time 10:00') !== -1, c.__t.el('tilesMeta').textContent);
   c.__t.setCounts(counts({ hour: '16:30' })); c.__t.renderTiles();
   const h2 = c.__t.el('tiles').innerHTML;
-  ok('same numbers at 16:30: plants is behind', /st-behind">behind<\/span>[\s\S]*?Plants researched/.test(h2));
+  ok('same numbers at 16:30: attempts is behind', /st-behind">behind<\/span>[\s\S]*?Outbound attempts/.test(h2));
+  c.__t.setCounts(counts({ day: MET })); c.__t.renderTiles();
+  ok('a day that met everything: nine ticks, and the report reads Done', (c.__t.el('tiles').innerHTML.match(/✓ met/g) || []).length === 9 && /Done<small>/.test(c.__t.el('tiles').innerHTML));
   c.__t.setCanEdit(false); c.__t.renderTiles();
   ok('read-only: tiles are divs, not buttons', c.__t.el('tiles').innerHTML.indexOf('<button') === -1);
   c.__t.setCounts(counts({ day: Object.assign(counts().day, { working: false }) })); c.__t.renderTiles();
@@ -105,12 +109,14 @@ const counts = (over) => Object.assign({
   sec('3 · the week');
   const c = boot(); c.__t.setCounts(counts()); c.__t.renderWeek();
   const h = c.__t.el('week').innerHTML;
-  ok('eight rows against weekly targets', (h.match(/class="wk-row"/g) || []).length === 8);
-  ok('plants 41 / 75', h.indexOf('<span class="v">41 / 75</span>') !== -1);
+  ok('seven daily rows (crm and eod are not summed) plus five weekly ones', (h.match(/class="wk-row"/g) || []).length === 12, (h.match(/class="wk-row"/g) || []).length);
+  ok('attempts 100 / 200–250', h.indexOf('<span class="v">100 / 200–250</span>') !== -1, h.match(/Outbound attempts[\s\S]{0,200}/));
+  ok('the weekly block: active accounts 24 / 20–30, suppliers 3 / 25–50', h.indexOf('<span class="v">24 / 20–30</span>') !== -1 && h.indexOf('<span class="v">3 / 25–50</span>') !== -1, h);
   ok('reply rate 4.2% with the aim and the definition', h.indexOf('<b>4.2%</b>') !== -1 && h.indexOf('(aim 8%)') !== -1 && h.indexOf('replies ÷ intro emails') !== -1);
   ok('seven boxes on the strip', (h.match(/class="d[^"]*"/g) || []).length === 7);
-  ok('Monday met all eight', /class="d met" title="2026-09-14">Mon<b>8\/8<\/b>/.test(h), h.match(/class="d[^"]*" title="2026-09-14"[^<]*<b>[^<]*/));
-  ok('Tuesday partly — 4 of 8 quotas met', /class="d part" title="2026-09-15">Tue<b>4\/8<\/b>/.test(h), h.match(/title="2026-09-15"[^<]*<b>[^<]*/));
+  ok('Monday met all nine', /class="d met" title="2026-09-14">Mon<b>9\/9<\/b>/.test(h), h.match(/class="d[^"]*" title="2026-09-14"[^<]*<b>[^<]*/));
+  // Tue: attempts 43≥40 ✓ conversations 3<5 ✗ emails 24<25 ✗ linkedin 6≥5 ✓ suppliers 3<5 ✗ accounts 10≥10 ✓ crm ✓ eod ✓ scheduled ✓
+  ok('Tuesday partly — 6 of 9 met, judged at each range\'s minimum', /class="d part" title="2026-09-15">Tue<b>6\/9<\/b>/.test(h), h.match(/title="2026-09-15"[^<]*<b>[^<]*/));
   ok('today is outlined', /class="d part today" title="2026-09-16"/.test(h));
   ok('Thursday is in the future — dashed, no number', /class="d future" title="2026-09-17">Thu<b>&nbsp;<\/b>/.test(h), h.match(/title="2026-09-17"[^<]*<b>[^<]*/));
   ok('Saturday is off, drawn but with a dot — its 2 plants count toward nothing', /class="d off" title="2026-09-19 — not a working day">Sat<b>·<\/b>/.test(h), h.match(/title="2026-09-19[^<]*<b>[^<]*/));

@@ -32,22 +32,27 @@ def ok(label, cond, extra=None):
 
 
 DAYS = ["2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13"]
-KEYS = ["plants", "contacts", "introEmails", "followupEmails", "coldCalls", "followupCalls", "leads", "meetings"]
+KEYS = ["attempts", "conversations", "emails", "linkedin", "suppliers", "accounts", "scheduled", "crm", "eod"]
 by_day = {}
 for i, d in enumerate(DAYS):
     working = i < 5 and d != "2026-09-09"
-    by_day[d] = {"plants": 15 if working else 3, "contacts": 20, "introEmails": 40, "followupEmails": 25,
-                 "coldCalls": 22, "followupCalls": 9, "leads": 3, "meetings": 1 if i % 2 == 0 else 0,
-                 "replies": 2, "working": working}
+    by_day[d] = {"attempts": 45 if working else 3, "conversations": 6, "emails": 28, "linkedin": 7,
+                 "suppliers": 4, "accounts": 12, "scheduled": 2, "crm": 1, "eod": 1 if working else 0,
+                 "leads": 3, "meetings": 1 if i % 2 == 0 else 0, "introEmails": 20, "replies": 2, "working": working}
 working_days = [d for d in DAYS if by_day[d]["working"]]
 totals = {k: sum(by_day[d][k] for d in working_days) for k in KEYS}
-quotas = {"plants": 15, "contacts": 20, "introEmails": 40, "followupEmails": 30, "coldCalls": 20, "followupCalls": 10, "leads": 3, "meetings": 1}
+quotas = {"attempts": 40, "conversations": 5, "emails": 25, "linkedin": 5, "suppliers": 5, "accounts": 10, "scheduled": 1, "crm": 1, "eod": 1}
+quotas_max = {"attempts": 50, "conversations": 10, "emails": 30, "linkedin": 10, "suppliers": 10, "accounts": 15, "scheduled": 3, "crm": 1, "eod": 1}
 targets = {k: quotas[k] * len(working_days) for k in KEYS}
+targets_max = {k: quotas_max[k] * len(working_days) for k in KEYS}
+totals["introEmails"] = sum(by_day[d]["introEmails"] for d in working_days); totals["leads"] = sum(by_day[d]["leads"] for d in working_days); totals["meetings"] = sum(by_day[d]["meetings"] for d in working_days)
 WEEK = {
     "success": True, "today": "2026-09-11", "hour": "15:05", "date": "2026-09-11",
-    "day": by_day["2026-09-11"], "quotas": quotas,
-    "week": {"start": DAYS[0], "end": DAYS[6], "days": DAYS, "workingDays": working_days, "targets": targets, "totals": totals,
-             "byDay": by_day, "replies": 8, "replyRate": 5.0, "replyRateAim": 8},
+    "day": by_day["2026-09-11"], "quotas": quotas, "quotasMax": quotas_max,
+    "week": {"start": DAYS[0], "end": DAYS[6], "days": DAYS, "workingDays": working_days, "targets": targets, "targetsMax": targets_max, "totals": totals,
+             "byDay": by_day, "replies": 8, "replyRate": 5.0, "replyRateAim": 8,
+             "weekly": {"activeAccounts": {"value": 24, "min": 20, "max": 30}, "leads": {"value": 12, "min": 10, "max": 20},
+                        "suppliersHandedOff": {"value": 18, "min": 25, "max": 50}, "intelUpdates": {"value": 9, "min": 0, "max": 0}, "meetings": {"value": 3, "min": 0, "max": 0}}},
     "sector": {"name": "Power", "index": 3, "of": 4}, "reps": {"Luzon": "gerald", "VisMin": "kim"},
     "workingDays": ["Mon", "Tue", "Wed", "Thu", "Fri"], "holidays": ["2026-09-09"], "maxBatch": 60,
     "preparedBy": "Ana Reyes",
@@ -61,16 +66,18 @@ ok("one page", len(PdfReader(BytesIO(pdf)).pages) == 1, len(PdfReader(BytesIO(pd
 ok("title and the week", "Lead Generation" in flat and "Weekly Report" in flat and "2026-09-07 to 2026-09-13" in flat, flat[:200])
 ok("four working days, the holiday named", "4 working days" in flat and "2026-09-09" in flat, flat[:300])
 ok("sector week printed", "Sector week 3 of 4: Power" in flat, flat[:300])
-for k, label in [("plants", "Plants researched"), ("introEmails", "Intro emails"), ("leads", "Leads handed off"), ("meetings", "Meetings booked")]:
+for k, label in [("attempts", "Outbound attempts"), ("emails", "Prospecting emails"), ("suppliers", "Local suppliers researched"), ("accounts", "Target accounts researched")]:
     ok("%s: target %d and actual %d both on the page" % (label, targets[k], totals[k]),
        label in flat and str(targets[k]) in flat and str(totals[k]) in flat, (label, targets[k], totals[k]))
-ok("follow-up emails short by 20 (100 of 120)", "20 short" in flat, flat)
-ok("plants met (60 of 60)", flat.count("met") >= 1 and "60" in flat)
-ok("reply rate with its definition", "Reply rate: 5.0%" in flat and "(aim 8%)" in flat and "8 ÷ 160" in flat, flat)
+ok("ranges print as min-max on the quota and the target", "40-50" in flat and "160-200" in flat, flat)
+ok("suppliers short: 16 of 20", "4 short" in flat, flat)
+ok("weekly items printed with their ranges and status", "Qualified leads handed to Field Sales" in flat and "10-20" in flat and "Qualified local suppliers handed off" in flat and "25-50" in flat and "7 short" in flat, flat)
+ok("attempts met (180 of 160)", "180" in flat and "met" in flat)
+ok("reply rate with its definition", "Reply rate: 5.0%" in flat and "(aim 8%)" in flat and "8 ÷ 80" in flat, flat)
 ok("Mon–Sun grid drawn with the non-working days present", all(d in flat for d in ["Mon", "Sat", "Sun"]) and "09-12" in flat, flat)
 ok("reps by username", "Luzon: gerald" in flat and "VisMin: kim" in flat, flat)
 ok("prepared by in the footer", "Prepared by Ana Reyes" in flat, flat[-300:])
-ok("a Saturday number is drawn as data, not counted: 3 appears, weekly plants stays 60", " 3 " in flat and "60" in flat)
+ok("a Saturday number is drawn as data, not counted: 3 appears, weekly attempts stays 180", " 3 " in flat and "180" in flat)
 
 print("\n== an empty week does not throw ==")
 empty = build_leadgen_week_pdf_bytes({"week": {}, "quotas": {}, "preparedBy": ""})

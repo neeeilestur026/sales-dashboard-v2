@@ -31,12 +31,23 @@ const LG_ENUM = {
   batchKind: ['Intro', 'Follow-up'],
   leadStatus: ['Handed Off', 'Presentation Booked', 'Quoted', 'Won', 'Lost', 'Returned'],
   accredStatus: ['Submitted', 'Pending', 'Approved', 'Expired'],
+  reached: ['Decision-maker', 'Gatekeeper', 'Voicemail / no answer'],           // A279
+  linkedinKind: ['Connection request', 'Message'],
+  supplierStatus: ['Researching', 'Qualified', 'Handed Off', 'Rejected'],
 };
+/* A279 — the nine daily items of the job description, in its order. The fourth element is which
+   logger the tile opens; 'eod' goes to the daily report instead. */
 const LG_TILES = [
-  ['plants', 'Plants researched', '🏭', 'plant'], ['contacts', 'Contacts verified', '👤', 'contact'],
-  ['introEmails', 'Intro emails', '✉️', 'batch'], ['followupEmails', 'Follow-up emails', '↩️', 'batch'],
-  ['coldCalls', 'Cold calls', '📞', 'call'], ['followupCalls', 'Follow-up calls', '📲', 'call'],
-  ['leads', 'Leads handed off', '🎯', 'lead'], ['meetings', 'Meetings booked', '📅', 'lead'],
+  ['attempts', 'Outbound attempts', '📣', 'call'], ['conversations', 'Decision-maker conversations', '🗣️', 'call'],
+  ['emails', 'Prospecting emails', '✉️', 'batch'], ['linkedin', 'LinkedIn requests & messages', '💼', 'linkedin'],
+  ['suppliers', 'Local suppliers researched', '🏗️', 'supplier'], ['accounts', 'Target accounts researched', '🏭', 'plant'],
+  ['crm', 'CRM updated', '🗂️', 'contact'], ['eod', 'End-of-day report', '📝', 'eod'],
+  ['scheduled', 'Meetings / calls scheduled', '📅', 'contact'],
+];
+const LG_WEEKLY = [
+  ['activeAccounts', 'Target accounts in active pursuit'], ['leads', 'Qualified leads handed to Field Sales'],
+  ['suppliersHandedOff', 'Qualified local suppliers handed off'], ['intelUpdates', 'Accounts updated with new intelligence'],
+  ['meetings', 'Presentations booked'],
 ];
 const LG_TILE_LABEL = {}; LG_TILES.forEach(t => { LG_TILE_LABEL[t[0]] = t[1]; });
 const LG_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -53,10 +64,19 @@ const LG_UI = {
   },
   contacts: {
     label: 'Contacts', icon: '👤', title: 'Contacts',
-    cols: [['contactNo', 'No'], ['name', 'Name'], ['role', 'Role'], ['company', 'Company'], ['plantSite', 'Site'], ['email', 'Email'], ['emailVerified', 'Verified'], ['status', 'Status'], ['introSent', 'Intro sent']],
+    cols: [['contactNo', 'No'], ['name', 'Name'], ['role', 'Role'], ['company', 'Company'], ['plantSite', 'Site'], ['email', 'Email'], ['emailVerified', 'Verified'], ['status', 'Status'], ['introSent', 'Intro sent'], ['nextCallDate', 'Next call']],
     fields: [['plantNo', 'Plant *', 'plant'], ['name', 'Name *', 'text'], ['role', 'Role', 'select', LG_ENUM.contactRole], ['emailVerified', 'Email verified', 'select', LG_ENUM.emailVerified],
-             ['email', 'Email', 'text'], ['mobile', 'Mobile', 'text'], ['linkedin', 'LinkedIn', 'text'], ['status', 'Status', 'select', LG_ENUM.contactStatus], ['notes', 'Notes', 'textarea', null, 'full']],
+             ['email', 'Email', 'text'], ['mobile', 'Mobile', 'text'], ['linkedin', 'LinkedIn', 'text'], ['status', 'Status', 'select', LG_ENUM.contactStatus],
+             ['nextCallDate', 'Next call scheduled for', 'date'], ['notes', 'Notes', 'textarea', null, 'full']],
     required: ['plantNo', 'name'], filters: ['sector', 'territory', 'emailVerified', 'status'],
+  },
+  suppliers: {
+    label: 'Suppliers', icon: '🏗️', title: 'Local suppliers — for local procurement',
+    cols: [['supplierNo', 'No'], ['company', 'Company'], ['category', 'Category'], ['location', 'Location'], ['contact', 'Contact'], ['email', 'Email'], ['status', 'Status'], ['handedOffOn', 'Handed off']],
+    fields: [['company', 'Company *', 'text'], ['category', 'Category (fasteners, hydraulics, machining…)', 'text'], ['location', 'Location', 'text'],
+             ['status', 'Status', 'select', LG_ENUM.supplierStatus], ['contact', 'Contact person', 'text'], ['email', 'Email', 'text'],
+             ['mobile', 'Mobile', 'text'], ['website', 'Website', 'text'], ['notes', 'Notes', 'textarea', null, 'full']],
+    required: ['company'], filters: ['status'],
   },
   leads: {
     label: 'Leads', icon: '🎯', title: 'Qualified leads — the lead sheet', cards: true,
@@ -74,7 +94,7 @@ const LG_UI = {
     required: ['plantNo'], filters: ['status'],
   },
 };
-const LG_TAB_ORDER = ['plants', 'contacts', 'leads', 'accred'];
+const LG_TAB_ORDER = ['plants', 'contacts', 'suppliers', 'leads', 'accred'];
 
 // ── boot ──────────────────────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -189,34 +209,47 @@ function renderTiles() {
   const stName = { met: '✓ met', pace: 'on pace', behind: 'behind', off: '—' };
   const stColor = { met: '#16a34a', pace: '#4f46e5', behind: '#d97706', off: '#c7cdd6' };
   document.getElementById('tilesMeta').textContent = (k.day.working ? 'Working day · ' : 'Not a working day · ') + 'server time ' + k.hour;
+  const range = (key) => { const a = k.quotas[key] || 0, b = (k.quotasMax || {})[key] || a; return b > a ? a + '–' + b : String(a); };
   document.getElementById('tiles').innerHTML = LG_TILES.map(([key, label, icon, dock]) => {
     const n = k.day[key] || 0, q = k.quotas[key] || 0, st = tileState(n, q, k.hour, k.day.working);
     const pct = q > 0 ? Math.round(n / q * 100) : 0;
     let sub = '';
-    if (key === 'introEmails' && lgMailbox) {
+    if (key === 'emails' && lgMailbox) {
       sub = lgMailbox.needsSetup ? 'mailbox not connected' : lgMailbox.ok ? `mailbox saw ${lgMailbox.seen} to listed contacts` : 'mailbox unreachable';
-    } else if (key === 'leads') sub = 'aim 3–5 · ' + (k.reps.Luzon || 'no Luzon rep') + ' / ' + (k.reps.VisMin || 'no VisMin rep');
+    } else if (key === 'attempts') sub = 'calls + emails + LinkedIn, combined';
+    else if (key === 'conversations') sub = 'calls that reached the decision-maker';
+    else if (key === 'crm') sub = n ? n + ' record' + (n === 1 ? '' : 's') + ' touched today' : 'nothing logged yet';
+    else if (key === 'eod') sub = n ? 'submitted to the Director ✓' : 'not submitted yet — open the daily report';
+    else if (key === 'scheduled') sub = 'follow-up calls booked + presentations';
     const tag = lgCanEdit ? 'button type="button"' : 'div';
-    return `<${tag} class="b-card lg-tile" data-dock="${dock}" ${lgCanEdit ? `title="Log ${label.toLowerCase()}"` : ''}>
+    return `<${tag} class="b-card lg-tile" data-dock="${dock}" ${lgCanEdit ? `title="${key === 'eod' ? 'Open the daily report' : 'Log ' + label.toLowerCase()}"` : ''}>
       <span class="st st-${st}">${stName[st]}</span>
       <div class="t"><span class="b-ic ic">${icon}</span><span>${flowEsc(label)}</span></div>
-      <div class="n b-tabnum">${n}<small>/ ${q}</small></div>
+      <div class="n b-tabnum">${key === 'eod' ? (n ? 'Done' : '—') : n}<small>${key === 'eod' ? '' : '/ ' + range(key)}</small></div>
       ${lgBar(pct, stColor[st])}
       <div class="sub">${flowEsc(sub)}</div>
     </${tag.split(' ')[0]}>`;
   }).join('');
-  if (lgCanEdit) document.querySelectorAll('#tiles [data-dock]').forEach(b => b.addEventListener('click', () => openDock(b.getAttribute('data-dock'))));
+  if (lgCanEdit) document.querySelectorAll('#tiles [data-dock]').forEach(b => b.addEventListener('click', () => {
+    const d = b.getAttribute('data-dock');
+    if (d === 'eod') { location.href = 'leadgen-daily-report.html'; return; }
+    openDock(d);
+  }));
 }
 function renderWeek() {
   const k = lgCounts; if (!k) return;
   const w = k.week;
   document.getElementById('weekMeta').textContent = w.start + ' → ' + w.end + ' · ' + w.workingDays.length + ' working day' + (w.workingDays.length === 1 ? '' : 's');
-  const rows = LG_TILES.map(([key, label]) => {
-    const n = w.totals[key] || 0, t = w.targets[key] || 0;
+  const rowOf = (label, n, t, tMax) => {
     const pct = t > 0 ? Math.round(n / t * 100) : 0;
     const color = t > 0 && n >= t ? '#16a34a' : '#4f46e5';
-    return `<div class="wk-row"><span>${flowEsc(label)}</span>${lgBar(pct, color)}<span class="v">${n} / ${t}</span></div>`;
-  }).join('');
+    const tgt = tMax > t ? t + '–' + tMax : String(t);
+    return `<div class="wk-row"><span>${flowEsc(label)}</span>${lgBar(pct, color)}<span class="v">${n} / ${tgt}</span></div>`;
+  };
+  const rows = LG_TILES.filter(([key]) => key !== 'crm' && key !== 'eod').map(([key, label]) =>
+    rowOf(label, w.totals[key] || 0, w.targets[key] || 0, (w.targetsMax || {})[key] || 0)).join('') +
+    `<div class="b-lbl" style="margin:12px 0 4px">Weekly</div>` +
+    LG_WEEKLY.map(([key, label]) => { const x = (w.weekly || {})[key] || { value: 0, min: 0, max: 0 }; return rowOf(label, x.value, x.min, x.max); }).join('');
   const rate = w.replyRate === null || w.replyRate === undefined ? '—' : w.replyRate + '%';
   const aim = w.replyRateAim ? ` <span class="lg-meta">(aim ${w.replyRateAim}%)</span>` : '';
   const strip = w.days.map((d, i) => {
@@ -256,7 +289,7 @@ function renderFollowups() {
 }
 
 // ── the dock ──────────────────────────────────────────────────────────────────────────────────
-const DOCK_TABS = [['call', '📞 Call'], ['batch', '✉️ Email batch'], ['plant', '🏭 Plant'], ['contact', '👤 Contact']];
+const DOCK_TABS = [['call', '📞 Call'], ['batch', '✉️ Emails'], ['linkedin', '💼 LinkedIn'], ['plant', '🏭 Account'], ['contact', '👤 Contact'], ['supplier', '🏗️ Supplier']];
 let lgDockPrefill = null;
 function openDock(tab, prefill) {
   if (!lgCanEdit) return;
@@ -288,10 +321,11 @@ function renderDock() {
   const F = document.getElementById('dockFields'), hint = document.getElementById('dockHint');
   const sectorNow = (k.sector && k.sector.name) || '';
   if (lgDockTab === 'call') {
-    hint.textContent = 'one call, one outcome';
+    hint.textContent = 'one call: who you reached, and the outcome';
     F.innerHTML = `<div class="full"><label>Contact *</label><select data-key="contactNo" required><option value="">— pick a contact —</option>${contactOptions(p.contactNo || '')}</select></div>` +
-      sel('kind', 'Kind', LG_ENUM.callKind, p.kind || 'Cold') + sel('outcome', 'Outcome', LG_ENUM.callOutcome, 'No answer') +
-      inp('date', 'Date', 'date', k.today) + inp('notes', 'Notes (referred to whom, why not interested…)', 'text', '') ;
+      sel('kind', 'Kind', LG_ENUM.callKind, p.kind || 'Cold') + sel('reached', 'Who did you reach?', LG_ENUM.reached, 'Voicemail / no answer') +
+      sel('outcome', 'Outcome', LG_ENUM.callOutcome, 'No answer') + inp('date', 'Date', 'date', k.today) +
+      inp('notes', 'Notes — the topic, who they referred you to, why not interested', 'text', '', true);
   } else if (lgDockTab === 'batch') {
     hint.textContent = 'the count is read off the selection';
     const pre = (p.contactNos || []).reduce((m, x) => { m[x] = 1; return m; }, {});
@@ -321,8 +355,18 @@ function renderDock() {
     document.getElementById('pickAll').addEventListener('click', () => { pick.querySelectorAll('input').forEach(i => { i.checked = true; }); countPick(); });
     document.getElementById('pickNone').addEventListener('click', () => { pick.querySelectorAll('input').forEach(i => { i.checked = false; }); countPick(); });
     drawPick();
+  } else if (lgDockTab === 'linkedin') {
+    hint.textContent = 'a connection request or a message — one per contact per act';
+    F.innerHTML = `<div class="full"><label>Contact *</label><select data-key="contactNo" required><option value="">— pick a contact —</option>${contactOptions(p.contactNo || '')}</select></div>` +
+      sel('kind', 'Kind', LG_ENUM.linkedinKind, 'Connection request') + inp('date', 'Date', 'date', k.today);
+  } else if (lgDockTab === 'supplier') {
+    hint.textContent = 'a local supplier for local procurement — Qualified when vetted, Handed Off sends it to the Suppliers master';
+    F.innerHTML = inp('company', 'Company *', 'text', '', false, ' required') + inp('category', 'Category (fasteners, hydraulics, machining…)', 'text', '') +
+      inp('location', 'Location', 'text', '') + sel('status', 'Status', LG_ENUM.supplierStatus, 'Researching') +
+      inp('contact', 'Contact person', 'text', '') + inp('email', 'Email', 'text', '') + inp('mobile', 'Mobile', 'text', '') + inp('website', 'Website', 'text', '') +
+      inp('notes', 'Notes', 'text', '', true);
   } else if (lgDockTab === 'plant') {
-    hint.textContent = 'one site per row — a second site of the same company is a second plant';
+    hint.textContent = 'one site per row — a second site of the same company is a second account';
     F.innerHTML = inp('company', 'Company *', 'text', '', false, ' required') + inp('plantSite', 'Plant / Site', 'text', '') +
       sel('sector', 'Sector *', LG_ENUM.sector, sectorNow || 'Cement') + sel('territory', 'Territory *', LG_ENUM.territory, 'Luzon') +
       inp('province', 'Province', 'text', '') + inp('equipment', 'Equipment / lines', 'text', '') + inp('source', 'Source (PhilGEPS, LinkedIn, Google…)', 'text', '') +
@@ -332,7 +376,8 @@ function renderDock() {
     F.innerHTML = `<div class="full"><label>Plant *</label><select data-key="plantNo" required><option value="">— pick a plant —</option>${plantOptions(p.plantNo || lgLastPlant)}</select></div>` +
       inp('name', 'Name *', 'text', '', false, ' required') + sel('role', 'Role', LG_ENUM.contactRole, 'Maintenance / O&M Head') +
       inp('email', 'Email', 'text', '') + sel('emailVerified', 'Email verified', LG_ENUM.emailVerified, 'Unverified') +
-      inp('mobile', 'Mobile', 'text', '') + inp('linkedin', 'LinkedIn', 'text', '') + inp('notes', 'Notes', 'text', '', true);
+      inp('mobile', 'Mobile', 'text', '') + inp('linkedin', 'LinkedIn', 'text', '') +
+      inp('nextCallDate', 'Next call scheduled for (optional)', 'date', '') + inp('notes', 'Notes', 'text', '', true);
   }
   document.getElementById('dockMsg').style.display = 'none';
   const first = F.querySelector('input:not([type=checkbox]),select'); if (first) setTimeout(() => first.focus(), 50);
@@ -354,12 +399,17 @@ async function submitDock() {
     let res;
     if (lgDockTab === 'call') {
       if (!rec.contactNo) throw new Error('Pick the contact you called.');
-      res = await postFlow('logSalesCall', { contactNo: rec.contactNo, kind: rec.kind, outcome: rec.outcome, notes: rec.notes, date: rec.date });
+      res = await postFlow('logSalesCall', { contactNo: rec.contactNo, kind: rec.kind, reached: rec.reached, outcome: rec.outcome, notes: rec.notes, date: rec.date });
     } else if (lgDockTab === 'batch') {
       const nos = Array.from(document.querySelectorAll('#pick input:checked')).map(i => i.value);
       if (!nos.length) throw new Error('Pick the contacts this batch went to.');
       res = await postFlow('saveLeadgenRecord', { entity: 'batches', clientRef: flowClientRef(),
         record: JSON.stringify({ kind: rec.kind, timeSlot: rec.timeSlot, sector: rec.sector, template: rec.template, notes: rec.notes, date: rec.date, contactNos: nos }) });
+    } else if (lgDockTab === 'linkedin') {
+      if (!rec.contactNo) throw new Error('Pick the contact.');
+      res = await postFlow('saveLeadgenRecord', { entity: 'linkedin', clientRef: flowClientRef(), record: JSON.stringify(rec) });
+    } else if (lgDockTab === 'supplier') {
+      res = await postFlow('saveLeadgenRecord', { entity: 'suppliers', clientRef: flowClientRef(), record: JSON.stringify(rec) });
     } else if (lgDockTab === 'plant') {
       res = await postFlow('saveLeadgenRecord', { entity: 'plants', clientRef: flowClientRef(), record: JSON.stringify(rec) });
     } else {
@@ -388,7 +438,7 @@ function buildTabs() {
 }
 function filterValues(key) {
   if (key === 'sector') return LG_ENUM.sector; if (key === 'territory') return LG_ENUM.territory;
-  if (key === 'status') return { plants: LG_ENUM.plantStatus, contacts: LG_ENUM.contactStatus, leads: LG_ENUM.leadStatus, accred: LG_ENUM.accredStatus }[lgActiveTab];
+  if (key === 'status') return { plants: LG_ENUM.plantStatus, contacts: LG_ENUM.contactStatus, leads: LG_ENUM.leadStatus, accred: LG_ENUM.accredStatus, suppliers: LG_ENUM.supplierStatus }[lgActiveTab];
   if (key === 'emailVerified') return LG_ENUM.emailVerified; return [];
 }
 function renderPanel(tab) {
@@ -442,10 +492,10 @@ function cell(r, key) {
 function badge(s) {
   const k = String(s || '').toLowerCase();
   let cls = 'b-new';
-  if (['active', 'approved', 'won', 'replied', 'pattern', 'switchboard', 'customer', 'presentation booked', 'quoted'].includes(k)) cls = 'b-good';
-  else if (['pending', 'submitted', 'handed off', 'new'].includes(k)) cls = 'b-info';
+  if (['active', 'approved', 'won', 'replied', 'pattern', 'switchboard', 'customer', 'presentation booked', 'quoted', 'qualified'].includes(k)) cls = 'b-good';
+  else if (['pending', 'submitted', 'handed off', 'new', 'researching'].includes(k)) cls = 'b-info';
   else if (['cold', 'unverified', 'returned'].includes(k)) cls = 'b-warm';
-  else if (['lost', 'expired', 'bounced', 'wrong person', 'do not contact'].includes(k)) cls = 'b-bad';
+  else if (['lost', 'expired', 'bounced', 'wrong person', 'do not contact', 'rejected'].includes(k)) cls = 'b-bad';
   return `<span class="mkt-badge ${cls}">${flowEsc(s || '—')}</span>`;
 }
 function renderLeadCards(rows) {
@@ -470,7 +520,7 @@ function renderLeadCards(rows) {
 function openRecModal(entity, rowIndex) {
   const u = LG_UI[entity];
   const rec = rowIndex ? (lgData[entity] || []).find(r => String(r.rowIndex) === String(rowIndex)) : null;
-  const idKey = { plants: 'plantNo', contacts: 'contactNo', leads: 'leadNo', accred: 'accredNo' }[entity];
+  const idKey = { plants: 'plantNo', contacts: 'contactNo', leads: 'leadNo', accred: 'accredNo', suppliers: 'supplierNo' }[entity];
   document.getElementById('recEntity').value = entity;
   document.getElementById('recRowIndex').value = rec ? rec.rowIndex : '';
   document.getElementById('recId').value = rec ? rec[idKey] : '';
@@ -501,7 +551,7 @@ async function submitRecord() {
   document.querySelectorAll('#recForm [data-key]').forEach(el => { rec[el.getAttribute('data-key')] = el.type === 'checkbox' ? el.checked : (el.value || '').trim(); });
   for (const r of (u.required || [])) if (!rec[r]) { formErr(u.fields.find(f => f[0] === r)[1].replace(' *', '') + ' is required.'); return; }
   const ri = document.getElementById('recRowIndex').value, id = document.getElementById('recId').value;
-  if (ri) { rec.rowIndex = ri; rec[{ plants: 'plantNo', contacts: 'contactNo', leads: 'leadNo', accred: 'accredNo' }[entity]] = id; }
+  if (ri) { rec.rowIndex = ri; rec[{ plants: 'plantNo', contacts: 'contactNo', leads: 'leadNo', accred: 'accredNo', suppliers: 'supplierNo' }[entity]] = id; }
   if (rec.plantNo) lgLastPlant = rec.plantNo;
   const btn = document.getElementById('recSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -517,7 +567,7 @@ async function submitRecord() {
 async function delRecord(entity, rowIndex) {
   const rec = (lgData[entity] || []).find(r => String(r.rowIndex) === String(rowIndex));
   if (!rec) return;
-  const id = rec[{ plants: 'plantNo', contacts: 'contactNo', leads: 'leadNo', accred: 'accredNo' }[entity]];
+  const id = rec[{ plants: 'plantNo', contacts: 'contactNo', leads: 'leadNo', accred: 'accredNo', suppliers: 'supplierNo' }[entity]];
   if (!confirm('Remove ' + id + '? It is kept on the sheet, marked removed, and drops out of every count.')) return;
   try {
     const res = await postFlow('deleteLeadgenRecord', { entity, id, rowIndex: rec.rowIndex });
@@ -552,7 +602,13 @@ async function openLeadPdf(leadNo) {
 // ── settings (director / management) ─────────────────────────────────────────────────────────
 async function openSettings() {
   const k = lgCounts; if (!k) return;
-  document.getElementById('setQuotas').innerHTML = LG_TILES.map(([key, label]) => `<div><label>${flowEsc(label)}</label><input type="number" min="0" data-quota="${key}" value="${k.quotas[key] || 0}"></div>`).join('');
+  const qmax = k.quotasMax || {};
+  document.getElementById('setQuotas').innerHTML = LG_TILES.map(([key, label]) => `<div><label>${flowEsc(label)}</label>
+      <div style="display:flex;gap:.3rem;align-items:center;"><input type="number" min="0" data-quota="${key}" value="${k.quotas[key] || 0}" title="minimum — met at this">
+      <span style="color:#8b93a1">–</span><input type="number" min="0" data-quota-max="${key}" value="${qmax[key] || k.quotas[key] || 0}" title="stretch"></div></div>`).join('') +
+    `<div class="full" style="grid-column:1/-1"><label>Per week</label></div>` +
+    LG_WEEKLY.filter(([key]) => ['activeAccounts', 'leads', 'suppliersHandedOff'].includes(key)).map(([key, label]) => { const x = (k.week.weekly || {})[key] || {}; return `<div><label>${flowEsc(label)}</label>
+      <div style="display:flex;gap:.3rem;align-items:center;"><input type="number" min="0" data-week="${key}" value="${x.min || 0}"><span style="color:#8b93a1">–</span><input type="number" min="0" data-week-max="${key}" value="${x.max || 0}"></div></div>`; }).join('');
   document.getElementById('setMaxBatch').value = k.maxBatch || 60;
   document.getElementById('setReplyAim').value = k.week.replyRateAim || 0;
   document.getElementById('setDays').innerHTML = LG_DOW.map(d => `<label><input type="checkbox" value="${d}"${(k.workingDays || []).includes(d) ? ' checked' : ''}>${d}</label>`).join('');
@@ -571,7 +627,12 @@ async function openSettings() {
 }
 async function saveSettings() {
   const patch = {};
-  document.querySelectorAll('#setQuotas [data-quota]').forEach(i => { patch[{ plants: 'lgQuotaPlants', contacts: 'lgQuotaContacts', introEmails: 'lgQuotaIntroEmails', followupEmails: 'lgQuotaFollowupEmails', coldCalls: 'lgQuotaColdCalls', followupCalls: 'lgQuotaFollowupCalls', leads: 'lgQuotaLeads', meetings: 'lgQuotaMeetings' }[i.getAttribute('data-quota')]] = Number(i.value) || 0; });
+  const QK = { attempts: 'lgQuotaAttempts', conversations: 'lgQuotaConversations', emails: 'lgQuotaEmails', linkedin: 'lgQuotaLinkedin', suppliers: 'lgQuotaSuppliers', accounts: 'lgQuotaAccounts', crm: 'lgQuotaCrm', eod: 'lgQuotaEod', scheduled: 'lgQuotaScheduled' };
+  const WK = { activeAccounts: 'lgWeekActiveAccounts', leads: 'lgWeekLeads', suppliersHandedOff: 'lgWeekSuppliers' };
+  document.querySelectorAll('#setQuotas [data-quota]').forEach(i => { patch[QK[i.getAttribute('data-quota')]] = Number(i.value) || 0; });
+  document.querySelectorAll('#setQuotas [data-quota-max]').forEach(i => { patch[QK[i.getAttribute('data-quota-max')] + 'Max'] = Number(i.value) || 0; });
+  document.querySelectorAll('#setQuotas [data-week]').forEach(i => { patch[WK[i.getAttribute('data-week')]] = Number(i.value) || 0; });
+  document.querySelectorAll('#setQuotas [data-week-max]').forEach(i => { patch[WK[i.getAttribute('data-week-max')] + 'Max'] = Number(i.value) || 0; });
   patch.lgMaxBatch = Number(document.getElementById('setMaxBatch').value) || 60;
   patch.lgReplyRateAim = Number(document.getElementById('setReplyAim').value) || 0;
   patch.lgWorkingDays = Array.from(document.querySelectorAll('#setDays input:checked')).map(i => i.value).join(',');

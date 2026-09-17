@@ -222,8 +222,9 @@ console.log('\n== the names at every hard-coded column anchor ==');
 console.log('\n== the money-bearing widths ==');
 [['CommissionRequests', 42, 'decides what a person is paid'],
  ['Clients', 12, 'A277 appended Stage — saveClient writes this sheet as a LITERAL and throws on a mismatch'],
- ['SalesCalls', 10, 'A277 appended Kind + Contact No — the two call quotas count on Kind'],
- ['LgPlants', 18, 'A277'], ['LgContacts', 17, 'A277'], ['LgTouches', 8, 'A277'],
+ ['SalesCalls', 11, 'A277 appended Kind + Contact No; A279 appended Reached'],
+ ['LgPlants', 19, 'A277; A279 appended Intel Updated On'], ['LgContacts', 19, 'A277; A279 appended Next Call Date + Scheduled On'],
+ ['LgSuppliers', 17, 'A279'], ['LgTouches', 8, 'A277'],
  ['LgEmailBatch', 14, 'A277 — Count is derived from Contact Nos'], ['LgLeads', 27, 'A277-2 inserted Attendees while the sheet still existed nowhere'], ['LgAccred', 14, 'A277'],
  ['SOCostDetails', 18, 'the gross-profit record; saveSOCostDetails is a FULL-ROW overwrite'],
  ['DailyReports', 24, 'no test mentioned this sheet at all before A243'],

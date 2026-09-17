@@ -48,10 +48,15 @@ TOP = 40 * PX
 BOTTOM = 40 * PX
 LOGO_H = 54 * PX
 
-KEYS = ["plants", "contacts", "introEmails", "followupEmails", "coldCalls", "followupCalls", "leads", "meetings"]
-LABELS = {"plants": "Plants researched", "contacts": "Contacts verified", "introEmails": "Intro emails",
-          "followupEmails": "Follow-up emails", "coldCalls": "Cold calls", "followupCalls": "Follow-up calls",
-          "leads": "Leads handed off", "meetings": "Meetings booked"}
+# A279 — the nine daily items; the two once-a-day ones are shown but not summed against a weekly target.
+KEYS = ["attempts", "conversations", "emails", "linkedin", "suppliers", "accounts", "scheduled", "crm", "eod"]
+LABELS = {"attempts": "Outbound attempts", "conversations": "Decision-maker conversations", "emails": "Prospecting emails",
+          "linkedin": "LinkedIn requests & messages", "suppliers": "Local suppliers researched",
+          "accounts": "Target accounts researched", "scheduled": "Meetings / calls scheduled",
+          "crm": "CRM updated (days)", "eod": "End-of-day report submitted (days)"}
+WEEKLY = [("activeAccounts", "Target accounts in active pursuit"), ("leads", "Qualified leads handed to Field Sales"),
+          ("suppliersHandedOff", "Qualified local suppliers handed off"), ("intelUpdates", "Accounts updated with new intelligence"),
+          ("meetings", "Presentations booked")]
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -158,19 +163,45 @@ def build_leadgen_week_pdf_bytes(payload):
     styles = [("LINEBELOW", (0, 0), (-1, 0), 0.8, HAIR_E), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
               ("TOPPADDING", (0, 0), (-1, -1), 6 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 6 * PX),
               ("LEFTPADDING", (0, 0), (-1, -1), 6 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 6 * PX)]
+    quotas_max = p.get("quotasMax") or {}
+    targets_max = week.get("targetsMax") or {}
     for i, k in enumerate(KEYS, start=1):
         n, t, q = _n(totals.get(k)), _n(targets.get(k)), _n(quotas.get(k))
+        qx, tx = _n(quotas_max.get(k)), _n(targets_max.get(k))
         pct = int(round(n * 100.0 / t)) if t else 0
         met = t > 0 and n >= t
         status = "met" if met else ("%d short" % (t - n) if t else "no target")
-        rows.append([Paragraph(_esc(LABELS[k]), cell_b), Paragraph(str(q), cell_r), Paragraph(str(t), cell_r),
+        q_s = ("%d-%d" % (q, qx)) if qx > q else str(q)
+        t_s = ("%d-%d" % (t, tx)) if tx > t else str(t)
+        rows.append([Paragraph(_esc(LABELS[k]), cell_b), Paragraph(q_s, cell_r), Paragraph(t_s, cell_r),
                      Paragraph(str(n), cell_rb), Paragraph("%d%%" % pct if t else "—", cell_r),
                      Paragraph(_esc(status), _ps("st%d" % i, 8, OK if met else WARN, LATO_B, align=1))])
         styles.append(("BACKGROUND", (5, i), (5, i), OK_SOFT if met else WARN_SOFT))
         styles.append(("LINEBELOW", (0, i), (-1, i), 0.5, HAIR_E))
     t1 = Table(rows, colWidths=[CONTENT_W * 0.34, CONTENT_W * 0.13, CONTENT_W * 0.14, CONTENT_W * 0.12, CONTENT_W * 0.10, CONTENT_W * 0.17])
     t1.setStyle(TableStyle(styles))
-    story += [_eyebrow("The eight, against this week's targets"), Spacer(1, 4 * PX), t1, Spacer(1, 10 * PX)]
+    story += [_eyebrow("The nine daily items, against this week's targets (ranges: met at the first number)"), Spacer(1, 4 * PX), t1, Spacer(1, 10 * PX)]
+
+    # the weekly items
+    wk = week.get("weekly") or {}
+    wrows = [[Paragraph("WEEKLY", hdr), Paragraph("TARGET", _ps("wh2", 8, LABEL9, LATO_B, align=2)), Paragraph("ACTUAL", _ps("wh3", 8, LABEL9, LATO_B, align=2)), Paragraph("STATUS", _ps("wh4", 8, LABEL9, LATO_B, align=1))]]
+    wstyles = [("LINEBELOW", (0, 0), (-1, 0), 0.8, HAIR_E), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+               ("TOPPADDING", (0, 0), (-1, -1), 5 * PX), ("BOTTOMPADDING", (0, 0), (-1, -1), 5 * PX),
+               ("LEFTPADDING", (0, 0), (-1, -1), 6 * PX), ("RIGHTPADDING", (0, 0), (-1, -1), 6 * PX)]
+    for i, (k, label) in enumerate(WEEKLY, start=1):
+        x = wk.get(k) or {}
+        v, mn, mx = _n(x.get("value")), _n(x.get("min")), _n(x.get("max"))
+        tgt = ("%d-%d" % (mn, mx)) if mx > mn else (str(mn) if mn else "-")
+        met = mn > 0 and v >= mn
+        st = "met" if met else (("%d short" % (mn - v)) if mn else "-")
+        wrows.append([Paragraph(_esc(label), cell_b), Paragraph(tgt, cell_r), Paragraph(str(v), cell_rb),
+                      Paragraph(_esc(st), _ps("wst%d" % i, 8, OK if met else (WARN if mn else MUTED7), LATO_B, align=1))])
+        if mn:
+            wstyles.append(("BACKGROUND", (3, i), (3, i), OK_SOFT if met else WARN_SOFT))
+        wstyles.append(("LINEBELOW", (0, i), (-1, i), 0.5, HAIR_E))
+    t3 = Table(wrows, colWidths=[CONTENT_W * 0.52, CONTENT_W * 0.16, CONTENT_W * 0.14, CONTENT_W * 0.18])
+    t3.setStyle(TableStyle(wstyles))
+    story += [t3, Spacer(1, 10 * PX)]
 
     # reply rate — defined, not left to the reader
     rate = week.get("replyRate")

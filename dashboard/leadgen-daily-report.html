@@ -81,16 +81,17 @@
         </div>
         <div class="report-body">
           <div class="dr-summary" id="summaryRow">
-            <div class="dr-tile"><div class="l">Plants</div><div class="v" id="sumPlants">—</div></div>
-            <div class="dr-tile"><div class="l">Contacts verified</div><div class="v" id="sumContacts">—</div></div>
-            <div class="dr-tile"><div class="l">Intro emails</div><div class="v" id="sumIntro">—</div></div>
-            <div class="dr-tile"><div class="l">Follow-up emails</div><div class="v" id="sumFollowupEmails">—</div></div>
-            <div class="dr-tile"><div class="l">Cold calls</div><div class="v" id="sumCold">—</div></div>
-            <div class="dr-tile"><div class="l">Follow-up calls</div><div class="v" id="sumFollowupCalls">—</div></div>
-            <div class="dr-tile"><div class="l">Leads handed off</div><div class="v" id="sumLeads">—</div></div>
-            <div class="dr-tile"><div class="l">Meetings booked</div><div class="v" id="sumMeetings">—</div></div>
+            <div class="dr-tile"><div class="l">Outbound attempts</div><div class="v" id="sumAttempts">—</div></div>
+            <div class="dr-tile"><div class="l">Decision-makers reached</div><div class="v" id="sumConversations">—</div></div>
+            <div class="dr-tile"><div class="l">Prospecting emails</div><div class="v" id="sumEmails">—</div></div>
+            <div class="dr-tile"><div class="l">LinkedIn</div><div class="v" id="sumLinkedin">—</div></div>
+            <div class="dr-tile"><div class="l">Local suppliers</div><div class="v" id="sumSuppliers">—</div></div>
+            <div class="dr-tile"><div class="l">Target accounts</div><div class="v" id="sumAccounts">—</div></div>
+            <div class="dr-tile"><div class="l">Scheduled</div><div class="v" id="sumScheduled">—</div></div>
+            <div class="dr-tile"><div class="l">EOD report</div><div class="v" id="sumEod">—</div></div>
             <div class="dr-tile"><div class="l">Movements</div><div class="v" id="sumMovements">—</div></div>
-            <div class="dr-tile"><div class="l">Emails in mailbox</div><div class="v" id="sumEmails">—</div></div>
+            <div class="dr-tile"><div class="l">Emails in mailbox</div><div class="v" id="sumEmailsMailbox">—</div></div>
+          </div></div>
           </div>
 
           <div class="dr-sect">
@@ -116,8 +117,12 @@
 
           <div class="dr-sect">
             <div class="dr-sect-title">Notes / Highlights <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);" id="notesMsg"></span></div>
-            <textarea id="notesField" class="notes-area" placeholder="Who replied, who was handed off, blockers, what the reps need…"></textarea>
-            <button class="btn btn-sm btn-primary no-print" id="saveNotesBtn" style="margin-top:0.5rem;">Save Notes</button>
+            <textarea id="notesField" class="notes-area" placeholder="Key conversations, who replied, who was handed off, blockers, what the reps need…"></textarea>
+            <div class="no-print" style="display:flex;gap:.5rem;margin-top:0.5rem;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-sm btn-secondary" id="saveNotesBtn">Save Notes</button>
+              <button class="btn btn-sm btn-primary primary" id="submitBtn">Submit to Director</button>
+              <span style="font-size:0.74rem;color:var(--text-muted);">Highlights, key conversations, blockers — then submit. Re-submitting updates the same report.</span>
+            </div>
           </div>
         </div>
       </div>
