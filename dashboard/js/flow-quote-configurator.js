@@ -146,6 +146,14 @@ function qcToggleCreate(open) {
 /* Clear the builder back to a blank quotation (leaves the remembered doc defaults in place). */
 function qcResetForm() {
   qcQuotationNo = '';
+  /* A281 — back to a supply quotation. Without this, building a hire and then pressing New would
+     leave the next one silently typed as a service quotation. qcTypeChanged() runs at the END of
+     this function, once the items are cleared: the column HEADINGS are its business, not
+     qcRenderItems', so resetting without it leaves "Duration / Rate" and two orphaned header cells
+     above rows that no longer have them. */
+  const qcTypeEl = document.getElementById('qcQuoteType'); if (qcTypeEl) qcTypeEl.value = '';
+  const qcKindEl = document.getElementById('qcServiceKind'); if (qcKindEl) qcKindEl.value = '';
+  const qcTermsEl = document.getElementById('qcServiceTerms'); if (qcTermsEl) qcTermsEl.value = '';
   qcEditPrNo = '';                                        // A251
   qcDesignVersion = 2;          // A241 — a brand-new quotation is born on the new design
   qcFromPr = '';
@@ -169,6 +177,7 @@ function qcResetForm() {
   const title = document.getElementById('formTitle'); if (title) title.textContent = 'New Quotation';
   const btn = document.getElementById('qcFinalizeBtn'); if (btn) btn.disabled = false;
   qcSyncLock();
+  qcTypeChanged();              // A281 — headings and the hire cells, back to supply
   qcAddRow();                   // renders + reschedules the preview
 }
 
@@ -299,8 +308,22 @@ function qcLoadExisting(q) {
     origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
     itemId: it.itemId || '', vat: it.vat || '', imageDataUrl: '',
     optionNo: String(it.optionNo || '').trim(),            // A205
+    // A281 — the hire shape, straight off QuotationItems. A supply line reads three blanks.
+    chargeKind: String(it.chargeKind || '').trim(),
+    rateBasis: String(it.rateBasis || '').trim() || String(it.uom || '').trim(),
     scope: ''                                              // A235 — filled from layoutJson just below
   }));
+  /* A281 — the quotation's own type, restored BEFORE the rows render so the columns come back with
+     the right headings and the hire cells are present. The rental terms are not a QuotationItems or
+     Quotations column: like scope and the note blocks they ride the Layout JSON the configurator
+     already round-trips. */
+  const qcTypeSel = document.getElementById('qcQuoteType');
+  if (qcTypeSel) qcTypeSel.value = String(q.type || '').trim().toLowerCase() === 'service' ? 'Service' : '';
+  const qcKindIn = document.getElementById('qcServiceKind');
+  if (qcKindIn) qcKindIn.value = String(q.serviceKind || '');
+  const qcSvcTerms = document.getElementById('qcServiceTerms');
+  if (qcSvcTerms) qcSvcTerms.value = String(lay.serviceTerms || '');
+  qcTypeChanged();
   /* A235 — put each item's scope of supply back on its line. It is NOT in `q.items`: QuotationItems
      has no scope column and deliberately never will (adding one is the width trap that has bitten
      this codebase five times, and no total, sales order or commission reads scope). It lives in the
@@ -814,8 +837,11 @@ function qcOptionGroups() {
   qcItems.forEach(i => {
     const k = String(i.optionNo || '').trim();
     if (!k) return;
-    (g[k] = g[k] || { key: k, lines: [], gross: 0 }).lines.push(i);
+    (g[k] = g[k] || { key: k, lines: [], gross: 0, deposit: 0 }).lines.push(i);
     g[k].gross += num(i.qty) * num(i.price);
+    // A281 — carried per group so the option's own "+ VAT 12%" line can exclude a refundable
+    // deposit the same way the total above it and the PDF's option band do.
+    if (String(i.chargeKind || '').trim().toLowerCase() === 'deposit') g[k].deposit += num(i.qty) * num(i.price);
   });
   return Object.keys(g).sort((a, b) => (num(a) - num(b)) || a.localeCompare(b)).map(k => g[k]);
 }
@@ -868,6 +894,25 @@ function qcRenderItems() {
               onchange="qcSetSel('${esc(i.lineKey)}',this.checked)">
             ${i.prPriced ? '' : '<div style="font-size:.62rem;color:#b45309;">no price</div>'}</td>`;
   };
+  /* A281 — the two cells a hire line needs and a supply line must not grow. Both write straight
+     onto the item; the basis also writes UOM, because that is the field the renderer reads to
+     decide whether the rate prints "/ DAY" beside it. */
+  const svc = qcIsService();
+  const kindCell = (i) => {
+    if (!svc) return '';
+    const cur = String(i.chargeKind || 'Rental');
+    const opts = QC_CHARGE_KINDS.map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${v}</option>`).join('');
+    const warn = cur === 'Deposit' ? ' title="Refundable — credits the deposits liability, never revenue, and is not VATed."' : '';
+    return `<td><select${ro}${warn} onchange="qcSet('${esc(i.lineKey)}','chargeKind',this.value)"
+              style="width:100%;box-sizing:border-box;${cur === 'Deposit' ? 'color:#b45309;font-weight:600;' : ''}">${opts}</select></td>`;
+  };
+  const basisCell = (i) => {
+    if (!svc) return '';
+    const cur = String(i.rateBasis || 'DAYS');
+    const opts = QC_RATE_BASES.map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${v}</option>`).join('');
+    return `<td><select${ro} onchange="qcSet('${esc(i.lineKey)}','rateBasis',this.value)"
+              style="width:100%;box-sizing:border-box;">${opts}</select></td>`;
+  };
   document.getElementById('qcItemBody').innerHTML = qcItems.map(i => `
     <tr data-key="${esc(i.lineKey)}"${(qcPartial && qcPartialUI && (i.prTaken || !i.qtSel)) ? ' style="opacity:.55;"' : ''}>
       ${selCell(i)}
@@ -878,8 +923,10 @@ function qcRenderItems() {
             oninput="qcSet('${esc(i.lineKey)}','itemName',this.value)">
           ${i.origItemNo || i.origItemName ? `<div style="font-size:.7rem;color:#64748b;margin-top:.2rem;">
             requested: ${esc(i.origItemNo || '')} ${esc(i.origItemName || '')}</div>` : ''}</td>
+      ${kindCell(i)}
       <td class="num"><input type="number" min="0" step="any" value="${i.qty}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','qty',this.value)"></td>
+      ${basisCell(i)}
       <td class="num"><input type="number" min="0" step="any" value="${i.price}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','price',this.value)"></td>
       <td><button class="btn btn-secondary btn-sm qc-photo-btn ${i.imageDataUrl ? 'qc-photo-on' : ''}"
@@ -997,6 +1044,86 @@ function qcRenderBlocks() {
 
 /** A241 — "Custom…" swaps the picker for a free-text box. The vocabulary makes the common unit one
  *  click; it does not become a cage, because the units a supplier quotes in are not ours to limit. */
+/* ── A281 · THE HIRE OF A TOOL, NOT THE SALE OF ONE ──────────────────────────────────────────
+ *
+ * A276 built the whole engine — a quotation Type, service-aware invoicing that bills a rate over a
+ * duration without moving stock, a refundable deposit that credits a liability instead of revenue,
+ * and a renderer that prints SERVICE QUOTATION with DURATION and RATE columns. What it never got
+ * was a way to SAY so: nothing in any UI set the type, and the PDF route never passed doc_type, so
+ * the document could not be produced at all.
+ *
+ * A service line is a RATE OVER A DURATION. Qty is the duration, price is the rate, and the rate is
+ * per something — which the renderer reads off the line's UOM and prints as "/ DAY" beside it, but
+ * ONLY for a unit of time. A mobilization charged once per LOT is a flat fee, and "/ LOT" would
+ * invite the reader to multiply it by a quantity that is already 1. So the basis picker offers both
+ * kinds and the renderer decides which prints a suffix.
+ *
+ * CHARGE KIND is what the money IS, and it is the field the invoice reads: rental/operator/
+ * mobilization credit 4100 Service Revenue and move no stock, while a DEPOSIT credits the 2100
+ * liability, stays out of Total Sales, and is never VATed. Getting that wrong is the difference
+ * between revenue and somebody else's money.
+ */
+const QC_CHARGE_KINDS = ['Rental', 'Operator', 'Mobilization', 'Demobilization', 'Consumable', 'Deposit'];
+/* The time units the renderer turns into a "/ DAY" suffix, then the flat ones that print none.
+   Kept in the same order the picker shows them, and matched to _RATE_BASIS in the PDF builder. */
+const QC_RATE_BASES = ['DAYS', 'WEEKS', 'MONTHS', 'HOURS', 'SHIFTS', 'MANDAYS', 'LOT', 'PC(S)'];
+
+/* A281 — CAN THIS SERVER STILL BE TOLD THE TYPE CHANGED? createQuotation has stored Type since
+   A276 (v148), so creating a hire works on any live script. updateQuotation did not write it until
+   v155, and on an older one a type CORRECTION would be accepted by the form, shown on the document
+   and silently dropped by the record — the worst of the three outcomes, because the lines would say
+   hire while the sheet said sale and it is the sheet that createInvoice reads. So on an old server
+   the picker is frozen on an EXISTING quotation and says why. A new one is never affected. */
+let qcTypeEditUI = true;
+if (typeof flowVersionAtLeast === 'function') {
+  flowVersionAtLeast(155).then(v => { qcTypeEditUI = !!v; qcSyncTypeLock(); })
+                         .catch(() => { qcTypeEditUI = true; });   // unknown version: do not block work
+}
+
+/** Freeze the type picker when this server could not record a change to it. */
+function qcSyncTypeLock() {
+  const el = document.getElementById('qcQuoteType');
+  if (!el) return;
+  const frozen = !!qcQuotationNo && !qcTypeEditUI;
+  el.disabled = frozen || qcLocked;
+  el.title = frozen ? 'This portal\u2019s backend is older than v155, which is the version that records a '
+                    + 'change of type on an existing quotation. Create a new quotation to change it.' : '';
+}
+
+/** True when the form is building a hire rather than a sale. */
+function qcIsService() {
+  return String((document.getElementById('qcQuoteType') || {}).value || '').trim().toLowerCase() === 'service';
+}
+
+/** The type changed: relabel the columns and the two terms that differ, then re-render. */
+function qcTypeChanged() {
+  const svc = qcIsService();
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  const text = (id, t) => { const el = document.getElementById(id); if (el) el.textContent = t; };
+  show('qcServiceKindWrap', svc);
+  show('qcServiceTermsWrap', svc);
+  show('qcThKind', svc);
+  show('qcThBasis', svc);
+  /* The headings the renderer will print, shown here too — the rep should be looking at the same
+     words the client will. */
+  text('qcThQty', svc ? 'Duration' : 'Qty');
+  text('qcThPrice', svc ? 'Rate' : 'Unit Price');
+  text('qcThDesc', svc ? 'Service & description' : 'Description');
+  text('qcLblDelivery', svc ? 'Availability' : 'Delivery');
+  text('qcLblWarranty', svc ? 'Support' : 'Warranty');
+  const d = document.getElementById('qcDelivery'), w = document.getElementById('qcWarranty');
+  if (d) d.placeholder = svc ? 'Subject to availability on the requested dates' : '1-3 weeks upon receipt of order';
+  if (w) w.placeholder = svc ? 'Operator training and on-call support included' : '1 year';
+  /* A service line with no basis prints a rate with no "/ DAY" beside it, which reads as a lump
+     sum. Default the blank ones to DAYS — the overwhelmingly common hire — rather than leave the
+     rep to discover the omission on the client's copy. */
+  if (svc) qcItems.forEach(i => { if (!i.rateBasis) { i.rateBasis = 'DAYS'; i.uom = 'DAYS'; }
+                                  if (!i.chargeKind) i.chargeKind = 'Rental'; });
+  qcSyncTypeLock();
+  qcRenderItems();
+  qcOnChange();
+}
+
 function qcUomPick(v) {
   const box = document.getElementById('qcUomCustom');
   box.style.display = (v === '__custom__') ? '' : 'none';
@@ -1073,6 +1200,10 @@ function qcSet(key, field, value) {
   if (qcLocked) return;
   const it = qcItems.find(i => i.lineKey === key);
   if (!it) return;
+  /* A281 — the renderer reads the RATE's per-unit off the line's UOM, so the basis writes both.
+     One control, one fact; a rep who sets "per week" and gets "/ DAY" on the client's copy would
+     have no way to see why. */
+  if (field === 'rateBasis') it.uom = String(value || '');
   it[field] = (field === 'qty' || field === 'price') ? (parseFloat(value) || 0) : value;
   if (field === 'optionNo' && qcOptionsEnabled) {
     it.optionNo = String(value || '').trim();
@@ -1156,8 +1287,20 @@ function qcTotals() {
   const discount = gross * pct / 100;
   const net = gross - discount;
   const opt = document.getElementById('qcVat').value;
-  const vat = opt === 'inclusive' ? net * QC_VAT_PCT : 0;
-  return { gross, pct, discount, net, vat, grand: net + vat, opt, groups, rec };
+  /* A281 — A REFUNDABLE DEPOSIT IS NOT VATED. It is the client's own money held against damage, not
+     consideration for a supply, so createInvoice has kept it out of the tax since A278. The form
+     used to tax it here, which meant the quotation promised one figure and the invoice billed
+     another — on a document the client holds. Only a hire can carry a deposit line, so a supply
+     quotation computes exactly what it always did. */
+  const depositGross = qcIsService() ? qcQuotedItems().reduce((s, i) => {
+    const k = qcOptionsEnabled ? String(i.optionNo || '').trim() : '';
+    if (k && k !== rec) return s;
+    return String(i.chargeKind || '').trim().toLowerCase() === 'deposit' ? s + num(i.qty) * num(i.price) : s;
+  }, 0) : 0;
+  const depositNet = depositGross - (depositGross * pct / 100);
+  const vatBase = Math.max(0, net - depositNet);
+  const vat = opt === 'inclusive' ? vatBase * QC_VAT_PCT : 0;
+  return { gross, pct, discount, net, vat, grand: net + vat, opt, groups, rec, deposit: depositNet, vatBase };
 }
 
 function qcRenderTotals() {
@@ -1177,7 +1320,9 @@ function qcRenderTotals() {
     html += `<div class="row disc"><span>Less: Discount (${t.pct}%)</span><span class="v">− ${m(t.discount)}</span></div>`;
     html += `<div class="row"><span>Net</span><span class="v">${m(t.net)}</span></div>`;
   }
-  if (t.opt === 'inclusive') html += `<div class="row"><span>VAT (12%)</span><span class="v">${m(t.vat)}</span></div>`;
+  if (t.opt === 'inclusive') html += `<div class="row"><span>VAT (12%)${
+    t.deposit > 0 ? ' <span style="font-size:.7rem;color:#64748b;">on ' + m(t.vatBase) + ' — the refundable deposit is not VATed</span>' : ''
+  }</span><span class="v">${m(t.vat)}</span></div>`;
   html += `<div class="row grand"><span>${label}</span><span class="v">${m(t.grand)}</span></div>`;
   /* A205 — the alternatives, each priced on its own. Shown BELOW the total so it is obvious the
      total is one of them rather than all of them, which is the misreading that costs money. */
@@ -1186,7 +1331,7 @@ function qcRenderTotals() {
       <span style="font-weight:700;color:#b91c1c;">Alternative offers</span>
       <span class="v" style="font-size:.72rem;color:#64748b;">client picks one · not cumulative</span></div>`;
     t.groups.forEach(g => {
-      const vat = g.gross * QC_VAT_PCT;
+      const vat = Math.max(0, g.gross - (qcIsService() ? (g.deposit || 0) : 0)) * QC_VAT_PCT;
       const on = g.key === t.rec;
       html += `<div class="row"><span>${on ? '★ ' : ''}Option ${g.key}${on ? ' (in the total above)' : ''}</span>
         <span class="v">${m(g.gross)}</span></div>`;
@@ -1231,6 +1376,9 @@ function qcPayload(withImages) {
     descMode: val('qcDescMode') || 'long',
     photos: showPhotos,
     designVersion: qcPreviewDesign(),                           // A241 / A242 — see the helper
+    // A281 — what the renderer switches on. Blank/absent is a supply quotation, which is what every
+    // caller that predates this sends, so nothing about the existing document moves.
+    docType: qcIsService() ? 'Service' : '',
     recommendedOption: qcOptionsEnabled ? qcRecommended : '',   // A205
     items: qcQuotedItems().filter(i => (i.itemNo || i.itemName)).map(i => ({   // A242: the ticked lines
       itemNo: i.itemNo || 'N/A', itemName: i.itemName || i.itemNo,
@@ -1238,7 +1386,11 @@ function qcPayload(withImages) {
       optionNo: String(i.optionNo || '').trim(),           // A205
 
       description: i.itemName || '',
+      /* A281 — for a hire line this is the RATE BASIS, and it is what the renderer reads to print
+         "/ DAY" beside the rate. Only a unit of TIME gets a suffix; LOT and PC print none. */
       uom: i.uom || '',                                  // A147: never force "pc(s)"
+      chargeKind: String(i.chargeKind || '').trim(),     // A281
+      rateBasis: String(i.rateBasis || '').trim(),
       origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',   // A86 pairing
       // A235 — this item's own scope of supply, printed under its description. Rides the item in
       // the payload rather than a QuotationItems column: that sheet is 13 wide and every positional
@@ -1261,7 +1413,12 @@ function qcPayload(withImages) {
       plantSite: val('qcPlantSite'),                       // A178: a plain document field, like the RFQ no
       descMode: val('qcDescMode') || 'long',
       validity: val('qcValidity'), delivery: val('qcDelivery'), payment: val('qcPayment'),
-      warranty: val('qcWarranty'), sigName: val('qcSigName'), sigDesignation: val('qcSigDesignation'),
+      warranty: val('qcWarranty'),
+      /* A281 — the same two inputs, under the names the hire document uses. The route picks whichever
+         pair matches docType, so one field can never end up printed under the other's heading. */
+      availability: val('qcDelivery'), support: val('qcWarranty'),
+      serviceTerms: qcIsService() ? val('qcServiceTerms') : '',
+      sigName: val('qcSigName'), sigDesignation: val('qcSigDesignation'),
       sigMobile: val('qcSigMobile'), sigViber: val('qcSigViber') || val('qcSigMobile'),
       sigEmail: val('qcSigEmail'),
       // A173: the route reads these ONLY from doc — a top-level copy is silently ignored.
@@ -1368,6 +1525,12 @@ function qcLayoutJson() {
     blocks: { scope: on('qcBlkScope'), exclusions: on('qcBlkExcl'), options: on('qcBlkOpts') },
     scope: val('qcScope'), exclusions: val('qcExclusions'), options: val('qcOptions')
   };
+  /* A281 — the rental terms round-trip here for the same reason the per-item scope does: Quotations
+     is 29 columns of positional writers and a 30th is the width trap this codebase has paid for
+     five times. Written only when there are terms, so a supply quotation stores exactly the string
+     it stored before. */
+  const _svcTerms = val('qcServiceTerms').trim();
+  if (_svcTerms) lay.serviceTerms = _svcTerms;
   /* A235 — per-item scope of supply. Stored in item ORDER and keyed by Line Key: the key is what an
      ordinary edit re-attaches by, the order is what the from-PR path falls back to when the server
      re-keys the lines (see qcLoadExisting). The key is omitted entirely when no item carries scope,
@@ -1496,7 +1659,14 @@ async function qcFinalize() {
         qty: num(i.qty), price: num(i.price), uom: i.uom || '',
         origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',
         itemId: i.itemId || '', vat: i.vat || '', lineKey: i.lineKey,
-        optionNo: String(i.optionNo || '').trim()          // A205
+        optionNo: String(i.optionNo || '').trim(),         // A205
+        /* A281 — the hire shape createQuotation has stored since A276 and nothing has ever sent.
+           `duration` is the same number as qty; it is stored separately because a sales order and an
+           invoice read it as a SPAN, and createInvoice uses exactly that to know it must not take
+           the tool out of stock. A supply line sends three blanks, as it always did. */
+        chargeKind: String(i.chargeKind || '').trim(),
+        rateBasis: String(i.rateBasis || '').trim(),
+        duration: qcIsService() ? num(i.qty) : ''
       }));
       const common = {
         customer: val('qcCustomer').trim(), date: val('qcDate'), subject: val('qcSubject').trim(),
@@ -1508,7 +1678,10 @@ async function qcFinalize() {
         layoutJson: qcLayoutJson(), items: JSON.stringify(items),
         // A218 — WHOSE deal. Sent on both paths; createQuotation stores it, and an edit can correct
         // an attribution that was wrong (there was no correction path at all before this).
-        salesperson: (val('qcSalesperson') || qcSession.name)
+        salesperson: (val('qcSalesperson') || qcSession.name),
+        // A281 — Type · Service Kind. createQuotation has read these since A276.
+        quoteType: qcIsService() ? 'Service' : '',
+        serviceKind: qcIsService() ? val('qcServiceKind').trim() : ''
       };
       if (qcQuotationNo) {
         res = await postFlow('updateQuotation', Object.assign({ quotationNo: qcQuotationNo,

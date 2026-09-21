@@ -108,6 +108,10 @@ function page(jsFiles, htmlFile, session, opts) {
 
   return {
     ctx, els, calls, params,
+    /* A281 — evaluate an expression INSIDE the page's own scope. A page script's module-level
+       `let` bindings are not properties of the context object, so a suite that wants to drive one
+       function directly (rather than through boot()) cannot reach them from the outside. */
+    run: (code) => vm.runInContext(code, ctx),
     /** The params a given action was called with, or null. */
     paramsFor: (action) => (params.filter(x => x.action === action)[0] || {}).params || null,
     boot: async () => {

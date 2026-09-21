@@ -805,7 +805,7 @@ def _alt_row_styles(span_rows, th=None):
     return out
 
 
-def build_summary_table(total_ex_vat, vat_option, discount_pct=0):
+def build_summary_table(total_ex_vat, vat_option, discount_pct=0, vat_base=None):
     """Totals for the summary block. Returns a dict the renderer interprets.
 
     A quotation-level discount % is applied to the pre-VAT subtotal: VAT and the grand total are
@@ -819,9 +819,33 @@ def build_summary_table(total_ex_vat, vat_option, discount_pct=0):
         dp = 0.0
     disc_amt = round(total_ex_vat * dp / 100.0, 2)
     net_ex = total_ex_vat - disc_amt
-    vat = net_ex * 0.12 if opt == "inclusive" else 0.0
+    # A281 — `vat_base` is the part of the subtotal that VAT is actually charged on, and it differs
+    # from the subtotal on exactly one kind of line: a REFUNDABLE DEPOSIT. A deposit is the client's
+    # own money held against damage, not consideration for a supply, so no output VAT arises on it —
+    # which is what createInvoice has done since A278. Before this the quotation VATed it and the
+    # invoice did not, so the client was quoted one figure and billed another.
+    # Omitted (None) means "all of it", which is every supply quotation and every caller that
+    # predates this.
+    _base = net_ex if vat_base is None else max(0.0, vat_base - round(vat_base * dp / 100.0, 2))
+    vat = _base * 0.12 if opt == "inclusive" else 0.0
     return {"gross_ex_vat": total_ex_vat, "discount_pct": dp, "discount_amt": disc_amt,
-            "total_ex_vat": net_ex, "vat": vat, "total": net_ex + vat, "vat_option": opt}
+            "total_ex_vat": net_ex, "vat": vat, "total": net_ex + vat, "vat_option": opt,
+            "vat_base": _base}
+
+
+def _vat_row_label(summary):
+    """The VAT row's label — and, when they differ, WHY it is not 12% of the line above.
+
+    A281: a hire quotation can carry a refundable deposit, which is excluded from the VAT base.
+    Printing a bare "VAT (12%)" next to a figure that is plainly not 12% of the net reads as an
+    arithmetic error to the client holding the page, so say what the tax was charged on.
+    """
+    base = summary.get("vat_base")
+    net = summary.get("total_ex_vat", 0)
+    if base is None or abs(base - net) < 0.005:
+        return "VAT (12%)"
+    return ("VAT (12% on PHP " + _fmt(base) + ")<br/><font size='8'>"
+            "Refundable deposit is not subject to VAT</font>")
 
 
 def _card(content, width, fill, border=HAIR_E, left_accent=None, pad=(16, 8)):
@@ -1537,7 +1561,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         if mk == "subtotal":
             k = it.get("_key")
             g_ex = sum(float(x.get("total_unit_price") or 0) for x in opt_map[k])
-            g_vat = g_ex * 0.12
+            # A281 — same rule as the grand summary: a refundable deposit inside an option is not
+            # VATable, so this band must not tax it either or the two blocks disagree on one page.
+            g_base = g_ex if not is_service else sum(
+                float(x.get("total_unit_price") or 0) for x in opt_map[k]
+                if str(x.get("charge_kind") or "").strip().lower() != "deposit")
+            g_vat = g_base * 0.12
             span_rows.append((len(rows), "subtotal"))
             rows.append([Paragraph(
                 f"Total (VAT Excl.) PHP {_fmt(g_ex)} &nbsp;·&nbsp; VAT (12%) PHP {_fmt(g_vat)}"
@@ -1849,7 +1878,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         net_label = "Net (VAT Exclusive)" if dp > 0 else "Total Amount (VAT Exclusive)"
         tot_rows += [[Paragraph(net_label, _ps("tl1", 13, MUTED7)),
                       Paragraph("PHP " + _fmt(summary["total_ex_vat"]), _ps("tv1", 13, TEXT, LATO_B, align=2))],
-                     [Paragraph("VAT (12%)", _ps("tl2", 13, MUTED7)),
+                     [Paragraph(_vat_row_label(summary), _ps("tl2", 13, MUTED7)),
                       Paragraph("PHP " + _fmt(summary["vat"]), _ps("tv2", 13, TEXT, LATO_B, align=2))]]
         grand_text = "Total (VAT Inclusive)"
     elif opt == "zero":

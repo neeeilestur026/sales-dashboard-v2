@@ -205,6 +205,16 @@
                 <div class="full"><label>Subject *</label><input type="text" id="qcSubject" placeholder="e.g. KITO ELECTRIC CHAIN HOIST"></div>
                 <div><label>Discount % <span style="text-transform:none;font-weight:500;">(off the total, before VAT)</span></label>
                   <input type="number" id="qcDiscount" min="0" max="100" step="any" value="0"></div>
+                <!-- A281 — SUPPLY or SERVICE. Service turns the line editor into a rate over a
+                     duration and prints SERVICE QUOTATION. Blank/Supply is what every existing
+                     quotation is and nothing about that document changes. -->
+                <div><label>Quotation type</label>
+                  <select id="qcQuoteType" onchange="qcTypeChanged()">
+                    <option value="">Supply — sale of goods</option>
+                    <option value="Service">Service — hire of a tool</option>
+                  </select></div>
+                <div id="qcServiceKindWrap" style="display:none;"><label>Service kind</label>
+                  <input type="text" id="qcServiceKind" placeholder="Tool rental" oninput="qcOnChange()"></div>
                 <div><label>VAT</label>
                   <select id="qcVat">
                     <option value="inclusive">VAT Inclusive</option>
@@ -234,8 +244,11 @@
                        built from a pricing request AND the backend understands a line selection. -->
                   <th id="qcThPick" style="width:5%;display:none;" title="Tick the items that go on THIS quotation. Anything you leave stays on the pricing request and can be quoted later on a second quotation.">On&nbsp;qtn</th>
                   <th id="qcThOption" style="width:8%;display:none;" title="Blank = an ordinary line, always charged. A number makes this an alternative — the client picks one option, and options are never summed together.">Option</th>
-                  <th style="width:12%;">Item No</th><th>Description</th>
-                  <th style="width:8%;">Qty</th><th style="width:12%;">Unit Price</th>
+                  <th style="width:12%;">Item No</th><th id="qcThDesc">Description</th>
+                  <th id="qcThKind" style="width:11%;display:none;" title="What the line charges for. Rental, Operator, Mobilization and Demobilization are service revenue; a Deposit is refundable and is never income.">Charge</th>
+                  <th id="qcThQty" style="width:8%;">Qty</th>
+                  <th id="qcThBasis" style="width:9%;display:none;" title="What the rate is per. A time unit prints as '/ DAY' beside the rate; LOT and PC are flat charges and print nothing.">Per</th>
+                  <th id="qcThPrice" style="width:12%;">Unit Price</th>
                   <th style="width:15%;">Photo</th>
                   <th style="width:15%;" title="Scope of supply printed under this item's description on the quotation.">Scope</th>
                   <th style="width:5%;"></th>
@@ -314,9 +327,17 @@
                   <div style="font-size:.68rem;color:var(--text-muted,#94a3b8);margin-top:.15rem;">
                     Whose deal this is. Change it if you are filing on someone else's behalf.</div></div>
                 <div><label>Validity</label><input type="text" id="qcValidity" placeholder="30 days"></div>
-                <div><label>Delivery</label><input type="text" id="qcDelivery" placeholder="1-3 weeks upon receipt of order"></div>
+                <div><label id="qcLblDelivery">Delivery</label><input type="text" id="qcDelivery" placeholder="1-3 weeks upon receipt of order"></div>
                 <div><label>Payment</label><input type="text" id="qcPayment" placeholder="30 days upon delivery"></div>
-                <div><label>Warranty</label><input type="text" id="qcWarranty" placeholder="1 year"></div>
+                <div><label id="qcLblWarranty">Warranty</label><input type="text" id="qcWarranty" placeholder="1 year"></div>
+                <!-- A281 — the rental terms. A hire carries obligations a supply quotation has no
+                     words for: who transports the tool, who runs it, what happens if it comes back
+                     damaged. One per line, like Scope and Exclusions. -->
+                <div class="full" id="qcServiceTermsWrap" style="display:none;">
+                  <label>Rental terms &amp; conditions <span style="text-transform:none;font-weight:500;">(one per line — prints as its own block)</span></label>
+                  <textarea id="qcServiceTerms" rows="4" style="width:100%;box-sizing:border-box;"
+                    placeholder="The tool remains the property of H.O Estur Corporation at all times.&#10;Transport to and from site is for the client's account.&#10;The client is responsible for loss or damage while the tool is in their custody.&#10;The deposit is refunded on return of the tool in serviceable condition."
+                    oninput="qcOnChange()"></textarea></div>
                 <div><label>Signatory</label><input type="text" id="qcSigName"></div>
                 <div><label>Signatory title</label><input type="text" id="qcSigDesignation"></div>
                 <div><label>Viber</label><input type="text" id="qcSigViber"></div>

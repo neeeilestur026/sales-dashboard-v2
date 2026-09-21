@@ -233,6 +233,9 @@ def quotation_pdf():
             "orig_code": _s(it.get("origItemNo")),
             "orig_name": _s(it.get("origItemName")),
             "option_no": _s(it.get("optionNo")).strip(),   # A205
+            # A281 — what this line CHARGES for. The renderer never reads it; the VAT base above
+            # does, to keep a refundable deposit out of the tax the same way createInvoice does.
+            "charge_kind": _s(it.get("chargeKind")).strip(),
             # A235 — THIS item's own scope of supply, printed under its description. Passed RAW:
             # flow_quotation_pdf._norm_bullets does the splitting and the **bold** detection, because
             # the renderer is the only consumer and normalising per item here would put a loop over
@@ -274,11 +277,24 @@ def quotation_pdf():
         "signature_mobile": _s(doc.get("sigMobile")),
         "signature_email": _s(doc.get("sigEmail")),
     }
+    # A281 — SUPPLY OR SERVICE. The renderer has carried both documents since A276 and nothing ever
+    # told it which: doc_type defaulted to "supply", so a service quotation printed as an ordinary
+    # QUOTATION with Qty and Unit Price columns. One field, read here, switches the title, the two
+    # column headings, the per-rate suffix and the terms strip.
+    _doc_type = "service" if _s(data.get("docType")).strip().lower() == "service" else "supply"
+    _is_service = _doc_type == "service"
+    # A hire has no delivery lead time and no factory warranty; it has an availability window and
+    # the support that comes with the tool. The builder picks its OWN four keys off this dict by
+    # doc_type — ("validity", "availability", "payment", "support") for a hire — so both pairs are
+    # supplied and it reads whichever belongs to the document it is drawing. Mapping the hire's two
+    # into the supply names instead left both cells printing an em-dash.
     terms = {
         "validity": _s(doc.get("validity")),
-        "delivery": _s(doc.get("delivery")),
         "payment": _s(doc.get("payment")),
+        "delivery": _s(doc.get("delivery")),
         "warranty": _s(doc.get("warranty")) or "1 year warranty against factory defect",
+        "availability": _s(doc.get("availability")) or _s(doc.get("delivery")),
+        "support": _s(doc.get("support")) or _s(doc.get("warranty")),
     }
     # A205: resolve the recommendation the same way both other engines do — an explicit choice when
     # it names a real group, otherwise the CHEAPEST. Never the sum.
@@ -295,8 +311,14 @@ def quotation_pdf():
     total_ex_vat = sum(_num(i.get("total_unit_price")) for i in items
                        if not i.get("option_no") or i.get("option_no") == _rec)
 
+    # A281 — a refundable deposit is in the subtotal (the client remits it) but NOT in the VAT base.
+    # The same rule createInvoice applies, so the quotation and the invoice agree on what is owed.
+    _vat_base = sum(_num(i.get("total_unit_price")) for i in items
+                    if (not i.get("option_no") or i.get("option_no") == _rec)
+                    and _s(i.get("charge_kind")).strip().lower() != "deposit")
     summary = build_summary_table(total_ex_vat, data.get("vatOption", "inclusive"),
-                                  _num(data.get("discountPct")))
+                                  _num(data.get("discountPct")),
+                                  vat_base=_vat_base if _is_service else None)
 
     try:
         pdf_bytes = build_quotation_pdf_bytes(items, images, client_details, terms,
@@ -305,6 +327,12 @@ def quotation_pdf():
                                               exclusions=_bullets(doc.get("exclusions")),
                                               options=_options(doc.get("options")),
                                               recommended_option=_rec,
+                                              # A281 — the hire document, and the rental terms that
+                                              # only it prints. _bullets is the same splitter the
+                                              # scope and exclusions blocks use, so the rep types a
+                                              # line per term exactly as they do there.
+                                              doc_type=_doc_type,
+                                              service_terms=_bullets(doc.get("serviceTerms")),
                                               # A241 — which design this record renders in. Absent
                                               # means 1: a quotation that predates the redesign keeps
                                               # the look the client already has until it is edited.
