@@ -147,6 +147,17 @@ function addRow(item) {
   const tb = document.getElementById('itemRows');
   const tr = document.createElement('tr');
   if (item && item.itemId) tr.dataset.itemId = item.itemId;   // A159: carry the identity from the quotation
+  /* A282 — THE HIRE SHAPE RIDES THE ROW. This form has four editable cells and the hire's three
+     fields are none of them, so before this collectItems() rebuilt every line without them: an SO
+     raised from a rental quotation lost its Charge Kind, Rate Basis and Duration the first time
+     anyone saved it, and the total silently collapsed to qty x rate — one day's hire. They are not
+     editable here on purpose (the terms of the hire are the quotation's business), so the dataset
+     is exactly the right place for them: carried through untouched, read by the total below. */
+  if (item) {
+    if (item.chargeKind) tr.dataset.chargeKind = item.chargeKind;
+    if (item.rateBasis) tr.dataset.rateBasis = item.rateBasis;
+    if (flowNum(item.duration) > 0) tr.dataset.duration = flowNum(item.duration);
+  }
   tr.innerHTML = `
     <td><input type="text" class="itemNo" value="${item ? flowEsc(item.itemNo) : ''}" placeholder="Item No" style="width:38%;display:inline-block;">
         <input type="text" class="itemName" value="${item ? flowEsc(item.itemName) : ''}" placeholder="Description" style="width:60%;display:inline-block;"></td>
@@ -163,7 +174,9 @@ function recalc() {
   document.querySelectorAll('#itemRows tr').forEach(tr => {
     const qty = flowNum(tr.querySelector('.qty').value);
     const price = flowNum(tr.querySelector('.price').value);
-    const lt = qty * price;
+    // A282 — a hire line is qty x rate x DURATION. The basis and span ride the row's dataset (see
+    // addRow); a supply line has neither, so the span is 1 and this is qty x price as before.
+    const lt = qty * price * flowLineSpan(tr.dataset);
     tr.querySelector('.lineTotal').textContent = lt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     total += lt;
   });
@@ -181,7 +194,10 @@ function collectItems() {
     // just because its item code is blank (that undershot the SO total vs the quotation). Blank code
     // falls back to the shared 'N/A' key, consistent with the rest of the flow.
     if (!itemNo && !itemName && !(qty > 0)) return;   // skip only fully-empty rows
-    items.push({ itemId: tr.dataset.itemId || '', itemNo: itemNo || 'N/A', itemName: itemName || itemNo, qty, price });
+    items.push({ itemId: tr.dataset.itemId || '', itemNo: itemNo || 'N/A', itemName: itemName || itemNo, qty, price,
+                 // A282 — carried through, never rebuilt. See addRow.
+                 chargeKind: tr.dataset.chargeKind || '', rateBasis: tr.dataset.rateBasis || '',
+                 duration: tr.dataset.duration || '' });
   });
   return items;
 }
@@ -468,7 +484,7 @@ function soViewItems(no) {
   } else {
     let total = 0;
     const rows = items.map((it, i) => {
-      const line = flowNum(it.qty) * flowNum(it.price);
+      const line = flowLineAmount(it);        // A282 — qty x rate x duration
       total += line;
       return `<tr><td class="num">${i + 1}</td><td>${flowEsc(it.itemNo)}</td><td>${flowEsc(it.itemName)}</td>
         <td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td>

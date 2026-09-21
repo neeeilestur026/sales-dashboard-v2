@@ -71,9 +71,14 @@ RENTAL_TC = [
 ]
 
 
-def line(n, name, rate, dur, uom, desc="", scope=None):
-    return {"item_no": n, "product_name": name, "product_code": "", "quantity": dur, "uom": uom,
-            "total_amount": rate, "total_unit_price": rate * dur, "description": desc,
+def line(n, name, rate, dur, uom, desc="", scope=None, qty=1):
+    """A282 — `dur` is HOW LONG and `qty` is HOW MANY; the amount is the product of the three.
+
+    Until A282 a hire line had one multiplier and this helper passed `dur` as the quantity, which
+    is why the duration used to be read out of the QTY column below."""
+    return {"item_no": n, "product_name": name, "product_code": "", "quantity": qty, "uom": uom,
+            "duration": dur,
+            "total_amount": rate, "total_unit_price": rate * dur * qty, "description": desc,
             "orig_code": "", "orig_name": "", "option_no": "", "scope": scope}
 
 
@@ -165,10 +170,16 @@ ok("the mobilization line does NOT print '/ LOT'", "/ LOT" not in svc)
 
 # ─────────────────────────────────────────────────────────────
 section("4 - a duration reads as a duration")
+# A282 — the duration moved out of the QTY column into a column of its own, so that a hire can say
+# how many tools AND for how long. The formatting rule is unchanged: a whole number reads whole.
 ok("seven days is '7', not '7.0'", "7 DAYS" in svc and "7.0 DAYS" not in svc)
-ok("one lot is '1', not '1.0'", "1 LOT" in svc and "1.0 LOT" not in svc)
+ok("  and the quantity beside it counts TOOLS", "1 pc(s)" in svc, svc[:400])
+ok("a flat LOT charge shows no duration to multiply", "1 LOT" not in svc)
 half = flat(render(items=[line(1, "HALF DAY CALLOUT", 4000.0, 1.5, "DAYS")]))
 ok("half a day survives as 1.5", "1.5 DAYS" in half)
+two = flat(render(items=[line(1, "TWO WRENCHES, ONE WEEK", 8500.0, 7, "DAYS", qty=2)]))
+ok("A282: two tools for seven days", "2 pc(s)" in two and "7 DAYS" in two, two[:500])
+ok("  billing 2 x 8,500 x 7 = 119,000", "119,000.00" in two, two[:600])
 ok("  a supply quotation keeps its one decimal", "1.0" in flat(render(service=False)))
 
 # ─────────────────────────────────────────────────────────────

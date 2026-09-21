@@ -244,13 +244,17 @@
                        built from a pricing request AND the backend understands a line selection. -->
                   <th id="qcThPick" style="width:5%;display:none;" title="Tick the items that go on THIS quotation. Anything you leave stays on the pricing request and can be quoted later on a second quotation.">On&nbsp;qtn</th>
                   <th id="qcThOption" style="width:8%;display:none;" title="Blank = an ordinary line, always charged. A number makes this an alternative — the client picks one option, and options are never summed together.">Option</th>
-                  <th style="width:12%;">Item No</th><th id="qcThDesc">Description</th>
+                  <th id="qcThNo" style="width:12%;">Item No</th><th id="qcThDesc">Description</th>
                   <th id="qcThKind" style="width:11%;display:none;" title="What the line charges for. Rental, Operator, Mobilization and Demobilization are service revenue; a Deposit is refundable and is never income.">Charge</th>
                   <th id="qcThQty" style="width:8%;">Qty</th>
-                  <th id="qcThBasis" style="width:9%;display:none;" title="What the rate is per. A time unit prints as '/ DAY' beside the rate; LOT and PC are flat charges and print nothing.">Per</th>
                   <th id="qcThPrice" style="width:12%;">Unit Price</th>
-                  <th style="width:15%;">Photo</th>
-                  <th style="width:15%;" title="Scope of supply printed under this item's description on the quotation.">Scope</th>
+                  <th id="qcThBasis" style="width:9%;display:none;" title="What the rate is per. A time unit prints as '/ DAY' beside the rate; LOT and PC are flat charges and print nothing.">Per</th>
+                  <!-- A282 — HOW LONG, beside how many. A hire has two multipliers: the amount is
+                       qty x rate x duration. Only a rate per unit of TIME carries one; a LOT or PC
+                       charge shows a dash, because a flat fee has nothing to multiply. -->
+                  <th id="qcThDur" style="width:9%;display:none;" title="How long the hire runs, in the rate's own unit. The amount is Qty x Rate x Duration. A flat charge (LOT, PC) has no duration.">Duration</th>
+                  <th id="qcThPhoto" style="width:15%;">Photo</th>
+                  <th id="qcThScope" style="width:15%;" title="Scope of supply printed under this item's description on the quotation.">Scope</th>
                   <th style="width:5%;"></th>
                 </tr></thead>
                 <tbody id="qcItemBody"></tbody>

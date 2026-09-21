@@ -1012,7 +1012,7 @@ function flowQuotationPricingReview(quotation, prRecord) {
 
   const optionReview = optGroups.order.map(k => {
     const lines = optGroups.base.concat(optGroups.options[k]);
-    const quoted = lines.reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+    const quoted = lines.reduce((s, it) => s + flowLineAmount(it), 0);
     const priced = _pricedFor(lines);
     return { key: k, recommended: k === optGroups.recommended, quoted, priced, delta: quoted - priced };
   });
@@ -1128,6 +1128,40 @@ function flowDeviationBanner(review) {
    and a different one on the document the client is holding. */
 function flowQuotationOptionKey(it) { return String((it && it.optionNo) || '').trim(); }
 
+/* ── A282 · a hire line is qty x rate x DURATION ─────────────────────────────────────────────
+ *
+ * A276 modelled a rental as a rate over a duration and put the duration in the QUANTITY column, so
+ * "two wrenches for a week" had no spelling. Qty is now how many tools and Duration is for how
+ * long. Only a rate per unit of TIME is spanned — the same rule that decides whether "/ DAY" prints
+ * beside the rate on the document — so a mobilization per LOT stays one flat fee and a refundable
+ * deposit stays per tool however long the hire runs.
+ *
+ * This is the FOURTH engine that has to agree (FlowAPI's _lineSpan, the PDF's rate_span, the quote
+ * configurator's qcLineSpan, and here) and the one every read-only screen goes through. A supply
+ * line has no rate basis, so the span is 1 and this is `qty * price` exactly as it has always been.
+ */
+const FLOW_TIME_BASES = ['DAY', 'DAYS', 'WEEK', 'WEEKS', 'MONTH', 'MONTHS', 'HOUR', 'HOURS',
+                         'MANDAY', 'MANDAYS', 'SHIFT', 'SHIFTS'];
+
+/** True when this line's rate is per unit of TIME, and so is multiplied by a duration. */
+function flowIsTimeBasis(basis) {
+  return FLOW_TIME_BASES.indexOf(String(basis || '').trim().toUpperCase().replace(/\.$/, '')) >= 0;
+}
+
+/** How many rate-units this line is charged for: its duration on a time rate, otherwise 1. */
+function flowLineSpan(it) {
+  if (!it || !flowIsTimeBasis(it.rateBasis)) return 1;
+  const n = flowNum(it.duration);
+  return n > 0 ? n : 1;          // a time rate with no duration is one unit, never zero
+}
+
+/** THE line amount, recomputed from the line. Where a record carries a line total the SERVER
+ *  wrote (an invoice's 'Line Sales'), prefer that: it is what the client was billed. */
+function flowLineAmount(it) {
+  if (!it) return 0;
+  return flowNum(it.qty) * flowNum(it.price) * flowLineSpan(it);
+}
+
 /** { base:[], options:{ '1':[…] }, order:['1','2'], recommended:'1', hasOptions:bool } */
 function flowQuotationOptions(q) {
   q = q || {};
@@ -1139,7 +1173,7 @@ function flowQuotationOptions(q) {
     options[k].push(it);
   });
   order.sort((a, b) => (flowNum(a) - flowNum(b)) || a.localeCompare(b));
-  const sum = k => options[k].reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+  const sum = k => options[k].reduce((s, it) => s + flowLineAmount(it), 0);
   let recommended = String(q.recommendedOption || '').trim();
   // Same fallback as the server: cheapest, never the sum. Under-promising is the safe failure.
   if (order.length && !options[recommended]) {
@@ -1160,7 +1194,7 @@ function flowQuotationGross(q) {
   if (stored) return stored;
   const g = flowQuotationOptions(q);
   return g.base.concat(g.hasOptions ? g.options[g.recommended] : [])
-          .reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+          .reduce((s, it) => s + flowLineAmount(it), 0);
 }
 
 /** The discount percentage, clamped — a stored 120, -5 or 'abc' must never produce a negative
@@ -1449,7 +1483,7 @@ function flowQuotationNetItems(q, optionNo) {
  *  view, where each alternative has to be priced on its own rather than blended. */
 function flowQuotationNetForOption(q, optionNo) {
   return flowQuotationNetItems(q, optionNo)
-    .reduce((s, it) => s + flowNum(it.qty) * flowNum(it.price), 0);
+    .reduce((s, it) => s + flowLineAmount(it), 0);
 }
 
 

@@ -107,7 +107,7 @@ function qPatchLocal(no, saved, oldNo) {
   const base = i >= 0 ? qList[i] : { quotationNo: no, status: 'Draft', createdBy: qSession.name, items: [] };
   const rec = Object.assign({}, base, saved, { quotationNo: no });
   if (saved.items) {
-    rec.items = saved.items.map(it => Object.assign({}, it, { lineTotal: flowNum(it.qty) * flowNum(it.price) }));
+    rec.items = saved.items.map(it => Object.assign({}, it, { lineTotal: flowLineAmount(it) }));   // A282
     rec.total = rec.items.reduce((s, it) => s + it.lineTotal, 0);
   }
   if (i >= 0) qList[i] = rec; else qList.push(rec);
@@ -780,7 +780,7 @@ function openReviewModal(no) {
   const discRows = qDisc > 0
     ? `<tr><td colspan="3">Subtotal</td><td class="num">${flowMoney(qtnGross(q), 'PHP')}</td></tr>
        <tr style="color:#0f766e;"><td colspan="3">Less: Discount (${flowNum(q.discountPct)}%)</td><td class="num">− ${flowMoney(qtnGross(q) * qDisc / 100, 'PHP')}</td></tr>` : '';
-  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowNum(it.qty) * flowNum(it.price), 'PHP')}</td></tr>`).join('')}${discRows}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total${qDisc > 0 ? ' (after discount, before VAT)' : ''}</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
+  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowLineAmount(it), 'PHP')}</td></tr>`).join('')}${discRows}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total${qDisc > 0 ? ' (after discount, before VAT)' : ''}</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
   const pv = document.getElementById('qrPdf');
   const fid = q.pdfLink ? ((q.pdfLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || [])[1]) : null;
   // The panel below is a FILE saved on Drive, not a live render — say so loudly when it no longer

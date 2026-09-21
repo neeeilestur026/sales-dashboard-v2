@@ -128,7 +128,9 @@ function recalc() {
     const it = ivCurrent.items[i];
     const qty = flowNum(tr.querySelector('.qty').value);
     const price = flowNum(tr.querySelector('.price').value);
-    const ls = qty * price;
+    // A282 — a hire line is qty x rate x DURATION. COGS is deliberately NOT spanned: it costs the
+    // units issued, and a hire issues nothing at all (kind !== goods books no cost).
+    const ls = qty * price * flowLineSpan(it);
     const lc = qty * landedFor(it);
     tr.querySelector('.lineSales').textContent = ls.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     tr.querySelector('.lineCOGS').textContent = lc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -148,7 +150,14 @@ function collectItems() {
   document.querySelectorAll('#itemRows tr').forEach((tr, i) => {
     const src = ivCurrent.items[i];
     items.push({ itemId: src.itemId || '', itemNo: src.itemNo, itemName: src.itemName,
-      qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value) });
+      qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value),
+      /* A282 — THE HIRE SHAPE, carried from the sales order and never rebuilt. Dropping it here
+         cost real money in three ways at once: `chargeKind` is what tells createInvoice a REFUNDABLE
+         DEPOSIT is a liability rather than revenue, and what stops a rental line deducting the tool
+         from stock and booking COGS against a tool that is coming back; `duration` is the span the
+         line amount is multiplied by, so a seven-day hire billed at one day. None of the three is
+         editable on this form — the terms belong to the quotation — so they pass straight through. */
+      chargeKind: src.chargeKind || '', rateBasis: src.rateBasis || '', duration: src.duration || '' });
   });
   return items;
 }

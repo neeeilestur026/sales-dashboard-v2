@@ -838,10 +838,10 @@ function qcOptionGroups() {
     const k = String(i.optionNo || '').trim();
     if (!k) return;
     (g[k] = g[k] || { key: k, lines: [], gross: 0, deposit: 0 }).lines.push(i);
-    g[k].gross += num(i.qty) * num(i.price);
+    g[k].gross += qcLineAmount(i);                            // A282 — qty x rate x duration
     // A281 — carried per group so the option's own "+ VAT 12%" line can exclude a refundable
     // deposit the same way the total above it and the PDF's option band do.
-    if (String(i.chargeKind || '').trim().toLowerCase() === 'deposit') g[k].deposit += num(i.qty) * num(i.price);
+    if (String(i.chargeKind || '').trim().toLowerCase() === 'deposit') g[k].deposit += qcLineAmount(i);
   });
   return Object.keys(g).sort((a, b) => (num(a) - num(b)) || a.localeCompare(b)).map(k => g[k]);
 }
@@ -913,6 +913,21 @@ function qcRenderItems() {
     return `<td><select${ro} onchange="qcSet('${esc(i.lineKey)}','rateBasis',this.value)"
               style="width:100%;box-sizing:border-box;">${opts}</select></td>`;
   };
+  /* A282 — HOW LONG, beside how many. Only a time basis has one: on a LOT or PC line the cell
+     shows a dash, because a "1" there invites the rep to change it and a flat fee has nothing to
+     multiply. The line's running amount is printed under the box so the rep can see the three
+     numbers resolve without going to the total. */
+  const durCell = (i) => {
+    if (!svc) return '';
+    if (!qcIsTimeBasis(i.rateBasis)) {
+      return `<td class="num" style="color:#94a3b8;" title="A flat charge is not multiplied by how long the tool is out.">&mdash;</td>`;
+    }
+    return `<td class="num"><input type="number" min="0" step="any" value="${i.duration == null || i.duration === '' ? 1 : i.duration}"${ro}${title}
+              oninput="qcSet('${esc(i.lineKey)}','duration',this.value)">
+            <div style="font-size:.62rem;color:#64748b;margin-top:.15rem;">= ${
+              (typeof flowMoney === 'function') ? flowMoney(qcLineAmount(i), 'PHP') : qcLineAmount(i).toFixed(2)
+            }</div></td>`;
+  };
   document.getElementById('qcItemBody').innerHTML = qcItems.map(i => `
     <tr data-key="${esc(i.lineKey)}"${(qcPartial && qcPartialUI && (i.prTaken || !i.qtSel)) ? ' style="opacity:.55;"' : ''}>
       ${selCell(i)}
@@ -926,9 +941,10 @@ function qcRenderItems() {
       ${kindCell(i)}
       <td class="num"><input type="number" min="0" step="any" value="${i.qty}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','qty',this.value)"></td>
-      ${basisCell(i)}
       <td class="num"><input type="number" min="0" step="any" value="${i.price}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','price',this.value)"></td>
+      ${basisCell(i)}
+      ${durCell(i)}
       <td><button class="btn btn-secondary btn-sm qc-photo-btn ${i.imageDataUrl ? 'qc-photo-on' : ''}"
             onclick="qcPickPhoto('${esc(i.lineKey)}')">${i.imageDataUrl ? '✓ photo' : '+ photo'}</button>${
           i.imageDataUrl ? `<button class="qc-del" style="margin-left:.3rem;"
@@ -1068,26 +1084,72 @@ const QC_CHARGE_KINDS = ['Rental', 'Operator', 'Mobilization', 'Demobilization',
    Kept in the same order the picker shows them, and matched to _RATE_BASIS in the PDF builder. */
 const QC_RATE_BASES = ['DAYS', 'WEEKS', 'MONTHS', 'HOURS', 'SHIFTS', 'MANDAYS', 'LOT', 'PC(S)'];
 
-/* A281 — CAN THIS SERVER STILL BE TOLD THE TYPE CHANGED? createQuotation has stored Type since
-   A276 (v148), so creating a hire works on any live script. updateQuotation did not write it until
-   v155, and on an older one a type CORRECTION would be accepted by the form, shown on the document
-   and silently dropped by the record — the worst of the three outcomes, because the lines would say
-   hire while the sheet said sale and it is the sheet that createInvoice reads. So on an old server
-   the picker is frozen on an EXISTING quotation and says why. A new one is never affected. */
-let qcTypeEditUI = true;
+/* CAN THIS SERVER DO A HIRE AT ALL? Two separate answers, and the arithmetic one governs.
+ *
+ * A281 — updateQuotation did not write 'Type' until v155, so on anything older a type CORRECTION
+ * would be accepted by the form, shown on the document and silently dropped by the record.
+ *
+ * A282 — and _lineAmount did not multiply by the duration until v156. That one is worse: the form
+ * would quote two wrenches for a week at 119,000, the client would receive a document saying
+ * 119,000, and createQuotation would store 17,000 — one day of one tool. Every downstream figure,
+ * the sales order, the invoice and the receivable, would follow the stored number. So below v156
+ * the hire type is not offered AT ALL rather than offered and wrong.
+ *
+ * Both fail OPEN on an unknown version: a portal that cannot answer must not be locked out of work
+ * it may well be able to do, and the version check is a courtesy to the deploy order, not a
+ * correctness boundary. */
+let qcHireUI = true;        // A282 — may this portal quote a hire?
+let qcTypeEditUI = true;    // A281 — may an EXISTING quotation change type?
 if (typeof flowVersionAtLeast === 'function') {
-  flowVersionAtLeast(155).then(v => { qcTypeEditUI = !!v; qcSyncTypeLock(); })
-                         .catch(() => { qcTypeEditUI = true; });   // unknown version: do not block work
+  flowVersionAtLeast(156).then(v => { qcHireUI = !!v; qcSyncTypeLock(); }).catch(() => { qcHireUI = true; });
+  flowVersionAtLeast(155).then(v => { qcTypeEditUI = !!v; qcSyncTypeLock(); }).catch(() => { qcTypeEditUI = true; });
 }
 
-/** Freeze the type picker when this server could not record a change to it. */
+/** Freeze the type picker when this server could not record — or could not compute — a hire. */
 function qcSyncTypeLock() {
   const el = document.getElementById('qcQuoteType');
   if (!el) return;
+  const svcOpt = Array.prototype.filter.call(el.options || [], o => o.value === 'Service')[0];
+  if (svcOpt) {
+    svcOpt.disabled = !qcHireUI;
+    svcOpt.textContent = qcHireUI ? 'Service — hire of a tool'
+                                  : 'Service — hire of a tool (needs backend v156)';
+  }
   const frozen = !!qcQuotationNo && !qcTypeEditUI;
   el.disabled = frozen || qcLocked;
-  el.title = frozen ? 'This portal\u2019s backend is older than v155, which is the version that records a '
-                    + 'change of type on an existing quotation. Create a new quotation to change it.' : '';
+  el.title = !qcHireUI
+    ? 'This portal\u2019s backend is older than v156, the version that bills a hire as qty \u00d7 rate \u00d7 '
+      + 'duration. Quoting one here would store a total for a single day. Paste FlowAPI.gs first.'
+    : (frozen ? 'This portal\u2019s backend is older than v155, which is the version that records a '
+              + 'change of type on an existing quotation. Create a new quotation to change it.' : '');
+}
+
+/* A282 — A HIRE HAS TWO MULTIPLIERS: how many tools, and for how long. A276 put the DURATION in
+   the quantity column, which says "seven days of a wrench" and cannot say "two wrenches for a
+   week" at all. Qty is now how many, Duration is how long, and the amount is qty x rate x duration.
+   Only a rate per unit of TIME is spanned — the same rule that decides whether "/ DAY" prints
+   beside the rate — so a mobilization per LOT stays one flat fee and a refundable deposit stays per
+   tool. FlowAPI's _lineSpan and the PDF's rate_span carry the identical vocabulary; all three
+   agreeing is what keeps the screen, the document and the receivable on the same number. */
+const QC_TIME_BASES = ['DAY', 'DAYS', 'WEEK', 'WEEKS', 'MONTH', 'MONTHS', 'HOUR', 'HOURS',
+                       'MANDAY', 'MANDAYS', 'SHIFT', 'SHIFTS'];
+
+/** True when this line's rate is per unit of TIME, and so is multiplied by a duration. */
+function qcIsTimeBasis(basis) {
+  return QC_TIME_BASES.indexOf(String(basis || '').trim().toUpperCase().replace(/\.$/, '')) >= 0;
+}
+
+/** How many rate-units a line is charged for: its duration on a time rate, otherwise 1. */
+function qcLineSpan(i) {
+  if (!qcIsService() || !qcIsTimeBasis(i && i.rateBasis)) return 1;
+  const n = (typeof flowNum === 'function') ? flowNum(i.duration) : (parseFloat(i.duration) || 0);
+  return n > 0 ? n : 1;          // a time rate with no duration is one unit, never zero
+}
+
+/** THE line amount, on screen. Every total in this file goes through here. */
+function qcLineAmount(i) {
+  const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
+  return num(i.qty) * num(i.price) * qcLineSpan(i);
 }
 
 /** True when the form is building a hire rather than a sale. */
@@ -1104,9 +1166,32 @@ function qcTypeChanged() {
   show('qcServiceTermsWrap', svc);
   show('qcThKind', svc);
   show('qcThBasis', svc);
+  show('qcThDur', svc);                       // A282
+  /* A282 — MAKE ROOM. A hire row carries three cells a supply row does not, and at the supply
+     widths the description input collapsed to a single visible letter.
+     The widths have to be FIXED to take effect. In the default auto layout a width is only a hint
+     and a column's content minimum beats it — Photo and Scope hold buttons, so they kept 131px
+     while the description, which holds a freely shrinkable input, was squeezed to 87px. Under
+     table-layout:fixed the percentages below are obeyed exactly. Applied only while the form is
+     building a hire, so the supply table keeps the auto layout ~102 live quotations were laid out
+     with. */
+  const width = (id, w) => { const el = document.getElementById(id); if (el) el.style.width = w; };
+  const tbl = document.getElementById('qcItemBody');
+  if (tbl && tbl.closest('table')) tbl.closest('table').style.tableLayout = svc ? 'fixed' : '';
+  width('qcThNo', svc ? '10%' : '12%');
+  width('qcThDesc', svc ? '28%' : '');
+  width('qcThPhoto', svc ? '9%' : '15%');
+  width('qcThScope', svc ? '9%' : '15%');
+  width('qcThPrice', svc ? '10%' : '12%');
+  width('qcThKind', '11%');
+  width('qcThQty', svc ? '7%' : '8%');
+  width('qcThBasis', '8%');
+  width('qcThDur', '8%');
   /* The headings the renderer will print, shown here too — the rep should be looking at the same
      words the client will. */
-  text('qcThQty', svc ? 'Duration' : 'Qty');
+  /* A282 — QTY IS QTY IN BOTH MODES. A276 relabelled it "Duration" on a hire, which is exactly the
+     conflation this change undoes: on a hire it counts TOOLS and the span has a column of its own. */
+  text('qcThQty', 'Qty');
   text('qcThPrice', svc ? 'Rate' : 'Unit Price');
   text('qcThDesc', svc ? 'Service & description' : 'Description');
   text('qcLblDelivery', svc ? 'Availability' : 'Delivery');
@@ -1117,8 +1202,19 @@ function qcTypeChanged() {
   /* A service line with no basis prints a rate with no "/ DAY" beside it, which reads as a lump
      sum. Default the blank ones to DAYS — the overwhelmingly common hire — rather than leave the
      rep to discover the omission on the client's copy. */
-  if (svc) qcItems.forEach(i => { if (!i.rateBasis) { i.rateBasis = 'DAYS'; i.uom = 'DAYS'; }
-                                  if (!i.chargeKind) i.chargeKind = 'Rental'; });
+  if (svc) {
+    qcItems.forEach(i => { if (!i.rateBasis) { i.rateBasis = 'DAYS'; i.uom = 'DAYS'; }
+                           if (!i.chargeKind) i.chargeKind = 'Rental';
+                           // A282 — a hire line always states a span. One is the honest default:
+                           // a blank would be read as zero by something, and zero is not a hire.
+                           if (!(flowNum(i.duration) > 0)) i.duration = 1; });
+  } else {
+    /* A282 — BACK TO A SALE, so the hire shape goes with it. Leaving a rate basis on the rows would
+       leave a supply quotation whose lines still multiply by a duration it no longer shows a column
+       for, and would store "Rental / DAYS / 7" on a record that says Supply. Cleared here, at the
+       one moment the answer changes, rather than defended at every reader downstream. */
+    qcItems.forEach(i => { i.chargeKind = ''; i.rateBasis = ''; i.duration = ''; });
+  }
   qcSyncTypeLock();
   qcRenderItems();
   qcOnChange();
@@ -1203,7 +1299,13 @@ function qcSet(key, field, value) {
   /* A281 — the renderer reads the RATE's per-unit off the line's UOM, so the basis writes both.
      One control, one fact; a rep who sets "per week" and gets "/ DAY" on the client's copy would
      have no way to see why. */
-  if (field === 'rateBasis') it.uom = String(value || '');
+  if (field === 'rateBasis') {
+    it.uom = String(value || '');
+    // A282 — a flat charge has no span. Dropping it here is what makes the dash in the duration
+    // cell true rather than merely displayed: the payload cannot carry a stale 7 on a LOT line.
+    if (!qcIsTimeBasis(value)) it.duration = '';
+    else if (!(flowNum(it.duration) > 0)) it.duration = 1;
+  }
   it[field] = (field === 'qty' || field === 'price') ? (parseFloat(value) || 0) : value;
   if (field === 'optionNo' && qcOptionsEnabled) {
     it.optionNo = String(value || '').trim();
@@ -1281,7 +1383,7 @@ function qcTotals() {
   // figure the client's document never shows, and it is the figure that gets stored.
   const gross = qcQuotedItems().reduce((s, i) => {
     const k = qcOptionsEnabled ? String(i.optionNo || '').trim() : '';
-    return (k && k !== rec) ? s : s + num(i.qty) * num(i.price);
+    return (k && k !== rec) ? s : s + qcLineAmount(i);        // A282 — qty x rate x duration
   }, 0);
   const pct = Math.min(100, Math.max(0, num(document.getElementById('qcDiscount').value)));
   const discount = gross * pct / 100;
@@ -1295,7 +1397,7 @@ function qcTotals() {
   const depositGross = qcIsService() ? qcQuotedItems().reduce((s, i) => {
     const k = qcOptionsEnabled ? String(i.optionNo || '').trim() : '';
     if (k && k !== rec) return s;
-    return String(i.chargeKind || '').trim().toLowerCase() === 'deposit' ? s + num(i.qty) * num(i.price) : s;
+    return String(i.chargeKind || '').trim().toLowerCase() === 'deposit' ? s + qcLineAmount(i) : s;
   }, 0) : 0;
   const depositNet = depositGross - (depositGross * pct / 100);
   const vatBase = Math.max(0, net - depositNet);
@@ -1391,6 +1493,9 @@ function qcPayload(withImages) {
       uom: i.uom || '',                                  // A147: never force "pc(s)"
       chargeKind: String(i.chargeKind || '').trim(),     // A281
       rateBasis: String(i.rateBasis || '').trim(),
+      // A282 — HOW LONG. The route multiplies qty x rate x this, and prints it as the DURATION
+      // column. Only a time basis carries one; the route ignores it on anything else.
+      duration: qcLineSpan(i),
       origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',   // A86 pairing
       // A235 — this item's own scope of supply, printed under its description. Rides the item in
       // the payload rather than a QuotationItems column: that sheet is 13 wide and every positional
@@ -1660,13 +1765,14 @@ async function qcFinalize() {
         origItemNo: i.origItemNo || '', origItemName: i.origItemName || '',
         itemId: i.itemId || '', vat: i.vat || '', lineKey: i.lineKey,
         optionNo: String(i.optionNo || '').trim(),         // A205
-        /* A281 — the hire shape createQuotation has stored since A276 and nothing has ever sent.
-           `duration` is the same number as qty; it is stored separately because a sales order and an
-           invoice read it as a SPAN, and createInvoice uses exactly that to know it must not take
-           the tool out of stock. A supply line sends three blanks, as it always did. */
+        /* A281 — the hire shape createQuotation has stored since A276 and nothing had ever sent.
+           A282 — and `duration` is now a real second multiplier rather than a copy of qty: qty is
+           how many tools, duration is for how long, and the stored Line Total is the product of the
+           three. Sent only on a line whose rate is per unit of TIME, so a mobilization per LOT and a
+           refundable deposit stay flat. A supply line sends three blanks, as it always did. */
         chargeKind: String(i.chargeKind || '').trim(),
         rateBasis: String(i.rateBasis || '').trim(),
-        duration: qcIsService() ? num(i.qty) : ''
+        duration: (qcIsService() && qcIsTimeBasis(i.rateBasis)) ? qcLineSpan(i) : ''
       }));
       const common = {
         customer: val('qcCustomer').trim(), date: val('qcDate'), subject: val('qcSubject').trim(),

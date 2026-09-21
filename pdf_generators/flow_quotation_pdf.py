@@ -1202,6 +1202,27 @@ def _rate_basis_label(uom):
     return ("/ " + unit) if unit else ""
 
 
+def rate_basis_is_time(uom):
+    """A282 — is this rate charged per unit of TIME, and so multiplied by a duration?
+
+    The same question `_rate_basis_label` answers for the "/ DAY" suffix, exported because the line
+    AMOUNT turns on it too and the two must never disagree: a rate that prints "/ DAY" is spanned by
+    a duration, and one that does not (LOT, PC) is a flat charge that is not. `blueprints/flow.py`
+    and FlowAPI's `_isTimeBasis` carry the same vocabulary."""
+    return bool(_RATE_BASIS.get(str(uom or "").strip().upper().rstrip(".")))
+
+
+def rate_span(uom, duration):
+    """How many rate-units a line is charged for: its duration on a time rate, otherwise 1."""
+    if not rate_basis_is_time(uom):
+        return 1.0
+    try:
+        d = float(duration or 0)
+    except (TypeError, ValueError):
+        d = 0.0
+    return d if d > 0 else 1.0      # a time rate with no duration is one unit, never zero
+
+
 def _bullet_block(heading, bullets, edge, width, columns=1, size=11.5, leading=1.7):
     """Uppercase heading + hairline rule, then a bordered card with a 3px left edge.
 
@@ -1414,18 +1435,30 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
     # A276 — "DURATION" is eight characters where "QTY" is three, and at 70px it wrapped to
     # "DURATIO / N" in the header. The extra width comes out of the description column, which has the
     # most to give; the supply layout keeps its exact numbers so its bytes do not move.
-    col_w = [36 * PX, 0, (88 if is_service else 70) * PX, 110 * PX, 120 * PX]
-    col_w[1] = CONTENT_W - col_w[0] - col_w[2] - col_w[3] - col_w[4]
+    # A282 — A HIRE DOCUMENT HAS SIX COLUMNS, because a hire has two multipliers. A276 drew five and
+    # put the DURATION in the quantity column, which reads correctly for one tool and cannot say
+    # "two wrenches for a week" at all. Now: QTY (how many), RATE (per day), DURATION (how long),
+    # AMOUNT (the product of the three). A supply document keeps its five columns and their exact
+    # widths, so its bytes do not move — quotation-baseline.py pins that.
+    if is_service:
+        col_w = [36 * PX, 0, 58 * PX, 104 * PX, 76 * PX, 112 * PX]
+    else:
+        col_w = [36 * PX, 0, 70 * PX, 110 * PX, 120 * PX]
+    col_w[1] = CONTENT_W - sum(w for ci, w in enumerate(col_w) if ci != 1)
+    _NC = len(col_w)                 # 6 on a hire, 5 on a supply document
+    _C_AMT = _NC - 1                 # the amount column, wherever it ended up
+    _C_PRICE = 3                     # the rate / unit price column, in both layouts
     head_l = _ps("thL", 11, colors.white, ARCH_B)
     head_r = _ps("thR", 11, colors.white, ARCH_B, align=2)
-    # A276 — same five-column geometry, different words. A hire line's quantity IS its duration and
-    # its unit price IS its rate, so the cells underneath need no new machinery: only the headings
-    # change, plus the per-unit suffix on the rate below.
     _h_desc = "SERVICE &amp; DESCRIPTION" if is_service else "ITEM &amp; DESCRIPTION"
-    _h_qty = "DURATION" if is_service else "QTY"
+    _h_qty = "QTY" if is_service else "QTY"
     _h_price = "RATE" if is_service else "UNIT PRICE"
-    rows = [[Paragraph("#", head_l), Paragraph(_h_desc, head_l),
-             Paragraph(_h_qty, head_r), Paragraph(_h_price, head_r), Paragraph("AMOUNT", head_r)]]
+    _head = [Paragraph("#", head_l), Paragraph(_h_desc, head_l),
+             Paragraph(_h_qty, head_r), Paragraph(_h_price, head_r)]
+    if is_service:
+        _head.append(Paragraph("DURATION", head_r))
+    _head.append(Paragraph("AMOUNT", head_r))
+    rows = [_head]
 
     title_st = _ps("itTitle", 13, HEADING, ARCH_SB, leading_mult=1.3)
     sub_st = _ps("itSub", 12.5, MUTED8, leading_mult=1.28)
@@ -1549,14 +1582,15 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         if mk == "band":
             band_row_idx.append(len(rows))
             span_rows.append((len(rows), "band"))
-            rows.append([_GroupBand(sum(col_w), it.get("_title"), it.get("_tag"), th),
-                         "", "", "", ""])
+            rows.append([_GroupBand(sum(col_w), it.get("_title"), it.get("_tag"), th)]
+                        + [""] * (_NC - 1))
             continue
         if mk == "banner":
             span_rows.append((len(rows), "banner"))
             rows.append([Paragraph(
                 "<b>ALTERNATIVE OFFERS</b> &nbsp;— the options below are alternatives; "
-                "please select one. Prices are not cumulative.", alt_banner_st), "", "", "", ""])
+                "please select one. Prices are not cumulative.", alt_banner_st)]
+                + [""] * (_NC - 1))
             continue
         if mk == "subtotal":
             k = it.get("_key")
@@ -1571,7 +1605,8 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             rows.append([Paragraph(
                 f"Total (VAT Excl.) PHP {_fmt(g_ex)} &nbsp;·&nbsp; VAT (12%) PHP {_fmt(g_vat)}"
                 f" &nbsp;·&nbsp; <font color='{_hx(ACCENT_DARK)}'>Total (VAT Inc.) "
-                f"PHP {_fmt(g_ex + g_vat)}</font>", alt_sub_st), "", "", "", ""])
+                f"PHP {_fmt(g_ex + g_vat)}</font>", alt_sub_st)]
+                + [""] * (_NC - 1))
             continue
         no = it.get("item_no")
         name = str(it.get("product_name") or "").strip()
@@ -1654,8 +1689,21 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
         # representable, so 1.5 still reads 1.5. The supply column keeps its fixed one decimal.
         _qv = float(it.get('quantity') or 0)
         _qtxt = (f"{_qv:g}" if is_service else f"{_qv:.1f}")
+        # A282 — on a hire document QTY is how many TOOLS, so the unit under it is pc(s), not the
+        # rate basis. The basis belongs to the RATE ("/ DAY") and to the DURATION cell beside it;
+        # printing "DAYS" under the quantity was what made two wrenches for a week unsayable.
+        _q_unit = "pc(s)" if is_service else str(it.get("uom") or "pc(s)")
         qty_cell = [Paragraph(_qtxt, qty_st),
-                    Paragraph(str(it.get("uom") or "pc(s)"), uom_st)]
+                    Paragraph(_q_unit, uom_st)]
+        dur_cell = ""
+        if is_service:
+            _dv = float(it.get("duration") or 1)
+            _basis = _RATE_BASIS.get(str(it.get("uom") or "").strip().upper().rstrip("."))
+            # A flat charge (LOT, PC) has no duration to state — an em-dash says "not applicable"
+            # where a "1" would invite the reader to look for the unit it counts.
+            dur_cell = ([Paragraph(f"{_dv:g}", qty_st),
+                         Paragraph(_basis + ("S" if _dv != 1 else ""), uom_st)]
+                        if _basis else Paragraph("&mdash;", qty_st))
         _k = _opt_key(it)
         if _k:
             idx_cell = Paragraph(
@@ -1680,10 +1728,11 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                 # about the package and cannot be misread as a price for either column alone. Navy
                 # and letter-spaced, the same type key as the group titles, so it groups with the
                 # structural labels rather than with the numbers.
-                incl_spans.append(("SPAN", (3, len(rows)), (4, len(rows))))
+                incl_spans.append(("SPAN", (_C_PRICE, len(rows)), (_C_AMT, len(rows))))
                 price_cell = _Tracked(th.incl, QUO_INCLUDED_WORD,
-                                      col_w[3] + col_w[4] - 16 * PX, align="center")
+                                      sum(col_w[_C_PRICE:]) - 16 * PX, align="center")
                 amount_cell = ""
+                dur_cell = ""
             else:
                 price_cell = Paragraph("&mdash;", price_st)
                 amount_cell = Paragraph("&mdash;", amt_st)
@@ -1698,7 +1747,13 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                     price_cell = [price_cell, Paragraph(_esc(_per), uom_st)]
         if th.bands and _grp_of(it):
             member_row_idx.append(len(rows))
-        rows.append([idx_cell, desc_cell, qty_cell, price_cell, amount_cell])
+        # A282 — the DURATION cell sits between the rate and the amount, and prints the rate's own
+        # unit under it ("7" over "DAYS") so the multiplication on the line is readable end to end.
+        _row = [idx_cell, desc_cell, qty_cell, price_cell]
+        if is_service:
+            _row.append(dur_cell)
+        _row.append(amount_cell)
+        rows.append(_row)
 
         # A213 — the scope of supply hangs off the FIRST base item, right under its description.
         # Appended INSIDE this loop on purpose: span_rows records `len(rows)` as it goes, so rows
@@ -1737,12 +1792,12 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
             own[-1] = list(own[-1]) + [Spacer(1, 3 * PX)]
             for cell in own:
                 scope_row_idx.append(len(rows))
-                rows.append(["", cell, "", "", ""])
+                rows.append(["", cell] + [""] * (_NC - 2))
 
         if scope_rows_pending and not _k:
             for cell in scope_rows_pending:
                 scope_row_idx.append(len(rows))
-                rows.append(["", cell, "", "", ""])
+                rows.append(["", cell] + [""] * (_NC - 2))
             scope_rows_pending = None
 
     # A240 — THE RECONCILING NOTE. Without it the visible lines do not add up to the total and
@@ -1760,7 +1815,7 @@ def build_quotation_pdf_bytes(items, images, client_details, terms_and_condition
                                          % ("s" if len(hidden_nos) > 1 else "",
                                             _number_span(hidden_nos),
                                             "are" if len(hidden_nos) > 1 else "is")), note_st),
-                          Spacer(1, 3 * PX)], "", "", ""])
+                          Spacer(1, 3 * PX)]] + [""] * (_NC - 2))
 
     items_tbl = Table(rows, colWidths=col_w, repeatRows=1)
     # Header: ONE continuous blue→red fade across all columns — each cell gets a horizontal

@@ -47,10 +47,13 @@ def ok(label, cond, extra=None):
         print("  FAIL " + label + ("" if extra is None else "\n         " + repr(extra)[:300]))
 
 
-def line(no, name, qty, price, uom, kind):
+def line(no, name, qty, price, uom, kind, duration=None):
     return {"itemNo": no, "itemName": name, "description": name, "qty": qty, "price": price,
             "uom": uom, "chargeKind": kind, "rateBasis": uom, "scope": "", "blocks": [],
-            "hidePrice": False, "group": "", "optionNo": "", "imageDataUrl": ""}
+            "hidePrice": False, "group": "", "optionNo": "", "imageDataUrl": "",
+            # A282 — how long, as opposed to how many. Absent means one rate-unit, which is what
+            # every caller that predates it sends and is why those documents did not move.
+            "duration": duration}
 
 
 BASE = {
@@ -98,8 +101,9 @@ svc = dict(BASE); svc["docType"] = "Service"
 data, t, flat = render(svc)
 ok("the route answers with a PDF", len(data) > 50000, len(data))
 ok("titled SERVICE QUOTATION — the route passes doc_type at last", "SERVICE QUOTATION" in t, t[:160])
-ok("the columns ask DURATION and RATE", "DURATION" in t and "RATE" in t)
-ok("  and never QTY / UNIT PRICE", "UNIT PRICE" not in t)
+# A282 — SIX columns on a hire: QTY (how many tools), RATE, DURATION (for how long), AMOUNT.
+ok("the columns ask QTY, RATE and DURATION", all(h in t for h in ("QTY", "RATE", "DURATION")))
+ok("  and never UNIT PRICE — a hire quotes a rate", "UNIT PRICE" not in t)
 ok("a day rate prints its per-unit", "/ DAY" in t)
 ok("  a manday rate its own", "/ MANDAY" in t)
 ok("  and a LOT charge prints NONE — it is a flat fee, not a rate to multiply", "/ LOT" not in t)
@@ -161,6 +165,47 @@ sdep = dict(BASE); sdep["items"] = dep["items"]        # no docType -> supply
 _, tsd, _ = render(sdep)
 ok("VAT 25,200 on the full 210,000", "25,200.00" in tsd, tsd[-500:])
 ok("  the row keeps its plain label", "12% on PHP" not in " ".join(tsd.split()))
+
+print("\n== A282: TWO wrenches for SEVEN days — a hire has two multipliers ==")
+# The gap this closes: A276 put the duration in the quantity column, so "qty 7" meant seven days of
+# ONE tool and a second wrench could not be quoted at all. Qty is now how many tools, Duration is
+# for how long, and the amount is the product of the three.
+two = dict(BASE); two["docType"] = "Service"
+two["items"] = [
+    line("HTW-3000", "HYDRAULIC TORQUE WRENCH, 3000 Nm", 2, 8500, "DAYS", "Rental", 7),
+    line("OPR", "CERTIFIED OPERATOR on site", 1, 4500, "MANDAYS", "Operator", 7),
+    line("MOB", "MOBILIZATION and DEMOBILIZATION", 1, 15000, "LOT", "Mobilization"),
+    line("DEP", "REFUNDABLE SECURITY DEPOSIT", 2, 10000, "LOT", "Deposit"),
+]
+# 2 x 8,500 x 7 = 119,000 | 1 x 4,500 x 7 = 31,500 | 15,000 flat | 2 x 10,000 deposit = 20,000
+# subtotal 185,500, VAT on 165,500 = 19,860, total 205,360.
+_, t2d, flat2d = render(two)
+ok("two wrenches at a day rate bill for seven days", "119,000.00" in t2d, t2d[:900])
+ok("  one operator for seven mandays", "31,500.00" in t2d)
+ok("  a LOT charge is flat — it is NOT multiplied by the hire's length", "15,000.00" in t2d)
+ok("  and neither is the deposit: 2 tools x 10,000, not x 7 days", "20,000.00" in t2d)
+ok("subtotal 185,500", "185,500.00" in t2d, t2d[-600:])
+ok("  VAT 19,860 — 12% of the 165,500 that is revenue", "19,860.00" in t2d, t2d[-600:])
+ok("  total 205,360", "205,360.00" in t2d, t2d[-600:])
+_f2 = " ".join(t2d.split())
+ok("the DURATION column states the span", "7 DAYS" in _f2 or "7" in _f2)
+ok("  a flat line's duration is an em-dash, not a 1 to be multiplied", "\u2014" in t2d)
+
+print("\n-- a duration is only ever applied to a rate per unit of TIME --")
+for uom, dur, want in [("DAYS", 5, 50000), ("WEEKS", 2, 20000), ("HOURS", 3, 30000),
+                       ("LOT", 5, 10000), ("PC(S)", 5, 10000), ("DAYS", 0, 10000),
+                       ("DAYS", None, 10000)]:
+    p1 = dict(BASE); p1["docType"] = "Service"
+    p1["items"] = [line("X", "ONE LINE", 1, 10000, uom, "Rental", dur)]
+    _, tt, _ = render(p1)
+    ok("%-6s x %-4s -> %s" % (uom, dur, "{:,.2f}".format(want)), "{:,.2f}".format(want) in tt, tt[:400])
+
+print("\n-- and a SUPPLY quotation never spans, whatever it is sent --")
+psup = dict(BASE)
+psup["items"] = [line("X", "ONE LINE", 2, 10000, "DAYS", "", 7)]
+_, tsup, _ = render(psup)
+ok("2 x 10,000 = 20,000, the duration ignored", "20,000.00" in tsup, tsup[:400])
+ok("  and 140,000 appears nowhere", "140,000.00" not in tsup)
 
 out = os.environ.get("SVC_PDF_OUT")
 if out:

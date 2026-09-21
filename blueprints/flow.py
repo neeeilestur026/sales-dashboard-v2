@@ -18,7 +18,8 @@ import requests as http_requests
 from flask import Blueprint, request, jsonify, make_response
 from PyPDF2 import PdfReader, PdfWriter
 
-from pdf_generators.flow_quotation_pdf import build_quotation_pdf_bytes, build_summary_table, _norm_bullets
+from pdf_generators.flow_quotation_pdf import (build_quotation_pdf_bytes, build_summary_table,
+                                              rate_span, _norm_bullets)
 from pdf_generators.quotation_parser import parse_quotation_pdf
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
@@ -211,6 +212,11 @@ def quotation_pdf():
     # This is the THIRD total engine (after FlowAPI.gs and flow-api.js) and the only one whose output
     # is printed on the document the client receives — so getting it wrong here is the version of
     # this bug that actually reaches them.
+    # A282 — needed ABOVE the item loop; the full _doc_type resolution is below, beside the terms.
+    # Only a HIRE document spans a line by a duration. A rep who builds a hire and then switches the
+    # type back to Supply leaves a rate basis on the rows, and without this gate the totals would go
+    # on multiplying on a document that no longer has a duration column to show for it.
+    _is_svc = _s(data.get("docType")).strip().lower() == "service"
     items, images, total_ex_vat = [], {}, 0.0
     for idx, it in enumerate(raw_items, start=1):
         # A173: a non-dict entry used to raise AttributeError HERE, outside the try that wraps the
@@ -219,13 +225,23 @@ def quotation_pdf():
             logger.warning("quotation_pdf: skipping non-dict item at position %s", idx)
             continue
         qty, price = _num(it.get("qty")), _num(it.get("price"))
+        # A282 — A HIRE HAS TWO MULTIPLIERS: how many tools (qty) and for how long (duration). The
+        # span is 1 on anything whose rate is not per unit of TIME — a supply line, a mobilization
+        # per LOT, a refundable deposit — so every existing document computes qty * price exactly as
+        # it did. `rate_span` is the renderer's own function, shared so the "/ DAY" suffix and the
+        # arithmetic can never disagree about which rates are spanned.
+        # THE RATE BASIS, never the UOM: they carry the same word on a hire line, but a supply line
+        # has a UOM and no basis, and one whose unit read "DAYS" would otherwise be spanned.
+        _span = rate_span(it.get("rateBasis"), it.get("duration")) if _is_svc else 1.0
         items.append({
             "item_no": idx,
             "product_name": _s(it.get("itemName") or it.get("itemNo")),
             "product_code": _s(it.get("itemNo")),
             "quantity": qty,
             "total_amount": price,
-            "total_unit_price": qty * price,
+            "total_unit_price": qty * price * _span,
+            # A282 — printed as its own DURATION column on a hire document.
+            "duration": _span,
             "description": _s(it.get("description")),
             "uom": _s(it.get("uom")),   # A147: carry the real unit (from the PR) so it isn't forced to "pc(s)"
             # requested-vs-offered (A86): the client's ORIGINAL code/description when admin

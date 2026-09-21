@@ -22,18 +22,25 @@ const eq = (l, got, want) => ok(l + ' = ' + JSON.stringify(want),
   (typeof got === 'number' && typeof want === 'number') ? Math.abs(got - want) < 0.005 : got === want, { got, want });
 const sec = (t) => console.log('\n== ' + t + ' ==');
 
-/* Exactly what qcFinalize builds for a service quotation — the field names and nothing else. */
+/* Exactly what qcFinalize builds for a service quotation — the field names and nothing else.
+ *
+ * A282 — QTY IS HOW MANY TOOLS AND DURATION IS HOW LONG. A276 wrote both as the same number, so
+ * these same five lines used to read "qty 7" for seven days of one wrench; a hire of TWO wrenches
+ * had no spelling at all. The money is deliberately unchanged from the A276 sample (190,000 of
+ * revenue plus a 20,000 deposit) so every assertion downstream still means what it meant — what
+ * moved is that the 7 now lives in the field named for it, and section 7 below hires two. */
 const ITEMS = [
-  { itemNo: 'HTW-3000', itemName: 'HYDRAULIC TORQUE WRENCH, 3000 Nm', qty: 7, price: 8500,
+  { itemNo: 'HTW-3000', itemName: 'HYDRAULIC TORQUE WRENCH, 3000 Nm', qty: 1, price: 8500,
     uom: 'DAYS', chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, lineKey: 'k1', optionNo: '' },
-  { itemNo: 'HP-700', itemName: 'ELECTRIC HYDRAULIC PUMP', qty: 7, price: 12000,
+  { itemNo: 'HP-700', itemName: 'ELECTRIC HYDRAULIC PUMP', qty: 1, price: 12000,
     uom: 'DAYS', chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, lineKey: 'k2', optionNo: '' },
-  { itemNo: 'OPR', itemName: 'CERTIFIED OPERATOR on site', qty: 7, price: 4500,
+  { itemNo: 'OPR', itemName: 'CERTIFIED OPERATOR on site', qty: 1, price: 4500,
     uom: 'MANDAYS', chargeKind: 'Operator', rateBasis: 'MANDAYS', duration: 7, lineKey: 'k3', optionNo: '' },
+  // A flat fee and a per-tool deposit: neither has a TIME basis, so neither is multiplied by 7.
   { itemNo: 'MOB', itemName: 'MOBILIZATION and DEMOBILIZATION', qty: 1, price: 15000,
-    uom: 'LOT', chargeKind: 'Mobilization', rateBasis: 'LOT', duration: 1, lineKey: 'k4', optionNo: '' },
+    uom: 'LOT', chargeKind: 'Mobilization', rateBasis: 'LOT', duration: '', lineKey: 'k4', optionNo: '' },
   { itemNo: '', itemName: 'Refundable security deposit', qty: 1, price: 20000,
-    uom: 'LOT', chargeKind: 'Deposit', rateBasis: 'LOT', duration: 1, lineKey: 'k5', optionNo: '' },
+    uom: 'LOT', chargeKind: 'Deposit', rateBasis: 'LOT', duration: '', lineKey: 'k5', optionNo: '' },
 ];
 const jsum = (store, acct, side) => (store.Journal || [])
   .filter(r => String(r['Account Code']) === acct)
@@ -131,8 +138,14 @@ sec('5 · what the client was quoted is what the client is billed');
    prints on the PDF (service_quotation_route.py). If any of the three drifts, the client holds a
    document promising one number while the receivable demands another — which is exactly what this
    whole appendix is about. */
-const qGross = ITEMS.reduce((s2, i) => s2 + i.qty * i.price, 0);
-const qVat = ITEMS.filter(i => i.chargeKind !== 'Deposit').reduce((s2, i) => s2 + i.qty * i.price, 0) * 0.12;
+/* A282 — spelled out with the span, because that IS the arithmetic now: how many x the rate x how
+   long, and only on a rate per unit of TIME. Written by hand here rather than imported so the test
+   asserts the rule rather than re-running the implementation. */
+const TIME = { DAYS: 1, WEEKS: 1, MONTHS: 1, HOURS: 1, MANDAYS: 1, SHIFTS: 1 };
+const span = i => (TIME[i.rateBasis] && Number(i.duration) > 0) ? Number(i.duration) : 1;
+const amt = i => i.qty * i.price * span(i);
+const qGross = ITEMS.reduce((s2, i) => s2 + amt(i), 0);
+const qVat = ITEMS.filter(i => i.chargeKind !== 'Deposit').reduce((s2, i) => s2 + amt(i), 0) * 0.12;
 eq('the quotation subtotal', qGross, 210000);
 eq('  its VAT excludes the deposit', qVat, 22800);
 eq('  so the quotation says 232,800', qGross + qVat, 232800);
@@ -162,7 +175,7 @@ eq('  typed as a supply quotation', String(row451()['Type'] || ''), '');
 call(ctx, 'updateQuotation', Object.assign({
   quotationNo: '2026-451-NE', customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-21',
   quoteType: 'Service', serviceKind: 'Tool rental',
-  items: JSON.stringify([{ itemNo: 'HTW-3000', itemName: 'WRENCH', qty: 7, price: 8500,
+  items: JSON.stringify([{ itemNo: 'HTW-3000', itemName: 'WRENCH', qty: 1, price: 8500,
                            chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, lineKey: 'x1' }])
 }, REP));
 eq('the correction lands', String(row451()['Type']), 'Service');
@@ -170,7 +183,7 @@ eq('  with its service kind', String(row451()['Service Kind']), 'Tool rental');
 /* A174 — an unsent field is left alone. A layout-only save, or any older caller, must not blank it. */
 call(ctx, 'updateQuotation', Object.assign({
   quotationNo: '2026-451-NE', customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-21',
-  items: JSON.stringify([{ itemNo: 'HTW-3000', itemName: 'WRENCH', qty: 7, price: 9000,
+  items: JSON.stringify([{ itemNo: 'HTW-3000', itemName: 'WRENCH', qty: 1, price: 9000,
                            chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, lineKey: 'x1' }])
 }, REP));
 eq('an edit that does not mention the type leaves it alone', String(row451()['Type']), 'Service');
@@ -183,6 +196,67 @@ call(ctx, 'updateQuotation', Object.assign({
 }, REP));
 eq('correcting it back to a supply quotation clears the type', String(row451()['Type'] || ''), '');
 eq('  and the service kind with it', String(row451()['Service Kind'] || ''), '');
+
+/* ── 7 · TWO wrenches for SEVEN days — the hire A276 could not express ─────────────────────── */
+sec('7 · two tools, one week — qty and duration are different numbers');
+/* THE WHOLE POINT OF A282. With the duration in the quantity column, "qty 7" meant seven days of
+   ONE wrench and a second tool could only be quoted by inventing a second line or doubling a rate
+   the client can check against the market. Now the two numbers are separate all the way to the
+   receivable, and the deposit — which is per TOOL, not per day — doubles while the mobilization,
+   which is one flat trip however long the tools are out, does not. */
+const { ctx: c2, store: s2 } = boot();
+const TWO = [
+  { itemNo: 'HTW-3000', itemName: 'HYDRAULIC TORQUE WRENCH, 3000 Nm', qty: 2, price: 8500,
+    uom: 'DAYS', chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, lineKey: 't1', optionNo: '' },
+  { itemNo: 'OPR', itemName: 'CERTIFIED OPERATOR on site', qty: 1, price: 4500,
+    uom: 'MANDAYS', chargeKind: 'Operator', rateBasis: 'MANDAYS', duration: 7, lineKey: 't2', optionNo: '' },
+  { itemNo: 'MOB', itemName: 'MOBILIZATION and DEMOBILIZATION', qty: 1, price: 15000,
+    uom: 'LOT', chargeKind: 'Mobilization', rateBasis: 'LOT', duration: '', lineKey: 't3', optionNo: '' },
+  { itemNo: '', itemName: 'Refundable security deposit', qty: 2, price: 10000,
+    uom: 'LOT', chargeKind: 'Deposit', rateBasis: 'LOT', duration: '', lineKey: 't4', optionNo: '' },
+];
+// 2 x 8,500 x 7 = 119,000 | 1 x 4,500 x 7 = 31,500 | 15,000 flat | 2 x 10,000 = 20,000 deposit
+const q2 = call(c2, 'createQuotation', Object.assign({
+  quotationNo: '2026-460-NE', customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-21',
+  quoteType: 'Service', serviceKind: 'Tool rental', items: JSON.stringify(TWO)
+}, ADMIN));
+ok('the quotation is created', q2.success === true, q2);
+const r460 = s2.Quotations.filter(r => String(r['Quotation No']) === '2026-460-NE')[0];
+eq('stored Total is 185,500 — two wrenches for a week, not one', Number(r460['Total']), 185500);
+const l460 = k => s2.QuotationItems.filter(r => String(r['Line Key']) === k)[0];
+eq('the wrench line: 2 x 8,500 x 7', Number(l460('t1')['Line Total']), 119000);
+eq('  qty says TWO', Number(l460('t1')['Quoted Qty']), 2);
+eq('  and duration says SEVEN — two different numbers at last', Number(l460('t1')['Duration']), 7);
+eq('the operator: 1 x 4,500 x 7 mandays', Number(l460('t2')['Line Total']), 31500);
+eq('mobilization is ONE trip, not seven', Number(l460('t3')['Line Total']), 15000);
+eq('the deposit is per TOOL: 2 x 10,000', Number(l460('t4')['Line Total']), 20000);
+ok('  and not per day — 140,000 appears nowhere', Number(l460('t4')['Line Total']) !== 140000);
+
+const so2 = call(c2, 'createSalesOrder', Object.assign({
+  quotationNo: '2026-460-NE', customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-22',
+  items: JSON.stringify(TWO)
+}, ADMIN));
+eq('the sales order carries the same total', Number(s2.SalesOrders[0]['Total']), 185500);
+eq('  and the line its duration', Number(s2.SalesOrderItems[0]['Duration']), 7);
+
+const before2 = Number(s2.Inventory[0]['Available Balance']);
+call(c2, 'createInvoice', Object.assign({
+  soNo: so2.soNo, customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-30', confirmNoDocs: true,
+  items: JSON.stringify(TWO)
+}, ADMIN));
+eq('the invoice bills 165,500 of revenue', Number(s2.Invoices[0]['Total Sales']), 165500);
+eq('  and holds 20,000 of deposit', Number(s2.Invoices[0]['Total Deposit']), 20000);
+eq('VAT on the revenue only: 19,860', jsum(s2, '2200', 'cr'), 19860);
+eq('the receivable is 205,360', Number(s2.ARAging[0]['Amount (PHP)']), 205360);
+eq('  which is exactly what the quotation said', Number(s2.ARAging[0]['Amount (PHP)']),
+   185500 + Math.round((185500 - 20000) * 0.12 * 100) / 100);
+/* Still the A276 guarantee: hiring two wrenches removes neither from stock. */
+eq('stock is untouched — two tools hired, none sold', Number(s2.Inventory[0]['Available Balance']), before2);
+eq('  and no cost of sale is booked', jsum(s2, '5000', 'dr'), 0);
+eq('the invoice line stores its span so the total can be checked', Number(s2.InvoiceItems[0]['Duration']), 7);
+eq('  beside the charge kind', String(s2.InvoiceItems[0]['Charge Kind']), 'Rental');
+eq('  and the deposit line is marked as one', String(s2.InvoiceItems[3]['Charge Kind']), 'Deposit');
+eq('    with no duration to multiply', String(s2.InvoiceItems[3]['Duration'] || ''), '');
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));
 process.exit(FAIL ? 1 : 0);

@@ -232,6 +232,7 @@ console.log('\n== the money-bearing widths ==');
  ['SalesOrders', 14, 'A276 appended Type + Service Kind — createInvoice reads Type to know a hire from a sale'],
  ['SalesOrderItems', 10, 'A276 appended Charge Kind + Rate Basis + Duration'],
  ['QuotationItems', 16, 'A276 appended Charge Kind + Rate Basis + Duration'],
+ ['InvoiceItems', 12, 'A282 appended Charge Kind + Rate Basis + Duration — a hire line is qty x rate x DURATION and Line Sales alone cannot be checked against Qty and Selling Price'],
  ['Invoices', 13, 'A278 appended VAT Rate + VAT — Total Sales stays NET (revenue); the RECEIVABLE and the GL carry the gross'],
  ['PricingRequestItems', 19, 'A242 appended Quoted On'],
  ['PaymentRequests', 41, ''], ['PurchaseOrders', 17, ''], ['APAging', 13, ''],

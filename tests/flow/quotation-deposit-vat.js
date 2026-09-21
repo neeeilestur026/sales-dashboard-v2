@@ -103,5 +103,40 @@ ok('every key the renderer already used survives',
    ['gross', 'pct', 'discount', 'net', 'vat', 'grand', 'opt', 'groups', 'rec'].every(k => k in t),
    Object.keys(t));
 
+sec('8 · A282 — qty is how many, duration is how long');
+/* A276 put the duration in the quantity column, so the form could quote seven days of ONE wrench
+   and had no way at all to say "two wrenches for a week". The screen must now agree with the PDF
+   (service_quotation_route.py) and the receivable (service-quotation-chain.js) on all three
+   numbers, and only a rate per unit of TIME is ever multiplied by a duration. */
+const HIRE = [
+  { itemNo: 'HTW', qty: 2, price: 8500, chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, optionNo: '', lineKey: 'h1' },
+  { itemNo: 'OPR', qty: 1, price: 4500, chargeKind: 'Operator', rateBasis: 'MANDAYS', duration: 7, optionNo: '', lineKey: 'h2' },
+  { itemNo: 'MOB', qty: 1, price: 15000, chargeKind: 'Mobilization', rateBasis: 'LOT', duration: '', optionNo: '', lineKey: 'h3' },
+  { itemNo: 'DEP', qty: 2, price: 10000, chargeKind: 'Deposit', rateBasis: 'LOT', duration: '', optionNo: '', lineKey: 'h4' },
+];
+t = totals(HIRE);
+eq('two wrenches for seven days: 2 x 8,500 x 7',
+   totals([HIRE[0]]).gross, 119000);            // the line the whole change exists for
+eq('subtotal 185,500', t.gross, 185500);
+eq('  the deposit doubles with the TOOLS: 2 x 10,000', t.deposit, 20000);
+eq('  and is not multiplied by the week', t.vatBase, 165500);
+eq('VAT 19,860', t.vat, 19860);
+eq('  grand 205,360 — the same figure the invoice raises', t.grand, 205360);
+
+sec('9 · only a rate per unit of TIME is spanned');
+for (const [basis, dur, want] of [['DAYS', 5, 50000], ['WEEKS', 2, 20000], ['HOURS', 3, 30000],
+                                  ['MANDAYS', 4, 40000], ['SHIFTS', 2, 20000],
+                                  ['LOT', 5, 10000], ['PC(S)', 5, 10000],
+                                  ['DAYS', 0, 10000], ['DAYS', '', 10000], ['', 5, 10000]]) {
+  t = totals([{ itemNo: 'X', qty: 1, price: 10000, chargeKind: 'Rental', rateBasis: basis, duration: dur, optionNo: '', lineKey: 'z' }]);
+  eq((basis || '(none)') + ' x ' + (dur === '' ? "''" : dur), t.gross, want);
+}
+
+sec('10 · a SUPPLY quotation never spans, whatever the line carries');
+t = totals([{ itemNo: 'X', qty: 2, price: 10000, chargeKind: 'Rental', rateBasis: 'DAYS', duration: 7, optionNo: '', lineKey: 'z' }],
+           { type: 'Supply' });
+eq('2 x 10,000, the duration ignored', t.gross, 20000);
+ok('  and 140,000 appears nowhere near it', t.grand !== 140000 * 1.12);
+
 console.log('\n' + (FAIL ? FAIL + ' FAILURE(S) of ' + N : 'all ok (' + N + ')'));
 process.exit(FAIL ? 1 : 0);
