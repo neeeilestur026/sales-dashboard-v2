@@ -2328,8 +2328,13 @@ function openDeductionModal(dedNo) {
                  <td><button class="btn-sm" onclick="sdVoidPosting('${esc(pg.postingId)}')">Void</button></td></tr>`).join('')}
             </tbody></table></div>` : ''}
       ` : ''}
+      ${d && d.skipPeriods ? `<div style="margin:.5rem 0;padding:.5rem .7rem;border-radius:8px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:.8rem;">
+        <strong>Sitting out:</strong> ${esc(String(d.skipPeriods).split(',').map(x => _sdLabel(x.trim())).join(' · '))}
+        <div style="font-size:.72rem;opacity:.85;margin-top:.15rem;">Nothing is collected on these cutoffs. The balance is unchanged — collection resumes on the next one.</div>
+      </div>` : ''}
       <div class="modal-actions">
         ${d && d.status === 'Draft' ? `<button class="btn-sm primary" onclick="sdActivate('${esc(d.deductionNo)}')">Activate</button>` : ''}
+        ${d && d.status === 'Active' ? `<button class="btn-sm" onclick="sdSkipCutoff('${esc(d.deductionNo)}')">Skip a cutoff…</button>` : ''}
         ${d && d.status === 'Active' ? `<button class="btn-sm" onclick="sdCancel('${esc(d.deductionNo)}')">Stop collecting</button>` : ''}
         <span style="flex:1;"></span>
         <button class="btn-sm" onclick="closeDeductionModal()">Close</button>
@@ -2463,6 +2468,36 @@ async function sdActivate(dedNo) {
   if (!res.success) { alert(res.message || 'Could not activate.'); return; }
   await loadSalaryDeductions();
   openDeductionModal(dedNo);
+}
+
+/* A284 — SIT ONE CUTOFF OUT. Deliberately not "stop collecting": the agreement stays Active, the
+   rate is untouched, and collection resumes by itself on the next cutoff. The case it was built for
+   is a monthly figure entered as a per-cutoff rate, so one cutoff took a whole month and the next
+   one is already paid for. Cancelling instead would be irreversible — handleActivateSalaryDeduction
+   refuses a Cancelled record — and would leave the balance stranded as a receivable. */
+async function sdSkipCutoff(dedNo) {
+  const d = _deductions.filter(x => x.deductionNo === dedNo)[0];
+  const already = d && d.skipPeriods ? String(d.skipPeriods).split(',').map(x => x.trim()).filter(Boolean) : [];
+  let cur = (typeof flowCutoffKeyFor === 'function') ? flowCutoffKeyFor(new Date()) : '';
+  if (!cur) {
+    const now = new Date();
+    cur = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-A';
+  }
+  const period = prompt('Which cutoff should ' + dedNo + ' sit out?\n\n' +
+    'Use the cutoff key, e.g. ' + cur + ' (A = 1st cutoff, B = 2nd).\n' +
+    (already.length ? '\nAlready sitting out: ' + already.join(', ') + '\n' : '') +
+    '\nNothing is collected that cutoff. The balance does not change and collection resumes on the next one.',
+    cur);
+  if (period === null) return;
+  const key = String(period).trim().toUpperCase();
+  if (!key) return;
+  const putBack = already.indexOf(key) !== -1;
+  if (putBack && !confirm(key + ' is already being skipped.\n\nCollect it again?')) return;
+  const res = await apiSkipSalaryDeductionCutoff(dedNo, key, !putBack);
+  if (!res.success) { alert(res.message || 'Could not change that cutoff.'); return; }
+  await loadSalaryDeductions();
+  closeDeductionModal();
+  alert(res.message || 'Updated.');
 }
 
 async function sdCancel(dedNo) {

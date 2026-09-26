@@ -417,5 +417,120 @@ section('15 · the build answers which build it is');
   ok('  and confirms salary deductions are in this build', body.hasSalaryDeductions === true);
 }
 
+
+// ─────────────────────────────────────────────────────────────
+section('A284 · sitting ONE cutoff out, and carrying on');
+/* The real case this was built for, DED-202609-002: 2,916 was a MONTHLY figure that got entered as
+   the per-CUTOFF rate, so the 1st September cutoff took a whole month in one go. The correction is
+   not a refund and not a cancellation — the right money has been collected, just early. September's
+   2nd cutoff sits out, the rate drops to 1,458, and collection resumes in October. */
+{
+  const ctx = boot();
+  const no = agree(ctx, { totalAmount: 34995, perCutoffAmount: 2916, cadence: 'Every Cutoff',
+                          startPeriod: '2026-09-A' });
+  runCutoff(ctx, '2026-09-A', 20000);
+  eq('the 1st cutoff collected a whole month at once', readReg(ctx, '2026-09-A').salaryDeduction, 2916);
+
+  // The correction: halve the rate, and sit out the cutoff the money already covered.
+  const edit = ctx.handleSaveSalaryDeduction({ token: TOKEN, deductionNo: no, employee: EMP,
+    username: 'gerald.l', item: 'Lenovo laptop', totalAmount: 34995, perCutoffAmount: 1458,
+    cadence: 'Every Cutoff', startPeriod: '2026-09-A' });
+  ok('the rate can be corrected on an ACTIVE deduction', edit.success === true, edit);
+
+  const skip = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-09-B' });
+  ok('the 2nd cutoff can be skipped', skip.success === true, skip);
+  ok('  and says collection resumes', /resumes/i.test(skip.message || ''), skip);
+
+  saveReg(ctx, '2026-09-B', 20000);
+  eq('the skipped cutoff collects NOTHING', readReg(ctx, '2026-09-B').salaryDeduction, 0);
+  runCutoff(ctx, '2026-09-B', 20000);
+
+  saveReg(ctx, '2026-10-A', 20000);
+  eq('October resumes by itself, at the corrected rate', readReg(ctx, '2026-10-A').salaryDeduction, 1458);
+
+  /* The card must not announce a collection on a cutoff that will take nothing. */
+  const card = paidRemaining(ctx, no);
+  ok('the card records which cutoff is being sat out', String(card.skipPeriods).indexOf('2026-09-B') !== -1, card);
+
+  /* Nothing is forgiven. A skip moves WHEN the money is taken, never how much is owed. */
+  const bal = paidRemaining(ctx, no);
+  eq('only the September collection counts as paid', bal.paid, 2916);
+  eq('  and the balance is the whole rest of it', bal.remaining, 34995 - 2916);
+  ok('  the deduction is still Active', bal.status === 'Active', bal);
+}
+
+section('A284 · the projection skips what the schedule skips');
+{
+  const ctx = boot();
+  const no = agree(ctx, { totalAmount: 10000, perCutoffAmount: 1000, cadence: 'Every Cutoff',
+                          startPeriod: '2026-09-A' });
+  eq('next collection is the start period', paidRemaining(ctx, no).nextPeriod, '2026-09-A');
+
+  ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-09-A' });
+  eq('sitting out the first cutoff moves NEXT to the one after', paidRemaining(ctx, no).nextPeriod, '2026-09-B');
+
+  ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-09-B' });
+  eq('  and sitting out both moves it into October', paidRemaining(ctx, no).nextPeriod, '2026-10-A');
+
+  /* Ten instalments of 1,000 starting 2026-10-A run to 2027-02-B; the two skipped September cutoffs
+     push the END out rather than shortening the schedule, because nothing was forgiven. */
+  const proj = paidRemaining(ctx, no);
+  eq('the schedule still has all ten instalments', proj.instalmentsLeft, 10);
+  eq('  and ends after them, not sooner', proj.projectedEndPeriod, '2027-02-B');
+}
+
+section('A284 · a skip can never rewrite money that has already moved');
+{
+  const ctx = boot();
+  const no = agree(ctx, { totalAmount: 10000, perCutoffAmount: 1000, cadence: 'Every Cutoff',
+                          startPeriod: '2026-09-A' });
+  runCutoff(ctx, '2026-09-A', 20000);
+
+  const late = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-09-A' });
+  ok('skipping a COLLECTED cutoff is refused', late.success === false, late);
+  ok('  and points at the void, which leaves a trace', /void/i.test(late.message || ''), late);
+  eq('  the collected cutoff still reads what it collected', readReg(ctx, '2026-09-A').salaryDeduction, 1000);
+
+  /* The trap this placement avoids: moving Start Period forward would have hidden the posting above
+     from the register read, because that test runs before the posted-period mirror. */
+  const lines = readReg(ctx, '2026-09-A').salaryDeductionLines || [];
+  ok('  and the payslip still itemises it', lines.length === 1 && Math.abs(lines[0].amount - 1000) < 0.005, lines);
+}
+
+section('A284 · the guard rails');
+{
+  const ctx = boot();
+  const no = agree(ctx, { totalAmount: 10000, perCutoffAmount: 1000, cadence: 'Every Cutoff',
+                          startPeriod: '2026-09-A' });
+
+  const badPeriod = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: 'September' });
+  ok('a period that is not a cutoff key is refused', badPeriod.success === false, badPeriod);
+
+  const notMine = ctx.handleSkipSalaryDeductionCutoff({ token: 'TKN-EMP', deductionNo: no, period: '2026-10-A' });
+  ok('an employee cannot skip their own deduction', notMine.success === false, notMine);
+  ok('  and is told it is not permitted', /permitted/i.test(notMine.message || ''), notMine);
+
+  const missing = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: 'DED-NOPE', period: '2026-10-A' });
+  ok('an unknown deduction is refused', missing.success === false, missing);
+
+  // Un-skip puts it back, right up until the money moves.
+  ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-10-A' });
+  saveReg(ctx, '2026-10-A', 20000);
+  eq('skipped: nothing collected', readReg(ctx, '2026-10-A').salaryDeduction, 0);
+  const back = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-10-A', skip: false });
+  ok('un-skipping is allowed while the cutoff is still open', back.success === true, back);
+  saveReg(ctx, '2026-10-A', 20000);
+  eq('  and it collects again', readReg(ctx, '2026-10-A').salaryDeduction, 1000);
+
+  // Two skips are independent, and the list survives both.
+  ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-11-A' });
+  const two = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-11-B' });
+  eq('both cutoffs are recorded, sorted', two.skipPeriods, '2026-11-A,2026-11-B');
+  saveReg(ctx, '2026-11-A', 20000);
+  eq('  November A sits out', readReg(ctx, '2026-11-A').salaryDeduction, 0);
+  saveReg(ctx, '2026-11-B', 20000);
+  eq('  and so does November B', readReg(ctx, '2026-11-B').salaryDeduction, 0);
+}
+
 console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ok'));
 process.exit(FAIL ? 1 : 0);

@@ -668,6 +668,9 @@ function doGet(e) {
       case 'voidSalaryDeductionPosting':
         result = handleVoidSalaryDeductionPosting(params);
         break;
+      case 'skipSalaryDeductionCutoff':
+        result = handleSkipSalaryDeductionCutoff(params);
+        break;
       case 'getBankAccounts':
         result = handleGetBankAccounts();
         break;
@@ -2899,6 +2902,9 @@ function doPost(e) {
         break;
       case 'voidSalaryDeductionPosting':
         result = handleVoidSalaryDeductionPosting(body);
+        break;
+      case 'skipSalaryDeductionCutoff':
+        result = handleSkipSalaryDeductionCutoff(body);
         break;
       case 'saveBankAccount':
         result = handleSaveBankAccount(body);
@@ -11664,7 +11670,11 @@ function _salaryDeductionsSheet() {
     'Deduction No', 'Employee', 'Username', 'Item', 'Purpose', 'Total Amount',
     'Per-Cutoff Amount', 'Cadence', 'Start Period', 'Status',
     'Form Doc Link', 'Form Doc Id', 'Form File Name',
-    'Created By', 'Created At', 'Closed By', 'Closed At', 'Notes'
+    'Created By', 'Created At', 'Closed By', 'Closed At', 'Notes',
+    /* A284 — cutoffs this agreement sits out, comma separated ('2026-09-B'). Appended at the END,
+       house convention: every writer below is positional. Blank on every existing row, which is
+       what keeps ~all live deductions behaving exactly as they did. */
+    'Skip Periods'
   ]);
 }
 
@@ -11720,8 +11730,40 @@ function _sdRowToObj(r, rowIndex) {
     cadence: String(r[7] || ''), startPeriod: String(r[8] || ''), status: String(r[9] || ''),
     formDocLink: String(r[10] || ''), formDocId: String(r[11] || ''), formFileName: String(r[12] || ''),
     createdBy: String(r[13] || ''), createdAt: String(r[14] || ''),
-    closedBy: String(r[15] || ''), closedAt: String(r[16] || ''), notes: String(r[17] || '')
+    closedBy: String(r[15] || ''), closedAt: String(r[16] || ''), notes: String(r[17] || ''),
+    skipPeriods: String(r[18] || '')                                   // A284
   };
+}
+
+/* ── A284 · SITTING OUT ONE CUTOFF ────────────────────────────────────────────────────────────
+ *
+ * A deduction is a rate ('Per-Cutoff Amount') times a cadence, and until now the only ways to stop
+ * it taking money were to cancel it — which cannot be undone, handleActivateSalaryDeduction refuses
+ * a Cancelled record — or to move 'Start Period' forward, which is worse than it looks: the
+ * start-period test in _salaryDeductionDueFor runs BEFORE the posted-period mirror, so moving it
+ * past a cutoff that has already been collected hides that posting from the register read, and the
+ * payslip stops adding up to the money that actually left the payslip.
+ *
+ * The real need is smaller than either: miss ONE cutoff and carry on. It happens whenever an amount
+ * was set per-month but collected per-cutoff, so a month's worth came out in one go and the second half
+ * is already paid. DED-202609-002 is exactly that.
+ */
+function _sdSkipList(d) {
+  return String((d && d.skipPeriods) || '').split(',')
+    .map(function (x) { return String(x || '').trim().toUpperCase(); })
+    .filter(function (x) { return _sdValidPeriod(x); });
+}
+
+/** Does this agreement sit out `period`? */
+function _sdIsSkipped(d, period) {
+  return _sdSkipList(d).indexOf(String(period || '').toUpperCase()) !== -1;
+}
+
+/** Can this agreement collect on `period` at all — right cadence, and not sat out? */
+function _sdCollectsOn(d, period) {
+  if (!period) return false;
+  if (d.cadence === 'First Cutoff Only' && period.slice(-1) !== 'A') return false;
+  return !_sdIsSkipped(d, period);
 }
 
 /** Every active posting, grouped by deduction. One read; every caller here needs the whole set. */
@@ -11777,6 +11819,13 @@ function _salaryDeductionDueFor(period) {
     var remainingC = Math.max(0, totalC - paidOtherC);
     if (remainingC <= 0 && !postedHere) continue;                       // fully repaid
 
+    /* A284 — the agreement sits this cutoff out. Tested AFTER the posting lookup and only when
+       nothing was posted, on the same principle as the mirror below: a skip suppresses a FUTURE
+       projection, it never erases a cutoff whose money has already left a payslip. Marking a
+       collected period as skipped is therefore a no-op here rather than a rewrite of history —
+       and handleSkipSalaryDeductionCutoff refuses it outright, pointing at the void instead. */
+    if (!postedHere && _sdIsSkipped(d, period)) continue;
+
     /* A posted period is MIRRORED, never re-projected — see the header note. */
     var dueC = postedHere ? _sdC(postedHere.amount)
                           : Math.min(_sdC(d.perCutoffAmount), remainingC);
@@ -11827,6 +11876,7 @@ function _sdDraftsFor(period) {
       if (!d.deductionNo || d.status !== 'Draft') continue;
       if (d.cadence === 'First Cutoff Only' && half !== 'A') continue;
       if (d.startPeriod && period < d.startPeriod) continue;
+      if (_sdIsSkipped(d, period)) continue;                            // A284 — no nag for a cutoff it sits out
       out.push({ deductionNo: d.deductionNo, employee: d.employee, item: d.item,
                  hasForm: !!d.formDocLink });
     }
@@ -11908,15 +11958,18 @@ function _sdDecorate(d, mine) {
   if (d.status === 'Active' && remainC > 0 && perC > 0) {
     var cursor = mine.length ? _sdCutoffNext(mine[mine.length - 1].period)
                              : (d.startPeriod || '');
+    /* A284 — walk past anything this agreement cannot collect on: the wrong half of the month for a
+       1st-cutoff-only deal, and any cutoff it is sitting out. Without the skip here the card would
+       announce a next collection on a cutoff that is going to take nothing. */
     var guard = 0;
-    while (cursor && guard++ < 200 && d.cadence === 'First Cutoff Only' && cursor.slice(-1) !== 'A') {
+    while (cursor && guard++ < 200 && !_sdCollectsOn(d, cursor)) {
       cursor = _sdCutoffNext(cursor);
     }
     nextPeriod = cursor;
     var walk = cursor, steps = left, g2 = 0;
     while (walk && steps > 1 && g2++ < 400) {
       walk = _sdCutoffNext(walk);
-      if (d.cadence === 'First Cutoff Only' && walk.slice(-1) !== 'A') continue;
+      if (!_sdCollectsOn(d, walk)) continue;      // a skipped cutoff is no instalment: the end moves out
       steps--;
     }
     endPeriod = walk;
@@ -11927,7 +11980,7 @@ function _sdDecorate(d, mine) {
     cadence: d.cadence, startPeriod: d.startPeriod, status: d.status,
     formDocLink: d.formDocLink, formDocId: d.formDocId, formFileName: d.formFileName,
     createdBy: d.createdBy, createdAt: d.createdAt, closedBy: d.closedBy, closedAt: d.closedAt,
-    notes: d.notes,
+    notes: d.notes, skipPeriods: d.skipPeriods,                 // A284
     paid: _sdP(paidC), remaining: _sdP(remainC),
     settled: remainC <= 0,                       // derived, never stored — a void must re-open it
     postingCount: mine.length, instalmentsLeft: left,
@@ -12115,6 +12168,72 @@ function handleCancelSalaryDeduction(params) {
     }
     return { success: true, message: 'Deduction cancelled.' };
   } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* A284 — sit ONE cutoff out, or put it back. The deduction stays Active and its rate is untouched;
+   only this period is skipped, and collection resumes by itself on the next one.
+ *
+ * Two refusals, both of which exist so a skip can never be used to rewrite money:
+ *   • ALREADY POSTED — the money is out of a payslip. Reversing that is a negative correction with
+ *     a trace, which is handleVoidSalaryDeductionPosting, not a quiet flag on the agreement.
+ *   • ALREADY APPROVED — the cutoff is closed. Skipping it now would change what a signed-off
+ *     register is understood to have contained.
+ * Unskipping is the same call with skip=false, and is allowed right up until the period is posted. */
+function handleSkipSalaryDeductionCutoff(params) {
+  var lock = LockService.getScriptLock();
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var role = String(session.role || '').toLowerCase();
+    if (['director', 'management', 'admin', 'hr'].indexOf(role) === -1) {
+      return { success: false, message: 'Not permitted.' };
+    }
+    var dedNo  = String((params && params.deductionNo) || '').trim();
+    var period = String((params && params.period) || '').trim().toUpperCase();
+    // Absent means "skip it" — the button people press. Only an explicit false puts it back.
+    var skip   = !(params && (params.skip === false || String(params.skip) === 'false'));
+    if (!dedNo) return { success: false, message: 'deductionNo required.' };
+    if (!_sdValidPeriod(period)) return { success: false, message: 'Cutoff must look like 2026-09-B.' };
+
+    lock.waitLock(20000);
+    var sheet = _salaryDeductionsSheet();
+    var found = _sdFindRow(sheet, dedNo);
+    if (!found) return { success: false, message: 'Deduction ' + dedNo + ' not found.' };
+    if (found.obj.status === 'Cancelled') return { success: false, message: 'That deduction is cancelled.' };
+
+    var mine = _sdPostingsByDeduction()[dedNo] || [];
+    for (var i = 0; i < mine.length; i++) {
+      if (String(mine[i].period) === period) {
+        return { success: false, message: 'Cutoff ' + period + ' has already been collected (' +
+          _sdP(_sdC(mine[i].amount)).toFixed(2) + '). Void that posting instead — a skip does not ' +
+          'return money that has already left a payslip.' };
+      }
+    }
+    if (_sdPeriodApproved(period)) {
+      return { success: false, message: 'Cutoff ' + period + ' is already approved. Reopen it before changing what it collects.' };
+    }
+
+    var list = _sdSkipList(found.obj);
+    var at = list.indexOf(period);
+    if (skip && at === -1) list.push(period);
+    if (!skip && at !== -1) list.splice(at, 1);
+    list.sort();
+    sheet.getRange(found.rowIndex, 19).setValue(list.join(','));
+
+    var prior = String(sheet.getRange(found.rowIndex, 18).getValue() || '');
+    sheet.getRange(found.rowIndex, 18).setValue((prior ? prior + ' | ' : '') +
+      (skip ? 'Skipped ' : 'Un-skipped ') + period + ' by ' +
+      String(session.fullName || session.username || '') + ' on ' + new Date().toISOString().slice(0, 10));
+
+    return { success: true, deductionNo: dedNo, period: period, skipped: skip,
+      skipPeriods: list.join(','),
+      message: skip ? ('Cutoff ' + period + ' will be skipped. Collection resumes next cutoff.')
+                    : ('Cutoff ' + period + ' will be collected again.') };
+  } catch (e) {
+    return { success: false, message: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e2) {}
+  }
 }
 
 /* Void a posting, never delete it — the A229 rule. Voiding re-opens the balance, which is why
