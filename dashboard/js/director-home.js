@@ -70,12 +70,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('payMonth').value = saved ? saved.month : String(now.getMonth() + 1).padStart(2, '0');
   document.getElementById('payYear').value  = saved ? saved.year  : now.getFullYear();
 
+  // A285 — the spotlight's "Total payroll cost" adds the employer share the director types here.
+  ['employerShareA', 'employerShareB'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', _updateKpis);
+  });
+
   await loadEmployees();
   await loadPeriod();  // auto-load on every page open
 });
 
 // ── Tab switching ─────────────────────────────────────────────
 const _TAB_MAP = { ee: 'EE', hoursA: 'HoursA', payA: 'PayA', hoursB: 'HoursB', payB: 'PayB', thirteenth: 'Thirteenth', deductions: 'Deductions' };
+// A285 — the payslip download glyph, as an icon rather than a "⬇" that fell back to whatever font had it.
+const _ICO_DL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>';
 
 function switchPayTab(tab) {
   Object.keys(_TAB_MAP).forEach(t => {
@@ -148,7 +156,7 @@ async function loadPeriod() {
   } catch (e) {
     ['hoursAGrid', 'payAGrid', 'hoursBGrid', 'payBGrid'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.innerHTML = `<p style="color:#ef4444;">Could not load payroll data: ${esc(e.message)} — click Load again to retry.</p>`;
+      if (el) el.innerHTML = `<p class="dh-error">Could not load payroll data: ${esc(e.message)} — click Load again to retry.</p>`;
     });
     return;
   }
@@ -194,14 +202,15 @@ async function loadEmployees() {
     }
   } catch (err) {
     document.getElementById('eeBody').innerHTML =
-      `<tr><td colspan="9" style="color:#ef4444;">Error: ${err.message}</td></tr>`;
+      `<tr><td colspan="10" class="dh-error">Error: ${esc(err.message)}</td></tr>`;
   }
 }
 
 function renderEETable() {
   const tbody = document.getElementById('eeBody');
   if (!_employees.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);">No employees. Add one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="dh-empty">No employees. Add one above.</td></tr>';
+    _updateKpis();                                   // A285 — the Active count is data, not a scraped column
     return;
   }
   tbody.innerHTML = _employees.map((e, i) => `
@@ -210,8 +219,8 @@ function renderEETable() {
       <td>${esc(e.lastName)}</td>
       <td>${esc(e.firstName)}</td>
       <td>${_isFixedPay(e)
-            ? `<span title="Fixed salary per cutoff — no Pag-IBIG, SSS or PhilHealth, and holiday pay does not apply" style="font-weight:700;color:#0f766e;">FIXED ${peso(e.fixedAmount)}</span>`
-            : '<span style="color:var(--text-muted,#64748b);">Hourly</span>'}</td>
+            ? `<span class="dh-badge s-fixed" title="Fixed salary per cutoff — no Pag-IBIG, SSS or PhilHealth, and holiday pay does not apply">FIXED ${peso(e.fixedAmount)}</span>`
+            : '<span class="dh-dim">Hourly</span>'}</td>
       <td class="num">${_isFixedPay(e) ? '—' : peso(e.dailyRate)}</td>
       <td class="num">${_isFixedPay(e) ? '—' : peso(e.hourlyRate)}</td>
       <td class="num">${peso(e.otherIncome)}</td>
@@ -225,6 +234,7 @@ function renderEETable() {
       </td>
     </tr>
   `).join('');
+  _updateKpis();                                     // A285
 }
 
 // ── EE Modal ──────────────────────────────────────────────────
@@ -345,21 +355,21 @@ async function saveEE() {
 function closeRateHistory() { document.getElementById('rhOverlay').classList.remove('open'); }
 
 function _rhRowsHtml(rows) {
-  if (!rows.length) return '<div style="color:var(--text-muted);padding:0.6rem 0;">No changes recorded yet.</div>';
-  return `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+  if (!rows.length) return '<div class="dh-empty">No changes recorded yet.</div>';
+  return `<table class="pay-table compact"><thead>
     <tr><th>Effective</th><th>Field</th><th class="num">Old</th><th class="num">New</th><th class="num">Change</th><th>Reason</th><th>By</th><th>Recorded</th></tr></thead><tbody>
     ${rows.map(h => {
       const chg = h.change === '' ? '—' : (h.change >= 0 ? '+' : '') + peso(h.change);
-      const chgCol = h.change === '' ? '' : (h.change >= 0 ? 'color:#15803d;' : 'color:#ef4444;');
+      const chgCls = h.change === '' ? '' : (h.change >= 0 ? ' dh-pos' : ' dh-neg');
       return `<tr>
         <td>${esc(h.effectiveDate || '—')}</td>
         <td>${esc(h.field || 'Daily Rate')}</td>
         <td class="num">${h.oldValue === '' ? '—' : peso(h.oldValue)}</td>
         <td class="num">${peso(h.newValue)}</td>
-        <td class="num" style="${chgCol}">${chg}</td>
+        <td class="num${chgCls}">${chg}</td>
         <td>${esc(h.reason || '')}</td>
         <td>${esc(h.changedBy || '')}</td>
-        <td style="color:var(--text-muted);">${esc(String(h.recordedAt || '').slice(0, 10))}</td>
+        <td class="dh-dim">${esc(String(h.recordedAt || '').slice(0, 10))}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -368,13 +378,13 @@ async function openRateHistory(idx) {
   const e = _employees[idx];
   const name = e.lastName + ', ' + e.firstName;
   document.getElementById('rhTitle').textContent = 'Salary History — ' + name;
-  document.getElementById('rhBody').innerHTML = '<div style="color:var(--text-muted);padding:0.6rem 0;">Loading…</div>';
+  document.getElementById('rhBody').innerHTML = '<div class="dh-empty">Loading…</div>';
   document.getElementById('rhOverlay').classList.add('open');
   try {
     const res = await apiGetPayrollRateHistory(name);
     document.getElementById('rhBody').innerHTML = _rhRowsHtml((res && res.data) || []);
   } catch (err) {
-    document.getElementById('rhBody').innerHTML = `<div style="color:#ef4444;">${esc(err.message)}</div>`;
+    document.getElementById('rhBody').innerHTML = `<div class="dh-error">${esc(err.message)}</div>`;
   }
 }
 
@@ -389,28 +399,27 @@ let _ihEmpName = '';
 function closeIncentiveHistory() { document.getElementById('ihOverlay').classList.remove('open'); }
 
 function _ihRowsHtml(rows) {
-  if (!rows.length) return '<div style="color:var(--text-muted);padding:0.6rem 0;">No incentives recorded for this employee yet.</div>';
+  if (!rows.length) return '<div class="dh-empty">No incentives recorded for this employee yet.</div>';
   const live = rows.filter(r => String(r.status || 'Active') !== 'Voided');
   const total = live.reduce((t, r) => t + (parseFloat(r.amount) || 0), 0);
-  return `<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem;">
+  return `<div class="dh-note" style="padding:10px 12px 0;">
       ${live.length} incentive${live.length === 1 ? '' : 's'} paid, ${peso(total)} in total${
       rows.length > live.length ? ` · ${rows.length - live.length} voided` : ''}
     </div>
-    <table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+    <table class="pay-table compact"><thead>
     <tr><th>Cutoff</th><th class="num">Amount</th><th>What for</th><th>Reason</th><th>Given by</th><th>Recorded</th><th></th></tr>
     </thead><tbody>
     ${rows.map(r => {
       const voided = String(r.status || 'Active') === 'Voided';
-      const style = voided ? 'text-decoration:line-through;color:var(--text-muted);' : '';
-      return `<tr style="${style}">
+      return `<tr${voided ? ' class="dh-void"' : ''}>
         <td>${esc(r.period || '')}</td>
         <td class="num">${peso(r.amount)}</td>
         <td>${esc(r.category || '')}</td>
         <td>${esc(r.reason || '')}</td>
         <td>${esc(r.givenBy || '')}</td>
-        <td style="color:var(--text-muted);">${esc(String(r.recordedAt || '').slice(0, 10))}</td>
+        <td class="dh-dim">${esc(String(r.recordedAt || '').slice(0, 10))}</td>
         <td>${voided
-          ? `<span title="Voided by ${esc(r.voidedBy || '')}" style="font-size:.72rem;">voided</span>`
+          ? `<span class="dh-dim sm" title="Voided by ${esc(r.voidedBy || '')}">voided</span>`
           : `<button class="btn-sm" title="Void this incentive — it stays in the history"
                onclick="voidIncentive('${esc(r.incentiveId)}','${esc(String(r.period || '').slice(-1))}')">Void</button>`}</td>
       </tr>`;
@@ -425,13 +434,13 @@ async function openIncentiveHistory(idx) {
 async function openIncentiveHistoryByName(name) {
   _ihEmpName = name;
   document.getElementById('ihTitle').textContent = 'Incentive History — ' + name;
-  document.getElementById('ihBody').innerHTML = '<div style="color:var(--text-muted);padding:0.6rem 0;">Loading…</div>';
+  document.getElementById('ihBody').innerHTML = '<div class="dh-empty">Loading…</div>';
   document.getElementById('ihOverlay').classList.add('open');
   try {
     const res = await apiGetPayrollIncentives({ employee: name });
     document.getElementById('ihBody').innerHTML = _ihRowsHtml((res && res.data) || []);
   } catch (err) {
-    document.getElementById('ihBody').innerHTML = `<div style="color:#ef4444;">${esc(err.message)}</div>`;
+    document.getElementById('ihBody').innerHTML = `<div class="dh-error">${esc(err.message)}</div>`;
   }
 }
 
@@ -442,12 +451,12 @@ async function loadRecentIncentives() {
   try {
     const res = await apiGetPayrollIncentives({});
     const rows = ((res && res.data) || []).slice(0, 12);
-    if (!rows.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No incentives recorded yet.</div>'; return; }
-    box.innerHTML = `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+    if (!rows.length) { box.innerHTML = '<div class="dh-empty">No incentives recorded yet.</div>'; return; }
+    box.innerHTML = `<table class="pay-table compact"><thead>
       <tr><th>Employee</th><th>Cutoff</th><th class="num">Amount</th><th>What for</th><th>Reason</th><th>Given by</th></tr></thead><tbody>
       ${rows.map(r => {
         const voided = String(r.status || 'Active') === 'Voided';
-        return `<tr style="${voided ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">
+        return `<tr${voided ? ' class="dh-void"' : ''}>
           <td>${esc(r.employee || '')}</td>
           <td>${esc(r.period || '')}</td>
           <td class="num">${peso(r.amount)}</td>
@@ -467,14 +476,14 @@ async function loadRateChanges() {
   try {
     const res = await apiGetPayrollRateHistory('');
     const rows = ((res && res.data) || []).filter(h => h.oldValue !== '').slice(0, 12);   // real changes, not initial records
-    if (!rows.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No salary changes recorded yet.</div>'; return; }
-    box.innerHTML = `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead>
+    if (!rows.length) { box.innerHTML = '<div class="dh-empty">No salary changes recorded yet.</div>'; return; }
+    box.innerHTML = `<table class="pay-table compact"><thead>
       <tr><th>Employee</th><th>Effective</th><th class="num">Old</th><th class="num">New</th><th class="num">Change</th><th>Reason</th><th>By</th></tr></thead><tbody>
       ${rows.map(h => {
-        const chgCol = h.change >= 0 ? 'color:#15803d;' : 'color:#ef4444;';
+        const chgCls = h.change >= 0 ? 'dh-pos' : 'dh-neg';
         return `<tr><td>${esc(h.employee)}</td><td>${esc(h.effectiveDate || '—')}</td>
           <td class="num">${peso(h.oldValue)}</td><td class="num">${peso(h.newValue)}</td>
-          <td class="num" style="${chgCol}">${(h.change >= 0 ? '+' : '') + peso(h.change)}</td>
+          <td class="num ${chgCls}">${(h.change >= 0 ? '+' : '') + peso(h.change)}</td>
           <td>${esc(h.reason || '')}</td><td>${esc(h.changedBy || '')}</td></tr>`;
       }).join('')}</tbody></table>`;
   } catch (e) { box.innerHTML = ''; }
@@ -542,7 +551,7 @@ function renderHoursGrid(cutoff) {
   const container   = document.getElementById(containerId);
 
   if (!_currentYear || !_currentMonth) {
-    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div>';
+    container.innerHTML = '<div class="dh-empty">Load a period first.</div>';
     return;
   }
 
@@ -551,19 +560,19 @@ function renderHoursGrid(cutoff) {
   const activeEE = _employees;
 
   if (!activeEE.length) {
-    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">No employees found. Add employees in the EE tab first.</div>';
+    container.innerHTML = '<div class="dh-empty">No employees found. Add employees in the EE tab first.</div>';
     return;
   }
 
   // Quick-fill toolbar
   let html = `
-    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
-      <span style="font-size:0.75rem;color:var(--text-muted);">Quick fill:</span>
-      <button class="btn-sm" onclick="fillAllHours('${cutoff}',8)">8h All Weekdays</button>
-      <button class="btn-sm" onclick="fillAllHours('${cutoff}',9)">9h All Weekdays</button>
-      <button class="btn-sm" onclick="fillAllHours('${cutoff}',0)">Clear All</button>
-      <span style="font-size:0.73rem;color:var(--text-muted);margin-left:0.5rem;">Enter hours per day (e.g. 8, 8.5, 10). Reg = up to 8hrs, OT = beyond 8hrs. Sundays auto-skip.
-        <strong>Click a date heading</strong> to mark it <span style="color:#fde68a;">Special 130%</span> or <span style="color:#fecaca;">Regular 200%</span>; a regular holiday nobody works still pays one day.</span>
+    <div class="dh-quickfill">
+      <span class="lbl">Quick fill:</span>
+      <button class="btn-sm xs" onclick="fillAllHours('${cutoff}',8)">8h all weekdays</button>
+      <button class="btn-sm xs" onclick="fillAllHours('${cutoff}',9)">9h all weekdays</button>
+      <button class="btn-sm xs" onclick="fillAllHours('${cutoff}',0)">Clear all</button>
+      <span class="help">Enter hours per day (e.g. 8, 8.5, 10). Reg = up to 8hrs, OT = beyond 8hrs. Sundays auto-skip.
+        <strong>Click a date heading</strong> to mark it <span class="dh-leg spe">Special 130%</span> or <span class="dh-leg reg">Regular 200%</span>; a regular holiday nobody works still pays one day.</span>
     </div>`;
 
   html += `<table class="pay-table" id="hoursTable${cutoff}">
@@ -576,15 +585,16 @@ function renderHoursGrid(cutoff) {
   const cal = _holidayMap(cutoff);
   dates.forEach(dt => {
     const type = cal[dt.dateStr] || '';
-    const tint = type === _HOL_REG ? 'background:rgba(239,68,68,0.22);color:#fecaca;'
-               : type === _HOL_SPE ? 'background:rgba(245,158,11,0.22);color:#fde68a;'
-               : (dt.isSunday ? 'color:#64748b;background:rgba(0,0,0,0.15);' : '');
-    const tag = type === _HOL_REG ? '<div style="font-size:0.6rem;font-weight:700;">REG 200%</div>'
-              : type === _HOL_SPE ? '<div style="font-size:0.6rem;font-weight:700;">SPE 130%</div>'
+    /* A285 — the tint is a class now. The old inline colours (#fecaca on rgba(239,68,68,.22)) were
+       chosen for a dark theme and were close to unreadable on the white table this page has had
+       since the bento redesign. */
+    const dayCls = type === _HOL_REG ? ' hol-reg' : type === _HOL_SPE ? ' hol-spe' : (dt.isSunday ? ' sun' : '');
+    const tag = type === _HOL_REG ? '<div class="dh-day-tag">REG 200%</div>'
+              : type === _HOL_SPE ? '<div class="dh-day-tag">SPE 130%</div>'
               : '';
     const tip = type ? 'Marked ' + type + ' — click to change'
                      : 'Ordinary day — click to mark a holiday';
-    html += `<th style="text-align:center;${tint}min-width:52px;cursor:pointer;user-select:none;"
+    html += `<th class="dh-day${dayCls}"
       title="${tip}" onclick="toggleHoliday('${cutoff}','${dt.dateStr}')">${dt.label}${tag}</th>`;
   });
 
@@ -603,7 +613,7 @@ function renderHoursGrid(cutoff) {
     let rowRegHrs = 0, rowOTHrs = 0;
 
     html += `<tr data-emp="${esc(empName)}">
-      <td class="sticky"><strong style="font-size:0.78rem;">${esc(empName)}</strong></td>`;
+      <td class="sticky"><strong>${esc(empName)}</strong></td>`;
 
     dates.forEach(dt => {
       const key    = empName + '|' + dt.dateStr;
@@ -620,13 +630,12 @@ function renderHoursGrid(cutoff) {
       const val    = hrs > 0 ? hrs : '';
 
       if (dt.isSunday) {
-        html += `<td style="background:rgba(0,0,0,0.12);text-align:center;color:#475569;font-size:0.7rem;">—</td>`;
+        html += `<td class="dh-sun">—</td>`;
       } else {
-        html += `<td style="padding:0.3rem 0.2rem;">
-          <input type="number" min="0" max="16" step="0.5" value="${val}"
+        html += `<td class="dh-hrs-cell">
+          <input type="number" min="0" max="16" step="0.5" value="${val}" class="dh-hrs"
             data-emp="${esc(empName)}" data-date="${dt.dateStr}" data-cutoff="${cutoff}"
-            onchange="_onHoursInput(this)"
-            style="width:100%;text-align:center;background:var(--bg,#f8fafc);border:1px solid var(--border,#334155);color:var(--text-primary,#f1f5f9);border-radius:6px;padding:0.3rem 0.2rem;font-size:0.82rem;">
+            onchange="_onHoursInput(this)">
         </td>`;
       }
     });
@@ -640,7 +649,7 @@ function renderHoursGrid(cutoff) {
       <td class="num computed highlight" id="basicPay_${cutoff}_${k}">${peso(e.basicPay)}</td>
       <td class="num computed highlight" id="holPay_${cutoff}_${k}" title="Regular 200% + Special 130% + unworked regular holidays">${e.holidayPay > 0 ? peso(e.holidayPay) : '—'}</td>
       <td class="num computed highlight" id="otPay_${cutoff}_${k}">${e.otHrs > 0 ? peso(e.otPay) : '—'}</td>
-      <td><button class="btn-sm" onclick="fillRowHours('${cutoff}','${esc(empName)}',8)" style="font-size:0.7rem;padding:0.2rem 0.5rem;">8h</button></td>
+      <td><button class="btn-sm xs" onclick="fillRowHours('${cutoff}','${esc(empName)}',8)">8h</button></td>
     </tr>`;
   });
 
@@ -1120,8 +1129,7 @@ function _sdDraftNotice(cutoff) {
      telling them apart cost a deploy cycle. The response itself says which: a build that knows about
      salary deductions always sends the key, even when it is empty. */
   if (cutoff === 'A' ? _sdStaleA : _sdStaleB) {
-    return `<div style="margin:0 0 0.7rem;padding:0.6rem 0.8rem;border:1px solid #fca5a5;background:#fef2f2;
-        border-radius:10px;font:400 0.8rem/1.5 'Inter',sans-serif;color:#7f1d1d;">
+    return `<div class="dh-banner bad">
         <strong>Salary deductions are not in the backend that is running.</strong>
         This screen is newer than the Apps Script it is talking to, so the column will stay empty.
         Paste <code>apps-script/Code.gs</code> and redeploy, then click Load again.
@@ -1131,11 +1139,10 @@ function _sdDraftNotice(cutoff) {
   if (!drafts.length) return '';
   const list = drafts.map(d =>
     `${esc(d.employee)} — ${esc(d.item || d.deductionNo)}${d.hasForm ? '' : ' (no signed form attached)'}`).join('; ');
-  return `<div style="margin:0 0 0.7rem;padding:0.6rem 0.8rem;border:1px solid #fcd34d;background:#fffbeb;
-      border-radius:10px;font:400 0.8rem/1.5 'Inter',sans-serif;color:#78350f;">
+  return `<div class="dh-banner warn">
       <strong>${drafts.length} salary deduction${drafts.length === 1 ? '' : 's'} not active yet</strong>
       — nothing is being deducted for ${list}.
-      <a href="#" onclick="switchPayTab('deductions');return false;" style="color:#78350f;font-weight:700;">Open Salary Deductions</a>
+      <a href="#" onclick="switchPayTab('deductions');return false;">Open Salary Deductions</a>
       to attach the signed form and activate.
     </div>`;
 }
@@ -1145,7 +1152,7 @@ function renderPayGrid(cutoff) {
   const container   = document.getElementById(containerId);
 
   if (!_currentYear || !_currentMonth) {
-    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">Load a period first.</div>';
+    container.innerHTML = '<div class="dh-empty">Load a period first.</div>';
     return;
   }
 
@@ -1154,7 +1161,7 @@ function renderPayGrid(cutoff) {
   const activeEE  = _employees;
 
   if (!activeEE.length) {
-    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">No employees. Add employees in the EE tab.</div>';
+    container.innerHTML = '<div class="dh-empty">No employees. Add employees in the EE tab.</div>';
     return;
   }
 
@@ -1214,12 +1221,12 @@ function renderPayGrid(cutoff) {
       ? salaryDeductionLines.map(l => `${l.item || 'Deduction'} — ${peso(l.amount)}`).join(' · ') +
         (salaryDeductionProvisional ? ' — not saved to this cutoff yet; Save Pay Register to apply it' : '')
       : 'No salary deduction this cutoff';
-    const sdCell = `<td class="num computed" style="white-space:nowrap;" title="${esc(sdTip)}">
+    const sdCell = `<td class="num computed" title="${esc(sdTip)}">
         ${salaryDeduction > 0
           ? `<a href="#" onclick="switchPayTab('deductions');return false;"
-                style="font-weight:700;text-decoration:none;${salaryDeductionProvisional ? 'font-style:italic;opacity:0.75;' : ''}">${peso(salaryDeduction)}</a>${
-             salaryDeductionProvisional ? '<span title="Not saved to this cutoff yet" style="color:#b45309;font-weight:700;"> *</span>' : ''}`
-          : '<span style="color:var(--text-muted);">—</span>'}
+                class="dh-sd-link${salaryDeductionProvisional ? ' prov' : ''}">${peso(salaryDeduction)}</a>${
+             salaryDeductionProvisional ? '<span title="Not saved to this cutoff yet" class="dh-warn-text"> *</span>' : ''}`
+          : '<span class="dh-dim">—</span>'}
       </td>`;
     /* Advances is described in this file as "a loan being repaid", which is exactly what someone
        typed the laptop instalment into before this feature existed. Both columns now exist side by
@@ -1227,11 +1234,10 @@ function renderPayGrid(cutoff) {
     const advTitle = salaryDeduction > 0
       ? ' title="This employee already has a salary deduction this cutoff — do not re-enter it here."'
       : '';
-    const incCell = `<td class="num computed" style="white-space:nowrap;">
-        ${incentive > 0 ? `<span style="font-weight:700;">${peso(incentive)}</span>` : '<span style="color:var(--text-muted);">—</span>'}
-        <button class="btn-sm" title="Add an incentive for this cutoff"
-          onclick="openIncentiveAdd('${esc(empName)}','${cutoff}')"
-          style="margin-left:6px;padding:1px 7px;">+</button>
+    const incCell = `<td class="num computed">
+        ${incentive > 0 ? `<strong>${peso(incentive)}</strong>` : '<span class="dh-dim">—</span>'}
+        <button class="btn-sm xs" title="Add an incentive for this cutoff"
+          onclick="openIncentiveAdd('${esc(empName)}','${cutoff}')">+</button>
       </td>`;
 
     html += `<tr data-emp="${esc(empName)}">
@@ -1249,15 +1255,15 @@ function renderPayGrid(cutoff) {
         ? `<td class="num" title="Waived — fixed salary">0.00</td>
            <td class="num" title="Waived — fixed salary">0.00</td>
            <td class="num" title="Waived — fixed salary">0.00</td>`
-        : `<td class="num"><input type="number" min="0" step="0.01" value="${pagibig.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="pagibig" onchange="_updateRegCell(this)" style="width:75px;"></td>
-           <td class="num"><input type="number" min="0" step="0.01" value="${sss.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="sss" onchange="_updateRegCell(this)" style="width:75px;"></td>
-           <td class="num"><input type="number" min="0" step="0.01" value="${philhealth.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="philhealth" onchange="_updateRegCell(this)" style="width:75px;"></td>`}
-      <td class="num"><input type="number" min="0" step="0.01" value="${advances.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="advances" onchange="_updateRegCell(this)" style="width:75px;"${advTitle}></td>
+        : `<td class="num"><input type="number" min="0" step="0.01" value="${pagibig.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="pagibig" onchange="_updateRegCell(this)" class="dh-num-in"></td>
+           <td class="num"><input type="number" min="0" step="0.01" value="${sss.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="sss" onchange="_updateRegCell(this)" class="dh-num-in"></td>
+           <td class="num"><input type="number" min="0" step="0.01" value="${philhealth.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="philhealth" onchange="_updateRegCell(this)" class="dh-num-in"></td>`}
+      <td class="num"><input type="number" min="0" step="0.01" value="${advances.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="advances" onchange="_updateRegCell(this)" class="dh-num-in"${advTitle}></td>
       ${sdCell}
-      <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" style="width:75px;"></td>
+      <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" class="dh-num-in"></td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
       <td class="num highlight" id="netPay_${cutoff}_${k}">${peso(netPay)}</td>
-      <td><button class="btn-sm" title="Download payslip PDF" onclick="downloadPayslip('${esc(empName)}','${cutoff}')">⬇</button></td>
+      <td><button class="btn-sm xs" title="Download payslip PDF" onclick="downloadPayslip('${esc(empName)}','${cutoff}')">${_ICO_DL}</button></td>
     </tr>`;
   });
 
@@ -1281,6 +1287,10 @@ function renderPayGrid(cutoff) {
   </tr></tbody></table>`;
 
   container.innerHTML = html;
+  /* A285 — the spotlight shows the cutoff rendered LAST (Load renders A then B, so B; saving A
+     re-renders A, so A) — the same rule the old DOM-scraping mirror followed, now from the data. */
+  _kpiCutoff = cutoff;
+  _updateKpis();
 }
 
 function _updateRegCell(input) {
@@ -2050,6 +2060,46 @@ function peso(value) {
   });
 }
 
+/* ── A285 · the spotlight + KPI tiles, computed from the DATA ──────────────────────────────────
+   These used to be filled by an inline script that scraped the rendered tables with a
+   MutationObserver and a 500ms poll, and read "Status" out of column 7 — which has been HDMF since
+   the Pay Type column was added, so "Active employees" showed 0 for as long as anyone can remember.
+   Now every figure comes from the same _payEarnings/_payDeductions the register itself is drawn
+   from, and the count is a filter over _employees. Called at the end of renderEETable,
+   renderPayGrid and render13thMonth, and when the employer-share field changes. */
+let _kpiCutoff = null;   // the cutoff rendered last — what the spotlight is showing
+
+function _updateKpis() {
+  // Numbers count up when the page supplies dhSetNumber (its motion layer); a plain write otherwise.
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (typeof dhSetNumber === 'function') dhSetNumber(el, v); else el.textContent = v;
+  };
+  set('kpiActive', String(_employees.filter(e => String(e.status) === 'Active').length));
+  const C = _kpiCutoff;
+  if (C && _currentYear && _currentMonth) {
+    let gross = 0, ded = 0;
+    _employees.forEach(emp => {
+      gross += _payEarnings(emp, C).grossPay;
+      ded   += _payDeductions(emp, C).totalDed;
+    });
+    const shareEl = document.getElementById('employerShare' + C);
+    const share = shareEl ? (parseFloat(shareEl.value) || 0) : 0;
+    const net = gross - ded;
+    set('spotGross', peso(gross));
+    set('spotDed', peso(ded));
+    set('spotTotal', peso(net + share));
+    set('kpiNet', peso(net));
+    set('kpiShare', peso(share));
+    const tag = document.getElementById('spotTag');
+    if (tag) tag.textContent = C === 'A' ? '1st Cutoff' : '2nd Cutoff';
+  }
+  if (_thirteenthData.length) {
+    set('kpi13', peso(_thirteenthData.reduce((s, r) => s + (Number(r.thirteenthMonth) || 0), 0)));
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 13th Month Pay
 // ═══════════════════════════════════════════════════════════════
@@ -2074,14 +2124,14 @@ async function load13thMonth() {
   const year = parseInt(sel ? sel.value : new Date().getFullYear(), 10);
   _thirteenthYear = year;
   const body = document.getElementById('thirteenthBody');
-  body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">Computing 13th month pay…</td></tr>';
+  body.innerHTML = '<tr><td colspan="8" class="dh-empty">Computing 13th month pay…</td></tr>';
   try {
     const res = await fetchFromAPI({ action: 'get13thMonthPay', year: year }, { noCache: true });
     if (!res.success) throw new Error(res.message || 'Failed to compute');
     _thirteenthData = res.data || [];
     render13thMonth();
   } catch (err) {
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;">' + esc(err.message) + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="dh-error">' + esc(err.message) + '</td></tr>';
     document.getElementById('thirteenthFoot').innerHTML = '';
   }
 }
@@ -2090,33 +2140,33 @@ function render13thMonth() {
   const body = document.getElementById('thirteenthBody');
   const foot = document.getElementById('thirteenthFoot');
   if (!_thirteenthData.length) {
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">No payroll records for ' + _thirteenthYear + '.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="dh-empty">No payroll records for ' + _thirteenthYear + '.</td></tr>';
     foot.innerHTML = '';
+    _updateKpis();                                   // A285
     return;
   }
   let totalBasic = 0, total13 = 0;
   body.innerHTML = _thirteenthData.map((r, i) => {
     totalBasic += r.totalBasicPay;
     total13    += r.thirteenthMonth;
-    const statusCls = (r.status||'').toLowerCase() === 'active'
-      ? 'color:#16a34a;font-weight:600;'
-      : 'color:#d97706;font-weight:600;';
+    const statusCls = (r.status||'').toLowerCase() === 'active' ? 's-active' : 's-inactive';
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
       '<td>' + esc(r.lastName) + '</td>' +
       '<td>' + esc(r.firstName) + '</td>' +
-      '<td><span style="' + statusCls + '">' + esc(r.status) + '</span></td>' +
+      '<td><span class="dh-badge ' + statusCls + '">' + esc(r.status) + '</span></td>' +
       '<td class="num">' + r.monthsWorked + '</td>' +
       '<td class="num">' + r.periodsCount + '</td>' +
       '<td class="num">' + peso(r.totalBasicPay) + '</td>' +
-      '<td class="num" style="font-weight:700;color:#16a34a;">' + peso(r.thirteenthMonth) + '</td>' +
+      '<td class="num dh-pos">' + peso(r.thirteenthMonth) + '</td>' +
       '</tr>';
   }).join('');
-  foot.innerHTML = '<tr style="font-weight:700;border-top:2px solid var(--border,#334155);">' +
-    '<td colspan="6" style="text-align:right;">TOTAL (' + _thirteenthData.length + ' employees)</td>' +
+  foot.innerHTML = '<tr class="total-row">' +
+    '<td colspan="6" class="num">TOTAL (' + _thirteenthData.length + ' employees)</td>' +
     '<td class="num">' + peso(totalBasic) + '</td>' +
-    '<td class="num" style="color:#16a34a;">' + peso(total13) + '</td>' +
+    '<td class="num">' + peso(total13) + '</td>' +
     '</tr>';
+  _updateKpis();                                     // A285
 }
 
 async function export13thMonthExcel() {
@@ -2208,14 +2258,14 @@ function _sdNextCutoff(period) {
 async function loadSalaryDeductions() {
   const body = document.getElementById('sdBody');
   if (!body) return;
-  body.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Loading…</div>';
+  body.innerHTML = '<div class="dh-empty">Loading…</div>';
   try {
     const res = await apiGetSalaryDeductions();
-    if (!res.success) { body.innerHTML = `<div style="padding:1rem;color:#dc2626;">${esc(res.message || 'Could not load salary deductions.')}</div>`; return; }
+    if (!res.success) { body.innerHTML = `<div class="dh-error">${esc(res.message || 'Could not load salary deductions.')}</div>`; return; }
     _deductions = res.data || [];
     renderSalaryDeductions();
   } catch (err) {
-    body.innerHTML = `<div style="padding:1rem;color:#dc2626;">${esc(err.message)}</div>`;
+    body.innerHTML = `<div class="dh-error">${esc(err.message)}</div>`;
   }
 }
 
@@ -2223,15 +2273,13 @@ function renderSalaryDeductions() {
   const body = document.getElementById('sdBody');
   if (!body) return;
   if (!_deductions.length) {
-    body.innerHTML = '<div style="padding:1.4rem;text-align:center;color:var(--text-muted);">' +
+    body.innerHTML = '<div class="dh-empty">' +
       'No salary deductions yet. “+ New Deduction” records one from a signed authorization form.</div>';
     return;
   }
-  const badge = (st) => {
-    const c = st === 'Active' ? '#0f766e' : st === 'Draft' ? '#b45309' : '#64748b';
-    return `<span style="background:${c}18;color:${c};font-weight:700;font-size:0.74rem;padding:2px 8px;border-radius:999px;">${esc(st)}</span>`;
-  };
-  let html = `<table class="pay-table" style="width:100%;font-size:0.82rem;"><thead><tr>
+  // A285 — a class per state; the colours live in director-home.css beside the other badges.
+  const badge = (st) => `<span class="dh-badge s-${esc(String(st).toLowerCase())}">${esc(st)}</span>`;
+  let html = `<table class="pay-table compact"><thead><tr>
       <th>Deduction</th><th>Employee</th><th>Item</th>
       <th class="num">Total</th><th class="num">Per cutoff</th><th>Cadence</th>
       <th class="num">Paid</th><th class="num">Remaining</th><th>Next</th><th>Status</th><th>Form</th><th></th>
@@ -2240,24 +2288,23 @@ function renderSalaryDeductions() {
     const pct = d.totalAmount > 0 ? Math.min(100, Math.round((d.paid / d.totalAmount) * 100)) : 0;
     html += `<tr>
       <td><strong>${esc(d.deductionNo)}</strong></td>
-      <td>${esc(d.employee)}<div style="font-size:0.74rem;color:var(--text-muted);">${esc(d.username)}</div></td>
+      <td>${esc(d.employee)}<div class="dh-dim sm">${esc(d.username)}</div></td>
       <td>${esc(d.item)}</td>
       <td class="num">${_sdPeso(d.totalAmount)}</td>
       <td class="num">${_sdPeso(d.perCutoffAmount)}</td>
       <td>${d.cadence === 'First Cutoff Only' ? '1st cutoff only' : 'Every cutoff'}</td>
       <td class="num">${_sdPeso(d.paid)}
-        <div style="height:4px;background:var(--border,#e2e8f0);border-radius:3px;margin-top:3px;">
-          <div style="height:4px;width:${pct}%;background:#0f766e;border-radius:3px;"></div></div></td>
+        <div class="dh-bar"><i style="width:${pct}%"></i></div></td>
       <td class="num"><strong>${_sdPeso(d.remaining)}</strong></td>
       <td>${d.status === 'Active' && d.remaining > 0
-            ? `${esc(_sdLabel(d.nextPeriod))}<div style="font-size:0.74rem;color:var(--text-muted);">${d.instalmentsLeft} left · ends ${esc(_sdLabel(d.projectedEndPeriod))}</div>`
-            : '<span style="color:var(--text-muted);">—</span>'}</td>
+            ? `${esc(_sdLabel(d.nextPeriod))}<div class="dh-dim sm">${d.instalmentsLeft} left · ends ${esc(_sdLabel(d.projectedEndPeriod))}</div>`
+            : '<span class="dh-dim">—</span>'}</td>
       <td>${badge(d.settled && d.status === 'Active' ? 'Settled' : d.status)}</td>
       <td>${d.formDocLink
             ? `<a href="${esc(d.formDocLink)}" target="_blank" class="link-btn">signed form</a>`
-            : '<span style="color:#b45309;">not attached</span>'}</td>
-      <td style="white-space:nowrap;">
-        <button class="btn-sm" onclick="openDeductionModal('${esc(d.deductionNo)}')">Open</button>
+            : '<span class="dh-warn-text">not attached</span>'}</td>
+      <td>
+        <button class="btn-sm xs" onclick="openDeductionModal('${esc(d.deductionNo)}')">Open</button>
       </td>
     </tr>`;
   });
@@ -2328,9 +2375,9 @@ function openDeductionModal(dedNo) {
                  <td><button class="btn-sm" onclick="sdVoidPosting('${esc(pg.postingId)}')">Void</button></td></tr>`).join('')}
             </tbody></table></div>` : ''}
       ` : ''}
-      ${d && d.skipPeriods ? `<div style="margin:.5rem 0;padding:.5rem .7rem;border-radius:8px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:.8rem;">
+      ${d && d.skipPeriods ? `<div class="dh-banner warn" style="margin-top:12px;">
         <strong>Sitting out:</strong> ${esc(String(d.skipPeriods).split(',').map(x => _sdLabel(x.trim())).join(' · '))}
-        <div style="font-size:.72rem;opacity:.85;margin-top:.15rem;">Nothing is collected on these cutoffs. The balance is unchanged — collection resumes on the next one.</div>
+        <div class="dh-dim sm" style="opacity:.85;margin-top:2px;">Nothing is collected on these cutoffs. The balance is unchanged — collection resumes on the next one.</div>
       </div>` : ''}
       <div class="modal-actions">
         ${d && d.status === 'Draft' ? `<button class="btn-sm primary" onclick="sdActivate('${esc(d.deductionNo)}')">Activate</button>` : ''}
