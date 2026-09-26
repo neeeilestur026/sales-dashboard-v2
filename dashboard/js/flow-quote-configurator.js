@@ -816,9 +816,13 @@ function qcLineKey() {
 }
 
 function qcAddRow(item) {
-  qcItems.push(Object.assign({ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0, optionNo: '',
+  const row = Object.assign({ lineKey: qcLineKey(), itemNo: '', itemName: '', qty: 1, price: 0, optionNo: '',
     uom: '', origItemNo: '', origItemName: '', itemId: '', vat: '', imageDataUrl: '',
-    scope: '' }, item || {}));                             // A235
+    scope: '' }, item || {});                              // A235
+  // A283 — a line added while the form is building a hire IS a hire line. Without this the row is
+  // born with three blanks, shows Rental/DAYS anyway, and bills for one day instead of the week.
+  if (qcIsService()) qcEnsureHireShape(row);
+  qcItems.push(row);
   qcRenderItems();
   qcOnChange();
 }
@@ -898,6 +902,11 @@ function qcRenderItems() {
      onto the item; the basis also writes UOM, because that is the field the renderer reads to
      decide whether the rate prints "/ DAY" beside it. */
   const svc = qcIsService();
+  /* A283 — THE LAST WORD BEFORE ANYTHING IS DRAWN. qcAddRow and qcTypeChanged both normalise, but
+     this catches every other way a line can reach the list (a from-PR load, a paste, a future
+     caller) and makes "a cell shows a value the item does not hold" structurally impossible rather
+     than merely fixed in the two places it was noticed. */
+  if (svc) qcItems.forEach(qcEnsureHireShape);
   const kindCell = (i) => {
     if (!svc) return '';
     const cur = String(i.chargeKind || 'Rental');
@@ -1139,6 +1148,39 @@ function qcIsTimeBasis(basis) {
   return QC_TIME_BASES.indexOf(String(basis || '').trim().toUpperCase().replace(/\.$/, '')) >= 0;
 }
 
+/* A283 — EVERY HIRE LINE CARRIES THE THREE FIELDS, FROM THE MOMENT IT EXISTS.
+ *
+ * qcAddRow seeds a line with no chargeKind, rateBasis or duration, and the Charge and Per cells
+ * defaulted their DISPLAY to Rental/DAYS without writing either back. So a row added after the type
+ * was switched to Service showed "Rental" and "DAYS" while the item itself held two empty strings —
+ * and the Duration cell, which reads the item rather than the dropdown, correctly reported that
+ * this was not a time-based charge and printed a dash.
+ *
+ * The dash was the visible half. The silent half: that line went into the payload with a blank
+ * charge kind and a blank duration, so it billed for ONE rate-unit instead of seven, and a DEPOSIT
+ * row added the same way would have posted as taxable service revenue instead of crediting the
+ * 2100 liability — the client charged VAT on their own returnable money.
+ *
+ * So the item is the single source of truth and it is normalised the moment a line enters the list
+ * or the type changes. A cell must never show a value the item does not hold. */
+function qcEnsureHireShape(i) {
+  if (!i) return i;
+  if (!String(i.chargeKind || '').trim()) i.chargeKind = 'Rental';
+  if (!String(i.rateBasis || '').trim()) { i.rateBasis = 'DAYS'; if (!i.uom) i.uom = 'DAYS'; }
+  if (qcIsTimeBasis(i.rateBasis)) {
+    if (!(flowNum(i.duration) > 0)) i.duration = 1;   // a time rate is never zero units long
+  } else {
+    i.duration = '';                                   // a flat charge has nothing to multiply
+  }
+  return i;
+}
+
+/** Strip the hire shape off every line — the type went back to a sale. */
+function qcClearHireShape(i) {
+  if (i) { i.chargeKind = ''; i.rateBasis = ''; i.duration = ''; }
+  return i;
+}
+
 /** How many rate-units a line is charged for: its duration on a time rate, otherwise 1. */
 function qcLineSpan(i) {
   if (!qcIsService() || !qcIsTimeBasis(i && i.rateBasis)) return 1;
@@ -1203,17 +1245,13 @@ function qcTypeChanged() {
      sum. Default the blank ones to DAYS — the overwhelmingly common hire — rather than leave the
      rep to discover the omission on the client's copy. */
   if (svc) {
-    qcItems.forEach(i => { if (!i.rateBasis) { i.rateBasis = 'DAYS'; i.uom = 'DAYS'; }
-                           if (!i.chargeKind) i.chargeKind = 'Rental';
-                           // A282 — a hire line always states a span. One is the honest default:
-                           // a blank would be read as zero by something, and zero is not a hire.
-                           if (!(flowNum(i.duration) > 0)) i.duration = 1; });
+    qcItems.forEach(qcEnsureHireShape);      // A283 — one definition, see qcEnsureHireShape
   } else {
     /* A282 — BACK TO A SALE, so the hire shape goes with it. Leaving a rate basis on the rows would
        leave a supply quotation whose lines still multiply by a duration it no longer shows a column
        for, and would store "Rental / DAYS / 7" on a record that says Supply. Cleared here, at the
        one moment the answer changes, rather than defended at every reader downstream. */
-    qcItems.forEach(i => { i.chargeKind = ''; i.rateBasis = ''; i.duration = ''; });
+    qcItems.forEach(qcClearHireShape);
   }
   qcSyncTypeLock();
   qcRenderItems();

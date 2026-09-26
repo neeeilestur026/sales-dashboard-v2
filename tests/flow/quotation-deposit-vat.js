@@ -19,7 +19,11 @@ const { page } = require('./pageload');
 
 let FAIL = 0, N = 0;
 const ok = (l, c, e) => { N++; if (c) console.log('  ok   ' + l); else { FAIL++; console.log('  FAIL ' + l + (e === undefined ? '' : '\n     ' + JSON.stringify(e))); } };
-const eq = (l, got, want) => ok(l + ' = ' + want, Math.abs(got - want) < 0.005, { got, want });
+/* Numbers compare with a tolerance; anything else compares exactly. The numeric-only version of
+   this helper reported "Rental" !== "Rental", because Math.abs('Rental' - 'Rental') is NaN. */
+const eq = (l, got, want) => ok(l + ' = ' + JSON.stringify(want),
+  (typeof got === 'number' && typeof want === 'number') ? Math.abs(got - want) < 0.005 : got === want,
+  { got, want });
 const sec = (t) => console.log('\n== ' + t + ' ==');
 
 const LINES = [
@@ -137,6 +141,64 @@ t = totals([{ itemNo: 'X', qty: 2, price: 10000, chargeKind: 'Rental', rateBasis
            { type: 'Supply' });
 eq('2 x 10,000, the duration ignored', t.gross, 20000);
 ok('  and 140,000 appears nowhere near it', t.grand !== 140000 * 1.12);
+
+sec('11 · A283 — a row added AFTER switching to Service is a hire line');
+/* THE BUG THIS SECTION EXISTS FOR, reported from the live form: only the first row showed a
+   Duration box; every row added afterwards showed a dash, while its Per dropdown said DAYS.
+   qcAddRow seeded no chargeKind/rateBasis/duration and the Charge and Per cells defaulted their
+   DISPLAY without writing back, so the item held two empty strings. Visible half: the dash.
+   Silent half: that line billed for ONE rate-unit instead of seven, and a Deposit row added the
+   same way would have posted as taxable revenue instead of the 2100 liability. */
+{
+  const p = page(['js/flow-pricing-engine.js', 'js/flow-quote-configurator.js'], 'flow-quotations.html',
+                 { username: 'Neil Estur', role: 'admin', name: 'Neil Estur' });
+  p.els.qcQuoteType.value = 'Service';
+  p.els.qcDiscount.value = '0';
+  p.els.qcVat.value = 'inclusive';
+  // Exactly the sequence in the screenshot: switch the type, THEN add rows.
+  const rows = p.run('qcItems = []; qcOptionsEnabled = false; qcRecommended = ""; qcPartial = false;' +
+                     'qcTypeChanged(); qcAddRow(); qcAddRow(); qcAddRow();' +
+                     'JSON.parse(JSON.stringify(qcItems));');
+  eq('three rows were added', rows.length, 3);
+  rows.forEach((r, n) => {
+    eq('row ' + (n + 1) + ' carries a charge kind', r.chargeKind, 'Rental');
+    eq('  and a rate basis', r.rateBasis, 'DAYS');
+    eq('  and a duration — not the blank that printed a dash', Number(r.duration), 1);
+  });
+  ok('EVERY row shows a duration box, not just the first',
+     rows.every(r => r.rateBasis === 'DAYS' && Number(r.duration) > 0), rows);
+
+  // And the money: 2 tools x 8,500 x 7 on a row that was added after the switch.
+  const t11 = p.run('qcItems[0].qty = 2; qcItems[0].price = 8500; qcItems[0].duration = 7;' +
+                    'qcItems[1].qty = 0; qcItems[2].qty = 0; qcTotals();');
+  eq('a row added after the switch bills the full span', t11.gross, 119000);
+  ok('  not 17,000, which is what a blank duration billed', Math.abs(t11.gross - 17000) > 1);
+
+  // A Deposit row added after the switch must still be a deposit, not revenue.
+  const t12 = p.run('qcItems[1].qty = 2; qcItems[1].price = 10000; qcItems[1].chargeKind = "Deposit";' +
+                    'qcItems[1].rateBasis = "LOT"; qcSet(qcItems[1].lineKey, "rateBasis", "LOT"); qcTotals();');
+  eq('the deposit is recognised and kept out of the VAT base', t12.deposit, 20000);
+  eq('  so VAT is 12% of the rental only', t12.vat, 14280);
+}
+
+sec('12 · switching back to Supply strips the hire shape');
+{
+  const p = page(['js/flow-pricing-engine.js', 'js/flow-quote-configurator.js'], 'flow-quotations.html',
+                 { username: 'Neil Estur', role: 'admin', name: 'Neil Estur' });
+  p.els.qcQuoteType.value = 'Service';
+  p.els.qcDiscount.value = '0';
+  p.els.qcVat.value = 'inclusive';
+  p.run('qcItems = []; qcOptionsEnabled = false; qcRecommended = ""; qcPartial = false;' +
+        'qcTypeChanged(); qcAddRow(); qcItems[0].qty = 2; qcItems[0].price = 10000; qcItems[0].duration = 7;');
+  const svcGross = p.run('qcTotals().gross');
+  eq('as a hire: 2 x 10,000 x 7', svcGross, 140000);
+  p.els.qcQuoteType.value = '';
+  const supRows = p.run('qcTypeChanged(); JSON.parse(JSON.stringify(qcItems));');
+  eq('the charge kind is cleared', supRows[0].chargeKind, '');
+  eq('  the rate basis too', supRows[0].rateBasis, '');
+  eq('  and the duration', String(supRows[0].duration), '');
+  eq('so as a sale it is 2 x 10,000 and nothing is spanned', p.run('qcTotals().gross'), 20000);
+}
 
 console.log('\n' + (FAIL ? FAIL + ' FAILURE(S) of ' + N : 'all ok (' + N + ')'));
 process.exit(FAIL ? 1 : 0);
