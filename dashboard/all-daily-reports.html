@@ -8,45 +8,45 @@
   <link rel="stylesheet" href="css/flow.css">
   <style>
     .report { max-width: 1100px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
-    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-sheet { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-lg); box-shadow: var(--hx-sh-2); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--hx-navy); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, var(--hx-card), var(--hx-inset)); }
     .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
-    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-head .meta { font-size: 0.82rem; color: var(--hx-ink-2); margin-top: 0.3rem; }
     .report-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
+    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); background: var(--hx-card); color: var(--hx-ink); font-size: 0.85rem; }
     .report-body { padding: 1.4rem 1.6rem; }
     .dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-    .dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
-    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
-    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
-    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; }
-    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
-    .mod-Quotation { background: #f0fdfa; color: #0f766e; }
-    .mod-SalesOrder, .mod-Sales\.Order { background: #f0fdf4; color: #15803d; }
-    .mod-PurchaseOrder, .mod-Purchase\.Order { background: #eff6ff; color: #1d4ed8; }
-    .mod-APAging, .mod-AP\.Aging { background: #fff7ed; color: #c2410c; }
-    .mod-Receiving { background: #ecfeff; color: #0e7490; }
-    .mod-Invoice { background: #f0fdfa; color: #0f766e; }
-    .mod-Inventory { background: #f8fafc; color: #475569; }
-    .mod-PricingRequest, .mod-Pricing\.Request { background: #fef3c7; color: #b45309; }
-    .mod-Document { background: #f1f5f9; color: #475569; }
-    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
-    .dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+    .dr-tile { border: 1px solid var(--hx-hair); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--hx-card); }
+    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-ink-3); font-weight: 600; }
+    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--hx-ink); margin-top: 0.2rem; }
+    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--hx-ink-2); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; }
+    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--hx-inset); color: var(--hx-ink-2); white-space: nowrap; }
+    .mod-Quotation { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+    .mod-SalesOrder, .mod-Sales\.Order { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .mod-PurchaseOrder, .mod-Purchase\.Order { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .mod-APAging, .mod-AP\.Aging { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .mod-Receiving { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .mod-Invoice { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+    .mod-Inventory { background: var(--hx-inset); color: var(--hx-ink-2); }
+    .mod-PricingRequest, .mod-Pricing\.Request { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .mod-Document { background: var(--hx-inset); color: var(--hx-ink-2); }
+    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--hx-inset); color: var(--hx-ink-2); }
+    .dr-empty { padding: 0.9rem; text-align: center; color: var(--hx-ink-3); font-size: 0.82rem; font-style: italic; }
     /* Per-user report card */
-    .urep { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 0.9rem; overflow: hidden; background: var(--bg-card); }
-    .urep > summary { list-style: none; cursor: pointer; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.7rem; background: var(--bg-inset, #f1f5f9); transition: background 0.15s ease; }
+    .urep { border: 1px solid var(--hx-hair); border-radius: 12px; margin-bottom: 0.9rem; overflow: hidden; background: var(--hx-card); }
+    .urep > summary { list-style: none; cursor: pointer; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.7rem; background: var(--hx-inset); transition: background 0.15s ease; }
     .urep > summary::-webkit-details-marker { display: none; }
-    .urep > summary::before { content: '▸'; color: var(--text-muted); transition: transform 0.15s ease; }
+    .urep > summary::before { content: '▸'; color: var(--hx-ink-3); transition: transform 0.15s ease; }
     .urep[open] > summary::before { transform: rotate(90deg); }
-    .urep > summary:hover { background: var(--accent-light, #ccfbf1); }
-    .urep .uname { font-weight: 700; color: var(--text-primary); }
-    .urep .ustat { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .urep > summary:hover { background: var(--hx-navy-soft); }
+    .urep .uname { font-weight: 700; color: var(--hx-ink); }
+    .urep .ustat { margin-left: auto; font-size: 0.78rem; color: var(--hx-ink-3); font-weight: 600; font-variant-numeric: tabular-nums; }
     .urep-body { padding: 1rem; }
-    .urep-note { margin-top: 0.7rem; padding: 0.6rem 0.8rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 0.84rem; color: #78350f; white-space: pre-wrap; }
+    .urep-note { margin-top: 0.7rem; padding: 0.6rem 0.8rem; background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-soft); border-radius: 8px; font-size: 0.84rem; color: var(--hx-warn); white-space: pre-wrap; }
     .umods { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
     @media print {
       .navbar, .no-print { display: none !important; }
-      body { background: #fff; }
+      body { background: var(--hx-card); }
       .main-content { padding: 0 !important; margin: 0 !important; }
       .report-sheet { border: none; box-shadow: none; }
       .urep { break-inside: avoid; }

@@ -42,7 +42,7 @@
 
     el.style.display = '';
     el.innerHTML = `
-      <h3 style="font-size:0.95rem;font-weight:700;margin:0 0 0.7rem;">💳 My salary deduction${rows.length > 1 ? 's' : ''}</h3>
+      <h3 style="font-size:0.95rem;font-weight:700;margin:0 0 0.7rem;">My salary deduction${rows.length > 1 ? 's' : ''}</h3>
       <div style="display:grid;gap:0.75rem;">
         ${rows.map(d => {
           const pct = d.totalAmount > 0 ? Math.min(100, Math.round((d.paid / d.totalAmount) * 100)) : 0;

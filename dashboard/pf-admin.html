@@ -6,22 +6,21 @@
   <title>Product Finder — Data Admin</title>
   <link rel="stylesheet" href="css/styles.css">
   <style>
-    :root{--ac:#4f46e5;--ac2:#4338ca;--ink:#111827;--ink2:#64748b;--line:#e5e7eb;}
-    body{background:radial-gradient(1200px 560px at 50% -140px,#eef2ff 0%,#f5f6f8 55%,#e6e9ee 100%);}
+    :root{--ac:var(--hx-navy-text);--ac2:var(--hx-navy-text);--ink:var(--hx-ink);--ink2:var(--hx-ink-3);--line:var(--hx-hair);}
     .main-content{max-width:960px;margin:0 auto;padding-top:88px;}
-    h1{font:800 24px 'Inter',sans-serif;color:var(--ink);margin:0 0 6px;}
-    .sub{font:400 13.5px 'Inter',sans-serif;color:var(--ink2);margin:0 0 18px;}
-    .pfa-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px;
-      box-shadow:0 1px 2px rgba(17,24,39,.04),0 12px 28px -18px rgba(17,24,39,.18);}
-    .pfa-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font:400 13.5px 'Inter',sans-serif;color:var(--ink);}
+    h1{font:800 24px 'Inter',sans-serif;color: var(--hx-ink);margin:0 0 6px;}
+    .sub{font:400 13.5px 'Inter',sans-serif;color: var(--hx-ink-3);margin:0 0 18px;}
+    .pfa-card{background: var(--hx-card);border: 1px solid var(--hx-hair);border-radius: 16px;padding:16px 18px;margin-bottom:14px;
+      box-shadow: var(--hx-sh-2);}
+    .pfa-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font:400 13.5px 'Inter',sans-serif;color: var(--hx-ink);}
     .pfa-name{font-weight:700;min-width:180px;}
-    .pfa-badge{font:700 10.5px 'Inter',sans-serif;padding:2px 9px;border-radius:999px;}
-    .b-ok{background:#dcfce7;color:#166534;} .b-warn{background:#fef3c7;color:#92400e;} .b-ov{background:#dbeafe;color:#1d4ed8;}
-    .pfa-btn{border:1px solid #d7dce3;background:#fff;border-radius:999px;padding:6px 14px;font:600 12.5px 'Inter',sans-serif;cursor:pointer;}
-    .pfa-note{font:400 12px 'Inter',sans-serif;color:var(--ink2);margin-top:6px;}
-    table{width:100%;border-collapse:collapse;font:400 13px 'Inter',sans-serif;}
-    th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;}
-    th{font-weight:700;color:var(--ink2);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;}
+    .pfa-badge{font:700 10.5px 'Inter',sans-serif;padding:2px 9px;border-radius: 999px;}
+    .b-ok{background: var(--hx-ok-soft);color: var(--hx-ok);} .b-warn{background: var(--hx-warn-soft);color: var(--hx-warn);} .b-ov{background: var(--hx-cyan-soft);color: var(--hx-cyan-ink);}
+    .pfa-btn{border: 1px solid var(--hx-hair);background: var(--hx-card);border-radius: 999px;padding:6px 14px;font:600 12.5px 'Inter',sans-serif;cursor:pointer;}
+    .pfa-note{font:400 12px 'Inter',sans-serif;color: var(--hx-ink-3);margin-top:6px;}
+    table{width:100%;border-collapse: collapse;font:400 13px 'Inter',sans-serif;}
+    th,td{padding:6px 8px;border-bottom: 1px solid var(--hx-hair);text-align:left;}
+    th{font-weight:700;color: var(--hx-ink-3);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;}
   </style>
 </head>
 <body>
@@ -109,7 +108,7 @@
           + '<button class="pfa-btn" onclick="pfaPickUpload(\'' + file + '\')">⬆ Upload replacement</button>'
           + (pfOverride(file) ? '<button class="pfa-btn" onclick="pfaClearOverride(\'' + file + '\')">Clear override</button>' : '')
           + '</div>'
-          + (pfOverride(file) ? '<p class="pfa-note">⚠ This device is using an uploaded replacement, not the bundled file. To make it permanent, replace <b>dashboard/data/' + file + '</b> in the app.</p>' : '')
+          + (pfOverride(file) ? '<p class="pfa-note">This device is using an uploaded replacement, not the bundled file. To make it permanent, replace <b>dashboard/data/' + file + '</b> in the app.</p>' : '')
           + '</div>';
         cards.push(html);
       }
@@ -152,8 +151,8 @@
                           : '<span class="pfa-badge b-ok">all checks passed</span>');
       }
       box.innerHTML = issues.length
-        ? issues.map(i => '<p class="pfa-note" style="color:' + (i.level === 'error' ? '#b91c1c' : '#92400e') + ';margin:2px 0;">'
-            + (i.level === 'error' ? '✖ ' : '⚠ ') + pfaEsc(i.file) + ' — ' + pfaEsc(i.msg) + '</p>').join('')
+        ? issues.map(i => '<p class="pfa-note" style="color: ' + (i.level === 'error' ? 'var(--hx-red)' : 'var(--hx-warn)') + ';margin:2px 0;">'
+            + (i.level === 'error' ? 'Error: ' : 'Warning: ') + pfaEsc(i.file) + ' — ' + pfaEsc(i.msg) + '</p>').join('')
         : '<p class="pfa-note">All schema and cross-file reference checks passed.</p>';
     }
 

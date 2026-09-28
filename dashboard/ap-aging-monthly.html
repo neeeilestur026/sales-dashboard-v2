@@ -9,62 +9,62 @@
   <style>
     /* Same report shell accounting-summary.html and balance-sheet.html use. */
     .report { max-width: 1180px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0);
-                    border-radius: var(--radius, 16px); padding: 1.4rem 1.6rem; }
+    .report-sheet { background: var(--hx-card); border: 1px solid var(--hx-hair);
+                    border-radius: var(--hx-r-md); padding: 1.4rem 1.6rem; }
     .report-head { display: flex; justify-content: space-between; align-items: flex-start;
                    gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .report-head h1 { margin: 0; font-size: 1.35rem; }
-    .report-head .meta { color: var(--text-muted, #64748b); font-size: 0.8rem; margin-top: 0.25rem; }
+    .report-head .meta { color: var(--hx-ink-3); font-size: 0.8rem; margin-top: 0.25rem; }
     .report-controls { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-    .report-controls select { padding: 0.35rem 0.5rem; border: 1px solid var(--border, #e2e8f0);
-                              border-radius: 8px; background: #fff; }
+    .report-controls select { padding: 0.35rem 0.5rem; border: 1px solid var(--hx-hair);
+                              border-radius: 8px; background: var(--hx-card); }
 
     .apm-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
                 gap: 0.7rem; margin-bottom: 1.1rem; }
-    .apm-kpi { border: 1px solid var(--border, #e2e8f0); border-radius: 12px; padding: 0.7rem 0.85rem;
-               background: var(--bg-inset, #f8fafc); }
+    .apm-kpi { border: 1px solid var(--hx-hair); border-radius: 12px; padding: 0.7rem 0.85rem;
+               background: var(--hx-inset); }
     .apm-kpi .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
-                  color: var(--text-muted, #64748b); }
+                  color: var(--hx-ink-3); }
     .apm-kpi .v { font-size: 1.12rem; font-weight: 700; margin-top: 0.2rem;
                   font-variant-numeric: tabular-nums; }
-    .apm-kpi .d { font-size: 0.68rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
-    .apm-kpi.paid .v { color: #16a34a; }
-    .apm-kpi.open .v { color: #b45309; }
+    .apm-kpi .d { font-size: 0.68rem; color: var(--hx-ink-3); margin-top: 0.15rem; }
+    .apm-kpi.paid .v { color: var(--hx-ok); }
+    .apm-kpi.open .v { color: var(--hx-warn); }
 
     .apm-sec { margin-top: 1.5rem; }
     .apm-sec-title { font-weight: 700; font-size: 0.95rem; display: flex; align-items: baseline;
                      gap: 0.5rem; margin-bottom: 0.15rem; }
-    .apm-sec-sub { font-weight: 400; font-size: 0.74rem; color: var(--text-muted, #64748b); }
-    .apm-note { font-size: 0.74rem; color: var(--text-muted, #64748b); margin: 0.3rem 0 0.6rem; }
+    .apm-sec-sub { font-weight: 400; font-size: 0.74rem; color: var(--hx-ink-3); }
+    .apm-note { font-size: 0.74rem; color: var(--hx-ink-3); margin: 0.3rem 0 0.6rem; }
 
     /* A supplier group: a summary row that opens to its payables. */
-    details.apm-grp { border: 1px solid var(--border, #e2e8f0); border-radius: 10px;
-                      margin-bottom: 0.45rem; background: #fff; }
+    details.apm-grp { border: 1px solid var(--hx-hair); border-radius: 10px;
+                      margin-bottom: 0.45rem; background: var(--hx-card); }
     details.apm-grp > summary { list-style: none; cursor: pointer; padding: 0.55rem 0.75rem;
                                 display: flex; align-items: center; gap: 0.6rem; }
     details.apm-grp > summary::-webkit-details-marker { display: none; }
-    details.apm-grp > summary::before { content: '▸'; color: var(--text-muted, #94a3b8);
+    details.apm-grp > summary::before { content: '▸'; color: var(--hx-ink-3);
                                         transition: transform .12s; }
     details.apm-grp[open] > summary::before { transform: rotate(90deg); }
     .apm-grp .g-name { font-weight: 600; }
-    .apm-grp .g-n { font-size: 0.72rem; color: var(--text-muted, #64748b); }
+    .apm-grp .g-n { font-size: 0.72rem; color: var(--hx-ink-3); }
     .apm-grp .g-v { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
     .apm-grp-body { padding: 0 0.75rem 0.6rem; }
 
     /* An inferred date is never presented as a recorded one. */
-    .apm-inferred { background: rgba(245,158,11,0.13); color: #b45309; border-radius: 5px;
+    .apm-inferred { background: var(--hx-warn-soft); color: var(--hx-warn); border-radius: 5px;
                     padding: 0 0.3rem; font-size: 0.68rem; white-space: nowrap; }
-    .apm-warn { background: rgba(239,68,68,0.12); color: #b91c1c; border-radius: 5px;
+    .apm-warn { background: var(--hx-red-soft); color: var(--hx-red); border-radius: 5px;
                 padding: 0 0.3rem; font-size: 0.68rem; white-space: nowrap; }
-    .apm-banner { border: 1px solid #fed7aa; background: #fffbeb; color: #92400e;
+    .apm-banner { border: 1px solid var(--hx-warn-soft); background: var(--hx-warn-soft); color: var(--hx-warn);
                   border-radius: 10px; padding: 0.6rem 0.8rem; font-size: 0.78rem;
                   margin-bottom: 0.9rem; }
-    .apm-banner.bad { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-    .apm-muted { color: var(--text-muted, #64748b); }
+    .apm-banner.bad { border-color: var(--hx-red-soft); background: var(--hx-red-soft); color: var(--hx-red); }
+    .apm-muted { color: var(--hx-ink-3); }
 
     @media print {
       .navbar, .no-print { display: none !important; }
-      body { background: #fff; }
+      body { background: var(--hx-card); }
       .main-content { padding: 0 !important; margin: 0 !important; }
       .report-sheet { border: none; box-shadow: none; }
       .apm-kpi, table, .apm-sec { break-inside: avoid; }

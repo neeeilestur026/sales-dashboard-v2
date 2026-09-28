@@ -339,7 +339,7 @@ async function loadPOs() {
     c.innerHTML = `<table class="flow-table"><thead><tr><th>PO No</th><th>SO</th><th>Date</th><th>Supplier</th><th>Cur</th><th class="num">Total (FC)</th><th>Status</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${poList.map(p => {
       const st = p.status || 'Draft';
       const noteTip = (st === 'Rejected' && p.approvalNote) ? ` title="Reason: ${flowEsc(p.approvalNote)}"` : '';
-      const noteLine = (st === 'Rejected' && p.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(p.approvalNote)}</div>` : '';
+      const noteLine = (st === 'Rejected' && p.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✕ ${flowEsc(p.approvalNote)}</div>` : '';
       const soCell = p.soNo ? flowEsc(p.soNo) : '<span class="flow-badge b-pending" title="Purchase order without a sales order — for restocking stock">Restock</span>';
       // A145: an approved/sent PO with no receiving yet — nudge to receive the goods.
       const rcBadge = (!poReceived[String(p.poNo)] && (st === 'Approved' || st === 'Sent'))

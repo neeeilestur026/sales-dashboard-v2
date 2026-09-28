@@ -212,7 +212,7 @@ function _chip(m, st) {
   if (on) return `<span class="ll-chip ok" title="${st.label}: done">✓ ${st.label}</span>`;
   if (m.migrated && st.op) return `<span class="ll-chip na" title="${st.label}: n/a (imported record)">– ${st.label}</span>`;
   const isNext = m.next === st.label;
-  return `<span class="ll-chip ${isNext ? 'next' : 'miss'}" title="${st.label}: ${isNext ? 'next step' : 'missing'}">${isNext ? '➜' : '✗'} ${st.label}</span>`;
+  return `<span class="ll-chip ${isNext ? 'next' : 'miss'}" title="${st.label}: ${isNext ? 'next step' : 'missing'}">${isNext ? '›' : '✕'} ${st.label}</span>`;
 }
 
 function llCard(m) {
@@ -328,7 +328,7 @@ function llRenderDT(soNo, r) {
     docs.forEach(d => { (byMod[d.module] = byMod[d.module] || []).push(d); });
     dh = '<div class="ll-docs">' + Object.keys(byMod).map(mod =>
       `<div class="ll-docmod"><div class="ll-docmod-h">${flowEsc(mod)} <span class="acc-muted">(${byMod[mod].length})</span></div>` +
-      byMod[mod].map(d => `<a href="${flowEsc(d.link)}" target="_blank" class="ll-doclink">📄 ${flowEsc(d.docType || d.fileName || 'document')}</a>`).join('') +
+      byMod[mod].map(d => `<a href="${flowEsc(d.link)}" target="_blank" class="ll-doclink">${flowEsc(d.docType || d.fileName || 'document')}</a>`).join('') +
       `</div>`).join('') + '</div>';
   }
 

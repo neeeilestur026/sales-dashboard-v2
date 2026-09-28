@@ -15,7 +15,7 @@ let drVisits = [];         // A189 — this rep's logged client visits for the s
 function _emailMetaHint() {
   const m = drEmailMeta;
   if (!m || !m.folder) return '';
-  return ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>`;
+  return ` <span style="color:var(--hx-ink-3);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>`;
 }
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Inventory'];
 
@@ -177,7 +177,7 @@ async function loadEmails() {
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
   document.getElementById('sumEmails').textContent = emails.length;
   if (needsSetup) {
-    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--hx-navy);font-weight:600;">Connect email →</a></td></tr>`;
     return;
   }
   body.innerHTML = emails.length ? emails.map(r => {
@@ -220,8 +220,8 @@ async function loadCalls() {
       <td>${_esc(c.contact || '—')}</td>
       <td>${_esc(c.company || '—')}</td>
       <td><span class="act-chip">${_esc(c.outcome || '')}</span></td>
-      <td style="color:var(--text-secondary);">${_esc(c.notes || '')}</td>
-      <td class="no-print"><button class="btn btn-xs" data-del="${c.rowIndex}" style="border:1px solid var(--border);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
+      <td style="color:var(--hx-ink-2);">${_esc(c.notes || '')}</td>
+      <td class="no-print"><button class="btn btn-xs" data-del="${c.rowIndex}" style="border:1px solid var(--hx-hair);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
     </tr>`).join('') : '<tr><td colspan="6" class="dr-empty">No calls logged for this day.</td></tr>';
   document.querySelectorAll('#callBody [data-del]').forEach(b => b.addEventListener('click', () => delCall(b.getAttribute('data-del'))));
 }
@@ -272,10 +272,10 @@ async function loadVisits() {
       <td>${_esc(v.company || '—')}</td>
       <td>${_esc(v.cityAddress || '—')}</td>
       <td>${_esc(v.agenda || '')}</td>
-      <td style="color:var(--text-secondary);">${_esc(v.summaryOfAgenda || '')}</td>
-      <td>${v.itineraryItem ? `<span class="act-chip" title="Fulfils a planned stop">planned</span>` : `<span style="color:var(--text-muted);font-size:0.72rem;">unplanned</span>`}</td>
-      <td>${v.photoDocId ? '📷' : '<span style="color:#b45309;" title="No photo on this visit">—</span>'}</td>
-      <td class="no-print"><button class="btn btn-xs" data-del="${v.rowIndex}" data-no="${_esc(v.visitNo)}" style="border:1px solid var(--border);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
+      <td style="color:var(--hx-ink-2);">${_esc(v.summaryOfAgenda || '')}</td>
+      <td>${v.itineraryItem ? `<span class="act-chip" title="Fulfils a planned stop">planned</span>` : `<span style="color:var(--hx-ink-3);font-size:0.72rem;">unplanned</span>`}</td>
+      <td>${v.photoDocId ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Photo attached"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>' : '<span style="color:var(--hx-warn);" title="No photo on this visit">—</span>'}</td>
+      <td class="no-print"><button class="btn btn-xs" data-del="${v.rowIndex}" data-no="${_esc(v.visitNo)}" style="border:1px solid var(--hx-hair);border-radius:6px;padding:0.1rem 0.45rem;font-size:0.72rem;cursor:pointer;">✕</button></td>
     </tr>`).join('') : '<tr><td colspan="9" class="dr-empty">No client visits logged for this day.</td></tr>';
   document.querySelectorAll('#visitBody [data-del]').forEach(b =>
     b.addEventListener('click', () => delVisit(b.getAttribute('data-del'), b.getAttribute('data-no'))));
@@ -293,15 +293,15 @@ async function visitPhotoChosen(e) {
   if (!file) return;
   if (file.size > FLOW_DOC_MAX_MB * 1024 * 1024) {
     msg.textContent = `That image is ${(file.size / 1048576).toFixed(1)} MB — the limit is ${FLOW_DOC_MAX_MB} MB.`;
-    msg.style.color = '#b91c1c'; e.target.value = ''; return;
+    msg.style.color = 'var(--hx-red)'; e.target.value = ''; return;
   }
   msg.textContent = 'Preparing…'; msg.style.color = '';
   try {
     drVisitPhoto = await flowDownscaleImage(file, 900, 0.85);
     prev.src = drVisitPhoto; prev.style.display = '';
-    msg.textContent = 'Ready'; msg.style.color = 'var(--text-muted)';
+    msg.textContent = 'Ready'; msg.style.color = 'var(--hx-ink-3)';
   } catch (err) {
-    msg.textContent = 'That file could not be read as an image.'; msg.style.color = '#b91c1c';
+    msg.textContent = 'That file could not be read as an image.'; msg.style.color = 'var(--hx-red)';
     e.target.value = '';
   }
 }

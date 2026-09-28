@@ -224,7 +224,7 @@ function render() {
     const sub = adrSubs[String(name).trim()];
     return `<details class="urep"${i === 0 ? ' open' : ''} data-user="${_e(name)}">
       <summary><span class="uname">${_e(name)}</span>
-        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${(adrVisits[name] || []).length ? ` · 🤝 ${adrVisits[name].length} visit(s)` : ''}${(adrEmails[name] && (adrEmails[name].emails || []).length) ? ` · ✉️ ${adrEmails[name].emails.length} sent` : ''}${note ? ' · 📝 note' : ''}${sub ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted</span>` : ' · <span style="color:#b45309;">not submitted</span>'}</span></summary>
+        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${(adrVisits[name] || []).length ? `, ${adrVisits[name].length} visit(s)` : ''}${(adrEmails[name] && (adrEmails[name].emails || []).length) ? `, ${adrEmails[name].emails.length} sent` : ''}${note ? ' · note' : ''}${sub ? ` · <span style="color:${sub.status === 'Reviewed' ? 'var(--hx-cyan-ink)' : 'var(--hx-ok)'};">✓ submitted</span>` : ' · <span style="color:var(--hx-warn);">not submitted</span>'}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
         ${flowRenderTaskCards(tasks, { moduleOrder: MODULE_ORDER, emptyText: 'No movements (note only).' })}
@@ -263,12 +263,12 @@ function renderProductivity(names, userTasks) {
     + rows.map(function (r) {
       return '<tr><td style="font-weight:600;">' + _e(r.name) + '</td>'
         + '<td class="num" style="font-weight:700;">' + r.tasks + '</td>'
-        + '<td style="font-size:0.78rem;color:var(--text-secondary,#475569);">' + (r.top || '—') + '</td>'
-        + '<td><div style="height:8px;border-radius:999px;background:var(--bg-inset,#f1f5f9);overflow:hidden;">'
-        + '<div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--accent,#4f46e5);"></div></div></td>'
+        + '<td style="font-size:0.78rem;color:var(--hx-ink-2);">' + (r.top || '—') + '</td>'
+        + '<td><div style="height:8px;border-radius:999px;background:var(--hx-inset);overflow:hidden;">'
+        + '<div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--hx-navy);"></div></div></td>'
         + '<td class="num">' + (r.visits || '') + '</td>'
         + '<td class="num">' + (r.emails || '') + '</td>'
-        + '<td>' + (r.submitted ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#b45309;">—</span>') + '</td></tr>';
+        + '<td>' + (r.submitted ? '<span style="color:var(--hx-ok);font-weight:700;">✓</span>' : '<span style="color:var(--hx-warn);">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
 }
 
@@ -278,17 +278,17 @@ function renderProductivity(names, userTasks) {
 function adrSubmissionHtml(sub) {
   if (!sub) return '';
   const part = (label, text) => text
-    ? `<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#0d9488;margin-top:0.4rem;">${label}</div>
+    ? `<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:var(--hx-cyan-ink);margin-top:0.4rem;">${label}</div>
        <div style="font-size:0.84rem;white-space:pre-wrap;">${_e(text)}</div>` : '';
   const body = part('Highlights', sub.highlights) + part('Blockers', sub.blockers) + part('Plan', sub.plan);
-  return `<div style="margin-top:0.7rem;border-left:3px solid var(--accent,#0d9488);background:var(--bg-inset,#f8fafc);padding:0.6rem 0.85rem;border-radius:0 8px 8px 0;">
+  return `<div style="margin-top:0.7rem;border-left:3px solid var(--hx-navy);background:var(--hx-inset);padding:0.6rem 0.85rem;border-radius:0 8px 8px 0;">
     <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
       <strong style="font-size:0.8rem;">Daily report submitted</strong>
-      <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${_e(_time(sub.submittedAt))}${(parseFloat(sub.submitCount) || 0) > 1 ? ` · updated ${parseFloat(sub.submitCount)}×` : ''}</span>
-      ${sub.status === 'Reviewed' ? `<span style="margin-left:auto;font-size:0.75rem;color:#0d9488;font-weight:700;">✓ Reviewed by ${_e(sub.reviewedBy)}</span>` : ''}
+      <span style="font-size:0.75rem;color:var(--hx-ink-3);">${_e(_time(sub.submittedAt))}${(parseFloat(sub.submitCount) || 0) > 1 ? ` · updated ${parseFloat(sub.submitCount)}×` : ''}</span>
+      ${sub.status === 'Reviewed' ? `<span style="margin-left:auto;font-size:0.75rem;color:var(--hx-cyan-ink);font-weight:700;">✓ Reviewed by ${_e(sub.reviewedBy)}</span>` : ''}
     </div>
     ${typeof flowReportCountersHtml === 'function' ? flowReportCountersHtml(sub) : ''}
-    ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
+    ${body || '<div style="font-size:0.82rem;color:var(--hx-ink-3);font-style:italic;">Submitted with no written notes.</div>'}
   </div>`;
 }
 
@@ -297,7 +297,7 @@ function adrSubmissionHtml(sub) {
 function adrVisitHtml(name) {
   const visits = adrVisits[String(name).trim()] || [];
   if (!visits.length) return '';
-  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">🤝 Client Visits — ${_e(_date())} <span style="font-weight:600;color:var(--text-secondary,#475569);">(${visits.length})</span></div>`;
+  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-ink-3);margin:0.6rem 0 0.3rem;">Client visits — ${_e(_date())} <span style="font-weight:600;color:var(--hx-ink-2);">(${visits.length})</span></div>`;
   return head + adrPlanVsActual(name) + `<div style="overflow-x:auto;"><table class="flow-table">
     <thead><tr><th>Time</th><th>Person visited</th><th>Company</th><th>City / address</th><th>Agenda</th><th>Summary of agenda</th><th>Plan</th><th>Photo</th></tr></thead>
     <tbody>${visits.map(v => `<tr>
@@ -306,9 +306,9 @@ function adrVisitHtml(name) {
       <td>${_e(v.company || '—')}</td>
       <td>${_e(v.cityAddress || '—')}</td>
       <td>${_e(v.agenda || '')}</td>
-      <td style="color:var(--text-secondary,#475569);">${_e(v.summaryOfAgenda || '')}</td>
-      <td>${v.itineraryItem ? '<span class="flow-badge" style="background:rgba(16,185,129,0.14);color:#047857;">planned</span>'
-                            : '<span style="color:var(--text-muted,#64748b);font-size:0.72rem;">unplanned</span>'}</td>
+      <td style="color:var(--hx-ink-2);">${_e(v.summaryOfAgenda || '')}</td>
+      <td>${v.itineraryItem ? '<span class="flow-badge" style="background:var(--hx-ok-line);color:var(--hx-ok);">planned</span>'
+                            : '<span style="color:var(--hx-ink-3);font-size:0.72rem;">unplanned</span>'}</td>
       <td data-photo="${_e(v.visitNo)}">${adrPhotoCell(v)}</td>
     </tr>`).join('')}</tbody></table></div>`;
 }
@@ -324,11 +324,11 @@ function adrPlanVsActual(name) {
   const done = new Set(visits.filter(v => v.itineraryItem).map(v => String(v.itineraryItem)));
   const planned = (plan.items || []).length;
   const unplanned = visits.filter(v => !v.itineraryItem).length;
-  return `<div style="font-size:0.75rem;color:var(--text-secondary,#475569);margin:0 0 0.4rem;">
+  return `<div style="font-size:0.75rem;color:var(--hx-ink-2);margin:0 0 0.4rem;">
     Against <strong>${_e(plan.itineraryNo)}</strong> (${_e(plan.weekStart)} – ${_e(plan.weekEnd)}):
     ${planned} planned this week ·
-    <span style="color:#047857;font-weight:700;">${done.size} matched so far</span> ·
-    <span style="color:#b45309;font-weight:700;">${unplanned} unplanned</span></div>`;
+    <span style="color:var(--hx-ok);font-weight:700;">${done.size} matched so far</span> ·
+    <span style="color:var(--hx-warn);font-weight:700;">${unplanned} unplanned</span></div>`;
 }
 
 /* A190 — the photo cell. Starts as a button; the image is fetched only when the rep's card is
@@ -337,10 +337,10 @@ function adrPlanVsActual(name) {
    serves HTML and renders as a broken image, which is the dead end already sitting in
    management-home.js and accounting-home.js. */
 function adrPhotoCell(v) {
-  if (!v.photoDocId) return '<span style="color:#b45309;font-size:0.72rem;" title="No photo on this visit">—</span>';
+  if (!v.photoDocId) return '<span style="color:var(--hx-warn);font-size:0.72rem;" title="No photo on this visit">—</span>';
   const src = adrVisitPhotos[String(v.visitNo)];
-  if (!src) return '<span style="color:var(--text-muted,#64748b);font-size:0.72rem;">📷 loading…</span>';
-  return `<img src="${src}" alt="Visit photo" loading="lazy" style="height:42px;border-radius:6px;border:1px solid var(--border,#e2e8f0);cursor:zoom-in;" onclick="adrZoomPhoto('${_e(v.visitNo)}')">`;
+  if (!src) return '<span style="color:var(--hx-ink-3);font-size:0.72rem;">loading…</span>';
+  return `<img src="${src}" alt="Visit photo" loading="lazy" style="height:42px;border-radius:6px;border:1px solid var(--hx-hair);cursor:zoom-in;" onclick="adrZoomPhoto('${_e(v.visitNo)}')">`;
 }
 
 async function adrLoadPhotos(name) {
@@ -366,18 +366,18 @@ function adrZoomPhoto(visitNo) {
   const src = adrVisitPhotos[String(visitNo)];
   if (!src) return;
   const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:4000;display:flex;align-items:center;justify-content:center;padding:2rem;cursor:zoom-out;';
+  el.style.cssText = 'position:fixed;inset:0;background:var(--hx-scrim);z-index:4000;display:flex;align-items:center;justify-content:center;padding:2rem;cursor:zoom-out;';
   el.innerHTML = `<img src="${src}" alt="Visit photo" style="max-width:100%;max-height:100%;border-radius:8px;">`;
   el.addEventListener('click', () => el.remove());
   document.body.appendChild(el);
 }
 
 function adrEmailHtml(name) {
-  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_e(_date())}</div>`;
+  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-ink-3);margin:0.6rem 0 0.3rem;">Sent Emails — ${_e(_date())}</div>`;
   const rec = adrEmails[name];
   if (!rec) {
     // Roster unavailable → say WHY instead of a bare dash.
-    if (adrRosterError) return head + `<div class="dr-empty" style="font-size:0.8rem;color:#b45309;">Sent emails unavailable — ${_e(adrRosterError)}</div>`;
+    if (adrRosterError) return head + `<div class="dr-empty" style="font-size:0.8rem;color:var(--hx-warn);">Sent emails unavailable — ${_e(adrRosterError)}</div>`;
     if (adrEmailsLoading) return head + `<div class="dr-empty" style="font-size:0.8rem;">Loading sent emails…</div>`;
     return head + `<div class="dr-empty" style="font-size:0.8rem;">—</div>`;
   }
@@ -387,7 +387,7 @@ function adrEmailHtml(name) {
       : `${_e(name)} hasn't connected their mailbox.`;
     return head + `<div class="dr-empty" style="font-size:0.8rem;">${why}</div>`;
   }
-  if (rec.error) return head + `<div class="dr-empty" style="font-size:0.8rem;color:#b45309;">Couldn't load (${_e(rec.error)}) — retrying on the next refresh.</div>`;
+  if (rec.error) return head + `<div class="dr-empty" style="font-size:0.8rem;color:var(--hx-warn);">Couldn't load (${_e(rec.error)}) — retrying on the next refresh.</div>`;
   const emails = rec.emails || [];
   if (!emails.length) return head + `<div class="dr-empty" style="font-size:0.8rem;">No emails sent on ${_e(_date())}.</div>`;
   return head + `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>

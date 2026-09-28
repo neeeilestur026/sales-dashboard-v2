@@ -66,7 +66,7 @@ const FG_STEPS = [
 
 const FG_MASTERS = 'Suppliers & Clients are master records. The Supplier master fills bank/account/method on payment requests; the Client master fills the contact block on Purchase Requests and the payment terms that set each invoice’s AR due date. They self-populate as new details are typed, so re-entry keeps shrinking over time.';
 
-const FG_ACTION = 'The ⚙ "What needs you" strip on your home dashboard and the notification bell list exactly the items waiting on your role at any moment — approvals, pricing, sourcing, quotes to send, payables/receivables due — so you never have to hunt across pages.';
+const FG_ACTION = 'The "What needs you" strip on your home dashboard and the notification bell list exactly the items waiting on your role at any moment — approvals, pricing, sourcing, quotes to send, payables/receivables due — so you never have to hunt across pages.';
 
 function fgRender() {
   const el = document.getElementById('fgBody');
@@ -77,7 +77,7 @@ function fgRender() {
       <p>${s.body}</p>
       ${s.status ? `<div class="fg-status">${s.status}</div>` : ''}
       ${(s.notes || []).length ? `<ul>${s.notes.map(n => `<li>${n}</li>`).join('')}</ul>` : ''}
-      ${s.gate ? `<div class="fg-gate">⛑ ${s.gate}</div>` : ''}
+      ${s.gate ? `<div class="fg-gate">${s.gate}</div>` : ''}
       <p style="margin-top:0.5rem;"><a href="${s.page}" class="btn btn-sm btn-secondary">Open ${flowEsc(s.title)} →</a></p>
     </div>`).join('');
 

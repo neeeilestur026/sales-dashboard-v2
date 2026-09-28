@@ -8,52 +8,52 @@
   <style>
     .bank-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; margin-bottom:1.25rem; }
     .bank-card {
-      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155);
-      border-radius:12px; padding:1rem 1.1rem; position:relative;
+      background: var(--hx-inset); border: 1px solid var(--hx-hair);
+      border-radius: 12px; padding:1rem 1.1rem; position:relative;
     }
-    .bank-card .bk-name { font-size:0.78rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
-    .bank-card .bk-bal  { font-size:1.6rem; font-weight:700; margin:0.3rem 0 0.1rem; color:var(--text-primary,#f1f5f9); }
-    .bank-card .bk-sub  { font-size:0.78rem; color:var(--text-muted,#94a3b8); }
+    .bank-card .bk-name { font-size:0.78rem; color: var(--hx-ink-3); text-transform:uppercase; letter-spacing:0.04em; }
+    .bank-card .bk-bal  { font-size:1.6rem; font-weight:700; margin:0.3rem 0 0.1rem; color: var(--hx-ink); }
+    .bank-card .bk-sub  { font-size:0.78rem; color: var(--hx-ink-3); }
     .bank-card .bk-actions { display:flex; gap:0.4rem; margin-top:0.75rem; flex-wrap:wrap; }
-    .bank-card.aub { border-color:#f97316; }
+    .bank-card.aub { border-color: var(--hx-warn); }
     .bk-btn {
-      padding:0.35rem 0.7rem; border-radius:6px; font-size:0.74rem; font-weight:600;
-      cursor:pointer; border:1px solid var(--border,#334155); background:var(--surface,#0f172a);
-      color:var(--text-primary,#e2e8f0);
+      padding:0.35rem 0.7rem; border-radius: 6px; font-size:0.74rem; font-weight:600;
+      cursor:pointer; border: 1px solid var(--hx-hair); background: var(--hx-card);
+      color: var(--hx-ink);
     }
-    .bk-btn.primary { background:#3b82f6; color:#fff; border-color:#3b82f6; }
-    .bk-btn.warn { background:#f97316; color:#fff; border-color:#f97316; }
+    .bk-btn.primary { background: var(--hx-cyan-ink); color: var(--hx-slab-ink); border-color: var(--hx-cyan-ink); }
+    .bk-btn.warn { background: var(--hx-warn); color: var(--hx-slab-ink); border-color: var(--hx-warn); }
     .bk-toolbar {
       display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;
       margin-bottom:0.75rem;
     }
     .bk-tabs { display:flex; gap:0.4rem; flex-wrap:wrap; }
     .bk-tab {
-      padding:0.4rem 0.85rem; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;
-      background:transparent; border:1px solid var(--border,#334155); color:var(--text-muted,#94a3b8);
+      padding:0.4rem 0.85rem; border-radius: 6px; font-size:0.78rem; font-weight:600; cursor:pointer;
+      background: transparent; border: 1px solid var(--hx-hair); color: var(--hx-ink-3);
     }
-    .bk-tab.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
-    .bk-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
-    .bk-table th { text-align:left; padding:0.5rem 0.6rem; border-bottom:1px solid var(--border,#334155); color:var(--text-muted,#94a3b8); font-size:0.7rem; text-transform:uppercase; }
-    .bk-table td { padding:0.5rem 0.6rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); }
-    .bk-amt.credit { color:#16a34a; font-weight:600; }
-    .bk-amt.debit  { color:#ef4444; font-weight:600; }
-    .pill-pr { background:rgba(249,115,22,0.15); color:#fb923c; padding:0.1rem 0.45rem; border-radius:999px; font-size:0.68rem; font-weight:600; }
-    .pill-xfer { background:rgba(59,130,246,0.15); color:#60a5fa; padding:0.1rem 0.45rem; border-radius:999px; font-size:0.68rem; font-weight:600; }
-    .pill-other { background:rgba(148,163,184,0.15); color:#cbd5e1; padding:0.1rem 0.45rem; border-radius:999px; font-size:0.68rem; font-weight:600; }
-    .bk-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:90; align-items:center; justify-content:center; }
+    .bk-tab.active { background: var(--hx-cyan-ink); color: var(--hx-slab-ink); border-color: var(--hx-cyan-ink); }
+    .bk-table { width:100%; border-collapse: collapse; font-size:0.82rem; }
+    .bk-table th { text-align:left; padding:0.5rem 0.6rem; border-bottom: 1px solid var(--hx-hair); color: var(--hx-ink-3); font-size:0.7rem; text-transform:uppercase; }
+    .bk-table td { padding:0.5rem 0.6rem; border-bottom: 1px solid var(--hx-inset); color: var(--hx-ink); }
+    .bk-amt.credit { color: var(--hx-ok); font-weight:600; }
+    .bk-amt.debit  { color: var(--hx-red); font-weight:600; }
+    .pill-pr { background: var(--hx-warn-soft); color: var(--hx-navy-text); padding:0.1rem 0.45rem; border-radius: 999px; font-size:0.68rem; font-weight:600; }
+    .pill-xfer { background: var(--hx-cyan-soft); color: var(--hx-cyan); padding:0.1rem 0.45rem; border-radius: 999px; font-size:0.68rem; font-weight:600; }
+    .pill-other { background: var(--hx-inset); color: var(--hx-hair); padding:0.1rem 0.45rem; border-radius: 999px; font-size:0.68rem; font-weight:600; }
+    .bk-modal-bg { display:none; position:fixed; inset:0; background: var(--hx-scrim); z-index:90; align-items:center; justify-content:center; }
     .bk-modal-bg.open { display:flex; }
     .bk-modal {
-      background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155);
-      border-radius:12px; padding:1.25rem; width:min(440px, 92vw);
-      color:var(--text-primary,#f1f5f9);
+      background: var(--hx-inset); border: 1px solid var(--hx-hair);
+      border-radius: 12px; padding:1.25rem; width:min(440px, 92vw);
+      color: var(--hx-ink);
     }
     .bk-modal h3 { margin:0 0 0.75rem; }
     .bk-modal .row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.7rem; }
-    .bk-modal .row label { font-size:0.74rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .bk-modal .row label { font-size:0.74rem; color: var(--hx-ink-3); text-transform:uppercase; letter-spacing:0.04em; }
     .bk-modal input, .bk-modal select, .bk-modal textarea {
-      padding:0.55rem 0.65rem; border-radius:6px; border:1px solid var(--border,#334155);
-      background:var(--bg-primary,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.88rem; font-family:inherit;
+      padding:0.55rem 0.65rem; border-radius: 6px; border: 1px solid var(--hx-hair);
+      background: var(--hx-page); color: var(--hx-ink); font-size:0.88rem; font-family:inherit;
     }
     .bk-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem; }
   </style>
@@ -67,33 +67,33 @@
       <div class="bk-toolbar">
         <div>
           <h1 style="margin:0;">Bank Accounts</h1>
-          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+          <p style="margin:0.25rem 0 0;color: var(--hx-ink-3);font-size:0.85rem;">
             AUB is auto-debited every time a Payment Request is marked Paid.
             Metrobank accounts receive client payments and fund AUB.
           </p>
         </div>
         <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-          <button class="bk-btn" onclick="loadBanks()">🔄 Refresh</button>
+          <button class="bk-btn" onclick="loadBanks()">Refresh</button>
           <button class="bk-btn warn" onclick="openTransferModal()">↔ Fund AUB / Transfer</button>
         </div>
       </div>
 
       <!-- Account balance cards -->
       <div class="bank-grid" id="bankCards">
-        <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1rem;">Loading…</div>
+        <div style="grid-column:1/-1;text-align:center;color: var(--hx-ink-3);padding:1rem;">Loading…</div>
       </div>
 
       <!-- Filter / Account tabs -->
       <div class="bk-toolbar">
         <div class="bk-tabs" id="bkTabs"></div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
-          <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
-          <input type="month" id="bkMonth" onchange="loadTransactions()" style="padding:0.4rem 0.55rem;border:1px solid var(--border,#334155);border-radius:6px;background:var(--surface,#0f172a);color:var(--text-primary,#e2e8f0);">
+          <label style="font-size:0.78rem;color: var(--hx-ink-3);">Month</label>
+          <input type="month" id="bkMonth" onchange="loadTransactions()" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 6px;background: var(--hx-card);color: var(--hx-ink);">
           <button class="bk-btn" onclick="document.getElementById('bkMonth').value='';loadTransactions();">Clear</button>
         </div>
       </div>
 
-      <div style="background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;overflow:hidden;">
+      <div style="background: var(--hx-inset);border: 1px solid var(--hx-hair);border-radius: 12px;overflow:hidden;">
         <table class="bk-table" id="bkTxTable">
           <thead>
             <tr>
@@ -107,7 +107,7 @@
             </tr>
           </thead>
           <tbody id="bkTxBody">
-            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem;">Select an account.</td></tr>
+            <tr><td colspan="7" style="text-align:center;color: var(--hx-ink-3);padding:1rem;">Select an account.</td></tr>
           </tbody>
         </table>
       </div>
@@ -152,7 +152,7 @@
   <div class="bk-modal-bg" id="xferModalBg">
     <div class="bk-modal">
       <h3>Transfer / Fund AUB</h3>
-      <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.6rem;">Use this when you deposit a Metrobank check to AUB, or move funds between any two accounts.</p>
+      <p style="font-size:0.78rem;color: var(--hx-ink-3);margin:0 0 0.6rem;">Use this when you deposit a Metrobank check to AUB, or move funds between any two accounts.</p>
       <div class="row">
         <label>From Account</label>
         <select id="xferFrom"></select>

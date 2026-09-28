@@ -363,7 +363,7 @@ function openPreview(idx) {
     var docItems = docs.map(function(name, i) {
       var url = attLinks[i] || '';
       var ext = name.split('.').pop().toLowerCase();
-      var icon = ext === 'pdf' ? '📄' : (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif') ? '🖼️' : '📎';
+      var icon = ext === 'pdf' ? 'PDF' : (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif') ? 'IMG' : 'DOC';
       return url
         ? '<a href="' + esc(url) + '" target="_blank" class="pv-doc-link" title="' + esc(name) + '">' + icon + ' ' + esc(name) + '</a>'
         : '<span class="pv-doc-nolink" title="' + esc(name) + '">' + icon + ' ' + esc(name) + '</span>';

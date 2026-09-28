@@ -48,7 +48,10 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   // A294 — marketing and HR
   'marketing-home.html', 'hr-home.html', 'hr-accreditations.html', 'hr-analytics.html', 'hr-campaigns.html', 'hr-content-calendar.html', 'hr-daily-report.html',
   'hr-employees.html', 'hr-grievances.html', 'hr-leave.html', 'hr-memos.html', 'hr-recruitment.html', 'hr-reviews.html', 'hr-tasks.html', 'hr-training.html',
-  'marketing-daily-report.html'];
+  'marketing-daily-report.html',
+  // A295 — reports, settings, the orphans
+  'all-daily-reports.html', 'ap-aging-monthly.html', 'balance-sheet.html', 'client-tracker.html', 'commission-payout-report.html', 'commission-rates.html',
+  'director-banks.html', 'director-duties.html', 'director-payables.html', 'my-reports.html', 'pf-admin.html', 'report.html', 'team-performance.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');
@@ -127,10 +130,26 @@ sec('4 · the burn-down (hard for PASSED pages, a metric for the rest)');
     const nh = attrs.filter(s => !/^style="\s*display\s*:\s*none;?\s*"$/.test(s)).length;
     const dk = ((blocks + attrs.join(' ')).match(/#1e293b|#334155|#0f172a/gi) || []).length;
     hex += hx; emoji += em; notHidden += nh; dark += dk;
-    if (PASSED.includes(f) && (hx || em || dk)) hard.push({ f, hx, em, dk });
+    if ((hx || em || dk)) hard.push({ f, hx, em, dk });
   });
   console.log('     metric: literal colours in style blocks/attrs = ' + hex + ', emoji = ' + emoji + ', non-hidden inline styles = ' + notHidden + ', dark-era literals = ' + dark);
-  ok('PASSED pages (' + PASSED.length + ') carry no literal colour, emoji or dark-era literal', hard.length === 0, hard);
+  // A295 — every page is done, so the burn-down is a hard fail for all of them (PASSED stays as the record of the order).
+  ok('every page (' + PAGES.length + ') carries no literal colour, emoji or dark-era literal', hard.length === 0, hard);
+  ok('  and PASSED lists every page', PAGES.every(f => PASSED.includes(f)), PAGES.filter(f => !PASSED.includes(f)));
+}
+
+/* ── 5 · the scripts ──────────────────────────────────────────────────────────────────────────── */
+sec('5 · the scripts (chrome emoji is a hard fail; hex is a metric — two writers are pinned inline)');
+{
+  /* ✓ ✔ ✕ ✉ ✎ ⚠ ▸ ▾ ▲ ▼ are glyphs the UI keeps; everything else in the pictograph and dingbat blocks is emoji. */
+  const EMOJI_JS = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{269F}\u{26A1}-\u{2708}\u{270A}-\u{270D}\u{270F}-\u{2712}\u{2716}-\u{27BF}]/u;
+  const JS_FILES = fs.readdirSync(D + 'js').filter(f => f.endsWith('.js')).sort();
+  const withEmoji = JS_FILES.filter(f => EMOJI_JS.test(read('js/' + f)));
+  ok('no script emits chrome emoji', withEmoji.length === 0, withEmoji);
+  const PINNED = ['report-render.js', 'flow-ap-aging.js', 'report-pdf.js'];   // report-render and the AP banner are pinned by tests; report-pdf paints a PDF
+  let hexJs = 0; const per = [];
+  JS_FILES.forEach(f => { if (PINNED.includes(f)) return; const n = (read('js/' + f).match(/#[0-9a-fA-F]{6}\b/g) || []).length; if (n) { hexJs += n; per.push(f + ':' + n); } });
+  console.log('     metric: hex colours in scripts (unpinned) = ' + hexJs + ' in ' + per.length + ' files' + (per.length ? ' — ' + per.slice(0, 12).join(', ') : ''));
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));

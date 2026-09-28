@@ -49,7 +49,7 @@ async function load(fresh) {
     buildMonths();
     render();
   } catch (e) {
-    body.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${_e(e.message || 'Could not load')}</div>`;
+    body.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${_e(e.message || 'Could not load')}</div>`;
   }
 }
 
@@ -259,6 +259,6 @@ function sec(title, sub, inner) {
 
 /* The A157 footer: the column visibly adds up to the figure above it. */
 function footRow(spanCols, total) {
-  return `<tr style="font-weight:700;border-top:2px solid var(--border,#e2e8f0);">
+  return `<tr style="font-weight:700;border-top:2px solid var(--hx-hair);">
     <td colspan="${spanCols}">Total</td><td class="num">${_m(total)}</td></tr>`;
 }

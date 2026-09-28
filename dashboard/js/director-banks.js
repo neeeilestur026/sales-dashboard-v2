@@ -48,7 +48,7 @@
     var grid = document.getElementById('bankCards');
     if (!grid) return;
     if (!accounts.length) {
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1rem;">No accounts.</div>';
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--hx-ink-3);padding:1rem;">No accounts.</div>';
       return;
     }
     grid.innerHTML = accounts.map(function (a) {
@@ -85,7 +85,7 @@
 
   window.loadBanks = function () {
     var grid = document.getElementById('bankCards');
-    if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1rem;">Loading…</div>';
+    if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--hx-ink-3);padding:1rem;">Loading…</div>';
     return apiGetBankAccounts().then(function (res) {
       var list = (res && (res.accounts || res.data || res)) || [];
       if (!Array.isArray(list) && res && Array.isArray(res.result)) list = res.result;
@@ -111,7 +111,7 @@
       return loadTransactions();
     }).catch(function (err) {
       console.error('loadBanks failed', err);
-      if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#ef4444;padding:1rem;">Failed to load accounts.</div>';
+      if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--hx-red);padding:1rem;">Failed to load accounts.</div>';
     });
   };
 
@@ -119,18 +119,18 @@
     var body = document.getElementById('bkTxBody');
     if (!body) return;
     if (!currentAccountCode) {
-      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem;">Select an account.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">Select an account.</td></tr>';
       return;
     }
     var month = (document.getElementById('bkMonth') || {}).value || '';
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem;">Loading…</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">Loading…</td></tr>';
     var params = { month: month };
     if (currentAccountCode !== '__ALL__') params.accountCode = currentAccountCode;
     return apiGetBankTransactions(params).then(function (res) {
       var list = (res && (res.transactions || res.data || res.result)) || [];
       if (!Array.isArray(list) && Array.isArray(res)) list = res;
       if (!list.length) {
-        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem;">No transactions.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">No transactions.</td></tr>';
         return;
       }
       list.sort(function (a, b) {
@@ -144,7 +144,7 @@
         var acct = '';
         if (currentAccountCode === '__ALL__') {
           var a = accounts.find(function (x) { return x.code === tx.accountCode; });
-          acct = ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + escapeHtml(a ? a.name : tx.accountCode) + ')</span>';
+          acct = ' <span style="color:var(--hx-ink-3);font-size:0.72rem;">(' + escapeHtml(a ? a.name : tx.accountCode) + ')</span>';
         }
         var canDelete = true;
         return '<tr>' +
@@ -159,7 +159,7 @@
       }).join('');
     }).catch(function (err) {
       console.error('loadTransactions failed', err);
-      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:1rem;">Failed to load.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--hx-red);padding:1rem;">Failed to load.</td></tr>';
     });
   };
 

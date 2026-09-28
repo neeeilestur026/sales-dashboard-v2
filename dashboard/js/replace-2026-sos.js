@@ -115,11 +115,11 @@ function render() {
   const gate = document.getElementById('versionGate');
   const wipeBtn = document.getElementById('wipeBtn');
   if (rsSystem.version >= RS_MIN_VERSION) {
-    gate.innerHTML = `✅ FlowAPI backend is current (version ${rsSystem.version}).`;
+    gate.innerHTML = `FlowAPI backend is current (version ${rsSystem.version}).`;
     gate.style.color = '#047857';
     wipeBtn.disabled = false;
   } else {
-    gate.innerHTML = `⛔ FlowAPI backend is OUTDATED (version ${rsSystem.version || 'unknown'} &lt; ${RS_MIN_VERSION}). ` +
+    gate.innerHTML = `FlowAPI backend is OUTDATED (version ${rsSystem.version || 'unknown'} &lt; ${RS_MIN_VERSION}). ` +
       `<b>Redeploy apps-script/FlowAPI.gs first</b> — running the wipe against the old backend would delete migrated records for ALL years, not just 2026.`;
     gate.style.color = '#b91c1c';
     wipeBtn.disabled = true;
@@ -239,5 +239,5 @@ function runVerify() {
   checks.push(['Every SO\'s sales + COGS match the file to the centavo', rowBad.length === 0,
     rowBad.length ? 'mismatched: ' + rowBad.join(', ') : '']);
   document.getElementById('verifyBody').innerHTML = checks.map(c =>
-    `<tr><td>${c[1] ? '✅' : '❌'}</td><td>${c[0]}</td><td style="color:var(--text-muted,#64748b);">${flowEsc(c[2] || '')}</td></tr>`).join('');
+    `<tr><td>${c[1] ? '✓' : '✕'}</td><td>${c[0]}</td><td style="color:var(--text-muted,#64748b);">${flowEsc(c[2] || '')}</td></tr>`).join('');
 }

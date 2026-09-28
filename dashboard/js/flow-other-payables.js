@@ -142,7 +142,7 @@ function prUpdateKpis(open) {
 
 function prRow(r) {
   const st = r.status || 'Draft';
-  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
+  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✕ ${flowEsc(r.approvalNote)}</div>` : '';
   const appr = [r.adminApprovedBy ? 'Admin ✓' : (r.acctApprovedBy ? 'Acct ✓' : ''),
     r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '',
     r.paidBy ? 'Paid ✓' : '']

@@ -365,7 +365,7 @@ function miJumpToWeek(weekStart) {
 function miPhotoCell(v) {
   if (!v.photoDocId) return '<span style="color:#b45309;font-size:.7rem;" title="No photo on this visit">—</span>';
   const src = miPhotos[String(v.visitNo)];
-  if (!src) return '<span style="color:var(--text-muted,#64748b);font-size:.7rem;">📷</span>';
+  if (!src) return '<span style="color:var(--text-muted,#64748b);font-size:.7rem;">photo</span>';
   return `<img class="mi-photo" src="${src}" alt="Visit photo" loading="lazy"
     onclick="miZoom('${_mie(v.visitNo)}')">`;
 }

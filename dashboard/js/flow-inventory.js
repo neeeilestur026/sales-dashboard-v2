@@ -105,17 +105,17 @@ function render() {
     const catalog = rows.filter(r => r.type !== 'Stock');
     const units = stock.reduce((s, r) => s + flowNum(r.balance), 0);
     c.innerHTML =
-      group('📦 Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`, invSlim ? 'list' : 'stock') +
+      group('Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`, invSlim ? 'list' : 'stock') +
       `<div style="height:1.1rem;"></div>` +
-      group('📋 Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order', 'list');
+      group('Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order', 'list');
   } else {
     // Pre-classification fallback (backend not yet on v79): keep the ordered/not-ordered split.
     const notOrdered = rows.filter(r => !invIsOrdered(r));
     const ordered = rows.filter(invIsOrdered);
     c.innerHTML =
-      group('🟠 Not yet ordered', notOrdered, '', 'list') +
+      group('Not yet ordered', notOrdered, '', 'list') +
       `<div style="height:1.1rem;"></div>` +
-      group('✅ Ordered · has a purchase order', ordered, '', invSlim ? 'list' : 'stock');
+      group('Ordered · has a purchase order', ordered, '', invSlim ? 'list' : 'stock');
   }
   fit();          // A273 — both branches above land here
 }

@@ -168,7 +168,7 @@ function shRenderTimeline() {
           ${t.autoderived ? '<span class="sh-auto">AUTO</span>' : ''}
           ${acts}
         </div>
-        ${meta.docLabel ? `<div class="sh-stage-doc">📎 ${flowEsc(meta.docLabel)}</div>` : ''}
+        ${meta.docLabel ? `<div class="sh-stage-doc">${flowEsc(meta.docLabel)}</div>` : ''}
         ${stageDocs.map(d => `<div class="sh-docrow">${d.link ? `<a href="${flowEsc(d.link)}" target="_blank" class="link-btn">${flowEsc(d.fileName || 'document')}</a>` : flowEsc(d.fileName || 'document')}${shViewer ? '' : `<button class="link-btn del-btn" onclick='shDelDoc("${flowEsc(d.docId)}")'>✕</button>`}</div>`).join('')}
         ${shViewer ? '' : `<div class="sh-docrow"><input type="file" multiple id="shFile_${key}"><button class="btn btn-sm btn-secondary" onclick="shUpload('${key}')">Attach</button></div>`}
         ${t.completedAt ? `<div class="sh-meta">${t.status === 'skipped' ? 'Skipped' : 'Done'} ${flowEsc(t.completedAt)}${t.completedBy ? ' · ' + flowEsc(t.completedBy) : ''}${t.skippedReason ? ' · ' + flowEsc(t.skippedReason) : ''}</div>` : ''}

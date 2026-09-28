@@ -52,7 +52,7 @@ async function loadBS() {
     };
     renderBS();
   } catch (e) {
-    body.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${_be(e.message)}</div>`;
+    body.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${_be(e.message)}</div>`;
   }
 }
 
@@ -127,7 +127,7 @@ function renderBS() {
         <div class="fld"><label>Cash (beginning, PHP)</label><input type="number" step="any" id="openCash" value="${openCash || ''}"></div>
         <div class="fld"><label>Inventory on hand (beginning, PHP)</label><input type="number" step="any" id="openInv" value="${openInv || ''}"></div>
         <button class="btn btn-sm btn-primary" id="saveOpenBtn" onclick="bsSaveOpening()">Save opening balances</button>
-        <span id="openMsg" style="font-size:0.78rem;color:var(--text-muted);"></span>
+        <span id="openMsg" style="font-size:0.78rem;color:var(--hx-ink-3);"></span>
       </div>
     </div>
 
@@ -173,7 +173,7 @@ function renderBS() {
       ${balanced ? '✓' : '✕'} Assets ${_bm(totalAssets)} = Liabilities ${_bm(totalLiabilities)} + Equity ${_bm(equity)}
     </div>
 
-    <p style="font-size:0.72rem;color:var(--text-muted);margin-top:1rem;line-height:1.5;">
+    <p style="font-size:0.72rem;color:var(--hx-ink-3);margin-top:1rem;line-height:1.5;">
       Current all-time snapshot from the Process Flow. Purchases Clearing offsets Accounts Payable
       (both = unpaid PO purchase value in PHP), so ordering/paying a PO leaves equity unchanged; equity
       moves only with realized profit (Sales − COGS − Expenses). PHP payables rely on the AP aging

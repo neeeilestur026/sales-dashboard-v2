@@ -645,7 +645,7 @@ function qtnTotal(q) { return flowQuotationNet(q); }
 function quotationRow(q) {
   const st = q.status || 'Draft';
   const noteTip = (st === 'Rejected' && q.approvalNote) ? ` title="Reason: ${flowEsc(q.approvalNote)}"` : '';
-  const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
+  const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✕ ${flowEsc(q.approvalNote)}</div>` : '';
   // A145: a Sent quotation with no sales order yet — nudge to create the SO.
   const soNudge = (st === 'Sent' && !qHasSO[String(q.quotationNo)])
     ? ` <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" title="Sent to the client but no sales order created yet">no SO</span>` : '';
@@ -771,7 +771,7 @@ function openReviewModal(no) {
   const prLink = q.prNo
     ? ` · <a href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}" target="_blank"
            style="color:var(--hx-navy);font-weight:700;text-decoration:none;"
-           title="Open the purchase request this quotation was priced from">📋 ${flowEsc(q.prNo)} ↗</a>`
+           title="Open the purchase request this quotation was priced from">${flowEsc(q.prNo)} ↗</a>`
     : ` · <span style="color:var(--hx-warn);font-weight:600;" title="No purchase request is linked, so the quoted prices cannot be checked against a request">⚠ no purchase request linked</span>`;
   document.getElementById('qrSub').innerHTML =
     `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}${prLink}`;

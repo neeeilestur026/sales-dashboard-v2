@@ -7,57 +7,57 @@
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .dp-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin-bottom:1rem; }
-    .dp-kpi { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; padding:0.85rem 1rem; }
-    .dp-kpi .lbl { font-size:0.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
-    .dp-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color:var(--text-primary,#f1f5f9); }
+    .dp-kpi { background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 12px; padding:0.85rem 1rem; }
+    .dp-kpi .lbl { font-size:0.72rem; color: var(--hx-ink-3); text-transform:uppercase; letter-spacing:0.04em; }
+    .dp-kpi .val { font-size:1.5rem; font-weight:700; margin-top:0.15rem; color: var(--hx-ink); }
 
     .dp-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
     .dp-toolbar input, .dp-toolbar select {
-      padding:0.5rem 0.65rem; border:1px solid var(--border,#334155); border-radius:8px;
-      background:var(--surface-2,#1e293b); color:var(--text-primary,#f1f5f9); font-size:0.85rem;
+      padding:0.5rem 0.65rem; border: 1px solid var(--hx-hair); border-radius: 8px;
+      background: var(--hx-inset); color: var(--hx-ink); font-size:0.85rem;
     }
     .dp-search { flex:1; min-width:220px; }
-    .dp-tab { padding:0.4rem 0.85rem; border-radius:8px; border:1px solid var(--border,#334155);
-      background:transparent; color:var(--text-muted,#64748b); font-size:0.8rem; cursor:pointer; font-weight:600; }
-    .dp-tab.active { background:#14b8a6; border-color:#14b8a6; color:#fff; }
+    .dp-tab { padding:0.4rem 0.85rem; border-radius: 8px; border: 1px solid var(--hx-hair);
+      background: transparent; color: var(--hx-ink-3); font-size:0.8rem; cursor:pointer; font-weight:600; }
+    .dp-tab.active { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-slab-ink); }
 
-    .dp-card { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px; overflow:hidden; }
+    .dp-card { background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 12px; overflow:hidden; }
     .dp-table-wrap { overflow-x:auto; }
-    .dp-table { width:100%; border-collapse:collapse; font-size:0.85rem; table-layout:fixed; min-width:1000px; }
-    .dp-table th { text-align:left; padding:0.55rem 0.75rem; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#334155); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; background:rgba(15,23,42,0.4); }
-    .dp-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.1); color:var(--text-primary,#e2e8f0); vertical-align:top; }
+    .dp-table { width:100%; border-collapse: collapse; font-size:0.85rem; table-layout:fixed; min-width:1000px; }
+    .dp-table th { text-align:left; padding:0.55rem 0.75rem; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; background:var(--hx-scrim); }
+    .dp-table td { padding:0.55rem 0.75rem; border-bottom: 1px solid var(--hx-inset); color: var(--hx-ink); vertical-align:top; }
     .dp-table td.wrap { word-break:break-word; overflow-wrap:anywhere; white-space:normal; }
     .dp-table td.nowrap { white-space:nowrap; }
     .dp-table .row-paid td { opacity:0.65; }
-    .dp-table .row-overdue td { background:rgba(239,68,68,0.06); }
+    .dp-table .row-overdue td { background: var(--hx-red-soft); }
     .dp-actions { display:flex; flex-wrap:wrap; gap:0.3rem; justify-content:flex-end; }
-    .dp-count { font-size:0.8rem; color:var(--text-muted,#94a3b8); margin-bottom:0.5rem; }
+    .dp-count { font-size:0.8rem; color: var(--hx-ink-3); margin-bottom:0.5rem; }
 
-    .badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; }
-    .badge-unpaid   { background:rgba(234,179,8,0.15);  color:#eab308; }
-    .badge-paid     { background:rgba(34,197,94,0.15);  color:#22c55e; }
-    .badge-overdue  { background:rgba(239,68,68,0.15);  color:#ef4444; }
+    .badge { display:inline-block; padding:0.2rem 0.55rem; border-radius: 999px; font-size:0.72rem; font-weight:600; }
+    .badge-unpaid   { background: var(--hx-warn-soft);  color: var(--hx-warn); }
+    .badge-paid     { background: var(--hx-ok-soft);  color: var(--hx-ok); }
+    .badge-overdue  { background: var(--hx-red-soft);  color: var(--hx-red); }
 
-    .dp-btn { padding:0.35rem 0.7rem; border-radius:6px; font-size:0.74rem; font-weight:600;
-      cursor:pointer; border:1px solid var(--border,#334155); background:var(--surface,#0f172a);
-      color:var(--text-primary,#e2e8f0); }
-    .dp-btn.primary { background:#3b82f6; color:#fff; border-color:#3b82f6; }
-    .dp-btn.success { background:#16a34a; color:#fff; border-color:#16a34a; }
-    .dp-btn.warn    { background:#f97316; color:#fff; border-color:#f97316; }
-    .dp-btn.danger  { background:#ef4444; color:#fff; border-color:#ef4444; }
+    .dp-btn { padding:0.35rem 0.7rem; border-radius: 6px; font-size:0.74rem; font-weight:600;
+      cursor:pointer; border: 1px solid var(--hx-hair); background: var(--hx-card);
+      color: var(--hx-ink); }
+    .dp-btn.primary { background: var(--hx-cyan-ink); color: var(--hx-slab-ink); border-color: var(--hx-cyan-ink); }
+    .dp-btn.success { background: var(--hx-ok); color: var(--hx-slab-ink); border-color: var(--hx-ok); }
+    .dp-btn.warn    { background: var(--hx-warn); color: var(--hx-slab-ink); border-color: var(--hx-warn); }
+    .dp-btn.danger  { background: var(--hx-red); color: var(--hx-slab-ink); border-color: var(--hx-red); }
 
-    .dp-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:90; align-items:center; justify-content:center; }
+    .dp-modal-bg { display:none; position:fixed; inset:0; background: var(--hx-scrim); z-index:90; align-items:center; justify-content:center; }
     .dp-modal-bg.open { display:flex; }
-    .dp-modal { background:var(--surface-2,#1e293b); border:1px solid var(--border,#334155); border-radius:12px;
-      padding:1.25rem; width:min(460px, 92vw); color:var(--text-primary,#f1f5f9); }
+    .dp-modal { background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 12px;
+      padding:1.25rem; width:min(460px, 92vw); color: var(--hx-ink); }
     .dp-modal h3 { margin:0 0 0.75rem; }
     .dp-modal .row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.7rem; }
     .dp-modal .row.two { flex-direction:row; gap:0.5rem; }
     .dp-modal .row.two > div { flex:1; display:flex; flex-direction:column; gap:0.3rem; }
-    .dp-modal .row label { font-size:0.74rem; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.04em; }
+    .dp-modal .row label { font-size:0.74rem; color: var(--hx-ink-3); text-transform:uppercase; letter-spacing:0.04em; }
     .dp-modal input, .dp-modal select, .dp-modal textarea {
-      padding:0.55rem 0.65rem; border-radius:6px; border:1px solid var(--border,#334155);
-      background:var(--bg-primary,#0f172a); color:var(--text-primary,#f1f5f9); font-size:0.88rem; font-family:inherit;
+      padding:0.55rem 0.65rem; border-radius: 6px; border: 1px solid var(--hx-hair);
+      background: var(--hx-page); color: var(--hx-ink); font-size:0.88rem; font-family:inherit;
     }
     .dp-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem; }
   </style>
@@ -71,29 +71,29 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
         <div>
           <h1 style="margin:0;">My Payables</h1>
-          <p style="margin:0.25rem 0 0;color:var(--text-muted,#94a3b8);font-size:0.85rem;">
+          <p style="margin:0.25rem 0 0;color: var(--hx-ink-3);font-size:0.85rem;">
             Personal payables/payments outside the Payment Request system.
             When marked Paid, the chosen bank account is auto-debited.
           </p>
         </div>
         <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-          <button class="dp-btn" onclick="loadPayables()">🔄 Refresh</button>
+          <button class="dp-btn" onclick="loadPayables()">Refresh</button>
           <button class="dp-btn primary" onclick="openAddModal()">+ Add Payable</button>
         </div>
       </div>
 
       <div class="dp-kpis">
-        <div class="dp-kpi"><div class="lbl">Unpaid</div><div class="val" id="kpiUnpaidCount" style="color:#eab308;">—</div></div>
-        <div class="dp-kpi"><div class="lbl">Unpaid Total</div><div class="val" id="kpiUnpaidTotal" style="color:#eab308;">—</div></div>
-        <div class="dp-kpi"><div class="lbl">Overdue</div><div class="val" id="kpiOverdue" style="color:#ef4444;">—</div></div>
-        <div class="dp-kpi"><div class="lbl">Paid (Filtered)</div><div class="val" id="kpiPaid" style="color:#22c55e;">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Unpaid</div><div class="val" id="kpiUnpaidCount" style="color: var(--hx-warn);">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Unpaid Total</div><div class="val" id="kpiUnpaidTotal" style="color: var(--hx-warn);">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Overdue</div><div class="val" id="kpiOverdue" style="color: var(--hx-red);">—</div></div>
+        <div class="dp-kpi"><div class="lbl">Paid (Filtered)</div><div class="val" id="kpiPaid" style="color: var(--hx-ok);">—</div></div>
       </div>
 
       <div class="dp-toolbar">
         <input type="text" id="dpSearch" class="dp-search" placeholder="Search payee, description, category…" oninput="applyFilters()">
-        <label style="font-size:0.78rem;color:var(--text-muted);">Month</label>
+        <label style="font-size:0.78rem;color: var(--hx-ink-3);">Month</label>
         <input type="month" id="dpMonth" onchange="applyFilters()">
-        <label style="font-size:0.78rem;color:var(--text-muted);">Year</label>
+        <label style="font-size:0.78rem;color: var(--hx-ink-3);">Year</label>
         <select id="dpYear" onchange="applyFilters()"><option value="">All</option></select>
         <button class="dp-tab active" onclick="setStatus('all')" id="tabAll">All</button>
         <button class="dp-tab" onclick="setStatus('Unpaid')" id="tabUnpaid">Unpaid</button>
@@ -129,7 +129,7 @@
               </tr>
             </thead>
             <tbody id="dpBody">
-              <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>
+              <tr><td colspan="8" style="text-align:center;color: var(--hx-ink-3);padding:1.5rem;">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -190,12 +190,12 @@
     <div class="dp-modal">
       <h3>Mark as Paid</h3>
       <input type="hidden" id="payPayableId">
-      <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 0.7rem;">
+      <p style="font-size:0.8rem;color: var(--hx-ink-3);margin:0 0 0.7rem;">
         The chosen bank account will be auto-debited for the payable amount.
       </p>
       <div class="row">
         <label>Payable</label>
-        <div id="paySummary" style="padding:0.55rem 0.65rem;background:var(--bg-primary,#0f172a);border:1px solid var(--border,#334155);border-radius:6px;font-size:0.88rem;"></div>
+        <div id="paySummary" style="padding:0.55rem 0.65rem;background: var(--hx-page);border: 1px solid var(--hx-hair);border-radius: 6px;font-size:0.88rem;"></div>
       </div>
       <div class="row">
         <label>Deduct From Bank Account *</label>
@@ -323,7 +323,7 @@
         var count = document.getElementById('dpCount');
         count.textContent = 'Showing ' + rows.length + ' payable' + (rows.length === 1 ? '' : 's');
         if (!rows.length) {
-          body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No payables match these filters.</td></tr>';
+          body.innerHTML = '<tr><td colspan="8" style="text-align:center;color: var(--hx-ink-3);padding:1.5rem;">No payables match these filters.</td></tr>';
           return;
         }
         body.innerHTML = rows.map(function (p) {
@@ -334,11 +334,11 @@
                     : overdue ? '<span class="badge badge-overdue">Overdue</span>'
                     : '<span class="badge badge-unpaid">Unpaid</span>';
           var dateLine = p.dueDate
-            ? '<div>' + esc(fmtDate(p.dueDate)) + '</div><div style="font-size:0.7rem;color:var(--text-muted);">added ' + esc(fmtDate(p.createdAt)) + '</div>'
-            : '<div style="color:var(--text-muted);">— no due —</div><div style="font-size:0.7rem;color:var(--text-muted);">added ' + esc(fmtDate(p.createdAt)) + '</div>';
+            ? '<div>' + esc(fmtDate(p.dueDate)) + '</div><div style="font-size:0.7rem;color: var(--hx-ink-3);">added ' + esc(fmtDate(p.createdAt)) + '</div>'
+            : '<div style="color: var(--hx-ink-3);">— no due —</div><div style="font-size:0.7rem;color: var(--hx-ink-3);">added ' + esc(fmtDate(p.createdAt)) + '</div>';
           var bankCell = paid
-            ? esc(bankNameFor(p.bankAccountCode)) + (p.paidAt ? '<div style="font-size:0.7rem;color:var(--text-muted);">' + esc(fmtDate(p.paidAt)) + '</div>' : '')
-            : '<span style="color:var(--text-muted);">—</span>';
+            ? esc(bankNameFor(p.bankAccountCode)) + (p.paidAt ? '<div style="font-size:0.7rem;color: var(--hx-ink-3);">' + esc(fmtDate(p.paidAt)) + '</div>' : '')
+            : '<span style="color: var(--hx-ink-3);">—</span>';
           var actions = paid
             ? '<button class="dp-btn warn" onclick="unmarkPaid(\'' + p.id + '\')">Unpay</button>' +
               '<button class="dp-btn danger" onclick="deletePayable(\'' + p.id + '\')">✕</button>'
@@ -454,7 +454,7 @@
 
       window.loadPayables = function () {
         var body = document.getElementById('dpBody');
-        body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1.5rem;">Loading…</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" style="text-align:center;color: var(--hx-ink-3);padding:1.5rem;">Loading…</td></tr>';
         return Promise.all([
           apiGetDirectorPayables(),
           apiGetBankAccounts()
@@ -468,7 +468,7 @@
           applyFilters();
         }).catch(function (err) {
           console.error('loadPayables failed', err);
-          body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:1.5rem;">Failed to load payables.</td></tr>';
+          body.innerHTML = '<tr><td colspan="8" style="text-align:center;color: var(--hx-red);padding:1.5rem;">Failed to load payables.</td></tr>';
         });
       };
 

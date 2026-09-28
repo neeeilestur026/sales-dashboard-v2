@@ -123,8 +123,8 @@ function cmRenderDiagnostic(r) {
       <b>${blocked ? 'Blocked at the ' + esc(blocked) : 'Nothing is blocking this'}</b><br>
       ${esc(r.order.summary)}</div>`);
     rows.push(`<div style="font:400 12px/1.7 'Inter',sans-serif;color:var(--ink2);margin-bottom:10px;">
-      quotation <b>${esc(r.order.quotationNo || '—')}</b> ${r.order.quotationExists ? '✓' : '✗ not in the book'}
-      &nbsp;·&nbsp; sales order <b>${esc(r.order.soNo || '—')}</b> ${r.order.soExists ? '✓' : '✗'}
+      quotation <b>${esc(r.order.quotationNo || '—')}</b> ${r.order.quotationExists ? '✓' : '✕ not in the book'}
+      &nbsp;·&nbsp; sales order <b>${esc(r.order.soNo || '—')}</b> ${r.order.soExists ? '✓' : '✕'}
       &nbsp;·&nbsp; owner <b>${esc(r.order.salesperson || '—')}</b>${
         r.order.ownerBasis ? ' <span style="opacity:.7">(' + esc(r.order.ownerBasis) + ')</span>' : ''}
       &nbsp;·&nbsp; ${r.order.collections} collection(s)</div>`);

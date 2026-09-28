@@ -664,7 +664,7 @@ function openPr(no) {
     body.innerHTML = sourcingTable(r);
     sqDecorateSourcing();   // A161: fill in each row's past supplier prices (async, best-effort)
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
-      <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','Supplier Quotation')">📎 Supplier Quotation (PDF)</button>
+      <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','Supplier Quotation')">Supplier Quotation (PDF)</button>
       <button class="btn btn-secondary" onclick="saveSourcing(false)">Save Draft</button>
       <button class="btn btn-primary" onclick="saveSourcing(true)">Forward to Management</button>`;
   } else if (canPrice && r.status === 'For Mgmt Pricing') {
@@ -732,7 +732,7 @@ function openSourcingEdit(no) {
   foot.innerHTML = `<button class="btn btn-secondary" onclick="openPr('${flowEsc(no)}')">← Back</button>
     <!-- A195: this button was missing its presetType, so a quotation attached from the post-pricing
          sourcing view did not satisfy the Supplier Quotation gate that demands one. -->
-    <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','supplier quotation')">📎 Supplier Quotation (PDF)</button>
+    <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','supplier quotation')">Supplier Quotation (PDF)</button>
     <button class="btn ${late ? 'btn-secondary' : 'btn-primary'}" onclick="saveSourcing(false)">Save Changes</button>
     ${late ? `<button class="btn btn-primary" onclick="saveSourcing(true)">Save &amp; Send for Re-pricing</button>` : ''}`;
 }
@@ -812,7 +812,7 @@ function sourcingTable(r) {
         </div>
       </td></tr>`).join('')}</tbody></table></div>
     <div style="margin-top:0.75rem;">
-      <button type="button" class="link-btn" onclick="sqToggleBrowse()">📚 Browse all saved supplier quotations</button>
+      <button type="button" class="link-btn" onclick="sqToggleBrowse()">Browse all saved supplier quotations</button>
       <div id="sqBrowse" style="display:none;margin-top:0.5rem;padding:0.6rem;border:1px solid var(--hx-hair);border-radius:8px;">
         <input type="text" id="sqSearch" placeholder="Search supplier, item, reference or PR no..." oninput="sqRenderBrowse()"
           style="width:100%;max-width:460px;padding:0.4rem 0.6rem;border:1px solid var(--hx-hair);border-radius:8px;margin-bottom:0.5rem;">
@@ -878,7 +878,7 @@ async function saveSourcing(forward) {
     } catch (e) { flowMsg('modalMsg', 'Could not save the sourcing: ' + e.message, false); return; }
     const hasQuote = await flowHasDoc('Pricing Request', prNo, 'Supplier Quotation');
     if (!hasQuote) {
-      flowMsg('modalMsg', "Attach the supplier's quotation first (📎 Supplier Quotation button) — it must be tagged “Supplier Quotation”.", false);
+      flowMsg('modalMsg', "Attach the supplier's quotation first (Supplier Quotation button) — it must be tagged “Supplier Quotation”.", false);
       return;
     }
   }

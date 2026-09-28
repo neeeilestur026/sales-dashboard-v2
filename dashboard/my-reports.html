@@ -11,22 +11,22 @@
     }
     .report-filters input[type="date"] {
       padding: 0.45rem 0.7rem; border-radius: 8px;
-      background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155);
-      color: var(--text-primary, #f1f5f9); font-size: 0.85rem;
+      background: var(--hx-inset); border: 1px solid var(--hx-hair);
+      color: var(--hx-ink); font-size: 0.85rem;
     }
     .report-filters .btn { font-size: 0.8rem; padding: 0.45rem 1rem; }
     .report-card {
-      background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155);
+      background: var(--hx-inset); border: 1px solid var(--hx-hair);
       border-radius: 12px; margin-bottom: 0.75rem; overflow: hidden;
       transition: border-color 0.2s;
     }
-    .report-card:hover { border-color: var(--accent, #f97316); }
+    .report-card:hover { border-color: var(--hx-navy); }
     .report-card-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 0.9rem 1.25rem; cursor: pointer; user-select: none;
     }
     .report-card-header .date {
-      font-weight: 700; font-size: 0.95rem; color: var(--text-primary, #f1f5f9);
+      font-weight: 700; font-size: 0.95rem; color: var(--hx-ink);
     }
     .report-card-header .badges {
       display: flex; gap: 0.5rem; flex-wrap: wrap;
@@ -36,10 +36,10 @@
       font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.55rem;
       border-radius: 999px; white-space: nowrap;
     }
-    .badge-stat.blue { background: rgba(59,130,246,0.15); color: #3b82f6; }
-    .badge-stat.green { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .badge-stat.orange { background: rgba(249,115,22,0.15); color: #f97316; }
-    .badge-stat.red { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-stat.blue { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .badge-stat.green { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .badge-stat.orange { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .badge-stat.red { background: var(--hx-red-soft); color: var(--hx-red); }
     .report-card-body {
       max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
     }
@@ -48,41 +48,41 @@
     .detail-section { margin-bottom: 1rem; }
     .detail-section-title {
       font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--text-muted, #64748b); margin-bottom: 0.5rem;
+      letter-spacing: 0.05em; color: var(--hx-ink-3); margin-bottom: 0.5rem;
     }
     .detail-table {
       width: 100%; border-collapse: collapse; font-size: 0.82rem;
     }
     .detail-table th {
       text-align: left; padding: 0.35rem 0.5rem; font-weight: 600;
-      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair);
       font-size: 0.72rem;
     }
     .detail-table td {
-      padding: 0.3rem 0.5rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-secondary, #94a3b8);
+      padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--hx-hair-2);
+      color: var(--hx-ink-2);
     }
     .status-pill {
       display: inline-block; padding: 0.15rem 0.45rem; border-radius: 999px;
       font-size: 0.7rem; font-weight: 600;
     }
-    .status-pill.success { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .status-pill.fail { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .status-pill.success { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .status-pill.fail { background: var(--hx-red-soft); color: var(--hx-red); }
     .urgent-card {
-      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+      background: var(--hx-red-soft); border: 1px solid var(--hx-red-soft);
       border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.4rem;
     }
-    .urgent-card .cat { font-size: 0.72rem; font-weight: 600; color: #ef4444; margin-bottom: 0.2rem; }
-    .urgent-card .desc { font-size: 0.8rem; color: var(--text-secondary, #94a3b8); }
+    .urgent-card .cat { font-size: 0.72rem; font-weight: 600; color: var(--hx-red); margin-bottom: 0.2rem; }
+    .urgent-card .desc { font-size: 0.8rem; color: var(--hx-ink-2); }
     .empty-state {
-      text-align: center; padding: 3rem 1rem; color: var(--text-muted, #64748b);
+      text-align: center; padding: 3rem 1rem; color: var(--hx-ink-3);
     }
     .empty-state svg { margin-bottom: 0.75rem; opacity: 0.4; }
     .chevron-icon {
-      transition: transform 0.2s; color: var(--text-muted, #64748b);
+      transition: transform 0.2s; color: var(--hx-ink-3);
     }
     .report-card.open .chevron-icon { transform: rotate(180deg); }
-    .submitted-time { font-size: 0.72rem; color: var(--text-muted, #64748b); }
+    .submitted-time { font-size: 0.72rem; color: var(--hx-ink-3); }
   </style>
 </head>
 <body>
@@ -97,10 +97,10 @@
 
     <div class="report-filters">
       <input type="date" id="dateFrom" title="From date">
-      <span style="color:var(--text-muted);">to</span>
+      <span style="color: var(--hx-ink-3);">to</span>
       <input type="date" id="dateTo" title="To date">
       <button class="btn" onclick="applyFilter()">Filter</button>
-      <button class="btn" onclick="clearFilter()" style="background:var(--surface-2);border:1px solid var(--border);">Clear</button>
+      <button class="btn" onclick="clearFilter()" style="background: var(--hx-inset);border: 1px solid var(--hx-hair);">Clear</button>
     </div>
 
     <div id="reportsContainer">

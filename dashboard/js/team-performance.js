@@ -52,8 +52,8 @@ const TP_ROLE_TASKS = {
             ['Purchase Orders', 'Purchase Order'], ['Invoices', 'Invoice'], ['Other', 'other']],
 };
 const _TP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const _TP_ROLE_CHIP = { sales: '#0d9488', accounting: '#7c3aed', admin: '#2563eb',
-  management: '#b45309', director: '#b45309', marketing: '#db2777', hr: '#0891b2', leadgen: '#4f46e5' };
+const _TP_ROLE_CHIP = { sales: 'var(--hx-cyan-ink)', accounting: 'var(--hx-navy-text)', admin: 'var(--hx-navy)',
+  management: 'var(--hx-warn)', director: 'var(--hx-warn)', marketing: 'var(--hx-navy-text)', hr: 'var(--hx-cyan-ink)', leadgen: 'var(--hx-navy-text)' };
 const _TP_DOC_ACTIONS = ['Created', 'Issued', 'Received', 'Added'];
 
 function _tpRoleOf(name) { return _tpRoles[_tpKey(name)] || ''; }
@@ -325,14 +325,14 @@ function tpRenderCompact() {
     const counts = _tpCounts(u, tasks);
     const c = _tpCompliance(name, days, today);
     const idx = _tpOrder.indexOf(name);
-    const roleChip = role ? `<span style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:0.15rem 0.5rem;border-radius:999px;color:#fff;background:${_TP_ROLE_CHIP[role] || '#64748b'};">${_tpe(role)}</span>` : '';
+    const roleChip = role ? `<span style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:0.15rem 0.5rem;border-radius:999px;color:#fff;background:${_TP_ROLE_CHIP[role] || 'var(--hx-ink-3)'};">${_tpe(role)}</span>` : '';
     const compChip = `<span style="font-size:0.68rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;
-      background:${c.done >= c.of && c.of ? '#dcfce7' : '#fef3c7'};color:${c.done >= c.of && c.of ? '#15803d' : '#b45309'};">
+      background:${c.done >= c.of && c.of ? 'var(--hx-ok-soft)' : 'var(--hx-warn-soft)'};color:${c.done >= c.of && c.of ? 'var(--hx-ok)' : 'var(--hx-warn)'};">
       ${c.done}/${c.of} report${c.of === 1 ? '' : 's'}</span>`;
     const chips = tasks.map(([label], j) =>
-      `<span style="display:inline-block;padding:0.22rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:999px;font-size:0.72rem;background:var(--bg-inset,#f8fafc);">${_tpe(label)}: <b>${counts[j]}</b></span>`).join(' ');
+      `<span style="display:inline-block;padding:0.22rem 0.6rem;border:1px solid var(--hx-hair);border-radius:999px;font-size:0.72rem;background:var(--hx-inset);">${_tpe(label)}: <b>${counts[j]}</b></span>`).join(' ');
     const spark = days.map((d, j) =>
-      `<span title="${_tpe(d)}" style="display:inline-block;min-width:1.7rem;text-align:center;padding:0.14rem 0.15rem;border-radius:5px;background:${u.perDay[j] ? 'var(--accent-light,#e6f4f1)' : 'var(--bg-inset,#f1f5f9)'};font-size:0.68rem;">${_TP_DAYS[j].slice(0, 2)}<br><b>${u.perDay[j]}</b></span>`).join(' ');
+      `<span title="${_tpe(d)}" style="display:inline-block;min-width:1.7rem;text-align:center;padding:0.14rem 0.15rem;border-radius:5px;background:${u.perDay[j] ? 'var(--hx-navy-soft)' : 'var(--hx-inset)'};font-size:0.68rem;">${_TP_DAYS[j].slice(0, 2)}<br><b>${u.perDay[j]}</b></span>`).join(' ');
 
     // Full mode also shows what the person actually wrote — the point of collecting submissions.
     let subs = '';
@@ -340,25 +340,25 @@ function tpRenderCompact() {
       const recs = _tpReports[_tpKey(name)] || {};
       const dates = days.filter(d => d <= today && recs[d]);
       subs = dates.length ? `<details style="margin-top:0.7rem;">
-        <summary style="cursor:pointer;font-size:0.75rem;font-weight:700;color:var(--text-secondary,#475569);">📝 Submitted notes (${dates.length})</summary>
+        <summary style="cursor:pointer;font-size:0.75rem;font-weight:700;color:var(--hx-ink-2);">Submitted notes (${dates.length})</summary>
         <div style="margin-top:0.5rem;">${dates.map(d => {
           const r = recs[d];
-          const part = (l, t) => t ? `<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;color:#0d9488;margin-top:0.35rem;">${l}</div><div style="font-size:0.78rem;white-space:pre-wrap;">${_tpe(t)}</div>` : '';
-          return `<div style="border-left:3px solid var(--accent,#0d9488);background:var(--bg-inset,#f8fafc);padding:0.5rem 0.7rem;border-radius:0 7px 7px 0;margin-bottom:0.45rem;">
+          const part = (l, t) => t ? `<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;color:var(--hx-cyan-ink);margin-top:0.35rem;">${l}</div><div style="font-size:0.78rem;white-space:pre-wrap;">${_tpe(t)}</div>` : '';
+          return `<div style="border-left:3px solid var(--hx-navy);background:var(--hx-inset);padding:0.5rem 0.7rem;border-radius:0 7px 7px 0;margin-bottom:0.45rem;">
             <div style="font-size:0.75rem;font-weight:700;">${_tpe(d)}
-              ${r.status === 'Reviewed' ? `<span style="font-weight:600;color:#0d9488;">· reviewed by ${_tpe(r.reviewedBy)}</span>` : ''}</div>
+              ${r.status === 'Reviewed' ? `<span style="font-weight:600;color:var(--hx-cyan-ink);">· reviewed by ${_tpe(r.reviewedBy)}</span>` : ''}</div>
             ${part('Highlights', r.highlights) + part('Blockers', r.blockers) + part('Plan', r.plan)
-              || '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
+              || '<div style="font-size:0.78rem;color:var(--hx-ink-3);font-style:italic;">Submitted with no written notes.</div>'}
           </div>`;
         }).join('')}</div></details>` : '';
     }
     const pdfBtn = (full && _tpOpts.withPersonPdf !== false)
-      ? `<button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;" onclick="tpPersonPdf('${_tpe(name).replace(/'/g, '&#39;')}')">📄 PDF</button>` : '';
+      ? `<button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;" onclick="tpPersonPdf('${_tpe(name).replace(/'/g, '&#39;')}')">PDF</button>` : '';
 
-    return `<div class="mfTw-card" style="border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.9rem;background:#fff;">
+    return `<div class="mfTw-card" style="border:1px solid var(--hx-hair);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.9rem;background:#fff;">
       <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
         <strong style="font-size:0.95rem;">${_tpe(name)}</strong>${roleChip}${compChip}
-        <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.visits || 0} visit(s) · ${u.emails} email(s)${_tpPlanLine(u)}</span>
+        <span style="font-size:0.75rem;color:var(--hx-ink-3);">${u.moves} movement(s) · ${u.calls} call(s) · ${u.visits || 0} visit(s) · ${u.emails} email(s)${_tpPlanLine(u)}</span>
         ${pdfBtn}
       </div>
       <div style="display:grid;grid-template-columns:minmax(280px,1.1fr) 1fr;gap:1rem;align-items:center;margin-top:0.7rem;">
@@ -381,14 +381,14 @@ function tpRenderCompact() {
       return `<tr><td>${_tpe(n)}</td><td>${_tpe(_tpRoleOf(n) || '—')}</td>
         <td class="num">${u.moves}</td><td class="num">${u.calls}</td><td class="num">${u.visits || 0}</td><td class="num">${u.emails}</td>
         <td class="num">${u.docs}</td>
-        <td class="num"${c.done < c.of ? ' style="color:#b45309;font-weight:700;"' : ''}>${c.done}/${c.of}</td></tr>`;
+        <td class="num"${c.done < c.of ? ' style="color:var(--hx-warn);font-weight:700;"' : ''}>${c.done}/${c.of}</td></tr>`;
     }).join('')}</tbody></table></div>` : '';
 
   const pct = comp.of ? Math.round((comp.done / comp.of) * 100) : 0;
   body.innerHTML = `<div id="tpSheet" style="background:#fff;">
     <div style="text-align:center;margin-bottom:0.9rem;">
       <div style="font-weight:800;font-size:1.05rem;letter-spacing:0.02em;">H.O ESTUR CORPORATION</div>
-      <div style="font-size:0.82rem;color:var(--text-muted,#64748b);">Team Weekly Report · ${_tpe(days[0])} – ${_tpe(days[6])}</div>
+      <div style="font-size:0.82rem;color:var(--hx-ink-3);">Team Weekly Report · ${_tpe(days[0])} – ${_tpe(days[6])}</div>
     </div>
     <div class="dr-tiles" style="margin-bottom:0.9rem;">
       <div class="dr-tile"><div class="l">Team Members Active</div><div class="v">${names.length}</div></div>
@@ -398,7 +398,7 @@ function tpRenderCompact() {
       <div class="dr-tile"><div class="l">Emails</div><div class="v">${tot('emails')}</div></div>
       <div class="dr-tile"><div class="l">Quotations</div><div class="v">${totMod('Quotation')}</div></div>
       <div class="dr-tile"><div class="l">Purchase Requests</div><div class="v">${totMod('Pricing Request')}</div></div>
-      <div class="dr-tile"><div class="l">Reports Submitted</div><div class="v"${pct < 100 ? ' style="color:#b45309;"' : ''}>${comp.done}/${comp.of}</div></div>
+      <div class="dr-tile"><div class="l">Reports Submitted</div><div class="v"${pct < 100 ? ' style="color:var(--hx-warn);"' : ''}>${comp.done}/${comp.of}</div></div>
     </div>
     ${teamTable}
     ${cards}
@@ -474,7 +474,7 @@ function tpRenderFull() {
     const counts = _tpCounts(u, taskDefs);
     const good = c.of && c.done >= c.of;
     const bad = c.of && c.done <= c.of / 2;
-    const badge = `<span class="badge" style="background:${good ? '#dcfce7' : bad ? '#fee2e2' : '#fef3c7'};color:${good ? '#15803d' : bad ? '#b91c1c' : '#b45309'};">${c.done} / ${c.of}</span>`;
+    const badge = `<span class="badge" style="background:${good ? 'var(--hx-ok-soft)' : bad ? 'var(--hx-red-soft)' : 'var(--hx-warn-soft)'};color:${good ? 'var(--hx-ok)' : bad ? 'var(--hx-red)' : 'var(--hx-warn)'};">${c.done} / ${c.of}</span>`;
     // The four tiles follow the person's ROLE, so a rep shows PRs/Quotes/Calls/Emails while
     // accounting shows invoices/payments — the same mix the weekly chart uses.
     const stats = taskDefs.slice(0, 4).map((t, j) =>
@@ -483,7 +483,7 @@ function tpRenderFull() {
     const dayBoxes = days.map((d, j) => {
       const future = d > today;
       const done = !!recs[d];
-      return `<div class="pday"><div class="box" style="background:${future ? '#f1f5f9' : done ? '#dcfce7' : '#fee2e2'};color:${future ? '#94a3b8' : done ? '#15803d' : '#b91c1c'};">${future ? '·' : done ? '✓' : '—'}</div><div class="lab">${_TP_DAYS[j]}</div></div>`;
+      return `<div class="pday"><div class="box" style="background:${future ? 'var(--hx-inset)' : done ? 'var(--hx-ok-soft)' : 'var(--hx-red-soft)'};color:${future ? 'var(--hx-ink-3)' : done ? 'var(--hx-ok)' : 'var(--hx-red)'};">${future ? '·' : done ? '✓' : '—'}</div><div class="lab">${_TP_DAYS[j]}</div></div>`;
     }).join('');
     const safe = _tpe(name).replace(/'/g, '&#39;');
     return `<div class="pcard" role="button" tabindex="0" title="Open ${_tpe(name)}'s full week"
@@ -501,18 +501,18 @@ function tpRenderFull() {
   const rows = names.map(n => {
     const u = users[n], c = _tpCompliance(n, days, today);
     const consistency = c.of ? Math.round((c.done / c.of) * 100) : 0;
-    const barColor = consistency >= 80 ? '' : consistency >= 60 ? 'background:#f59e0b;' : 'background:#dc2626;';
+    const barColor = consistency >= 80 ? '' : consistency >= 60 ? 'background:var(--hx-warn);' : 'background:var(--hx-red);';
     return `<tr><td style="font-weight:700;">${_tpe(n)}</td>
-      <td style="color:#8b93a1;">${_tpe(_TP_ROLE_LABEL[_tpRoleOf(n)] || _tpRoleOf(n) || '—')}</td>
-      <td class="n"${c.done < c.of ? ' style="color:#b91c1c;font-weight:700;"' : ''}>${c.done} / ${c.of}</td>
+      <td style="color:var(--hx-ink-3);">${_tpe(_TP_ROLE_LABEL[_tpRoleOf(n)] || _tpRoleOf(n) || '—')}</td>
+      <td class="n"${c.done < c.of ? ' style="color:var(--hx-red);font-weight:700;"' : ''}>${c.done} / ${c.of}</td>
       <td class="n">${u.moves}</td><td class="n">${(u.moves / elapsed).toFixed(1)}</td>
       <td><div style="display:flex;align-items:center;gap:8px;"><div class="bar" style="flex:1;"><i style="width:${consistency}%;${barColor}"></i></div>
-        <span style="font-weight:700;font-size:11px;color:${consistency >= 60 ? '#8b93a1' : '#b91c1c'};">${consistency}%</span></div></td></tr>`;
+        <span style="font-weight:700;font-size:11px;color:${consistency >= 60 ? 'var(--hx-ink-3)' : 'var(--hx-red)'};">${consistency}%</span></div></td></tr>`;
   }).join('');
 
   body.innerHTML = `
     <div class="pgrid">${cards}</div>
-    <div style="border:1px solid #e2e6ec;border-radius:14px;overflow:hidden;overflow-x:auto;margin-top:16px;">
+    <div style="border:1px solid var(--hx-hair);border-radius:14px;overflow:hidden;overflow-x:auto;margin-top:16px;">
       <table class="ptable">
         <thead><tr><th>Person</th><th>Role</th><th class="n">Days Submitted</th><th class="n">Activities</th>
           <th class="n">Avg / Day</th><th>Consistency</th></tr></thead>
@@ -536,7 +536,7 @@ function tpOpenPerson(name) {
   const m = _tpPersonModel(name);
   const hide = !!_tpOpts.hideAmounts;
   const chart = _tpChartImg[name]
-    ? `<img src="${_tpChartImg[name]}" alt="" style="width:100%;max-width:420px;border:1px solid #eef1f5;border-radius:10px;">`
+    ? `<img src="${_tpChartImg[name]}" alt="" style="width:100%;max-width:420px;border:1px solid var(--hx-hair-2);border-radius:10px;">`
     : '<div class="mf-empty">Chart unavailable — the counts below carry the same data.</div>';
 
   const tiles = [['Movements', m.totals.moves], ['Calls', m.totals.calls],
@@ -550,17 +550,17 @@ function tpOpenPerson(name) {
   const dayRows = m.days.map(d => `<tr><td>${_tpe(d.dayName)}</td><td>${_tpe(d.date)}</td>
     <td class="n">${d.future ? '—' : d.moves}</td><td class="n">${d.future ? '—' : d.calls}</td>
     <td class="n">${d.future ? '—' : (d.visits || 0)}</td>
-    <td>${d.future ? '<span style="color:#94a3b8;">upcoming</span>'
-      : d.submitted ? '<span style="color:#15803d;font-weight:700;">✓ submitted</span>'
-                    : '<span style="color:#b91c1c;font-weight:700;">— missed</span>'}</td></tr>`).join('');
+    <td>${d.future ? '<span style="color:var(--hx-ink-3);">upcoming</span>'
+      : d.submitted ? '<span style="color:var(--hx-ok);font-weight:700;">✓ submitted</span>'
+                    : '<span style="color:var(--hx-red);font-weight:700;">— missed</span>'}</td></tr>`).join('');
 
-  const part = (l, t) => t ? `<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;color:#4f46e5;margin-top:0.4rem;">${l}</div><div style="font-size:0.82rem;white-space:pre-wrap;">${_tpe(t)}</div>` : '';
+  const part = (l, t) => t ? `<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;color:var(--hx-navy-text);margin-top:0.4rem;">${l}</div><div style="font-size:0.82rem;white-space:pre-wrap;">${_tpe(t)}</div>` : '';
   const subs = (m.submissions || []).length
-    ? m.submissions.map(r => `<div style="border-left:3px solid #4f46e5;background:#f8fafc;padding:0.55rem 0.75rem;border-radius:0 8px 8px 0;margin-bottom:0.5rem;">
+    ? m.submissions.map(r => `<div style="border-left:3px solid var(--hx-navy);background:var(--hx-inset);padding:0.55rem 0.75rem;border-radius:0 8px 8px 0;margin-bottom:0.5rem;">
         <div style="font-size:0.78rem;font-weight:700;">${_tpe(r.date)}
-          ${r.status === 'Reviewed' ? `<span style="font-weight:600;color:#0d9488;"> · reviewed by ${_tpe(r.reviewedBy)}</span>` : ''}</div>
+          ${r.status === 'Reviewed' ? `<span style="font-weight:600;color:var(--hx-cyan-ink);"> · reviewed by ${_tpe(r.reviewedBy)}</span>` : ''}</div>
         ${part('Highlights', r.highlights) + part('Blockers', r.blockers) + part('Plan', r.plan)
-          || '<div style="font-size:0.8rem;color:#94a3b8;font-style:italic;">Submitted with no written notes.</div>'}
+          || '<div style="font-size:0.8rem;color:var(--hx-ink-3);font-style:italic;">Submitted with no written notes.</div>'}
       </div>`).join('')
     : '<div class="mf-empty">No daily reports submitted this week.</div>';
 
@@ -583,7 +583,7 @@ function tpOpenPerson(name) {
     <h4 class="tp-detail-h">What they reported</h4>
     ${subs}
     <div style="margin-top:1rem;display:flex;gap:0.5rem;">
-      <button class="btn btn-sm btn-secondary no-print" onclick="tpPersonPdf('${safe}')">📄 Weekly PDF</button>
+      <button class="btn btn-sm btn-secondary no-print" onclick="tpPersonPdf('${safe}')">Weekly PDF</button>
       <button class="btn btn-sm btn-secondary no-print" onclick="tpClosePerson()">Close</button>
     </div>`;
   ov.classList.add('open');
@@ -591,6 +591,12 @@ function tpOpenPerson(name) {
 function tpClosePerson() {
   const ov = document.getElementById('tpPersonOverlay');
   if (ov) ov.classList.remove('open');
+}
+
+// A295 — Chart.js paints on a canvas, so it needs a real colour, read from the token at draw time.
+function _tpHx(name, fallback) {
+  try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
+  return fallback || '';
 }
 
 async function _tpDrawCharts(names) {
@@ -607,7 +613,7 @@ async function _tpDrawCharts(names) {
       _tpCharts.push(new Chart(cv.getContext('2d'), {
         type: 'bar',
         data: { labels: tasks.map(t => t[0]),
-                datasets: [{ data: _tpCounts(_tpData.users[name], tasks), backgroundColor: '#0d9488' }] },
+                datasets: [{ data: _tpCounts(_tpData.users[name], tasks), backgroundColor: _tpHx('--hx-navy', '#2E3192') }] },
         options: { animation: false, responsive: true,
           plugins: { legend: { display: false } },
           scales: { y: { beginAtZero: true, ticks: { precision: 0 } },
@@ -682,6 +688,6 @@ function _tpPlanLine(u) {
   if (!u || !u.planned) return '';
   const matched = Object.keys(u.planKeys || {}).length;
   const missed = Math.max(0, u.planned - matched);
-  return ` · <span style="color:${missed ? '#b45309' : '#047857'};font-weight:700;">plan ${matched}/${u.planned}` +
+  return ` · <span style="color:${missed ? 'var(--hx-warn)' : 'var(--hx-ok)'};font-weight:700;">plan ${matched}/${u.planned}` +
          (u.unplanned ? ` (+${u.unplanned} unplanned)` : '') + '</span>';
 }

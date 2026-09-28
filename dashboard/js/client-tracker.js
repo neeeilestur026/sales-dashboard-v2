@@ -80,7 +80,7 @@ async function ctLoad(fresh) {
     ctRenderRail();
     ctRenderPane();
   } catch (e) {
-    document.getElementById('ctPane').innerHTML = `<p style="color:#ef4444;">${_cte(e.message)}</p>`;
+    document.getElementById('ctPane').innerHTML = `<p style="color:var(--hx-red);">${_cte(e.message)}</p>`;
   }
 }
 
@@ -152,7 +152,7 @@ function ctPriceNote(c) {
       <td>${_cte(f.item.slice(0, 60))}${f.sameDay ? ' <b>· same day</b>' : ''}</td>
       <td class="num">${flowMoney(f.low, 'PHP')} → ${flowMoney(f.high, 'PHP')}</td>
       <td class="num"><b>${f.gapPct}%</b></td>
-      <td class="num" style="color:var(--text-muted,#94a3b8);">${f.quotes.map(x => _cte(x.date)).join(' · ')}</td>
+      <td class="num" style="color:var(--hx-ink-3);">${f.quotes.map(x => _cte(x.date)).join(' · ')}</td>
     </tr>`).join('');
   /* Reported, not judged. A price moves for honest reasons — another supplier, a currency swing, a
      quantity break — so this shows the numbers and the dates and lets a person decide. What it must
@@ -180,7 +180,7 @@ function ctTimeline(c) {
       sub = `${_cte(e.who)}${e.note ? ' — ' + _cte(String(e.note).slice(0, 220)) : ''}`;
     } else if (e.kind === 'order') {
       sub = `${_cte(e.ref)}${e.quotationNo ? ' · from ' + _cte(e.quotationNo)
-                                            : ' · <span style="color:#b45309;">no quotation recorded</span>'}`;
+                                            : ' · <span style="color:var(--hx-warn);">no quotation recorded</span>'}`;
     }
     return `<div class="ct-ev ${_cte(e.kind)}">
         <div class="top">
@@ -190,7 +190,7 @@ function ctTimeline(c) {
           ${money}
         </div>
         <div class="sub">${sub}</div>
-        ${e.kind === 'visit' && e.photoDocId ? `<div class="sub" data-ctphoto="${_cte(e.ref)}">📷</div>` : ''}
+        ${e.kind === 'visit' && e.photoDocId ? `<div class="sub" data-ctphoto="${_cte(e.ref)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Photo"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>` : ''}
       </div>`;
   }).join('') + '</div>';
 }
@@ -228,7 +228,7 @@ function ctZoom(visitNo) {
   const src = ctPhotos[String(visitNo)];
   if (!src) return;
   const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:4000;display:flex;' +
+  el.style.cssText = 'position:fixed;inset:0;background:var(--hx-scrim);z-index:4000;display:flex;' +
                      'align-items:center;justify-content:center;padding:2rem;cursor:zoom-out;';
   el.innerHTML = `<img src="${src}" alt="Visit photo" style="max-width:100%;max-height:100%;border-radius:8px;">`;
   el.addEventListener('click', () => el.remove());

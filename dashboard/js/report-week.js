@@ -55,10 +55,10 @@ async function _rwRender() {
       <button class="btn btn-sm btn-secondary" onclick="rwNavWeek(-1)" title="Previous week">◀</button>
       ${_rwOffset !== 0 ? `<button class="btn btn-sm btn-secondary" onclick="rwNavWeek(0)" title="Back to the selected date's week">↺</button>` : ''}
       <button class="btn btn-sm btn-secondary" onclick="rwNavWeek(1)" title="Next week" ${canNext ? '' : 'disabled'}>▶</button>
-      <button class="btn btn-sm btn-secondary" onclick="rwWeekPdf()" title="Download this week as a PDF report">📄 PDF</button>
+      <button class="btn btn-sm btn-secondary" onclick="rwWeekPdf()" title="Download this week as a PDF report">PDF</button>
     </span>`;
   const titleHtml = `<div class="dr-sect-title" style="display:flex;align-items:center;gap:0.6rem;">
-    📅 Week ${_rwEsc(days[0])} – ${_rwEsc(days[6])}${_rwOffset !== 0 ? ` <span class="act-chip">${_rwOffset < 0 ? _rwOffset : '+' + _rwOffset} wk</span>` : ''}${navHtml}</div>`;
+    Week ${_rwEsc(days[0])} – ${_rwEsc(days[6])}${_rwOffset !== 0 ? ` <span class="act-chip">${_rwOffset < 0 ? _rwOffset : '+' + _rwOffset} wk</span>` : ''}${navHtml}</div>`;
 
   mount.innerHTML = `<div class="dr-sect">${titleHtml}<div class="dr-empty">Loading weekly summary…</div></div>`;
 

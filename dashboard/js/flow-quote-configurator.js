@@ -862,7 +862,7 @@ function qcRenderItems() {
   const ro = qcLocked ? ' disabled' : '';
   const title = qcLocked ? ' title="Set by management on the purchase request"' : '';
   /* A205 — the Option cell. Blank keeps the line an ordinary charged item; a number puts it in a
-     mutually exclusive group. The ★ marks which option the stored total is built from, so it only
+     mutually exclusive group. The star marks which option the stored total is built from, so it only
      appears once a line is actually tagged. */
   const optCell = (i) => {
     if (!qcOptionsEnabled) return '';
@@ -873,7 +873,7 @@ function qcRenderItems() {
       ? `<button type="button" class="qc-del qc-rec${qcRecommended === cur ? ' on' : ''}"
            style="margin-left:.25rem;${qcRecommended === cur ? 'color:var(--hx-warn);' : 'color:var(--hx-hair);'}"
            onclick="qcSetRecommended('${esc(cur)}')"
-           title="${qcRecommended === cur ? 'This option is the one the quotation total is built from' : 'Make this the recommended option'}">★</button>`
+           title="${qcRecommended === cur ? 'This option is the one the quotation total is built from' : 'Make this the recommended option'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-label="Recommended"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>`
       : '';
     return `<td><select${ro}${title} onchange="qcSet('${esc(i.lineKey)}','optionNo',this.value)"
               style="width:100%;box-sizing:border-box;">${opts}</select>${star}</td>`;
@@ -1473,13 +1473,13 @@ function qcRenderTotals() {
     t.groups.forEach(g => {
       const vat = Math.max(0, g.gross - (qcIsService() ? (g.deposit || 0) : 0)) * QC_VAT_PCT;
       const on = g.key === t.rec;
-      html += `<div class="row"><span>${on ? '★ ' : ''}Option ${g.key}${on ? ' (in the total above)' : ''}</span>
+      html += `<div class="row"><span>${on ? '✓ ' : ''}Option ${g.key}${on ? ' (in the total above)' : ''}</span>
         <span class="v">${m(g.gross)}</span></div>`;
       html += `<div class="row" style="font-size:.72rem;color:var(--hx-ink-3);"><span>&nbsp;&nbsp;+ VAT 12% ${m(vat)} → VAT-inc</span>
         <span class="v">${m(g.gross + vat)}</span></div>`;
     });
     if (!qcRecommended) {
-      html += `<div class="row" style="color:var(--hx-warn);font-size:.74rem;"><span>⚠ No option marked ★ —
+      html += `<div class="row" style="color:var(--hx-warn);font-size:.74rem;"><span>⚠ No option marked as recommended —
         the cheapest is being used. Pick one before finalising.</span><span class="v"></span></div>`;
     }
     const lonely = t.groups.filter(g => g.lines.length === 1 && t.groups.length === 1);
@@ -1727,7 +1727,7 @@ async function qcFinalize() {
      sales order and the pipeline. Block rather than guess. */
   const qcGroups = qcOptionGroups();
   if (qcGroups.length && !qcRecommended) {
-    qcMsg('Mark one option with ★ — it decides the quotation total that goes to approval and the sales order.', false);
+    qcMsg('Mark one option as recommended — it decides the quotation total that goes to approval and the sales order.', false);
     return;
   }
   if (qcGroups.length === 1) {

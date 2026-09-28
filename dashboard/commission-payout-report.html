@@ -9,47 +9,47 @@
   <link rel="stylesheet" href="css/flow-screen.css">
   <style>
     500;600;700;800&display=swap');
-    :root{--ac:#4f46e5;--card:#fff;--line:#d7dce3;--ink:#111827;--ink2:#8b93a1;
-      --accent:#4f46e5;--accent-hover:#4338ca;--accent-dark:#3730a3;--accent-light:#e0e7ff;--accent-ring:rgba(79,70,229,.18);}
-    body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:radial-gradient(1100px 560px at 12% -8%,#eef1f5,#e6e9ee 60%) !important;}
+    :root{--ac:var(--hx-navy-text);--card:var(--hx-glass-solid);--line:var(--hx-hair);--ink:var(--hx-ink);--ink2:var(--hx-ink-3);
+      --accent:var(--hx-navy-text);--accent-hover:var(--hx-navy-text);--accent-dark:var(--hx-navy-text);--accent-light:var(--hx-navy-soft);--accent-ring:var(--hx-navy-line);}
+    body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background: radial-gradient(1100px 560px at 12% -8%,var(--hx-inset),var(--hx-inset) 60%) !important;}
     .main-content{max-width:1100px;margin:0 auto;padding:104px 24px 40px !important;}
-    .chart-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:1rem;box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -18px rgba(15,23,42,.35);}
-    .chart-card h3{font:700 15px 'Inter',sans-serif;color:var(--ink);margin:0;}
-    .btn{border-radius:999px;padding:10px 18px;font:600 13px 'Inter',sans-serif;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;transition:all .18s;}
-    .btn:hover{background:#f1f5f9;}
-    .btn-primary{background:linear-gradient(180deg,#6a63ea,#4f46e5);color:#fff;border:none;}
+    .chart-card{background: var(--hx-glass-solid);border: 1px solid var(--hx-hair);border-radius: 18px;padding:20px 22px;margin-bottom:1rem;box-shadow: var(--hx-sh-2);}
+    .chart-card h3{font:700 15px 'Inter',sans-serif;color: var(--hx-ink);margin:0;}
+    .btn{border-radius: 999px;padding:10px 18px;font:600 13px 'Inter',sans-serif;border: 1px solid var(--hx-hair);background: var(--hx-card);color: var(--hx-ink);cursor:pointer;transition:all .18s;}
+    .btn:hover{background: var(--hx-inset);}
+    .btn-primary{background: linear-gradient(180deg,var(--hx-navy),var(--hx-navy));color: var(--hx-slab-ink);border: none;}
     .btn-sm{padding:7px 14px;font-size:12px;}
     .btn:disabled{opacity:.45;cursor:not-allowed;}
     .cp-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;}
-    .cp-bar select{padding:9px 12px;border:1px solid var(--line);border-radius:9px;font:500 13px 'Inter',sans-serif;background:#fff;}
-    .cp-window{margin-top:10px;padding:11px 13px;border-radius:10px;background:#eef2ff;border-left:3px solid var(--ac);
-      font:500 12.5px/1.6 'Inter',sans-serif;color:#3730a3;}
+    .cp-bar select{padding:9px 12px;border: 1px solid var(--hx-hair);border-radius: 9px;font:500 13px 'Inter',sans-serif;background: var(--hx-card);}
+    .cp-window{margin-top:10px;padding:11px 13px;border-radius: 10px;background: var(--hx-navy-soft);border-left: 3px solid var(--ac);
+      font:500 12.5px/1.6 'Inter',sans-serif;color: var(--hx-navy-text);}
     /* The two systems do not share employee identities. Say so where the keying happens. */
-    .cp-warn{margin-top:10px;padding:11px 13px;border-radius:10px;background:#fffbeb;border-left:3px solid #f59e0b;
-      font:500 12.5px/1.6 'Inter',sans-serif;color:#92400e;}
-    table.cp{width:100%;border-collapse:collapse;font:400 13px 'Inter',sans-serif;margin-top:14px;}
+    .cp-warn{margin-top:10px;padding:11px 13px;border-radius: 10px;background: var(--hx-warn-soft);border-left: 3px solid var(--hx-warn);
+      font:500 12.5px/1.6 'Inter',sans-serif;color: var(--hx-warn);}
+    table.cp{width:100%;border-collapse: collapse;font:400 13px 'Inter',sans-serif;margin-top:14px;}
     table.cp th{text-align:left;font:600 10.5px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.04em;
-      color:var(--ink2);padding:9px 10px;border-bottom:1px solid var(--line);}
-    table.cp td{padding:10px;border-bottom:1px solid #eef2f6;color:var(--ink);vertical-align:top;}
+      color: var(--hx-ink-3);padding:9px 10px;border-bottom: 1px solid var(--hx-hair);}
+    table.cp td{padding:10px;border-bottom: 1px solid var(--hx-inset);color: var(--hx-ink);vertical-align:top;}
     table.cp td.num,table.cp th.num{text-align:right;white-space:nowrap;}
-    table.cp tfoot td{font:700 14px 'Inter',sans-serif;border-top:2px solid var(--ink);border-bottom:none;padding-top:12px;}
-    .cp-key{font:700 15px 'Inter',sans-serif;color:#065f46;}
+    table.cp tfoot td{font:700 14px 'Inter',sans-serif;border-top: 2px solid var(--hx-ink);border-bottom: none;padding-top:12px;}
+    .cp-key{font:700 15px 'Inter',sans-serif;color: var(--hx-ok);}
     .cp-name{font:600 13.5px 'Inter',sans-serif;}
-    .cp-detail{font:400 11.5px/1.7 'Inter',sans-serif;color:#64748b;margin-top:4px;}
-    .cp-copy{background:none;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font:600 10.5px 'Inter',sans-serif;
-      color:#475569;cursor:pointer;margin-left:6px;}
-    .cp-copy:hover{background:#f1f5f9;}
-    .cp-empty{padding:2rem;text-align:center;color:var(--ink2);font:500 13px 'Inter',sans-serif;}
-    .cp-flag{color:#b91c1c;font:600 11.5px 'Inter',sans-serif;}
-    .loading-overlay{display:flex;align-items:center;justify-content:center;gap:.6rem;padding:2rem;color:var(--ink2);font:500 13px 'Inter',sans-serif;}
-    .spinner{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite;}
+    .cp-detail{font:400 11.5px/1.7 'Inter',sans-serif;color: var(--hx-ink-3);margin-top:4px;}
+    .cp-copy{background: none;border: 1px solid var(--hx-hair);border-radius: 6px;padding:1px 7px;font:600 10.5px 'Inter',sans-serif;
+      color: var(--hx-ink-2);cursor:pointer;margin-left:6px;}
+    .cp-copy:hover{background: var(--hx-inset);}
+    .cp-empty{padding:2rem;text-align:center;color: var(--hx-ink-3);font:500 13px 'Inter',sans-serif;}
+    .cp-flag{color: var(--hx-red);font:600 11.5px 'Inter',sans-serif;}
+    .loading-overlay{display:flex;align-items:center;justify-content:center;gap:.6rem;padding:2rem;color: var(--hx-ink-3);font:500 13px 'Inter',sans-serif;}
+    .spinner{width:22px;height:22px;border: 3px solid var(--hx-hair);border-top-color: var(--ac);border-radius: 50%;animation:spin .8s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
     /* This gets printed and sat next to the payroll register. */
     @media print{
       .navbar,.cp-noprint{display:none !important;}
-      body{background:#fff !important;}
+      body{background: var(--hx-card) !important;}
       .main-content{padding:0 !important;max-width:none;}
-      .chart-card{box-shadow:none;border:none;padding:0;margin-bottom:18px;}
+      .chart-card{box-shadow: none;border: none;padding:0;margin-bottom:18px;}
       details{display:block;}
       details > summary{display:none;}
     }
@@ -65,7 +65,7 @@
       <div class="cp-bar">
         <div>
           <h3>Commissions for Payroll</h3>
-          <p style="font:400 12.5px 'Inter',sans-serif;color:var(--ink2);margin:5px 0 0;">
+          <p style="font:400 12.5px 'Inter',sans-serif;color: var(--hx-ink-3);margin:5px 0 0;">
             Approved commissions grouped by salary cutoff — the figure to enter as an <strong>Incentive</strong> for each person, with <strong>Commission</strong> as the category. Entered that way it is paid once, in that cutoff only, and appears in the employee's incentive history.
           </p>
         </div>
@@ -87,7 +87,7 @@
 
     <div class="chart-card cp-noprint" id="cpAuditCard" style="display:none;">
       <h3>Before you pay — integrity check</h3>
-      <p style="font:400 12.5px 'Inter',sans-serif;color:var(--ink2);margin:5px 0 0;">
+      <p style="font:400 12.5px 'Inter',sans-serif;color: var(--hx-ink-3);margin:5px 0 0;">
         Anything that changed underneath an approved claim: a payment reversed, an amount corrected,
         an approval with no cutoff.
       </p>

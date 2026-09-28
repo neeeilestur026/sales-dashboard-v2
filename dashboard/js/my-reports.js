@@ -167,7 +167,7 @@ function renderReports(reports) {
     // Urgent Issues
     if (r.urgentIssues && r.urgentIssues.length) {
       html += '<div class="detail-section">' +
-        '<div class="detail-section-title" style="color:#ef4444;">Urgent Issues (' + r.urgentIssues.length + ')</div>';
+        '<div class="detail-section-title" style="color:var(--hx-red);">Urgent Issues (' + r.urgentIssues.length + ')</div>';
       r.urgentIssues.forEach(u => {
         html += '<div class="urgent-card"><div class="cat">' + esc(u.category) + '</div><div class="desc">' + esc(u.description) + '</div></div>';
       });
@@ -177,8 +177,8 @@ function renderReports(reports) {
     // Other Task / Notes
     if (r.otherTask && String(r.otherTask).trim()) {
       html += '<div class="detail-section">' +
-        '<div class="detail-section-title" style="color:#b45309;">Other Task / Notes</div>' +
-        '<div style="padding:0.6rem 0.8rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;white-space:pre-wrap;font-size:0.85rem;line-height:1.45;">' + esc(r.otherTask) + '</div>' +
+        '<div class="detail-section-title" style="color:var(--hx-warn);">Other Task / Notes</div>' +
+        '<div style="padding:0.6rem 0.8rem;background:var(--hx-warn-soft);border:1px solid var(--hx-warn-line);border-radius:6px;white-space:pre-wrap;font-size:0.85rem;line-height:1.45;">' + esc(r.otherTask) + '</div>' +
         '</div>';
     }
 

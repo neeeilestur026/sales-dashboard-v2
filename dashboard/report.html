@@ -8,30 +8,30 @@
   <link rel="stylesheet" href="css/flow.css">
   <style>
     .report { max-width: 1040px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
-    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-sheet { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-lg); box-shadow: var(--hx-sh-2); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--hx-navy); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, var(--hx-card), var(--hx-inset)); }
     .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
-    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-head .meta { font-size: 0.82rem; color: var(--hx-ink-2); margin-top: 0.3rem; }
     .report-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
+    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); background: var(--hx-card); color: var(--hx-ink); font-size: 0.85rem; }
     .report-body { padding: 1.4rem 1.6rem; }
     .dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-    .dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
-    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
-    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
+    .dr-tile { border: 1px solid var(--hx-hair); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--hx-card); }
+    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-ink-3); font-weight: 600; }
+    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--hx-ink); margin-top: 0.2rem; }
     .dr-sect { margin-bottom: 1.6rem; }
-    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
-    .dr-sect-title .pill { margin-left: auto; background: var(--accent-light); color: var(--accent-dark); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; }
-    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
-    .mod-PricingRequest { background: #fff7ed; color: #c2410c; }
-    .mod-Quotation { background: #f0fdfa; color: #0f766e; }
-    .mod-Inventory { background: #f8fafc; color: #475569; }
-    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
-    .dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
-    .notes-area { width: 100%; padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.88rem; font-family: inherit; resize: vertical; min-height: 110px; box-sizing: border-box; }
+    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--hx-ink-2); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--hx-hair); padding-bottom: 0.4rem; }
+    .dr-sect-title .pill { margin-left: auto; background: var(--hx-navy-soft); color: var(--hx-navy-ink); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; }
+    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--hx-inset); color: var(--hx-ink-2); white-space: nowrap; }
+    .mod-PricingRequest { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .mod-Quotation { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+    .mod-Inventory { background: var(--hx-inset); color: var(--hx-ink-2); }
+    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--hx-inset); color: var(--hx-ink-2); }
+    .dr-empty { padding: 0.9rem; text-align: center; color: var(--hx-ink-3); font-size: 0.82rem; font-style: italic; }
+    .notes-area { width: 100%; padding: 0.75rem; background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.88rem; font-family: inherit; resize: vertical; min-height: 110px; box-sizing: border-box; }
     @media print {
       .navbar, .no-print { display: none !important; }
-      body { background: #fff; }
+      body { background: var(--hx-card); }
       .main-content { padding: 0 !important; margin: 0 !important; }
       .report-sheet { border: none; box-shadow: none; }
       .dr-tile, table { break-inside: avoid; }
@@ -53,7 +53,7 @@
           <div class="report-controls no-print">
             <input type="date" id="datePicker">
             <button class="btn btn-sm btn-secondary" id="refreshBtn">Refresh</button>
-            <button class="btn btn-sm btn-secondary" id="pdfBtn">📄 PDF</button>
+            <button class="btn btn-sm btn-secondary" id="pdfBtn">PDF</button>
             <button class="btn btn-sm btn-primary" id="printBtn">Print</button>
           </div>
         </div>
@@ -77,13 +77,13 @@
           <div class="dr-sect">
             <div class="dr-sect-title">Call Log <span class="pill" id="callCount">0</span></div>
             <div class="no-print" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.7rem;">
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Contact</label><input type="text" id="callContact" placeholder="Name" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Company</label><input type="text" id="callCompany" placeholder="Company" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Outcome</label>
-                <select id="callOutcome" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;">
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Contact</label><input type="text" id="callContact" placeholder="Name" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Company</label><input type="text" id="callCompany" placeholder="Company" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Outcome</label>
+                <select id="callOutcome" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
                   <option>Connected</option><option>Voicemail</option><option>No answer</option><option>Follow-up set</option><option>Not interested</option><option>Other</option>
                 </select></div>
-              <div style="flex:1;min-width:140px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Notes</label><input type="text" id="callNotes" placeholder="Optional" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div style="flex:1;min-width:140px;"><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Notes</label><input type="text" id="callNotes" placeholder="Optional" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
               <button class="btn btn-sm btn-primary" id="logCallBtn">+ Log Call</button>
             </div>
             <div style="overflow-x:auto;"><table class="flow-table">
@@ -97,26 +97,26 @@
           <div class="dr-sect">
             <div class="dr-sect-title">Client Visits <span class="pill" id="visitCount">0</span></div>
             <div class="no-print" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.7rem;">
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Time of visit</label><input type="time" id="visitTime" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Person visited</label><input type="text" id="visitPerson" placeholder="Name" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Company</label><input type="text" id="visitCompany" placeholder="Company" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">City / address</label><input type="text" id="visitCity" placeholder="e.g. Davao City" style="padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Time of visit</label><input type="time" id="visitTime" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Person visited</label><input type="text" id="visitPerson" placeholder="Name" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Company</label><input type="text" id="visitCompany" placeholder="Company" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">City / address</label><input type="text" id="visitCity" placeholder="e.g. Davao City" style="padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
               <!-- A190: agenda = what the visit was FOR; summary = what came OUT of it. One 'topic'
                    field was collapsing two different questions. -->
-              <div style="flex:1;min-width:170px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Agenda</label><input type="text" id="visitAgenda" placeholder="What the visit was for" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div style="flex:1;min-width:200px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Summary of agenda</label><input type="text" id="visitSummary" placeholder="What came out of it" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;"></div>
-              <div style="min-width:190px;"><label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Against the plan</label>
-                <select id="visitPlanItem" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;">
+              <div style="flex:1;min-width:170px;"><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Agenda</label><input type="text" id="visitAgenda" placeholder="What the visit was for" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div style="flex:1;min-width:200px;"><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Summary of agenda</label><input type="text" id="visitSummary" placeholder="What came out of it" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;"></div>
+              <div style="min-width:190px;"><label style="display:block;font-size:0.68rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Against the plan</label>
+                <select id="visitPlanItem" style="width:100%;box-sizing:border-box;padding:0.4rem 0.55rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
                   <option value="">Unplanned visit</option>
                 </select></div>
             </div>
             <!-- A190: the photo is required. Kept on its own row with the preview so it reads as a
                  step rather than one more optional box in the strip above. -->
-            <div class="no-print" style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;margin-bottom:0.7rem;padding:0.55rem 0.7rem;border:1px dashed var(--border);border-radius:8px;">
-              <span style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Photo <span style="color:#b91c1c;">*required</span></span>
+            <div class="no-print" style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;margin-bottom:0.7rem;padding:0.55rem 0.7rem;border: 1px dashed var(--hx-hair);border-radius: 8px;">
+              <span style="font-size:0.7rem;font-weight:700;color: var(--hx-ink-3);text-transform:uppercase;">Photo <span style="color: var(--hx-red);">*required</span></span>
               <input type="file" id="visitPhoto" accept="image/png,image/jpeg" style="font-size:0.78rem;">
-              <img id="visitPhotoPreview" alt="" style="display:none;height:44px;border-radius:6px;border:1px solid var(--border);">
-              <span id="visitPhotoMsg" style="font-size:0.72rem;color:var(--text-muted);"></span>
+              <img id="visitPhotoPreview" alt="" style="display:none;height:44px;border-radius: 6px;border: 1px solid var(--hx-hair);">
+              <span id="visitPhotoMsg" style="font-size:0.72rem;color: var(--hx-ink-3);"></span>
               <button class="btn btn-sm btn-primary" id="logVisitBtn" style="margin-left:auto;">+ Log Visit</button>
             </div>
             <div style="overflow-x:auto;"><table class="flow-table">
@@ -136,7 +136,7 @@
           <div id="weekSect"></div>
 
           <div class="dr-sect">
-            <div class="dr-sect-title">My Notes / Other Tasks <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);" id="notesMsg"></span></div>
+            <div class="dr-sect-title">My Notes / Other Tasks <span class="no-print" style="margin-left:auto;font-size:0.7rem;color: var(--hx-ink-3);" id="notesMsg"></span></div>
             <textarea id="notesField" class="notes-area" placeholder="Calls, meetings, follow-ups, blockers, support needs..."></textarea>
             <button class="btn btn-sm btn-primary no-print" id="saveNotesBtn" style="margin-top:0.5rem;">Save Notes</button>
           </div>

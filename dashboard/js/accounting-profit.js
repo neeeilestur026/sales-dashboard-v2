@@ -326,7 +326,7 @@ function pnlDetailHtml(m) {
         : (e.edited ? ' <span class="pnl-edited" title="Cost edited by accounting">edited</span>' : '');
       const editCell = pnlCanEditCost
         ? `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditCost('${id}')">✎ Edit</button></td>` +
-          `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditNote('${id}')" title="${e.note ? 'Edit the note' : 'Add a note'}">${e.note ? '🗒 Note' : '＋ Note'}</button></td>`
+          `<td class="num"><button type="button" class="pnl-editcost" onclick="pnlEditNote('${id}')" title="${e.note ? 'Edit the note' : 'Add a note'}">${e.note ? 'Note' : '＋ Note'}</button></td>`
         : '';
       // Escaped like every other cell — a note is free text on a financial record, so an unescaped
       // '<' would be an injection point on four different dashboards.

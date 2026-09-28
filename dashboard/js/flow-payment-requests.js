@@ -407,7 +407,7 @@ function loadFromPO() {
     /* A225 FIRST and styled as a refusal, not an amber FYI — it is the reason Save is disabled, so it
        has to be the first thing read. The AP-duplicate and already-partly-paid notes stay below it. */
     const perPO = prSyncCreateGate();
-    if (perPO) msgs.push(`<span style="color:var(--hx-red);">🚫 ${flowEsc(perPO)}</span>`);
+    if (perPO) msgs.push(`<span style="color:var(--hx-red);">${flowEsc(perPO)}</span>`);
     if (n > 1) msgs.push(`⚠ ${n} AP entries found for this PO — the payable above is their SUM. Check AP Aging for stale duplicates before submitting; the portion buttons stay disabled until it is resolved.`);
     // A158: a second request on the same PO is legitimate (deposit → balance) but worth flagging,
     // since re-requesting the full payable is exactly how a PO gets paid twice.
@@ -605,7 +605,7 @@ function prUpdateKpis(open) {
 
 function prRow(r) {
   const st = r.status || 'Draft';
-  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
+  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✕ ${flowEsc(r.approvalNote)}</div>` : '';
   // A156: three sign-offs then payment — show how far along it is, not just the status word.
   const appr = [r.adminApprovedBy ? 'Admin ✓' : (r.acctApprovedBy ? 'Acct ✓' : ''),
     r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '',
