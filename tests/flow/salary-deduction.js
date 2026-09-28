@@ -479,6 +479,47 @@ section('A284 · the projection skips what the schedule skips');
   eq('  and ends after them, not sooner', proj.projectedEndPeriod, '2027-02-B');
 }
 
+section('A286 · a skip reaches a register that was ALREADY saved');
+/* DED-202609-002 again, one step further on: September's 2nd cutoff had been SAVED (not approved)
+   with the instalment in it before the skip was applied. The register read hands the client the
+   STORED figure for a saved cutoff, so the skip changed the projection and the grid kept showing
+   the old 1,458 — "he still has a deduction for the 2nd cutoff". The skip must rewrite that row. */
+{
+  const ctx = boot();
+  const no = agree(ctx, { totalAmount: 34995, perCutoffAmount: 1458, cadence: 'Every Cutoff',
+                          startPeriod: '2026-09-A' });
+  runCutoff(ctx, '2026-09-A', 20000);
+  saveReg(ctx, '2026-09-B', 20000, { advances: 500 });                 // saved FIRST, with the instalment
+  const before = readReg(ctx, '2026-09-B');
+  eq('the saved 2nd cutoff carries the instalment', before.salaryDeduction, 1458);
+  const netBefore = before.netPay;
+
+  const r = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-09-B' });
+  ok('the skip is accepted', r.success === true, r);
+  ok('  and says the saved register was updated', r.registerRefreshed === true && /register/.test(r.message), r);
+
+  const after = readReg(ctx, '2026-09-B');
+  eq('the STORED figure is now zero — no Save Pay needed', after.salaryDeduction, 0);
+  eq('  net pay rose by exactly the instalment', after.netPay, netBefore + 1458);
+  eq('  the advance the director typed is untouched', after.advances, 500);
+  eq('  and total deductions dropped by the same 1,458', after.totalDeductions, before.totalDeductions - 1458);
+
+  runCutoff(ctx, '2026-09-B', 20000);
+  eq('approving that cutoff banks nothing more (A collected 1,458; B adds 0)', paidRemaining(ctx, no).paid, 1458);
+
+  // Un-skipping a still-open cutoff puts the figure back into its saved row too.
+  saveReg(ctx, '2026-10-A', 20000);
+  ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-10-A' });
+  eq('October A skipped: its saved row reads 0', readReg(ctx, '2026-10-A').salaryDeduction, 0);
+  const back = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-10-A', skip: false });
+  ok('un-skip refreshes the row as well', back.registerRefreshed === true, back);
+  eq('  and the instalment is back in it', readReg(ctx, '2026-10-A').salaryDeduction, 1458);
+
+  // A cutoff with no saved register is simply skipped; nothing to refresh, and it says so.
+  const none = ctx.handleSkipSalaryDeductionCutoff({ token: TOKEN, deductionNo: no, period: '2026-11-B' });
+  ok('no saved row -> skipped, registerRefreshed false', none.success === true && none.registerRefreshed === false, none);
+}
+
 section('A284 · a skip can never rewrite money that has already moved');
 {
   const ctx = boot();

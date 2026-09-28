@@ -11759,6 +11759,48 @@ function _sdIsSkipped(d, period) {
   return _sdSkipList(d).indexOf(String(period || '').toUpperCase()) !== -1;
 }
 
+/* A286 — A SKIP MUST REACH A REGISTER THAT IS ALREADY SAVED.
+ *
+ * handleGetPayrollRegister hands the client a saved cutoff's STORED salary-deduction figure, and the
+ * client shows it "full stop" (director-home.js _payDeductions) — the live projection only stands in
+ * for a cutoff nobody has saved yet. So when a cutoff was saved BEFORE it was skipped, the grid kept
+ * showing the old instalment after the skip, the director saw "he still has a deduction for the 2nd
+ * cutoff", and nothing short of pressing Save Pay again would clear it. That is what happened to
+ * DED-202609-002.
+ *
+ * This recomputes ONE saved row from the current due, with exactly the arithmetic
+ * handleSavePayrollRegister uses (the affordability cap, the ledger-wins incentive already in the
+ * stored gross), and rewrites only the three cells that follow from it: Salary Deduction (16),
+ * Total Deductions (13) and Net Pay (14). Everything the director typed — advances, WTax, the
+ * statutory three — is left exactly as saved. An APPROVED cutoff is never touched: its money has
+ * moved, and handleSkipSalaryDeductionCutoff refuses before we get here.
+ *
+ * Returns true when a row was rewritten, so the caller can say so. */
+function _sdRefreshRegisterRow(period, employee) {
+  if (!_sdValidPeriod(period) || !employee || _sdPeriodApproved(period)) return false;
+  var sheet, data;
+  try { sheet = _payrollRegisterSheet(); data = sheet.getDataRange().getValues(); }
+  catch (e) { return false; }
+  var due = _salaryDeductionDueFor(period);
+  var changed = false;
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[0] || '') !== period || String(row[1] || '') !== String(employee)) continue;
+    var gross = parseFloat(row[6]) || 0;
+    var otherDed = (parseFloat(row[7]) || 0) + (parseFloat(row[8]) || 0) + (parseFloat(row[9]) || 0)
+                 + (parseFloat(row[10]) || 0) + (parseFloat(row[11]) || 0);
+    var availableNetC = Math.max(0, _sdC(gross) - _sdC(otherDed));
+    var sd = _sdSum(_sdAllocate(due[String(employee)] || [], availableNetC));
+    var totDed = otherDed + sd;
+    var before = parseFloat(row[15]) || 0;
+    if (Math.abs(before - sd) < 0.005 && Math.abs((parseFloat(row[12]) || 0) - totDed) < 0.005) continue;
+    sheet.getRange(i + 1, 13, 1, 2).setValues([[totDed, gross - totDed]]);   // Total Deductions, Net Pay
+    sheet.getRange(i + 1, 16).setValue(sd);                                  // Salary Deduction
+    changed = true;
+  }
+  return changed;
+}
+
 /** Can this agreement collect on `period` at all — right cadence, and not sat out? */
 function _sdCollectsOn(d, period) {
   if (!period) return false;
@@ -12225,10 +12267,16 @@ function handleSkipSalaryDeductionCutoff(params) {
       (skip ? 'Skipped ' : 'Un-skipped ') + period + ' by ' +
       String(session.fullName || session.username || '') + ' on ' + new Date().toISOString().slice(0, 10));
 
+    /* A286 — if that cutoff's register is already saved (and not approved — checked above), bring
+       its stored figure into line NOW. Otherwise the grid keeps showing the old instalment until
+       someone presses Save Pay, and the skip looks like it did nothing. Same on the way back. */
+    var refreshed = _sdRefreshRegisterRow(period, found.obj.employee);
+
     return { success: true, deductionNo: dedNo, period: period, skipped: skip,
-      skipPeriods: list.join(','),
-      message: skip ? ('Cutoff ' + period + ' will be skipped. Collection resumes next cutoff.')
-                    : ('Cutoff ' + period + ' will be collected again.') };
+      skipPeriods: list.join(','), registerRefreshed: refreshed,
+      message: (skip ? ('Cutoff ' + period + ' will be skipped. Collection resumes next cutoff.')
+                     : ('Cutoff ' + period + ' will be collected again.')) +
+               (refreshed ? ' The saved register for that cutoff has been updated.' : '') };
   } catch (e) {
     return { success: false, message: e.message };
   } finally {

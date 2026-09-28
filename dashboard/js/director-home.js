@@ -2543,6 +2543,9 @@ async function sdSkipCutoff(dedNo) {
   const res = await apiSkipSalaryDeductionCutoff(dedNo, key, !putBack);
   if (!res.success) { alert(res.message || 'Could not change that cutoff.'); return; }
   await loadSalaryDeductions();
+  /* A286 — the server may have rewritten that cutoff's saved register row; the grids in memory
+     still hold the old figure. Reload the period so Pay A/B show what the sheet now says. */
+  if (_currentYear && _currentMonth) await loadPeriod();
   closeDeductionModal();
   alert(res.message || 'Updated.');
 }
