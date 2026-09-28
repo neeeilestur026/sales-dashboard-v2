@@ -311,7 +311,7 @@ function openRevisionModal(idx) {
     <div class="detail-row"><span class="detail-label">Document #</span><span class="detail-value">${escapeHtml(record.documentNumber)}</span></div>
     <div class="detail-row"><span class="detail-label">Date Sent</span><span class="detail-value">${record.dateSent}</span></div>
     <div class="detail-row"><span class="detail-label">Current Amount</span><span class="detail-value">₱${Number(record.amount || 0).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
-    <div class="detail-row"><span class="detail-label">Current PDF</span><span class="detail-value"><a href="${escapeHtml(record.driveLink)}" target="_blank" style="color:#3b82f6;">View Current PDF</a></span></div>`;
+    <div class="detail-row"><span class="detail-label">Current PDF</span><span class="detail-value"><a href="${escapeHtml(record.driveLink)}" target="_blank" style="color:var(--hx-cyan-ink);">View Current PDF</a></span></div>`;
 
   // Reset form
   document.getElementById('revisionPdfInput').value = '';

@@ -64,11 +64,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
     const statusEl = document.getElementById('reportStatus');
     if (statusEl) {
-      if (reportResult.success && reportResult.alreadySubmitted) {
-        statusEl.innerHTML = '<span style="color:#22c55e;">Submitted today</span>';
-      } else {
-        statusEl.innerHTML = '<span style="color:#eab308;">Not yet submitted</span>';
-      }
+      // Plain text: the page script reads it and tones the tag (css/sales-home.css).
+      statusEl.textContent = (reportResult.success && reportResult.alreadySubmitted) ? 'Submitted today' : 'Not yet submitted';
     }
   } catch (e) {
     const statusEl = document.getElementById('reportStatus');
@@ -99,10 +96,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const bars = [];
       if (t.quotationTarget > 0) {
-        bars.push(makeProgressBar('Quotations', monthQ, t.quotationTarget, '#f97316'));
+        bars.push(makeProgressBar('Quotations', monthQ, t.quotationTarget, 'q'));
       }
       if (t.prTarget > 0) {
-        bars.push(makeProgressBar('Purchase Requests', monthP, t.prTarget, '#3b82f6'));
+        bars.push(makeProgressBar('Purchase requests', monthP, t.prTarget, 'p'));
       }
 
       if (bars.length > 0) {
@@ -132,13 +129,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       if (overdue.length > 0) {
         document.getElementById('overdueCount').textContent = overdue.length;
+        // Classed rows; css/sales-home.css paints them.
         const listHtml = overdue.slice(0, 5).map(r =>
-          `<div style="padding:0.25rem 0;border-bottom:1px solid #e2e8f0;">
-            <strong style="color:var(--text-primary,#f1f5f9);">${r.clientName}</strong>
-            <span style="color:var(--text-muted,#64748b);margin-left:0.5rem;">${r.type} — ${r.documentNumber}</span>
-            <span style="color:#ef4444;margin-left:0.5rem;font-size:0.75rem;">Due: ${r.followUpDate}</span>
+          `<div class="overdue-item">
+            <span class="name">${r.clientName}</span>
+            <span class="meta">${r.type} — ${r.documentNumber}</span>
+            <span class="due">Due ${r.followUpDate}</span>
           </div>`
-        ).join('') + (overdue.length > 5 ? `<div style="padding:0.25rem 0;color:var(--text-muted);">...and ${overdue.length - 5} more</div>` : '');
+        ).join('') + (overdue.length > 5 ? `<div class="overdue-more">and ${overdue.length - 5} more</div>` : '');
         document.getElementById('overdueList').innerHTML = listHtml;
         document.getElementById('overdueSection').style.display = 'block';
       }
@@ -159,14 +157,17 @@ function setAppLink(elementId, url) {
     el.href = url;
   } else {
     el.removeAttribute('href');
-    el.classList.add('btn-secondary');
-    el.classList.remove('btn-primary');
-    el.textContent = 'Not Configured';
-    el.style.pointerEvents = 'none';
+    el.classList.add('off');   // css/sales-home.css: dimmed, not clickable
+    el.textContent = 'Not configured';
   }
 }
 
-function makeProgressBar(label, current, target, color) {
+/**
+ * One target bar. `tone` is a class the page sheet paints: 'q' quotations (navy), 'p' purchase
+ * requests (cyan). The only inline style is the width, which IS the data. The "(NN%)" text is
+ * what sales-home-page.js reads to draw the ring, so its shape stays.
+ */
+function makeProgressBar(label, current, target, tone) {
   const pct = Math.min(Math.round((current / target) * 100), 100);
   return `<div class="progress-row">
     <div class="progress-label">
@@ -174,7 +175,7 @@ function makeProgressBar(label, current, target, color) {
       <strong>${current} / ${target} (${pct}%)</strong>
     </div>
     <div class="progress-bar-bg">
-      <div class="progress-bar-fill" style="width:${pct}%;background:${color};"></div>
+      <div class="progress-bar-fill ${tone}" style="width:${pct}%"></div>
     </div>
   </div>`;
 }

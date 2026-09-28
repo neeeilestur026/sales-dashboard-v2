@@ -147,9 +147,9 @@ function renderPRTable(records) {
       checkboxCell = '<td style="text-align:center;"><input type="checkbox" class="fwd-check" data-idx="' + idx + '"></td>';
       // Buy price: show from SQ (read-only) or "No SQ" label
       if (r.hasSQ) {
-        buyPriceCell = '<td title="From SQ: ' + esc(r.sqSupplierCompany) + ' (' + esc(r.sqCurrency || 'PHP') + ')"><span style="color:#f97316;font-weight:600;font-size:0.82rem;">' + formatCurrency(r.sqBuyPrice, r.sqCurrency) + '</span><br><span style="font-size:0.65rem;color:#3b82f6;">SQ: ' + esc(r.sqSupplierCompany || 'Linked') + '</span></td>';
+        buyPriceCell = '<td title="From SQ: ' + esc(r.sqSupplierCompany) + ' (' + esc(r.sqCurrency || 'PHP') + ')"><span style="color:var(--hx-warn);font-weight:600;font-size:0.82rem;">' + formatCurrency(r.sqBuyPrice, r.sqCurrency) + '</span><br><span style="font-size:0.65rem;color:var(--hx-cyan-ink);">SQ: ' + esc(r.sqSupplierCompany || 'Linked') + '</span></td>';
       } else {
-        buyPriceCell = '<td><span style="color:var(--text-muted,#64748b);font-style:italic;font-size:0.78rem;">No SQ yet</span></td>';
+        buyPriceCell = '<td><span style="color:var(--hx-ink-3);font-style:italic;font-size:0.78rem;">No SQ yet</span></td>';
       }
       unitPriceCell = r.unitPrice ? '<span class="price-display">' + formatCurrency(r.unitPrice) + '</span>' : '<span class="price-awaiting">--</span>';
       totalPriceCell = r.totalPrice ? '<span class="price-display">' + formatCurrency(r.totalPrice) + '</span>' : '<span class="price-awaiting">--</span>';
@@ -157,7 +157,7 @@ function renderPRTable(records) {
       unitPriceCell = r.unitPrice ? '<span class="price-display">' + formatCurrency(r.unitPrice) + '</span>' : '<span class="price-awaiting">Awaiting pricing</span>';
       totalPriceCell = r.totalPrice ? '<span class="price-display">' + formatCurrency(r.totalPrice) + '</span>' : '<span class="price-awaiting">--</span>';
       if (showQuotCheck && r.status === 'For Quotation' && r.unitPrice) {
-        checkboxCell = '<td style="text-align:center;"><input type="checkbox" class="quot-check" data-idx="' + idx + '" style="width:16px;height:16px;cursor:pointer;accent-color:#a855f7;"></td>';
+        checkboxCell = '<td style="text-align:center;"><input type="checkbox" class="quot-check" data-idx="' + idx + '" style="width:16px;height:16px;cursor:pointer;accent-color:var(--hx-navy-text);"></td>';
       } else if (showQuotCheck) {
         checkboxCell = '<td></td>';
       }
@@ -170,7 +170,7 @@ function renderPRTable(records) {
       '<td style="color:var(--text-muted)">' + esc(r.prNumber) + '</td>' +
       '<td style="color:var(--text-muted);white-space:nowrap">' + esc(r.dateSent) + '</td>' +
       '<td>' + statusBadge + '</td>' +
-      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(r.itemDescription) + (r.hasSQ && r.sqSupplierDesc ? '\nSupplier: ' + esc(r.sqSupplierDesc) : '') + '">' + esc(r.itemDescription) + (r.hasSQ && r.sqSupplierDesc && r.sqSupplierDesc !== r.itemDescription ? '<br><span style="font-size:0.7rem;color:#3b82f6;" title="Supplier description">&#x2192; ' + esc(r.sqSupplierDesc) + '</span>' : '') + '</td>' +
+      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(r.itemDescription) + (r.hasSQ && r.sqSupplierDesc ? '\nSupplier: ' + esc(r.sqSupplierDesc) : '') + '">' + esc(r.itemDescription) + (r.hasSQ && r.sqSupplierDesc && r.sqSupplierDesc !== r.itemDescription ? '<br><span style="font-size:0.7rem;color:var(--hx-cyan-ink);" title="Supplier description">&#x2192; ' + esc(r.sqSupplierDesc) + '</span>' : '') + '</td>' +
       '<td style="color:var(--text-muted);font-size:0.8rem">' + esc(r.modelPartNo) + '</td>' +
       '<td style="text-align:center">' + esc(String(qty)) + '</td>' +
       buyPriceCell +
@@ -416,7 +416,7 @@ function renderQuotationTable(records) {
     else if (ovKey === 'rejected') ovClass = 'badge-lost';
     else if (ovKey === 'partially-approved') ovClass = 'badge-partially-approved';
 
-    var pdfLink = r.driveLink ? '<a href="' + esc(r.driveLink) + '" target="_blank" style="color:#3b82f6;font-size:0.78rem;">View PDF</a>' : '--';
+    var pdfLink = r.driveLink ? '<a href="' + esc(r.driveLink) + '" target="_blank" style="color:var(--hx-cyan-ink);font-size:0.78rem;">View PDF</a>' : '--';
 
     return '<tr>' +
       (isAdmin ? '<td style="font-size:0.78rem;color:var(--text-muted)">' + esc(r.agentName) + '</td>' : '') +

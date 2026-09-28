@@ -27,7 +27,9 @@ const read = (f) => fs.readFileSync(D + f, 'utf8');
    commit appends its pages; the burn-down is a hard fail for these and a metric for the rest. */
 const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave-request.html',
   'director-home.html', 'director-expenses.html', 'director-sales-orders.html', 'director-emails.html',
-  'leadgen-home.html', 'leadgen-daily-report.html'];
+  'leadgen-home.html', 'leadgen-daily-report.html',
+  // A290 — the sales family
+  'dashboard.html', 'clients.html', 'pending-items.html', 'performance.html', 'quotation-summary.html', 'weekly-itinerary.html', 'sales-emails.html', 'product-finder.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

@@ -15,24 +15,25 @@
   function render(el, rows, session) {
     if (!rows.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
     el.style.display = '';
+    // Classed output (A290) — css/sales-home.css paints it; no colour or emoji in the script.
     el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem;">
-        <h3 style="font-size:0.95rem;font-weight:700;margin:0;">🎯 Leads for you</h3>
-        <span style="font-size:.78rem;color:var(--text-muted,#64748b);">qualified by lead generation · ${rows.length} open</span>
+      <div class="lfy-head">
+        <h3>Leads for you</h3>
+        <span>Qualified by lead generation, ${rows.length} open</span>
       </div>
-      <div style="display:grid;gap:.6rem;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));">
+      <div class="lfy-grid">
         ${rows.map(l => `
-          <div style="border:1px solid var(--border,#e2e8f0);border-radius:12px;padding:.8rem .9rem;background:var(--bg-card,#fff);font-size:.82rem;color:var(--text-muted,#64748b);line-height:1.5;">
-            <div style="display:flex;justify-content:space-between;gap:.5rem;align-items:baseline;">
-              <div style="font-weight:700;font-size:.9rem;color:var(--text-primary,#0f172a);">${esc(l.company)}${l.plantSite ? ' — ' + esc(l.plantSite) : ''}</div>
-              <span style="font-size:.68rem;font-weight:700;padding:.1rem .5rem;border-radius:999px;background:#e0e7ff;color:#3730a3;white-space:nowrap;">${esc(l.status)}</span>
+          <div class="lfy-card">
+            <div class="lfy-top">
+              <div class="lfy-co">${esc(l.company)}${l.plantSite ? ' — ' + esc(l.plantSite) : ''}</div>
+              <span class="badge badge-active">${esc(l.status)}</span>
             </div>
-            <div>${esc(l.sector || '')}${l.province ? ' · ' + esc(l.province) : ''} · handed ${esc(l.handedOffOn || '')}</div>
-            ${l.contactName ? `<div><b style="color:var(--text-primary,#0f172a);font-weight:600;">${esc(l.contactName)}</b>${l.contactRole ? ' · ' + esc(l.contactRole) : ''}${l.contactMobile ? ' · ' + esc(l.contactMobile) : ''}${l.contactEmail ? ' · ' + esc(l.contactEmail) : ''}</div>` : ''}
-            ${l.pain ? `<div><b style="font-weight:600;">Pain:</b> ${esc(l.pain)}</div>` : ''}
-            ${l.whatTheySaid ? `<div><b style="font-weight:600;">They said:</b> ${esc(l.whatTheySaid)}</div>` : ''}
-            ${l.nextStep || l.presentationDate ? `<div><b style="font-weight:600;">Next:</b> ${esc(l.nextStep || '')}${l.presentationDate ? ' · presentation ' + esc(l.presentationDate) : ''}</div>` : ''}
-            <div style="display:flex;gap:.4rem;justify-content:flex-end;margin-top:.5rem;">
+            <div>${esc(l.sector || '')}${l.province ? ', ' + esc(l.province) : ''}, handed ${esc(l.handedOffOn || '')}</div>
+            ${l.contactName ? `<div><b>${esc(l.contactName)}</b>${l.contactRole ? ', ' + esc(l.contactRole) : ''}${l.contactMobile ? ', ' + esc(l.contactMobile) : ''}${l.contactEmail ? ', ' + esc(l.contactEmail) : ''}</div>` : ''}
+            ${l.pain ? `<div><b>Pain:</b> ${esc(l.pain)}</div>` : ''}
+            ${l.whatTheySaid ? `<div><b>They said:</b> ${esc(l.whatTheySaid)}</div>` : ''}
+            ${l.nextStep || l.presentationDate ? `<div><b>Next:</b> ${esc(l.nextStep || '')}${l.presentationDate ? ', presentation ' + esc(l.presentationDate) : ''}</div>` : ''}
+            <div class="lfy-actions">
               <a class="btn btn-sm btn-secondary" href="flow-pricing-request.html">Open a pricing request</a>
               <button type="button" class="btn btn-sm btn-secondary" data-return="${esc(l.leadNo)}" title="Give this lead back to lead generation">Return</button>
             </div>

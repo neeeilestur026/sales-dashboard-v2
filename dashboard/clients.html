@@ -9,42 +9,42 @@
   <style>
     .cl-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
     .cl-form .full { grid-column: 1 / -1; }
-    .cl-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .cl-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
     .cl-form input, .cl-form select, .cl-form textarea {
-      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155); border-radius: 8px;
-      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text-primary); font-size: 0.875rem; font-family: inherit;
     }
     .cl-form textarea { resize: vertical; min-height: 60px; }
-    .cl-form input:focus, .cl-form select:focus, .cl-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .cl-form input:focus, .cl-form select:focus, .cl-form textarea:focus { outline: none; border-color: var(--accent); }
     .cl-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
     .cl-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .cl-table th { text-align: left; padding: 0.6rem 0.65rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
-    .cl-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
-    .cl-table tr:hover td { background: #e2e8f0; }
+    .cl-table th { text-align: left; padding: 0.6rem 0.65rem; color: var(--text-muted); border-bottom: 1px solid var(--border); font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
+    .cl-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--hx-hair-2); color: var(--text-primary); }
+    .cl-table tr:hover td { background: var(--hx-hair-2); }
     .filter-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
     .filter-bar input, .filter-bar select {
-      padding: 0.45rem 0.7rem; background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155); border-radius: 8px;
-      color: var(--text-primary, #f1f5f9); font-size: 0.82rem; font-family: inherit;
+      padding: 0.45rem 0.7rem; background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text-primary); font-size: 0.82rem; font-family: inherit;
     }
     .filter-bar input { flex: 1; min-width: 180px; }
-    .filter-bar input::placeholder { color: var(--text-muted, #64748b); }
+    .filter-bar input::placeholder { color: var(--text-muted); }
     .filter-bar select { appearance: auto; }
-    .count-label { font-size: 0.8rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+    .count-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; }
     .toggle-form-btn { cursor: pointer; }
     .form-section { display: none; }
     .form-section.open { display: block; }
     .ml-auto { margin-left: auto; }
     .type-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600; }
-    .type-active { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .type-inactive { background: rgba(148,163,184,0.1); color: #94a3b8; }
-    .type-prospect { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .type-vip { background: rgba(249,115,22,0.12); color: #f97316; }
+    .type-active { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .type-inactive { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .type-prospect { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .type-vip { background: var(--hx-warn-soft); color: var(--hx-warn); }
     .act-btn { background: none; border: none; cursor: pointer; padding: 0.2rem 0.35rem; border-radius: 4px; transition: background 0.15s; }
-    .act-btn:hover { background: #f8fafc; }
-    .act-edit { color: #3b82f6; }
-    .act-del { color: #ef4444; }
+    .act-btn:hover { background: var(--hx-inset); }
+    .act-edit { color: var(--hx-cyan-ink); }
+    .act-del { color: var(--hx-red); }
     @media(max-width: 640px) { .cl-form { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -61,7 +61,7 @@
     <!-- Add/Edit Form (collapsible) -->
     <div class="chart-card" style="margin-bottom:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--text-primary);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add New Client
         </h3>
@@ -75,7 +75,7 @@
           <input type="hidden" id="editRowIndex" value="">
           <div class="cl-form">
             <div class="full">
-              <label for="clCompany">Company Name <span style="color:#ef4444;">*</span></label>
+              <label for="clCompany">Company Name <span style="color: var(--hx-red);">*</span></label>
               <input type="text" id="clCompany" placeholder="e.g. DMCI Holdings" required>
             </div>
             <div>
@@ -136,13 +136,13 @@
             <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Clear</button>
           </div>
         </form>
-        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius: 8px;font-size:0.85rem;margin-top:0.5rem;"></div>
       </div>
     </div>
 
     <!-- Records -->
     <div class="chart-card">
-      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">Client Records</h3>
+      <h3 style="font-size:0.95rem;font-weight:600;color: var(--text-primary);margin-bottom:0.75rem;">Client Records</h3>
 
       <div class="filter-bar">
         <!-- Admin agent filter (hidden for sales) -->

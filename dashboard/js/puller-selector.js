@@ -502,7 +502,7 @@ async function psSuggest() {
     html += '<p class="cr-rec-line" style="margin-top:8px;font-weight:700;">' + esc(confirmMsg) + '</p>';
   }
   html += '<div class="cr-actions" style="justify-content:flex-start;margin-top:12px;">' +
-    '<button type="button" class="cr-btn" onclick="psExportPdf()">📄 Export filled PDF</button></div>';
+    '<button type="button" class="cr-btn" onclick="psExportPdf()">Export filled PDF</button></div>';
   if (typeof pfActionBtns === 'function' && r.primary) {
     html += pfActionBtns({ text: psSummaryText(a, r), inquiryId: psInquiryId,
       qty: psNum(a.quantity) || 1,
@@ -618,7 +618,7 @@ async function psExportPdf() {
   } catch (e) {
     alert('Could not build the PDF: ' + (e.message || e));
   } finally {
-    if (btn && btn.tagName === 'BUTTON') { btn.disabled = false; btn.textContent = '📄 Export filled PDF'; }
+    if (btn && btn.tagName === 'BUTTON') { btn.disabled = false; btn.textContent = 'Export filled PDF'; }
   }
 }
 

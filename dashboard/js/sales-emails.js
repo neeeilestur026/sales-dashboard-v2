@@ -122,7 +122,7 @@ async function loadFolder(folder, force) {
     renderList();
   } catch (e) {
     deEmails = [];
-    box.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${_esc(e.message)}</div>`;
+    box.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${_esc(e.message)}</div>`;
   }
 }
 
@@ -220,12 +220,12 @@ async function seLoadQuotations() {
 }
 
 function seQuotationCell(e) {
-  if (!seReady) return '<span style="color:#94a3b8;">—</span>';
+  if (!seReady) return '<span style="color:var(--hx-ink-3);">—</span>';
   const hit = seLinkByMsg[String(e.messageId || '').toLowerCase()];
   if (hit) {
     return `<a class="link-btn" href="flow-quotations.html?review=${encodeURIComponent(hit.quotationNo)}">${_esc(hit.quotationNo)}</a>`;
   }
-  if (!e.messageId) return '<span style="color:#94a3b8;" title="This message has no Message-ID, so it cannot be attached">—</span>';
+  if (!e.messageId) return '<span style="color:var(--hx-ink-3);" title="This message has no Message-ID, so it cannot be attached">—</span>';
   return `<button class="link-btn" onclick='seAttach("${_esc(e.messageId)}")'>Attach…</button>`;
 }
 
@@ -304,7 +304,7 @@ function seRenderSplit(rows, box) {
     `<div style="margin:0 0 .5rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
        ${seReplyReady ? `<button class="btn btn-sm btn-secondary" id="seCheckReplies" ${linked ? '' : 'disabled'}>
          Check for replies${linked ? ' (' + linked + ')' : ''}</button>` : ''}
-       <span style="font-size:.74rem;color:var(--text-muted,#64748b);">
+       <span style="font-size:.74rem;color:var(--hx-ink-3);">
          ${canCheck ? 'Asks the mailbox whether the client answered any attached message.'
           : linked ? 'Reply checking arrives with the next backend update.'
                    : 'Attach a message to a quotation first — replies are tracked per attached message.'}</span>
@@ -700,7 +700,7 @@ function seToast(text, ok) {
       'box-shadow:0 8px 26px rgba(15,23,42,.28);max-width:min(520px,92vw);text-align:center;';
     document.body.appendChild(t);
   }
-  t.style.background = ok ? '#0f766e' : '#b91c1c';
+  t.style.background = ok ? 'var(--hx-ok)' : 'var(--hx-red)';
   t.textContent = text;
   t.style.display = '';
   clearTimeout(t._h);

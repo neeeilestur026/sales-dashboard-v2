@@ -19,19 +19,19 @@
       flex: 1;
       min-width: 200px;
       padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
       font-size: 0.875rem;
     }
-    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted, #64748b); }
+    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted); }
     .tracker-toolbar select {
       padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
       font-size: 0.875rem;
       cursor: pointer;
     }
@@ -44,18 +44,18 @@
     .tracker-table th {
       text-align: left;
       padding: 0.65rem 0.9rem;
-      color: var(--text-muted, #64748b);
-      border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
       font-weight: 600;
       white-space: nowrap;
     }
     .tracker-table td {
       padding: 0.7rem 0.9rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--hx-hair-2);
       vertical-align: middle;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
     }
-    .tracker-table tr:hover td { background: #e2e8f0; }
+    .tracker-table tr:hover td { background: var(--hx-hair-2); }
     .badge {
       display: inline-block;
       padding: 0.2rem 0.55rem;
@@ -64,12 +64,12 @@
       font-weight: 600;
       letter-spacing: 0.02em;
     }
-    .badge-quotation { background: rgba(249,115,22,0.15); color: #f97316; }
-    .badge-pending   { background: rgba(234,179,8,0.15);   color: #eab308; }
-    .badge-replied   { background: rgba(34,197,94,0.15);   color: #22c55e; }
-    .badge-closed    { background: rgba(148,163,184,0.15); color: #94a3b8; }
-    .badge-won       { background: rgba(34,197,94,0.2);    color: #22c55e; }
-    .badge-lost      { background: rgba(239,68,68,0.15);   color: #ef4444; }
+    .badge-quotation { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .badge-pending   { background: var(--hx-warn-soft);   color: var(--hx-warn); }
+    .badge-replied   { background: var(--hx-ok-soft);   color: var(--hx-ok); }
+    .badge-closed    { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .badge-won       { background: var(--hx-ok-soft);    color: var(--hx-ok); }
+    .badge-lost      { background: var(--hx-red-soft);   color: var(--hx-red); }
     .days-badge {
       display: inline-block;
       padding: 0.2rem 0.55rem;
@@ -77,19 +77,19 @@
       font-size: 0.8rem;
       font-weight: 600;
     }
-    .days-fresh  { background: rgba(34,197,94,0.12);  color: #22c55e; }
-    .days-ok     { background: rgba(234,179,8,0.12);  color: #eab308; }
-    .days-old    { background: rgba(249,115,22,0.12); color: #f97316; }
-    .days-stale  { background: rgba(239,68,68,0.12);  color: #ef4444; }
+    .days-fresh  { background: var(--hx-ok-soft);  color: var(--hx-ok); }
+    .days-ok     { background: var(--hx-warn-soft);  color: var(--hx-warn); }
+    .days-old    { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .days-stale  { background: var(--hx-red-soft);  color: var(--hx-red); }
     .tracker-count {
       font-size: 0.8rem;
-      color: var(--text-muted, #64748b);
+      color: var(--text-muted);
       margin-bottom: 0.75rem;
     }
     .no-results {
       text-align: center;
       padding: 3rem 1rem;
-      color: var(--text-muted, #64748b);
+      color: var(--text-muted);
     }
     .status-select {
       display: inline-block;
@@ -104,17 +104,17 @@
       text-align: center;
       min-width: 70px;
     }
-    .status-select.badge-pending  { background: rgba(234,179,8,0.15);   color: #eab308; }
-    .status-select.badge-replied  { background: rgba(34,197,94,0.15);   color: #22c55e; }
-    .status-select.badge-won      { background: rgba(34,197,94,0.2);    color: #22c55e; }
-    .status-select.badge-lost     { background: rgba(239,68,68,0.15);   color: #ef4444; }
-    .status-select.badge-closed   { background: rgba(148,163,184,0.15); color: #94a3b8; }
-    .status-select option { background: #1e293b; color: #f1f5f9; }
+    .status-select.badge-pending  { background: var(--hx-warn-soft);   color: var(--hx-warn); }
+    .status-select.badge-replied  { background: var(--hx-ok-soft);   color: var(--hx-ok); }
+    .status-select.badge-won      { background: var(--hx-ok-soft);    color: var(--hx-ok); }
+    .status-select.badge-lost     { background: var(--hx-red-soft);   color: var(--hx-red); }
+    .status-select.badge-closed   { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .status-select option { background: var(--hx-slab); color: var(--hx-ink-3); }
     .followup-input {
       background: transparent;
-      border: 1px solid var(--border, #334155);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
       font-size: 0.78rem;
       padding: 0.2rem 0.4rem;
       cursor: pointer;
@@ -122,89 +122,89 @@
     }
     .followup-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
     .followup-suggested { border-style: dashed; opacity: 0.6; }
-    .followup-due { background: rgba(239,68,68,0.1); }
-    .followup-due .followup-input { border-color: #ef4444; color: #ef4444; }
+    .followup-due { background: var(--hx-red-soft); }
+    .followup-due .followup-input { border-color: var(--hx-red); color: var(--hx-red); }
 
     /* ─── Revise Button ─── */
     .btn-revise {
       padding: 0.2rem 0.5rem; border-radius: 6px;
       font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;
-      background: rgba(59,130,246,0.15); color: #3b82f6;
+      background: var(--hx-cyan-soft); color: var(--hx-cyan-ink);
       margin-left: 0.4rem;
     }
-    .btn-revise:hover { background: rgba(59,130,246,0.3); }
+    .btn-revise:hover { background: var(--hx-cyan-soft); }
 
     /* ─── Revision Modal ─── */
     .revision-overlay {
       display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.6); z-index: 10000;
+      background: var(--hx-scrim); z-index: 10000;
       align-items: center; justify-content: center;
     }
     .revision-overlay.open { display: flex; }
     .revision-modal {
-      background: var(--surface, #0f172a);
-      border: 1px solid var(--border, #334155);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 16px; width: 92vw; max-width: 560px; max-height: 85vh;
       display: flex; flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden;
+      box-shadow: var(--hx-sh-1); overflow: hidden;
     }
     .revision-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #334155);
+      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
     }
-    .revision-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #f1f5f9); }
+    .revision-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary); }
     .revision-close {
-      background: none; border: none; color: var(--text-muted, #64748b);
+      background: none; border: none; color: var(--text-muted);
       cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem;
     }
-    .revision-close:hover { color: var(--text-primary, #f1f5f9); }
+    .revision-close:hover { color: var(--text-primary); }
     .revision-body { flex: 1; overflow-y: auto; padding: 1.25rem; }
     .revision-details {
       font-size: 0.82rem; margin-bottom: 1.25rem;
-      padding-bottom: 1rem; border-bottom: 1px solid var(--border, #334155);
+      padding-bottom: 1rem; border-bottom: 1px solid var(--border);
     }
     .revision-details .detail-row { margin-bottom: 0.6rem; }
     .revision-details .detail-label {
       display: block; font-size: 0.7rem; font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.04em;
-      color: var(--text-muted, #64748b); margin-bottom: 0.15rem;
+      color: var(--text-muted); margin-bottom: 0.15rem;
     }
-    .revision-details .detail-value { color: var(--text-primary, #f1f5f9); word-break: break-word; }
+    .revision-details .detail-value { color: var(--text-primary); word-break: break-word; }
     .revision-form .form-group { margin-bottom: 1rem; }
     .revision-form label {
       display: block; font-size: 0.82rem; font-weight: 600;
-      color: var(--text-primary, #f1f5f9); margin-bottom: 0.4rem;
+      color: var(--text-primary); margin-bottom: 0.4rem;
     }
     .revision-file-input, .revision-amount-input {
       width: 100%; padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
-      border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text-primary); font-size: 0.875rem;
     }
-    .form-hint { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-top: 0.3rem; }
+    .form-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; }
     .revision-error {
-      background: rgba(239,68,68,0.1); color: #ef4444;
+      background: var(--hx-red-soft); color: var(--hx-red);
       padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.82rem; margin-bottom: 0.75rem;
     }
     .revision-progress {
       display: flex; align-items: center; gap: 0.5rem;
-      font-size: 0.82rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem;
+      font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem;
     }
     .revision-actions {
-      padding: 1rem 1.25rem; border-top: 1px solid var(--border, #334155);
+      padding: 1rem 1.25rem; border-top: 1px solid var(--border);
       display: flex; gap: 0.5rem; justify-content: flex-end;
     }
     .btn-revision-cancel {
       padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
-      border: 1px solid var(--border, #334155); background: transparent;
-      color: var(--text-muted, #64748b); cursor: pointer;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); cursor: pointer;
     }
-    .btn-revision-cancel:hover { color: var(--text-primary, #f1f5f9); }
+    .btn-revision-cancel:hover { color: var(--text-primary); }
     .btn-revision-submit {
       padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
-      border: none; background: rgba(59,130,246,0.2); color: #3b82f6; cursor: pointer;
+      border: none; background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); cursor: pointer;
     }
-    .btn-revision-submit:hover { background: rgba(59,130,246,0.35); }
+    .btn-revision-submit:hover { background: var(--hx-cyan-soft); }
     .btn-revision-submit:disabled { opacity: 0.4; cursor: not-allowed; }
   </style>
 </head>
@@ -261,12 +261,12 @@
         <div id="revisionDetails" class="revision-details"></div>
         <div class="revision-form">
           <div class="form-group">
-            <label for="revisionPdfInput">Upload Revised PDF <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+            <label for="revisionPdfInput">Upload Revised PDF <span style="color: var(--text-muted);font-weight:400;">(optional)</span></label>
             <input type="file" id="revisionPdfInput" accept=".pdf" class="revision-file-input">
             <p class="form-hint">Leave empty to keep the current PDF and just resubmit for approval.</p>
           </div>
           <div class="form-group">
-            <label for="revisionAmountInput">Total Amount (PHP) <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+            <label for="revisionAmountInput">Total Amount (PHP) <span style="color: var(--text-muted);font-weight:400;">(optional)</span></label>
             <input type="number" id="revisionAmountInput" step="0.01" min="0" class="revision-amount-input" placeholder="Leave blank to keep current amount">
           </div>
           <div id="revisionError" class="revision-error" style="display:none;"></div>

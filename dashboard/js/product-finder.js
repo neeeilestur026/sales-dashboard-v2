@@ -872,9 +872,9 @@ function pfActionBtns(opts) {
   const o = opts || {};
   const btns = [];
   if (o.inquiryId && o.product && o.product.name && pfCanCreatePR()) {
-    btns.push('<button class="cr-btn" onclick="pfCreatePR(' + pfAttr(o.inquiryId) + ',' + pfAttr(o.product) + ',' + (Number(o.qty) || 1) + ')">📝 Create Purchase Request</button>');
+    btns.push('<button class="cr-btn" onclick="pfCreatePR(' + pfAttr(o.inquiryId) + ',' + pfAttr(o.product) + ',' + (Number(o.qty) || 1) + ')">Create Purchase Request</button>');
   }
-  btns.push('<button class="cr-btn cr-btn-sec" onclick="pfCopyDetails(this,' + pfAttr(o.text || '') + ')">📋 Copy details</button>');
+  btns.push('<button class="cr-btn cr-btn-sec" onclick="pfCopyDetails(this,' + pfAttr(o.text || '') + ')">Copy details</button>');
   return '<div class="cr-actions" style="justify-content:flex-start;margin-top:10px;">' + btns.join('') + '</div>';
 }
 
@@ -936,7 +936,7 @@ async function pfRfqSubmit() {
   // Competitor model typed into the request → show the official crossover above everything.
   const byId = {}; pfData.products.forEach(p => { byId[p.id] = p; });
   const xrefHtml = (m.xref && m.xref.length)
-    ? '<div class="cr-rec" style="border-left-color:#f59e0b;"><div class="cr-rec-label">Competitor model detected</div>'
+    ? '<div class="cr-rec" style="border-left-color:var(--hx-warn);"><div class="cr-rec-label">Competitor model detected</div>'
       + m.xref.map(r => '<div class="cr-rec-line">' + pfEsc(r.competitor_brand + ' ' + r.competitor_model)
         + ' → official crossover: <b>' + pfEsc(byId[r.our_id] ? byId[r.our_id].name : r.our_id) + '</b></div>').join('')
       + '</div>'
@@ -974,7 +974,7 @@ async function pfRfqSubmit() {
     box.innerHTML = xrefHtml
       + '<p class="cr-capnote">Matched to <b>' + pfEsc(m.category) + '</b> (from "' + pfEsc(m.matchedTerm) + '")'
       + (m.attrs && m.attrs.tons > 0 ? ' · load ' + pfEsc(m.attrs.tons) + ' t — only sizes that COVER it are shown' : '')
-      + (m.relaxed ? ' · <span style="color:#b45309;">no exact model for every requested feature — closest options shown</span>' : '')
+      + (m.relaxed ? ' · <span style="color:var(--hx-warn);">no exact model for every requested feature — closest options shown</span>' : '')
       + '. Top options:</p>'
       + m.results.map(p => `
         <div class="cr-rec">
@@ -1040,7 +1040,7 @@ function pfDimBlockHtml(size) {
   if (d.stud_size_in) out += line('Stud length', 'per flange spec');
   return '<div class="cr-rec"><div class="cr-rec-label">Dimensions ' + pfBadge(d.verified) + '</div>'
     + out
-    + (d.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(d.note) + '</div>' : '')
+    + (d.note ? '<div class="cr-rec-line" style="color:var(--hx-ink-3);font-size:12px;">' + pfEsc(d.note) + '</div>' : '')
     + '</div>';
 }
 
@@ -1057,7 +1057,7 @@ function pfNm(n) {
    interchangeable, so the basis travels with every figure we print. */
 function pfBasisHtml(row) {
   const text = (pfData.bases || {})[row.basis];
-  return text ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(text) + '</div>' : '';
+  return text ? '<div class="cr-rec-line" style="color:var(--hx-ink-3);font-size:12px;">' + pfEsc(text) + '</div>' : '';
 }
 
 /* ── Which wrench, and at what pump pressure ──
@@ -1179,7 +1179,7 @@ async function pfBoltMatch() {
       + ', but that figure is <b>disputed</b>'
       + '. '
       + 'Torque values are safety-critical, so the engineer must confirm before use.</p>'
-      + (row.note ? '<p class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</p>' : '')
+      + (row.note ? '<p class="cr-rec-line" style="color:var(--hx-ink-3);font-size:12px;">' + pfEsc(row.note) + '</p>' : '')
       + '</div>';
   } else {
     // same ranking the display uses, so the Purchase Request orders the wrench we just named
@@ -1194,7 +1194,7 @@ async function pfBoltMatch() {
       + '<div class="cr-rec-series">' + pfEsc(row.bolt) + ' ' + pfEsc(gl) + ' → ' + nm + ' Nm (≈ ' + ftlb + ' ft·lb)</div>'
       + pfWrenchHtml(row.torque_max_nm)
       + pfBasisHtml(row)
-      + (row.note ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
+      + (row.note ? '<div class="cr-rec-line" style="color:var(--hx-ink-3);font-size:12px;">' + pfEsc(row.note) + '</div>' : '')
       + '</div>'
       // the wrench IS the orderable product here — offer it straight to a Purchase Request
       + pfActionBtns({ text: 'Bolt torque: ' + row.bolt + ' ' + gl + ' → ' + pfNm(row.torque_max_nm) + ' Nm' + (w ? '\nWrench: ' + w.name : ''),
@@ -1221,7 +1221,7 @@ async function pfHoseMatch() {
     html += r.matches.map(p => '<div class="cr-rec"><div class="cr-rec-label">' + pfEsc(p.brand) + ' ' + pfBadge(true) + '</div>'
       + '<div class="cr-rec-series">' + pfEsc(p.name) + '</div>'
       + '<div class="cr-rec-line">Thread ' + pfEsc(p.thread || '—') + ' · rated ' + pfEsc(p.max_pressure_bar) + ' bar ≥ your ' + bar.toFixed(0) + ' bar.</div>'
-      + (p.source ? '<div class="cr-rec-line" style="color:#64748b;font-size:12px;">Spec source: ' + pfEsc(p.source) + '</div>' : '')
+      + (p.source ? '<div class="cr-rec-line" style="color:var(--hx-ink-3);font-size:12px;">Spec source: ' + pfEsc(p.source) + '</div>' : '')
       + pfActionBtns({ text: 'Coupler/hose for thread ' + (thread || '(any)') + ' @ ' + pressure + ' ' + unit + ':\n' + p.name + ' (rated ' + p.max_pressure_bar + ' bar)',
                        inquiryId: inq.id, qty: 1,
                        product: { id: p.id, name: p.name, category: p.category } })
@@ -1350,20 +1350,20 @@ function pfRenderLog() {
   }
   if (!rows.length) { box.innerHTML = warn + '<p class="cr-hint">No inquiries yet — every RFQ / Match / Cross-Ref submission is saved here automatically.</p>'; return; }
   box.innerHTML = warn + rows.map(r => `
-    <div class="cr-rec" style="border-left-color:${r.status === 'won' ? '#16a34a' : r.status === 'lost' ? '#dc2626' : '#4f46e5'};">
+    <div class="cr-rec" style="border-left-color:${r.status === 'won' ? 'var(--hx-ok)' : r.status === 'lost' ? 'var(--hx-red)' : 'var(--hx-navy-text)'};">
       <div class="cr-rec-label">${pfEsc(String(r.date).slice(0, 10))} · ${pfEsc(r.source)}
         ${pfFollowUpDue(r) ? '<span class="pf-badge pf-follow">follow up!</span>' : ''}</div>
       <div class="cr-rec-line"><b>${pfEsc(r.client || '(no client)')}</b>${r.industry ? ' · ' + pfEsc(r.industry) : ''}</div>
       <div class="cr-rec-line">Asked: ${pfEsc(r.rawText)}</div>
       <div class="cr-rec-line">Shown: ${pfEsc(r.recommendation)}</div>
-      ${r.prNo ? '<div class="cr-rec-line">Became: <a href="flow-pricing-request.html" style="font-weight:600;color:#4f46e5;">→ ' + pfEsc(r.prNo) + '</a></div>' : ''}
+      ${r.prNo ? '<div class="cr-rec-line">Became: <a href="flow-pricing-request.html" style="font-weight:600;color:var(--hx-navy-text);">→ ' + pfEsc(r.prNo) + '</a></div>' : ''}
       <div class="cr-actions" style="justify-content:flex-start;gap:8px;margin-top:6px;">
-        <select onchange="pfUpdateInquiry('${pfEsc(r.id)}', {status:this.value}); pfRenderLog();" style="padding:4px 8px;border-radius:8px;border:1px solid #d7dce3;">
+        <select onchange="pfUpdateInquiry('${pfEsc(r.id)}', {status:this.value}); pfRenderLog();" style="padding:4px 8px;border-radius:8px;border:1px solid var(--hx-hair);">
           ${['new', 'quoted', 'won', 'lost'].map(s => `<option value="${s}"${r.status === s ? ' selected' : ''}>${s}</option>`).join('')}
         </select>
         <input type="text" value="${pfEsc(r.notes)}" placeholder="notes"
           onchange="pfUpdateInquiry('${pfEsc(r.id)}', {notes:this.value});"
-          style="flex:1;min-width:160px;padding:4px 8px;border-radius:8px;border:1px solid #d7dce3;">
+          style="flex:1;min-width:160px;padding:4px 8px;border-radius:8px;border:1px solid var(--hx-hair);">
       </div>
     </div>`).join('');
 }

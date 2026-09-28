@@ -352,7 +352,7 @@ async function bsSuggest() {
     html += '<p class="cr-rec-line" style="margin-top:8px;font-weight:700;">' + esc(confirmMsg) + '</p>';
   }
   html += '<div class="cr-actions" style="justify-content:flex-start;margin-top:12px;">' +
-    '<button type="button" class="cr-btn" onclick="bsExportPdf()">📄 Export filled PDF</button>' +
+    '<button type="button" class="cr-btn" onclick="bsExportPdf()">Export filled PDF</button>' +
     '</div>';
   if (typeof pfActionBtns === 'function' && r.primary) {
     html += pfActionBtns({ text: bsSummaryText(a, r), inquiryId: bsInquiryId,

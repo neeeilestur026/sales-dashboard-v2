@@ -82,7 +82,7 @@ async function loadClients() {
     document.getElementById('clientCount').textContent = allClients.length + ' client' + (allClients.length !== 1 ? 's' : '');
     renderTable(allClients);
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -90,7 +90,7 @@ async function loadClients() {
 function renderTable(data) {
   var container = document.getElementById('clientContainer');
   if (data.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted,#64748b);">No clients found. Click "Show Form" to add one.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No clients found. Click "Show Form" to add one.</div>';
     return;
   }
 
@@ -162,7 +162,7 @@ async function submitClient(e) {
 
     msg.style.display = 'block';
     msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = editingRowIndex ? 'Client updated!' : 'Client added!';
 
     cancelEdit();
@@ -171,7 +171,7 @@ async function submitClient(e) {
   } catch (err) {
     msg.style.display = 'block';
     msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
 

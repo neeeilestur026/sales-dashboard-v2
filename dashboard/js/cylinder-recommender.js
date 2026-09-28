@@ -408,7 +408,7 @@ function crRecommend() {
       <h2>Recommendation${a.company ? ' — ' + crEsc(a.company) : ''}</h2>
       <span class="cr-conf" style="background:${confColor}1a;color:${confColor};border:1px solid ${confColor}55;">
         confidence: ${r.confidence}</span>
-      <button class="cr-btn cr-btn-sec no-print" onclick="window.print()">🖨 Print</button>
+      <button class="cr-btn cr-btn-sec no-print" onclick="window.print()">Print</button>
     </div>
     ${r.required_capacity_tons ? `<p class="cr-capnote"><b>Required capacity: ${crEsc(r.required_capacity_tons)} tons per point.</b> ${crEsc(r.capacity_note || '')}</p>` : ''}
     ${recCard(r.primary_recommendation, 'Recommended cylinder')}
