@@ -92,7 +92,7 @@ async function checkReportStatus(session) {
       banner.style.display = 'flex';
     } else {
       banner.className = 'alert-banner warning';
-      banner.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> You haven\'t submitted today\'s daily report yet. <a href="hr-daily-report.html" style="color:#eab308;font-weight:700;margin-left:0.25rem;">Submit now</a>';
+      banner.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> You haven\'t submitted today\'s daily report yet. <a href="hr-daily-report.html" class="alert-link">Submit now</a>';
       banner.style.display = 'flex';
     }
   } catch (err) {
@@ -129,7 +129,7 @@ function renderTodayOverview(summaryRes, taskRes, recRes, leaveRes, campaignRes)
   }
 
   if (items.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);">No data available</div>';
+    container.innerHTML = '<div class="hx-empty">No data available</div>';
     return;
   }
 
@@ -141,7 +141,7 @@ function renderTodayOverview(summaryRes, taskRes, recRes, leaveRes, campaignRes)
 function renderBirthdays(events) {
   const container = document.getElementById('birthdayList');
   if (!events || events.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.82rem;">No upcoming birthdays or anniversaries in the next 30 days.</div>';
+    container.innerHTML = '<div class="hx-empty">No upcoming birthdays or anniversaries in the next 30 days.</div>';
     return;
   }
 
@@ -149,12 +149,10 @@ function renderBirthdays(events) {
     const isToday = e.daysAway === 0;
     const badgeCls = isToday ? 'bday-today' : 'bday-soon';
     const badgeText = isToday ? 'Today!' : e.daysAway + ' day' + (e.daysAway !== 1 ? 's' : '');
-    const bgColor = e.type === 'Birthday' ? 'rgba(236,72,153,0.15)' : 'rgba(59,130,246,0.15)';
-    const fgColor = e.type === 'Birthday' ? '#ec4899' : '#3b82f6';
     const initials = e.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
     return '<div class="bday-item">' +
-      '<div class="bday-avatar" style="background:' + bgColor + ';color:' + fgColor + ';">' + initials + '</div>' +
+      '<div class="bday-avatar ' + (e.type === 'Birthday' ? 'bd' : 'an') + '">' + initials + '</div>' +
       '<div class="bday-info"><div class="bday-name">' + esc(e.name) + '</div>' +
       '<div class="bday-detail">' + esc(e.type) + (e.detail ? ' &middot; ' + esc(e.detail) : '') + ' &middot; ' + esc(e.date) + '</div></div>' +
       '<span class="bday-badge ' + badgeCls + '">' + badgeText + '</span>' +

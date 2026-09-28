@@ -8,58 +8,58 @@
   <style>
     .cc-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
     .cc-form .full { grid-column: 1 / -1; }
-    .cc-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .cc-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--hx-ink-3); margin-bottom: 0.25rem; }
     .cc-form input, .cc-form select, .cc-form textarea {
-      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155); border-radius: 8px;
-      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--hx-inset);
+      border: 1px solid var(--hx-hair); border-radius: 8px;
+      color: var(--hx-ink); font-size: 0.875rem; font-family: inherit;
     }
     .cc-form textarea { resize: vertical; min-height: 60px; }
     .cc-form textarea.large { min-height: 120px; }
-    .cc-form input:focus, .cc-form select:focus, .cc-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .cc-form input:focus, .cc-form select:focus, .cc-form textarea:focus { outline: none; border-color: var(--hx-navy); }
     .form-section { display: none; }
     .form-section.open { display: block; }
     .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
-    .filter-bar select { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
-    .filter-bar select:focus { outline: none; border-color: var(--accent, #f97316); }
+    .filter-bar select { padding: 0.45rem 0.6rem; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.82rem; }
+    .filter-bar select:focus { outline: none; border-color: var(--hx-navy); }
 
     /* Card-based calendar layout */
     .date-group { margin-bottom: 1.5rem; }
-    .date-group-header { font-size: 0.85rem; font-weight: 700; color: var(--accent, #f97316); margin-bottom: 0.6rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border, #334155); display: flex; align-items: center; gap: 0.4rem; }
+    .date-group-header { font-size: 0.85rem; font-weight: 700; color: var(--hx-navy); margin-bottom: 0.6rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--hx-hair); display: flex; align-items: center; gap: 0.4rem; }
     .date-group-header svg { opacity: 0.7; }
     .content-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.75rem; }
-    .content-card { background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.85rem 1rem; transition: border-color 0.2s; }
-    .content-card:hover { border-color: var(--accent, #f97316); }
+    .content-card { background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 10px; padding: 0.85rem 1rem; transition: border-color 0.2s; }
+    .content-card:hover { border-color: var(--hx-navy); }
     .content-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; gap: 0.5rem; }
-    .content-card-title { font-size: 0.88rem; font-weight: 600; color: var(--text-primary, #f1f5f9); line-height: 1.3; }
+    .content-card-title { font-size: 0.88rem; font-weight: 600; color: var(--hx-ink); line-height: 1.3; }
     .content-card-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .content-card-preview { font-size: 0.78rem; color: var(--text-muted, #64748b); line-height: 1.45; margin-bottom: 0.6rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-    .content-card-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; padding-top: 0.5rem; border-top: 1px solid #e2e8f0; }
+    .content-card-preview { font-size: 0.78rem; color: var(--hx-ink-3); line-height: 1.45; margin-bottom: 0.6rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .content-card-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; padding-top: 0.5rem; border-top: 1px solid var(--hx-hair-2); }
 
     /* Platform badges */
     .platform-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.25rem; }
-    .platform-facebook { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .platform-instagram { background: rgba(236,72,153,0.12); color: #ec4899; }
-    .platform-linkedin { background: rgba(30,64,175,0.15); color: #60a5fa; }
-    .platform-twitter { background: rgba(14,165,233,0.12); color: #0ea5e9; }
-    .platform-website { background: rgba(148,163,184,0.12); color: #94a3b8; }
-    .platform-youtube { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .platform-facebook { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .platform-instagram { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+    .platform-linkedin { background: var(--hx-navy-line); color: var(--hx-cyan); }
+    .platform-twitter { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .platform-website { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .platform-youtube { background: var(--hx-red-soft); color: var(--hx-red); }
 
     /* Type badges */
     .type-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
-    .type-post { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .type-story { background: rgba(168,85,247,0.12); color: #a855f7; }
-    .type-reel { background: rgba(236,72,153,0.12); color: #ec4899; }
-    .type-article { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .type-video { background: rgba(239,68,68,0.12); color: #ef4444; }
-    .type-infographic { background: rgba(234,179,8,0.12); color: #eab308; }
+    .type-post { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .type-story { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+    .type-reel { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+    .type-article { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .type-video { background: var(--hx-red-soft); color: var(--hx-red); }
+    .type-infographic { background: var(--hx-warn-soft); color: var(--hx-warn); }
 
     /* Status badges */
     .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
-    .status-draft { background: rgba(148,163,184,0.12); color: #94a3b8; }
-    .status-scheduled { background: rgba(234,179,8,0.12); color: #eab308; }
-    .status-published { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .status-cancelled { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .status-draft { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .status-scheduled { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .status-published { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .status-cancelled { background: var(--hx-red-soft); color: var(--hx-red); }
 
     @media(max-width: 640px) {
       .cc-form { grid-template-columns: 1fr; }
@@ -80,7 +80,7 @@
     <!-- Add/Edit Form -->
     <div class="chart-card" style="margin-bottom:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add Content
         </h3>
@@ -94,11 +94,11 @@
           <input type="hidden" id="editRowIndex" value="">
           <div class="cc-form">
             <div class="full">
-              <label for="ccTitle">Title <span style="color:#ef4444;">*</span></label>
+              <label for="ccTitle">Title <span style="color: var(--hx-red);">*</span></label>
               <input type="text" id="ccTitle" placeholder="e.g. Product launch announcement" required>
             </div>
             <div>
-              <label for="ccType">Type <span style="color:#ef4444;">*</span></label>
+              <label for="ccType">Type <span style="color: var(--hx-red);">*</span></label>
               <select id="ccType" required>
                 <option value="Post">Post</option>
                 <option value="Story">Story</option>
@@ -109,7 +109,7 @@
               </select>
             </div>
             <div>
-              <label for="ccPlatform">Platform <span style="color:#ef4444;">*</span></label>
+              <label for="ccPlatform">Platform <span style="color: var(--hx-red);">*</span></label>
               <select id="ccPlatform" required>
                 <option value="Facebook">Facebook</option>
                 <option value="Instagram">Instagram</option>
@@ -146,13 +146,13 @@
             <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
           </div>
         </form>
-        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius: 8px;font-size:0.85rem;margin-top:0.5rem;"></div>
       </div>
     </div>
 
     <!-- Calendar View -->
     <div class="chart-card">
-      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">Content Calendar</h3>
+      <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);margin-bottom:0.75rem;">Content Calendar</h3>
       <div class="filter-bar">
         <select id="filterPlatform" onchange="filterContent()">
           <option value="">All Platforms</option>

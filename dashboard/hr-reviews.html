@@ -8,31 +8,31 @@
   <style>
     .review-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
     .review-form .full { grid-column: 1 / -1; }
-    .review-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .review-form label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--hx-ink-3); margin-bottom: 0.25rem; }
     .review-form input, .review-form select, .review-form textarea {
-      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155); border-radius: 8px;
-      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--hx-inset);
+      border: 1px solid var(--hx-hair); border-radius: 8px;
+      color: var(--hx-ink); font-size: 0.875rem; font-family: inherit;
     }
     .review-form textarea { resize: vertical; min-height: 60px; }
-    .review-form input:focus, .review-form select:focus, .review-form textarea:focus { outline: none; border-color: var(--accent, #f97316); }
+    .review-form input:focus, .review-form select:focus, .review-form textarea:focus { outline: none; border-color: var(--hx-navy); }
     .review-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .review-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
-    .review-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
-    .review-table tr:hover td { background: #e2e8f0; }
+    .review-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); font-weight: 600; white-space: nowrap; }
+    .review-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2); color: var(--hx-ink); }
+    .review-table tr:hover td { background: var(--hx-hair-2); }
     .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-    .status-draft { background: rgba(100,116,139,0.15); color: #94a3b8; }
-    .status-progress { background: rgba(234,179,8,0.12); color: #eab308; }
-    .status-completed { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .status-draft { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .status-progress { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .status-completed { background: var(--hx-ok-soft); color: var(--hx-ok); }
     .rating-badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; min-width: 2.2rem; text-align: center; }
-    .rating-low { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .rating-mid { background: rgba(234,179,8,0.15); color: #eab308; }
-    .rating-high { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .rating-low { background: var(--hx-red-soft); color: var(--hx-red); }
+    .rating-mid { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .rating-high { background: var(--hx-ok-soft); color: var(--hx-ok); }
     .form-section { display: none; }
     .form-section.open { display: block; }
     .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
-    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
-    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent, #f97316); }
+    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.82rem; }
+    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--hx-navy); }
     @media(max-width: 640px) { .review-form { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -49,7 +49,7 @@
     <!-- Add/Edit Form -->
     <div class="chart-card" style="margin-bottom:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);display:flex;align-items:center;gap:0.4rem;" id="formTitle">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add Review
         </h3>
@@ -63,15 +63,15 @@
           <input type="hidden" id="editRowIndex" value="">
           <div class="review-form">
             <div>
-              <label for="revEmployee">Employee Name <span style="color:#ef4444;">*</span></label>
+              <label for="revEmployee">Employee Name <span style="color: var(--hx-red);">*</span></label>
               <input type="text" id="revEmployee" placeholder="e.g. Juan Dela Cruz" required>
             </div>
             <div>
-              <label for="revReviewer">Reviewer <span style="color:#ef4444;">*</span></label>
+              <label for="revReviewer">Reviewer <span style="color: var(--hx-red);">*</span></label>
               <input type="text" id="revReviewer" placeholder="e.g. Maria Santos" required>
             </div>
             <div>
-              <label for="revPeriod">Period <span style="color:#ef4444;">*</span></label>
+              <label for="revPeriod">Period <span style="color: var(--hx-red);">*</span></label>
               <input type="text" id="revPeriod" placeholder="e.g. Q1 2026" required>
             </div>
             <div>
@@ -104,15 +104,15 @@
             <button type="button" class="btn btn-secondary" onclick="resetForm()">Cancel</button>
           </div>
         </form>
-        <div id="formMsg" style="display:none;padding:0.5rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;"></div>
+        <div id="formMsg" style="display:none;padding:0.5rem;border-radius: 8px;font-size:0.85rem;margin-top:0.5rem;"></div>
       </div>
     </div>
 
     <!-- Reviews Table -->
     <div class="chart-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);">All Reviews</h3>
-        <div id="reviewCount" style="font-size:0.8rem;color:var(--text-muted,#64748b);"></div>
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);">All Reviews</h3>
+        <div id="reviewCount" style="font-size:0.8rem;color: var(--hx-ink-3);"></div>
       </div>
       <div class="filter-bar">
         <select id="filterStatus" onchange="filterReviews()">

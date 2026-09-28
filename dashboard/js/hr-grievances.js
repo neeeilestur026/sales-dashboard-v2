@@ -111,16 +111,16 @@ async function submitGrievance(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await loadGrievances();
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -156,7 +156,7 @@ async function loadGrievances() {
     updateStats();
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -205,7 +205,7 @@ function renderTable() {
   const container = document.getElementById('grievanceContainer');
 
   if (grievancesData.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No grievances found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No grievances found.</div>';
     return;
   }
 
@@ -221,7 +221,7 @@ function renderTable() {
     html += '<tr>' +
       '<td>' + g.rowIndex + '</td>' +
       '<td><strong>' + esc(g.subject) + '</strong>' +
-        (g.description ? '<br><span style="font-size:0.75rem;color:var(--text-muted);">' + esc(g.description).substring(0, 80) + (g.description.length > 80 ? '...' : '') + '</span>' : '') +
+        (g.description ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(g.description).substring(0, 80) + (g.description.length > 80 ? '...' : '') + '</span>' : '') +
       '</td>' +
       '<td><span class="cat-badge ' + catCls + '">' + esc(g.category) + '</span></td>' +
       '<td>' + displayName + '</td>' +
@@ -230,7 +230,7 @@ function renderTable() {
       '<td>' + esc(g.createdDate) + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-sm btn-secondary" onclick="editGrievance(' + g.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteGrievance(' + g.rowIndex + ')" title="Delete">Del</button>' +
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteGrievance(' + g.rowIndex + ')" title="Delete">Del</button>' +
       '</td></tr>';
   });
 

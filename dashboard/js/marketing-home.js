@@ -10,9 +10,25 @@ let mActiveTab = 'leads';
 // ── Per-entity UI config: columns (table), fields (form), select options ──
 const IND = ['Cement', 'Mining', 'Power', 'Oil & Gas', 'Shipyard', 'Semiconductor', 'Other'];
 const VERT = ['Cement', 'Mining', 'Power', 'Oil & Gas', 'Shipyard', 'Semiconductor', 'General'];
+// A294 — the icon map: keys named in MKTG_UI and the KPI tiles, drawn as inline SVG (no emoji).
+const MK_ICON = {
+  target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+  megaphone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  content: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  toolbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  handshake: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  briefcase: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+  globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+  rhythm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+};
+const mkIcon = (k) => MK_ICON[k] || '';
+
 const MKTG_UI = {
   leads: {
-    label: 'Leads', icon: '🎯', title: 'Lead Pipeline (Marketing-Qualified Leads)',
+    label: 'Leads', icon: 'target', title: 'Lead Pipeline (Marketing-Qualified Leads)',
     cols: [['date', 'Date'], ['company', 'Company'], ['contact', 'Contact'], ['industry', 'Industry'], ['source', 'Source'], ['status', 'Status'], ['soNo', 'Deal (SO)']],
     fields: [
       ['date', 'Date', 'date'], ['status', 'Status', 'select', ['New', 'Nurturing', 'MQL', 'Handed Off', 'Converted', 'Lost']],
@@ -23,7 +39,7 @@ const MKTG_UI = {
     ], required: ['company'], badge: 'status',
   },
   campaigns: {
-    label: 'Campaigns', icon: '📣', title: 'Campaigns & ROI',
+    label: 'Campaigns', icon: 'megaphone', title: 'Campaigns & ROI',
     cols: [['name', 'Campaign'], ['channel', 'Channel'], ['status', 'Status'], ['startDate', 'Start'], ['budget', 'Budget (MDF)', 'money'], ['leads', 'Leads', 'num'], ['mqls', 'MQLs', 'num']],
     fields: [
       ['name', 'Campaign name *', 'text'], ['channel', 'Channel', 'select', ['LinkedIn', 'Email', 'Google', 'Event', 'Multi']],
@@ -33,7 +49,7 @@ const MKTG_UI = {
     ], required: ['name'], badge: 'status',
   },
   content: {
-    label: 'Content', icon: '📝', title: 'Content Calendar & Library',
+    label: 'Content', icon: 'content', title: 'Content Calendar & Library',
     cols: [['date', 'Date'], ['title', 'Title'], ['type', 'Type'], ['vertical', 'Vertical'], ['status', 'Status'], ['link', 'Link', 'link']],
     fields: [
       ['date', 'Date', 'date'], ['title', 'Title *', 'text'],
@@ -44,7 +60,7 @@ const MKTG_UI = {
     ], required: ['title'], badge: 'status',
   },
   enablement: {
-    label: 'Enablement', icon: '🧰', title: 'Sales Enablement Library',
+    label: 'Enablement', icon: 'toolbox', title: 'Sales Enablement Library',
     cols: [['name', 'Asset'], ['category', 'Category'], ['vertical', 'Vertical'], ['status', 'Status'], ['lastUpdated', 'Last Updated'], ['link', 'Link', 'link']],
     fields: [
       ['name', 'Asset name *', 'text'],
@@ -54,7 +70,7 @@ const MKTG_UI = {
     ], required: ['name'], badge: 'status',
   },
   events: {
-    label: 'Events', icon: '📅', title: 'Trade Shows & Events',
+    label: 'Events', icon: 'calendar', title: 'Trade Shows & Events',
     cols: [['name', 'Event'], ['type', 'Type'], ['date', 'Date'], ['location', 'Location'], ['status', 'Status'], ['leadsCaptured', 'Leads', 'num']],
     fields: [
       ['name', 'Event name *', 'text'], ['type', 'Type', 'select', ['Trade Show', 'Seminar', 'Demo', 'Sponsorship']],
@@ -64,7 +80,7 @@ const MKTG_UI = {
     ], required: ['name'], badge: 'status',
   },
   principal: {
-    label: 'Co-Marketing', icon: '🤝', title: 'Principal Co-Marketing (MDF)',
+    label: 'Co-Marketing', icon: 'handshake', title: 'Principal Co-Marketing (MDF)',
     cols: [['principal', 'Principal'], ['activity', 'Activity'], ['date', 'Date'], ['status', 'Status'], ['mdfRequested', 'MDF Req.', 'money'], ['mdfApproved', 'MDF Appr.', 'money']],
     fields: [
       ['principal', 'Principal', 'select', ['Powerteam', 'CEJN', 'RAD Torque', 'SPX', 'Other']], ['activity', 'Activity *', 'text'],
@@ -140,13 +156,13 @@ function renderKpis() {
   const traffic = prevVisits > 0 ? ((thisVisits - prevVisits) / prevVisits * 100) : null;
 
   const tiles = [
-    kpiTile('MQLs generated', mqls, 15, 30, '15-30 / mo', true, '🎯'),
-    kpiTile('Leads → closed deals', conv, 5, 10, '5-10 / mo', true, '💰'),
-    kpiTile('Content pieces', pieces, 4, 8, '4-8 / mo', false, '📝'),
-    kpiTile('LinkedIn posts', liPosts, 8, 12, '8-12 / mo', false, '💼'),
-    kpiTile('Email campaigns', emails, 2, 4, '2-4 / mo', false, '✉️'),
-    kpiTilePct('Enablement current', enaPct, 100, '100%', '🧰'),
-    kpiTile('Co-marketing', coMkt, 1, Infinity, '1+ / mo', false, '🤝'),
+    kpiTile('MQLs generated', mqls, 15, 30, '15-30 / mo', true, 'target'),
+    kpiTile('Leads → closed deals', conv, 5, 10, '5-10 / mo', true, 'money'),
+    kpiTile('Content pieces', pieces, 4, 8, '4-8 / mo', false, 'content'),
+    kpiTile('LinkedIn posts', liPosts, 8, 12, '8-12 / mo', false, 'briefcase'),
+    kpiTile('Email campaigns', emails, 2, 4, '2-4 / mo', false, 'mail'),
+    kpiTilePct('Enablement current', enaPct, 100, '100%', 'toolbox'),
+    kpiTile('Co-marketing', coMkt, 1, Infinity, '1+ / mo', false, 'handshake'),
     kpiTileTraffic(traffic, thisVisits),
   ];
   document.getElementById('kpis').innerHTML = tiles.join('');
@@ -155,18 +171,18 @@ function renderKpis() {
 function kpiTile(label, val, lo, hi, target, top, icon) {
   const met = val >= lo;
   const pill = top ? '<span class="pill pill-top">HIGHEST</span>' : `<span class="pill ${met ? 'pill-met' : 'pill-below'}">${met ? 'on target' : 'below'}</span>`;
-  return `<div class="kpi${top ? ' hero-kpi' : ''}">${pill}<div class="l">${icon} ${flowEsc(label)}</div><div class="v">${val}</div><div class="t">Target ${target}</div></div>`;
+  return `<div class="kpi${top ? ' hero-kpi' : ''}">${pill}<div class="l"><span class="ico">${mkIcon(icon)}</span>${flowEsc(label)}</div><div class="v">${val}</div><div class="t">Target ${target}</div></div>`;
 }
 function kpiTilePct(label, val, lo, target, icon) {
   const met = val >= lo;
-  return `<div class="kpi"><span class="pill ${met ? 'pill-met' : 'pill-below'}">${met ? 'on target' : 'below'}</span><div class="l">${icon} ${flowEsc(label)}</div><div class="v">${val}%</div><div class="t">Target ${target}</div></div>`;
+  return `<div class="kpi"><span class="pill ${met ? 'pill-met' : 'pill-below'}">${met ? 'on target' : 'below'}</span><div class="l"><span class="ico">${mkIcon(icon)}</span>${flowEsc(label)}</div><div class="v">${val}%</div><div class="t">Target ${target}</div></div>`;
 }
 function kpiTileTraffic(pct, visits) {
   const has = pct !== null;
   const met = has && pct >= 5;
   const pill = has ? `<span class="pill ${met ? 'pill-met' : 'pill-below'}">${met ? 'on target' : 'below'}</span>` : '';
   const v = has ? (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%' : '—';
-  return `<div class="kpi">${pill}<div class="l">🌐 Website traffic MoM</div><div class="v">${v}</div><div class="t">Target +5-10% · ${visits ? visits.toLocaleString() + ' visits' : 'enter monthly metrics'}</div></div>`;
+  return `<div class="kpi">${pill}<div class="l"><span class="ico">${mkIcon('globe')}</span>Website traffic MoM</div><div class="v">${v}</div><div class="t">Target +5-10% · ${visits ? visits.toLocaleString() + ' visits' : 'enter monthly metrics'}</div></div>`;
 }
 function _prevMonth(m) {
   const [y, mo] = m.split('-').map(Number);
@@ -178,8 +194,8 @@ function _prevMonth(m) {
 function buildTabs() {
   const tabs = ENTITY_ORDER.map(k => {
     const u = MKTG_UI[k];
-    return `<div class="mkt-tab ${mActiveTab === k ? 'active' : ''}" data-tab="${k}">${u.icon} ${u.label}<span class="cnt">${(mData[k] || []).length}</span></div>`;
-  }).join('') + `<div class="mkt-tab ${mActiveTab === 'rhythm' ? 'active' : ''}" data-tab="rhythm">🗓 Task Rhythm</div>`;
+    return `<div class="mkt-tab ${mActiveTab === k ? 'active' : ''}" data-tab="${k}"><span class="ico">${mkIcon(u.icon)}</span>${u.label}<span class="cnt">${(mData[k] || []).length}</span></div>`;
+  }).join('') + `<div class="mkt-tab ${mActiveTab === 'rhythm' ? 'active' : ''}" data-tab="rhythm"><span class="ico">${mkIcon('rhythm')}</span>Task rhythm</div>`;
   const el = document.getElementById('tabs');
   el.innerHTML = tabs;
   el.querySelectorAll('.mkt-tab').forEach(t => t.addEventListener('click', () => { mActiveTab = t.getAttribute('data-tab'); render(); }));
@@ -193,13 +209,13 @@ function renderPanel(tab) {
   const statuses = (u.fields.find(f => f[0] === 'status') || [])[3] || [];
   host.innerHTML = `<div class="mkt-panel active"><div class="panel-card">
     <div class="panel-toolbar">
-      <h3>${u.icon} ${flowEsc(u.title)}</h3>
+      <h3><span class="ico">${mkIcon(u.icon)}</span>${flowEsc(u.title)}</h3>
       <input type="text" id="pSearch" placeholder="Search…">
       ${statuses.length ? `<select id="pStatus"><option value="">All statuses</option>${statuses.map(s => `<option>${s}</option>`).join('')}</select>` : ''}
       <span class="spacer"></span>
       ${mCanEdit ? `<button class="btn btn-sm btn-primary" id="pAdd">+ Add ${u.label.replace(/s$/, '')}</button>` : ''}
     </div>
-    <div id="pBody" style="overflow-x:auto;"></div>
+    <div id="pBody" class="hx-scroll"></div>
   </div></div>`;
   const reRender = () => renderRows(tab, rows);
   document.getElementById('pSearch').addEventListener('input', reRender);
@@ -223,7 +239,7 @@ function renderRows(tab, rows) {
   const trs = filtered.map(r => {
     const tds = u.cols.map(c => cell(r, c)).join('');
     const acts = mCanEdit
-      ? `<td style="white-space:nowrap;"><button class="mkt-act" data-edit="${r.rowIndex}">Edit</button> <button class="mkt-act" data-del="${r.rowIndex}">✕</button></td>`
+      ? `<td class="nowrap"><button class="mkt-act" data-edit="${r.rowIndex}">Edit</button> <button class="mkt-act" data-del="${r.rowIndex}">✕</button></td>`
       : '<td></td>';
     return `<tr>${tds}${acts}</tr>`;
   }).join('');
@@ -238,7 +254,7 @@ function cell(r, c) {
   if (type === 'money') return `<td class="num">${flowMoney(flowNum(v), 'PHP')}</td>`;
   if (type === 'num') return `<td class="num">${v ? flowNum(v) : '—'}</td>`;
   if (type === 'link') return `<td>${v ? `<a href="${flowEsc(v)}" target="_blank" class="link-btn">open</a>` : '—'}</td>`;
-  if (key === 'date' || key === 'startDate' || key === 'lastUpdated') return `<td style="white-space:nowrap;">${flowEsc(flowDate(v) || v || '—')}</td>`;
+  if (key === 'date' || key === 'startDate' || key === 'lastUpdated') return `<td class="nowrap">${flowEsc(flowDate(v) || v || '—')}</td>`;
   if (key === 'status') return `<td>${statusBadge(v)}</td>`;
   if (key === 'soNo') return `<td>${v ? `<span class="mkt-badge b-good">${flowEsc(v)}</span>` : '—'}</td>`;
   return `<td>${flowEsc(v || '—')}</td>`;
@@ -336,7 +352,7 @@ async function submitMetrics() {
     closeMetModal();
     flash('Monthly metrics saved.', true);
     await loadAll();
-  } catch (e) { const mm = document.getElementById('metMsg'); mm.style.display = 'block'; mm.textContent = e.message; mm.style.color = '#b45309'; }
+  } catch (e) { const mm = document.getElementById('metMsg'); mm.className = 'flow-msg bad'; mm.style.display = 'block'; mm.textContent = e.message; }
   finally { btn.disabled = false; btn.textContent = 'Save'; }
 }
 
@@ -363,7 +379,7 @@ function rhythmHtml() {
     return `<div class="rhythm-col"><h4>${cad}</h4>${items}</div>`;
   }).join('');
   return `<div class="mkt-panel active"><div class="panel-card">
-    <div class="panel-toolbar"><h3>🗓 Task Rhythm</h3><span class="spacer"></span><span style="font-size:0.74rem;color:var(--text-muted,#64748b);">Personal checklist — resets each period</span></div>
+    <div class="panel-toolbar"><h3><span class="ico">${mkIcon('rhythm')}</span>Task rhythm</h3><span class="spacer"></span><span class="hx-meta">Personal checklist, resets each period</span></div>
     <div class="rhythm-grid">${cols}</div>
   </div></div>`;
 }
@@ -377,5 +393,5 @@ function wireRhythm() {
 }
 
 // ── helpers ──
-function formErr(msg) { const m = document.getElementById('recFormMsg'); m.style.display = 'block'; m.textContent = msg; m.style.color = '#b45309'; }
-function flash(text, ok) { const m = document.getElementById('msg'); m.style.display = 'block'; m.textContent = text; m.style.color = ok ? '#0f766e' : '#b45309'; setTimeout(() => { m.style.display = 'none'; }, 4000); }
+function formErr(msg) { const m = document.getElementById('recFormMsg'); m.className = 'flow-msg bad'; m.style.display = 'block'; m.textContent = msg; }
+function flash(text, ok) { const m = document.getElementById('msg'); m.className = 'flow-msg ' + (ok ? 'ok' : 'bad'); m.style.display = 'block'; m.textContent = text; setTimeout(() => { m.style.display = 'none'; }, 4000); }

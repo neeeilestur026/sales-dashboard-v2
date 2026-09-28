@@ -30,16 +30,16 @@ async function loadAnalytics() {
       renderRecruitmentFunnel(d.recruitmentFunnel || {});
       renderTaskProgress(d.taskCompletion || { done: 0, total: 0 });
     } else {
-      document.getElementById('deptChart').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Unable to load analytics data.</div>';
-      document.getElementById('funnelChart').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Unable to load funnel data.</div>';
-      document.getElementById('taskProgress').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Unable to load task data.</div>';
+      document.getElementById('deptChart').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">Unable to load analytics data.</div>';
+      document.getElementById('funnelChart').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">Unable to load funnel data.</div>';
+      document.getElementById('taskProgress').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">Unable to load task data.</div>';
     }
 
     // Birthdays & Anniversaries
     if (bdayRes.status === 'fulfilled' && bdayRes.value.success) {
       renderBirthdays(bdayRes.value.data || []);
     } else {
-      document.getElementById('bdayContainer').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Unable to load birthday data.</div>';
+      document.getElementById('bdayContainer').innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">Unable to load birthday data.</div>';
     }
   } catch (err) {
     console.error('Error loading analytics:', err);
@@ -70,7 +70,7 @@ function renderDepartmentChart(deptBreakdown) {
   const entries = Object.entries(deptBreakdown);
 
   if (entries.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">No department data available.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">No department data available.</div>';
     return;
   }
 
@@ -97,18 +97,18 @@ function renderDepartmentChart(deptBreakdown) {
 function renderRecruitmentFunnel(funnelData) {
   const container = document.getElementById('funnelChart');
   const stages = [
-    { key: 'Job Posted',        color: '#94a3b8' },
-    { key: 'Resume Screening',  color: '#eab308' },
-    { key: 'Initial Interview', color: '#3b82f6' },
-    { key: 'Final Interview',   color: '#a855f7' },
-    { key: 'Job Offer',         color: '#f97316' },
-    { key: 'Onboarding',        color: '#ec4899' },
-    { key: 'Complete',          color: '#22c55e' }
+    { key: 'Job Posted',        color: 'var(--hx-ink-3)' },
+    { key: 'Resume Screening',  color: 'var(--hx-warn)' },
+    { key: 'Initial Interview', color: 'var(--hx-cyan-ink)' },
+    { key: 'Final Interview',   color: 'var(--hx-navy-text)' },
+    { key: 'Job Offer',         color: 'var(--hx-warn)' },
+    { key: 'Onboarding',        color: 'var(--hx-navy)' },
+    { key: 'Complete',          color: 'var(--hx-ok)' }
   ];
 
   const total = stages.reduce((sum, s) => sum + (funnelData[s.key] || 0), 0);
   if (total === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">No recruitment data available.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">No recruitment data available.</div>';
     return;
   }
 
@@ -141,7 +141,7 @@ function renderBirthdays(events) {
   const container = document.getElementById('bdayContainer');
 
   if (!events || events.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">No upcoming birthdays or anniversaries.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--hx-ink-3);">No upcoming birthdays or anniversaries.</div>';
     return;
   }
 
@@ -181,7 +181,7 @@ function renderTaskProgress(taskData) {
   '<div class="progress-track">' +
     '<div class="progress-fill" style="width:' + Math.max(pct, 2) + '%;">' + pct + '%</div>' +
   '</div>' +
-  '<div style="text-align:center;margin-top:0.5rem;font-size:0.78rem;color:var(--text-muted,#64748b);">' +
+  '<div style="text-align:center;margin-top:0.5rem;font-size:0.78rem;color:var(--hx-ink-3);">' +
     (total === 0 ? 'No tasks recorded' : pct + '% of tasks completed') +
   '</div>';
 

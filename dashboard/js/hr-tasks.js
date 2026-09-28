@@ -84,16 +84,16 @@ async function submitTask(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await Promise.all([loadTasks(), loadStats()]);
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -146,7 +146,7 @@ async function loadTasks() {
     tasksData = result.data || [];
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -164,7 +164,7 @@ function renderTable() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No tasks found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No tasks found.</div>';
     return;
   }
 
@@ -180,7 +180,7 @@ function renderTable() {
     const isOverdue = t.status !== 'Completed' && t.dueDate && t.dueDate < today;
 
     html += '<tr>' +
-      '<td><strong>' + esc(t.title) + '</strong>' + (t.notes ? '<br><span style="font-size:0.75rem;color:var(--text-muted);">' + esc(t.notes).substring(0, 60) + '</span>' : '') + '</td>' +
+      '<td><strong>' + esc(t.title) + '</strong>' + (t.notes ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(t.notes).substring(0, 60) + '</span>' : '') + '</td>' +
       '<td><span class="type-badge ' + typeCls + '">' + esc(t.type) + '</span></td>' +
       '<td>' + esc(t.assignedTo) + '</td>' +
       '<td><span class="status-badge ' + statusCls + '">' + esc(t.status) + '</span></td>' +
@@ -192,11 +192,11 @@ function renderTable() {
       html += '<button class="btn btn-sm btn-secondary" onclick="quickStatus(' + t.rowIndex + ',\'In Progress\')" style="margin-right:0.2rem;" title="Start">Start</button>';
     }
     if (t.status !== 'Completed') {
-      html += '<button class="btn btn-sm" style="background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);margin-right:0.2rem;" onclick="quickStatus(' + t.rowIndex + ',\'Completed\')" title="Complete">Done</button>';
+      html += '<button class="btn btn-sm" style="background:var(--hx-ok-soft);color:var(--hx-ok);border:1px solid var(--hx-ok-line);margin-right:0.2rem;" onclick="quickStatus(' + t.rowIndex + ',\'Completed\')" title="Complete">Done</button>';
     }
 
     html += '<button class="btn btn-sm btn-secondary" onclick="editTask(' + t.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-      '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteTask(' + t.rowIndex + ',\'' + esc(t.title).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>' +
+      '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteTask(' + t.rowIndex + ',\'' + esc(t.title).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>' +
       '</td></tr>';
   });
 

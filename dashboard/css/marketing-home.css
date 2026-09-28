@@ -1,0 +1,125 @@
+/* marketing-home.css — A294 · the marketing home, on the brand system.
+ *
+ * Linked by marketing-home.html after css/styles.css (tokens, both themes, the deck, glass,
+ * buttons, the segmented control), css/flow.css (the tables, the messages, the record and
+ * metrics dialogs) and css/daily-reports.css (the shared daily-reports block). This file is only
+ * what the page adds: the scorecard inside the slab (marketing-home.js renders the eight .kpi
+ * tiles into #kpis; the first is the month's headline), the tracker tabs on the segmented
+ * control, the panels and the record form, the task rhythm and the load moment. Every rule hangs
+ * off body.mk. Keyframes animate transform or opacity only; everything is switched off under
+ * prefers-reduced-motion. */
+
+/* ── 1 · the slab: the scorecard ─────────────────────────────────────────────────────────────── */
+body.mk .hx-slab .cap input[type="month"] { background: rgba(255,255,255,.12); border: 1px solid var(--hx-slab-line); border-radius: var(--hx-r-pill); padding: 4px 10px; font: 600 11.5px/1.2 var(--hx-text); color: var(--hx-slab-ink); color-scheme: dark; }
+body.mk .hx-slab .cap input[type="month"]:focus { outline: none; border-color: var(--hx-cyan); }
+body.mk .mk-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
+body.mk .mk-kpis .kpi { position: relative; min-width: 0; }
+body.mk .mk-kpis .kpi.hero-kpi { grid-column: 1 / -1; padding-bottom: 12px; border-bottom: 1px solid var(--hx-slab-line); }
+body.mk .mk-kpis .kpi .l { display: flex; align-items: center; gap: 5px; font: 500 10.5px/1.3 var(--hx-text); color: var(--hx-slab-ink-2); padding-right: 64px; }
+body.mk .mk-kpis .kpi .l .ico { display: inline-flex; color: var(--hx-cyan); }
+body.mk .mk-kpis .kpi .l .ico svg { width: 12px; height: 12px; }
+body.mk .mk-kpis .kpi .v { font: 800 15px/1.2 var(--hx-display); color: var(--hx-slab-ink); margin-top: 2px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+body.mk .mk-kpis .kpi.hero-kpi .v { font-size: 30px; line-height: 1; margin: 6px 0 4px; letter-spacing: -.02em; }
+body.mk .mk-kpis .kpi .t { font: 400 10.5px/1.3 var(--hx-text); color: var(--hx-slab-ink-2); }
+body.mk .mk-kpis .kpi .pill { position: absolute; top: 0; right: 0; font: 700 9.5px/1.4 var(--hx-text); padding: 1px 7px; border-radius: var(--hx-r-pill); border: 1px solid var(--hx-slab-line); color: var(--hx-slab-ink); background: rgba(255,255,255,.12); }
+body.mk .mk-kpis .kpi .pill-met { background: rgba(0,174,239,.25); border-color: rgba(0,174,239,.5); }
+body.mk .mk-kpis .kpi .pill-below { background: rgba(255,255,255,.08); color: var(--hx-slab-ink-2); }
+body.mk .mk-kpis .kpi .pill-top { background: var(--hx-cyan); border-color: var(--hx-cyan); color: var(--hx-navy-ink); }
+body.mk .mk-kpis .hx-empty { grid-column: 1 / -1; color: var(--hx-slab-ink-2); padding: 12px 0; }
+
+/* ── 2 · the rail and the mast ───────────────────────────────────────────────────────────────── */
+body.mk .hx-mast .hx-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── 3 · the trackers: tabs on the segmented control, the panels, the record form ────────────── */
+body.mk #tabsSeg { margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+body.mk #tabsSeg::-webkit-scrollbar { display: none; }
+body.mk #tabs { display: flex; align-items: center; gap: 2px; padding: 0 4px; }
+body.mk #tabs .mkt-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: var(--hx-r-pill); font: 600 12.5px/1.2 var(--hx-text); color: var(--hx-ink-2); cursor: pointer; white-space: nowrap; transition: color .2s var(--hx-ease); user-select: none; }
+body.mk #tabs .mkt-tab:hover { color: var(--hx-ink); }
+body.mk #tabs .mkt-tab.active { color: #fff; }
+body.mk .hx-seg:not(.has-ind) #tabs .mkt-tab.active { background: var(--hx-navy); }
+body.mk #tabs .mkt-tab .ico { display: inline-flex; }
+body.mk #tabs .mkt-tab .ico svg { width: 14px; height: 14px; }
+body.mk #tabs .mkt-tab .cnt { font: 700 10.5px/1.5 var(--hx-text); padding: 0 6px; border-radius: var(--hx-r-pill); background: rgba(255,255,255,.7); color: var(--hx-ink-2); }
+body.mk #tabs .mkt-tab.active .cnt { background: rgba(255,255,255,.18); color: #fff; }
+html[data-theme="dark"] body.mk #tabs .mkt-tab .cnt { background: rgba(255,255,255,.1); color: var(--hx-ink-2); }
+body.mk .mkt-panel { display: none; }
+body.mk .mkt-panel.active { display: block; animation: mkIn .26s var(--hx-ease); }
+body.mk .panel-card { min-width: 0; }
+body.mk .panel-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+body.mk .panel-toolbar h3 { margin: 0; font: 700 14px/1.3 var(--hx-text); color: var(--hx-ink); display: inline-flex; align-items: center; gap: 7px; }
+body.mk .panel-toolbar h3 .ico { display: inline-flex; color: var(--hx-navy-text); }
+body.mk .panel-toolbar h3 .ico svg { width: 15px; height: 15px; }
+body.mk .panel-toolbar input[type="text"], body.mk .panel-toolbar select { padding: 7px 10px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); font: 400 13px/1.3 var(--hx-text); background: var(--hx-glass-solid); color: var(--hx-ink); }
+body.mk .panel-toolbar input[type="text"]:focus, body.mk .panel-toolbar select:focus { outline: none; border-color: var(--hx-cyan); }
+body.mk .panel-toolbar .spacer { margin-left: auto; }
+body.mk #pBody { max-height: 62vh; }
+body.mk #pBody .flow-table { font-size: 12.5px; }
+body.mk .mkt-act { background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-pill); padding: 3px 9px; cursor: pointer; font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+body.mk .mkt-act:hover { border-color: var(--hx-navy-line); color: var(--hx-ink); }
+body.mk .mkt-badge { display: inline-block; padding: 2px 9px; border-radius: var(--hx-r-pill); font: 700 10.5px/1.5 var(--hx-text); white-space: nowrap; }
+body.mk .b-new { background: var(--hx-inset); color: var(--hx-ink-2); }
+body.mk .b-warm { background: var(--hx-warn-soft); color: var(--hx-warn); }
+body.mk .b-good { background: var(--hx-ok-soft); color: var(--hx-ok); }
+body.mk .b-info { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+body.mk .b-bad { background: var(--hx-red-soft); color: var(--hx-red); }
+body.mk .dr-empty { padding: 1.2rem; text-align: center; color: var(--hx-ink-3); font: 400 12.5px/1.5 var(--hx-text); }
+body.mk #msg { margin-top: 12px; }
+
+/* the record and metrics dialogs (flow.css gives the shell) */
+body.mk .flow-modal.mk-wide { max-width: 640px; }
+body.mk .flow-modal.mk-narrow { max-width: 420px; }
+body.mk .mkt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+body.mk .mkt-form .full { grid-column: 1 / -1; }
+body.mk .mkt-form label { display: block; font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); margin-bottom: 4px; }
+body.mk .mkt-form input, body.mk .mkt-form select, body.mk .mkt-form textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); font: 400 13px/1.4 var(--hx-text); background: var(--hx-glass-solid); color: var(--hx-ink); }
+body.mk .mkt-form input:focus, body.mk .mkt-form select:focus, body.mk .mkt-form textarea:focus { outline: none; border-color: var(--hx-cyan); }
+body.mk .mkt-form textarea { min-height: 64px; resize: vertical; }
+
+/* the task rhythm */
+body.mk .rhythm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+body.mk .rhythm-col h4 { margin: 0 0 8px; font: 700 12.5px/1.3 var(--hx-text); color: var(--hx-navy-text); }
+body.mk .rhythm-col label { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-sm); margin-bottom: 6px; font: 400 12.5px/1.45 var(--hx-text); color: var(--hx-ink-2); cursor: pointer; background: var(--hx-glass-solid); }
+body.mk .rhythm-col label.done { background: var(--hx-inset); color: var(--hx-ink-3); text-decoration: line-through; }
+body.mk .rhythm-col input { margin-top: 3px; accent-color: var(--hx-navy); }
+
+/* ── 4 · the daily-reports block (management-flow.js and report-render.js render into it) ────── */
+body.mk .is-controls { gap: 8px; margin-bottom: 12px; }
+body.mk .is-controls label { font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+body.mk .is-controls input { padding: 7px 10px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); font: 400 13px/1.3 var(--hx-text); background: var(--hx-glass-solid); color: var(--hx-ink); }
+body.mk .dr-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+body.mk .dr-tiles .dr-tile { background: var(--hx-glass-solid); border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); padding: 10px 12px; text-align: center; }
+body.mk .dr-tiles .dr-tile .l { font: 600 11px/1.3 var(--hx-text); color: var(--hx-ink-2); text-transform: none; letter-spacing: 0; }
+body.mk .dr-tiles .dr-tile .v { font: 800 18px/1.1 var(--hx-display); color: var(--hx-ink); margin-top: 4px; font-variant-numeric: tabular-nums; }
+body.mk #mgmtDrBody { max-height: 440px; padding: 8px; }
+body.mk .mf-empty { font-style: normal; color: var(--hx-ink-3); font: 400 12.5px/1.5 var(--hx-text); padding: 18px; text-align: center; }
+body.mk .mk-weekly { margin-top: 18px; border-top: 1px solid var(--hx-hair-2); padding-top: 14px; }
+body.mk .mk-weekly .hx-head { margin-bottom: 10px; }
+
+/* ── 5 · the load moment ─────────────────────────────────────────────────────────────────────── */
+body.mk.mk-load .mk-kpis .kpi { animation: mkIn .45s var(--hx-ease) both; }
+body.mk.mk-load .mk-kpis .kpi:nth-child(2) { animation-delay: .05s; }
+body.mk.mk-load .mk-kpis .kpi:nth-child(3) { animation-delay: .10s; }
+body.mk.mk-load .mk-kpis .kpi:nth-child(4) { animation-delay: .15s; }
+body.mk.mk-load .mk-kpis .kpi:nth-child(5) { animation-delay: .20s; }
+body.mk.mk-load .mk-kpis .kpi:nth-child(n+6) { animation-delay: .25s; }
+
+@keyframes mkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── 6 · responsive ──────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  body.mk .mk-kpis { grid-template-columns: repeat(3, 1fr); }
+  body.mk .mk-kpis .kpi.hero-kpi { grid-column: 1 / -1; }
+  body.mk .dr-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  body.mk .mk-kpis { grid-template-columns: 1fr 1fr; }
+  body.mk .mkt-form { grid-template-columns: 1fr; }
+  body.mk .dr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.mk .hx-mast .hx-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ── 7 · reduced motion ──────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.mk *, body.mk *::before, body.mk *::after { animation: none !important; transition: none !important; }
+}

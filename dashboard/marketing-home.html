@@ -7,149 +7,105 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/daily-reports.css">
-  <style>
-    .mkt { max-width: 1320px; margin: 0 auto; }
-    .mkt-hero {
-      background: linear-gradient(135deg, var(--accent, #0d9488), var(--accent-dark, #0f766e));
-      border-radius: var(--radius-lg, 16px); padding: 1.4rem 1.6rem; color: #fff;
-      box-shadow: var(--shadow-md, 0 6px 20px rgba(13,148,136,0.18));
-      display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;
-    }
-    .mkt-hero h1 { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
-    .mkt-hero p { margin: 0.3rem 0 0; font-size: 0.85rem; opacity: 0.92; max-width: 640px; }
-    .mkt-hero .ctrl { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    .mkt-hero .ctrl input, .mkt-hero .ctrl button { border-radius: 8px; border: none; padding: 0.45rem 0.7rem; font-size: 0.85rem; }
-    .mkt-hero .ctrl input { background: rgba(255,255,255,0.92); color: #0f172a; }
-    .mkt-hero .ctrl .ro { font-size: 0.72rem; background: rgba(255,255,255,0.2); padding: 0.3rem 0.7rem; border-radius: 999px; }
-
-    /* KPI scorecard */
-    .mkt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.7rem; margin: 1.2rem 0; }
-    .kpi { border: 1px solid var(--border, #e2e8f0); border-radius: 14px; padding: 0.85rem 0.95rem; background: var(--bg-card, #fff); min-width: 0; position: relative; box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06)); }
-    .kpi.hero-kpi { border-color: var(--accent, #0d9488); background: linear-gradient(180deg, #fff, #f0fbf9); }
-    .kpi .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #64748b); font-weight: 700; display: flex; align-items: center; gap: 0.35rem; }
-    .kpi .v { font-size: clamp(1.1rem, 2vw, 1.7rem); font-weight: 800; color: var(--text-primary, #0f172a); font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 0.2rem; }
-    .kpi .t { font-size: 0.7rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
-    .kpi .pill { position: absolute; top: 0.7rem; right: 0.8rem; font-size: 0.62rem; font-weight: 800; padding: 0.1rem 0.5rem; border-radius: 999px; }
-    .pill-met { background: rgba(13,148,136,0.14); color: #0f766e; }
-    .pill-below { background: rgba(245,158,11,0.16); color: #b45309; }
-    .pill-top { background: #fde68a; color: #92400e; }
-
-    /* tab bar */
-    .mkt-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .mkt-tab { padding: 0.5rem 1rem; border-radius: 10px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
-      border: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #fff); color: var(--text-secondary, #475569);
-      transition: all 0.14s ease; }
-    .mkt-tab:hover { color: var(--accent-dark, #0f766e); border-color: var(--accent, #0d9488); }
-    .mkt-tab.active { background: var(--accent, #0d9488); color: #fff; border-color: var(--accent, #0d9488); box-shadow: 0 2px 8px rgba(13,148,136,0.28); }
-    .mkt-tab .cnt { font-size: 0.7rem; opacity: 0.8; margin-left: 0.3rem; }
-
-    .mkt-panel { display: none; }
-    .mkt-panel.active { display: block; animation: fadeIn 0.2s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-    .panel-card { background: var(--bg-card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 14px; padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,23,42,0.06)); }
-    .panel-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
-    .panel-toolbar h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-primary, #0f172a); }
-    .panel-toolbar input[type=text], .panel-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 0.84rem; background: #fff; }
-    .panel-toolbar .spacer { margin-left: auto; }
-
-    .mkt-act { background: none; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; padding: 0.18rem 0.5rem; cursor: pointer; font-size: 0.74rem; color: var(--text-secondary, #475569); }
-    .mkt-act:hover { border-color: var(--accent, #0d9488); color: var(--accent-dark, #0f766e); }
-    .mkt-badge { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
-    .b-new { background: rgba(100,116,139,0.16); color: #475569; }
-    .b-warm { background: rgba(245,158,11,0.16); color: #b45309; }
-    .b-good { background: rgba(13,148,136,0.16); color: #0f766e; }
-    .b-info { background: rgba(59,130,246,0.14); color: #1d4ed8; }
-    .b-bad { background: rgba(239,68,68,0.14); color: #b91c1c; }
-    .dr-empty { padding: 1.2rem; text-align: center; color: var(--text-muted, #64748b); font-size: 0.85rem; font-style: italic; }
-
-    /* form */
-    .mkt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
-    .mkt-form .full { grid-column: 1 / -1; }
-    .mkt-form label { display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-secondary, #475569); margin-bottom: 0.2rem; }
-    .mkt-form input, .mkt-form select, .mkt-form textarea { width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 0.85rem; background: #fff; }
-    .mkt-form textarea { min-height: 60px; resize: vertical; }
-    @media (max-width: 640px) { .mkt-form { grid-template-columns: 1fr; } }
-
-    /* task rhythm */
-    .rhythm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
-    .rhythm-col h4 { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-dark, #0f766e); font-weight: 800; }
-    .rhythm-col label { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.45rem 0.55rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; margin-bottom: 0.4rem; font-size: 0.82rem; color: var(--text-secondary, #475569); cursor: pointer; }
-    .rhythm-col label.done { background: var(--bg-inset, #f8fafc); color: var(--text-muted, #94a3b8); text-decoration: line-through; }
-    .rhythm-col input { margin-top: 0.15rem; }
-  </style>
+  <link rel="stylesheet" href="css/marketing-home.css">
 </head>
-<body>
+<body class="mk">
   <script src="js/theme.js"></script>
   <header class="navbar" id="navbar"></header>
-  <main class="main-content">
-    <div class="mkt">
-      <!-- A275 — hidden until this person actually has one -->
-      <div class="chart-card" id="myDeductionCard" style="margin-bottom:1rem;display:none;"></div>
-      <div class="mkt-hero">
-        <div>
-          <h1>Marketing Dashboard</h1>
-          <p id="heroSub">B2B industrial marketing — generate qualified leads, produce technical content, and enable the sales team. Judged on qualified leads that turn into real opportunities, not vanity metrics.</p>
+
+  <main class="main-content hx-main">
+    <div class="hx-deck">
+
+      <!-- ══ THE RAIL — sticky: the month's scorecard, the theme, and where to go ═══════════════ -->
+      <aside class="hx-rail" id="rail">
+        <div class="hx-rail-date">
+          <b id="hbDay">—</b><span id="hbMon">&nbsp;</span>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Dark theme">
+            <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <span>Dark</span>
+          </button>
         </div>
-        <div class="ctrl">
-          <label style="font-size:0.72rem;opacity:0.9;">Month</label>
-          <input type="month" id="monthSel">
-          <button id="metricsBtn" title="Enter website visits / followers for this month">Monthly metrics</button>
-          <span class="ro" id="roTag" style="display:none;">Read-only</span>
-        </div>
-      </div>
 
-      <div class="mkt-kpis" id="kpis"></div>
+        <!-- The slab: the scorecard against the job's targets. marketing-home.js renders the eight
+             tiles into #kpis for the month picked in the cap; the first tile is the headline. -->
+        <section class="hx-slab" id="spot">
+          <div class="cap"><span class="l">Scorecard</span><input type="month" id="monthSel" aria-label="Month"></div>
+          <div class="mk-kpis" id="kpis"><div class="hx-empty">Loading…</div></div>
+        </section>
 
-      <div class="mkt-tabs" id="tabs"></div>
-      <div id="panels"></div>
+        <nav class="hx-rail-nav" aria-label="On this page">
+          <a href="#trackers">Trackers</a>
+          <a href="#newsec-daily-reports">Daily reports</a>
+        </nav>
+      </aside>
 
-      <div id="msg" class="flow-msg" style="display:none;margin-top:0.8rem;"></div>
-    </div>
+      <!-- ══ THE COLUMN ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="hx-col">
+        <header class="hx-mast">
+          <div>
+            <h1>Marketing</h1>
+            <p id="heroSub">Generate qualified leads, produce technical content and enable the sales team. Judged on qualified leads that turn into real opportunities, not vanity metrics.</p>
+          </div>
+          <div class="hx-actions">
+            <span class="badge badge-neutral" id="roTag" style="display:none;">Read-only</span>
+            <button type="button" class="btn btn-primary" id="metricsBtn" title="Enter website visits and followers for this month">Monthly metrics</button>
+          </div>
+        </header>
 
-    <!-- A264: 🗒️ Daily Reports — same section as the management home, same ids so
-         js/management-flow.js drives it here unchanged. -->
-    <div class="mgmt-newsec" id="newsec-daily-reports" style="margin-top:1.5rem;">
-      <h2 style="cursor:pointer;" onclick="mgmtToggleNewsec('newsec-daily-reports')">🗒️ Daily Reports
-        <span class="is-state" id="mgmtDrMeta" style="margin-left:auto;font-weight:400;"></span>
-        <span class="newsec-chevron"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-      </h2>
-      <div class="is-controls">
-        <label style="font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">Date</label>
-        <input type="date" id="mgmtDrDate">
-        <input type="text" id="mgmtDrSearch" placeholder="Search user…">
-      </div>
-      <div class="dr-tiles">
-        <div class="dr-tile"><div class="l">Active Users</div><div class="v" id="mgmtDrUsers">0</div></div>
-        <div class="dr-tile"><div class="l">Movements</div><div class="v" id="mgmtDrMovements">0</div></div>
-        <div class="dr-tile"><div class="l">Documents</div><div class="v" id="mgmtDrDocs">0</div></div>
-        <div class="dr-tile"><div class="l">Sales Invoiced</div><div class="v" id="mgmtDrSales">₱0.00</div></div>
-        <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
-      </div>
-      <!-- A266: bounded so a long roster scrolls inside the card instead of running the page to
-           4,000px. Management keeps its own unbounded copy — that page is a scrolling overview. -->
-      <div class="flow-scroll" id="mgmtDrBody" style="max-height:440px;padding:0.5rem;"><div class="mf-empty">Loading…</div></div>
+        <!-- A275: shown only when this person has a salary deduction (js/salary-deduction-card.js) -->
+        <section class="hx-glass" id="myDeductionCard" style="display:none;"></section>
 
-      <!-- Team Weekly Report: per-user task charts for the Mon–Sun week of the picked date (A110) -->
-      <div style="margin-top:1.4rem;border-top:1px solid var(--border,#e2e8f0);padding-top:1rem;">
-        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.7rem;">
-          <h3 style="font-size:0.95rem;font-weight:700;margin:0;">📊 Team Weekly Report</h3>
-          <span id="mfTwRange" style="font-size:0.8rem;color:var(--text-muted,#64748b);"></span>
-          <span style="margin-left:auto;display:inline-flex;gap:0.35rem;">
-            <button class="btn btn-sm btn-secondary" onclick="mfTwNav(-1)" title="Previous week">◀</button>
-            <button class="btn btn-sm btn-secondary" id="mfTwReset" onclick="mfTwNav(0)" style="display:none;" title="Back to this week">↺</button>
-            <button class="btn btn-sm btn-secondary" id="mfTwNext" onclick="mfTwNav(1)" title="Next week">▶</button>
-            <button class="btn btn-sm btn-primary" id="mfTwPdfBtn" onclick="mfTwPdf()" disabled>📄 View / Save PDF</button>
-          </span>
-        </div>
-        <div id="mfTwBody"><div class="mf-empty">Loading team weekly report…</div></div>
+        <!-- The trackers: leads, campaigns, content, enablement, events, co-marketing, the task rhythm.
+             marketing-home.js builds the tabs into #tabs and the panel into #panels. -->
+        <section class="hx-glass" id="trackers">
+          <div class="hx-head"><h2>Trackers</h2><span class="hx-meta">Every record the team keeps, one tab each.</span></div>
+          <div class="hx-seg" id="tabsSeg"><span class="hx-seg-ind"></span><div class="hx-seg-track" id="tabs"></div></div>
+          <div id="panels"></div>
+          <div id="msg" class="flow-msg" style="display:none;"></div>
+        </section>
+
+        <!-- A264: the daily reports, the same ids the management home uses so js/management-flow.js
+             and js/report-render.js drive it here unchanged. -->
+        <section class="hx-glass" id="newsec-daily-reports">
+          <div class="hx-head"><h2>Daily reports</h2><span class="hx-meta is-state" id="mgmtDrMeta"></span></div>
+          <div class="is-controls">
+            <label for="mgmtDrDate">Date</label>
+            <input type="date" id="mgmtDrDate">
+            <input type="text" id="mgmtDrSearch" placeholder="Search user…">
+          </div>
+          <div class="dr-tiles">
+            <div class="dr-tile"><div class="l">Active users</div><div class="v" id="mgmtDrUsers">0</div></div>
+            <div class="dr-tile"><div class="l">Movements</div><div class="v" id="mgmtDrMovements">0</div></div>
+            <div class="dr-tile"><div class="l">Documents</div><div class="v" id="mgmtDrDocs">0</div></div>
+            <div class="dr-tile"><div class="l">Sales invoiced</div><div class="v" id="mgmtDrSales">₱0.00</div></div>
+            <div class="dr-tile"><div class="l">PDFs</div><div class="v" id="mgmtDrPdfs">0</div></div>
+          </div>
+          <!-- A266: bounded so a long roster scrolls inside the card -->
+          <div class="hx-scroll" id="mgmtDrBody"><div class="mf-empty">Loading…</div></div>
+
+          <!-- Team Weekly Report: per-user task charts for the Mon–Sun week of the picked date (A110) -->
+          <div class="mk-weekly">
+            <div class="hx-head">
+              <h3>Team weekly report</h3>
+              <span class="hx-meta" id="mfTwRange"></span>
+              <div class="hx-actions">
+                <button type="button" class="btn btn-sm" onclick="mfTwNav(-1)" title="Previous week">Previous</button>
+                <button type="button" class="btn btn-sm" id="mfTwReset" onclick="mfTwNav(0)" style="display:none;" title="Back to this week">This week</button>
+                <button type="button" class="btn btn-sm" id="mfTwNext" onclick="mfTwNav(1)" title="Next week">Next</button>
+                <button type="button" class="btn btn-sm btn-primary" id="mfTwPdfBtn" onclick="mfTwPdf()" disabled>View or save PDF</button>
+              </div>
+            </div>
+            <div id="mfTwBody"><div class="mf-empty">Loading team weekly report…</div></div>
+          </div>
+        </section>
       </div>
     </div>
   </main>
 
-  <!-- Record modal -->
+  <!-- Record dialog (marketing-home.js toggles .open and builds the form) -->
   <div class="flow-modal-overlay" id="recModal">
-    <div class="flow-modal" style="max-width:640px;">
+    <div class="flow-modal mk-wide">
       <h3 id="recModalTitle">Add</h3>
       <input type="hidden" id="recEntity">
       <input type="hidden" id="recRowIndex">
@@ -162,14 +118,14 @@
     </div>
   </div>
 
-  <!-- Monthly metrics modal -->
+  <!-- Monthly metrics dialog -->
   <div class="flow-modal-overlay" id="metModal">
-    <div class="flow-modal" style="max-width:420px;">
-      <h3>Monthly Metrics — <span id="metMonthLabel"></span></h3>
+    <div class="flow-modal mk-narrow">
+      <h3>Monthly metrics, <span id="metMonthLabel"></span></h3>
       <div class="mkt-form">
-        <div><label>Website Visits</label><input type="number" min="0" id="metVisits"></div>
-        <div><label>LinkedIn Followers</label><input type="number" min="0" id="metFollowers"></div>
-        <div class="full"><label>Notes</label><input type="text" id="metNotes"></div>
+        <div><label for="metVisits">Website visits</label><input type="number" min="0" id="metVisits"></div>
+        <div><label for="metFollowers">LinkedIn followers</label><input type="number" min="0" id="metFollowers"></div>
+        <div class="full"><label for="metNotes">Notes</label><input type="text" id="metNotes"></div>
       </div>
       <div id="metMsg" class="flow-msg" style="display:none;"></div>
       <div class="flow-modal-foot">
@@ -189,13 +145,6 @@
   <script src="js/report-pdf.js"></script>
   <script src="js/team-performance.js"></script>
   <script src="js/management-flow.js"></script>
-  <script>
-    // Collapse/expand a .mgmt-newsec by clicking its header (mirrors management-home.html).
-    function mgmtToggleNewsec(id) {
-      var el = document.getElementById(id);
-      if (el) el.classList.toggle('collapsed');
-    }
-  </script>
-
+  <script src="js/marketing-home-page.js"></script>   <!-- A294: the page's own glue — date, the tab indicator, the rail, the load moment -->
 </body>
 </html>

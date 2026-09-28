@@ -86,16 +86,16 @@ async function submitReview(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await loadReviews();
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -131,7 +131,7 @@ async function loadReviews() {
     document.getElementById('reviewCount').textContent = reviewsData.length + ' review' + (reviewsData.length !== 1 ? 's' : '');
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -141,7 +141,7 @@ function filterReviews() {
 
 function ratingDisplay(rating) {
   const num = parseFloat(rating);
-  if (isNaN(num)) return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  if (isNaN(num)) return '<span style="color:var(--hx-ink-3);">—</span>';
   let cls = 'rating-high';
   if (num < 2) cls = 'rating-low';
   else if (num <= 3) cls = 'rating-mid';
@@ -158,7 +158,7 @@ function renderTable() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">' + (search ? 'No matching reviews.' : 'No reviews found.') + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">' + (search ? 'No matching reviews.' : 'No reviews found.') + '</div>';
     return;
   }
 
@@ -177,7 +177,7 @@ function renderTable() {
       '<td><span class="status-badge ' + statusCls + '">' + esc(r.status || 'Draft') + '</span></td>' +
       '<td style="white-space:nowrap;">' +
       '<button class="btn btn-sm btn-secondary" onclick="editReview(' + r.rowIndex + ')" style="margin-right:0.3rem;" title="Edit">Edit</button>' +
-      '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteReview(' + r.rowIndex + ',\'' + esc(r.employeeName).replace(/'/g, "\\'") + '\')" title="Delete">Delete</button>' +
+      '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteReview(' + r.rowIndex + ',\'' + esc(r.employeeName).replace(/'/g, "\\'") + '\')" title="Delete">Delete</button>' +
       '</td></tr>';
   });
 

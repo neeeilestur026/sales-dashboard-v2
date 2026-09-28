@@ -116,16 +116,16 @@ async function submitLeave(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await Promise.all([loadLeaveStats(), loadLeave()]);
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -213,7 +213,7 @@ async function loadLeave() {
     leaveData = result.data || [];
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -233,7 +233,7 @@ function renderTable() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">' + (search ? 'No matching leave requests.' : 'No leave requests found.') + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">' + (search ? 'No matching leave requests.' : 'No leave requests found.') + '</div>';
     return;
   }
 
@@ -258,20 +258,20 @@ function renderTable() {
       '<td style="white-space:nowrap;">';
 
     if (isAdmin) {
-      html += '<span style="color:var(--text-muted);font-size:0.78rem;">View only</span>';
+      html += '<span style="color:var(--hx-ink-3);font-size:0.78rem;">View only</span>';
     } else {
       // Quick approve/reject for pending items (HR can only approve sales)
       if (l.status === 'Pending') {
         var reqRole = String(l.requesterRole || '').toLowerCase();
         if (reqRole === 'sales' || !reqRole) {
-          html += '<button class="btn btn-sm" style="background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);margin-right:0.2rem;" onclick="approveLeave(' + l.rowIndex + ')" title="Approve">Approve</button>' +
-            '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);margin-right:0.2rem;" onclick="rejectLeave(' + l.rowIndex + ')" title="Reject">Reject</button>';
+          html += '<button class="btn btn-sm" style="background:var(--hx-ok-soft);color:var(--hx-ok);border:1px solid var(--hx-ok-line);margin-right:0.2rem;" onclick="approveLeave(' + l.rowIndex + ')" title="Approve">Approve</button>' +
+            '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);margin-right:0.2rem;" onclick="rejectLeave(' + l.rowIndex + ')" title="Reject">Reject</button>';
         } else {
-          html += '<span style="color:var(--text-muted);font-size:0.75rem;margin-right:0.4rem;" title="Management approval required for ' + esc(reqRole) + ' staff">Mgmt only</span>';
+          html += '<span style="color:var(--hx-ink-3);font-size:0.75rem;margin-right:0.4rem;" title="Management approval required for ' + esc(reqRole) + ' staff">Mgmt only</span>';
         }
       }
       html += '<button class="btn btn-sm btn-secondary" onclick="editLeave(' + l.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteLeave(' + l.rowIndex + ')" title="Delete">Del</button>';
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteLeave(' + l.rowIndex + ')" title="Delete">Del</button>';
     }
 
     html += '</td></tr>';

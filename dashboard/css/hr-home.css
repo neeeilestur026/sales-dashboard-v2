@@ -1,0 +1,108 @@
+/* hr-home.css — A294 · the HR and marketing home, on the brand system.
+ *
+ * Linked by hr-home.html after css/styles.css (tokens, both themes, the deck, glass, buttons),
+ * css/flow.css and css/daily-reports.css (the shared daily-reports block). This file is only what
+ * the page adds: the report banner hr-home.js classes, the two module grids, the today overview
+ * and the birthday list it renders, the daily-reports block and the load moment. Every rule hangs
+ * off body.hr. Keyframes animate transform or opacity only; everything is switched off under
+ * prefers-reduced-motion. */
+
+/* ── 1 · the rail and the mast ───────────────────────────────────────────────────────────────── */
+body.hr .hx-facts { grid-template-columns: 1fr 1fr; }
+body.hr .hx-facts > div.wide { grid-column: 1 / -1; }
+body.hr .hx-mast .hx-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+body.hr .hx-mast .btn svg { width: 14px; height: 14px; }
+
+/* ── 2 · the report banner (hr-home.js sets alert-banner success | warning) ──────────────────── */
+body.hr .alert-banner { display: none; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--hx-r-md); font: 500 12.5px/1.5 var(--hx-text); border: 1px solid var(--hx-hair); background: var(--hx-glass-solid); color: var(--hx-ink); }
+body.hr .alert-banner svg { flex-shrink: 0; width: 16px; height: 16px; }
+body.hr .alert-banner.warning { background: var(--hx-warn-soft); border-color: var(--hx-warn-line); color: var(--hx-warn); }
+body.hr .alert-banner.success { background: var(--hx-ok-soft); border-color: var(--hx-ok-line); color: var(--hx-ok); }
+body.hr .alert-banner .alert-link { color: inherit; font-weight: 700; margin-left: 4px; }
+
+/* ── 3 · today: the overview and the birthdays ───────────────────────────────────────────────── */
+body.hr .hr-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+body.hr .hr-pair > div { min-width: 0; }
+body.hr .hr-pair h3 { margin: 0 0 8px; font: 700 13.5px/1.3 var(--hx-text); color: var(--hx-ink); }
+body.hr .overview-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--hx-hair-2); font: 400 12.5px/1.4 var(--hx-text); }
+body.hr .overview-item:last-child { border-bottom: none; }
+body.hr .overview-label { color: var(--hx-ink-2); }
+body.hr .overview-value { font: 800 14px/1.2 var(--hx-display); color: var(--hx-ink); font-variant-numeric: tabular-nums; }
+body.hr .bday-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hx-hair-2); }
+body.hr .bday-item:last-child { border-bottom: none; }
+body.hr .bday-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 700 10.5px/1 var(--hx-text); flex-shrink: 0; background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+body.hr .bday-avatar.an { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+body.hr .bday-info { flex: 1; min-width: 0; }
+body.hr .bday-name { font: 600 13px/1.3 var(--hx-text); color: var(--hx-ink); }
+body.hr .bday-detail { font: 400 11.5px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+body.hr .bday-badge { font: 700 10.5px/1.5 var(--hx-text); padding: 2px 8px; border-radius: var(--hx-r-pill); white-space: nowrap; }
+body.hr .bday-today { background: var(--hx-ok-soft); color: var(--hx-ok); }
+body.hr .bday-soon { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+body.hr .hx-empty { padding: 1rem; }
+
+/* ── 4 · the module cards ────────────────────────────────────────────────────────────────────── */
+body.hr .modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+body.hr .module-card { background: var(--hx-glass-solid); border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); padding: 14px 16px; text-decoration: none; color: var(--hx-ink); display: flex; flex-direction: column; gap: 5px; min-width: 0; transition: border-color .15s var(--hx-ease), background .15s var(--hx-ease); }
+body.hr .module-card:hover { border-color: var(--hx-navy-line); background: var(--hx-inset); color: var(--hx-ink); }
+body.hr .module-card:focus-visible { border-color: var(--hx-cyan); }
+body.hr .module-card-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 3px; background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+body.hr .module-card-icon svg { width: 18px; height: 18px; }
+body.hr .module-card-icon.t-cyan { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+body.hr .module-card-icon.t-ok { background: var(--hx-ok-soft); color: var(--hx-ok); }
+body.hr .module-card-icon.t-warn { background: var(--hx-warn-soft); color: var(--hx-warn); }
+body.hr .module-card-icon.t-red { background: var(--hx-red-soft); color: var(--hx-red); }
+body.hr .module-card h4 { font: 700 13.5px/1.3 var(--hx-text); margin: 0; color: var(--hx-ink); }
+body.hr .module-card p { font: 400 11.5px/1.4 var(--hx-text); color: var(--hx-ink-3); margin: 0; }
+body.hr .module-stat { font: 500 11.5px/1.4 var(--hx-text); color: var(--hx-ink-2); display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 6px; }
+body.hr .module-stat .num { font: 800 14px/1.2 var(--hx-display); color: var(--hx-navy-text); font-variant-numeric: tabular-nums; }
+
+/* ── 5 · the daily-reports block (management-flow.js and report-render.js render into it) ────── */
+body.hr .is-controls { gap: 8px; margin-bottom: 12px; }
+body.hr .is-controls label { font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+body.hr .is-controls input { padding: 7px 10px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); font: 400 13px/1.3 var(--hx-text); background: var(--hx-glass-solid); color: var(--hx-ink); }
+body.hr .dr-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+body.hr .dr-tiles .dr-tile { background: var(--hx-glass-solid); border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); padding: 10px 12px; text-align: center; }
+body.hr .dr-tiles .dr-tile .l { font: 600 11px/1.3 var(--hx-text); color: var(--hx-ink-2); text-transform: none; letter-spacing: 0; }
+body.hr .dr-tiles .dr-tile .v { font: 800 18px/1.1 var(--hx-display); color: var(--hx-ink); margin-top: 4px; font-variant-numeric: tabular-nums; }
+body.hr #mgmtDrBody { max-height: 440px; padding: 8px; }
+body.hr .mf-empty { font-style: normal; color: var(--hx-ink-3); font: 400 12.5px/1.5 var(--hx-text); padding: 18px; text-align: center; }
+body.hr .hr-weekly { margin-top: 18px; border-top: 1px solid var(--hx-hair-2); padding-top: 14px; }
+body.hr .hr-weekly .hx-head { margin-bottom: 10px; }
+
+/* ── 6 · the load moment ─────────────────────────────────────────────────────────────────────── */
+body.hr.hr-load .hx-facts dd { animation: hrIn .45s var(--hx-ease) both; }
+body.hr.hr-load .hx-facts > div:nth-child(2) dd { animation-delay: .05s; }
+body.hr.hr-load .hx-facts > div:nth-child(3) dd { animation-delay: .10s; }
+body.hr.hr-load .hx-facts > div:nth-child(4) dd { animation-delay: .15s; }
+body.hr.hr-load .hx-facts > div:nth-child(5) dd { animation-delay: .20s; }
+body.hr.hr-load .module-card { animation: hrIn .4s var(--hx-ease) both; }
+body.hr.hr-load .module-card:nth-child(2) { animation-delay: .03s; }
+body.hr.hr-load .module-card:nth-child(3) { animation-delay: .06s; }
+body.hr.hr-load .module-card:nth-child(4) { animation-delay: .09s; }
+body.hr.hr-load .module-card:nth-child(n+5) { animation-delay: .12s; }
+body.hr .hx-facts dd.hr-tick, body.hr .hx-slab .v.hr-tick { animation: hrFade .5s var(--hx-ease); }
+
+@keyframes hrIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes hrFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── 7 · responsive ──────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  body.hr .hx-facts { grid-template-columns: repeat(3, 1fr); }
+  body.hr .hx-facts > div.wide { grid-column: auto; }
+  body.hr .hr-pair { grid-template-columns: 1fr; }
+  body.hr .dr-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  body.hr .hx-facts { grid-template-columns: 1fr 1fr; }
+  body.hr .modules-grid { grid-template-columns: 1fr 1fr; }
+  body.hr .dr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.hr .hx-mast .hx-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+@media (max-width: 480px) {
+  body.hr .modules-grid { grid-template-columns: 1fr; }
+}
+
+/* ── 8 · reduced motion ──────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.hr *, body.hr *::before, body.hr *::after { animation: none !important; transition: none !important; }
+}

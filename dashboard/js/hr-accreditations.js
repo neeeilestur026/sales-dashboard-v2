@@ -90,16 +90,16 @@ async function submitAccreditation(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await loadAccreditations();
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -153,7 +153,7 @@ async function loadAccreditations() {
     updateStats();
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -198,7 +198,7 @@ function renderTable() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">' + (search || filterStatus ? 'No matching accreditations.' : 'No accreditations found.') + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">' + (search || filterStatus ? 'No matching accreditations.' : 'No accreditations found.') + '</div>';
     return;
   }
 
@@ -228,10 +228,10 @@ function renderTable() {
 
     const docCell = a.docLink
       ? '<a class="doc-link" href="' + esc(a.docLink) + '" target="_blank" rel="noopener noreferrer">View</a>'
-      : '<span style="color:var(--text-muted);font-size:0.78rem;">--</span>';
+      : '<span style="color:var(--hx-ink-3);font-size:0.78rem;">--</span>';
 
     html += '<tr' + rowCls + '>' +
-      '<td><strong>' + esc(a.name) + '</strong>' + (a.notes ? '<br><span style="font-size:0.75rem;color:var(--text-muted);">' + esc(a.notes).substring(0, 60) + '</span>' : '') + '</td>' +
+      '<td><strong>' + esc(a.name) + '</strong>' + (a.notes ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(a.notes).substring(0, 60) + '</span>' : '') + '</td>' +
       '<td>' + esc(a.issuingBody) + '</td>' +
       '<td>' + esc(a.dateIssued) + '</td>' +
       '<td>' + esc(a.expiryDate) + '</td>' +
@@ -239,7 +239,7 @@ function renderTable() {
       '<td>' + docCell + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-sm btn-secondary" onclick="editAccreditation(' + a.rowIndex + ')" style="margin-right:0.3rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteAccreditation(' + a.rowIndex + ',\'' + esc(a.name).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>' +
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteAccreditation(' + a.rowIndex + ',\'' + esc(a.name).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>' +
       '</td></tr>';
   });
 

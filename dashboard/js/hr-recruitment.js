@@ -103,16 +103,16 @@ async function submitCandidate(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await Promise.all([loadPipeline(), loadStats()]);
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -173,7 +173,7 @@ async function loadPipeline() {
     pipelineData = result.data || [];
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -189,7 +189,7 @@ function renderTable() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No candidates found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No candidates found.</div>';
     return;
   }
 
@@ -206,7 +206,7 @@ function renderTable() {
     const canAdvance = stageIdx >= 0 && stageIdx < STAGES.length - 1;
 
     html += '<tr>' +
-      '<td><strong>' + esc(c.candidateName) + '</strong>' + (c.notes ? '<br><span style="font-size:0.75rem;color:var(--text-muted);">' + esc(c.notes).substring(0, 60) + '</span>' : '') + '</td>' +
+      '<td><strong>' + esc(c.candidateName) + '</strong>' + (c.notes ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(c.notes).substring(0, 60) + '</span>' : '') + '</td>' +
       '<td>' + esc(c.position) + '</td>' +
       '<td><span class="stage-badge ' + cls + '">' + esc(c.stage) + '</span></td>' +
       '<td>' + esc(c.dateApplied) + '</td>' +
@@ -215,12 +215,12 @@ function renderTable() {
 
     if (!isAdmin) {
       if (canAdvance) {
-        html += '<button class="btn btn-sm" style="background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);margin-right:0.2rem;" onclick="advanceStage(' + c.rowIndex + ',\'' + esc(c.stage) + '\')" title="Advance to next stage">Next</button>';
+        html += '<button class="btn btn-sm" style="background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);border:1px solid var(--hx-cyan-ring);margin-right:0.2rem;" onclick="advanceStage(' + c.rowIndex + ',\'' + esc(c.stage) + '\')" title="Advance to next stage">Next</button>';
       }
       html += '<button class="btn btn-sm btn-secondary" onclick="editCandidate(' + c.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteCandidate(' + c.rowIndex + ',\'' + esc(c.candidateName).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>';
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteCandidate(' + c.rowIndex + ',\'' + esc(c.candidateName).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>';
     } else {
-      html += '<span style="color:var(--text-muted);font-size:0.78rem;">View only</span>';
+      html += '<span style="color:var(--hx-ink-3);font-size:0.78rem;">View only</span>';
     }
 
     html += '</td></tr>';

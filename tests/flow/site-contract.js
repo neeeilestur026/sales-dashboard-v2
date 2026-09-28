@@ -44,7 +44,11 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'replace-2026-sos.html', 'update-2025-costs.html', 'supplier-quotation.html', 'payment-requests.html', 'sales-orders.html', 'mi-queue.html', 'mro-queue.html',
   'pricing-submissions.html', 'quotation-board.html',
   // A293 — management
-  'management-home.html', 'management-leave.html', 'management-sales-orders.html', 'management-itinerary.html', 'pricing.html'];
+  'management-home.html', 'management-leave.html', 'management-sales-orders.html', 'management-itinerary.html', 'pricing.html',
+  // A294 — marketing and HR
+  'marketing-home.html', 'hr-home.html', 'hr-accreditations.html', 'hr-analytics.html', 'hr-campaigns.html', 'hr-content-calendar.html', 'hr-daily-report.html',
+  'hr-employees.html', 'hr-grievances.html', 'hr-leave.html', 'hr-memos.html', 'hr-recruitment.html', 'hr-reviews.html', 'hr-tasks.html', 'hr-training.html',
+  'marketing-daily-report.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

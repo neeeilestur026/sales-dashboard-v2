@@ -94,16 +94,16 @@ async function submitTraining(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await loadTraining();
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -139,7 +139,7 @@ async function loadTraining() {
     updateStats();
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -153,9 +153,9 @@ function updateStats() {
   });
 
   container.innerHTML =
-    '<div class="mini-stat"><div class="num" style="color:#3b82f6;">' + scheduled + '</div><div class="lbl">Scheduled</div></div>' +
-    '<div class="mini-stat"><div class="num" style="color:#eab308;">' + inProgress + '</div><div class="lbl">In Progress</div></div>' +
-    '<div class="mini-stat"><div class="num" style="color:#22c55e;">' + completed + '</div><div class="lbl">Completed</div></div>';
+    '<div class="mini-stat"><div class="num" style="color:var(--hx-cyan-ink);">' + scheduled + '</div><div class="lbl">Scheduled</div></div>' +
+    '<div class="mini-stat"><div class="num" style="color:var(--hx-warn);">' + inProgress + '</div><div class="lbl">In Progress</div></div>' +
+    '<div class="mini-stat"><div class="num" style="color:var(--hx-ok);">' + completed + '</div><div class="lbl">Completed</div></div>';
 }
 
 function filterTraining() {
@@ -167,7 +167,7 @@ function renderTable() {
   const container = document.getElementById('trnContainer');
 
   if (trainingData.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No training programs found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No training programs found.</div>';
     return;
   }
 
@@ -183,7 +183,7 @@ function renderTable() {
 
     html += '<tr>' +
       '<td><strong>' + esc(t.title) + '</strong>' +
-        (t.department ? '<br><span style="font-size:0.75rem;color:var(--text-muted);">' + esc(t.department) + '</span>' : '') +
+        (t.department ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(t.department) + '</span>' : '') +
       '</td>' +
       '<td><span class="type-badge">' + esc(t.type) + '</span></td>' +
       '<td>' + esc(t.instructor) + '</td>' +
@@ -194,9 +194,9 @@ function renderTable() {
 
     if (!isAdmin) {
       html += '<button class="btn btn-sm btn-secondary" onclick="editTraining(' + t.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteTraining(' + t.rowIndex + ')" title="Delete">Del</button>';
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteTraining(' + t.rowIndex + ')" title="Delete">Del</button>';
     } else {
-      html += '<span style="color:var(--text-muted);font-size:0.78rem;">View only</span>';
+      html += '<span style="color:var(--hx-ink-3);font-size:0.78rem;">View only</span>';
     }
 
     html += '</td></tr>';

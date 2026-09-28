@@ -91,16 +91,16 @@ async function submitMemo(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await loadMemos();
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -160,7 +160,7 @@ async function loadMemos() {
     memosData = result.data || [];
     renderMemos();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -176,7 +176,7 @@ function renderMemos() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No memos found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No memos found.</div>';
     return;
   }
 
@@ -217,16 +217,16 @@ function renderMemos() {
     html += '<div class="memo-card-meta">';
     if (m.createdBy) html += '<span>By: ' + esc(m.createdBy) + '</span>';
     if (m.createdAt) html += '<span>' + esc(m.createdAt) + '</span>';
-    if (m.status === 'Archived') html += '<span style="color:#94a3b8;font-weight:600;">Archived</span>';
+    if (m.status === 'Archived') html += '<span style="color:var(--hx-ink-3);font-weight:600;">Archived</span>';
     html += '</div>';
 
     // Actions
     html += '<div class="memo-card-actions">';
     html += '<button class="btn btn-sm btn-secondary" onclick="editMemo(' + m.rowIndex + ')" title="Edit">Edit</button>';
     if (m.status !== 'Archived') {
-      html += '<button class="btn btn-sm" style="background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);" onclick="archiveMemo(' + m.rowIndex + ')" title="Archive">Archive</button>';
+      html += '<button class="btn btn-sm" style="background:var(--hx-inset);color:var(--hx-ink-3);border:1px solid var(--hx-hair);" onclick="archiveMemo(' + m.rowIndex + ')" title="Archive">Archive</button>';
     }
-    html += '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteMemo(' + m.rowIndex + ')" title="Delete">Delete</button>';
+    html += '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteMemo(' + m.rowIndex + ')" title="Delete">Delete</button>';
     html += '</div>';
 
     html += '</div>'; // .memo-card

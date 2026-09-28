@@ -100,16 +100,16 @@ async function submitCampaign(e) {
     if (!result.success) throw new Error(result.message || 'Failed');
 
     msg.style.display = 'block';
-    msg.style.background = 'rgba(34,197,94,0.12)';
-    msg.style.color = '#22c55e';
+    msg.style.background = 'var(--hx-ok-soft)';
+    msg.style.color = 'var(--hx-ok)';
     msg.textContent = result.message || 'Success!';
     resetForm();
     clearApiCache();
     await Promise.all([loadCampaignStats(), loadCampaigns()]);
   } catch (err) {
     msg.style.display = 'block';
-    msg.style.background = 'rgba(239,68,68,0.12)';
-    msg.style.color = '#ef4444';
+    msg.style.background = 'var(--hx-red-soft)';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
   btn.disabled = false;
@@ -156,7 +156,7 @@ async function loadCampaigns() {
     campaignsData = result.data || [];
     renderTable();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -168,7 +168,7 @@ function renderTable() {
   const container = document.getElementById('campContainer');
 
   if (campaignsData.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No campaigns found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No campaigns found.</div>';
     return;
   }
 
@@ -186,15 +186,15 @@ function renderTable() {
     const leads = parseInt(c.leads) || 0;
 
     // ROI: leads per spend ratio
-    let roiHtml = '<span style="color:var(--text-muted);">-</span>';
+    let roiHtml = '<span style="color:var(--hx-ink-3);">-</span>';
     if (spend > 0) {
       const ratio = (leads / spend).toFixed(2);
-      roiHtml = '<span style="color:#22c55e;font-weight:600;">' + ratio + '</span><span style="color:var(--text-muted);font-size:0.72rem;"> leads/PHP</span>';
+      roiHtml = '<span style="color:var(--hx-ok);font-weight:600;">' + ratio + '</span><span style="color:var(--hx-ink-3);font-size:0.72rem;"> leads/PHP</span>';
     }
 
     html += '<tr>' +
       '<td><strong>' + esc(c.campaignName) + '</strong>' +
-        (c.notes ? '<br><span style="font-size:0.75rem;color:var(--text-muted);">' + esc(c.notes).substring(0, 60) + (c.notes.length > 60 ? '...' : '') + '</span>' : '') +
+        (c.notes ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(c.notes).substring(0, 60) + (c.notes.length > 60 ? '...' : '') + '</span>' : '') +
       '</td>' +
       '<td><span class="channel-badge">' + esc(c.channel) + '</span></td>' +
       '<td>' + esc(c.startDate) + '</td>' +
@@ -208,9 +208,9 @@ function renderTable() {
 
     if (!isAdmin) {
       html += '<button class="btn btn-sm btn-secondary" onclick="editCampaign(' + c.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteCampaign(' + c.rowIndex + ')" title="Delete">Del</button>';
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteCampaign(' + c.rowIndex + ')" title="Delete">Del</button>';
     } else {
-      html += '<span style="color:var(--text-muted);font-size:0.78rem;">View only</span>';
+      html += '<span style="color:var(--hx-ink-3);font-size:0.78rem;">View only</span>';
     }
 
     html += '</td></tr>';
