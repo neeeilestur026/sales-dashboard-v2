@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function _date() { return document.getElementById('datePicker').value; }
 function _emailMetaHint() {
   const m = ldrEmailMeta;
-  return (m && m.folder) ? ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>` : '';
+  return (m && m.folder) ? ` <span class="dr-dim">(checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window)</span>` : '';
 }
 
 async function refreshLive() {
@@ -77,7 +77,13 @@ async function load() {
   const date = _date();
   document.getElementById('reportMeta').textContent = `For ${date} · Prepared by ${ldrSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
   try { await Promise.all([loadTimeline(), loadCounts(), loadDay(), loadEmails()]); }
-  catch (e) { ldrEntries = []; document.getElementById('timelineBody').innerHTML = `<tr><td colspan="5" class="dr-empty">${_esc(e.message)}</td></tr>`; }
+  catch (e) {
+    // A287 — the error used to be overwritten by render() on the next line; it stays visible now
+    ldrEntries = [];
+    document.getElementById('timelineBody').innerHTML = `<tr><td colspan="5" class="dr-empty">${_esc(e.message)}</td></tr>`;
+    document.getElementById('taskList').innerHTML = `<div class="dr-empty">${_esc(e.message)}</div>`;
+    return;
+  }
   render();
   renderVerified();
   loadNotes();
@@ -99,7 +105,7 @@ function render() {
       <td><span class="mod-badge ${_modClass(e.module)}">${_esc(e.module)}</span></td>
       <td><span class="act-chip">${_esc(e.action)}</span></td>
       <td>${_esc(e.refNo)}</td>
-      <td style="color:var(--text-secondary);">${_esc(e.summary)}</td>
+      <td class="dr-dim">${_esc(e.summary)}</td>
     </tr>`).join('') : '<tr><td colspan="5" class="dr-empty">No recorded activity for this day.</td></tr>';
 }
 
@@ -139,7 +145,7 @@ function _liLi(t) {
 function _evidence(key, d) {
   const li = (s) => `<li>${s}</li>`;
   if (key === 'attempts') {
-    return `<ul class="ev-list">${(d.calls || []).map(c => li('📞 ' + _callLi(c))).join('')}${(d.linkedin || []).map(t => li('💼 ' + _liLi(t))).join('')}</ul>` +
+    return `<ul class="ev-list">${(d.calls || []).map(c => li('<span class="act-chip">Call</span> ' + _callLi(c))).join('')}${(d.linkedin || []).map(t => li('<span class="act-chip">LinkedIn</span> ' + _liLi(t))).join('')}</ul>` +
       _batchRows((d.introBatches || []).concat(d.followupBatches || []));
   }
   if (key === 'conversations') return `<ul class="ev-list">${(d.conversations || []).map(c => li(_callLi(c))).join('')}</ul>`;
@@ -147,12 +153,12 @@ function _evidence(key, d) {
   if (key === 'linkedin') return `<ul class="ev-list">${(d.linkedin || []).map(t => li(_liLi(t))).join('')}</ul>`;
   if (key === 'suppliers') return `<ul class="ev-list">${(d.suppliers || []).map(x => li(`<b>${_esc(x.company)}</b>${x.category ? ' · ' + _esc(x.category) : ''}${x.location ? ' · ' + _esc(x.location) : ''}${x.contact ? ' · ' + _esc(x.contact) : ''}${x.email || x.mobile ? ' · <span class="ev-dim">' + _esc([x.email, x.mobile].filter(Boolean).join(' · ')) + '</span>' : ''} · ${_esc(x.status)}`)).join('')}</ul>`;
   if (key === 'accounts') return `<ul class="ev-list">${(d.accounts || []).map(p => li(`<b>${_esc(p.company)}</b>${p.plantSite ? ' — ' + _esc(p.plantSite) : ''} · ${_esc(p.sector)} · ${_esc(p.province || '—')} · ${_esc(p.territory)}${p.source ? ' · <span class="ev-dim">source: ' + _esc(p.source) + '</span>' : ''}${p.equipment ? ' · <span class="ev-dim">' + _esc(p.equipment) + '</span>' : ''}`)).join('')}</ul>`;
-  if (key === 'crm') return `<div class="ev-none" style="font-style:normal;">${d.crm || 0} record${d.crm === 1 ? '' : 's'} created, edited or logged today — see the timeline below.</div>`;
+  if (key === 'crm') return `<div class="ev-none plain">${d.crm || 0} record${d.crm === 1 ? '' : 's'} created, edited or logged today. See the timeline below.</div>`;
   if (key === 'eod') {
     const e = d.eod;
-    return `<div class="ev-none" style="font-style:normal;">${e ? `Submitted ${_esc(String(e.submittedAt).slice(0, 16).replace('T', ' '))}${e.submitCount > 1 ? ' (updated ' + (e.submitCount - 1) + '×)' : ''} · ${_esc(e.status)}${e.reviewedBy ? ' by ' + _esc(e.reviewedBy) : ''}` : 'Not submitted yet — write your highlights below and press <b>Submit to Management</b>.'}</div>`;
+    return `<div class="ev-none plain">${e ? `Submitted ${_esc(String(e.submittedAt).slice(0, 16).replace('T', ' '))}${e.submitCount > 1 ? ' (updated ' + (e.submitCount - 1) + '×)' : ''} · ${_esc(e.status)}${e.reviewedBy ? ' by ' + _esc(e.reviewedBy) : ''}` : 'Not submitted yet. Write your highlights below and press <b>Submit to Management</b>.'}</div>`;
   }
-  if (key === 'scheduled') return `<ul class="ev-list">${(d.scheduledCalls || []).map(c => li(`📞 <b>${_esc(c.name)}</b> · ${_esc(c.company)}${c.plantSite ? ' — ' + _esc(c.plantSite) : ''} · call booked for <b>${_esc(c.nextCallDate)}</b>`)).join('')}${(d.meetings || []).map(l => li(`📅 <b>${_esc(l.company)}</b>${l.plantSite ? ' — ' + _esc(l.plantSite) : ''} · presentation <b>${_esc(l.presentationDate || 'date not set')}</b> · attendees: ${_esc(l.attendees || (l.contactName ? l.contactName + (l.handedTo ? ', ' + l.handedTo : '') : 'not recorded'))}`)).join('')}</ul>`;
+  if (key === 'scheduled') return `<ul class="ev-list">${(d.scheduledCalls || []).map(c => li(`<span class="act-chip">Call</span> <b>${_esc(c.name)}</b> · ${_esc(c.company)}${c.plantSite ? ' — ' + _esc(c.plantSite) : ''} · call booked for <b>${_esc(c.nextCallDate)}</b>`)).join('')}${(d.meetings || []).map(l => li(`<span class="act-chip">Presentation</span> <b>${_esc(l.company)}</b>${l.plantSite ? ' — ' + _esc(l.plantSite) : ''} · presentation <b>${_esc(l.presentationDate || 'date not set')}</b> · attendees: ${_esc(l.attendees || (l.contactName ? l.contactName + (l.handedTo ? ', ' + l.handedTo : '') : 'not recorded'))}`)).join('')}</ul>`;
   if (key === 'plants') return `<ul class="ev-list">${d.plants.map(p => li(`<b>${_esc(p.company)}</b>${p.plantSite ? ' — ' + _esc(p.plantSite) : ''} · ${_esc(p.sector)} · ${_esc(p.province || '—')} · ${_esc(p.territory)}${p.source ? ' · <span class="ev-dim">source: ' + _esc(p.source) + '</span>' : ''}${p.equipment ? ' · <span class="ev-dim">' + _esc(p.equipment) + '</span>' : ''}`)).join('')}</ul>`;
   if (key === 'contacts') return `<ul class="ev-list">${d.contacts.map(c => li(`<b>${_esc(c.name)}</b> · ${_esc(c.role)} · ${_esc(c.company)}${c.plantSite ? ' — ' + _esc(c.plantSite) : ''} · <span class="ev-dim">${_esc(c.email || 'no email')}${c.mobile ? ' · ' + _esc(c.mobile) : ''}</span> · verified by ${_esc(c.emailVerified)}`)).join('')}</ul>`;
   if (key === 'introEmails') return _batchRows(d.introBatches);
@@ -213,7 +219,7 @@ async function submitToManagement() {
       notes: document.getElementById('notesField').value
     });
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not submit.');
-    msg.textContent = r.message + ' ✓';
+    msg.textContent = r.message || 'Submitted.';
     await Promise.all([loadCounts(), loadDay()]);
     render(); renderVerified();
   } catch (e) { msg.textContent = e.message; }
@@ -236,7 +242,7 @@ async function loadEmails() {
   document.getElementById('emailCount').textContent = emails.length;
   const mb = document.getElementById('sumEmailsMailbox'); if (mb) mb.textContent = emails.length;
   if (needsSetup) {
-    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#4f46e5);font-weight:600;">Email Setup</a>.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to pull your sent emails automatically: <a href="email-setup.html" class="lg-link">Email setup</a>.</td></tr>`;
     return;
   }
   body.innerHTML = emails.length ? emails.map(r => {
@@ -254,7 +260,7 @@ async function saveNotes() {
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const r = await postFlow('saveDailyNote', { date: _date(), user: ldrSession.name, notes: document.getElementById('notesField').value });
-    msg.textContent = r && r.success ? 'Saved ✓' : (r.message || 'Failed');
+    msg.textContent = r && r.success ? 'Saved' : ((r && r.message) || 'Could not save the notes.');
   } catch (e) { msg.textContent = e.message; }
   finally { btn.disabled = false; btn.textContent = 'Save Notes'; setTimeout(() => { msg.textContent = ''; }, 2500); }
 }

@@ -6,126 +6,74 @@
   <title>Lead Gen Daily Report</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
-  <style>
-    .report { max-width: 1040px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
-    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
-    .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
-    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
-    .report-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    .report-controls input, .report-controls select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; }
-    .report-body { padding: 1.4rem 1.6rem; }
-    .dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-    .dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
-    .dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
-    .dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
-    .dr-sect { margin-bottom: 1.6rem; }
-    .dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
-    .dr-sect-title .pill { margin-left: auto; background: var(--accent-light); color: var(--accent-dark); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; }
-    .mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
-    .mod-LeadGen { background: #e0e7ff; color: #3730a3; }
-    .mod-Call { background: #eff6ff; color: #1d4ed8; }
-    .act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
-    .dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
-    .notes-area { width: 100%; padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.88rem; font-family: inherit; resize: vertical; min-height: 110px; box-sizing: border-box; }
-    .task-list label { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.45rem; font-size: 0.86rem; color: var(--text-secondary); cursor: pointer; }
-    .task-list label.done { background: var(--bg-inset); color: var(--text-muted); text-decoration: line-through; }
-    .task-list input { margin-top: 0.2rem; }
-    /* A277-2 — the verified checklist */
-    .ev { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 0.5rem; background: var(--bg-card); }
-    .ev > summary { list-style: none; display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; cursor: pointer; font-size: 0.86rem; }
-    .ev > summary::-webkit-details-marker { display: none; }
-    .ev-box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 800; flex-shrink: 0; }
-    .ev-done .ev-box { background: #dcfce7; border-color: #86efac; color: #15803d; }
-    .ev-part .ev-box { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
-    .ev-title { flex: 1; min-width: 0; font-weight: 600; color: var(--text-primary); }
-    .ev-title small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--text-muted); }
-    .ev-pill { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
-    .ev-done .ev-pill { background: #dcfce7; color: #15803d; } .ev-part .ev-pill { background: #fef3c7; color: #b45309; }
-    .ev-list { margin: 0; padding: 0 0.7rem 0.6rem 2.5rem; font-size: 0.8rem; color: var(--text-secondary); }
-    .ev-list li { padding: 0.22rem 0; border-top: 1px dashed var(--border); }
-    .ev-list li b { color: var(--text-primary); font-weight: 600; }
-    .ev-dim { color: var(--text-muted); }
-    .ev-mark { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; margin-right: 0.4rem; white-space: nowrap; }
-    .ev-ok { background: #dcfce7; color: #15803d; } .ev-no { background: #fee2e2; color: #b91c1c; } .ev-unk { background: var(--bg-inset); color: var(--text-muted); }
-    .ev-batch { padding: 0 0.7rem 0.4rem 2.5rem; }
-    .ev-batch-h { font-size: 0.78rem; color: var(--text-secondary); padding: 0.35rem 0 0.1rem; }
-    .ev-batch .ev-list { padding-left: 0.6rem; }
-    .ev-none { padding: 0 0.7rem 0.6rem 2.5rem; font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
-    .ev-note { padding: 0 0.7rem 0.3rem 2.5rem; font-size: 0.76rem; } .ev-warn { color: #b45309; font-weight: 600; }
-    @media print { .ev { break-inside: avoid; } .ev > summary { cursor: default; } }
-    @media print {
-      .navbar, .no-print { display: none !important; }
-      body { background: #fff; }
-      .main-content { padding: 0 !important; margin: 0 !important; }
-      .report-sheet { border: none; box-shadow: none; }
-      .dr-tile, table { break-inside: avoid; }
-    }
-  </style>
+  <link rel="stylesheet" href="css/leadgen.css">
 </head>
-<body>
+<body class="lg lg-report">
   <header class="navbar" id="navbar"></header>
-  <main class="main-content">
+  <main class="main-content lg-main lg-report-main">
     <div class="report">
-      <div class="report-sheet">
-        <div class="report-head">
+      <!-- A287 — the sheet is the page's only article, so the contract test can slice it -->
+      <article class="report-sheet lg-panel">
+        <header class="report-head">
           <div>
-            <h1>Lead Generation Daily Report</h1>
-            <div class="meta" id="reportMeta">—</div>
+            <h1>Daily report</h1>
+            <p class="lg-meta" id="reportMeta">—</p>
           </div>
           <div class="report-controls no-print">
-            <input type="date" id="datePicker">
-            <button class="btn btn-sm btn-secondary" id="refreshBtn">Refresh</button>
-            <button class="btn btn-sm btn-primary" id="printBtn">Print</button>
+            <input type="date" id="datePicker" aria-label="Report date">
+            <button type="button" class="lg-btn" id="refreshBtn">Refresh</button>
+            <button type="button" class="lg-btn primary" id="printBtn">Print</button>
           </div>
-        </div>
+        </header>
         <div class="report-body">
-          <div class="dr-summary" id="summaryRow">
-            <div class="dr-tile"><div class="l">Outbound attempts</div><div class="v" id="sumAttempts">—</div></div>
-            <div class="dr-tile"><div class="l">Decision-makers reached</div><div class="v" id="sumConversations">—</div></div>
-            <div class="dr-tile"><div class="l">Prospecting emails</div><div class="v" id="sumEmails">—</div></div>
-            <div class="dr-tile"><div class="l">LinkedIn</div><div class="v" id="sumLinkedin">—</div></div>
-            <div class="dr-tile"><div class="l">Local suppliers</div><div class="v" id="sumSuppliers">—</div></div>
-            <div class="dr-tile"><div class="l">Target accounts</div><div class="v" id="sumAccounts">—</div></div>
-            <div class="dr-tile"><div class="l">Scheduled</div><div class="v" id="sumScheduled">—</div></div>
-            <div class="dr-tile"><div class="l">EOD report</div><div class="v" id="sumEod">—</div></div>
-            <div class="dr-tile"><div class="l">Movements</div><div class="v" id="sumMovements">—</div></div>
-            <div class="dr-tile"><div class="l">Emails in mailbox</div><div class="v" id="sumEmailsMailbox">—</div></div>
-          </div></div>
-          </div>
+          <section class="dr-sect">
+            <div class="dr-sect-title">Today against the quotas</div>
+            <div class="lg-board lg-board-5" id="summaryRow">
+              <div class="dr-tile"><div class="l">Outbound attempts</div><div class="v" id="sumAttempts">—</div></div>
+              <div class="dr-tile"><div class="l">Decision-makers reached</div><div class="v" id="sumConversations">—</div></div>
+              <div class="dr-tile"><div class="l">Prospecting emails</div><div class="v" id="sumEmails">—</div></div>
+              <div class="dr-tile"><div class="l">LinkedIn</div><div class="v" id="sumLinkedin">—</div></div>
+              <div class="dr-tile"><div class="l">Local suppliers</div><div class="v" id="sumSuppliers">—</div></div>
+              <div class="dr-tile"><div class="l">Target accounts</div><div class="v" id="sumAccounts">—</div></div>
+              <div class="dr-tile"><div class="l">Scheduled</div><div class="v" id="sumScheduled">—</div></div>
+              <div class="dr-tile"><div class="l">End-of-day report</div><div class="v" id="sumEod">—</div></div>
+              <div class="dr-tile"><div class="l">Movements</div><div class="v" id="sumMovements">—</div></div>
+              <div class="dr-tile"><div class="l">Emails in the mailbox</div><div class="v" id="sumEmailsMailbox">—</div></div>
+            </div>
+          </section>
 
-          <div class="dr-sect">
-            <div class="dr-sect-title">Daily tasks — verified against the records <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;text-transform:none;letter-spacing:0;">nothing to tick: each task lists what was logged, and emails are checked in the Sent folder</span></div>
+          <section class="dr-sect">
+            <div class="dr-sect-title">Daily tasks, verified against the records <span class="lg-meta no-print">Nothing to tick. Each task lists what was logged, and emails are checked in the Sent folder.</span></div>
             <div class="task-list" id="taskList"></div>
-          </div>
+          </section>
 
-          <div class="dr-sect">
-            <div class="dr-sect-title">Activity Timeline <span class="pill" id="tlCount">0</span></div>
-            <div style="overflow-x:auto;"><table class="flow-table">
+          <section class="dr-sect">
+            <div class="dr-sect-title">Activity timeline <span class="lg-count" id="tlCount">0</span></div>
+            <div class="lg-scroll"><table class="flow-table">
               <thead><tr><th>Time</th><th>Module</th><th>Action</th><th>Reference</th><th>Detail</th></tr></thead>
               <tbody id="timelineBody"></tbody>
             </table></div>
-          </div>
+          </section>
 
-          <div class="dr-sect">
-            <div class="dr-sect-title">Sent Emails (GoDaddy) <span class="pill" id="emailCount">0</span></div>
-            <div style="overflow-x:auto;"><table class="flow-table">
+          <section class="dr-sect">
+            <div class="dr-sect-title">Sent emails (GoDaddy) <span class="lg-count" id="emailCount">0</span></div>
+            <div class="lg-scroll"><table class="flow-table">
               <thead><tr><th>Time</th><th>Recipient</th><th>Subject</th><th>Category</th></tr></thead>
               <tbody id="emailBody"></tbody>
             </table></div>
-          </div>
+          </section>
 
-          <div class="dr-sect">
-            <div class="dr-sect-title">Notes / Highlights <span class="no-print" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);" id="notesMsg"></span></div>
-            <textarea id="notesField" class="notes-area" placeholder="Key conversations, who replied, who was handed off, blockers, what the reps need…"></textarea>
-            <div class="no-print" style="display:flex;gap:.5rem;margin-top:0.5rem;flex-wrap:wrap;align-items:center;">
-              <button class="btn btn-sm btn-secondary" id="saveNotesBtn">Save Notes</button>
-              <button class="btn btn-sm btn-primary primary" id="submitBtn">Submit to Management</button>
-              <span style="font-size:0.74rem;color:var(--text-muted);">Highlights, key conversations, blockers — then submit. Re-submitting updates the same report.</span>
+          <section class="dr-sect">
+            <div class="dr-sect-title">Notes and highlights <span class="lg-meta no-print" id="notesMsg"></span></div>
+            <textarea id="notesField" class="notes-area" placeholder="Key conversations, who replied, who was handed off, blockers, what the reps need"></textarea>
+            <div class="lg-foot lg-foot-left no-print">
+              <button type="button" class="lg-btn" id="saveNotesBtn">Save Notes</button>
+              <button type="button" class="lg-btn primary" id="submitBtn">Submit to Management</button>
+              <span class="lg-meta">Re-submitting updates the same report.</span>
             </div>
-          </div>
+          </section>
         </div>
-      </div>
+      </article>
     </div>
   </main>
 

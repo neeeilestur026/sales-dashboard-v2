@@ -38,11 +38,11 @@ const LG_ENUM = {
 /* A279 — the nine daily items of the job description, in its order. The fourth element is which
    logger the tile opens; 'eod' goes to the daily report instead. */
 const LG_TILES = [
-  ['attempts', 'Outbound attempts', '📣', 'call'], ['conversations', 'Decision-maker conversations', '🗣️', 'call'],
-  ['emails', 'Prospecting emails', '✉️', 'batch'], ['linkedin', 'LinkedIn requests & messages', '💼', 'linkedin'],
-  ['suppliers', 'Local suppliers researched', '🏗️', 'supplier'], ['accounts', 'Target accounts researched', '🏭', 'plant'],
-  ['crm', 'CRM updated', '🗂️', 'contact'], ['eod', 'End-of-day report', '📝', 'eod'],
-  ['scheduled', 'Meetings / calls scheduled', '📅', 'contact'],
+  ['attempts', 'Outbound attempts', 'phone', 'call'], ['conversations', 'Decision-maker conversations', 'chat', 'call'],
+  ['emails', 'Prospecting emails', 'mail', 'batch'], ['linkedin', 'LinkedIn requests & messages', 'linkedin', 'linkedin'],
+  ['suppliers', 'Local suppliers researched', 'package', 'supplier'], ['accounts', 'Target accounts researched', 'factory', 'plant'],
+  ['crm', 'CRM updated', 'database', 'contact'], ['eod', 'End-of-day report', 'file', 'eod'],
+  ['scheduled', 'Meetings / calls scheduled', 'calendar', 'contact'],
 ];
 const LG_WEEKLY = [
   ['activeAccounts', 'Target accounts in active pursuit'], ['leads', 'Qualified leads handed to Field Sales'],
@@ -51,11 +51,29 @@ const LG_WEEKLY = [
 ];
 const LG_TILE_LABEL = {}; LG_TILES.forEach(t => { LG_TILE_LABEL[t[0]] = t[1]; });
 const LG_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/* A287 — feather-style icons, one string each, 24-box, stroke = currentColor. The keys are what
+   LG_TILES, LG_UI, and DOCK_TABS carry; leadgen.css sizes the svg by its container. */
+const _lgIco = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const LG_ICON = {
+  phone: _lgIco('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>'),
+  chat: _lgIco('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
+  mail: _lgIco('<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'),
+  linkedin: _lgIco('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>'),
+  package: _lgIco('<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'),
+  factory: _lgIco('<path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/>'),
+  database: _lgIco('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>'),
+  file: _lgIco('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'),
+  calendar: _lgIco('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'),
+  users: _lgIco('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  target: _lgIco('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
+  clipboard: _lgIco('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>'),
+  pin: _lgIco('<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'),
+};
 
 /* Per-entity UI: columns for the table, fields for the edit modal. [key, label, type, options, span] */
 const LG_UI = {
   plants: {
-    label: 'Plants', icon: '🏭', title: 'Plants & sites',
+    label: 'Plants', icon: 'factory', title: 'Plants and sites',
     cols: [['plantNo', 'No'], ['company', 'Company'], ['plantSite', 'Plant / Site'], ['sector', 'Sector'], ['province', 'Province'], ['territory', 'Territory'], ['status', 'Status'], ['nextActionDate', 'Next action']],
     fields: [['company', 'Company *', 'text'], ['plantSite', 'Plant / Site', 'text'], ['sector', 'Sector *', 'select', LG_ENUM.sector], ['territory', 'Territory *', 'select', LG_ENUM.territory],
              ['province', 'Province', 'text'], ['status', 'Status', 'select', LG_ENUM.plantStatus], ['equipment', 'Equipment / lines', 'text'], ['source', 'Source', 'text'],
@@ -63,7 +81,7 @@ const LG_UI = {
     required: ['company', 'sector', 'territory'], filters: ['sector', 'territory', 'status'],
   },
   contacts: {
-    label: 'Contacts', icon: '👤', title: 'Contacts',
+    label: 'Contacts', icon: 'users', title: 'Contacts',
     cols: [['contactNo', 'No'], ['name', 'Name'], ['role', 'Role'], ['company', 'Company'], ['plantSite', 'Site'], ['email', 'Email'], ['emailVerified', 'Verified'], ['status', 'Status'], ['introSent', 'Intro sent'], ['nextCallDate', 'Next call']],
     fields: [['plantNo', 'Plant *', 'plant'], ['name', 'Name *', 'text'], ['role', 'Role', 'select', LG_ENUM.contactRole], ['emailVerified', 'Email verified', 'select', LG_ENUM.emailVerified],
              ['email', 'Email', 'text'], ['mobile', 'Mobile', 'text'], ['linkedin', 'LinkedIn', 'text'], ['status', 'Status', 'select', LG_ENUM.contactStatus],
@@ -71,7 +89,7 @@ const LG_UI = {
     required: ['plantNo', 'name'], filters: ['sector', 'territory', 'emailVerified', 'status'],
   },
   suppliers: {
-    label: 'Suppliers', icon: '🏗️', title: 'Local suppliers — for local procurement',
+    label: 'Suppliers', icon: 'package', title: 'Local suppliers, for local procurement',
     cols: [['supplierNo', 'No'], ['company', 'Company'], ['category', 'Category'], ['location', 'Location'], ['contact', 'Contact'], ['email', 'Email'], ['status', 'Status'], ['handedOffOn', 'Handed off']],
     fields: [['company', 'Company *', 'text'], ['category', 'Category (fasteners, hydraulics, machining…)', 'text'], ['location', 'Location', 'text'],
              ['status', 'Status', 'select', LG_ENUM.supplierStatus], ['contact', 'Contact person', 'text'], ['email', 'Email', 'text'],
@@ -79,15 +97,15 @@ const LG_UI = {
     required: ['company'], filters: ['status'],
   },
   leads: {
-    label: 'Leads', icon: '🎯', title: 'Qualified leads — the lead sheet', cards: true,
-    fields: [['plantNo', 'Plant *', 'plant'], ['contactNo', 'Contact', 'contact'], ['status', 'Status', 'select', LG_ENUM.leadStatus], ['handedTo', 'Handed to (username)', 'text'],
+    label: 'Leads', icon: 'target', title: 'Qualified leads', cards: true,
+    fields: [['plantNo', 'Plant *', 'plant'], ['contactNo', 'Contact', 'contact'], ['status', 'Status', 'select', LG_ENUM.leadStatus], ['handedTo', 'Handed to (rep username)', 'text'],
              ['rightPerson', 'Right person', 'check'], ['ownMaintenance', 'Runs its own maintenance', 'check'], ['flangedOrHydraulic', 'Has flanged / hydraulic work', 'check'], ['saidYes', 'Said yes to a presentation or asked for a quote', 'check'],
              ['pain', 'Pain', 'text', null, 'full'], ['whatTheySaid', 'What they said', 'textarea', null, 'full'], ['nextStep', 'Next step', 'text'], ['nextStepDate', 'Next step date', 'date'],
              ['presentationDate', 'Presentation date', 'date'], ['attendees', 'Attendees (presentation)', 'text'], ['notes', 'Notes', 'textarea', null, 'full']],
     required: ['plantNo'], filters: ['territory', 'status'],
   },
   accred: {
-    label: 'Accreditation', icon: '📋', title: 'Vendor accreditation',
+    label: 'Accreditation', icon: 'clipboard', title: 'Vendor accreditation',
     cols: [['accredNo', 'No'], ['company', 'Company'], ['plantSite', 'Site'], ['status', 'Status'], ['submitted', 'Submitted'], ['approved', 'Approved'], ['expiry', 'Expiry'], ['docsSent', 'Docs']],
     fields: [['plantNo', 'Plant *', 'plant'], ['company', 'Company', 'text'], ['status', 'Status', 'select', LG_ENUM.accredStatus], ['docsSent', 'Documents sent', 'check'],
              ['submitted', 'Submitted', 'date'], ['approved', 'Approved', 'date'], ['expiry', 'Expiry', 'date'], ['notes', 'Notes', 'textarea', null, 'full']],
@@ -111,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const h = new Date().getHours();
   document.getElementById('greeting').textContent = (h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening') + ', ' + String(lgSession.name || '').split(' ')[0] + '.';
-  document.getElementById('subline').textContent = lgOversight ? 'Lead Generation — oversight view' : 'Lead Generation';
+  document.getElementById('subline').textContent = lgOversight ? 'Lead generation, oversight view' : 'Lead generation';
 
   document.getElementById('logBtn').addEventListener('click', () => openDock(lgDockTab));
   document.getElementById('dockClose').addEventListener('click', closeDock);
@@ -144,7 +162,7 @@ async function loadAll() {
 async function loadCounts() {
   try {
     const r = await fetchFlow('getLeadgenCounts', {}, { fresh: true });
-    if (!r || !r.success) throw new Error((r && r.message) || 'Could not load the counts.');
+    if (!r || !r.success) throw new Error((r && r.message) || "Today's counts did not load.");
     lgCounts = r;
     renderHeader(); renderTiles(); renderWeek();
   } catch (e) { document.getElementById('tilesMeta').textContent = e.message; }
@@ -203,30 +221,29 @@ function tileState(n, q, hour, working) {
   const frac = Math.max(0, Math.min(1, ((h + (m || 0) / 60) - 8) / 9));
   return n >= q * frac ? 'pace' : 'behind';
 }
-function lgBar(pct, color) { return `<div class="lg-bar"><i style="width:${Math.max(0, Math.min(100, pct))}%;background:${color}"></i></div>`; }
+function lgBar(pct, state) { return `<div class="lg-bar"><i class="${state}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>`; }
 function renderTiles() {
   const k = lgCounts; if (!k) return;
   const stName = { met: '✓ met', pace: 'on pace', behind: 'behind', off: '—' };
-  const stColor = { met: '#16a34a', pace: '#4f46e5', behind: '#d97706', off: '#c7cdd6' };
-  document.getElementById('tilesMeta').textContent = (k.day.working ? 'Working day · ' : 'Not a working day · ') + 'server time ' + k.hour;
+  document.getElementById('tilesMeta').textContent = (k.day.working ? 'Counted at server time ' : 'Not a working day, counted at server time ') + k.hour;
   const range = (key) => { const a = k.quotas[key] || 0, b = (k.quotasMax || {})[key] || a; return b > a ? a + '–' + b : String(a); };
   document.getElementById('tiles').innerHTML = LG_TILES.map(([key, label, icon, dock]) => {
     const n = k.day[key] || 0, q = k.quotas[key] || 0, st = tileState(n, q, k.hour, k.day.working);
     const pct = q > 0 ? Math.round(n / q * 100) : 0;
     let sub = '';
     if (key === 'emails' && lgMailbox) {
-      sub = lgMailbox.needsSetup ? 'mailbox not connected' : lgMailbox.ok ? `mailbox saw ${lgMailbox.seen} to listed contacts` : 'mailbox unreachable';
-    } else if (key === 'attempts') sub = 'calls + emails + LinkedIn, combined';
-    else if (key === 'conversations') sub = 'calls that reached the decision-maker';
-    else if (key === 'crm') sub = n ? n + ' record' + (n === 1 ? '' : 's') + ' touched today' : 'nothing logged yet';
-    else if (key === 'eod') sub = n ? 'submitted to Management ✓' : 'not submitted yet — open the daily report';
-    else if (key === 'scheduled') sub = 'follow-up calls booked + presentations';
+      sub = lgMailbox.needsSetup ? 'Mailbox not connected' : lgMailbox.ok ? `mailbox saw ${lgMailbox.seen} to listed contacts` : 'Mailbox unreachable';
+    } else if (key === 'attempts') sub = 'Calls, emails and LinkedIn, combined';
+    else if (key === 'conversations') sub = 'Calls that reached the decision-maker';
+    else if (key === 'crm') sub = n ? n + ' record' + (n === 1 ? '' : 's') + ' touched today' : 'Nothing logged yet';
+    else if (key === 'eod') sub = n ? 'Submitted to Management' : 'Report not submitted yet. Open it from here.';
+    else if (key === 'scheduled') sub = 'Follow-up calls booked plus presentations';
     const tag = lgCanEdit ? 'button type="button"' : 'div';
-    return `<${tag} class="b-card lg-tile" data-dock="${dock}" ${lgCanEdit ? `title="${key === 'eod' ? 'Open the daily report' : 'Log ' + label.toLowerCase()}"` : ''}>
+    return `<${tag} class="b-card lg-tile" data-dock="${dock}" data-st="${st}" ${lgCanEdit ? `title="${key === 'eod' ? 'Open the daily report' : 'Log ' + label.toLowerCase()}"` : ''}>
       <span class="st st-${st}">${stName[st]}</span>
-      <div class="t"><span class="b-ic ic">${icon}</span><span>${flowEsc(label)}</span></div>
-      <div class="n b-tabnum">${key === 'eod' ? (n ? 'Done' : '—') : n}<small>${key === 'eod' ? '' : '/ ' + range(key)}</small></div>
-      ${lgBar(pct, stColor[st])}
+      <div class="t"><span class="ic">${LG_ICON[icon] || ''}</span><span>${flowEsc(label)}</span></div>
+      <div class="n">${key === 'eod' ? (n ? 'Done' : '—') : n}<small>${key === 'eod' ? '' : '/ ' + range(key)}</small></div>
+      ${lgBar(pct, st)}
       <div class="sub">${flowEsc(sub)}</div>
     </${tag.split(' ')[0]}>`;
   }).join('');
@@ -242,13 +259,13 @@ function renderWeek() {
   document.getElementById('weekMeta').textContent = w.start + ' → ' + w.end + ' · ' + w.workingDays.length + ' working day' + (w.workingDays.length === 1 ? '' : 's');
   const rowOf = (label, n, t, tMax) => {
     const pct = t > 0 ? Math.round(n / t * 100) : 0;
-    const color = t > 0 && n >= t ? '#16a34a' : '#4f46e5';
+    const state = t > 0 && n >= t ? 'met' : 'on';
     const tgt = tMax > t ? t + '–' + tMax : String(t);
-    return `<div class="wk-row"><span>${flowEsc(label)}</span>${lgBar(pct, color)}<span class="v">${n} / ${tgt}</span></div>`;
+    return `<div class="wk-row"><span>${flowEsc(label)}</span>${lgBar(pct, state)}<span class="v">${n} / ${tgt}</span></div>`;
   };
   const rows = LG_TILES.filter(([key]) => key !== 'crm' && key !== 'eod').map(([key, label]) =>
     rowOf(label, w.totals[key] || 0, w.targets[key] || 0, (w.targetsMax || {})[key] || 0)).join('') +
-    `<div class="b-lbl" style="margin:12px 0 4px">Weekly</div>` +
+    `<div class="wk-head">Weekly targets</div>` +
     LG_WEEKLY.map(([key, label]) => { const x = (w.weekly || {})[key] || { value: 0, min: 0, max: 0 }; return rowOf(label, x.value, x.min, x.max); }).join('');
   const rate = w.replyRate === null || w.replyRate === undefined ? '—' : w.replyRate + '%';
   const aim = w.replyRateAim ? ` <span class="lg-meta">(aim ${w.replyRateAim}%)</span>` : '';
@@ -274,22 +291,22 @@ function renderWeek() {
 function renderFollowups() {
   document.getElementById('fuCount').textContent = lgFollowups.length;
   const host = document.getElementById('followups');
-  if (!lgFollowups.length) { host.innerHTML = '<div class="lg-empty">Nothing due — every intro is inside its cadence.</div>'; return; }
+  if (!lgFollowups.length) { host.innerHTML = '<div class="lg-empty">Nothing due today. Every intro is still within its follow-up window.</div>'; return; }
   const cls = { 'Day 3': 'stg-d3', 'Day 7': 'stg-d7', 'Day 14': 'stg-d14', 'Revisit': 'stg-rev', 'Replied': 'stg-rep' };
   host.innerHTML = lgFollowups.map(f => {
-    const late = f.overdue > 0 ? `<span class="late"> · ${f.overdue} day${f.overdue === 1 ? '' : 's'} late</span>` : '';
+    const late = f.overdue > 0 ? `<span class="late">, ${f.overdue} day${f.overdue === 1 ? '' : 's'} late</span>` : '';
     const acts = lgCanEdit ? `<div class="act">
-        <button type="button" class="lg-mini" data-fu-call="${flowEsc(f.contactNo)}">📞 Call</button>
-        <button type="button" class="lg-mini${f.stage === 'Replied' ? '' : ' pri'}" data-fu-email="${flowEsc(f.contactNo)}">✉ Email</button></div>` : '';
+        <button type="button" class="lg-mini" data-fu-call="${flowEsc(f.contactNo)}">Call</button>
+        <button type="button" class="lg-mini${f.stage === 'Replied' ? '' : ' pri'}" data-fu-email="${flowEsc(f.contactNo)}">Email</button></div>` : '';
     return `<div class="fu"><span class="stg ${cls[f.stage] || 'stg-rev'}">${flowEsc(f.stage)}</span>
-      <div class="who"><b>${flowEsc(f.name)} · ${flowEsc(f.company)}${f.plantSite ? ' — ' + flowEsc(f.plantSite) : ''}</b>${flowEsc(f.action)} · due ${flowEsc(f.due)}${late}</div>${acts}</div>`;
+      <div class="who"><b>${flowEsc(f.name)} · ${flowEsc(f.company)}${f.plantSite ? ' — ' + flowEsc(f.plantSite) : ''}</b>${flowEsc(f.action)}, due ${flowEsc(f.due)}${late}</div>${acts}</div>`;
   }).join('');
   host.querySelectorAll('[data-fu-call]').forEach(b => b.addEventListener('click', () => openDock('call', { contactNo: b.getAttribute('data-fu-call'), kind: 'Follow-up' })));
   host.querySelectorAll('[data-fu-email]').forEach(b => b.addEventListener('click', () => openDock('batch', { contactNos: [b.getAttribute('data-fu-email')], kind: 'Follow-up' })));
 }
 
 // ── the dock ──────────────────────────────────────────────────────────────────────────────────
-const DOCK_TABS = [['call', '📞 Call'], ['batch', '✉️ Emails'], ['linkedin', '💼 LinkedIn'], ['plant', '🏭 Account'], ['contact', '👤 Contact'], ['supplier', '🏗️ Supplier']];
+const DOCK_TABS = [['call', 'phone', 'Call'], ['batch', 'mail', 'Emails'], ['linkedin', 'linkedin', 'LinkedIn'], ['plant', 'factory', 'Account'], ['contact', 'users', 'Contact'], ['supplier', 'package', 'Supplier']];
 let lgDockPrefill = null;
 function openDock(tab, prefill) {
   if (!lgCanEdit) return;
@@ -316,26 +333,26 @@ function inp(key, label, type, value, span, extra) {
 function renderDock() {
   const k = lgCounts || { today: flowToday(), sector: {}, maxBatch: 60 };
   const p = lgDockPrefill || {};
-  document.getElementById('dockTabs').innerHTML = DOCK_TABS.map(([id, l]) => `<span class="dock-tab${id === lgDockTab ? ' active' : ''}" data-tab="${id}">${l}</span>`).join('');
+  document.getElementById('dockTabs').innerHTML = DOCK_TABS.map(([id, ic, l]) => `<span class="dock-tab${id === lgDockTab ? ' active' : ''}" data-tab="${id}" role="button" tabindex="0"><span class="ico">${LG_ICON[ic] || ''}</span>${l}</span>`).join('');
   document.querySelectorAll('#dockTabs .dock-tab').forEach(t => t.addEventListener('click', () => { lgDockTab = t.getAttribute('data-tab'); lgDockPrefill = null; renderDock(); }));
   const F = document.getElementById('dockFields'), hint = document.getElementById('dockHint');
   const sectorNow = (k.sector && k.sector.name) || '';
   if (lgDockTab === 'call') {
-    hint.textContent = 'one call: who you reached, and the outcome';
+    hint.textContent = 'One call: who you reached and the outcome.';
     F.innerHTML = `<div class="full"><label>Contact *</label><select data-key="contactNo" required><option value="">— pick a contact —</option>${contactOptions(p.contactNo || '')}</select></div>` +
       sel('kind', 'Kind', LG_ENUM.callKind, p.kind || 'Cold') + sel('reached', 'Who did you reach?', LG_ENUM.reached, 'Voicemail / no answer') +
       sel('outcome', 'Outcome', LG_ENUM.callOutcome, 'No answer') + inp('date', 'Date', 'date', k.today) +
-      inp('notes', 'Notes — the topic, who they referred you to, why not interested', 'text', '', true);
+      inp('notes', 'Notes: the topic, who they referred you to, why not interested', 'text', '', true);
   } else if (lgDockTab === 'batch') {
-    hint.textContent = 'the count is read off the selection';
+    hint.textContent = 'The count is read off the selection.';
     const pre = (p.contactNos || []).reduce((m, x) => { m[x] = 1; return m; }, {});
     F.innerHTML = sel('kind', 'Kind', LG_ENUM.batchKind, p.kind || 'Intro') + inp('timeSlot', 'Time slot', 'text', '', false, ' placeholder="08:30"') +
       sel('sector', 'Sector', [''].concat(LG_ENUM.sector), sectorNow) + inp('template', 'Template', 'text', '') +
       `<div class="full"><label>Contacts (with an email)</label>
         <div class="pick-tools"><input type="text" id="pickSearch" placeholder="Filter by name or company…"><select id="pickSector"><option value="">All sectors</option>${LG_ENUM.sector.map(s => `<option${s === sectorNow && !p.contactNos ? ' selected' : ''}>${s}</option>`).join('')}</select>
-          <button type="button" class="lg-mini" id="pickAll">select shown</button><button type="button" class="lg-mini" id="pickNone">clear</button><span class="cnt" id="pickCount">0 selected</span></div>
+          <button type="button" class="lg-mini" id="pickAll">Select shown</button><button type="button" class="lg-mini" id="pickNone">Clear</button><span class="cnt" id="pickCount">0 selected</span></div>
         <div class="pick" id="pick"></div>
-        <div class="dock-hint">At most ${k.maxBatch || 60} per batch. An Intro batch starts each contact's follow-up clock; a second intro does not restart it.</div></div>` +
+        <div class="dock-hint">At most ${k.maxBatch || 60} per batch. An Intro batch starts each contact's follow-up clock. A second intro does not restart it.</div></div>` +
       inp('date', 'Date', 'date', k.today) + inp('notes', 'Notes', 'text', '');
     const pick = document.getElementById('pick');
     const drawPick = () => {
@@ -344,35 +361,35 @@ function renderDock() {
       Object.assign(chosen, pre); Object.keys(pre).forEach(x => delete pre[x]);
       const rows = lgData.contacts.filter(c => c.email && c.status !== 'Do Not Contact' && (!s || c.sector === s) && (!q || (c.name + ' ' + c.company + ' ' + c.plantSite).toLowerCase().includes(q)));
       pick.innerHTML = rows.length ? rows.map(c => `<label><input type="checkbox" value="${flowEsc(c.contactNo)}"${chosen[c.contactNo] ? ' checked' : ''}>${flowEsc(c.name)} · ${flowEsc(c.company)}${c.plantSite ? ' — ' + flowEsc(c.plantSite) : ''}<small>${c.introSent ? 'intro ' + flowEsc(c.introSent) : 'no intro yet'}</small></label>`).join('')
-        : '<div class="lg-empty">No contacts with an email match.</div>';
+        : '<div class="lg-empty">No contacts with an email match this filter.</div>';
       Object.keys(chosen).filter(x => !rows.some(c => c.contactNo === x)).forEach(x => { pick.insertAdjacentHTML('afterbegin', `<label><input type="checkbox" value="${flowEsc(x)}" checked>${flowEsc((lgData.contacts.find(c => c.contactNo === x) || { name: x }).name)}<small>selected</small></label>`); });
       pick.querySelectorAll('input').forEach(i => i.addEventListener('change', countPick));
       countPick();
     };
-    const countPick = () => { const n = pick.querySelectorAll('input:checked').length; const el = document.getElementById('pickCount'); el.textContent = n + ' selected'; el.style.color = n > (k.maxBatch || 60) ? '#b91c1c' : ''; };
+    const countPick = () => { const n = pick.querySelectorAll('input:checked').length; const el = document.getElementById('pickCount'); el.textContent = n + ' selected'; el.classList.toggle('over', n > (k.maxBatch || 60)); };
     document.getElementById('pickSearch').addEventListener('input', drawPick);
     document.getElementById('pickSector').addEventListener('change', drawPick);
     document.getElementById('pickAll').addEventListener('click', () => { pick.querySelectorAll('input').forEach(i => { i.checked = true; }); countPick(); });
     document.getElementById('pickNone').addEventListener('click', () => { pick.querySelectorAll('input').forEach(i => { i.checked = false; }); countPick(); });
     drawPick();
   } else if (lgDockTab === 'linkedin') {
-    hint.textContent = 'a connection request or a message — one per contact per act';
+    hint.textContent = 'A connection request or a message, one per contact per act.';
     F.innerHTML = `<div class="full"><label>Contact *</label><select data-key="contactNo" required><option value="">— pick a contact —</option>${contactOptions(p.contactNo || '')}</select></div>` +
       sel('kind', 'Kind', LG_ENUM.linkedinKind, 'Connection request') + inp('date', 'Date', 'date', k.today);
   } else if (lgDockTab === 'supplier') {
-    hint.textContent = 'a local supplier for local procurement — Qualified when vetted, Handed Off sends it to the Suppliers master';
+    hint.textContent = 'A local supplier for local procurement. Qualified once vetted, Handed Off sends it to the Suppliers master.';
     F.innerHTML = inp('company', 'Company *', 'text', '', false, ' required') + inp('category', 'Category (fasteners, hydraulics, machining…)', 'text', '') +
       inp('location', 'Location', 'text', '') + sel('status', 'Status', LG_ENUM.supplierStatus, 'Researching') +
       inp('contact', 'Contact person', 'text', '') + inp('email', 'Email', 'text', '') + inp('mobile', 'Mobile', 'text', '') + inp('website', 'Website', 'text', '') +
       inp('notes', 'Notes', 'text', '', true);
   } else if (lgDockTab === 'plant') {
-    hint.textContent = 'one site per row — a second site of the same company is a second account';
+    hint.textContent = 'One site per row. A second site of the same company is a second account.';
     F.innerHTML = inp('company', 'Company *', 'text', '', false, ' required') + inp('plantSite', 'Plant / Site', 'text', '') +
       sel('sector', 'Sector *', LG_ENUM.sector, sectorNow || 'Cement') + sel('territory', 'Territory *', LG_ENUM.territory, 'Luzon') +
       inp('province', 'Province', 'text', '') + inp('equipment', 'Equipment / lines', 'text', '') + inp('source', 'Source (PhilGEPS, LinkedIn, Google…)', 'text', '') +
       `<div><label>&nbsp;</label><label class="chk"><input type="checkbox" data-key="philgeps"> PhilGEPS-registered</label></div>` + inp('notes', 'Notes', 'text', '', true);
   } else {
-    hint.textContent = 'two per plant: the maintenance head and MRO / purchasing';
+    hint.textContent = 'Two per plant: the maintenance head and MRO or purchasing.';
     F.innerHTML = `<div class="full"><label>Plant *</label><select data-key="plantNo" required><option value="">— pick a plant —</option>${plantOptions(p.plantNo || lgLastPlant)}</select></div>` +
       inp('name', 'Name *', 'text', '', false, ' required') + sel('role', 'Role', LG_ENUM.contactRole, 'Maintenance / O&M Head') +
       inp('email', 'Email', 'text', '') + sel('emailVerified', 'Email verified', LG_ENUM.emailVerified, 'Unverified') +
@@ -392,7 +409,7 @@ function dockValues() {
 async function submitDock() {
   const btn = document.getElementById('dockSave'), msg = document.getElementById('dockMsg');
   const rec = dockValues();
-  const err = (t) => { msg.style.display = 'block'; msg.textContent = t; msg.style.color = '#b45309'; };
+  const err = (t) => { msg.className = 'flow-msg bad'; msg.style.display = 'block'; msg.textContent = t; };
   msg.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -432,7 +449,7 @@ function render() { buildTabs(); renderPanel(lgActiveTab); }
 function buildTabs() {
   document.getElementById('tabs').innerHTML = LG_TAB_ORDER.map(k => {
     const u = LG_UI[k];
-    return `<div class="mkt-tab ${lgActiveTab === k ? 'active' : ''}" data-tab="${k}">${u.icon} ${u.label}<span class="cnt">${(lgData[k] || []).length}</span></div>`;
+    return `<div class="mkt-tab${lgActiveTab === k ? ' active' : ''}" data-tab="${k}" role="tab" tabindex="0"><span class="ico">${LG_ICON[u.icon] || ''}</span>${u.label}<span class="cnt">${(lgData[k] || []).length}</span></div>`;
   }).join('');
   document.querySelectorAll('#tabs .mkt-tab').forEach(t => t.addEventListener('click', () => { lgActiveTab = t.getAttribute('data-tab'); render(); }));
 }
@@ -445,15 +462,15 @@ function renderPanel(tab) {
   const u = LG_UI[tab], host = document.getElementById('panels');
   const rows = (lgData[tab] || []).slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   host.innerHTML = `<div class="panel-toolbar">
-      <h3>${u.icon} ${flowEsc(u.title)}</h3>
-      <input type="text" id="pSearch" placeholder="Search…">
+      <h3>${flowEsc(u.title)}</h3>
+      <input type="text" id="pSearch" placeholder="Search ${u.label.toLowerCase()}" aria-label="Search ${u.label.toLowerCase()}">
       ${(u.filters || []).map(f => `<select data-filter="${f}"><option value="">All ${({ emailVerified: 'verification', status: 'statuses', territory: 'territories', sector: 'sectors' })[f] || f}</option>${filterValues(f).map(v => `<option>${flowEsc(v)}</option>`).join('')}</select>`).join('')}
       <span class="spacer"></span>
       ${/* `primary` alongside btn-primary: bento-skin-director paints .btn-sm white AFTER .btn-primary indigo, so a
             small primary button is white-on-white unless it also carries the skin's own .btn-sm.primary class. */ ''}
-      ${lgCanEdit && tab !== 'leads' ? `<button type="button" class="btn btn-sm btn-primary primary" id="pAdd">+ Add ${u.label.replace(/s$/, '')}</button>` : ''}
-      ${lgCanEdit && tab === 'leads' ? `<button type="button" class="btn btn-sm btn-primary primary" id="pAdd">+ Qualify a lead</button>` : ''}
-    </div><div id="pBody" style="overflow-x:auto;"></div>`;
+      ${lgCanEdit && tab !== 'leads' ? `<button type="button" class="lg-btn primary" id="pAdd">Add ${u.label.replace(/s$/, '').toLowerCase()}</button>` : ''}
+      ${lgCanEdit && tab === 'leads' ? `<button type="button" class="lg-btn primary" id="pAdd">Qualify a lead</button>` : ''}
+    </div><div id="pBody" class="lg-scroll"></div>`;
   const reRender = () => renderRows(tab, rows);
   document.getElementById('pSearch').addEventListener('input', reRender);
   host.querySelectorAll('[data-filter]').forEach(s => s.addEventListener('change', reRender));
@@ -466,12 +483,15 @@ function renderRows(tab, rows) {
   const fs = {}; document.querySelectorAll('#panels [data-filter]').forEach(s => { if (s.value) fs[s.getAttribute('data-filter')] = s.value; });
   const filtered = rows.filter(r => Object.keys(fs).every(k => String(r[k] || '') === fs[k]) && (!q || JSON.stringify(r).toLowerCase().includes(q)));
   const body = document.getElementById('pBody');
-  if (!filtered.length) { body.innerHTML = '<div class="lg-empty">Nothing here yet.</div>'; return; }
+  if (!filtered.length) {
+    const empty = { plants: 'No target accounts yet. Add the first plant.', contacts: 'No contacts yet.', suppliers: 'No local suppliers researched yet.', leads: 'No qualified leads yet.', accred: 'No accreditation records yet.' };
+    body.innerHTML = `<div class="lg-empty">${(q || Object.keys(fs).length) ? 'Nothing matches this search.' : (empty[tab] || 'Nothing here yet.')}</div>`; return;
+  }
   if (u.cards) { renderLeadCards(filtered); return; }
   const th = u.cols.map(c => `<th>${c[1]}</th>`).join('');
   const trs = filtered.map(r => {
     const tds = u.cols.map(c => cell(r, c[0])).join('');
-    const acts = lgCanEdit ? `<td style="white-space:nowrap;"><button class="mkt-act" data-edit="${r.rowIndex}">Edit</button> <button class="mkt-act" data-del="${r.rowIndex}" title="Remove">✕</button></td>` : '<td></td>';
+    const acts = lgCanEdit ? `<td class="lg-nowrap"><button type="button" class="mkt-act" data-edit="${r.rowIndex}">Edit</button> <button type="button" class="mkt-act" data-del="${r.rowIndex}">Remove</button></td>` : '<td></td>';
     return `<tr>${tds}${acts}</tr>`;
   }).join('');
   body.innerHTML = `<table class="flow-table"><thead><tr>${th}<th></th></tr></thead><tbody>${trs}</tbody></table>`;
@@ -486,7 +506,7 @@ function cell(r, key) {
   const v = r[key];
   if (key === 'status' || key === 'emailVerified') return `<td>${badge(v)}</td>`;
   if (typeof v === 'boolean') return `<td>${v ? '✓' : '—'}</td>`;
-  if (/Date$|^introSent$|^submitted$|^approved$|^expiry$/.test(key)) return `<td style="white-space:nowrap;">${flowEsc(v || '—')}</td>`;
+  if (/Date$|^introSent$|^submitted$|^approved$|^expiry$/.test(key)) return `<td class="lg-nowrap">${flowEsc(v || '—')}</td>`;
   return `<td>${flowEsc(v || '—')}</td>`;
 }
 function badge(s) {
@@ -502,16 +522,16 @@ function renderLeadCards(rows) {
   const body = document.getElementById('pBody');
   const flag = (on, t) => `<span class="${on ? '' : 'no'}">${on ? '✓' : '✕'} ${t}</span>`;
   body.innerHTML = `<div class="lead-cards">${rows.map(l => `<div class="lead">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;"><h4>${flowEsc(l.company)}${l.plantSite ? ' — ' + flowEsc(l.plantSite) : ''}</h4>${badge(l.status)}</div>
-      <div class="kv">${flowEsc(l.leadNo)} · ${flowEsc(l.territory)} → <b>${flowEsc(l.handedTo || 'no rep set')}</b> · handed ${flowEsc(l.handedOffOn || '—')}${l.rehandedOn ? ' · re-handed ' + flowEsc(l.rehandedOn) + ' (not counted)' : ''}</div>
+      <div class="lead-h"><h4>${flowEsc(l.company)}${l.plantSite ? ' — ' + flowEsc(l.plantSite) : ''}</h4>${badge(l.status)}</div>
+      <div class="kv">${flowEsc(l.leadNo)} · ${flowEsc(l.territory)}, handed to <b>${flowEsc(l.handedTo || 'no rep set')}</b> on ${flowEsc(l.handedOffOn || '—')}${l.rehandedOn ? ', re-handed ' + flowEsc(l.rehandedOn) + ' (not counted)' : ''}</div>
       ${l.contactName ? `<div class="kv"><b>${flowEsc(l.contactName)}</b>${l.contactRole ? ' · ' + flowEsc(l.contactRole) : ''}${l.contactMobile ? ' · ' + flowEsc(l.contactMobile) : ''}${l.contactEmail ? ' · ' + flowEsc(l.contactEmail) : ''}</div>` : ''}
       <div class="q">${flag(l.rightPerson, 'right person')}${flag(l.ownMaintenance, 'own maintenance')}${flag(l.flangedOrHydraulic, 'flanged / hydraulic')}${flag(l.saidYes, 'said yes')}</div>
       ${l.pain ? `<div class="kv"><b>Pain:</b> ${flowEsc(l.pain)}</div>` : ''}
       ${l.whatTheySaid ? `<div class="kv"><b>They said:</b> ${flowEsc(l.whatTheySaid)}</div>` : ''}
       ${l.nextStep || l.nextStepDate ? `<div class="kv"><b>Next:</b> ${flowEsc(l.nextStep || '')}${l.nextStepDate ? ' · ' + flowEsc(l.nextStepDate) : ''}</div>` : ''}
       ${l.presentationDate ? `<div class="kv"><b>Presentation:</b> ${flowEsc(l.presentationDate)}${l.bookedOn ? ' (booked ' + flowEsc(l.bookedOn) + ')' : ''}${l.attendees ? ' · ' + flowEsc(l.attendees) : ''}</div>` : ''}
-      ${l.status === 'Returned' ? `<div class="kv" style="color:#b91c1c"><b>Returned ${flowEsc(l.returnedOn)}:</b> ${flowEsc(l.returnReason)}</div>` : ''}
-      <div class="foot"><button type="button" class="lg-mini" data-pdf="${flowEsc(l.leadNo)}">📄 Lead sheet</button>${lgCanEdit ? `<button type="button" class="lg-mini" data-edit="${l.rowIndex}">Edit</button><button type="button" class="lg-mini" data-del="${l.rowIndex}">✕</button>` : ''}</div>
+      ${l.status === 'Returned' ? `<div class="kv returned"><b>Returned ${flowEsc(l.returnedOn)}:</b> ${flowEsc(l.returnReason)}</div>` : ''}
+      <div class="foot"><button type="button" class="lg-mini" data-pdf="${flowEsc(l.leadNo)}">Lead sheet (PDF)</button>${lgCanEdit ? `<button type="button" class="lg-mini" data-edit="${l.rowIndex}">Edit</button><button type="button" class="lg-mini" data-del="${l.rowIndex}">Remove</button>` : ''}</div>
     </div>`).join('')}</div>`;
   wireRowButtons('leads', body);
 }
@@ -526,7 +546,7 @@ function openRecModal(entity, rowIndex) {
   document.getElementById('recId').value = rec ? rec[idKey] : '';
   document.getElementById('recModalTitle').textContent = (rec ? 'Edit ' : (entity === 'leads' ? 'Qualify a ' : 'Add ')) + u.label.replace(/s$/, '');
   document.getElementById('recForm').innerHTML = u.fields.filter(f => rec || !(entity === 'leads' && (f[0] === 'status' || f[0] === 'handedTo'))).map(f => fieldHtml(f, rec)).join('') +
-    (entity === 'leads' && !rec ? '<div class="full dock-hint">A lead is handed off only when all four conditions are ticked. The rep is chosen by territory; a Prospect client is created if the company is new.</div>' : '');
+    (entity === 'leads' && !rec ? '<div class="full dock-hint">A lead is handed off only when all four conditions are ticked. The rep is chosen by territory, and a Prospect client is created if the company is new.</div>' : '');
   document.getElementById('recFormMsg').style.display = 'none';
   document.getElementById('recModal').classList.add('open');
   const first = document.querySelector('#recForm input:not([type=checkbox]),#recForm select'); if (first) setTimeout(() => first.focus(), 50);
@@ -604,11 +624,11 @@ async function openSettings() {
   const k = lgCounts; if (!k) return;
   const qmax = k.quotasMax || {};
   document.getElementById('setQuotas').innerHTML = LG_TILES.map(([key, label]) => `<div><label>${flowEsc(label)}</label>
-      <div style="display:flex;gap:.3rem;align-items:center;"><input type="number" min="0" data-quota="${key}" value="${k.quotas[key] || 0}" title="minimum — met at this">
-      <span style="color:#8b93a1">–</span><input type="number" min="0" data-quota-max="${key}" value="${qmax[key] || k.quotas[key] || 0}" title="stretch"></div></div>`).join('') +
-    `<div class="full" style="grid-column:1/-1"><label>Per week</label></div>` +
+      <div class="lg-range"><input type="number" min="0" data-quota="${key}" value="${k.quotas[key] || 0}" title="Minimum, met at this">
+      <span class="lg-dash">–</span><input type="number" min="0" data-quota-max="${key}" value="${qmax[key] || k.quotas[key] || 0}" title="Stretch"></div></div>`).join('') +
+    `<div class="full"><label>Per week</label></div>` +
     LG_WEEKLY.filter(([key]) => ['activeAccounts', 'leads', 'suppliersHandedOff'].includes(key)).map(([key, label]) => { const x = (k.week.weekly || {})[key] || {}; return `<div><label>${flowEsc(label)}</label>
-      <div style="display:flex;gap:.3rem;align-items:center;"><input type="number" min="0" data-week="${key}" value="${x.min || 0}"><span style="color:#8b93a1">–</span><input type="number" min="0" data-week-max="${key}" value="${x.max || 0}"></div></div>`; }).join('');
+      <div class="lg-range"><input type="number" min="0" data-week="${key}" value="${x.min || 0}"><span class="lg-dash">–</span><input type="number" min="0" data-week-max="${key}" value="${x.max || 0}"></div></div>`; }).join('');
   document.getElementById('setMaxBatch').value = k.maxBatch || 60;
   document.getElementById('setReplyAim').value = k.week.replyRateAim || 0;
   document.getElementById('setDays').innerHTML = LG_DOW.map(d => `<label><input type="checkbox" value="${d}"${(k.workingDays || []).includes(d) ? ' checked' : ''}>${d}</label>`).join('');
@@ -642,8 +662,8 @@ async function saveSettings() {
   patch.lgRepVisMin = document.getElementById('setRepVisMin').value;
   const bad = patch.lgHolidays.split(',').filter(Boolean).find(d => !/^\d{4}-\d{2}-\d{2}$/.test(d));
   const msg = document.getElementById('setMsg');
-  if (bad) { msg.style.display = 'block'; msg.style.color = '#b45309'; msg.textContent = '"' + bad + '" is not a yyyy-mm-dd date.'; return; }
-  if (!patch.lgWorkingDays) { msg.style.display = 'block'; msg.style.color = '#b45309'; msg.textContent = 'Pick at least one working day.'; return; }
+  if (bad) { msg.className = 'flow-msg bad'; msg.style.display = 'block'; msg.textContent = '"' + bad + '" is not a yyyy-mm-dd date.'; return; }
+  if (!patch.lgWorkingDays) { msg.className = 'flow-msg bad'; msg.style.display = 'block'; msg.textContent = 'Pick at least one working day.'; return; }
   const btn = document.getElementById('setSave'); btn.disabled = true;
   try {
     if (typeof flowSetViewerOnly === 'function') flowSetViewerOnly(false);      // the one write oversight may make
@@ -652,10 +672,10 @@ async function saveSettings() {
     document.getElementById('setModal').classList.remove('open');
     flash('Quotas and working week saved.', true);
     await loadCounts();
-  } catch (e) { msg.style.display = 'block'; msg.style.color = '#b45309'; msg.textContent = e.message; }
+  } catch (e) { msg.className = 'flow-msg bad'; msg.style.display = 'block'; msg.textContent = e.message; }
   finally { if (typeof flowSetViewerOnly === 'function') flowSetViewerOnly(lgOversight); btn.disabled = false; }
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────────────────────
-function formErr(m) { const el = document.getElementById('recFormMsg'); el.style.display = 'block'; el.textContent = m; el.style.color = '#b45309'; }
-function flash(text, ok) { const m = document.getElementById('msg'); m.style.display = 'block'; m.textContent = text; m.style.color = ok ? '#15803d' : '#b45309'; setTimeout(() => { m.style.display = 'none'; }, 3500); }
+function formErr(m) { const el = document.getElementById('recFormMsg'); el.className = 'flow-msg bad'; el.style.display = 'block'; el.textContent = m; }
+function flash(text, ok) { const m = document.getElementById('msg'); m.className = 'lg-toast ' + (ok ? 'ok' : 'bad'); m.style.display = 'block'; m.textContent = text; setTimeout(() => { m.style.display = 'none'; }, 3500); }
