@@ -36,6 +36,26 @@ body.lg {
   font-family:var(--lg-text);
   -webkit-font-smoothing:antialiased;
 }
+/* A289 — the dark set: the theme toggle now reaches every page */
+body.lg[data-theme="dark"] {
+  --lg-navy-soft:rgba(46,49,146,.30); --lg-navy-line:rgba(143,149,232,.45);
+  --lg-cyan-ink:#5CCBF7; --lg-cyan-soft:rgba(0,174,239,.16);
+  --lg-red-soft:rgba(190,30,45,.22); --lg-red-line:rgba(190,30,45,.5);
+  --lg-page:#0B1020; --lg-inset:#141A33; --lg-hair:#2A3356; --lg-hair-2:#1F2745;
+  --lg-ink:#EEF1FA; --lg-ink-2:#B7BFD6; --lg-ink-3:#7E88A6;
+  --lg-glass:rgba(20,24,48,.6); --lg-glass-line:rgba(255,255,255,.08); --lg-glass-solid:rgba(22,27,54,.96);
+  --lg-sh-2:0 1px 2px rgba(0,0,0,.4), 0 16px 40px -24px rgba(0,0,0,.8); --lg-sh-3:0 24px 60px -24px rgba(0,0,0,.9);
+  --accent-hover:#B4B8F0; --accent-dark:#B4B8F0; --accent-light:rgba(46,49,146,.30);
+  --bg-primary:#0B1020; --bg-inset:#141A33; --bg-card:#141A33; --surface:#141A33; --border:#2A3356;
+  --text-primary:#EEF1FA; --text-secondary:#B7BFD6; --text-muted:#7E88A6;
+  color-scheme:dark;
+}
+body.lg[data-theme="dark"] .lg-tile .n, body.lg[data-theme="dark"] .lg-title h1, body.lg[data-theme="dark"] .lg-date b { color:var(--lg-ink); }
+body.lg[data-theme="dark"] .lg-tile .st-met, body.lg[data-theme="dark"] .lg-tile[data-st="met"] .n, body.lg[data-theme="dark"] .lg-count, body.lg[data-theme="dark"] .stg-d3, body.lg[data-theme="dark"] .stg-d7, body.lg[data-theme="dark"] .strip .d.met, body.lg[data-theme="dark"] .strip .d.met b, body.lg[data-theme="dark"] .mkt-badge.b-good, body.lg[data-theme="dark"] .lead .q span, body.lg[data-theme="dark"] .lg-band-l, body.lg[data-theme="dark"] .flow-msg.ok, body.lg[data-theme="dark"] .lg-link, body.lg[data-theme="dark"] .ev-pill { color:#8F95E8; }
+body.lg[data-theme="dark"] .lg-bar { background:var(--lg-hair-2); }
+body.lg[data-theme="dark"] .lg-board { background:rgba(42,51,86,.75); }
+body.lg[data-theme="dark"] .lg-tile .t .ic, body.lg[data-theme="dark"] .strip .d, body.lg[data-theme="dark"] .stg-rev, body.lg[data-theme="dark"] .mkt-badge.b-warm, body.lg[data-theme="dark"] .mkt-badge.b-new, body.lg[data-theme="dark"] .act-chip, body.lg[data-theme="dark"] .ev-unk, body.lg[data-theme="dark"] .lg-seg, body.lg[data-theme="dark"] .dock-tabs { background:var(--lg-inset); border-color:var(--lg-hair-2); }
+body.lg[data-theme="dark"] .ev-done .ev-box { color:#fff; }
 /* the aurora: a fixed pseudo (not background-attachment) so iOS Safari blurs it too */
 body.lg::before {
   content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
@@ -101,17 +121,13 @@ body.lg .lg-mini.pri:hover { background:var(--lg-navy-ink); border-color:var(--l
 /* ── 4 · the action band (auth.js writes inline-styled rows; only inline properties get !important) ── */
 body.lg .lg-band { display:grid; grid-template-columns:120px minmax(0,1fr); gap:14px; align-items:start; padding:14px 18px; margin-bottom:14px; background:var(--lg-glass); -webkit-backdrop-filter:var(--lg-blur); backdrop-filter:var(--lg-blur); border:1px solid var(--lg-glass-line); border-radius:var(--lg-r-lg); box-shadow:var(--lg-sh-2); }
 body.lg .lg-band-l { font:700 12px/1.4 var(--lg-text); color:var(--lg-navy); padding-top:7px; }
-body.lg #flowActionCenter > div { gap:6px !important; }
-body.lg #flowActionCenter > div:not([style*="grid"]) { color:var(--lg-ink-2) !important; font:500 12.5px/1.4 var(--lg-text) !important; padding:7px 0 !important; }
-body.lg #flowActionCenter a { padding:6px 12px 6px 6px !important; border-radius:var(--lg-r-pill) !important; border:1px solid var(--lg-hair) !important; background:rgba(255,255,255,.7) !important; color:var(--lg-ink) !important; gap:9px !important; box-shadow:none !important; }
-body.lg #flowActionCenter a:hover { background:#fff !important; border-color:var(--lg-navy-line) !important; }
-body.lg #flowActionCenter a > div { width:24px !important; height:24px !important; border-radius:50% !important; background:var(--lg-navy-soft) !important; color:var(--lg-navy) !important; }
-body.lg #flowActionCenter a > div svg { width:12px; height:12px; }
-body.lg #flowActionCenter a > span:first-of-type { font:500 12.5px/1.3 var(--lg-text) !important; }
-body.lg #flowActionCenter a > span:last-child { display:none; }
+body.lg .fa-row { background:rgba(255,255,255,.7); border-color:var(--lg-hair); color:var(--lg-ink); }
+body.lg .fa-row:hover { background:#fff; border-color:var(--lg-navy-line); }
+body.lg .fa-ico { background:var(--lg-navy-soft); color:var(--lg-navy); }
+body.lg .fa-empty, body.lg .fa-loading { color:var(--lg-ink-2); font:500 12.5px/1.4 var(--lg-text); padding:7px 0; }
 /* the one crimson: the "Behind on …" row links to the board */
-body.lg #flowActionCenter a[href$="#tiles"] > div { background:var(--lg-red-soft) !important; color:var(--lg-red) !important; }
-body.lg #flowActionCenter a[href$="#tiles"] { border-color:var(--lg-red-line) !important; }
+body.lg .fa-row[href$="#tiles"] .fa-ico { background:var(--lg-red-soft); color:var(--lg-red); }
+body.lg .fa-row[href$="#tiles"] { border-color:var(--lg-red-line); }
 
 /* the salary card (shared script) */
 body.lg #myDeductionCard h3, body.lg #myDeductionCard h4 { font:700 14px/1.3 var(--lg-text); color:var(--lg-ink); }

@@ -263,17 +263,14 @@ body.dh .flow-modal-overlay .flow-modal [style*="#64748b"] { color:var(--dh-ink-
 body.dh .flow-modal-overlay .flow-modal [style*="#b45309"] { color:var(--dh-cyan-ink) !important; }
 body.dh .flow-modal-overlay .flow-modal .flow-table th { background:var(--dh-inset); }
 
-/* ── 9 · shared scripts' inline output (only inline properties need !important) ──────────────── */
-body.dh #flowActionCenter > div { gap:6px !important; }
-body.dh #flowActionCenter > div:only-child:not(:has(a)) { color:var(--dh-navy-text) !important; font:500 12.5px/1.4 var(--dh-text) !important; padding:6px 0 !important; }
-body.dh #flowActionCenter > div:only-child:not(:has(a)) > span:first-child { display:none; }
-body.dh #flowActionCenter a { padding:7px 12px 7px 7px !important; border-radius:var(--dh-r-pill) !important; border:1px solid var(--dh-hair) !important; background:var(--dh-glass-solid) !important; color:var(--dh-ink) !important; box-shadow:none !important; gap:9px !important; }
-body.dh #flowActionCenter a:hover { border-color:var(--dh-navy-line) !important; }
-body.dh #flowActionCenter a > div { width:26px !important; height:26px !important; border-radius:50% !important; background:var(--dh-navy-soft) !important; color:var(--dh-navy-text) !important; }
-body.dh #flowActionCenter a > div svg { width:12px; height:12px; }
-body.dh #flowActionCenter a > div[style*="#ef4444"] { background:var(--dh-red-soft) !important; color:var(--dh-red) !important; }
-body.dh #flowActionCenter a > span:first-of-type { font:500 12.5px/1.3 var(--dh-text) !important; }
-body.dh #flowActionCenter a > span:last-child { display:none; }
+/* ── 9 · shared scripts' output (the action strip and the bell are classed since A289; only the
+       salary card and the built modals still arrive inline-styled) ─────────────────────────── */
+body.dh .fa-row { background:var(--dh-glass-solid); border-color:var(--dh-hair); color:var(--dh-ink); }
+body.dh .fa-row:hover { border-color:var(--dh-navy-line); }
+body.dh .fa-ico { background:var(--dh-navy-soft); color:var(--dh-navy-text); }
+body.dh .fa-ico[data-tone="urgent"] { background:var(--dh-red-soft); color:var(--dh-red); }
+body.dh .fa-row[data-tone="urgent"] { border-color:var(--dh-red-line); }
+body.dh .fa-empty { color:var(--dh-navy-text); }
 body.dh #myDeductionCard h3 { font:700 14px/1.3 var(--dh-text) !important; margin:0 0 12px !important; color:var(--dh-ink); }
 body.dh #myDeductionCard [style*="border-radius"] { border-radius:var(--dh-r-md) !important; border-color:var(--dh-hair) !important; background:var(--dh-glass-solid) !important; }
 body.dh #myDeductionCard div[style*="width:"][style*="%"] { background:var(--dh-navy) !important; }
@@ -281,11 +278,6 @@ body.dh #myDeductionCard [style*="#16a34a"] { color:var(--dh-navy-text) !importa
 body.dh #sdModal .modal-box [style*="#b45309"] { color:var(--dh-red) !important; }
 body.dh #sdModal .modal-box [style*="#dc2626"] { color:var(--dh-red) !important; }
 body.dh #sdModal .modal-box h3[style], body.dh #sdModal .modal-box p[style] { color:var(--dh-ink-3) !important; }
-body.dh #notifDropdown { background:var(--dh-glass-solid) !important; border-color:var(--dh-hair) !important; box-shadow:var(--dh-sh-3) !important; color:var(--dh-ink); }
-body.dh #notifDropdown a { border-bottom-color:var(--dh-hair-2) !important; color:var(--dh-ink-2) !important; }
-body.dh #notifDropdown a > div { background:var(--dh-navy-soft) !important; color:var(--dh-navy-text) !important; }
-body.dh #notifDropdown a > div[style*="#ef4444"] { background:var(--dh-red-soft) !important; color:var(--dh-red) !important; }
-body.dh #notifBadge { background:var(--dh-red) !important; }
 body.dh .navbar { background:var(--bg-card); border-bottom-color:var(--border); }
 
 /* ── 10 · keyframes (dx-prefixed; the home's dh* set lives in director-home.css) ─────────────── */

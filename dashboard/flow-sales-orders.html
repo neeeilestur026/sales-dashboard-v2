@@ -6,9 +6,9 @@
   <title>Flow — Sales Orders</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
-  <link rel="stylesheet" href="css/bento-skin-v2.css">
 </head>
 <body>
+  <script src="js/theme.js"></script>
   <header class="navbar" id="navbar"></header>
   <main class="main-content">
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
@@ -102,7 +102,7 @@
         <span id="soFilterMeta" style="margin-left:auto;font-size:0.78rem;color:var(--text-muted,#64748b);"></span>
       </div>
       <!-- A266: this div is the ONLY scrolling region. It must stay a child of the card, never the
-           card itself — bento-skin-v2 puts overflow:hidden on .chart-card and .chart-card:hover
+           card itself — the old skin put overflow:hidden on .chart-card and a hover transform
            applies a transform, either of which would capture the sticky <thead>. -->
       <div class="flow-scroll" id="listContainer" style="max-height:calc(100vh - 300px);"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>
     </div>

@@ -1,238 +1,132 @@
-/* flow.css — shared styles for the Accounting Process Flow modules */
+/* flow.css — shared styles for the Accounting Process Flow modules.
+   A289: on the brand tokens (styles.css). Every class name is unchanged; the status colours are
+   now one semantic map — neutral, pending (warn), done (ok), information (cyan), needs you (red). */
 
-.flow-nav { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border, #334155); padding-bottom: 0.5rem; }
-.flow-tab { padding: 0.4rem 0.8rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600; color: var(--text-muted, #64748b); text-decoration: none; }
-.flow-tab:hover { background: rgba(59,130,246,0.08); color: var(--accent, #3b82f6); }
-.flow-tab.active { background: var(--accent, #3b82f6); color: #fff; }
+.flow-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; border-bottom: 0; padding-bottom: 0; }
+.flow-tab { padding: 6px 12px; border-radius: var(--hx-r-pill); font: 600 12px/1.3 var(--hx-text); color: var(--hx-ink-2); text-decoration: none; border: 1px solid var(--hx-hair); background: var(--hx-glass-solid); transition: background .15s var(--hx-ease), color .15s var(--hx-ease), border-color .15s var(--hx-ease); }
+.flow-tab:hover { border-color: var(--hx-navy-line); color: var(--hx-ink); background: var(--hx-glass-solid); }
+.flow-tab.active { background: var(--hx-navy); color: #fff; border-color: var(--hx-navy); box-shadow: none; }
 
-.flow-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
-.flow-table th { text-align: left; padding: 0.55rem 0.7rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
-.flow-table td { padding: 0.55rem 0.7rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
-.flow-table tr:hover td { background: #e2e8f0; }
+.flow-table { width: 100%; border-collapse: collapse; font: 400 12.5px/1.4 var(--hx-text); }
+.flow-table th { position: sticky; top: 0; z-index: 2; text-align: left; padding: 10px 12px; color: var(--hx-ink-2); border-bottom: 1px solid var(--hx-hair); font: 700 11px/1.3 var(--hx-text); text-transform: none; letter-spacing: 0; white-space: nowrap; background: var(--hx-inset); }
+.flow-table td { padding: 10px 12px; border-bottom: 1px solid var(--hx-hair-2); color: var(--hx-ink); }
+.flow-table tbody tr { transition: background .12s var(--hx-ease); }
+.flow-table tr:hover td { background: var(--hx-row-hover); }
+.flow-table tr:last-child td { border-bottom: none; }
 .flow-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.flow-table tr.tot td, .flow-table tr.total-row td { font-weight: 800; color: var(--hx-navy-text); background: var(--hx-navy-soft); border-top: 2px solid var(--hx-navy); border-bottom: none; }
 
-.flow-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.flow-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 1rem; }
 .flow-form .full { grid-column: 1 / -1; }
-.flow-form label { display: block; font-size: 0.74rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
-.flow-form input, .flow-form select, .flow-form textarea { width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.86rem; box-sizing: border-box; }
-
-.flow-items th, .flow-items td { padding: 0.4rem 0.5rem; }
-.flow-items input, .flow-items select { width: 100%; padding: 0.35rem 0.5rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 6px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; box-sizing: border-box; }
+.flow-form label { display: block; font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); margin-bottom: 5px; text-transform: none; letter-spacing: 0; }
+.flow-form input, .flow-form select, .flow-form textarea { width: 100%; padding: 8px 10px; background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); color: var(--hx-ink); font: 400 13px/1.4 var(--hx-text); box-sizing: border-box; box-shadow: none; transition: border-color .15s var(--hx-ease); }
+.flow-form input:focus, .flow-form select:focus, .flow-form textarea:focus { outline: none; border-color: var(--hx-cyan); box-shadow: none; }
+.flow-items th, .flow-items td { padding: 6px 8px; }
+.flow-items input, .flow-items select { width: 100%; padding: 5px 7px; background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: 7px; color: var(--hx-ink); font: 400 12.5px/1.3 var(--hx-text); box-sizing: border-box; }
+.flow-items input:focus, .flow-items select:focus { outline: none; border-color: var(--hx-cyan); box-shadow: none; }
 .flow-items .num input { text-align: right; }
 
-.flow-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0.75rem 0; }
-.flow-msg { padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600; margin-top: 0.5rem; }
-.flow-badge { padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-.b-unpaid { background: rgba(239,68,68,0.12); color: #ef4444; }
-.b-partial { background: rgba(249,115,22,0.12); color: #f97316; }
-.b-paid { background: rgba(34,197,94,0.12); color: #16a34a; }
-.b-open { background: rgba(59,130,246,0.12); color: #3b82f6; }
+.flow-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.flow-msg { display: none; padding: 8px 12px; border-radius: var(--hx-r-sm); font: 600 12.5px/1.4 var(--hx-text); margin-top: 10px; }
+.flow-msg.ok { background: var(--hx-ok-soft); color: var(--hx-ok); }
+.flow-msg.bad { background: var(--hx-red-soft); color: var(--hx-red); }
 
-/* A266 — the sales-order list had ONE badge class for every status, so a delivered order and an
-   open one were the same blue. Status is the manual field (did the goods leave); Process is derived
-   from the chain (where the money is). Green is reserved for Process/Collected alone, so "paid" is
-   readable from colour without reading the word. */
-.b-status-open       { background: rgba(59,130,246,0.12);  color: #2563eb; }
-.b-status-delivered  { background: rgba(100,116,139,0.16); color: #475569; }
-.b-status-invoiced   { background: rgba(14,165,233,0.14);  color: #0369a1; }
-.b-status-closed     { background: rgba(51,65,85,0.20);    color: #1e293b; }
-.b-proc-noinv        { background: rgba(239,68,68,0.12);   color: #dc2626; }
-.b-proc-invoiced     { background: rgba(139,92,246,0.16);  color: #6d28d9; }
-.b-proc-awaiting     { background: rgba(245,158,11,0.16);  color: #b45309; }
-.b-proc-collected    { background: rgba(34,197,94,0.14);   color: #15803d; }
+/* status badges: one semantic map */
+.flow-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: var(--hx-r-pill); font: 700 10.5px/1.5 var(--hx-text); white-space: nowrap; background: var(--hx-inset); color: var(--hx-ink-2); border: 1px solid var(--hx-hair-2); }
+.b-draft, .b-idle, .b-no-plan, .b-lost, .b-status-delivered, .b-status-closed { background: var(--hx-inset); color: var(--hx-ink-2); border-color: var(--hx-hair-2); }
+.b-pending, .b-partial, .b-proc-awaiting, .b-status-invoiced { background: var(--hx-warn-soft); color: var(--hx-warn); border-color: transparent; }
+.b-approved, .b-paid, .b-proc-collected { background: var(--hx-ok-soft); color: var(--hx-ok); border-color: transparent; }
+.b-sent, .b-open, .b-status-open, .b-proc-invoiced { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); border-color: transparent; }
+.b-rejected, .b-unpaid, .b-proc-noinv, .b-needs-you { background: var(--hx-red-soft); color: var(--hx-red); border-color: transparent; }
+.link-btn.reopen-btn { color: var(--hx-navy-text); }
 
-/* A266 — a bounded table scroller, so `.flow-table thead th` (already position:sticky below) finally
-   has a scrolling ancestor to stick to. Promoted from `.mf-invscroll`, which was defined inline in
-   management-home.html only and therefore rendered unstyled on hr-home and marketing-home.
-   MUST be its own element, never the .chart-card: bento-skin-v2 sets overflow:hidden on that card
-   and .chart-card:hover applies a transform — either one would capture the sticky header. */
-/* A266 — when the form is collapsed it is just a title and a button, so drop it to a slim bar and
-   hand the height back to the list. */
-.so-form-collapsed { padding: 0.7rem 1.25rem !important; margin-bottom: 0.75rem !important; }
+/* A266 — when the form is collapsed it is just a title and a button, so drop it to a slim bar. */
+.so-form-collapsed { padding: 10px 20px !important; margin-bottom: 12px !important; }
 
-.flow-scroll { overflow: auto; border: 1px solid var(--border,#e2e8f0); border-radius: 10px; }
+/* A266 — a bounded table scroller, so the sticky header has a scrolling ancestor to stick to. */
+.flow-scroll { overflow: auto; border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); background: var(--hx-glass-solid); }
 .flow-scroll table { margin: 0; }
-/* The header is already `position:sticky` (see below); it only needs an opaque background, or the
-   rows scroll through it. `border-collapse: collapse` is left alone — sticky engages fine with it. */
-.flow-scroll .flow-table thead th {
-  background: var(--bg-card,#fff);
-  box-shadow: inset 0 -1px 0 var(--border,#e2e8f0);
-}
+.flow-scroll .flow-table thead th { background: var(--hx-inset); box-shadow: inset 0 -1px 0 var(--hx-hair); }
 @media (max-width: 1000px) { .flow-scroll { max-height: none !important; } }
-/* Approval workflow */
-.b-draft { background: var(--bg-inset,#eef2f6); color: var(--text-secondary,#475569); }
-.b-pending { background: rgba(245,158,11,0.14); color: #b45309; }
-.b-approved { background: rgba(13,148,136,0.14); color: #0f766e; }
-.b-rejected { background: rgba(239,68,68,0.14); color: #dc2626; }
-.b-sent { background: rgba(59,130,246,0.14); color: #2563eb; }
-.b-lost { background: rgba(100,116,139,0.16); color: #475569; }   /* A152: Not Pursued / Lost / Cancelled */
-.link-btn.reopen-btn { color: #0f766e; }   /* A152: Reopen a closed quotation (positive action) */
 
-.flow-hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-.flow-hub a { display: block; background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 1.1rem; text-decoration: none; }
-.flow-hub a:hover { border-color: var(--accent, #3b82f6); }
-.flow-hub .step { font-size: 0.72rem; font-weight: 700; color: var(--accent, #3b82f6); }
-.flow-hub .title { font-size: 1rem; font-weight: 700; color: var(--text-primary, #f1f5f9); margin: 0.2rem 0; }
-.flow-hub .desc { font-size: 0.78rem; color: var(--text-muted, #64748b); }
-.link-btn { background: none; border: none; color: var(--accent, #3b82f6); font-weight: 600; cursor: pointer; font-size: 0.82rem; padding: 0; }
-.del-btn { color: #ef4444; }
+.flow-hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.flow-hub a { display: block; background: var(--hx-glass); -webkit-backdrop-filter: var(--hx-blur); backdrop-filter: var(--hx-blur); border: 1px solid var(--hx-glass-line); border-radius: var(--hx-r-lg); box-shadow: var(--hx-sh-2); padding: 16px 18px; text-decoration: none; transition: border-color .15s var(--hx-ease); }
+.flow-hub a:hover { border-color: var(--hx-navy-line); transform: none; box-shadow: var(--hx-sh-2); }
+.flow-hub .step { font: 700 11px/1.3 var(--hx-text); color: var(--hx-cyan-ink); }
+.flow-hub .title { font: 700 15px/1.3 var(--hx-text); color: var(--hx-ink); margin: 4px 0; }
+.flow-hub .desc { font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-3); }
+.link-btn { background: none; border: none; color: var(--hx-navy-text); font: 600 12.5px/1.3 var(--hx-text); cursor: pointer; padding: 0; }
+.del-btn { color: var(--hx-red); }
 
-/* ── PDF modal ── */
-.flow-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-start; justify-content: center; z-index: 1000; overflow-y: auto; padding: 2rem 1rem; }
+/* the modal (the same look as .modal in styles.css; the class names stay for the scripts) */
+.flow-modal-overlay { position: fixed; inset: 0; background: var(--hx-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); display: none; align-items: flex-start; justify-content: center; z-index: 1000; overflow-y: auto; padding: 2rem 1rem; animation: hxFade .2s var(--hx-ease); }
 .flow-modal-overlay.open { display: flex; }
-.flow-modal { background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 12px; width: min(760px, 100%); padding: 1.25rem 1.5rem; box-sizing: border-box; max-height: calc(100vh - 4rem); overflow-y: auto; }
-.flow-modal h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem; }
-.flow-modal .sub { font-size: 0.8rem; color: var(--text-muted, #64748b); margin-bottom: 1rem; }
-.flow-modal .group-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted, #64748b); margin: 1rem 0 0.4rem; }
-.flow-modal-foot { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
-.pdf-item-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; padding: 0.3rem 0; border-bottom: 1px solid #e2e8f0; }
+.flow-modal { background: var(--hx-glass-solid); color: var(--hx-ink); border: 1px solid var(--hx-glass-line); border-radius: var(--hx-r-lg); width: min(760px, 100%); padding: 22px 24px; box-sizing: border-box; max-height: calc(100vh - 4rem); overflow-y: auto; box-shadow: var(--hx-sh-3); }
+.flow-modal h3 { font: 700 16px/1.3 var(--hx-text); color: var(--hx-ink); margin-bottom: .25rem; }
+.flow-modal .sub { font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-3); margin-bottom: 1rem; }
+.flow-modal .group-title { font: 700 11px/1.3 var(--hx-text); text-transform: none; letter-spacing: 0; color: var(--hx-ink-3); margin: 1rem 0 .4rem; }
+.flow-modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+.flow-modal-overlay.open .flow-modal { animation: flowPop .22s var(--hx-spring); }
+@keyframes flowPop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+.pdf-item-row { display: flex; align-items: center; gap: .6rem; font-size: .82rem; padding: .3rem 0; border-bottom: 1px solid var(--hx-hair-2); }
 .pdf-item-row .grow { flex: 1; }
 
-/* ── Design refresh (flow modules) — elevate to match the base theme ── */
-.flow-table thead th {
-  position: sticky; top: 0; z-index: 2;
-  background: var(--bg-inset, #e2e8f0);
-  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.7rem;
-}
-.flow-table tbody tr { transition: background 0.15s ease; }
-.flow-table tr:hover td { background: var(--accent-light, #ccfbf1); }   /* teal tint instead of grey */
-.flow-table .num { font-variant-numeric: tabular-nums; }
+/* Oversight: per-sales-rep collapsible groups (quotations / purchase requests) */
+.rep-group { border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); margin-bottom: 10px; background: var(--hx-glass-solid); overflow: hidden; }
+.rep-group > summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: .6rem; font-weight: 600; background: var(--hx-inset); transition: background .15s var(--hx-ease); }
+.rep-group > summary::-webkit-details-marker { display: none; }
+.rep-group > summary::before { content: '▸'; color: var(--hx-ink-3); transition: transform .15s var(--hx-ease); }
+.rep-group[open] > summary::before { transform: rotate(90deg); }
+.rep-group > summary:hover { background: var(--hx-navy-soft); }
+.rep-group .rep-name { color: var(--hx-ink); }
+.rep-group .rep-meta { margin-left: auto; font: 500 12px/1.3 var(--hx-text); color: var(--hx-ink-3); }
+.rep-group > div { padding: 0 12px 12px; }
 
-.flow-tab { transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; }
-.flow-tab.active { box-shadow: 0 2px 10px -3px var(--accent-ring, rgba(15,118,110,.25)); }
+/* ═══ Shared daily/weekly report surfaces ═══ */
+.dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+.dr-tile { border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); padding: 12px 14px; background: var(--hx-glass-solid); }
+.dr-tile .l { font: 600 11px/1.3 var(--hx-text); text-transform: none; letter-spacing: 0; color: var(--hx-ink-2); }
+.dr-tile .v { font: 800 18px/1.1 var(--hx-display); color: var(--hx-ink); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.dr-sect-title { font: 700 14px/1.3 var(--hx-text); text-transform: none; letter-spacing: 0; color: var(--hx-ink); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--hx-hair-2); display: flex; align-items: center; gap: .5rem; }
+.mod-badge { display: inline-block; padding: 2px 9px; border-radius: var(--hx-r-pill); font: 700 10.5px/1.5 var(--hx-text); background: var(--hx-navy-soft); color: var(--hx-navy-text); white-space: nowrap; }
+.mod-Quotation, .mod-SalesOrder, .mod-Sales\.Order, .mod-PurchaseOrder, .mod-Purchase\.Order, .mod-PricingRequest, .mod-Pricing\.Request { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+.mod-APAging, .mod-AP\.Aging { background: var(--hx-warn-soft); color: var(--hx-warn); }
+.mod-Receiving, .mod-Invoice { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+.mod-Inventory, .mod-Document { background: var(--hx-inset); color: var(--hx-ink-2); }
+.act-chip { display: inline-block; font: 700 10.5px/1.5 var(--hx-text); padding: 1px 7px; border-radius: 5px; background: var(--hx-inset); color: var(--hx-ink-2); border: 1px solid var(--hx-hair-2); }
+.dr-empty { padding: 14px; text-align: center; color: var(--hx-ink-3); font: 400 12.5px/1.5 var(--hx-text); font-style: normal; }
+/* Per-user report card */
+.urep { border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); margin-bottom: 10px; overflow: hidden; background: var(--hx-glass-solid); }
+.urep > summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: .7rem; background: var(--hx-inset); transition: background .15s var(--hx-ease); }
+.urep > summary::-webkit-details-marker { display: none; }
+.urep > summary::before { content: '▸'; color: var(--hx-ink-3); transition: transform .15s var(--hx-ease); }
+.urep[open] > summary::before { transform: rotate(90deg); }
+.urep > summary:hover { background: var(--hx-navy-soft); }
+.urep .uname { font-weight: 700; color: var(--hx-ink); }
+.urep .ustat { margin-left: auto; font: 600 12px/1.3 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
+.urep-body { padding: 14px; }
+.urep-note { margin-top: 10px; padding: 8px 12px; background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-line); border-radius: var(--hx-r-sm); font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-warn); white-space: pre-wrap; }
+.umods { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 
-.flow-form input, .flow-form select, .flow-form textarea,
-.flow-items input, .flow-items select {
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
-}
-.flow-form input:focus, .flow-form select:focus, .flow-form textarea:focus,
-.flow-items input:focus, .flow-items select:focus {
-  outline: none; border-color: var(--accent, #0f766e);
-  box-shadow: 0 0 0 3px var(--accent-ring, rgba(15,118,110,.2));
-}
-
-/* Modal — blurred backdrop + soft pop-in */
-.flow-modal-overlay { background: rgba(15,23,42,0.45); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-.flow-modal { box-shadow: 0 24px 60px -20px rgba(15,23,42,0.5); }
-.flow-modal-overlay.open .flow-modal { animation: flowPop 0.2s var(--ease-spring, cubic-bezier(0.34,1.4,0.5,1)); }
-@keyframes flowPop { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
-
-/* Hub cards — hover lift */
-.flow-hub a { transition: transform 0.2s var(--ease-spring, ease), border-color 0.2s ease, box-shadow 0.2s ease; }
-.flow-hub a:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0,0,0,.1)); }
+/* A274 — the inventory table: fixed layout so a 622-character description wraps instead of pushing the table wider. */
+.inv-table { table-layout: fixed; width: 100%; }
+.inv-table th, .inv-table td { vertical-align: top; }
+.inv-table col.c-item { width: 140px; }
+.inv-table col.c-onhand { width: 92px; }
+.inv-table col.c-cost { width: 156px; }
+.inv-table col.c-total { width: 132px; }
+.inv-table col.c-act { width: 118px; }
+.inv-item { font-weight: 600; overflow-wrap: anywhere; white-space: normal; }
+.inv-muted { color: var(--hx-ink-3); }
+.inv-desc { overflow-wrap: anywhere; line-height: 1.45; white-space: normal; }
+.inv-desc.clamp { max-height: 2.9em; overflow: hidden; cursor: pointer; position: relative; }
+.inv-desc.clamp + .inv-more { display: inline-block; margin-top: 2px; font: 700 11.5px/1.3 var(--hx-text); color: var(--hx-navy-text); cursor: pointer; user-select: none; }
+.inv-desc.clamp + .inv-more::after { content: '⌄ more'; }
+.inv-desc.clamp.open + .inv-more::after { content: '⌃ less'; }
+.inv-desc.clamp.open { max-height: none; overflow: visible; }
+.inv-cost .v { font-variant-numeric: tabular-nums; }
+.inv-cost .b { display: block; font-size: 11px; color: var(--hx-ink-3); margin-top: 2px; overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: reduce) {
   .flow-modal-overlay.open .flow-modal { animation: none !important; }
-  .flow-hub a:hover, .flow-tab.active { transform: none; }
-}
-
-/* Oversight: per-sales-rep collapsible groups (quotations / purchase requests) */
-.rep-group { border: 1px solid var(--border, #e2e8f0); border-radius: 10px; margin-bottom: 0.75rem; background: var(--surface, #fff); overflow: hidden; }
-.rep-group > summary { list-style: none; cursor: pointer; padding: 0.7rem 1rem; display: flex; align-items: center; gap: 0.6rem; font-weight: 600; background: var(--bg-inset, #f8fafc); transition: background 0.15s ease; }
-.rep-group > summary::-webkit-details-marker { display: none; }
-.rep-group > summary::before { content: '▸'; color: var(--text-muted, #64748b); transition: transform 0.15s ease; }
-.rep-group[open] > summary::before { transform: rotate(90deg); }
-.rep-group > summary:hover { background: var(--accent-light, #ccfbf1); }
-.rep-group .rep-name { color: var(--text-primary, #0f172a); }
-.rep-group .rep-meta { margin-left: auto; font-weight: 500; font-size: 0.78rem; color: var(--text-muted, #64748b); }
-.rep-group > div { padding: 0 0.75rem 0.75rem; }
-
-
-/* ═══ Shared daily/weekly report surfaces ═══
-   Promoted from the report pages' inline <style> blocks so the Team Performance page (and anything
-   after it) doesn't become a fourth copy. The existing inline copies are left alone — they win by
-   cascade order anyway, so removing them would be pointless risk. */
-.dr-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-.dr-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 0.95rem; background: var(--bg-card); }
-.dr-tile .l { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
-.dr-tile .v { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin-top: 0.2rem; }
-.dr-sect-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 0 0 0.55rem; display: flex; align-items: center; gap: 0.5rem; }
-.mod-badge { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
-.mod-Quotation { background: #f0fdfa; color: #0f766e; }
-.mod-SalesOrder, .mod-Sales\.Order { background: #f0fdf4; color: #15803d; }
-.mod-PurchaseOrder, .mod-Purchase\.Order { background: #eff6ff; color: #1d4ed8; }
-.mod-APAging, .mod-AP\.Aging { background: #fff7ed; color: #c2410c; }
-.mod-Receiving { background: #ecfeff; color: #0e7490; }
-.mod-Invoice { background: #f0fdfa; color: #0f766e; }
-.mod-Inventory { background: #f8fafc; color: #475569; }
-.mod-PricingRequest, .mod-Pricing\.Request { background: #fef3c7; color: #b45309; }
-.mod-Document { background: #f1f5f9; color: #475569; }
-.act-chip { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 5px; background: var(--bg-inset); color: var(--text-secondary); }
-.dr-empty { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
-    /* Per-user report card */
-.urep { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 0.9rem; overflow: hidden; background: var(--bg-card); }
-.urep > summary { list-style: none; cursor: pointer; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.7rem; background: var(--bg-inset, #f1f5f9); transition: background 0.15s ease; }
-.urep > summary::-webkit-details-marker { display: none; }
-.urep > summary::before { content: '▸'; color: var(--text-muted); transition: transform 0.15s ease; }
-.urep[open] > summary::before { transform: rotate(90deg); }
-.urep > summary:hover { background: var(--accent-light, #ccfbf1); }
-.urep .uname { font-weight: 700; color: var(--text-primary); }
-.urep .ustat { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
-.urep-body { padding: 1rem; }
-.urep-note { margin-top: 0.7rem; padding: 0.6rem 0.8rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 0.84rem; color: #78350f; white-space: pre-wrap; }
-.umods { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
-    
-/* ═══════════════════════════════════════════════════════════════════════════════
-   A274 — the inventory table. It ran off the screen sideways: 9 columns, one of
-   them holding descriptions up to 622 characters. `table-layout: fixed` with a
-   width on every column except the description is what stops that — the text
-   wraps instead of pushing the table wider.
-   ═══════════════════════════════════════════════════════════════════════════════ */
-.inv-table { table-layout: fixed; width: 100%; }
-.inv-table th, .inv-table td { vertical-align: top; }
-
-.inv-table col.c-item   { width: 140px; }
-.inv-table col.c-onhand { width: 92px; }
-.inv-table col.c-cost   { width: 156px; }
-.inv-table col.c-total  { width: 132px; }
-.inv-table col.c-act    { width: 118px; }
-/* the description column is deliberately given no width — it takes what is left */
-
-/* Item numbers reach 58 characters, and 618 of 994 items have none at all. */
-/* The skin puts `white-space: nowrap` on flow-table cells, which is right for money columns and
-   wrong for these two: it kept a 279-character description on ONE clipped line, so the two-line
-   clamp had nothing to clamp. */
-.inv-item { font-weight: 600; overflow-wrap: anywhere; white-space: normal; }
-.inv-muted { color: var(--text-muted, #64748b); }
-
-/* Clamped to two lines; the class is only applied to descriptions long enough to
-   need it, so short rows do not get a pointer cursor that does nothing. */
-.inv-desc { overflow-wrap: anywhere; line-height: 1.45; white-space: normal; }
-/* max-height, not -webkit-line-clamp: `display:-webkit-box` computed to `flow-root` in this
-   engine, so the clamp silently did nothing and the div collapsed to a single line. Two lines at
-   1.45 line-height is 2.9em; the explicit line-height matters because the inherited one was
-   `normal`, which is not a number this can be multiplied by. */
-.inv-desc.clamp {
-  max-height: 2.9em;
-  overflow: hidden;
-  cursor: pointer;
-  position: relative;
-}
-/* The affordance sits OUTSIDE the clamped box — inside it, `overflow:hidden` would clip it away
-   on exactly the rows that need it. */
-.inv-desc.clamp + .inv-more {
-  display: inline-block;
-  margin-top: 0.15rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--accent, #0d9488);
-  cursor: pointer;
-  user-select: none;
-}
-.inv-desc.clamp + .inv-more::after { content: '⌄ more'; }
-.inv-desc.clamp.open + .inv-more::after { content: '⌃ less'; }
-.inv-desc.clamp.open {
-  max-height: none;
-  overflow: visible;
-}
-
-/* Landed cost is the figure; purchase and shipping sit under it. 88 of 98 stock
-   items have no cost at all, and those render nothing rather than three zeros. */
-.inv-cost .v { font-variant-numeric: tabular-nums; }
-.inv-cost .b {
-  display: block;
-  font-size: 0.7rem;
-  color: var(--text-muted, #64748b);
-  margin-top: 0.1rem;
-  overflow-wrap: anywhere;
 }

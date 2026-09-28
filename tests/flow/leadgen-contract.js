@@ -41,7 +41,7 @@ ok('  and no shared skin', !/bento-skin|flow-screen/.test(HTML));
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="lg"> — the scope every rule hangs off', /<body class="lg">/.test(HTML));
 const SCRIPTS = (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]);
-eq('script order unchanged', SCRIPTS.join(','), 'api.js,salary-deduction-card.js,auth.js,flow-api.js,leadgen-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js');
+eq('script order unchanged', SCRIPTS.join(','), 'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,leadgen-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js');
 eq('exactly one inline <script>', (HTML.match(/<script>/g) || []).length, 1);
 ok('the oversight block keeps its inline handlers (management-flow.js calls them by name)',
    /onclick="mgmtToggleNewsec\('newsec-daily-reports'\)"/.test(HTML) && /onclick="mfTwNav\(-1\)"/.test(HTML) && /onclick="mfTwNav\(0\)"/.test(HTML) && /onclick="mfTwNav\(1\)"/.test(HTML) && /onclick="mfTwPdf\(\)"/.test(HTML));
@@ -151,7 +151,7 @@ eq('#emailBody', tagIn(RPT, 'emailBody'), 'tbody');
 ['refreshBtn', 'printBtn', 'saveNotesBtn', 'submitBtn'].forEach(id => eq('#' + id, tagIn(RPT, id), 'button'));
 ok('the two button labels the JS restores after saving are exact', /id="saveNotesBtn">Save Notes</.test(RPT) && /id="submitBtn">Submit to Management</.test(RPT));
 ok('<body class="lg lg-report">', /<body class="lg lg-report">/.test(RPT));
-eq('scripts', (RPT.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), 'api.js,auth.js,flow-api.js,leadgen-daily-report.js');
+eq('scripts', (RPT.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), 'theme.js,api.js,auth.js,flow-api.js,leadgen-daily-report.js');
 ok('the summary is a board of ten', /class="lg-board lg-board-5" id="summaryRow"/.test(RPT) && (SHEET.match(/class="dr-tile"/g) || []).length === 10);
 ok('the timeline error is no longer overwritten by render()', /document\.getElementById\('taskList'\)\.innerHTML = `<div class="dr-empty">/.test(RJS) && /return;\n  \}\n  render\(\);/.test(RJS));
 ok('saveNotes is null-safe on the response', /\(\(r && r\.message\) \|\| /.test(RJS));

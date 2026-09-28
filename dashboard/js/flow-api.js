@@ -440,17 +440,15 @@ function flowCommissionLadder(x, indent) {
 
 /** The muted "Soon" tag on a menu entry for a feature that is visible but not open yet. */
 function flowSoonTag() {
-  return ' <span style="font-size:0.7em;font-weight:600;opacity:0.6;letter-spacing:0.03em;">SOON</span>';
+  return ' <span class="soon-tag">SOON</span>';
 }
 
 /** One panel, used by all three commission screens, so the promise is worded once. */
 function flowComingSoonHtml(title, body) {
-  return `<div style="padding:1.6rem 1.4rem;border-radius:14px;background:#f8fafc;
-      border:1px solid var(--border,#e2e8f0);text-align:center;">
-      <div style="font:700 1rem/1.4 'Inter',system-ui,sans-serif;color:#1e293b;">${title} — coming soon</div>
-      <p style="margin:0.55rem auto 0;max-width:46ch;font:400 0.86rem/1.65 'Inter',system-ui,sans-serif;color:#64748b;">${body}</p>
-      <p style="margin:0.9rem 0 0;font:500 0.78rem 'Inter',system-ui,sans-serif;color:#94a3b8;">
-        We are still building this. Nothing you do elsewhere is affected.</p>
+  return `<div class="flow-soon">
+      <div class="flow-soon-t">${title} — coming soon</div>
+      <p class="flow-soon-p">${body}</p>
+      <p class="flow-soon-dim">We are still building this. Nothing you do elsewhere is affected.</p>
     </div>`;
 }
 
@@ -607,10 +605,10 @@ function renderFlowNav(active) {
 function flowMsg(elId, text, ok) {
   const el = document.getElementById(elId);
   if (!el) return;
+  // A289 — classes, not colours: .flow-msg.ok / .flow-msg.bad are painted by flow.css in both themes.
+  if (el.classList) { el.classList.add('flow-msg'); el.classList.remove('ok', 'bad'); el.classList.add(ok ? 'ok' : 'bad'); }
   el.style.display = 'block';
   el.textContent = text;
-  el.style.background = ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
-  el.style.color = ok ? '#16a34a' : '#ef4444';
 }
 
 // ─── PDF generation helpers (Flask renders; FlowAPI stores to Drive) ─────────
@@ -1050,24 +1048,18 @@ function flowOptionReviewHtml(review) {
   const rows = review.optionReview.map(o => {
     const pct = o.quoted ? (o.delta / o.quoted) * 100 : 0;
     return `<tr>
-        <td style="padding:.25rem .4rem;font-weight:700;">Option ${flowEsc(o.key)}${o.recommended ? ' <span style="font-weight:600;color:#b91c1c;">· recommended</span>' : ''}</td>
-        <td style="padding:.25rem .4rem;text-align:right;font-variant-numeric:tabular-nums;">${money(o.quoted)}</td>
-        <td style="padding:.25rem .4rem;text-align:right;font-variant-numeric:tabular-nums;">${money(o.priced)}</td>
-        <td style="padding:.25rem .4rem;text-align:right;font-variant-numeric:tabular-nums;${o.delta < 0 ? 'color:#b91c1c;' : ''}">${money(o.delta)}${o.quoted ? ` (${pct.toFixed(1)}%)` : ''}</td>
+        <td><strong>Option ${flowEsc(o.key)}</strong>${o.recommended ? ' <span class="flow-opt-rec">recommended</span>' : ''}</td>
+        <td class="num">${money(o.quoted)}</td>
+        <td class="num">${money(o.priced)}</td>
+        <td class="num${o.delta < 0 ? ' hx-neg' : ''}">${money(o.delta)}${o.quoted ? ` (${pct.toFixed(1)}%)` : ''}</td>
       </tr>`;
   }).join('');
-  return `<div style="margin:.5rem 0;padding:.5rem .6rem;border:1px solid #fca5a5;border-radius:10px;background:#fff7f7;">
-      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#b91c1c;margin-bottom:.3rem;">
-        Alternative offers — priced separately</div>
-      <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
-        <thead><tr style="color:#64748b;font-size:.7rem;text-transform:uppercase;">
-          <th style="text-align:left;padding:.2rem .4rem;">Option</th>
-          <th style="text-align:right;padding:.2rem .4rem;">Quoted</th>
-          <th style="text-align:right;padding:.2rem .4rem;">Sourced</th>
-          <th style="text-align:right;padding:.2rem .4rem;">Margin</th>
-        </tr></thead><tbody>${rows}</tbody></table>
-      <div style="font-size:.72rem;color:#64748b;margin-top:.3rem;">
-        The client picks one. The quotation total below is built from the recommended option.</div>
+  return `<div class="flow-banner bad">
+      <div class="flow-banner-title">Alternative offers, priced separately</div>
+      <table class="flow-opt">
+        <thead><tr><th>Option</th><th class="num">Quoted</th><th class="num">Sourced</th><th class="num">Margin</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <div class="flow-banner-dim">The client picks one. The quotation total below is built from the recommended option.</div>
     </div>`;
 }
 
@@ -1084,27 +1076,29 @@ function flowDeviationBanner(review) {
   const parts = [];
   if (flagged) {
     const up = review.totalDelta > 0;
-    parts.push(`<div style="font-weight:700;margin-bottom:0.35rem;">⚠ The quoted total does not match what management priced</div>`);
-    parts.push(`<div>Priced <strong>${money(review.pricedTotal)}</strong> → quoted <strong>${money(review.quotedGross)}</strong> ` +
-      `<span style="color:${up ? '#dc2626' : '#b45309'};">(${up ? '+' : ''}${money(review.totalDelta)})</span>` +
+    const warnIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    parts.push(`<div><strong>${warnIco}The quoted total does not match what management priced</strong></div>`);
+    parts.push(`<div>Priced <strong>${money(review.pricedTotal)}</strong>, quoted <strong>${money(review.quotedGross)}</strong> ` +
+      `<span class="${up ? 'hx-neg' : 'flow-banner-warn'}">(${up ? '+' : ''}${money(review.totalDelta)})</span>` +
       (review.discountPct ? ` before a ${review.discountPct}% discount` : '') + `</div>`);
     if (review.perLine.length) {
-      parts.push(`<div style="margin-top:0.3rem;">` + review.perLine.map(d =>
-        `${flowEsc(String(d.item).slice(0, 44))}: ${money(d.priced)} → ${money(d.quoted)} ` +
-        `<span style="color:${d.diff < 0 ? '#b45309' : '#dc2626'};">(${d.diff < 0 ? '' : '+'}${money(d.diff)})</span>`
+      parts.push(`<div class="mt-1">` + review.perLine.map(d =>
+        `${flowEsc(String(d.item).slice(0, 44))}: ${money(d.priced)} to ${money(d.quoted)} ` +
+        `<span class="${d.diff < 0 ? 'flow-banner-warn' : 'hx-neg'}">(${d.diff < 0 ? '' : '+'}${money(d.diff)})</span>`
       ).join('<br>') + `</div>`);
     }
     if (review.matched < review.total) {
-      parts.push(`<div style="margin-top:0.3rem;color:#b45309;">Only ${review.matched} of ${review.total} line(s) ` +
-        `could be matched to the pricing (the rest were re-described on the quotation) — review the breakdown below.</div>`);
+      parts.push(`<div class="mt-1 flow-banner-warn">Only ${review.matched} of ${review.total} line(s) ` +
+        `could be matched to the pricing (the rest were re-described on the quotation). Review the breakdown below.</div>`);
     }
   } else {
-    parts.push(`<div style="font-weight:700;">⚠ Review the pricing before approving</div>`);
+    const warnIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    parts.push(`<div><strong>${warnIco}Review the pricing before approving</strong></div>`);
   }
   if (review.incomplete) {
-    parts.push(`<div style="margin-top:0.3rem;color:#b45309;">Some lines have no saved cost breakdown.</div>`);
+    parts.push(`<div class="mt-1 flow-banner-warn">Some lines have no saved cost breakdown.</div>`);
   }
-  return `<div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.6rem;font-size:0.78rem;color:#991b1b;">${parts.join('')}</div>`;
+  return `<div class="flow-banner bad">${parts.join('')}</div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════

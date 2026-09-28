@@ -6,10 +6,9 @@
   <title>Accounting Dashboard — Home</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
-  <link rel="stylesheet" href="css/bento-skin-v2.css">
   <link rel="stylesheet" href="css/flow-screen.css">
   <!-- A188: the Revenue & Net Profit report's styles, shared with the Admin dashboard. Must stay
-       AFTER bento-skin-v2.css — the skin also styles .pnl-card/.pnl-tile and these must win. -->
+       after the base sheet (A289: the retired skin used to style .pnl-card/.pnl-tile too). -->
   <link rel="stylesheet" href="css/pnl-report.css">
   <style>
     .hero {
@@ -235,6 +234,7 @@
 
 </head>
 <body class="flow-screen">
+  <script src="js/theme.js"></script>
   <header class="navbar" id="navbar"></header>
 
   <main class="main-content">

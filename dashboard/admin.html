@@ -9,10 +9,9 @@
        (flow-docs.js) builds its dialog from — without it that modal renders as an unstyled
        block at the page bottom and appears not to open. -->
   <link rel="stylesheet" href="css/flow.css">
-  <link rel="stylesheet" href="css/bento-skin-v2.css">
   <link rel="stylesheet" href="css/flow-screen.css">
   <!-- A188: the Revenue & Net Profit report's styles, shared with the Accounting dashboard. Must
-       stay AFTER bento-skin-v2.css — the skin also styles .pnl-card/.pnl-tile and these must win. -->
+       stay after the base sheet (A289: the retired skin used to style .pnl-card/.pnl-tile too). -->
   <link rel="stylesheet" href="css/pnl-report.css">
   <style>
     .hero {
@@ -184,6 +183,7 @@
   </style>
 </head>
 <body class="flow-screen">
+  <script src="js/theme.js"></script>
   <!-- Navigation -->
   <header class="navbar" id="navbar"></header>
 

@@ -466,7 +466,7 @@ function renderPanel(tab) {
       <input type="text" id="pSearch" placeholder="Search ${u.label.toLowerCase()}" aria-label="Search ${u.label.toLowerCase()}">
       ${(u.filters || []).map(f => `<select data-filter="${f}"><option value="">All ${({ emailVerified: 'verification', status: 'statuses', territory: 'territories', sector: 'sectors' })[f] || f}</option>${filterValues(f).map(v => `<option>${flowEsc(v)}</option>`).join('')}</select>`).join('')}
       <span class="spacer"></span>
-      ${/* `primary` alongside btn-primary: bento-skin-director paints .btn-sm white AFTER .btn-primary indigo, so a
+      ${/* `primary` alongside btn-primary: the old director skin painted .btn-sm white AFTER .btn-primary indigo, so a
             small primary button is white-on-white unless it also carries the skin's own .btn-sm.primary class. */ ''}
       ${lgCanEdit && tab !== 'leads' ? `<button type="button" class="lg-btn primary" id="pAdd">Add ${u.label.replace(/s$/, '').toLowerCase()}</button>` : ''}
       ${lgCanEdit && tab === 'leads' ? `<button type="button" class="lg-btn primary" id="pAdd">Qualify a lead</button>` : ''}

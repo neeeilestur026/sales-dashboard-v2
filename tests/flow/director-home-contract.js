@@ -91,10 +91,10 @@ ok('the scripts load in the same order as before',
 sec('1d · the command centre (A288)');
 ok('director.css sits between flow.css and director-home.css', /flow\.css[\s\S]*css\/director\.css[\s\S]*director-home\.css/.test(HTML));
 ok('the theme script is the FIRST child of <body> (no flash, and it is a src script, not a second inline one)',
-   /<body class="dh">\s*<script src="js\/director-theme\.js"><\/script>/.test(HTML));
+   /<body class="dh">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 ok('director-pulse.js loads after director-approvals.js', /director-approvals\.js[\s\S]*director-pulse\.js/.test(HTML));
 eq('the exact script list', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'director-theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js');
+   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js');
 const TAGS2 = { button: ['themeToggle'], canvas: ['pulseCost'], aside: ['rail'], section: ['pulse', 'team', 'payroll'],
                 div: ['pulseAccrual', 'pulseHeads', 'pulseDed', 'pulseCostBox', 'pulseCostFallback', 'spotTotal'], dd: ['kpiNet', 'kpiShare', 'kpi13', 'kpiActive', 'spotGross', 'spotDed'] };
 Object.keys(TAGS2).forEach(tag => TAGS2[tag].forEach(id => eq('#' + id, tagOf(id), tag)));
@@ -178,7 +178,7 @@ sec('2 · director-home.js boots on the new markup and every tab switches');
   const err4 = threw(() => p.run(inline));
   ok('it runs in the stub DOM without throwing', err4 === null, err4);
   ok('  and it listens for dh:kpis (the rail composition bar)', p.run("__ev.indexOf('dh:kpis') !== -1"), p.run('__ev'));
-  ok('  the theme toggle is wired by the shared theme script, not here', !/themeToggle/.test(inline) && /getElementById\('themeToggle'\)/.test(fs.readFileSync(D + 'js/director-theme.js', 'utf8')));
+  ok('  the theme toggle is wired by the shared theme script, not here', !/themeToggle/.test(inline) && /getElementById\('themeToggle'\)/.test(fs.readFileSync(D + 'js/theme.js', 'utf8')));
   ok('dhSetNumber is now defined', p.run('typeof dhSetNumber') === 'function');
   p.run(`dhSetNumber(document.getElementById('kpiNet'), '₱1,234.00')`);
   eq('  under reduced motion it writes the final text at once', p.els.kpiNet.textContent, '₱1,234.00');

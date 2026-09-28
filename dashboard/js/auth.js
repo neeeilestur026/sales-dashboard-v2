@@ -1087,15 +1087,14 @@ function renderNavbar(activePage) {
       ${navLinks}
     </nav>
     <div class="navbar-user">
-      <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()" title="Notifications" style="position:relative;cursor:pointer;margin-right:0.5rem;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:0.6rem;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center;"></span>
+      <button type="button" class="theme-toggle nav-theme" id="navThemeToggle" aria-pressed="false" aria-label="Dark theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Dark</span></button>
+      <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()" title="Notifications">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="notif-badge" id="notifBadge" style="display:none;"></span>
       </div>
-      <div id="notifDropdown" style="display:none;position:absolute;top:52px;right:60px;width:320px;max-height:400px;overflow-y:auto;background:var(--surface,#ffffff);border:1px solid var(--border,#334155);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:9999;padding:0.5rem 0;">
-        <div style="padding:0.5rem 1rem;font-size:0.82rem;font-weight:700;color:var(--text-primary,#f1f5f9);border-bottom:1px solid var(--border,#334155);">Notifications</div>
-        <div id="notifList" style="padding:0.25rem 0;font-size:0.8rem;color:var(--text-secondary,#94a3b8);">
-          <div style="padding:0.75rem 1rem;text-align:center;color:var(--text-muted);">Loading...</div>
-        </div>
+      <div class="notif-dropdown" id="notifDropdown" style="display:none;">
+        <div class="notif-head">Notifications</div>
+        <div class="notif-list" id="notifList"><div class="notif-empty">Loading...</div></div>
       </div>
       <span class="navbar-user-name">${session.name}</span>
       <div class="navbar-user-avatar">${initials}</div>
@@ -1168,12 +1167,13 @@ document.addEventListener('click', (e) => {
 // One live-computed worklist ("what needs YOU right now"), derived from the same FlowAPI getters the
 // homes already call. Feeds BOTH the navbar bell (loadNotifications) and the home strip (flowActionsStrip).
 // Items are NAVIGATIONAL (link to the page where you act) — no approve wiring duplicated here. Nothing
-// persists: an item disappears the moment its underlying status changes. Returns [{icon,color,text,link}].
+// persists: an item disappears the moment its underlying status changes. Returns [{icon,tone,text,link}].
 async function flowComputeActions(session) {
   const items = [];
   if (!session || typeof fetchFlow !== 'function') return items;
   const role = String(session.role || '').toLowerCase();
-  const add = (icon, color, text, link) => items.push({ icon, color, text, link });
+  // A289 — tone, not colour: urgent | warn | info | ok. The stylesheet paints [data-tone].
+  const add = (icon, tone, text, link) => items.push({ icon, tone, text, link });
   const isMgmt = role === 'management', isDir = role === 'director';
   const isAdmin = role === 'admin', isAcct = role === 'accounting', isSales = role === 'sales';
   /* A280 — the quotation/PR nudges belong to whoever RAISES them, which is now sales and lead-gen.
@@ -1206,7 +1206,7 @@ async function flowComputeActions(session) {
     jobs.push(fetchFlow('getInventory').then(r => {
       const stockOnly = (typeof flowStockItems === 'function') ? flowStockItems((r && r.data) || []) : ((r && r.data) || []);
       const low = stockOnly.filter(i => { const b = parseFloat(i.balance) || 0; return b > 0 && b < 10; });
-      if (low.length) add('inventory', '#ef4444', low.length + ' item(s) running low on stock', 'flow-inventory.html');
+      if (low.length) add('inventory', 'urgent', low.length + ' item(s) running low on stock', 'flow-inventory.html');
     }).catch(() => {}));
   }
 
@@ -1217,7 +1217,7 @@ async function flowComputeActions(session) {
     const stages = isAdmin ? ['Pending Admin'] : ['Pending Management', 'Pending Director'];
     jobs.push(fetchFlow('getQuotations').then(r => {
       const n = ((r && r.data) || []).filter(q => stages.indexOf(q.status) !== -1).length;
-      if (n) add('report', '#f97316', n + ' quotation(s) awaiting your approval', 'flow-quotations.html');
+      if (n) add('report', 'warn', n + ' quotation(s) awaiting your approval', 'flow-quotations.html');
     }).catch(() => {}));
   }
   /* A190 — weekly itineraries. The director is the FIRST approver and management the second, so
@@ -1227,14 +1227,14 @@ async function flowComputeActions(session) {
     const stage = isDir ? 'Pending Director' : 'Pending Management';
     jobs.push(fetchFlow('getWeeklyItineraries').then(r => {
       const n = ((r && r.data) || []).filter(x => x.status === stage).length;
-      if (n) add('report', '#f97316', n + ' weekly itinerar' + (n === 1 ? 'y' : 'ies') + ' awaiting your approval',
+      if (n) add('report', 'warn', n + ' weekly itinerar' + (n === 1 ? 'y' : 'ies') + ' awaiting your approval',
                  isDir ? 'director-home.html' : 'management-home.html');
     }).catch(() => {}));
   }
   if (isSales) {
     jobs.push(fetchFlow('getWeeklyItineraries', { user: session.name }).then(r => {
       const mine = ((r && r.data) || []).filter(x => x.status === 'Rejected').length;
-      if (mine) add('report', '#ef4444', mine + ' weekly itinerar' + (mine === 1 ? 'y was' : 'ies were') + ' sent back', 'weekly-itinerary.html');
+      if (mine) add('report', 'urgent', mine + ' weekly itinerar' + (mine === 1 ? 'y was' : 'ies were') + ' sent back', 'weekly-itinerary.html');
     }).catch(() => {}));
   }
 
@@ -1265,7 +1265,7 @@ async function flowComputeActions(session) {
         const fu = flowFollowUp(x, links[String(x.quotationNo)] || [], cfg, hasSO);
         if (fu.state === 'due' || fu.state === 'overdue') { chase++; value += (typeof flowQuotationNet === 'function' ? flowQuotationNet(x) : 0); }
       });
-      if (chase) add('report', '#b45309', chase + ' quotation(s) across the team past follow-up' +
+      if (chase) add('report', 'warn', chase + ' quotation(s) across the team past follow-up' +
         (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''), 'flow-quotations.html');
     }).catch(() => {}));
   }
@@ -1274,14 +1274,14 @@ async function flowComputeActions(session) {
   if (isMgmt || isDir) {
     jobs.push(fetchFlow('getPurchaseOrders').then(r => {
       const n = ((r && r.data) || []).filter(p => p.status === 'Pending Management').length;
-      if (n) add('report', '#f97316', n + ' purchase order(s) awaiting your approval', 'flow-purchase-orders.html');
+      if (n) add('report', 'warn', n + ' purchase order(s) awaiting your approval', 'flow-purchase-orders.html');
     }).catch(() => {}));
   }
   // Management: pricing requests waiting for final prices (previously unsurfaced on any home).
   if (isMgmt || isDir) {
     jobs.push(fetchFlow('getPricingRequests').then(r => {
       const n = ((r && r.data) || []).filter(p => p.status === 'For Mgmt Pricing').length;
-      if (n) add('report', '#6366f1', n + ' pricing request(s) waiting for your final pricing', 'flow-pricing-request.html');
+      if (n) add('report', 'info', n + ' pricing request(s) waiting for your final pricing', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
   /* Admin: the whole pricing queue admin actually owns. A192 added the second and third counts —
@@ -1291,9 +1291,9 @@ async function flowComputeActions(session) {
     jobs.push(fetchFlow('getPricingRequests').then(r => {
       const rows = (r && r.data) || [];
       const src = rows.filter(p => p.status === 'Requested' || p.status === 'Sourcing').length;
-      if (src) add('report', '#6366f1', src + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
+      if (src) add('report', 'info', src + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
       const ver = rows.filter(p => p.status === 'Mgmt Priced').length;
-      if (ver) add('report', '#f97316', ver + ' priced request(s) awaiting your verification', 'flow-pricing-request.html');
+      if (ver) add('report', 'warn', ver + ' priced request(s) awaiting your verification', 'flow-pricing-request.html');
       /* Deliberately unscoped: a returned request nobody has quoted is admin's problem whoever
          raised it, and that oversight is exactly what was missing. Sales keeps its own scoped
          nudge for the ones raised in their name. */
@@ -1301,7 +1301,7 @@ async function flowComputeActions(session) {
          exactly what this nudge is for; leaving it out would make the leftover half of every split
          request invisible from the moment the first quotation went out. */
       const rts = rows.filter(p => p.status === 'Returned to Sales' || p.status === 'Partly Quoted').length;
-      if (rts) add('report', '#22c55e', rts + ' priced request(s) still waiting to be quoted', 'flow-pricing-request.html');
+      if (rts) add('report', 'ok', rts + ' priced request(s) still waiting to be quoted', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
   /* A207 commissions. Three separate nudges because three different people have three different
@@ -1313,7 +1313,7 @@ async function flowComputeActions(session) {
       const rows = (r && r.data) || [];
       if (rows.length) {
         const value = rows.reduce((t, x) => t + (parseFloat(x.netPayable) || 0), 0);
-        add('report', '#f97316', rows.length + ' commission request(s) awaiting your approval'
+        add('report', 'warn', rows.length + ' commission request(s) awaiting your approval'
             + (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''),
             isDir ? 'director-home.html' : 'management-home.html');
       }
@@ -1326,7 +1326,7 @@ async function flowComputeActions(session) {
       const rows = ((r && r.data) || []).filter(x => !x.releasedAt);
       if (rows.length) {
         const value = rows.reduce((t, x) => t + (parseFloat(x.netPayable) || 0), 0);
-        add('urgent', '#ef4444', rows.length + ' approved commission(s) to include in the next cutoff'
+        add('urgent', 'urgent', rows.length + ' approved commission(s) to include in the next cutoff'
             + (value ? ' (\u20b1' + Math.round(value).toLocaleString() + ')' : ''),
             'commission-payout-report.html');
       }
@@ -1341,7 +1341,7 @@ async function flowComputeActions(session) {
       const rows = (r && r.data) || [];
       if (rows.length) {
         const value = rows.reduce((t, x) => t + (parseFloat(x.totalSpent) || 0), 0);
-        add('urgent', '#ef4444', rows.length + ' travel report(s) waiting for your signature'
+        add('urgent', 'urgent', rows.length + ' travel report(s) waiting for your signature'
             + (value ? ' (₱' + Math.round(value).toLocaleString() + ')' : ''),
             'flow-travel.html');
       }
@@ -1351,7 +1351,7 @@ async function flowComputeActions(session) {
   if (isSales) {
     jobs.push(postFlow('getTravelReplenishments', { status: 'Rejected' }).then(r => {
       const rows = (r && r.data) || [];
-      if (rows.length) add('report', '#b45309', rows.length + ' travel report(s) sent back to you',
+      if (rows.length) add('report', 'warn', rows.length + ' travel report(s) sent back to you',
                            'flow-travel.html');
     }).catch(() => {}));
   }
@@ -1359,7 +1359,7 @@ async function flowComputeActions(session) {
   if (_commLive && isSales) {
     jobs.push(postFlow('getCommissionRequests', { status: 'Rejected' }).then(r => {
       const rows = (r && r.data) || [];
-      if (rows.length) add('report', '#b45309', rows.length + ' commission request(s) sent back to you',
+      if (rows.length) add('report', 'warn', rows.length + ' commission request(s) sent back to you',
                            'flow-commissions.html');
     }).catch(() => {}));
   }
@@ -1391,8 +1391,8 @@ async function flowComputeActions(session) {
       const page = t => t === 'Other' ? 'flow-other-payables.html' : 'flow-payment-requests.html';
       const label = t => t === 'Other' ? 'other payable' : 'payment request';
       ['PO', 'Other'].forEach(t => {
-        if (waiting[t]) add('report', '#f97316', waiting[t] + ' ' + label(t) + '(s) awaiting your approval', page(t));
-        if (toPay[t]) add('urgent', '#ef4444', toPay[t] + ' approved ' + label(t) + '(s) to pay + attach proof', page(t));
+        if (waiting[t]) add('report', 'warn', waiting[t] + ' ' + label(t) + '(s) awaiting your approval', page(t));
+        if (toPay[t]) add('urgent', 'urgent', toPay[t] + ' approved ' + label(t) + '(s) to pay + attach proof', page(t));
       });
     }).catch(() => {}));
   }
@@ -1400,11 +1400,11 @@ async function flowComputeActions(session) {
   if (isAcct || isAdmin) {
     jobs.push(fetchFlow('getAPAging').then(r => {
       const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
-      if (n) add('urgent', '#ef4444', n + ' payable(s) past due', 'flow-ap-aging.html');
+      if (n) add('urgent', 'urgent', n + ' payable(s) past due', 'flow-ap-aging.html');
     }).catch(() => {}));
     jobs.push(fetchFlow('getARAging').then(r => {
       const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
-      if (n) add('urgent', '#ef4444', n + ' receivable(s) past due — collect', 'flow-ar-aging.html');
+      if (n) add('urgent', 'urgent', n + ' receivable(s) past due — collect', 'flow-ar-aging.html');
     }).catch(() => {}));
   }
   // Admin/Accounting procurement follow-ups: sales orders with no PO, POs not yet received.
@@ -1426,15 +1426,15 @@ async function flowComputeActions(session) {
          PO, and one nobody has touched in two months is history, not a task. */
       const noPO = ((so && so.data) || []).filter(s =>
         !hasPO[String(s.soNo)] && _actionable(s.status) && !_stale(s.date, 60)).length;
-      if (noPO) add('report', '#b45309', noPO + ' sales order(s) with no purchase order yet', 'flow-purchase-orders.html');
+      if (noPO) add('report', 'warn', noPO + ' sales order(s) with no purchase order yet', 'flow-purchase-orders.html');
       // A171: same treatment — a PO raised a year ago and never received is not this week's work.
       const notRc = ((po && po.data) || []).filter(p =>
         (p.status === 'Approved' || p.status === 'Sent') && !received[String(p.poNo)] && !_stale(p.date, 120)).length;
-      if (notRc) add('report', '#b45309', notRc + ' purchase order(s) not received yet', 'flow-receiving.html');
+      if (notRc) add('report', 'warn', notRc + ' purchase order(s) not received yet', 'flow-receiving.html');
       // A151: received but not yet invoiced — the SO is sitting between delivery and billing.
       const delNotInv = ((so && so.data) || []).filter(s =>
         rcSO[String(s.soNo)] && !invSO[String(s.soNo)] && !_stale(s.date, 120)).length;
-      if (delNotInv) add('report', '#b45309', delNotInv + ' received order(s) not yet invoiced', 'flow-lifecycle.html');
+      if (delNotInv) add('report', 'warn', delNotInv + ' received order(s) not yet invoiced', 'flow-lifecycle.html');
     }).catch(() => {}));
   }
   // Sales: my returned pricing requests, my approved/rejected quotations, my sent quotes with no SO.
@@ -1442,7 +1442,7 @@ async function flowComputeActions(session) {
     jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
       // A242 — same on the rep's own home: a partly-quoted request still has items to quote.
       const n = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales' || p.status === 'Partly Quoted').length;
-      if (n) add('report', '#22c55e', n + ' pricing request(s) ready to quote (final prices set)', 'flow-pricing-request.html');
+      if (n) add('report', 'ok', n + ' pricing request(s) ready to quote (final prices set)', 'flow-pricing-request.html');
     }).catch(() => {}));
     jobs.push(Promise.all([
       fetchFlow('getQuotations', { createdBy: session.name }).catch(() => ({ data: [] })),
@@ -1452,7 +1452,7 @@ async function flowComputeActions(session) {
     ]).then(([q, so, le, cf]) => {
       const mine = (q && q.data) || [];
       const rejected = mine.filter(x => x.status === 'Rejected');
-      if (rejected.length) add('urgent', '#ef4444', rejected.length + ' quotation(s) rejected — fix & resubmit' + (rejected[0].approvalNote ? ' (' + rejected[0].approvalNote + ')' : ''), 'flow-quotations.html');
+      if (rejected.length) add('urgent', 'urgent', rejected.length + ' quotation(s) rejected — fix & resubmit' + (rejected[0].approvalNote ? ' (' + rejected[0].approvalNote + ')' : ''), 'flow-quotations.html');
       const hasSO = {}; ((so && so.data) || []).forEach(s => { if (s.quotationNo) hasSO[String(s.quotationNo)] = true; });
       const cfg = (cf && cf.data) || null;
       const links = {};
@@ -1475,10 +1475,10 @@ async function flowComputeActions(session) {
         notSent = mine.filter(x => x.status === 'Approved').length;
         noOrder = mine.filter(x => x.status === 'Sent' && !hasSO[String(x.quotationNo)]).length;
       }
-      if (notSent) add('report', '#22c55e', notSent + ' approved quotation(s) still not sent to the client', 'flow-quotations.html');
-      if (replied) add('report', '#1d4ed8', replied + ' client repl' + (replied === 1 ? 'y' : 'ies') + ' waiting on you', 'flow-quotations.html');
-      if (chase) add('report', '#b45309', chase + ' quotation(s) with no client reply — due a follow-up', 'flow-quotations.html');
-      if (noOrder) add('report', '#f97316', noOrder + ' sent quotation(s) still with no sales order', 'flow-sales-orders.html');
+      if (notSent) add('report', 'ok', notSent + ' approved quotation(s) still not sent to the client', 'flow-quotations.html');
+      if (replied) add('report', 'info', replied + ' client repl' + (replied === 1 ? 'y' : 'ies') + ' waiting on you', 'flow-quotations.html');
+      if (chase) add('report', 'warn', chase + ' quotation(s) with no client reply — due a follow-up', 'flow-quotations.html');
+      if (noOrder) add('report', 'warn', noOrder + ' sent quotation(s) still with no sales order', 'flow-sales-orders.html');
     }).catch(() => {}));
   }
 
@@ -1488,17 +1488,17 @@ async function flowComputeActions(session) {
   if (role === 'leadgen') {
     jobs.push(fetchFlow('getLeadgenFollowups').then(r => {
       const n = ((r && r.data) || []).length;
-      if (n) add('report', '#4f46e5', n + ' follow-up' + (n === 1 ? '' : 's') + ' due today', 'leadgen-home.html#followups');
+      if (n) add('report', 'info', n + ' follow-up' + (n === 1 ? '' : 's') + ' due today', 'leadgen-home.html#followups');
     }).catch(() => {}));
     jobs.push(fetchFlow('getLeadgen').then(r => {
       const d = (r && r.data) || {};
       const today = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
       const soon = (d.accred || []).filter(a => a.expiry && a.status === 'Approved' && !_stale(a.expiry, 0) && (new Date(a.expiry) - new Date(today)) / 86400000 <= 30).length;
-      if (soon) add('urgent', '#f97316', soon + ' accreditation' + (soon === 1 ? '' : 's') + ' expiring within 30 days', 'leadgen-home.html#accred');
+      if (soon) add('urgent', 'warn', soon + ' accreditation' + (soon === 1 ? '' : 's') + ' expiring within 30 days', 'leadgen-home.html#accred');
       const stuck = (d.leads || []).filter(l => l.status === 'Handed Off' && _stale(l.handedOffOn, 7)).length;
-      if (stuck) add('report', '#b45309', stuck + ' handed-off lead' + (stuck === 1 ? '' : 's') + ' with no rep movement after a week', 'leadgen-home.html#leads');
+      if (stuck) add('report', 'warn', stuck + ' handed-off lead' + (stuck === 1 ? '' : 's') + ' with no rep movement after a week', 'leadgen-home.html#leads');
       const back = (d.leads || []).filter(l => l.status === 'Returned').length;
-      if (back) add('urgent', '#ef4444', back + ' lead' + (back === 1 ? '' : 's') + ' returned by the rep — re-qualify or close', 'leadgen-home.html#leads');
+      if (back) add('urgent', 'urgent', back + ' lead' + (back === 1 ? '' : 's') + ' returned by the rep — re-qualify or close', 'leadgen-home.html#leads');
     }).catch(() => {}));
     jobs.push(fetchFlow('getLeadgenCounts', {}, { fresh: true }).then(k => {
       if (!k || !k.success || !k.day || !k.day.working) return;
@@ -1507,14 +1507,14 @@ async function flowComputeActions(session) {
       const labels = { plants: 'plants', contacts: 'contacts', introEmails: 'intro emails', followupEmails: 'follow-up emails',
                        coldCalls: 'cold calls', followupCalls: 'follow-up calls', leads: 'leads', meetings: 'meetings' };
       const behind = Object.keys(labels).filter(x => (k.quotas[x] || 0) > 0 && (k.day[x] || 0) < k.quotas[x]);
-      if (behind.length) add('report', '#d97706', 'Behind on ' + behind.map(x => (k.quotas[x] - k.day[x]) + ' ' + labels[x]).join(', '), 'leadgen-home.html#tiles');
+      if (behind.length) add('report', 'warn', 'Behind on ' + behind.map(x => (k.quotas[x] - k.day[x]) + ' ' + labels[x]).join(', '), 'leadgen-home.html#tiles');
     }).catch(() => {}));
   }
   // A277 — the rep's side of the hand-off: leads the lead-gen user has put in their name.
   if (isSales && session.username) {
     jobs.push(fetchFlow('getLeadgen', { entity: 'leads', handedTo: session.username, status: 'Handed Off' }).then(r => {
       const n = ((r && r.data && r.data.leads) || []).length;
-      if (n) add('report', '#4f46e5', n + ' qualified lead' + (n === 1 ? '' : 's') + ' handed to you — book the presentation', 'dashboard.html#leadsForYou');
+      if (n) add('report', 'info', n + ' qualified lead' + (n === 1 ? '' : 's') + ' handed to you — book the presentation', 'dashboard.html#leadsForYou');
     }).catch(() => {}));
   }
 
@@ -1536,25 +1536,22 @@ async function flowActionsStrip(containerId) {
   if (!el) return;
   const session = getSession();
   if (!session) { el.style.display = 'none'; return; }
-  el.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.82rem;padding:0.4rem 0;">Loading your action items…</div>';
+  el.innerHTML = '<div class="fa-loading">Loading your action items…</div>';
   let items = [];
   try { items = await flowComputeActions(session); } catch (e) { items = []; }
   if (!items.length) {
-    el.innerHTML = '<div style="display:flex;align-items:center;gap:0.5rem;color:#16a34a;font-size:0.86rem;font-weight:600;"><span>✓</span> You\'re all caught up — nothing needs your action right now.</div>';
+    el.innerHTML = '<div class="fa-empty">You\'re all caught up — nothing needs your action right now.</div>';
     return;
   }
-  el.innerHTML = `<div style="display:grid;gap:0.5rem;">${items.map(n => `
-    <a href="${n.link}" style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.8rem;text-decoration:none;color:var(--text-primary,#1e293b);border:1px solid var(--border,#e2e8f0);border-radius:10px;background:var(--bg-card,#fff);transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow='none'">
-      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:${n.color}18;color:${n.color};flex-shrink:0;">${_flowActionIconSvg(n.icon)}</div>
-      <span style="font-size:0.86rem;flex:1;">${n.text}</span>
-      <span style="color:var(--text-muted,#94a3b8);font-size:0.9rem;">→</span>
-    </a>`).join('')}</div>`;
+  // A289 — classed rows on a tone; the stylesheet paints them, so every page and both themes agree.
+  el.innerHTML = `<div class="fa-list">${items.map(n => `
+    <a href="${n.link}" class="fa-row" data-tone="${n.tone || 'neutral'}"><span class="fa-ico" data-tone="${n.tone || 'neutral'}">${_flowActionIconSvg(n.icon)}</span><span class="fa-text">${n.text}</span></a>`).join('')}</div>`;
 }
 
 async function loadNotifications() {
   const list = document.getElementById('notifList');
   if (!list) return;
-  list.innerHTML = '<div style="padding:0.75rem 1rem;text-align:center;color:var(--text-muted);">Loading...</div>';
+  list.innerHTML = '<div class="notif-empty">Loading...</div>';
 
   const session = getSession();
   if (!session) return;
@@ -1576,21 +1573,12 @@ async function loadNotifications() {
 
   // Render
   if (notifications.length === 0) {
-    list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-muted);">No notifications</div>';
+    list.innerHTML = '<div class="notif-empty">No notifications</div>';
     return;
   }
-
-  list.innerHTML = notifications.map(n => {
-    const iconSvg = n.icon === 'urgent'
-      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
-      : n.icon === 'inventory'
-      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>'
-      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-    return `<a href="${n.link}" style="display:flex;align-items:center;gap:0.6rem;padding:0.6rem 1rem;text-decoration:none;color:var(--text-secondary);border-bottom:1px solid #e2e8f0;transition:background 0.15s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">
-      <div style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:${n.color}15;color:${n.color};flex-shrink:0;">${iconSvg}</div>
-      <span>${n.text}</span>
-    </a>`;
-  }).join('');
+  list.innerHTML = notifications.map(n =>
+    `<a href="${n.link}" class="notif-row" data-tone="${n.tone || 'neutral'}"><span class="notif-ico" data-tone="${n.tone || 'neutral'}">${_flowActionIconSvg(n.icon)}</span><span class="notif-text">${n.text}</span></a>`
+  ).join('');
 }
 
 // Auto-load notification badge count on page load
@@ -1626,22 +1614,22 @@ function _renderMemoQueue(queue, idx, dismissed, dismissedKey, checkKey, today) 
   }
   const memo = queue[idx];
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  overlay.className = 'modal-overlay open';
   const card = document.createElement('div');
-  card.style.cssText = 'background:#1e293b;border:1px solid #334155;border-radius:12px;max-width:560px;width:100%;padding:1.5rem;color:#f1f5f9;box-shadow:0 20px 40px rgba(0,0,0,0.5);';
-  const priorityColor = (memo.priority || '').toLowerCase() === 'urgent' ? '#ef4444' :
-                        (memo.priority || '').toLowerCase() === 'high' ? '#f97316' : '#3b82f6';
+  card.className = 'modal memo';
+  const pri = (memo.priority || '').toLowerCase();
+  const priorityTone = pri === 'urgent' ? 'urgent' : pri === 'high' ? 'warn' : 'info';
   card.innerHTML = `
-    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-      <span style="background:${priorityColor}20;color:${priorityColor};font-size:0.7rem;font-weight:600;padding:0.2rem 0.55rem;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">${(memo.priority || 'Normal')}</span>
-      <span style="color:#64748b;font-size:0.75rem;">${memo.type || 'Memo'} · ${memo.createdAt || ''}</span>
-      <span style="margin-left:auto;color:#64748b;font-size:0.75rem;">${idx+1} / ${queue.length}</span>
+    <div class="memo-head">
+      <span class="memo-pri" data-tone="${priorityTone}">${(memo.priority || 'Normal')}</span>
+      <span>${memo.type || 'Memo'}, ${memo.createdAt || ''}</span>
+      <span style="margin-left:auto;">${idx+1} / ${queue.length}</span>
     </div>
-    <h3 style="margin:0 0 0.5rem 0;font-size:1.15rem;">${(memo.title || '').replace(/</g,'&lt;')}</h3>
-    <div style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;margin-bottom:0.5rem;white-space:pre-wrap;">${(memo.content || '').replace(/</g,'&lt;')}</div>
-    <div style="font-size:0.75rem;color:#64748b;margin-bottom:1rem;">From: ${memo.createdBy || 'HR'} · For: ${memo.target || 'All'}</div>
-    <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-      <button id="memoDismissBtn" style="background:#3b82f6;color:#fff;border:none;padding:0.5rem 1rem;border-radius:6px;font-weight:600;cursor:pointer;">Mark as Read</button>
+    <h3>${(memo.title || '').replace(/</g,'&lt;')}</h3>
+    <div class="memo-body">${(memo.content || '').replace(/</g,'&lt;')}</div>
+    <div class="memo-from">From: ${memo.createdBy || 'HR'}. For: ${memo.target || 'All'}</div>
+    <div class="modal-actions">
+      <button type="button" id="memoDismissBtn" class="btn btn-primary">Mark as Read</button>
     </div>
   `;
   overlay.appendChild(card);

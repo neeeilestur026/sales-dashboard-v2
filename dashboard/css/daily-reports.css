@@ -1,51 +1,49 @@
 /* ═══════════════════════════════════════════════
-   daily-reports.css — the 🗒️ Daily Reports section, extracted so the management, HR and
+   daily-reports.css — the Daily Reports section, extracted so the management, HR and
    marketing home pages render it identically from ONE stylesheet.
 
    A264: the section was previously styled by rules inlined in management-home.html, which is
-   why it could not simply be dropped onto another page. management-home.html keeps its inline
-   copy (those same selectors also dress its income-statement and inventory cards); this file
-   carries only what the Daily Reports block itself needs.
+   why it could not simply be dropped onto another page. A289: on the brand tokens.
    ═══════════════════════════════════════════════ */
 
 /* Section shell — collapsible card */
-.mgmt-newsec { background:var(--bg-card,#fff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.2rem 1.4rem; margin-bottom:1.25rem; box-shadow:var(--shadow-sm,0 1px 3px rgba(15,23,42,0.06)); }
-.mgmt-newsec > h2 { margin:0 0 0.9rem; font-size:1.05rem; font-weight:700; color:var(--text-primary,#0f172a); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
-.newsec-chevron { display:inline-flex; transition:transform 0.25s ease; color:var(--text-muted,#64748b); }
+.mgmt-newsec { background:var(--hx-glass); -webkit-backdrop-filter:var(--hx-blur); backdrop-filter:var(--hx-blur); border:1px solid var(--hx-glass-line); border-radius:var(--hx-r-lg); padding:18px 20px; margin-bottom:16px; box-shadow:var(--hx-sh-2); }
+.mgmt-newsec > h2 { margin:0 0 12px; font:700 15px/1.3 var(--hx-text); color:var(--hx-ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.newsec-chevron { display:inline-flex; transition:transform .25s var(--hx-ease); color:var(--hx-ink-3); }
 .mgmt-newsec.collapsed .newsec-chevron { transform:rotate(-90deg); }
 .mgmt-newsec.collapsed > h2 { margin-bottom:0; }
 .mgmt-newsec.collapsed > :not(h2) { display:none; }
 
 /* Date + search controls */
-.is-controls { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:0.9rem; }
-.is-controls select, .is-controls input { padding:0.4rem 0.7rem; border:1px solid var(--border,#e2e8f0); border-radius:8px; font-size:0.85rem; background:#fff; color:var(--text-primary,#0f172a); }
-.is-state { font-size:0.74rem; color:var(--text-muted,#64748b); }
+.is-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+.is-controls select, .is-controls input { padding:8px 10px; border:1px solid var(--hx-hair); border-radius:var(--hx-r-sm); font:400 13px/1.4 var(--hx-text); background:var(--hx-glass-solid); color:var(--hx-ink); }
+.is-state { font:500 12px/1.4 var(--hx-text); color:var(--hx-ink-3); }
 
 /* Empty / loading state */
-.mf-empty { padding:1.2rem; text-align:center; color:var(--text-muted,#64748b); font-style:italic; font-size:0.86rem; }
+.mf-empty { padding:18px; text-align:center; color:var(--hx-ink-3); font:400 12.5px/1.5 var(--hx-text); font-style:normal; }
 
 /* The five counter tiles */
-.dr-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:0.6rem; margin-bottom:0.9rem; }
-.dr-tile { background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.6rem 0.8rem; text-align:center; }
-.dr-tile .l { font-size:0.64rem; text-transform:uppercase; color:var(--text-muted,#64748b); font-weight:700; }
-.dr-tile .v { font-size:1.05rem; font-weight:800; color:var(--text-primary,#0f172a); margin-top:0.2rem; font-variant-numeric:tabular-nums; }
+.dr-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-bottom:12px; }
+.dr-tiles .dr-tile { background:var(--hx-glass-solid); border:1px solid var(--hx-hair-2); border-radius:var(--hx-r-md); padding:10px 12px; text-align:left; }
+.dr-tiles .dr-tile .l { font:600 11px/1.3 var(--hx-text); text-transform:none; letter-spacing:0; color:var(--hx-ink-2); }
+.dr-tiles .dr-tile .v { font:800 18px/1.1 var(--hx-display); color:var(--hx-ink); margin-top:4px; font-variant-numeric:tabular-nums; }
 
 /* Per-user expandable report */
-.urep { border:1px solid var(--border,#e2e8f0); border-radius:10px; margin-bottom:0.6rem; overflow:hidden; background:#fff; }
-.urep > summary { list-style:none; cursor:pointer; padding:0.7rem 0.9rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; background:var(--bg-inset,#f8fafc); }
+.urep { border:1px solid var(--hx-hair-2); border-radius:var(--hx-r-md); margin-bottom:8px; overflow:hidden; background:var(--hx-glass-solid); }
+.urep > summary { list-style:none; cursor:pointer; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:1rem; background:var(--hx-inset); }
 .urep > summary::-webkit-details-marker { display:none; }
-.uname { font-weight:700; color:var(--text-primary,#0f172a); }
-.ustat { font-size:0.76rem; color:var(--text-muted,#64748b); }
-.urep-body { padding:0.8rem 0.9rem; }
-.umods { display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.6rem; }
-.urep-note { margin-top:0.6rem; font-size:0.82rem; color:var(--text-secondary,#475569); background:var(--bg-inset,#f8fafc); padding:0.5rem 0.7rem; border-radius:8px; }
-.mod-badge { display:inline-block; padding:0.12rem 0.5rem; border-radius:999px; font-size:0.68rem; font-weight:700; background:var(--accent-light,#ccfbf1); color:var(--accent-dark,#0f766e); white-space:nowrap; }
-.act-chip { display:inline-block; padding:0.1rem 0.45rem; border-radius:6px; font-size:0.7rem; font-weight:600; background:var(--bg-inset,#f1f5f9); color:var(--text-secondary,#475569); }
+.uname { font-weight:700; color:var(--hx-ink); }
+.ustat { font:500 12px/1.3 var(--hx-text); color:var(--hx-ink-3); }
+.urep-body { padding:12px 14px; }
+.umods { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.urep-note { margin-top:10px; font:400 12.5px/1.5 var(--hx-text); color:var(--hx-ink-2); background:var(--hx-inset); padding:8px 12px; border-radius:var(--hx-r-sm); }
+.mod-badge { display:inline-block; padding:2px 9px; border-radius:var(--hx-r-pill); font:700 10.5px/1.5 var(--hx-text); background:var(--hx-navy-soft); color:var(--hx-navy-text); white-space:nowrap; }
+.act-chip { display:inline-block; padding:1px 7px; border-radius:5px; font:700 10.5px/1.5 var(--hx-text); background:var(--hx-inset); color:var(--hx-ink-2); border:1px solid var(--hx-hair-2); }
 
 /* Activity table inside an expanded report */
-.flow-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
-.flow-table th { text-align:left; padding:0.45rem 0.6rem; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; border-bottom:1px solid var(--border,#e2e8f0); }
-.flow-table td { padding:0.45rem 0.6rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-primary,#0f172a); }
+.flow-table { width:100%; border-collapse:collapse; font:400 12.5px/1.4 var(--hx-text); }
+.flow-table th { text-align:left; padding:8px 10px; font:700 11px/1.3 var(--hx-text); text-transform:none; letter-spacing:0; color:var(--hx-ink-2); border-bottom:1px solid var(--hx-hair); background:var(--hx-inset); }
+.flow-table td { padding:8px 10px; border-bottom:1px solid var(--hx-hair-2); color:var(--hx-ink); }
 .flow-table td.num, .flow-table th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
-.link-btn { background:none; border:none; padding:0; color:var(--accent,#0d9488); font-weight:600; cursor:pointer; font-size:inherit; text-decoration:underline; }
+.link-btn { background:none; border:none; padding:0; color:var(--hx-navy-text); font-weight:600; cursor:pointer; font-size:inherit; text-decoration:underline; text-underline-offset:2px; }

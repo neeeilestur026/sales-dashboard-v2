@@ -21,11 +21,11 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 
 const PAGES = {
-  'director-expenses.html': { body: 'dh dh-expenses', links: 'styles.css,director.css,director-pages.css', scripts: 'director-theme.js,api.js,auth.js,director-expenses.js', js: 'director-expenses.js',
+  'director-expenses.html': { body: 'dh dh-expenses', links: 'styles.css,director.css,director-pages.css', scripts: 'theme.js,api.js,auth.js,director-expenses.js', js: 'director-expenses.js',
     tags: { dd: ['kpiCount', 'kpiAvg', 'kpiTopCat'], div: ['kpiTotal', 'dexCount'], small: ['kpiTopCatAmt'], tbody: ['topCatBody', 'typeBreakdownBody', 'dexBody'], input: ['dexSearch', 'dexMonth'], select: ['dexYear', 'dexCategory'], table: ['dexTable'], button: ['dexClear', 'dexRefresh', 'themeToggle'], aside: ['rail'] } },
-  'director-sales-orders.html': { body: 'dh dh-so', links: 'styles.css,director.css,director-pages.css', scripts: 'director-theme.js,api.js,auth.js,director-sales-orders.js', js: 'director-sales-orders.js',
+  'director-sales-orders.html': { body: 'dh dh-so', links: 'styles.css,director.css,director-pages.css', scripts: 'theme.js,api.js,auth.js,director-sales-orders.js', js: 'director-sales-orders.js',
     tags: { dd: ['kpiTotal', 'kpiPending', 'kpiDelivered'], div: ['kpiAmount', 'dsoCount'], tbody: ['topBuyersBody', 'leastBuyersBody', 'dsoBody'], input: ['dsoSearch', 'dsoMonth'], select: ['dsoYear'], table: ['dsoTable'], button: ['tabAll', 'tabPending', 'tabDelivered', 'dsoClear', 'dsoRefresh', 'themeToggle'], h3: ['leastTitle'], p: ['leastNote'], aside: ['rail'] } },
-  'director-emails.html': { body: 'dh dh-emails', links: 'styles.css,flow.css,director.css,director-pages.css', scripts: 'director-theme.js,api.js,auth.js,director-emails.js', js: 'director-emails.js',
+  'director-emails.html': { body: 'dh dh-emails', links: 'styles.css,flow.css,director.css,director-pages.css', scripts: 'theme.js,api.js,auth.js,director-emails.js', js: 'director-emails.js',
     tags: { span: ['whoTag', 'cntInbox', 'cntSent', 'cntSpam'], button: ['refreshBtn', 'themeToggle'], div: ['setupBox', 'feedBox', 'tabs', 'catFilter', 'listBox', 'metaLine'], input: ['search'], select: ['daysSel'], aside: ['rail'] } },
 };
 
@@ -37,7 +37,7 @@ Object.keys(PAGES).forEach(file => {
   eq('stylesheets', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), P.links);
   ok('no shared skin, no <style> block', !/bento-skin|flow-screen/.test(HTML) && !/<style[\s>]/i.test(HTML));
   ok('<body class="' + P.body + '">', new RegExp('<body class="' + P.body + '">').test(HTML));
-  ok('the theme script is the first child of <body>', new RegExp('<body class="' + P.body + '">\\s*<script src="js/director-theme\\.js"></script>').test(HTML));
+  ok('the theme script is the first child of <body>', new RegExp('<body class="' + P.body + '">\\s*<script src="js/theme\\.js"></script>').test(HTML));
   eq('scripts', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), P.scripts);
   eq('no inline <script> at all', (HTML.match(/<script>/g) || []).length, 0);
   const styles = HTML.match(/style="[^"]*"/g) || [];
@@ -53,7 +53,7 @@ ok('emails: the three folder tabs are buttons with data-folder (the script selec
 
 /* ── 2 · the scripts ─────────────────────────────────────────────────────────────────────────── */
 sec('2 · the scripts');
-['director-expenses.js', 'director-sales-orders.js', 'director-emails.js', 'director-theme.js'].forEach(f => {
+['director-expenses.js', 'director-sales-orders.js', 'director-emails.js', 'theme.js'].forEach(f => {
   const JS = fs.readFileSync(D + 'js/' + f, 'utf8');
   ok(f + ': no hex colour, no inline style, no emoji', !/#[0-9a-fA-F]{6}\b/.test(JS) && !/style="/.test(JS) && !EMOJI.test(JS));
 });
@@ -62,14 +62,14 @@ sec('2 · the scripts');
   ok('sales orders: rows are opened by index through one delegated listener, not an onclick built from the escaped number',
      !/onclick="toggleRow\(/.test(SO) && !/esc\(soNo\)\.replace\(\/'\/g/.test(SO) && /data-i="/.test(SO) && /closest\('tr\.main-row'\)/.test(SO));
   ok('  and the quiet-buyers panel is lapsed / single-order, never "least active"', /Lapsed buyers/.test(SO) && /Single-order buyers/.test(SO) && !/least active/i.test(SO));
-  const TH = fs.readFileSync(D + 'js/director-theme.js', 'utf8');
+  const TH = fs.readFileSync(D + 'js/theme.js', 'utf8');
   ok('theme: validates the stored value, defaults to light, wires #themeToggle', /v === 'dark' \|\| v === 'light'/.test(TH) && /\|\| 'light'/.test(TH) && /getElementById\('themeToggle'\)/.test(TH));
 }
 
 /* ── 3 · boot each page against its real markup ──────────────────────────────────────────────── */
 const SESSION = { role: 'director', name: 'Test Director', username: 'td' };
 const boot = (html, js) => {
-  const p = page(['js/director-theme.js', 'js/' + js], html, SESSION);
+  const p = page(['js/theme.js', 'js/' + js], html, SESSION);
   p.run('setInterval = () => 0; window.addEventListener = () => {};');
   return p;
 };
