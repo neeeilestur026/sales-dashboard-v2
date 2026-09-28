@@ -147,14 +147,14 @@ function _pmpEl() {
         <div class="flow-form">
           <div><label>Actual debited (PHP) *</label><input type="number" step="0.01" min="0" id="pmpDebited" oninput="_pmpRecalc()"></div>
           <div><label>Bank charge (PHP)</label><input type="number" step="0.01" min="0" id="pmpCharge" placeholder="0.00" oninput="_pmpRecalc()"></div>
-          <div><label>Value date <span style="font-weight:400;color:var(--text-muted,#64748b);">(the bank's date)</span></label><input type="date" id="pmpValueDate"></div>
+          <div><label>Value date <span style="font-weight:400;color:var(--hx-ink-3);">(the bank's date)</span></label><input type="date" id="pmpValueDate"></div>
         </div>
         <div class="sub" id="pmpDerived" style="margin-top:0.5rem;"></div>
       </div>
 
       <div class="group-title">Reference</div>
       <div class="flow-form">
-        <div class="full"><label>Payment reference <span style="font-weight:400;color:var(--text-muted,#64748b);">(transfer / cheque no)</span></label><input type="text" id="pmpRef" placeholder="optional"></div>
+        <div class="full"><label>Payment reference <span style="font-weight:400;color:var(--hx-ink-3);">(transfer / cheque no)</span></label><input type="text" id="pmpRef" placeholder="optional"></div>
       </div>
 
       <div class="group-title">Proof of payment</div>
@@ -187,7 +187,7 @@ function _pmpRecalc() {
   const fc = flowNum(r.amount);
   const est = flowNum(r.amountPHPEst);
   if (!(debited > 0)) { out.innerHTML = 'Enter what the bank debited to see the rate this records.'; return; }
-  if (charge > debited) { out.innerHTML = '<b style="color:#b91c1c;">The charge cannot exceed what was debited.</b>'; return; }
+  if (charge > debited) { out.innerHTML = '<b style="color:var(--hx-red);">The charge cannot exceed what was debited.</b>'; return; }
   const settles = debited - charge;
   const rate = fc > 0 ? settles / fc : 0;
   const diff = est > 0 ? settles - est : null;
@@ -209,8 +209,8 @@ async function _pmpProofCheck(no) {
   /* The server refuses without it regardless — this only stops someone filling the whole form and
      being turned away at the end, which is what the old pre-flight alert did. */
   box.innerHTML = has
-    ? '<span style="color:#15803d;">&#10003; Proof of payment is attached.</span>'
-    : '<span style="color:#b91c1c;">No proof of payment attached — it is required.</span> '
+    ? '<span style="color:var(--hx-ok);">&#10003; Proof of payment is attached.</span>'
+    : '<span style="color:var(--hx-red);">No proof of payment attached — it is required.</span> '
       + `<button type="button" class="link-btn" onclick="prAttachProof('${flowEsc(no)}')">Attach it</button> `
       + `<button type="button" class="link-btn" onclick="_pmpProofCheck('${flowEsc(no)}')">Re-check</button>`;
   if (btn) { btn.disabled = !has; btn.style.opacity = has ? '' : '0.5'; }
@@ -243,8 +243,8 @@ async function prMarkPaid(no) {
     const mine = prPayOwns(r.paymentMethod, prActor().role);
     own.innerHTML = r.paymentMethod
       ? `${flowEsc(r.paymentMethod)} payments are released by <b>${flowEsc(prPayOwnerLabel(r.paymentMethod))}</b>.`
-        + (mine ? '' : ' <span style="color:#b91c1c;">The server will refuse this from your role.</span>')
-      : '<span style="color:#b91c1c;">No payment method is set on this request — the server will refuse it.</span>';
+        + (mine ? '' : ' <span style="color:var(--hx-red);">The server will refuse this from your role.</span>')
+      : '<span style="color:var(--hx-red);">No payment method is set on this request — the server will refuse it.</span>';
   }
 
   /* A PHP obligation has no rate to record, so the whole block is hidden and the dialog behaves

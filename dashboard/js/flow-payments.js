@@ -37,7 +37,7 @@ async function loadRegister() {
     pgData = paymentRegister((pr && pr.data) || [], (ap && ap.data) || [], (jr && jr.data) || []);
     render();
   } catch (e) {
-    c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
+    c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`;
   }
 }
 
@@ -48,7 +48,7 @@ function pgSection(tone, title, count, total, note, tableHtml) {
   return `<div class="pg-sec ${tone}">
     <div class="pg-sec-h"><h3>${flowEsc(title)}</h3><span class="n">${count} ${count === 1 ? 'entry' : 'entries'}</span><span class="t">${pgMoney(total)}</span></div>
     ${note ? `<div class="pg-note">${note}</div>` : ''}
-    ${count ? tableHtml : '<p style="color:var(--text-muted,#64748b);font-size:0.82rem;">Nothing here — which is the good outcome.</p>'}
+    ${count ? tableHtml : '<p style="color:var(--hx-ink-3);font-size:0.82rem;">Nothing here — which is the good outcome.</p>'}
   </div>`;
 }
 
@@ -64,7 +64,7 @@ function pgPayRow(r, withWhy) {
     <td>${flowEsc(String(r.poNo || '—').slice(0, 26))}</td>
     <td class="num">${fc}</td>
     <td class="num">${pgMoney(r.cashOut)}</td>
-    <td>${r.prNo ? `<a class="link-btn" href="flow-payment-requests.html" title="Open Payment Requests">${flowEsc(String(r.prNo).slice(0, 24))}</a>${r.prStatus ? ' ' + (typeof flowStatusBadge === 'function' ? flowStatusBadge(r.prStatus) : flowEsc(r.prStatus)) : ''}` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+    <td>${r.prNo ? `<a class="link-btn" href="flow-payment-requests.html" title="Open Payment Requests">${flowEsc(String(r.prNo).slice(0, 24))}</a>${r.prStatus ? ' ' + (typeof flowStatusBadge === 'function' ? flowStatusBadge(r.prStatus) : flowEsc(r.prStatus)) : ''}` : '<span style="color:var(--hx-ink-3);">—</span>'}</td>
     ${withWhy ? `<td class="pg-why">${flowEsc(r.why || '')}</td>` : ''}
   </tr>`;
 }

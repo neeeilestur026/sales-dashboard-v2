@@ -273,7 +273,7 @@ async function tvLoadQueue() {
 
 function tvQueueMsg(text) {
   document.getElementById('tvQueueBody').innerHTML =
-    '<tr><td colspan="6" style="padding:1rem;color:#64748b;">' + flowEsc(text) + '</td></tr>';
+    '<tr><td colspan="6" style="padding:1rem;color:var(--hx-ink-3);">' + flowEsc(text) + '</td></tr>';
   document.getElementById('tvQueueCount').textContent = '—';
 }
 
@@ -377,7 +377,7 @@ function tvRenderTrail() {
                             ' (' + flowEsc(r.waiverReason) + ')');
   if (r.prNo) bits.push('paid on <b>' + flowEsc(r.prNo) + '</b>');
   if (r.status === 'Rejected' && r.approvalNote) {
-    bits.push('<span style="color:#b91c1c;">sent back: ' + flowEsc(r.approvalNote) + '</span>');
+    bits.push('<span style="color:var(--hx-red);">sent back: ' + flowEsc(r.approvalNote) + '</span>');
   }
   el.innerHTML = bits.join(' &nbsp;·&nbsp; ');
   el.style.display = '';
@@ -536,7 +536,7 @@ function tvRenderLegs() {
       </td>
       <td><button class="tv-del" onclick="tvDelLeg(${i})" title="Remove"${dis}>&times;</button></td>
     </tr>`).join('') ||
-    '<tr><td colspan="8" style="padding:1rem;color:var(--text-muted,#64748b);font-size:.85rem;">' +
+    '<tr><td colspan="8" style="padding:1rem;color:var(--hx-ink-3);font-size:.85rem;">' +
     'No legs yet — add one, or fill them in from the visits you logged this week.</td></tr>';
 
   /* A237 — the Transport choice drives BOTH projections: `kind` decides whether the leg prints on

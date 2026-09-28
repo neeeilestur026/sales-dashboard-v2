@@ -10,82 +10,82 @@
     /* 5-step process indicator */
     .pr-steps { display:flex; gap:0; margin:0 0 1.25rem; flex-wrap:wrap; }
     .pr-step { flex:1 1 0; min-width:120px; position:relative; text-align:center; padding:0.55rem 0.4rem; }
-    .pr-step .dot { width:30px; height:30px; border-radius:50%; margin:0 auto 0.35rem;
+    .pr-step .dot { width:30px; height:30px; border-radius: 50%; margin:0 auto 0.35rem;
       display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem;
-      background:var(--surface-2,#eef2f7); color:var(--text-muted,#64748b); border:2px solid transparent; }
-    .pr-step .lbl { font-size:0.72rem; font-weight:600; color:var(--text-muted,#64748b); }
-    .pr-step.active .dot { background:var(--accent,#0d9488); color:#fff; }
-    .pr-step.active .lbl { color:var(--text,#0f172a); }
-    .pr-step.done .dot { background:rgba(13,148,136,0.15); color:var(--accent,#0d9488); border-color:var(--accent,#0d9488); }
+      background: var(--hx-inset); color: var(--hx-ink-3); border: 2px solid transparent; }
+    .pr-step .lbl { font-size:0.72rem; font-weight:600; color: var(--hx-ink-3); }
+    .pr-step.active .dot { background: var(--hx-navy); color: var(--hx-slab-ink); }
+    .pr-step.active .lbl { color: var(--hx-ink); }
+    .pr-step.done .dot { background: var(--hx-navy-soft); color: var(--hx-navy); border-color: var(--hx-navy); }
     .pr-step:not(:last-child)::after { content:''; position:absolute; top:1.05rem; left:60%; right:-40%;
-      height:2px; background:var(--border,#e2e8f0); z-index:0; }
-    .pr-step.done:not(:last-child)::after { background:var(--accent,#0d9488); }
+      height:2px; background: var(--hx-hair); z-index:0; }
+    .pr-step.done:not(:last-child)::after { background: var(--hx-navy); }
     .pr-card-head { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-bottom:0.5rem; }
-    .pr-meta { font-size:0.78rem; color:var(--text-muted,#64748b); }
-    .pr-meta b { color:var(--text,#0f172a); }
-    .pr-queue-item { border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.85rem 1rem; margin-bottom:0.85rem; background:var(--surface,#fff); }
-    .seg { display:inline-flex; border:1px solid var(--border,#e2e8f0); border-radius:8px; overflow:hidden; }
-    .seg button { border:none; background:transparent; padding:0.4rem 0.9rem; font-weight:600; font-size:0.82rem; cursor:pointer; color:var(--text-muted,#64748b); }
-    .seg button.active { background:var(--accent,#0d9488); color:#fff; }
+    .pr-meta { font-size:0.78rem; color: var(--hx-ink-3); }
+    .pr-meta b { color: var(--hx-ink); }
+    .pr-queue-item { border: 1px solid var(--hx-hair); border-radius: 10px; padding:0.85rem 1rem; margin-bottom:0.85rem; background: var(--hx-card); }
+    .seg { display:inline-flex; border: 1px solid var(--hx-hair); border-radius: 8px; overflow:hidden; }
+    .seg button { border: none; background: transparent; padding:0.4rem 0.9rem; font-weight:600; font-size:0.82rem; cursor:pointer; color: var(--hx-ink-3); }
+    .seg button.active { background: var(--hx-navy); color: var(--hx-slab-ink); }
 
     /* Management pricing engine */
-    .pe-card { border:1px solid var(--border,#e2e8f0); border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.85rem; background:var(--surface,#fff); }
+    .pe-card { border: 1px solid var(--hx-hair); border-radius: 12px; padding:0.85rem 1rem; margin-bottom:0.85rem; background: var(--hx-card); }
     .pe-card-head { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-bottom:0.7rem; flex-wrap:wrap; }
-    .pe-card-head .pe-name { font-weight:700; font-size:0.9rem; color:var(--text,#0f172a); }
-    .pe-card-head select { padding:0.35rem 0.5rem; border:1px solid var(--border,#e2e8f0); border-radius:7px; font-size:0.82rem; }
+    .pe-card-head .pe-name { font-weight:700; font-size:0.9rem; color: var(--hx-ink); }
+    .pe-card-head select { padding:0.35rem 0.5rem; border: 1px solid var(--hx-hair); border-radius: 7px; font-size:0.82rem; }
     .pe-inputs { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:0.55rem; margin-bottom:0.7rem; }
-    .pe-inputs label { display:block; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted,#64748b); font-weight:700; margin-bottom:0.2rem; }
-    .pe-inputs input { width:100%; padding:0.4rem 0.55rem; border:1px solid var(--border,#e2e8f0); border-radius:7px; font-size:0.84rem; box-sizing:border-box; text-align:right; }
-    .pe-breakdown { display:grid; grid-template-columns:repeat(auto-fit,minmax(86px,1fr)); gap:0.45rem 0.75rem; padding:0.7rem 0.8rem; background:var(--bg-inset,#f1f5f9); border-radius:9px; }
+    .pe-inputs label { display:block; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--hx-ink-3); font-weight:700; margin-bottom:0.2rem; }
+    .pe-inputs input { width:100%; padding:0.4rem 0.55rem; border: 1px solid var(--hx-hair); border-radius: 7px; font-size:0.84rem; box-sizing:border-box; text-align:right; }
+    .pe-breakdown { display:grid; grid-template-columns:repeat(auto-fit,minmax(86px,1fr)); gap:0.45rem 0.75rem; padding:0.7rem 0.8rem; background: var(--hx-inset); border-radius: 9px; }
     .pe-bd { display:flex; flex-direction:column; }
-    .pe-bd .l { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-muted,#64748b); font-weight:700; }
-    .pe-bd .v { font-size:0.84rem; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text,#0f172a); }
-    .pe-bd.final .v { color:var(--accent,#0d9488); font-weight:700; }
+    .pe-bd .l { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.03em; color: var(--hx-ink-3); font-weight:700; }
+    .pe-bd .v { font-size:0.84rem; font-weight:600; font-variant-numeric:tabular-nums; color: var(--hx-ink); }
+    .pe-bd.final .v { color: var(--hx-navy); font-weight:700; }
     .pe-pnl-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.6rem; margin:0.5rem 0 0.8rem; }
-    .pe-kpi { border:1px solid var(--border,#e2e8f0); border-radius:10px; padding:0.6rem 0.8rem; background:var(--surface,#fff); display:flex; flex-direction:column; gap:0.15rem; }
-    .pe-kpi .l { font-size:0.64rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-muted,#64748b); font-weight:700; }
-    .pe-kpi .v { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text,#0f172a); }
-    .pe-pnl-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
-    .pe-pnl-table td { padding:0.32rem 0.5rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text-secondary,#475569); }
+    .pe-kpi { border: 1px solid var(--hx-hair); border-radius: 10px; padding:0.6rem 0.8rem; background: var(--hx-card); display:flex; flex-direction:column; gap:0.15rem; }
+    .pe-kpi .l { font-size:0.64rem; text-transform:uppercase; letter-spacing:0.03em; color: var(--hx-ink-3); font-weight:700; }
+    .pe-kpi .v { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; color: var(--hx-ink); }
+    .pe-pnl-table { width:100%; border-collapse: collapse; font-size:0.82rem; }
+    .pe-pnl-table td { padding:0.32rem 0.5rem; border-bottom: 1px solid var(--hx-hair); color: var(--hx-ink-2); }
     .pe-pnl-table td.n { text-align:right; font-variant-numeric:tabular-nums; }
-    .pe-pnl-table tr.bold td { font-weight:700; color:var(--text,#0f172a); }
+    .pe-pnl-table tr.bold td { font-weight:700; color: var(--hx-ink); }
 
     /* ── Original pricing-engine design (config grid · readouts · line table · breakdown table) ── */
     .pe-config-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem 1.25rem; margin-bottom:0.75rem; }
-    .pe-config-grid label { display:block; font-size:0.72rem; font-weight:700; color:var(--text-muted,#94a3b8); margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.04em; }
-    .pe-config-grid select, .pe-config-grid input { width:100%; padding:0.5rem 0.7rem; background:var(--bg-card,#fff); border:1.5px solid var(--border,#e2e8f0); border-radius:8px; color:var(--text,#1e293b); font-size:0.875rem; box-sizing:border-box; }
-    .pe-readout { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:0.9rem; padding:0.65rem 1rem; background:var(--bg-inset,#f1f5f9); border-radius:10px; border:1px solid var(--border,#e2e8f0); }
+    .pe-config-grid label { display:block; font-size:0.72rem; font-weight:700; color: var(--hx-ink-3); margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.04em; }
+    .pe-config-grid select, .pe-config-grid input { width:100%; padding:0.5rem 0.7rem; background: var(--hx-card); border: 1.5px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size:0.875rem; box-sizing:border-box; }
+    .pe-readout { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:0.9rem; padding:0.65rem 1rem; background: var(--hx-inset); border-radius: 10px; border: 1px solid var(--hx-hair); }
     .pe-ro-item { display:flex; flex-direction:column; gap:0.1rem; }
-    .pe-ro-label { font-size:0.66rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); letter-spacing:0.04em; }
-    .pe-ro-value { font-size:0.92rem; font-weight:700; color:var(--text,#1e293b); font-variant-numeric:tabular-nums; }
-    .pe-line-table { width:100%; border-collapse:collapse; font-size:0.83rem; min-width:760px; }
-    .pe-line-table th { text-align:left; padding:0.45rem 0.5rem; font-size:0.66rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#e2e8f0); background:var(--bg-inset,#f1f5f9); letter-spacing:0.04em; white-space:nowrap; }
+    .pe-ro-label { font-size:0.66rem; font-weight:700; text-transform:uppercase; color: var(--hx-ink-3); letter-spacing:0.04em; }
+    .pe-ro-value { font-size:0.92rem; font-weight:700; color: var(--hx-ink); font-variant-numeric:tabular-nums; }
+    .pe-line-table { width:100%; border-collapse: collapse; font-size:0.83rem; min-width:760px; }
+    .pe-line-table th { text-align:left; padding:0.45rem 0.5rem; font-size:0.66rem; font-weight:700; text-transform:uppercase; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); background: var(--hx-inset); letter-spacing:0.04em; white-space:nowrap; }
     .pe-line-table td { padding:0.35rem 0.3rem; vertical-align:middle; }
-    .pe-line-table input, .pe-line-table select { width:100%; padding:0.38rem 0.5rem; background:var(--bg-card,#fff); border:1.5px solid var(--border,#e2e8f0); border-radius:6px; color:var(--text,#1e293b); font-size:0.82rem; box-sizing:border-box; }
+    .pe-line-table input, .pe-line-table select { width:100%; padding:0.38rem 0.5rem; background: var(--hx-card); border: 1.5px solid var(--hx-hair); border-radius: 6px; color: var(--hx-ink); font-size:0.82rem; box-sizing:border-box; }
     .pe-line-table input[type="number"] { text-align:right; }
-    .pe-line-table .td-name { font-size:0.8rem; color:var(--text,#0f172a); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .pe-remove { background:none; border:none; color:var(--text-muted,#94a3b8); cursor:pointer; padding:0.25rem; border-radius:4px; font-size:0.95rem; line-height:1; }
-    .pe-remove:hover { color:#dc2626; background:#fef2f2; }
+    .pe-line-table .td-name { font-size:0.8rem; color: var(--hx-ink); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pe-remove { background: none; border: none; color: var(--hx-ink-3); cursor:pointer; padding:0.25rem; border-radius: 4px; font-size:0.95rem; line-height:1; }
+    .pe-remove:hover { color: var(--hx-red); background: var(--hx-red-soft); }
     .pe-results-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:0.5rem; }
-    .pe-results-table { width:100%; border-collapse:collapse; font-size:0.77rem; min-width:1100px; }
-    .pe-results-table th { text-align:left; padding:0.5rem 0.45rem; font-size:0.64rem; font-weight:700; text-transform:uppercase; color:var(--text-muted,#94a3b8); border-bottom:1px solid var(--border,#e2e8f0); white-space:nowrap; background:var(--bg-inset,#f1f5f9); letter-spacing:0.04em; }
-    .pe-results-table td { padding:0.4rem 0.45rem; border-bottom:1px solid var(--border,#e2e8f0); color:var(--text,#1e293b); }
+    .pe-results-table { width:100%; border-collapse: collapse; font-size:0.77rem; min-width:1100px; }
+    .pe-results-table th { text-align:left; padding:0.5rem 0.45rem; font-size:0.64rem; font-weight:700; text-transform:uppercase; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); white-space:nowrap; background: var(--hx-inset); letter-spacing:0.04em; }
+    .pe-results-table td { padding:0.4rem 0.45rem; border-bottom: 1px solid var(--hx-hair); color: var(--hx-ink); }
     .pe-results-table .td-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
     .pe-results-table .td-name { max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     @media (max-width:768px) { .pe-config-grid { grid-template-columns:1fr; } }
     /* Separated "Migrated / Old History" section below the live pricing requests */
-    .pr-history-group { margin-top:1rem; border-top:2px dashed var(--border,#e2e8f0); padding-top:0.75rem; }
-    .pr-history-group > summary .rep-name { color:var(--text-muted,#64748b); }
-    .pe-edit-banner { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.9rem; margin:0.6rem 0 0.2rem; background:#fffbeb; border:1px solid rgba(217,119,6,0.3); border-radius:9px; font-size:0.82rem; color:#92400e; }
+    .pr-history-group { margin-top:1rem; border-top: 2px dashed var(--hx-hair); padding-top:0.75rem; }
+    .pr-history-group > summary .rep-name { color: var(--hx-ink-3); }
+    .pe-edit-banner { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.9rem; margin:0.6rem 0 0.2rem; background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-soft); border-radius: 9px; font-size:0.82rem; color: var(--hx-warn); }
     .pe-edit-banner .pe-edit-id { font-weight:700; }
     /* A156: sourcing context (plant site / client location) shown beside the engine. */
     .pe-context { display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem; margin:0.55rem 0 0.2rem; }
-    .pe-ctx { display:inline-flex; align-items:baseline; gap:0.4rem; padding:0.35rem 0.7rem; border-radius:999px;
-              background:var(--bg-inset,#f8fafc); border:1px solid var(--border,#e2e8f0); font-size:0.78rem; }
-    .pe-ctx .k { font-size:0.66rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted,#8b93a1); }
-    .pe-ctx .v { font-weight:700; color:var(--text-primary,#111827); }
-    .pe-ctx.site { background:#eef2ff; border-color:#c7d2fe; }
-    .pe-ctx-note { font-size:0.72rem; color:var(--text-muted,#8b93a1); }
+    .pe-ctx { display:inline-flex; align-items:baseline; gap:0.4rem; padding:0.35rem 0.7rem; border-radius: 999px;
+              background: var(--hx-inset); border: 1px solid var(--hx-hair); font-size:0.78rem; }
+    .pe-ctx .k { font-size:0.66rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color: var(--hx-ink-3); }
+    .pe-ctx .v { font-weight:700; color: var(--hx-ink); }
+    .pe-ctx.site { background: var(--hx-navy-soft); border-color: var(--hx-navy-line); }
+    .pe-ctx-note { font-size:0.72rem; color: var(--hx-ink-3); }
   </style>
 </head>
 <body>
@@ -120,10 +120,10 @@
       <div id="mgmtEngineBody" style="margin-top:0.5rem;"></div>
       <div class="flow-actions" style="margin-top:0.75rem;">
         <button type="button" class="btn btn-primary" id="peSaveBtn" onclick="savePricing()" disabled>Save Pricing (return to admin)</button>
-        <button type="button" class="btn btn-secondary" id="peDocsBtn" onclick="peViewDocs()" disabled>📎 Supplier Quotation (PDF)</button>
+        <button type="button" class="btn btn-secondary" id="peDocsBtn" onclick="peViewDocs()" disabled>Supplier Quotation (PDF)</button>
         <!-- A201 — reject the forwarded sourcing back to admin; version-gated (needs FlowAPI v110) -->
         <button type="button" class="btn btn-danger" id="peRejectBtn" onclick="rejectPricing()" disabled style="display:none;">✕ Reject pricing</button>
-        <span style="margin-left:auto;font-size:0.78rem;color:var(--text-muted,#64748b);">Open a request below or a past pricing to load it here.</span>
+        <span style="margin-left:auto;font-size:0.78rem;color: var(--hx-ink-3);">Open a request below or a past pricing to load it here.</span>
       </div>
       <div id="peMsg" class="flow-msg" style="display:none;margin-top:0.6rem;"></div>
     </div>
@@ -136,22 +136,22 @@
       </div>
       <div id="pricingHistoryContent" style="display:none;margin-top:0.75rem;">
         <div class="flow-actions" style="gap:0.5rem;flex-wrap:wrap;">
-          <input type="text" id="phClient" placeholder="Filter by customer…" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
-          <input type="month" id="phMonth" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
-          <select id="phStatus" onchange="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+          <input type="text" id="phClient" placeholder="Filter by customer…" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
+          <input type="month" id="phMonth" oninput="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
+          <select id="phStatus" onchange="applyPricingHistoryFilter()" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
             <option value="">All statuses</option><option>Mgmt Priced</option><option>Verifying</option>
             <option value="Returned to Sales">For Quotation</option><option>Quoted</option><option>Migrated</option>
           </select>
           <button type="button" class="btn btn-sm btn-secondary" onclick="clearPricingHistoryFilters()">Clear</button>
         </div>
-        <div id="pricingHistoryList" style="margin-top:0.75rem;"><p style="color:var(--text-muted,#64748b);font-size:0.82rem;">Loading…</p></div>
+        <div id="pricingHistoryList" style="margin-top:0.75rem;"><p style="color: var(--hx-ink-3);font-size:0.82rem;">Loading…</p></div>
       </div>
     </div>
 
     <!-- Admin/oversight: saved supplier quotations — review what suppliers charged before -->
     <div class="chart-card" id="sqSummaryCard" style="display:none;margin-bottom:1.25rem;">
       <div class="flow-actions" style="justify-content:space-between;align-items:center;cursor:pointer;" onclick="sqToggleSummary()">
-        <h3 style="font-size:0.95rem;font-weight:600;">Supplier Quotations <span id="sqSummaryCount" style="font-weight:400;color:var(--text-muted,#64748b);font-size:0.82rem;"></span></h3>
+        <h3 style="font-size:0.95rem;font-weight:600;">Supplier Quotations <span id="sqSummaryCount" style="font-weight:400;color: var(--hx-ink-3);font-size:0.82rem;"></span></h3>
         <svg id="sqToggleIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div id="sqSummaryContent" style="display:none;margin-top:0.75rem;">
@@ -159,8 +159,8 @@
         <div id="sqSummaryKpis" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;"></div>
         <div class="flow-actions" style="gap:0.5rem;flex-wrap:wrap;">
           <input type="text" id="sqSumSearch" placeholder="Search supplier, item, reference or PR no&hellip;" oninput="sqRenderSummary()"
-            style="flex:1;min-width:240px;padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
-          <select id="sqSumSupplier" onchange="sqRenderSummary()" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.84rem;">
+            style="flex:1;min-width:240px;padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
+          <select id="sqSumSupplier" onchange="sqRenderSummary()" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.84rem;">
             <option value="">All suppliers</option>
           </select>
           <button type="button" class="btn btn-sm btn-secondary" onclick="sqClearSummary()">Clear</button>
@@ -172,7 +172,7 @@
 
     <!-- A169: Product Finder hand-off banner. OUTSIDE salesFormCard on purpose — that card is
          hidden for oversight roles, so a message inside it would render into a hidden subtree. -->
-    <div id="prInquiryBanner" class="chart-card" style="display:none;margin-bottom:1rem;border-left:4px solid #4f46e5;font-size:0.9rem;"></div>
+    <div id="prInquiryBanner" class="chart-card" style="display:none;margin-bottom:1rem;border-left: 4px solid var(--hx-navy);font-size:0.9rem;"></div>
 
     <!-- Sales: new request form -->
     <div class="chart-card" id="salesFormCard" style="display:none;margin-bottom:1.25rem;">
@@ -183,7 +183,7 @@
         <div><label>Date</label><input type="date" id="date"></div>
         <div class="full"><label>Notes (optional)</label><input type="text" id="notes" placeholder="Context for admin / management"></div>
       </div>
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.75rem 0 0.35rem;">Client contact — shown on the PR PDF (optional)</div>
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color: var(--hx-ink-3);margin:0.75rem 0 0.35rem;">Client contact — shown on the PR PDF (optional)</div>
       <div class="flow-form">
         <div><label>Contact Person</label><input type="text" id="prContact"></div>
         <div><label>Designation</label><input type="text" id="prDesignation"></div>

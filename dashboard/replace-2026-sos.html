@@ -8,23 +8,23 @@
   <link rel="stylesheet" href="css/flow.css">
   <style>
     .report { max-width: 1380px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; margin-bottom: 1.25rem; }
-    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-sheet { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-lg); box-shadow: var(--hx-sh-2); overflow: hidden; margin-bottom: 1.25rem; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--hx-navy); background: linear-gradient(180deg, var(--hx-card), var(--hx-inset)); }
     .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
-    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-head .meta { font-size: 0.82rem; color: var(--hx-ink-2); margin-top: 0.3rem; }
     .report-body { padding: 1.4rem 1.6rem; }
     .mig-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1.3rem; }
-    .mig-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--bg-inset); }
-    .mig-tile .lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; }
-    .mig-tile .val { font-size: clamp(0.9rem, 1.7vw, 1.25rem); font-weight: 800; color: var(--text-primary); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .mig-tile { border: 1px solid var(--hx-hair); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--hx-inset); }
+    .mig-tile .lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--hx-ink-3); font-weight: 700; }
+    .mig-tile .val { font-size: clamp(0.9rem, 1.7vw, 1.25rem); font-weight: 800; color: var(--hx-ink); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
     .mig-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    .mig-table th { text-align: left; padding: 0.5rem 0.55rem; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 2px solid var(--border); background: var(--bg-inset); white-space: nowrap; }
+    .mig-table th { text-align: left; padding: 0.5rem 0.55rem; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--hx-ink-3); font-weight: 700; border-bottom: 2px solid var(--hx-hair); background: var(--hx-inset); white-space: nowrap; }
     .mig-table th.num, .mig-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .mig-table td { padding: 0.42rem 0.55rem; border-bottom: 1px solid var(--border); }
+    .mig-table td { padding: 0.42rem 0.55rem; border-bottom: 1px solid var(--hx-hair); }
     .step-title { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.5rem; }
-    .step-note { font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.7rem; }
-    .mig-prog { height: 8px; border-radius: 99px; background: var(--bg-inset); overflow: hidden; margin: 0.6rem 0 0.3rem; }
-    .mig-prog > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+    .step-note { font-size: 0.8rem; color: var(--hx-ink-2); margin: 0 0 0.7rem; }
+    .mig-prog { height: 8px; border-radius: 99px; background: var(--hx-inset); overflow: hidden; margin: 0.6rem 0 0.3rem; }
+    .mig-prog > span { display: block; height: 100%; background: var(--hx-navy); width: 0; transition: width .2s; }
   </style>
 </head>
 <body>
@@ -54,12 +54,12 @@
           <div id="importMsg" class="flow-msg" style="display:none;"></div>
           <div id="progWrap" style="display:none;">
             <div class="mig-prog"><span id="progBar"></span></div>
-            <div id="progText" style="font-size:0.78rem;color:var(--text-secondary);"></div>
+            <div id="progText" style="font-size:0.78rem;color: var(--hx-ink-2);"></div>
           </div>
 
           <h3 class="step-title" style="margin-top:1.2rem;">Verification</h3>
           <div style="overflow-x:auto;"><table class="mig-table">
-            <tbody id="verifyBody"><tr><td style="color:var(--text-muted);">Run the import (or click Verify) to check the system against the file.</td></tr></tbody>
+            <tbody id="verifyBody"><tr><td style="color: var(--hx-ink-3);">Run the import (or click Verify) to check the system against the file.</td></tr></tbody>
           </table></div>
         </div>
       </div>

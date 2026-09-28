@@ -56,12 +56,12 @@ async function llSetupUI() {
 async function llSetFolder() {
   const id = (document.getElementById('llFolderId').value || '').trim();
   const msg = document.getElementById('llSetupMsg');
-  if (!id) { msg.textContent = 'Enter the folder ID first.'; msg.style.color = '#ef4444'; return; }
+  if (!id) { msg.textContent = 'Enter the folder ID first.'; msg.style.color = 'var(--hx-red)'; return; }
   msg.textContent = 'Setting…'; msg.style.color = '';
   try {
     const r = await postFlow('setFlowDriveFolder', { folderId: id });
-    msg.textContent = (r && r.message) || 'Done.'; msg.style.color = r && r.success ? '#16a34a' : '#ef4444';
-  } catch (e) { msg.textContent = e.message; msg.style.color = '#ef4444'; }
+    msg.textContent = (r && r.message) || 'Done.'; msg.style.color = r && r.success ? 'var(--hx-ok)' : 'var(--hx-red)';
+  } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--hx-red)'; }
 }
 
 async function llBackfill(action, label) {
@@ -76,9 +76,9 @@ async function llBackfill(action, label) {
   msg.textContent = 'Running ' + label + '…'; msg.style.color = '';
   try {
     const r = await postFlow(action, {});
-    msg.textContent = (r && r.message) || 'Done.'; msg.style.color = r && r.success ? '#16a34a' : '#ef4444';
+    msg.textContent = (r && r.message) || 'Done.'; msg.style.color = r && r.success ? 'var(--hx-ok)' : 'var(--hx-red)';
     await loadAll();
-  } catch (e) { msg.textContent = e.message; msg.style.color = '#ef4444'; }
+  } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--hx-red)'; }
 }
 
 async function loadAll() {
@@ -102,7 +102,7 @@ async function loadAll() {
     buildYearOptions();
     render();
   } catch (e) {
-    c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`;
+    c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`;
   }
 }
 
@@ -255,11 +255,11 @@ async function llToggle(soNo) {
     llRenderDT(soNo, llExpanded[soNo]);
   } catch (e) {
     const dt = document.getElementById('lldt-' + soNo);
-    if (dt) dt.innerHTML = '<span style="color:#ef4444;">Could not load documents/timeline: ' + flowEsc(e.message) + '</span>';
+    if (dt) dt.innerHTML = '<span style="color:var(--hx-red);">Could not load documents/timeline: ' + flowEsc(e.message) + '</span>';
   }
 }
 
-function _line(label, val) { return `<div class="acc-muted" style="font-size:0.82rem;margin:0.2rem 0;"><strong style="color:var(--text-primary,#f1f5f9);">${label}</strong> ${val}</div>`; }
+function _line(label, val) { return `<div class="acc-muted" style="font-size:0.82rem;margin:0.2rem 0;"><strong style="color:var(--hx-ink);">${label}</strong> ${val}</div>`; }
 
 function llBody(m) {
   let h = '';
@@ -300,8 +300,8 @@ function llBody(m) {
   const _note = llNoteBySo[String(m.soNo)];
   if (_note) {
     h += `<div class="acc-sec"><h4>Note</h4>` +
-         `<p style="margin:0;padding:0.5rem 0.65rem;border-left:3px solid #0f766e;` +
-         `background:var(--bg-inset,#f1f5f9);white-space:pre-wrap;font-size:0.84rem;">${flowEsc(_note)}</p></div>`;
+         `<p style="margin:0;padding:0.5rem 0.65rem;border-left:3px solid var(--hx-cyan);` +
+         `background:var(--hx-inset);white-space:pre-wrap;font-size:0.84rem;">${flowEsc(_note)}</p></div>`;
   }
   // Summary
   h += `<div class="acc-sec"><h4>Summary</h4><div class="acc-summary">
@@ -322,7 +322,7 @@ function llRenderDT(soNo, r) {
 
   // Documents grouped by module
   let dh = '';
-  if (!docs.length) dh = '<div class="acc-muted">No documents attached anywhere on this order\'s chain. <span style="color:#f59e0b;">⚠ Attach supporting documents at each step to keep the record complete.</span></div>';
+  if (!docs.length) dh = '<div class="acc-muted">No documents attached anywhere on this order\'s chain. <span style="color:var(--hx-warn);">⚠ Attach supporting documents at each step to keep the record complete.</span></div>';
   else {
     const byMod = {};
     docs.forEach(d => { (byMod[d.module] = byMod[d.module] || []).push(d); });

@@ -35,7 +35,7 @@ function _docsModalEl() {
              why nothing could be checked; and the gates' own "attach a document" prompts opened this
              box untyped, so a compliance upload could not satisfy the rule that demanded it. The
              options come from the server's own rule table, so the two can never disagree. -->
-        <div class="full"><label>Type <span style="font-weight:400;color:var(--text-muted,#64748b);">— pick the document this is</span></label>
+        <div class="full"><label>Type <span style="font-weight:400;color:var(--hx-ink-3);">— pick the document this is</span></label>
           <select id="flowDocsType" onchange="_flowDocsTypeChanged()"><option value="">— select —</option></select>
           <input type="text" id="flowDocsTypeOther" placeholder="Describe the document" style="display:none;margin-top:0.35rem;">
         </div>
@@ -126,7 +126,7 @@ function openDocsModal(module, refNo, title, presetType, kind) {
   const t = document.getElementById('flowDocsType');
   if (t) {
     t.disabled = !!presetType;                       // a gate's demand is not up for negotiation
-    t.style.background = presetType ? 'var(--bg-inset,#eef2f6)' : '';
+    t.style.background = presetType ? 'var(--hx-inset)' : '';
   }
   _flowDocsFillTypes(module || '', presetType || '', kind || '');
   el.classList.add('open');
@@ -195,12 +195,12 @@ function closeDocsModal() {
 
 async function flowDocsRefresh() {
   const list = document.getElementById('flowDocsList');
-  list.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div>';
+  list.innerHTML = '<div style="color:var(--hx-ink-3);font-size:0.85rem;">Loading…</div>';
   try {
     const res = await fetchFlow('getDocuments', { module: _docsCtx.module, refNo: _docsCtx.refNo });
     const docs = ((res && res.data) || []).filter(d => !flowIsItemPhotoDoc(d));
     if (!docs.length) {
-      list.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No documents attached yet.</div>';
+      list.innerHTML = '<div style="color:var(--hx-ink-3);font-size:0.85rem;">No documents attached yet.</div>';
       return;
     }
     list.innerHTML = `<table class="flow-table"><thead><tr><th>File</th><th>Type</th><th>By</th><th></th></tr></thead><tbody>${docs.map(d => `
@@ -211,7 +211,7 @@ async function flowDocsRefresh() {
         <td style="white-space:nowrap;">${flowIsViewerOnly() ? '' : `<button class="link-btn del-btn" onclick='flowDocsDelete("${flowEsc(d.docId)}")'>Remove</button>`}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) {
-    list.innerHTML = `<div style="color:#ef4444;font-size:0.85rem;">${flowEsc(e.message)}</div>`;
+    list.innerHTML = `<div style="color:var(--hx-red);font-size:0.85rem;">${flowEsc(e.message)}</div>`;
   }
 }
 

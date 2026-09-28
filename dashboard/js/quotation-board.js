@@ -91,7 +91,7 @@ async function qbLoad(fresh) {
     qbFillRepFilter();
     qbRender();
   } catch (e) {
-    wrap.innerHTML = `<p style="color:#ef4444;">${_qbe(e.message)}</p>`;
+    wrap.innerHTML = `<p style="color:var(--hx-red);">${_qbe(e.message)}</p>`;
   }
 }
 

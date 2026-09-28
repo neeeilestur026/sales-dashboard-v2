@@ -10,15 +10,15 @@
       display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;
     }
     .toolbar input[type="text"] {
-      padding: 0.45rem 0.75rem; border-radius: 8px; border: 1px solid var(--border, #334155);
-      background: var(--surface, #1e293b); color: var(--text-primary, #f1f5f9);
+      padding: 0.45rem 0.75rem; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-primary);
       font-size: 0.85rem; min-width: 200px; font-family: inherit;
     }
-    .toolbar input:focus { outline: none; border-color: var(--accent, #3b82f6); }
-    .sub-count { font-size: 0.82rem; color: var(--text-secondary, #94a3b8); }
+    .toolbar input:focus { outline: none; border-color: var(--accent); }
+    .sub-count { font-size: 0.82rem; color: var(--text-secondary); }
 
     .sub-card {
-      background: var(--surface, #1e293b); border: 1px solid var(--border, #334155);
+      background: var(--surface); border: 1px solid var(--border);
       border-radius: 12px; padding: 1.15rem; margin-bottom: 1rem;
       cursor: default;
     }
@@ -26,29 +26,29 @@
       display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
       margin-bottom: 0.75rem;
     }
-    .sub-id { font-weight: 700; font-size: 0.92rem; color: var(--text-primary, #f1f5f9); }
+    .sub-id { font-weight: 700; font-size: 0.92rem; color: var(--text-primary); }
     .sub-meta {
-      display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary, #94a3b8);
+      display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary);
     }
     .sub-meta span { display: flex; align-items: center; gap: 0.3rem; }
-    .badge-pending { background: rgba(234,179,8,0.12); color: #eab308; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge-forwarded { background: rgba(59,130,246,0.12); color: #3b82f6; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge-priced { background: rgba(34,197,94,0.12); color: #22c55e; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge-applied { background: rgba(168,85,247,0.12); color: #a855f7; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge-sent { background: rgba(20,184,166,0.12); color: #14b8a6; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-pending { background: var(--hx-warn-soft); color: var(--hx-warn); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-forwarded { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-priced { background: var(--hx-ok-soft); color: var(--hx-ok); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-applied { background: rgba(168,85,247,0.12); color: var(--hx-navy-text); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-sent { background: rgba(20,184,166,0.12); color: var(--hx-navy-text); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
 
     .btn-apply {
       display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.3rem 0.7rem; background: rgba(34,197,94,0.12); color: #22c55e;
-      border: 1px solid rgba(34,197,94,0.25); border-radius: 6px;
+      padding: 0.3rem 0.7rem; background: var(--hx-ok-soft); color: var(--hx-ok);
+      border: 1px solid var(--hx-ok-soft); border-radius: 6px;
       font-size: 0.75rem; font-weight: 600; cursor: pointer;
     }
-    .btn-apply:hover { background: rgba(34,197,94,0.2); }
+    .btn-apply:hover { background: var(--hx-ok-soft); }
     .btn-apply:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .btn-forward-sales {
       display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.3rem 0.7rem; background: rgba(20,184,166,0.12); color: #14b8a6;
+      padding: 0.3rem 0.7rem; background: rgba(20,184,166,0.12); color: var(--hx-navy-text);
       border: 1px solid rgba(20,184,166,0.25); border-radius: 6px;
       font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-left: 0.5rem;
     }
@@ -58,11 +58,11 @@
     .items-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     .items-table th {
       text-align: left; padding: 0.5rem 0.75rem; font-size: 0.72rem; font-weight: 600;
-      text-transform: uppercase; color: var(--text-muted, #64748b);
-      border-bottom: 1px solid var(--border, #334155);
+      text-transform: uppercase; color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
     }
     .items-table td {
-      padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e8f0;
+      padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2);
     }
     .items-table .td-num {
       text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -70,12 +70,12 @@
     .items-table tr:last-child td { border-bottom: none; }
 
     .no-results {
-      text-align: center; padding: 3rem 1rem; color: var(--text-muted, #64748b);
+      text-align: center; padding: 3rem 1rem; color: var(--text-muted);
     }
 
     .loading-overlay {
       display: flex; align-items: center; justify-content: center; gap: 0.75rem;
-      padding: 3rem 1rem; color: var(--text-secondary, #94a3b8);
+      padding: 3rem 1rem; color: var(--text-secondary);
     }
   </style>
 </head>
@@ -91,7 +91,7 @@
 
     <div class="toolbar">
       <input type="text" id="searchInput" placeholder="Search submissions..." oninput="applyFilter()">
-      <select id="statusFilter" onchange="applyFilter()" style="padding:0.45rem 0.75rem;border-radius:8px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--text-primary,#f1f5f9);font-size:0.85rem;font-family:inherit;">
+      <select id="statusFilter" onchange="applyFilter()" style="padding:0.45rem 0.75rem;border-radius: 8px;border: 1px solid var(--border);background: var(--surface);color: var(--text-primary);font-size:0.85rem;font-family:inherit;">
         <option value="">All Statuses</option>
         <option value="Pending">Pending</option>
         <option value="Forwarded">Forwarded</option>
@@ -175,16 +175,16 @@
         const clients = [...new Set(prRefs.map(r => r.clientName).filter(Boolean))];
         const agents = [...new Set(prRefs.map(r => r.agentName).filter(Boolean))];
         const clientLine = clients.length
-          ? `<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.35rem;">Client: ${clients.map(c => esc(c)).join(', ')}${agents.length ? ` <span style="font-weight:400;color:var(--text-secondary,#94a3b8);">(Agent: ${agents.map(a => esc(a)).join(', ')})</span>` : ''}</div>`
+          ? `<div style="font-size:0.85rem;font-weight:600;color: var(--text-primary);margin-bottom:0.35rem;">Client: ${clients.map(c => esc(c)).join(', ')}${agents.length ? ` <span style="font-weight:400;color: var(--text-secondary);">(Agent: ${agents.map(a => esc(a)).join(', ')})</span>` : ''}</div>`
           : '';
 
         const itemRows = items.map((it, idx) => `
           <tr>
-            <td style="text-align:center;color:var(--text-muted);">${idx + 1}</td>
+            <td style="text-align:center;color: var(--text-muted);">${idx + 1}</td>
             <td style="font-weight:600;">${esc(it.modelNo || it.modelPartNo) || '—'}</td>
             <td>${esc(it.name || it.itemDescription) || '—'}</td>
             <td class="td-num">${Number(it.qty || it.quantity || 0)}</td>
-            <td class="td-num" style="font-weight:700;color:#22c55e;">${peso(it.unitPriceVatEx)}</td>
+            <td class="td-num" style="font-weight:700;color: var(--hx-ok);">${peso(it.unitPriceVatEx)}</td>
           </tr>
         `).join('');
 
@@ -203,7 +203,7 @@
                 </span>
                 <span>${esc(s.principal)}</span>
                 <span>${s.destination ? esc(s.destination) : 'Local Pickup'}</span>
-                ${s.forwardedBy ? `<span style="color:#3b82f6;">Fwd by: ${esc(s.forwardedBy)}</span>` : ''}
+                ${s.forwardedBy ? `<span style="color: var(--hx-cyan-ink);">Fwd by: ${esc(s.forwardedBy)}</span>` : ''}
                 <span class="${statusBadgeClass(s.status)}">${esc(s.status)}</span>
               </div>
             </div>
@@ -218,7 +218,7 @@
                   <th>Unit Price (VAT Excl.)</th>
                 </tr>
               </thead>
-              <tbody>${itemRows || '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;">No items</td></tr>'}</tbody>
+              <tbody>${itemRows || '<tr><td colspan="5" style="color: var(--text-muted);text-align:center;">No items</td></tr>'}</tbody>
             </table>
             ${(showApply || showForwardSales) ? `
               <div style="margin-top:0.75rem;text-align:right;">

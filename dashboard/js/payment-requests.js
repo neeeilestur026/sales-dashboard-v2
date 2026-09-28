@@ -63,7 +63,7 @@ async function loadPaymentRequests() {
     prData = result.data || [];
     filterRequests();
   } catch (err) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-red);">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -164,7 +164,7 @@ async function _pickBankAccountForPR(payeeName, defaultMatch) {
 
   return new Promise(resolve => {
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    overlay.style.cssText = 'position:fixed;inset:0;background:var(--hx-scrim);display:flex;align-items:center;justify-content:center;z-index:9999;';
     const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const defaultCode = (accounts.find(a => new RegExp(defaultMatch || 'AUB', 'i').test(a.code)) || accounts[0]).code;
     const optsHtml = accounts.map(a => {
@@ -173,14 +173,14 @@ async function _pickBankAccountForPR(payeeName, defaultMatch) {
       return `<option value="${a.code}"${sel}>${a.name || a.code} (bal: ${peso(bal)})</option>`;
     }).join('');
     overlay.innerHTML = `
-      <div style="background:#fff;color:#0f172a;border-radius:12px;padding:1.25rem 1.4rem;min-width:340px;max-width:92vw;box-shadow:0 20px 40px rgba(0,0,0,0.25);">
+      <div style="background:#fff;color:var(--hx-ink);border-radius:12px;padding:1.25rem 1.4rem;min-width:340px;max-width:92vw;box-shadow:var(--hx-sh-2);">
         <div style="font-weight:700;font-size:1.05rem;margin-bottom:0.5rem;">Mark PR as Paid</div>
-        <div style="color:#475569;font-size:0.88rem;margin-bottom:0.9rem;">Choose the bank account to debit for ${payeeName ? '<b>' + payeeName + '</b>' : 'this payee'}.</div>
-        <label style="display:block;font-size:0.78rem;font-weight:600;color:#334155;margin-bottom:0.3rem;">Bank Account</label>
-        <select id="_prBankSel" style="width:100%;padding:0.45rem 0.55rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.9rem;margin-bottom:1rem;">${optsHtml}</select>
+        <div style="color:var(--hx-ink-2);font-size:0.88rem;margin-bottom:0.9rem;">Choose the bank account to debit for ${payeeName ? '<b>' + payeeName + '</b>' : 'this payee'}.</div>
+        <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--hx-ink-2);margin-bottom:0.3rem;">Bank Account</label>
+        <select id="_prBankSel" style="width:100%;padding:0.45rem 0.55rem;border:1px solid var(--hx-hair);border-radius:6px;font-size:0.9rem;margin-bottom:1rem;">${optsHtml}</select>
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-          <button id="_prBankCancel" style="padding:0.45rem 0.9rem;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;">Cancel</button>
-          <button id="_prBankOk" style="padding:0.45rem 1rem;border:none;background:#16a34a;color:#fff;border-radius:6px;cursor:pointer;font-weight:600;">Confirm Pay</button>
+          <button id="_prBankCancel" style="padding:0.45rem 0.9rem;border:1px solid var(--hx-hair);background:#fff;border-radius:6px;cursor:pointer;">Cancel</button>
+          <button id="_prBankOk" style="padding:0.45rem 1rem;border:none;background:var(--hx-ok);color:#fff;border-radius:6px;cursor:pointer;font-weight:600;">Confirm Pay</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -219,7 +219,7 @@ async function markPRPaid(rowIndex, payeeName) {
 function renderTable(data) {
   const container = document.getElementById('prContainer');
   if (data.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted,#64748b);">No payment requests found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No payment requests found.</div>';
     return;
   }
 
@@ -232,14 +232,14 @@ function renderTable(data) {
     const isPaid = billing.toLowerCase() === 'paid';
     const status = isPaid ? 'Paid' : (r.status || 'Pending');
     const statusCls = status.toLowerCase() === 'paid' ? 'st-paid' : status.toLowerCase() === 'approved' ? 'st-approved' : status.toLowerCase() === 'rejected' ? 'st-rejected' : 'st-pending';
-    const priorityCls = (r.priority || '').toLowerCase() === 'urgent' ? 'color:#ef4444;font-weight:700;' : '';
+    const priorityCls = (r.priority || '').toLowerCase() === 'urgent' ? 'color:var(--hx-red);font-weight:700;' : '';
     const adminA = r.adminApproval || 'Pending';
     const mgmtA = r.mgmtApproval || 'Pending';
     const adminCls = adminA === 'Approved' ? 'st-approved' : adminA === 'Rejected' ? 'st-rejected' : 'st-pending';
     const mgmtCls = mgmtA === 'Approved' ? 'st-approved' : mgmtA === 'Rejected' ? 'st-rejected' : 'st-pending';
     const billingCls = isPaid ? 'st-paid' : 'st-pending';
     const paidMeta = isPaid && (r.paidAt || r.paidBy)
-      ? '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + esc((r.paidAt || '').slice(0, 10)) + (r.paidBy ? ' · ' + esc(r.paidBy) : '') + '</div>'
+      ? '<div style="font-size:0.65rem;color:var(--hx-ink-3);margin-top:2px;">' + esc((r.paidAt || '').slice(0, 10)) + (r.paidBy ? ' · ' + esc(r.paidBy) : '') + '</div>'
       : '';
 
     // Determine if current user can approve or mark paid
@@ -254,15 +254,15 @@ function renderTable(data) {
     var actionHtml = '';
     if (prSession && prSession.role === 'director') {
       if (canMarkPaid) {
-        actionHtml = '<button class="pr-mark-paid-btn" data-row-index="' + r.rowIndex + '" data-payee="' + esc(r.payeeName) + '" style="background:rgba(34,197,94,0.18);color:#16a34a;border:none;border-radius:4px;padding:0.25rem 0.6rem;font-size:0.72rem;font-weight:700;cursor:pointer;">Mark Paid</button>';
+        actionHtml = '<button class="pr-mark-paid-btn" data-row-index="' + r.rowIndex + '" data-payee="' + esc(r.payeeName) + '" style="background:var(--hx-ok-line);color:var(--hx-ok);border:none;border-radius:4px;padding:0.25rem 0.6rem;font-size:0.72rem;font-weight:700;cursor:pointer;">Mark Paid</button>';
       } else {
-        actionHtml = '<span style="font-size:0.72rem;color:#16a34a;font-weight:600;">✓ Paid</span>';
+        actionHtml = '<span style="font-size:0.72rem;color:var(--hx-ok);font-weight:600;">✓ Paid</span>';
       }
     } else if (canApprove) {
-      actionHtml = '<button onclick="event.stopPropagation();updatePRStatus(' + r.rowIndex + ',\'Approved\')" style="background:rgba(34,197,94,0.15);color:#22c55e;border:none;border-radius:4px;padding:0.2rem 0.5rem;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:0.25rem;">Approve</button>' +
-        '<button onclick="event.stopPropagation();updatePRStatus(' + r.rowIndex + ',\'Rejected\')" style="background:rgba(239,68,68,0.15);color:#ef4444;border:none;border-radius:4px;padding:0.2rem 0.5rem;font-size:0.72rem;font-weight:700;cursor:pointer;">Reject</button>';
+      actionHtml = '<button onclick="event.stopPropagation();updatePRStatus(' + r.rowIndex + ',\'Approved\')" style="background:var(--hx-ok-line);color:var(--hx-ok);border:none;border-radius:4px;padding:0.2rem 0.5rem;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:0.25rem;">Approve</button>' +
+        '<button onclick="event.stopPropagation();updatePRStatus(' + r.rowIndex + ',\'Rejected\')" style="background:var(--hx-red-line);color:var(--hx-red);border:none;border-radius:4px;padding:0.2rem 0.5rem;font-size:0.72rem;font-weight:700;cursor:pointer;">Reject</button>';
     } else {
-      actionHtml = '<span style="font-size:0.72rem;color:var(--text-muted);">—</span>';
+      actionHtml = '<span style="font-size:0.72rem;color:var(--hx-ink-3);">—</span>';
     }
 
     html += '<tr onclick="openPreview(' + idx + ')" style="cursor:pointer;" title="Click to preview">' +
@@ -270,7 +270,7 @@ function renderTable(data) {
       '<td style="white-space:nowrap;">' + esc(r.requestDate) + '</td>' +
       '<td>' + esc(r.requestedBy) + '</td>' +
       '<td><strong>' + esc(r.payeeName) + '</strong></td>' +
-      '<td style="font-weight:600;color:var(--accent,#f97316);">' + formatAmount(r.amount, r.currency) + '</td>' +
+      '<td style="font-weight:600;color:var(--hx-navy);">' + formatAmount(r.amount, r.currency) + '</td>' +
       '<td>' + esc(r.paymentMethod) + '</td>' +
       '<td style="' + priorityCls + '">' + esc(r.priority || 'Normal') + '</td>' +
       '<td><span class="' + adminCls + '" style="font-size:0.72rem;">' + esc(adminA) + '</span></td>' +
@@ -315,7 +315,7 @@ function openPreview(idx) {
     '<div class="dl"><span class="dl-label">Department</span><span class="dl-value">' + esc(r.department) + '</span></div>' +
     '<div class="dl"><span class="dl-label">Purpose</span><span class="dl-value">' + esc(r.purpose) + '</span></div>' +
     '<div class="dl"><span class="dl-label">Priority</span><span class="dl-value">' + esc(r.priority || 'Normal') + '</span></div>' +
-    '<hr style="border:none;border-top:1px solid var(--border,#334155);margin:0.75rem 0;">' +
+    '<hr style="border:none;border-top:1px solid var(--hx-hair);margin:0.75rem 0;">' +
     '<div class="dl"><span class="dl-label">Payee</span><span class="dl-value" style="font-weight:700;">' + esc(r.payeeName) + '</span></div>' +
     '<div class="dl"><span class="dl-label">Payee Type</span><span class="dl-value">' + esc(r.payeeType) + '</span></div>' +
     '<div class="dl"><span class="dl-label">Amount</span><span class="dl-value" style="font-weight:700;font-size:1rem;">' + formatAmount(r.amount, r.currency) + '</span></div>' +
@@ -329,7 +329,7 @@ function openPreview(idx) {
       // Supporting docs now shown in the PDF panel below the iframe — omit here
       return '';
     })() +
-    '<hr style="border:none;border-top:1px solid var(--border,#334155);margin:0.75rem 0;">' +
+    '<hr style="border:none;border-top:1px solid var(--hx-hair);margin:0.75rem 0;">' +
     '<div class="dl"><span class="dl-label">Admin Approval</span><span class="dl-value"><span class="st ' + adminCls + '">' + esc(adminA) + '</span></span></div>' +
     '<div class="dl"><span class="dl-label">Mgmt Approval</span><span class="dl-value"><span class="st ' + mgmtCls + '">' + esc(mgmtA) + '</span></span></div>' +
     '<div class="dl"><span class="dl-label">Status</span><span class="dl-value"><span class="st ' + statusCls + '">' + esc(status) + '</span></span></div>' +
@@ -385,14 +385,14 @@ function openPreview(idx) {
   var canDirectorMarkPaid = prSession && prSession.role === 'director' && (r.billingStatus || '').toLowerCase() !== 'paid';
 
   if (canApproveAdmin || canApproveMgmt) {
-    btns += '<button onclick="approveFromPreview(' + idx + ',\'Approved\')" style="background:rgba(34,197,94,0.15);color:#22c55e;border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Approve</button>';
-    btns += '<button onclick="approveFromPreview(' + idx + ',\'Rejected\')" style="background:rgba(239,68,68,0.15);color:#ef4444;border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Reject</button>';
+    btns += '<button onclick="approveFromPreview(' + idx + ',\'Approved\')" style="background:var(--hx-ok-line);color:var(--hx-ok);border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Approve</button>';
+    btns += '<button onclick="approveFromPreview(' + idx + ',\'Rejected\')" style="background:var(--hx-red-line);color:var(--hx-red);border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Reject</button>';
   }
   if (canDirectorMarkPaid) {
-    btns += '<button onclick="markPaidFromPreview(' + idx + ')" style="background:rgba(34,197,94,0.18);color:#16a34a;border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Mark Paid</button>';
+    btns += '<button onclick="markPaidFromPreview(' + idx + ')" style="background:var(--hx-ok-line);color:var(--hx-ok);border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Mark Paid</button>';
   }
 
-  actionsEl.innerHTML = btns || '<span style="color:var(--text-muted);font-size:0.82rem;">No actions available</span>';
+  actionsEl.innerHTML = btns || '<span style="color:var(--hx-ink-3);font-size:0.82rem;">No actions available</span>';
 
   document.getElementById('previewOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';

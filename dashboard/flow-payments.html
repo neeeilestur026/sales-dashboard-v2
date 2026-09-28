@@ -13,25 +13,25 @@
        before you read a single figure. */
     .pg-sec { margin-top: 1.5rem; }
     .pg-sec-h { display:flex; align-items:baseline; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.5rem;
-                padding-left:0.6rem; border-left:3px solid var(--border); }
+                padding-left:0.6rem; border-left: 3px solid var(--hx-hair); }
     .pg-sec-h h3 { font-size:0.95rem; font-weight:700; margin:0; }
-    .pg-sec-h .n { font-size:0.78rem; color:var(--text-muted,#64748b); }
+    .pg-sec-h .n { font-size:0.78rem; color: var(--hx-ink-3); }
     .pg-sec-h .t { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; }
-    .pg-sec.ok   .pg-sec-h { border-left-color:#16a34a; }
-    .pg-sec.warn .pg-sec-h { border-left-color:#d97706; }
-    .pg-sec.bad  .pg-sec-h { border-left-color:#b91c1c; }
-    .pg-note { font-size:0.78rem; line-height:1.5; color:var(--text-muted,#64748b);
-               background:var(--bg-subtle,#f8fafc); border:1px solid var(--border);
-               border-radius:7px; padding:0.5rem 0.7rem; margin:0 0 0.6rem; }
-    .pg-why { font-size:0.74rem; color:#b45309; }
+    .pg-sec.ok   .pg-sec-h { border-left-color: var(--hx-ok); }
+    .pg-sec.warn .pg-sec-h { border-left-color: var(--hx-warn); }
+    .pg-sec.bad  .pg-sec-h { border-left-color: var(--hx-red); }
+    .pg-note { font-size:0.78rem; line-height:1.5; color: var(--hx-ink-3);
+               background: var(--hx-inset); border: 1px solid var(--hx-hair);
+               border-radius: 7px; padding:0.5rem 0.7rem; margin:0 0 0.6rem; }
+    .pg-why { font-size:0.74rem; color: var(--hx-warn); }
     /* The identity line: the page states its own arithmetic rather than asking you to do it. */
-    .pg-ident { font-size:0.8rem; padding:0.6rem 0.8rem; border-radius:8px; margin-top:0.9rem;
-                border:1px solid var(--border); font-variant-numeric:tabular-nums; }
-    .pg-ident.ok  { border-color:#16a34a; color:#15803d; }
-    .pg-ident.bad { border-color:#b91c1c; color:#b91c1c; font-weight:700; }
+    .pg-ident { font-size:0.8rem; padding:0.6rem 0.8rem; border-radius: 8px; margin-top:0.9rem;
+                border: 1px solid var(--hx-hair); font-variant-numeric:tabular-nums; }
+    .pg-ident.ok  { border-color: var(--hx-ok); color: var(--hx-ok); }
+    .pg-ident.bad { border-color: var(--hx-red); color: var(--hx-red); font-weight:700; }
     @media print {
       .navbar, .no-print, .flow-nav, .stepper { display:none !important; }
-      body { background:#fff; }
+      body { background: var(--hx-card); }
       .main-content { padding:0 !important; }
       .pg-sec { break-inside: avoid; }
     }

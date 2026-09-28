@@ -82,7 +82,7 @@ async function loadPRs() {
     const res = await fetchFlow('getPaymentRequests', { type: 'Other' });
     prList = (res && res.data) || [];
     renderPRs();
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 /** Still in play: everything before it is paid or rejected. */
@@ -103,14 +103,14 @@ function renderPRs() {
   const c = document.getElementById('listContainer');
   if (!c) return;
   flowLedgerInjectCss();
-  if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
+  if (!prList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
   flowLedgerBuildPeriod(prList, 'createdAt', 'opYear', 'opMonth');
   const rows = flowLedgerFilterPeriod(prList, 'createdAt', 'opYear', 'opMonth');
   const { open, history } = flowLedgerSplit(rows, prIsOpen);
 
   const openTable = open.length
     ? `<table class="flow-table">${prHead()}<tbody>${open.map(prRow).join('')}${flowLedgerFootRow([{ at: 3, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amount), 0), 'PHP') }], 8)}</tbody></table>`
-    : '<p style="color:var(--text-muted,#64748b);">No open payables in this period.</p>';
+    : '<p style="color:var(--hx-ink-3);">No open payables in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table">${prHead()}<tbody>${history.map(prRow).join('')}</tbody></table>` : '';
 
@@ -142,14 +142,14 @@ function prUpdateKpis(open) {
 
 function prRow(r) {
   const st = r.status || 'Draft';
-  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
+  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
   const appr = [r.adminApprovedBy ? 'Admin ✓' : (r.acctApprovedBy ? 'Acct ✓' : ''),
     r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '',
     r.paidBy ? 'Paid ✓' : '']
-    .filter(Boolean).join(' · ') || '<span style="color:var(--text-muted,#64748b);">—</span>';
+    .filter(Boolean).join(' · ') || '<span style="color:var(--hx-ink-3);">—</span>';
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowEsc(r.payee)}</td><td>${flowEsc(r.purpose)}</td>
     <td class="num">${flowMoney(r.amount, 'PHP')}</td><td>${flowStatusBadge(st)}${note}</td>
-    <td style="font-size:0.74rem;color:var(--text-secondary,#475569);">${appr}</td>
+    <td style="font-size:0.74rem;color:var(--hx-ink-2);">${appr}</td>
     <td>${prPdfCell(r)}</td>
     <td style="white-space:nowrap;">${prActions(r)}</td></tr>`;
 }
@@ -165,12 +165,12 @@ function prPdfStale(r) {
   return upd > 0 && crt > 0 && (upd - crt) > 60000;  // edited well after creation
 }
 function prPdfCell(r) {
-  if (!r.pdfLink) return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  if (!r.pdfLink) return '<span style="color:var(--hx-ink-3);">—</span>';
   const stale = prPdfStale(r);
   const title = stale
     ? "This saved PDF may predate the latest edit — click PDF to regenerate it."
     : 'The saved PDF matches this request.';
-  return `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn"${stale ? ' style="color:#b45309;"' : ''} title="${title}">${stale ? '⚠ ' : ''}View</a>`;
+  return `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn"${stale ? ' style="color:var(--hx-warn);"' : ''} title="${title}">${stale ? '⚠ ' : ''}View</a>`;
 }
 
 function prActions(r) {

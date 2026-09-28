@@ -33,7 +33,7 @@ async function loadShipments() {
     shList.sort((a, b) => (flowDate(b.createdAt) || '').localeCompare(flowDate(a.createdAt) || '') ||
       String(b.shipmentId).localeCompare(String(a.shipmentId)));
     renderShipments();
-  } catch (e) { c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`; }
+  } catch (e) { c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`; }
 }
 
 function renderShipments() {
@@ -60,7 +60,7 @@ function renderShipments() {
       <td>${flowEsc(s.customer || '—')}</td>
       <td>${shKindBadge(s.supplierKind)}</td>
       <td><span class="flow-badge b-open">${flowEsc(s.status || 'Pending')}</span></td>
-      <td><span class="sh-prog"><span class="sh-bar"><span style="width:${pct}%;"></span></span><span style="font-size:0.74rem;color:var(--text-muted,#64748b);">${p.done}/${p.total}</span></span></td>
+      <td><span class="sh-prog"><span class="sh-bar"><span style="width:${pct}%;"></span></span><span style="font-size:0.74rem;color:var(--hx-ink-3);">${p.done}/${p.total}</span></span></td>
       <td><button class="link-btn" onclick='shOpen("${flowEsc(s.shipmentId)}")'>Timeline</button></td>
     </tr>`;
   }).join('')}</tbody></table>`;
@@ -82,7 +82,7 @@ async function shOpen(shipmentId) {
     shDocs = (docs && docs.data) || [];
     shRenderTimeline();
   } catch (e) {
-    document.getElementById('shTlBody').innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
+    document.getElementById('shTlBody').innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`;
   }
 }
 function shClose() { document.getElementById('shOverlay').style.display = 'none'; shCurrent = null; }
@@ -125,7 +125,7 @@ function shRenderTimeline() {
     <div><label>Principal</label><input type="text" id="shPrincipal" value="${flowEsc(s.principal || '')}"></div>
     <div style="grid-column:1/-1;"><label>Remarks</label><input type="text" id="shRemarks" value="${flowEsc(s.remarks || '')}"></div>
   </div>
-  <div class="flow-actions" style="margin:-0.3rem 0 0.6rem;">${shViewer ? '' : `<button class="btn btn-sm btn-primary" onclick="shSaveHeader()">Save details</button>`}<span id="shHeadMsg" style="font-size:0.76rem;color:var(--text-muted,#64748b);"></span></div>`;
+  <div class="flow-actions" style="margin:-0.3rem 0 0.6rem;">${shViewer ? '' : `<button class="btn btn-sm btn-primary" onclick="shSaveHeader()">Save details</button>`}<span id="shHeadMsg" style="font-size:0.76rem;color:var(--hx-ink-3);"></span></div>`;
 
   if (kind === 'local') {
     html += `<div class="sh-kindnote">Local purchase — paid, then delivered to the office. The proforma,

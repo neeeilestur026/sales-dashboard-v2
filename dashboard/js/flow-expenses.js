@@ -75,7 +75,7 @@ async function loadExpenses() {
     buildCatOptions();
     render();
   } catch (e) {
-    c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
+    c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`;
   }
 }
 
@@ -296,9 +296,9 @@ async function delExpense(rowIndex) {
 
 function formErr(msg) {
   const m = document.getElementById('expFormMsg');
-  m.style.display = 'block'; m.textContent = msg; m.style.color = '#b45309';
+  m.style.display = 'block'; m.textContent = msg; m.style.color = 'var(--hx-warn)';
 }
 function flash(text, ok) {
   const m = document.getElementById('msg');
-  m.style.display = 'block'; m.textContent = text; m.style.color = ok ? '#0f766e' : '#b45309';
+  m.style.display = 'block'; m.textContent = text; m.style.color = ok ? 'var(--hx-ok)' : 'var(--hx-warn)';
 }

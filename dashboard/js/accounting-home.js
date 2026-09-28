@@ -43,10 +43,18 @@ function setAppLink(elementId, url) {
 
 let _acctSmAll = [];
 
+function _acctSmBadge(status) {
+  // Classed, like admin.js's _smBadge; css/shipments.css paints it.
+  const k = String(status || '').toLowerCase().trim();
+  const cls = { pending: 'sbadge-pending', 'awaiting confirmation': 'sbadge-awaiting', 'payment processing': 'sbadge-payment', 'goods ready': 'sbadge-goodsready',
+                booked: 'sbadge-booked', 'in transit': 'sbadge-intransit', 'customs clearance': 'sbadge-customs', arrived: 'sbadge-arrived', delivered: 'sbadge-delivered', cancelled: 'sbadge-rejected' }[k] || 'sbadge-default';
+  return `<span class="sbadge ${cls}">${_acctEsc(status || '—')}</span>`;
+}
+
 function _acctSmRenderList(result) {
   const container = document.getElementById('acctSmContainer');
   if (!result || !result.success) {
-    container.innerHTML = '<div style="padding:1rem;color:#ef4444;">Could not load shipments.</div>';
+    container.innerHTML = '<div class="hx-error">Could not load shipments.</div>';
     document.getElementById('acctSmSummary').textContent = 'Error loading';
     return;
   }
@@ -67,18 +75,16 @@ function _acctSmRenderList(result) {
 function _acctSmRenderRecent() {
   const el = document.getElementById('acctSmRecent');
   if (!el) return;
-  const statusColor = { Pending: '#f59e0b', 'In Transit': '#3b82f6', Arrived: '#22c55e', Delivered: '#8b5cf6', Cancelled: '#ef4444' };
   const rows = _acctSmAll.slice(0, 4);
-  if (!rows.length) { el.innerHTML = '<div style="color:#8b93a1;font:400 12px \'Inter\',sans-serif;padding:6px 0;">No shipments yet.</div>'; return; }
+  if (!rows.length) { el.innerHTML = '<div class="hx-empty">No shipments yet.</div>'; return; }
   el.innerHTML = rows.map(s => {
-    const color = statusColor[s.status] || '#64748b';
-    const sub = [s.principal, s.mode, (s.eta ? 'ETA ' + s.eta : '')].filter(Boolean).join(' · ');
+    const sub = [s.principal, s.mode, (s.eta ? 'ETA ' + s.eta : '')].filter(Boolean).join(', ');
     return `<div class="sm-mini">
-      <div style="min-width:0;">
-        <div style="font:700 12.5px 'Inter',sans-serif;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_acctEsc(s.poNo || '—')}</div>
-        <div style="font:500 11px 'Inter',sans-serif;color:#8b93a1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_acctEsc(sub)}</div>
+      <div>
+        <div class="po">${_acctEsc(s.poNo || '—')}</div>
+        <div class="sub">${_acctEsc(sub)}</div>
       </div>
-      <span class="badge" style="background:${color}22;color:${color};flex-shrink:0;">${_acctEsc(s.status)}</span>
+      ${_acctSmBadge(s.status)}
     </div>`;
   }).join('');
 }
@@ -94,27 +100,24 @@ function _acctSmRender(filter) {
   const rows = filter === 'All' ? _acctSmAll : _acctSmAll.filter(s => s.status === filter);
 
   if (!rows.length) {
-    container.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted,#64748b);">No shipments found.</div>';
+    container.innerHTML = '<div class="hx-empty">No shipments found.</div>';
     return;
   }
 
-  const statusColor = { Pending: '#f59e0b', 'In Transit': '#3b82f6', Arrived: '#22c55e', Delivered: '#8b5cf6', Cancelled: '#ef4444' };
-
   container.innerHTML = rows.map((s, idx) => {
-    const color = statusColor[s.status] || '#64748b';
     const docsObj = _acctSmParseDocs(s.documents);
     const docCount = Object.values(docsObj).reduce((n, arr) => n + arr.length, 0);
     return `<div class="sm-row" onclick="_acctSmOpenDetail(${idx})">
       <div class="sm-row-left">
         <div class="sm-row-po">
           ${_acctEsc(s.poNo || '—')}
-          <span style="margin-left:0.4rem;font-size:0.7rem;font-weight:600;padding:0.1rem 0.5rem;border-radius:10px;background:${color}22;color:${color};border:1px solid ${color}44;">${_acctEsc(s.status)}</span>
+          ${_acctSmBadge(s.status)}
         </div>
-        <div class="sm-row-sub">${_acctEsc(s.principal || '')}${s.item ? ' · ' + s.item : ''}${s.eta ? ' · ETA: ' + s.eta : ''}</div>
+        <div class="sm-row-sub">${_acctEsc(s.principal || '')}${s.item ? ', ' + _acctEsc(s.item) : ''}${s.eta ? ', ETA ' + _acctEsc(s.eta) : ''}</div>
       </div>
       <div class="sm-row-right">
-        ${docCount > 0 ? `<span style="font-size:0.7rem;color:var(--text-muted,#64748b);">📎 ${docCount} doc${docCount !== 1 ? 's' : ''}</span>` : ''}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-muted,#64748b);"><polyline points="9 18 15 12 9 6"/></svg>
+        ${docCount > 0 ? `<span>${docCount} doc${docCount !== 1 ? 's' : ''}</span>` : ''}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>`;
   }).join('');
@@ -144,15 +147,13 @@ async function _acctSmOpenDetail(idx) {
   _acctSmTlCurrentStage = '';
   _acctSmTlOpenPhases   = new Set();
 
-  const statusColor = { Pending: '#f59e0b', 'In Transit': '#3b82f6', Arrived: '#22c55e', Delivered: '#8b5cf6', Cancelled: '#ef4444' };
-  const color = statusColor[s.status] || '#64748b';
-  const badgeHtml = `<span style="font-size:0.72rem;font-weight:600;padding:0.1rem 0.5rem;border-radius:10px;background:${color}22;color:${color};border:1px solid ${color}44;">${_acctEsc(s.status)}</span>`;
+  const badgeHtml = _acctSmBadge(s.status);
 
   document.getElementById('acctSmTlHeader').textContent    = s.shipmentId || s.poNo || '—';
   document.getElementById('acctSmTlSubtitle').textContent  = `PO ${s.poNo || '—'} · ${s.client || '—'}`;
   document.getElementById('acctSmTlStatusBadge').innerHTML = badgeHtml;
-  document.getElementById('acctSmTlContent').innerHTML     = '<div style="padding:3rem;text-align:center;">Loading…</div>';
-  document.getElementById('acctSmTlRibbon').innerHTML      = '<div style="height:52px;"></div>';
+  document.getElementById('acctSmTlContent').innerHTML     = '<div class="sm-loading">Loading…</div>';
+  document.getElementById('acctSmTlRibbon').innerHTML      = '<div class="sm-tl-ribbon-ph"></div>';
   document.getElementById('acctSmOverlay').style.display   = 'block';
 
   try {
@@ -171,11 +172,11 @@ async function _acctSmOpenDetail(idx) {
       _acctSmTlRender();
     } else {
       document.getElementById('acctSmTlContent').innerHTML =
-        `<div style="padding:2rem;text-align:center;color:#ef4444;">${_acctEsc((r && r.message) || 'Failed to load timeline.')}</div>`;
+        `<div style="padding:2rem;text-align:center;color:var(--hx-red);">${_acctEsc((r && r.message) || 'Failed to load timeline.')}</div>`;
     }
   } catch (err) {
     document.getElementById('acctSmTlContent').innerHTML =
-      `<div style="padding:2rem;text-align:center;color:#ef4444;">Error: ${_acctEsc(err.message)}</div>`;
+      `<div style="padding:2rem;text-align:center;color:var(--hx-red);">Error: ${_acctEsc(err.message)}</div>`;
   }
 }
 
@@ -209,10 +210,10 @@ function _acctSmTlRender() {
     const isOpen       = _acctSmTlOpenPhases.has(pi);
 
     const hdrState = allComplete ? 'done' : isOpen ? 'open' : anyDone ? 'partial' : 'pending';
-    const cntColor = allComplete ? '#22c55e' : anyDone ? '#f59e0b' : 'var(--text-muted,#64748b)';
-    const lblColor = allComplete ? 'var(--text-primary,#f1f5f9)' : 'var(--text-secondary,#94a3b8)';
-    const numBg    = allComplete ? 'rgba(34,197,94,0.15)' : '#e2e8f0';
-    const numBorder= allComplete ? 'rgba(34,197,94,0.5)' : '#e2e8f0';
+    const cntColor = allComplete ? 'var(--hx-ok)' : anyDone ? 'var(--hx-warn)' : 'var(--hx-ink-3)';
+    const lblColor = allComplete ? 'var(--hx-ink)' : 'var(--hx-ink-2)';
+    const numBg    = allComplete ? 'var(--hx-ok-soft)' : 'var(--hx-inset)';
+    const numBorder= allComplete ? 'var(--hx-ok-line)' : 'var(--hx-hair)';
 
     html += `<div class="sm-tl-phase-wrap" id="acctSmPhase${pi}">
       <div class="sm-tl-phase-hdr ${hdrState}" onclick="_acctSmTlTogglePhase(${pi})" role="button" tabindex="0"
@@ -297,7 +298,7 @@ function _acctSmTlRenderRibbon(apiMap) {
 function _acctSmTlRenderNextUp(apiMap, nextKey) {
   if (!nextKey) {
     return `<div class="sm-tl-next-up done">
-      <div class="sm-tl-next-up-icon">🎉</div>
+      <div class="sm-tl-next-up-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
       <div class="sm-tl-next-up-body">
         <div class="sm-tl-next-up-kicker">All complete</div>
         <div class="sm-tl-next-up-stage"><strong>All ${_SM_LIFECYCLE_STAGES.length} stages done!</strong></div>
@@ -313,7 +314,9 @@ function _acctSmTlRenderNextUp(apiMap, nextKey) {
   const phaseIdx = _SM_PHASES.findIndex(p => p.stages.includes(nextKey));
   const phaseLabel = phaseIdx >= 0 ? `Phase ${phaseIdx+1}: ${_SM_PHASES[phaseIdx].name}` : '';
   const ownerCls = _SM_OWNER_BADGE_CLASS[def.owner] || 'sm-owner-admin';
-  const icon   = blocked ? '⚠️' : '➡️';
+  const icon   = blocked
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
   const cls    = blocked ? 'blocked' : '';
   const kicker = blocked ? 'Waiting on prerequisites' : 'Next up';
   return `<div class="sm-tl-next-up ${cls}" role="status">
@@ -363,14 +366,14 @@ function _acctSmTlRenderStageRow(def, apiStage, nextKey, apiMap) {
         <div class="sm-tl-card-meta">
           <span class="sm-owner-badge ${ownerCls}">${_acctEsc(def.owner)}</span>
           ${isAuto ? '<span class="auto-badge">AUTO</span>' : ''}
-          ${skipReason ? `<span style="color:#f59e0b;font-style:italic;font-size:0.64rem;">– ${_acctEsc(skipReason)}</span>` : ''}
+          ${skipReason ? `<span style="color:var(--hx-warn);font-style:italic;font-size:0.64rem;">– ${_acctEsc(skipReason)}</span>` : ''}
         </div>
         ${dateNote ? `<div class="sm-tl-card-date">${dateNote}</div>` : ''}
       </div>
       <div class="sm-tl-card-right">
         ${docs.length > 0 ? `<span class="doc-badge">${docs.length}</span>` : ''}
         ${isBlocked ? '<span class="blocked-icon" title="Prerequisites not yet met">⚠</span>' : ''}
-        <span style="font-size:0.7rem;color:var(--text-muted,#64748b);">${isOpen ? '▾' : '▸'}</span>
+        <span style="font-size:0.7rem;color:var(--hx-ink-3);">${isOpen ? '▾' : '▸'}</span>
       </div>
     </div>
     ${isOpen ? `<div class="sm-tl-detail">${_acctSmTlStageDetail(def, apiStage, apiMap)}</div>` : ''}
@@ -388,14 +391,14 @@ function _acctSmTlStageDetail(def, apiStage, apiMap) {
   if (meta.description) {
     html += `<div class="sm-tl-detail-section">
       <div class="sm-tl-section-label">About this stage</div>
-      <div style="font-size:0.76rem;color:var(--text-secondary,#94a3b8);line-height:1.5;">${_acctEsc(meta.description)}</div>
-      ${isAuto && apiStage.autoderivedNote ? `<div style="margin-top:0.35rem;display:inline-flex;align-items:center;gap:0.35rem;"><span class="auto-badge">AUTO</span><span style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_acctEsc(apiStage.autoderivedNote)}</span></div>` : ''}
+      <div style="font-size:0.76rem;color:var(--hx-ink-2);line-height:1.5;">${_acctEsc(meta.description)}</div>
+      ${isAuto && apiStage.autoderivedNote ? `<div style="margin-top:0.35rem;display:inline-flex;align-items:center;gap:0.35rem;"><span class="auto-badge">AUTO</span><span style="font-size:0.7rem;color:var(--hx-ink-3);">${_acctEsc(apiStage.autoderivedNote)}</span></div>` : ''}
     </div>`;
   }
 
   if (status === 'skipped' && apiStage.skippedReason) {
     html += `<div class="sm-tl-detail-section">
-      <div style="font-size:0.76rem;color:#f59e0b;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);border-radius:5px;padding:0.4rem 0.6rem;">
+      <div style="font-size:0.76rem;color:var(--hx-warn);background:var(--hx-warn-soft);border:1px solid var(--hx-warn-line);border-radius:5px;padding:0.4rem 0.6rem;">
         <strong>Skip reason:</strong> ${_acctEsc(apiStage.skippedReason)}
       </div>
     </div>`;
@@ -429,7 +432,7 @@ function _acctSmTlStageDetail(def, apiStage, apiMap) {
       html += `<span class="sm-dep-chip ${cls}" onclick="_acctSmTlScrollToStage('${rk}')" tabindex="0" role="button" onkeydown="if(event.key==='Enter')_acctSmTlScrollToStage('${rk}')">${icon} ${_acctEsc(rDef.label)}</span>`;
     });
     if (unlocks.length > 0) {
-      if (requires.length > 0) html += `<span style="font-size:0.65rem;color:var(--text-muted,#64748b);align-self:center;">→ unlocks:</span>`;
+      if (requires.length > 0) html += `<span style="font-size:0.65rem;color:var(--hx-ink-3);align-self:center;">→ unlocks:</span>`;
       unlocks.forEach(uk => {
         const uDef = _SM_LIFECYCLE_STAGES.find(d => d.key === uk);
         if (!uDef) return;
@@ -449,23 +452,23 @@ function _acctSmTlStageDetail(def, apiStage, apiMap) {
       const thumbUrl = f.thumbnailUrl || f.previewUrl || '';
       const thumbImg = thumbUrl
         ? `<img src="${_acctEsc(thumbUrl)}" class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')" alt="Preview">`
-        : `<div class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')" style="display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f766e" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>`;
+        : `<div class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>`;
       html += `<div class="sm-mgmt-doc-file">${thumbImg}<span class="sm-mgmt-doc-name" title="${_acctEsc(f.name)}">${_acctEsc(f.name)}</span><button class="sm-mgmt-doc-btn" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')">View ↗</button></div>`;
     });
     html += '</div>';
   } else {
-    html += `<div style="font-size:0.73rem;color:var(--text-muted,#64748b);">No documents attached.</div>`;
+    html += `<div style="font-size:0.73rem;color:var(--hx-ink-3);">No documents attached.</div>`;
   }
   html += '</div>';
 
   if (status !== 'pending') {
-    html += `<div class="sm-tl-detail-section"><div class="sm-tl-section-label">Activity</div><div style="font-size:0.73rem;color:var(--text-secondary,#94a3b8);line-height:1.55;">`;
+    html += `<div class="sm-tl-detail-section"><div class="sm-tl-section-label">Activity</div><div style="font-size:0.73rem;color:var(--hx-ink-2);line-height:1.55;">`;
     if (apiStage.completedAt || apiStage.completedBy) {
       const verb = status === 'skipped' ? 'Skipped' : 'Completed';
       html += `<div>• ${verb}${apiStage.completedAt ? ' on <strong>' + _acctEsc(apiStage.completedAt) + '</strong>' : ''}${apiStage.completedBy ? ' by <strong>' + _acctEsc(apiStage.completedBy) + '</strong>' : ''}</div>`;
     }
     if (apiStage.notes) {
-      html += `<div style="margin-top:0.25rem;padding:0.35rem 0.5rem;background:#f8fafc;border-radius:4px;border:1px solid #e2e8f0;">${_acctEsc(apiStage.notes)}</div>`;
+      html += `<div style="margin-top:0.25rem;padding:0.35rem 0.5rem;background:var(--hx-inset);border-radius:4px;border:1px solid var(--hx-hair);">${_acctEsc(apiStage.notes)}</div>`;
     }
     html += '</div></div>';
   }

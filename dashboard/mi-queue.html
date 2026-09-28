@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .queue-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .queue-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
-    .queue-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; }
-    .queue-table tr:hover td { background: #e2e8f0; }
+    .queue-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
+    .queue-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2); }
+    .queue-table tr:hover td { background: var(--hx-hair-2); }
     .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
-    .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
-    .filter-bar input:focus { outline: none; border-color: var(--accent, #f97316); }
+    .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.82rem; }
+    .filter-bar input:focus { outline: none; border-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -26,7 +26,7 @@
     <div class="chart-card">
       <div class="filter-bar">
         <input type="text" id="searchInput" placeholder="Search recipient, issuance no, model..." oninput="renderFiltered()">
-        <select id="dateRange" onchange="renderFiltered()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+        <select id="dateRange" onchange="renderFiltered()" style="padding:0.5rem 0.75rem;background: var(--surface-2);border: 1px solid var(--border);border-radius: 8px;color: var(--text-primary);font-size:0.875rem;">
           <option value="30d">Last 30 days</option>
           <option value="7d">Last 7 days</option>
           <option value="90d">Last 90 days</option>

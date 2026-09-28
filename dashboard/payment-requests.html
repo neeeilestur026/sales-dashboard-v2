@@ -7,89 +7,89 @@
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .pr-kpi { background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 1rem; text-align: center; }
-    .pr-kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
-    .pr-kpi-label { font-size: 0.72rem; font-weight: 600; color: var(--text-muted, #64748b); text-transform: uppercase; margin-top: 0.2rem; }
+    .pr-kpi { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: 12px; padding: 1rem; text-align: center; }
+    .pr-kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--hx-ink); }
+    .pr-kpi-label { font-size: 0.72rem; font-weight: 600; color: var(--hx-ink-3); text-transform: uppercase; margin-top: 0.2rem; }
     .pr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .pr-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
-    .pr-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
-    .pr-table tr:hover td { background: #e2e8f0; }
+    .pr-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); font-weight: 600; white-space: nowrap; }
+    .pr-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2); color: var(--hx-ink); }
+    .pr-table tr:hover td { background: var(--hx-hair-2); }
     .st { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-    .st-pending { background: rgba(249,115,22,0.12); color: #f97316; }
-    .st-approved { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .st-paid { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .st-rejected { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .st-pending { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .st-approved { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+    .st-paid { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .st-rejected { background: var(--hx-red-soft); color: var(--hx-red); }
     .search-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.25rem; }
-    .search-bar input, .search-bar select { padding: 0.5rem 0.75rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem; }
+    .search-bar input, .search-bar select { padding: 0.5rem 0.75rem; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.875rem; }
     .search-bar input { flex: 1; min-width: 200px; }
-    .search-bar input::placeholder { color: var(--text-muted, #64748b); }
+    .search-bar input::placeholder { color: var(--hx-ink-3); }
     .detail-row { display: none; }
     .detail-row.open { display: table-row; }
-    .detail-row td { background: #e2e8f0; padding: 1rem; }
+    .detail-row td { background: var(--hx-hair-2); padding: 1rem; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; font-size: 0.82rem; }
     .detail-grid div { padding: 0.4rem 0; }
-    .detail-grid strong { color: var(--text-muted, #64748b); font-size: 0.72rem; display: block; margin-bottom: 0.15rem; }
+    .detail-grid strong { color: var(--hx-ink-3); font-size: 0.72rem; display: block; margin-bottom: 0.15rem; }
     @media(max-width: 768px) { .detail-grid { grid-template-columns: 1fr 1fr; } }
     @media(max-width: 480px) { .detail-grid { grid-template-columns: 1fr; } }
 
     /* ─── Preview Modal ─── */
     .preview-overlay {
       display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.6); z-index: 10000;
+      background: var(--hx-scrim); z-index: 10000;
       align-items: center; justify-content: center;
     }
     .preview-overlay.open { display: flex; }
     .preview-modal {
-      background: var(--surface, #0f172a); border: 1px solid var(--border, #334155);
+      background: var(--hx-card); border: 1px solid var(--hx-hair);
       border-radius: 16px; width: 92vw; max-width: 1000px; height: 85vh;
       display: flex; flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden;
+      box-shadow: var(--hx-sh-1); overflow: hidden;
     }
-    .preview-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #334155); }
-    .preview-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #f1f5f9); }
-    .preview-close { background: none; border: none; color: var(--text-muted, #64748b); cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem; }
-    .preview-close:hover { color: var(--text-primary, #f1f5f9); }
+    .preview-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--hx-hair); }
+    .preview-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--hx-ink); }
+    .preview-close { background: none; border: none; color: var(--hx-ink-3); cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 0.25rem; }
+    .preview-close:hover { color: var(--hx-ink); }
     .preview-body { display: flex; flex: 1; overflow: hidden; }
-    .pv-details { width: 300px; min-width: 260px; padding: 1.25rem; overflow-y: auto; border-right: 1px solid var(--border, #334155); font-size: 0.82rem; }
+    .pv-details { width: 300px; min-width: 260px; padding: 1.25rem; overflow-y: auto; border-right: 1px solid var(--hx-hair); font-size: 0.82rem; }
     .pv-details .dl { margin-bottom: 0.85rem; }
-    .pv-details .dl-label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #64748b); margin-bottom: 0.2rem; }
-    .pv-details .dl-value { color: var(--text-primary, #f1f5f9); word-break: break-word; }
-    .pv-pdf { flex: 1; display: flex; flex-direction: column; background: #1a1a2e; }
+    .pv-details .dl-label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--hx-ink-3); margin-bottom: 0.2rem; }
+    .pv-details .dl-value { color: var(--hx-ink); word-break: break-word; }
+    .pv-pdf { flex: 1; display: flex; flex-direction: column; background: var(--hx-slab); }
     .pv-pdf-frame { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
     .pv-pdf-frame iframe { width: 100%; height: 100%; border: none; }
-    .pv-pdf-frame .no-pdf { text-align: center; color: var(--text-muted, #64748b); padding: 2rem; }
+    .pv-pdf-frame .no-pdf { text-align: center; color: var(--hx-ink-3); padding: 2rem; }
     .pv-pdf-frame .no-pdf svg { margin-bottom: 0.75rem; opacity: 0.5; }
     .pv-docs-strip {
-      border-top: 1px solid #e2e8f0; padding: 0.6rem 1rem;
-      background: rgba(15,23,42,0.7); display: flex; flex-wrap: wrap;
+      border-top: 1px solid var(--hx-hair-2); padding: 0.6rem 1rem;
+      background: var(--hx-scrim); display: flex; flex-wrap: wrap;
       align-items: center; gap: 0.5rem; flex-shrink: 0;
     }
     .pv-docs-label {
       font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--text-muted, #64748b);
+      letter-spacing: 0.05em; color: var(--hx-ink-3);
       white-space: nowrap; margin-right: 0.25rem;
     }
     .pv-doc-link {
       display: inline-flex; align-items: center; gap: 0.3rem;
-      font-size: 0.72rem; color: #60a5fa; text-decoration: none;
-      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
+      font-size: 0.72rem; color: var(--hx-cyan); text-decoration: none;
+      background: var(--hx-cyan-soft); border: 1px solid var(--hx-cyan-soft);
       border-radius: 5px; padding: 0.18rem 0.55rem; white-space: nowrap;
       max-width: 180px; overflow: hidden; text-overflow: ellipsis;
     }
-    .pv-doc-link:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); }
+    .pv-doc-link:hover { background: var(--hx-cyan-soft); border-color: var(--hx-cyan-soft); }
     .pv-doc-nolink {
       display: inline-flex; align-items: center; gap: 0.3rem;
-      font-size: 0.72rem; color: var(--text-muted, #64748b);
-      background: #e2e8f0; border: 1px solid #e2e8f0;
+      font-size: 0.72rem; color: var(--hx-ink-3);
+      background: var(--hx-hair-2); border: 1px solid var(--hx-hair-2);
       border-radius: 5px; padding: 0.18rem 0.55rem; white-space: nowrap;
       max-width: 180px; overflow: hidden; text-overflow: ellipsis;
     }
-    .preview-actions { padding: 1rem 1.25rem; border-top: 1px solid var(--border, #334155); display: flex; gap: 0.5rem; justify-content: flex-end; }
-    .btn-preview { padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer; background: rgba(59,130,246,0.15); color: #3b82f6; text-decoration: none; }
-    .btn-preview:hover { background: rgba(59,130,246,0.3); }
+    .preview-actions { padding: 1rem 1.25rem; border-top: 1px solid var(--hx-hair); display: flex; gap: 0.5rem; justify-content: flex-end; }
+    .btn-preview { padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer; background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); text-decoration: none; }
+    .btn-preview:hover { background: var(--hx-cyan-soft); }
     @media (max-width: 700px) {
       .preview-body { flex-direction: column; }
-      .pv-details { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border, #334155); max-height: 35vh; }
+      .pv-details { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--hx-hair); max-height: 35vh; }
       .preview-modal { width: 98vw; height: 92vh; }
     }
   </style>
@@ -115,21 +115,21 @@
     <!-- Table -->
     <div class="chart-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);">All Payment Requests</h3>
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);">All Payment Requests</h3>
         <a href="/payment-request/" class="btn btn-sm btn-primary">+ New Request</a>
       </div>
       <div class="search-bar">
         <input type="text" id="prSearch" placeholder="Search payee or PR#..." oninput="filterRequests()">
-        <select id="dateRange" onchange="filterRequests()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+        <select id="dateRange" onchange="filterRequests()" style="padding:0.5rem 0.75rem;background: var(--hx-inset);border: 1px solid var(--hx-hair);border-radius: 8px;color: var(--hx-ink);font-size:0.875rem;">
           <option value="30d">Last 30 days</option>
           <option value="7d">Last 7 days</option>
           <option value="90d">Last 90 days</option>
           <option value="year">This year</option>
           <option value="all">All time</option>
         </select>
-        <input type="month" id="monthFilter" onchange="filterRequests()" title="Filter by month" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
-        <button type="button" onclick="document.getElementById('monthFilter').value='';filterRequests();" title="Clear month filter" style="padding:0.5rem 0.65rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-muted,#94a3b8);font-size:0.78rem;cursor:pointer;">Clear month</button>
-        <select id="archiveFilter" onchange="filterRequests()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+        <input type="month" id="monthFilter" onchange="filterRequests()" title="Filter by month" style="padding:0.5rem 0.75rem;background: var(--hx-inset);border: 1px solid var(--hx-hair);border-radius: 8px;color: var(--hx-ink);font-size:0.875rem;">
+        <button type="button" onclick="document.getElementById('monthFilter').value='';filterRequests();" title="Clear month filter" style="padding:0.5rem 0.65rem;background: var(--hx-inset);border: 1px solid var(--hx-hair);border-radius: 8px;color: var(--hx-ink-3);font-size:0.78rem;cursor:pointer;">Clear month</button>
+        <select id="archiveFilter" onchange="filterRequests()" style="padding:0.5rem 0.75rem;background: var(--hx-inset);border: 1px solid var(--hx-hair);border-radius: 8px;color: var(--hx-ink);font-size:0.875rem;">
           <option value="active">Active</option>
           <option value="archive">Archive</option>
           <option value="all">All</option>
@@ -143,7 +143,7 @@
           Export
         </button>
       </div>
-      <div id="prCount" style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;"></div>
+      <div id="prCount" style="font-size:0.8rem;color: var(--hx-ink-3);margin-bottom:0.75rem;"></div>
       <div id="prContainer" style="overflow-x:auto;">
         <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
       </div>

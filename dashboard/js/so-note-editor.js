@@ -32,11 +32,11 @@ function _sneEl() {
       <div class="sub" id="sneSub">—</div>
       <div style="margin-top:0.6rem;">
         <textarea id="sneText" rows="7" maxlength="${SNE_MAX}"
-          style="width:100%;box-sizing:border-box;padding:0.55rem 0.65rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.86rem;font-family:inherit;resize:vertical;"
+          style="width:100%;box-sizing:border-box;padding:0.55rem 0.65rem;border:1px solid var(--hx-hair);border-radius:8px;font-size:0.86rem;font-family:inherit;resize:vertical;"
           placeholder="Anything the team should know about this order — a costing assumption, a client agreement, why a figure looks the way it does."></textarea>
         <div style="display:flex;gap:0.6rem;align-items:center;margin-top:0.3rem;">
-          <span style="font-size:0.72rem;color:var(--text-muted,#64748b);" id="sneCount"></span>
-          <span style="font-size:0.72rem;color:var(--text-muted,#64748b);margin-left:auto;" id="sneWho"></span>
+          <span style="font-size:0.72rem;color:var(--hx-ink-3);" id="sneCount"></span>
+          <span style="font-size:0.72rem;color:var(--hx-ink-3);margin-left:auto;" id="sneWho"></span>
         </div>
       </div>
       <div id="sneMsg" class="flow-msg" style="display:none;"></div>

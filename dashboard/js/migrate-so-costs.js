@@ -53,7 +53,7 @@ async function load() {
     mcMigrated = new Set(((migrated && migrated.data) || []).map(r => String(r.soNo)));
     mcSelected = new Set();
     render();
-  } catch (e) { c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${_me(e.message)}</div>`; }
+  } catch (e) { c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${_me(e.message)}</div>`; }
 }
 
 function isMigrated(r) { return mcMigrated.has(String(r.soNo)); }
@@ -129,8 +129,8 @@ function rowHtml(r, i) {
 function bdTable(r) {
   const intl = String(r.cogsType) === 'international';
   const line = (label, val) => `<tr><td>${label}</td><td class="num">${_mm(val)}</td></tr>`;
-  let rows = `<tr><td colspan="2" style="font-weight:700;color:var(--text-primary);">Revenue</td></tr>` + line('Sales', r.sales);
-  rows += `<tr><td colspan="2" style="font-weight:700;color:var(--text-primary);">Cost of Goods Sold</td></tr>`;
+  let rows = `<tr><td colspan="2" style="font-weight:700;color:var(--hx-ink);">Revenue</td></tr>` + line('Sales', r.sales);
+  rows += `<tr><td colspan="2" style="font-weight:700;color:var(--hx-ink);">Cost of Goods Sold</td></tr>`;
   rows += line('Purchase of Goods', r.purchaseOfGoods);
   if (intl) {
     rows += line('Bank Charge (COGS)', r.bankServiceChargeCOGS);
@@ -226,6 +226,6 @@ async function removeMigrated() {
 function flash(msg, ok) {
   const el = document.getElementById('msg');
   el.style.display = 'block'; el.textContent = msg;
-  el.style.background = ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
-  el.style.color = ok ? '#16a34a' : '#ef4444';
+  el.style.background = ok ? 'var(--hx-ok-soft)' : 'var(--hx-red-soft)';
+  el.style.color = ok ? 'var(--hx-ok)' : 'var(--hx-red)';
 }

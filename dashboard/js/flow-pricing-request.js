@@ -93,7 +93,7 @@ function prFocusRow(prNo, tries) {
     if (el.tagName === 'DETAILS') el.open = true;
   }
   tr.style.transition = 'background 0.4s ease';
-  tr.style.background = 'rgba(245,158,11,0.28)';
+  tr.style.background = 'var(--hx-warn-line)';
   /* The lists above this row keep rendering after the row itself exists — a single scrollIntoView
      landed correctly and was then pushed 6,000px down the page. Re-settle a few times, and hold the
      highlight until the last one, so the row is both in view AND still marked when we stop. */
@@ -131,7 +131,7 @@ function prInquiryBanner(html, tone) {
   const el = document.getElementById('prInquiryBanner');   // lives OUTSIDE #salesFormCard on purpose:
   if (!el) return;                                          // that card is hidden for oversight roles
   el.style.display = '';
-  el.style.borderLeftColor = tone === 'warn' ? '#f59e0b' : '#4f46e5';
+  el.style.borderLeftColor = tone === 'warn' ? 'var(--hx-warn)' : 'var(--hx-navy)';
   el.innerHTML = html;
 }
 
@@ -530,7 +530,7 @@ async function loadRequests() {
     const res = await fetchFlow('getPricingRequests', params);
     prList = (res && res.data) || [];
     renderList();
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 // Admin maintenance: after deleting PR rows in the sheet, resync the monotonic numbering counter so the
@@ -600,13 +600,13 @@ function renderAdminAllGrouped(rows) {
   const other = active.filter(r => !known.includes(r.status));
   html += prGroupSection('Other', other, { open: true });
   html += prGroupSection('Migrated / Old History', migrated, { history: true });
-  return html || '<p style="color:var(--text-muted,#64748b);">Nothing here.</p>';
+  return html || '<p style="color:var(--hx-ink-3);">Nothing here.</p>';
 }
 
 function renderList() {
   const c = document.getElementById('listContainer');
   const rows = filteredList();
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">Nothing here.</p>'; return; }
+  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">Nothing here.</p>'; return; }
   // Admin "All": organize by stage + separate migrated/old history.
   if (prRole === 'admin' && !prFilter) { c.innerHTML = renderAdminAllGrouped(rows); return; }
   if (prOversight) {
@@ -721,9 +721,9 @@ function openSourcingEdit(no) {
   // won't move them; the request must be re-priced by management if the final price should change.
   const late = ['Mgmt Priced', 'Returned to Sales', 'Quoted', 'Partly Quoted'].includes(r.status);
   const hint = late
-    ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ Editing supplier prices here does <b>not</b> change management's final prices — use <b>Save &amp; Send for Re-pricing</b> so management re-prices with the new costs.</p>`
+    ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:var(--hx-warn);">⚠ Editing supplier prices here does <b>not</b> change management's final prices — use <b>Save &amp; Send for Re-pricing</b> so management re-prices with the new costs.</p>`
     : (r.status === 'For Mgmt Pricing'
-      ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:#b45309;">⚠ This request is already queued for management pricing — the engine will pick up the updated supplier prices when management opens it.</p>`
+      ? `<p class="pr-meta" style="margin-bottom:0.5rem;color:var(--hx-warn);">⚠ This request is already queued for management pricing — the engine will pick up the updated supplier prices when management opens it.</p>`
       : '');
   body.innerHTML = hint + sourcingTable(r);
   sqDecorateSourcing();   // A161: same history on the edit-anytime sourcing view
@@ -744,7 +744,7 @@ function _prFinalCell(i) {
   if (!i.included) return flowNum(i.finalPrice) ? flowMoney(i.finalPrice, 'PHP') : '—';
   return flowNum(i.finalPrice) > 0
     ? flowMoney(i.finalPrice, 'PHP')
-    : '<span style="color:#b45309;font-weight:700;" title="This item will print on the quotation at zero — a freebie.">₱0.00 (free)</span>';
+    : '<span style="color:var(--hx-warn);font-weight:700;" title="This item will print on the quotation at zero — a freebie.">₱0.00 (free)</span>';
 }
 
 function readonlyTable(r, priced) {
@@ -778,14 +778,14 @@ function svatSelect(v) {
 }
 
 function sourcingTable(r) {
-  const inp = 'width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;';
+  const inp = 'width:100%;max-width:420px;padding:0.45rem 0.6rem;border:1px solid var(--hx-hair);border-radius:8px;';
   return `<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;">
       <div style="flex:1;min-width:220px;">
         <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Client Location</label>
         <input type="text" id="srcLocation" value="${flowEsc(r.clientLocation || '')}" placeholder="e.g. Cebu City, Cebu" style="${inp}">
       </div>
       <div style="flex:1;min-width:220px;">
-        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Plant Site / Delivery Destination <span style="color:#dc2626;">*</span></label>
+        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.25rem;">Plant Site / Delivery Destination <span style="color:var(--hx-red);">*</span></label>
         <input type="text" id="srcPlantSite" value="${flowEsc(r.plantSite || '')}" placeholder="e.g. Ambuklao Plant, Bokod" style="${inp}">
       </div>
     </div>
@@ -807,15 +807,15 @@ function sourcingTable(r) {
       <tr data-sq-for="${i.line}"><td colspan="10" style="padding:0 0 0.5rem 0;border-top:none;">
         <button type="button" class="link-btn" id="sqBtn_${i.line}" disabled
           onclick="sqToggle(${i.line})" title="Previous supplier quotations recorded for this item">⟲ checking history…</button>
-        <div id="sqHist_${i.line}" style="display:none;margin:0.4rem 0 0.2rem;padding:0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;overflow-x:auto;">
+        <div id="sqHist_${i.line}" style="display:none;margin:0.4rem 0 0.2rem;padding:0.6rem;border:1px solid var(--hx-hair);border-radius:8px;overflow-x:auto;">
           <div data-sq-body></div>
         </div>
       </td></tr>`).join('')}</tbody></table></div>
     <div style="margin-top:0.75rem;">
       <button type="button" class="link-btn" onclick="sqToggleBrowse()">📚 Browse all saved supplier quotations</button>
-      <div id="sqBrowse" style="display:none;margin-top:0.5rem;padding:0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+      <div id="sqBrowse" style="display:none;margin-top:0.5rem;padding:0.6rem;border:1px solid var(--hx-hair);border-radius:8px;">
         <input type="text" id="sqSearch" placeholder="Search supplier, item, reference or PR no..." oninput="sqRenderBrowse()"
-          style="width:100%;max-width:460px;padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;margin-bottom:0.5rem;">
+          style="width:100%;max-width:460px;padding:0.4rem 0.6rem;border:1px solid var(--hx-hair);border-radius:8px;margin-bottom:0.5rem;">
         <div id="sqBrowseBody" style="overflow-x:auto;"></div>
       </div>
     </div>
@@ -920,7 +920,7 @@ function peRowHtml(i, idx, pf) {
   const qty = pf.qty != null ? pf.qty : (i.qty != null ? flowNum(i.qty) : 1);
   const cbm = pf.cbm != null ? pf.cbm : (i.cbm || 0);
   return `<tr${line !== '' ? ` data-line="${line}"` : ''}>
-      <td style="text-align:center;color:var(--text-muted);">${idx + 1}</td>
+      <td style="text-align:center;color:var(--hx-ink-3);">${idx + 1}</td>
       <td><input type="text" class="pe-model" value="${flowEsc(model)}" placeholder="Model No." oninput="recalcPricing()"></td>
       <td><input type="text" class="pe-name" value="${flowEsc(name)}" placeholder="Item description" oninput="recalcPricing()"></td>
       <td><input type="number" step="any" min="0" class="pe-buy" value="${buy}" placeholder="0.00" oninput="recalcPricing()"></td>
@@ -951,10 +951,10 @@ function pricingPanel(r) {
       <div class="pe-ro-item"><span class="pe-ro-label">Forex Rate</span><span class="pe-ro-value" style="display:flex;align-items:center;gap:0.35rem;">
         <span id="mForexPrefix">1 — = ₱</span>
         <input type="number" id="mForex" step="0.0001" min="0" value="" placeholder="—" oninput="recalcPricing()"
-               style="width:5.5rem;padding:0.2rem 0.4rem;border:1px solid var(--border,#cbd5e1);border-radius:4px;font-size:0.85rem;font-weight:600;"></span></div>
+               style="width:5.5rem;padding:0.2rem 0.4rem;border:1px solid var(--hx-hair);border-radius:4px;font-size:0.85rem;font-weight:600;"></span></div>
       <div class="pe-ro-item"><span class="pe-ro-label">Shipping &amp; Duties</span><span class="pe-ro-value" style="display:flex;align-items:center;gap:0.25rem;">
         <input type="number" id="mDuties" step="0.1" min="0" max="100" value="" placeholder="—" oninput="recalcPricing()"
-               style="width:4.5rem;padding:0.2rem 0.4rem;border:1px solid var(--border,#cbd5e1);border-radius:4px;font-size:0.85rem;font-weight:600;"><span>%</span></span></div>
+               style="width:4.5rem;padding:0.2rem 0.4rem;border:1px solid var(--hx-hair);border-radius:4px;font-size:0.85rem;font-weight:600;"><span>%</span></span></div>
       <div class="pe-ro-item"><span class="pe-ro-label">Origin</span><span class="pe-ro-value" id="mOrigin">—</span></div>
       <div class="pe-ro-item"><span class="pe-ro-label">CBM Rate</span><span class="pe-ro-value" id="peCbmRate">—</span></div>
       <div class="pe-ro-item"><span class="pe-ro-label">Min Delivery</span><span class="pe-ro-value" id="peMinDeliv">—</span></div>
@@ -964,7 +964,7 @@ function pricingPanel(r) {
       <th style="width:30px;">#</th><th style="width:130px;">Model No.</th><th>Item Description</th>
       <th style="width:110px;">Buy Price</th><th style="width:80px;">Discount %</th><th style="width:64px;">Qty</th>
       <th style="width:74px;">CBM</th><th style="width:36px;"></th>
-    </tr></thead><tbody id="peRows">${rows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1rem;">No items. Click “Add Item” to begin.</td></tr>'}</tbody></table></div>
+    </tr></thead><tbody id="peRows">${rows || '<tr><td colspan="8" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">No items. Click “Add Item” to begin.</td></tr>'}</tbody></table></div>
     <div style="margin-top:0.6rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
       <button type="button" class="btn btn-sm btn-secondary" onclick="mAddItem()">+ Add Item</button>
       <button type="button" class="btn btn-sm btn-secondary" onclick="mClearItems()">Clear All</button>
@@ -1009,7 +1009,7 @@ function mAddItem() {
 }
 function mClearItems() {
   const tb = document.getElementById('peRows'); if (!tb) return;
-  tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:1rem;">No items. Click “Add Item” to begin.</td></tr>';
+  tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">No items. Click “Add Item” to begin.</td></tr>';
   recalcPricing();
 }
 
@@ -1128,7 +1128,7 @@ function loadFlowPricing(prNo) {
     });
   }).join('');
   const rowsEl = document.getElementById('peRows');
-  if (rowsEl) rowsEl.innerHTML = rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1rem;">No included items to price.</td></tr>';
+  if (rowsEl) rowsEl.innerHTML = rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">No included items to price.</td></tr>';
   const banner = document.getElementById('peEditBanner');
   if (banner) { banner.style.display = 'flex'; const id = document.getElementById('peEditId'); if (id) id.textContent = `${r.prNo} · ${r.customer || ''} · ${flowEsc(prStatusLabel(r.status || ''))}`; }
   peRenderContext(r);
@@ -1217,7 +1217,7 @@ function peRenderRepriceWarn(changed) {
       `<span>(${pct >= 0 ? '+' : ''}${pct}%)</span></div>`;
   }).join('');
   el.style.display = '';
-  el.innerHTML = `<div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:0.6rem 0.75rem;margin:0.5rem 0;font-size:0.8rem;color:#991b1b;">
+  el.innerHTML = `<div style="border:1px solid var(--hx-red-line);background:var(--hx-red-soft);border-radius:8px;padding:0.6rem 0.75rem;margin:0.5rem 0;font-size:0.8rem;color:var(--hx-red);">
     <div style="font-weight:700;margin-bottom:0.35rem;">⚠ This request's saved margin/commission no longer reproduce ${changed.length} of its saved line price${changed.length > 1 ? 's' : ''}</div>
     <div style="margin-bottom:0.35rem;">Re-pricing and saving now will change ${changed.length > 1 ? 'these lines' : 'this line'} to the figures below — different from what was already quoted. Review each line and the margin before saving.</div>
     ${rows}</div>`;
@@ -1247,8 +1247,8 @@ function recalcPricing() {
     const disc = _peNum(tr, '.pe-disc'), qty = _peNum(tr, '.pe-qty');
     const hist = _pePriceHist[String(modelNo)];
     const histCell = hist
-      ? `<td class="td-num" style="color:#7c3aed;white-space:nowrap;" title="${flowEsc(hist.client || '')}">${M(hist.unitPriceVatEx)}</td>`
-      : '<td class="td-num" style="color:var(--text-muted);">—</td>';
+      ? `<td class="td-num" style="color:var(--hx-navy-text);white-space:nowrap;" title="${flowEsc(hist.client || '')}">${M(hist.unitPriceVatEx)}</td>`
+      : '<td class="td-num" style="color:var(--hx-ink-3);">—</td>';
     html += `<tr>
       <td>${idx + 1}</td>
       <td class="td-name" title="${flowEsc(modelNo)}">${flowEsc(modelNo) || '—'}</td>
@@ -1262,8 +1262,8 @@ function recalcPricing() {
       <td class="td-num" style="font-weight:600;">${M(out.totalCOGS)}</td>
       <td class="td-num">${M(out.commission)}</td>
       <td class="td-num">${M(out.profitMargin)}</td>
-      <td class="td-num" style="font-weight:600;color:#16a34a;">${M(out.unitPriceVatEx)}</td>
-      <td class="td-num" style="font-weight:700;color:var(--accent,#0f766e);">${M(out.unitPrice)}</td>
+      <td class="td-num" style="font-weight:600;color:var(--hx-ok);">${M(out.unitPriceVatEx)}</td>
+      <td class="td-num" style="font-weight:700;color:var(--hx-navy);">${M(out.unitPrice)}</td>
       <td class="td-num">${M(out.finalPrice)}</td>
       ${histCell}
     </tr>`;
@@ -1271,7 +1271,7 @@ function recalcPricing() {
     t.cogs += out.landedCost; t.commission += out.commission; t.localTax += out.localTax; t.delivery += out.deliveryCost;
   });
   const body = document.getElementById('peResults');
-  if (body) body.innerHTML = html || '<tr><td colspan="16" style="text-align:center;color:var(--text-muted);padding:1rem;">Add supplier prices to see results.</td></tr>';
+  if (body) body.innerHTML = html || '<tr><td colspan="16" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">Add supplier prices to see results.</td></tr>';
   renderPePnl(t, comm);
 }
 
@@ -1288,23 +1288,23 @@ function renderPePnl(t, commPct) {
     <div class="pe-pnl-kpis">
       ${kpi('Gross Revenue (incl. VAT)', M(t.revenue), '112%')}
       ${kpi('Net Sales (excl. VAT)', M(t.netSales), '100%')}
-      ${kpi('Total COGS', M(t.cogs), pct(t.cogs), '#f97316')}
-      ${kpi('Gross Profit', M(grossProfit), pct(grossProfit), '#16a34a')}
-      ${kpi('Operating Income', M(operatingIncome), pct(operatingIncome), '#2563eb')}
-      ${kpi('Net Income', M(netIncome), pct(netIncome), '#9333ea')}
+      ${kpi('Total COGS', M(t.cogs), pct(t.cogs), 'var(--hx-warn)')}
+      ${kpi('Gross Profit', M(grossProfit), pct(grossProfit), 'var(--hx-ok)')}
+      ${kpi('Operating Income', M(operatingIncome), pct(operatingIncome), 'var(--hx-cyan-ink)')}
+      ${kpi('Net Income', M(netIncome), pct(netIncome), 'var(--hx-navy-text)')}
     </div>
     <table class="pe-pnl-table"><tbody>
       <tr><td>Sales, Gross of VAT</td><td class="n">${M(t.revenue)}</td><td class="n">112.0%</td></tr>
-      <tr><td>Less: VAT (12%)</td><td class="n" style="color:#ef4444;">(${M(t.vat)})</td><td class="n">12.0%</td></tr>
+      <tr><td>Less: VAT (12%)</td><td class="n" style="color:var(--hx-red);">(${M(t.vat)})</td><td class="n">12.0%</td></tr>
       <tr class="bold"><td>Sales, Net of VAT</td><td class="n">${M(t.netSales)}</td><td class="n">100.0%</td></tr>
-      <tr><td>Cost of Goods Sold</td><td class="n" style="color:#f97316;">(${M(t.cogs)})</td><td class="n">${pct(t.cogs)}</td></tr>
-      <tr class="bold"><td>Gross Profit</td><td class="n" style="color:#16a34a;">${M(grossProfit)}</td><td class="n">${pct(grossProfit)}</td></tr>
+      <tr><td>Cost of Goods Sold</td><td class="n" style="color:var(--hx-warn);">(${M(t.cogs)})</td><td class="n">${pct(t.cogs)}</td></tr>
+      <tr class="bold"><td>Gross Profit</td><td class="n" style="color:var(--hx-ok);">${M(grossProfit)}</td><td class="n">${pct(grossProfit)}</td></tr>
       <tr><td>Commission (${flowNum(commPct)}%)</td><td class="n">(${M(t.commission)})</td><td class="n">${pct(t.commission)}</td></tr>
       <tr><td>Local Tax (2%)</td><td class="n">(${M(t.localTax)})</td><td class="n">${pct(t.localTax)}</td></tr>
       <tr><td>Delivery</td><td class="n">(${M(t.delivery)})</td><td class="n">${pct(t.delivery)}</td></tr>
-      <tr class="bold"><td>Operating Income</td><td class="n" style="color:#2563eb;">${M(operatingIncome)}</td><td class="n">${pct(operatingIncome)}</td></tr>
+      <tr class="bold"><td>Operating Income</td><td class="n" style="color:var(--hx-cyan-ink);">${M(operatingIncome)}</td><td class="n">${pct(operatingIncome)}</td></tr>
       <tr><td>Income Tax (25%)</td><td class="n">(${M(incomeTax)})</td><td class="n">${pct(incomeTax)}</td></tr>
-      <tr class="bold"><td>NET INCOME</td><td class="n" style="color:#9333ea;">${M(netIncome)}</td><td class="n">${pct(netIncome)}</td></tr>
+      <tr class="bold"><td>NET INCOME</td><td class="n" style="color:var(--hx-navy-text);">${M(netIncome)}</td><td class="n">${pct(netIncome)}</td></tr>
     </tbody></table>`;
 }
 
@@ -1498,13 +1498,13 @@ function renderPricingHistoryTable() {
     if (cl && !String(r.customer || '').toLowerCase().includes(cl)) return false;
     return true;
   });
-  if (!list.length) { el.innerHTML = '<p style="color:var(--text-muted,#64748b);font-size:0.82rem;">No pricing history matches.</p>'; return; }
+  if (!list.length) { el.innerHTML = '<p style="color:var(--hx-ink-3);font-size:0.82rem;">No pricing history matches.</p>'; return; }
   const rows = list.map((r, i) => {
     const badge = r.status === 'Migrated' || r.legacyId
-      ? '<span class="flow-badge" style="background:rgba(13,148,136,0.14);color:#0f766e;">Migrated</span>'
+      ? '<span class="flow-badge" style="background:var(--hx-cyan-ring);color:var(--hx-cyan-ink);">Migrated</span>'
       : `<span class="flow-badge ${BADGE[r.status] || 'b-pending'}">${flowEsc(prStatusLabel(r.status))}</span>`;
     return `<tr class="ph-row">
-        <td><strong>${flowEsc(r.prNo)}</strong>${r.legacyId ? `<div style="font-size:0.68rem;color:var(--text-muted,#64748b);">${flowEsc(r.legacyId)}</div>` : ''}</td>
+        <td><strong>${flowEsc(r.prNo)}</strong>${r.legacyId ? `<div style="font-size:0.68rem;color:var(--hx-ink-3);">${flowEsc(r.legacyId)}</div>` : ''}</td>
         <td>${flowEsc(flowDate(r.date) || '')}</td>
         <td>${flowEsc(r.customer || '—')}</td>
         <td class="num">${(r.items || []).length}</td>
@@ -1513,7 +1513,7 @@ function renderPricingHistoryTable() {
           <button class="link-btn" onclick="togglePhDetail(${i})">Breakdown</button>
           <button class="link-btn" style="margin-left:0.5rem;" onclick="loadFlowPricing('${flowEsc(r.prNo)}')">Reload / Re-price</button>
         </td></tr>
-      <tr id="phDetail${i}" style="display:none;"><td colspan="6" style="background:var(--bg-inset,#f8fafc);">${phDetailHtml(r)}</td></tr>`;
+      <tr id="phDetail${i}" style="display:none;"><td colspan="6" style="background:var(--hx-inset);">${phDetailHtml(r)}</td></tr>`;
   }).join('');
   el.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr>
     <th>PR No</th><th>Date</th><th>Customer</th><th class="num">Items</th><th>Status</th><th></th>
@@ -1527,7 +1527,7 @@ function togglePhDetail(i) {
 
 // Full per-item breakdown for a history row (from the saved priced/legacy breakdown JSON).
 function phDetailHtml(r) {
-  const head = `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin:0.4rem 0;">
+  const head = `<div style="font-size:0.72rem;color:var(--hx-ink-3);margin:0.4rem 0;">
     Destination: <strong>${flowEsc(r.destination || '—')}</strong> · Commission: <strong>${flowNum(r.commission)}%</strong> · Margin: <strong>${flowNum(r.margin)}%</strong></div>`;
   /* A181: one row per ITEM, each joined to its saved breakdown. This used to render the breakdown
      rows alone, so a request whose breakdown covered fewer lines than it had items showed only those
@@ -1760,7 +1760,7 @@ async function sqDecorateSourcing() {
 function sqRenderBrowse() {
   const box = document.getElementById('sqBrowseBody');
   if (!box) return;
-  if (sqHistoryErr) { box.innerHTML = `<p class="pr-meta" style="color:#b45309;">${flowEsc(sqHistoryErr)} — the Supplier Quotation page has the full list.</p>`; return; }
+  if (sqHistoryErr) { box.innerHTML = `<p class="pr-meta" style="color:var(--hx-warn);">${flowEsc(sqHistoryErr)} — the Supplier Quotation page has the full list.</p>`; return; }
   const q = ((document.getElementById('sqSearch') || {}).value || '').trim().toLowerCase();
   let recs = sqHistory || [];
   if (q) {
@@ -1826,7 +1826,7 @@ function sqRenderSummary() {
   const cnt = document.getElementById('sqSummaryCount');
   if (!body) return;
   if (sqHistoryErr) {
-    body.innerHTML = `<p class="pr-meta" style="color:#b45309;">${flowEsc(sqHistoryErr)} — the Supplier Quotation page has the full list.</p>`;
+    body.innerHTML = `<p class="pr-meta" style="color:var(--hx-warn);">${flowEsc(sqHistoryErr)} — the Supplier Quotation page has the full list.</p>`;
     if (kpis) kpis.innerHTML = '';
     return;
   }
@@ -1846,7 +1846,7 @@ function sqRenderSummary() {
     // A179: flowDate, not a raw slice — a Manila-midnight value truncates to the day before.
     // Still YYYY-MM-DD, so the lexical sort still finds the most recent.
     const latest = all.map(r => flowDate(r.date)).filter(Boolean).sort().pop() || '—';
-    const tile = (label, val) => `<div style="flex:1;min-width:130px;padding:0.5rem 0.7rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+    const tile = (label, val) => `<div style="flex:1;min-width:130px;padding:0.5rem 0.7rem;border:1px solid var(--hx-hair);border-radius:8px;">
       <div class="pr-meta" style="margin:0;">${label}</div><div style="font-weight:700;font-size:1.05rem;">${val}</div></div>`;
     kpis.innerHTML = tile('Quotations', all.length) + tile('Suppliers', suppliers.size)
       + tile('Most recent', latest) + tile('Showing', recs.length);

@@ -48,7 +48,7 @@ async function loadAll() {
     buildYearOptions();
     render();
   } catch (e) {
-    body.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${_e(e.message)}</div>`;
+    body.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${_e(e.message)}</div>`;
   }
 }
 
@@ -147,12 +147,12 @@ function render() {
         <div class="as-sect-body">
         <table class="as-pl"><tbody>
           <tr class="bold"><td>Revenue (Sales)</td><td class="n">${_m(revenue)}</td><td class="n">100.0%</td></tr>
-          <tr><td>Less: Cost of Goods Sold</td><td class="n" style="color:#f97316;">(${_m(cogs)})</td><td class="n">${pct(cogs)}</td></tr>
-          <tr class="bold final"><td>Gross Profit</td><td class="n" style="color:#16a34a;">${_m(grossProfit)}</td><td class="n">${margin}</td></tr>
-          <tr><td>Less: Operating Expenses (OpEx)</td><td class="n" style="color:#f97316;">(${_m(expTotal)})</td><td class="n">${pct(expTotal)}</td></tr>
-          <tr class="bold final"><td>Net Income</td><td class="n" style="color:${netIncome >= 0 ? '#16a34a' : '#ef4444'};">${_m(netIncome)}</td><td class="n">${pct(netIncome)}</td></tr>
+          <tr><td>Less: Cost of Goods Sold</td><td class="n" style="color:var(--hx-warn);">(${_m(cogs)})</td><td class="n">${pct(cogs)}</td></tr>
+          <tr class="bold final"><td>Gross Profit</td><td class="n" style="color:var(--hx-ok);">${_m(grossProfit)}</td><td class="n">${margin}</td></tr>
+          <tr><td>Less: Operating Expenses (OpEx)</td><td class="n" style="color:var(--hx-warn);">(${_m(expTotal)})</td><td class="n">${pct(expTotal)}</td></tr>
+          <tr class="bold final"><td>Net Income</td><td class="n" style="color:${netIncome >= 0 ? 'var(--hx-ok)' : 'var(--hx-red)'};">${_m(netIncome)}</td><td class="n">${pct(netIncome)}</td></tr>
         </tbody></table>
-        <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.5rem;">Revenue &amp; COGS come from issued invoices in the period. The flow capitalizes duties/delivery into inventory cost (recovered through COGS) and routes VAT to Input&nbsp;VAT, so operating costs appear under Costs &amp; Expenses.</p>
+        <p style="font-size:0.74rem;color:var(--hx-ink-3);margin-top:0.5rem;">Revenue &amp; COGS come from issued invoices in the period. The flow capitalizes duties/delivery into inventory cost (recovered through COGS) and routes VAT to Input&nbsp;VAT, so operating costs appear under Costs &amp; Expenses.</p>
         </div>
       </div>
       <div class="as-sect">

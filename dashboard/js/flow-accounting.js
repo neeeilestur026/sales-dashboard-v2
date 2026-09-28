@@ -30,7 +30,7 @@ async function loadAll() {
     buildModels();
     render();
   } catch (e) {
-    c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`;
+    c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`;
   }
 }
 
@@ -141,7 +141,7 @@ function soBody(m) {
   } else {
     m.procurement.forEach(x => {
       const p = x.po;
-      html += `<div class="acc-muted" style="font-size:0.82rem;margin:0.4rem 0 0.2rem;"><strong style="color:var(--text-primary,#f1f5f9);">${flowEsc(p.poNo)}</strong> · ${flowEsc(p.supplier)} · ${flowEsc(p.currency)} · Total ${flowMoney(p.total, p.currency)} · ${flowEsc(p.status)}${p.pdfLink ? ` · <a href="${flowEsc(p.pdfLink)}" target="_blank" class="link-btn">PDF</a>` : ''}</div>`;
+      html += `<div class="acc-muted" style="font-size:0.82rem;margin:0.4rem 0 0.2rem;"><strong style="color:var(--hx-ink);">${flowEsc(p.poNo)}</strong> · ${flowEsc(p.supplier)} · ${flowEsc(p.currency)} · Total ${flowMoney(p.total, p.currency)} · ${flowEsc(p.status)}${p.pdfLink ? ` · <a href="${flowEsc(p.pdfLink)}" target="_blank" class="link-btn">PDF</a>` : ''}</div>`;
       html += itemsTable(
         [{ t: 'Item' }, { t: 'Name' }, { t: 'Qty', num: 1 }, { t: 'Purchase/Unit (FC)', num: 1 }, { t: 'Total (FC)', num: 1 }],
         (p.items || []).map(it => `<tr><td>${flowEsc(it.itemNo)}</td><td>${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, p.currency)}</td><td class="num">${flowMoney(it.total, p.currency)}</td></tr>`));
@@ -171,7 +171,7 @@ function soBody(m) {
     html += `<div class="acc-muted">Not yet invoiced.</div>`;
   } else {
     m.invs.forEach(v => {
-      html += `<div class="acc-muted" style="font-size:0.82rem;margin:0.3rem 0;"><strong style="color:var(--text-primary,#f1f5f9);">${flowEsc(v.invNo)}</strong> · ${flowDate(v.date)}</div>`;
+      html += `<div class="acc-muted" style="font-size:0.82rem;margin:0.3rem 0;"><strong style="color:var(--hx-ink);">${flowEsc(v.invNo)}</strong> · ${flowDate(v.date)}</div>`;
       html += itemsTable(
         [{ t: 'Item' }, { t: 'Qty', num: 1 }, { t: 'Selling Price', num: 1 }, { t: 'Line Sales', num: 1 }, { t: 'Landed (COGS)', num: 1 }, { t: 'Line COGS', num: 1 }],
         (v.items || []).map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.sellingPrice, 'PHP')}</td><td class="num">${flowMoney(it.lineSales, 'PHP')}</td><td class="num">${flowMoney(it.landedCost, 'PHP')}</td><td class="num">${flowMoney(it.lineCOGS, 'PHP')}</td></tr>`));

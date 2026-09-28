@@ -17,7 +17,7 @@ async function loadMROs() {
     mroData = result.data || [];
     renderFiltered();
   } catch (err) {
-    document.getElementById('queueContainer').innerHTML = '<div style="color:#ef4444;padding:1rem;">Error: ' + esc(err.message) + '</div>';
+    document.getElementById('queueContainer').innerHTML = '<div style="color:var(--hx-red);padding:1rem;">Error: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -51,7 +51,7 @@ function renderFiltered() {
 function renderTable(data) {
   const container = document.getElementById('queueContainer');
   if (data.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No MRO records found.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--hx-ink-3);">No MRO records found.</div>';
     return;
   }
 
@@ -69,10 +69,10 @@ function renderTable(data) {
       '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.itemDescription) + '</td>' +
       '<td style="text-align:center;">' + esc(String(r.quantity)) + '</td>' +
       '<td>' + esc(r.receivedBy) + '</td>' +
-      '<td>' + (r.driveLink ? '<a href="' + esc(r.driveLink) + '" target="_blank" style="color:#3b82f6;">View</a>' : '—') + '</td>' +
+      '<td>' + (r.driveLink ? '<a href="' + esc(r.driveLink) + '" target="_blank" style="color:var(--hx-cyan-ink);">View</a>' : '—') + '</td>' +
       '</tr>';
   });
 
   html += '</tbody></table>';
-  container.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">' + data.length + ' record(s)</div>' + html;
+  container.innerHTML = '<div style="font-size:0.8rem;color:var(--hx-ink-3);margin-bottom:0.5rem;">' + data.length + ' record(s)</div>' + html;
 }

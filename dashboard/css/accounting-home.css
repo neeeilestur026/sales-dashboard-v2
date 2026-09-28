@@ -1,0 +1,100 @@
+/* accounting-home.css — A292 · the accounting home, on the brand system.
+ *
+ * Linked by accounting-home.html after css/styles.css (tokens, both themes, the deck, glass,
+ * buttons), css/flow.css, css/pnl-report.css (the profit report) and css/shipments.css (the
+ * monitoring list, the badges and the timeline dialog, shared with the admin home). This file is
+ * only what the page adds: the module cards, the revenue table, the shipments section head, the
+ * document viewer's body, the slab's state tag and the load moment. Every rule hangs off body.ac.
+ * Keyframes animate transform or opacity only; everything is switched off under
+ * prefers-reduced-motion. */
+
+/* ── 1 · the slab and the rail ───────────────────────────────────────────────────────────────── */
+body.ac .hx-facts { grid-template-columns: 1fr 1fr; }
+body.ac .hx-facts > div.wide { grid-column: 1 / -1; }
+body.ac .hx-slab .tag[data-tone="ok"] { background: rgba(0,174,239,.22); border-color: rgba(0,174,239,.5); }
+body.ac .hx-slab .tag[data-tone="bad"] { background: rgba(255,255,255,.18); }
+body.ac .hx-rail-nav .hx-count { transition: background .3s, color .3s; }
+body.ac .hx-rail-nav .hx-count.zero, body.ac #inbox.zero .hx-count { background: var(--hx-inset); color: var(--hx-ink-3); border-color: var(--hx-hair); }
+
+/* ── 2 · the mast ────────────────────────────────────────────────────────────────────────────── */
+body.ac .hx-mast .hx-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── 3 · needs you ───────────────────────────────────────────────────────────────────────────── */
+body.ac #inbox .hx-head { margin-bottom: 8px; }
+body.ac #flowActionCenter { min-height: 24px; }
+
+/* ── 4 · the modules ─────────────────────────────────────────────────────────────────────────── */
+body.ac .ac-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 10px; }
+body.ac .acard { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); background: var(--hx-glass-solid); color: inherit; text-decoration: none; min-width: 0; transition: border-color .15s var(--hx-ease), background .15s var(--hx-ease); }
+body.ac .acard:hover { border-color: var(--hx-navy-line); background: var(--hx-inset); }
+body.ac .acard:focus-visible { border-color: var(--hx-cyan); }
+body.ac .acard-top { display: flex; align-items: center; gap: 11px; min-width: 0; }
+body.ac .acard-icon { width: 38px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+body.ac .acard-icon svg { width: 18px; height: 18px; }
+body.ac .acard-icon.t-cyan { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
+body.ac .acard-icon.t-ok { background: var(--hx-ok-soft); color: var(--hx-ok); }
+body.ac .acard-icon.t-warn { background: var(--hx-warn-soft); color: var(--hx-warn); }
+body.ac .acard-icon.t-ink { background: var(--hx-inset); color: var(--hx-ink-2); }
+body.ac .acard-title { font: 700 13.5px/1.3 var(--hx-text); color: var(--hx-ink); margin: 0; }
+body.ac .acard-desc { font: 400 11.5px/1.4 var(--hx-text); color: var(--hx-ink-3); margin: 1px 0 0; }
+body.ac .acard-stat { font: 500 11.5px/1.4 var(--hx-text); color: var(--hx-ink-2); padding: 6px 9px; background: var(--hx-inset); border-radius: var(--hx-r-sm); }
+
+/* ── 5 · revenue beside the recent shipments ─────────────────────────────────────────────────── */
+body.ac .ac-pair { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+body.ac .ac-pair > section { margin: 0; }
+body.ac #revenue .hx-scroll { max-height: 420px; }
+body.ac #revenue table { width: 100%; border-collapse: collapse; }
+body.ac #revenue th.n, body.ac #revenue td.n { text-align: right; font-variant-numeric: tabular-nums; }
+body.ac #revenue td { white-space: nowrap; }
+body.ac #revenue tr.tot td { font-weight: 800; color: var(--hx-navy-text); background: var(--hx-navy-soft); border-top: 2px solid var(--hx-navy); border-bottom: none; }
+body.ac #acctSmRecent .hx-empty { padding: 1rem; }
+
+/* ── 6 · the profit report and the monitoring section ────────────────────────────────────────── */
+body.ac #profit { margin-top: 0; }
+body.ac #shipments .hx-head .hx-actions { margin-left: auto; }
+body.ac #acctSmChevron { width: 14px; height: 14px; transition: transform .2s var(--hx-ease); }
+body.ac #acctSmToggle[aria-expanded="false"] #acctSmChevron { transform: rotate(-90deg); }
+
+/* the document viewer's body: an iframe or a fallback link */
+body.ac .ac-docbody { flex: 1; overflow: hidden; }
+body.ac .ac-docframe { width: 100%; height: 100%; border: 0; }
+body.ac .ac-docfallback { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--hx-ink-3); font: 400 13px/1.5 var(--hx-text); }
+
+/* ── 7 · the load moment ─────────────────────────────────────────────────────────────────────── */
+body.ac.ac-load .hx-facts dd { animation: acIn .45s var(--hx-ease) both; }
+body.ac.ac-load .hx-facts > div:nth-child(2) dd { animation-delay: .05s; }
+body.ac.ac-load .hx-facts > div:nth-child(3) dd { animation-delay: .10s; }
+body.ac.ac-load .hx-facts > div:nth-child(4) dd { animation-delay: .15s; }
+body.ac.ac-load .hx-facts > div:nth-child(5) dd { animation-delay: .20s; }
+body.ac.ac-load .acard { animation: acIn .4s var(--hx-ease) both; }
+body.ac.ac-load .acard:nth-child(2) { animation-delay: .03s; }
+body.ac.ac-load .acard:nth-child(3) { animation-delay: .06s; }
+body.ac.ac-load .acard:nth-child(4) { animation-delay: .09s; }
+body.ac.ac-load .acard:nth-child(5) { animation-delay: .12s; }
+body.ac.ac-load .acard:nth-child(n+6) { animation-delay: .15s; }
+body.ac .hx-count.pop { animation: acPop .32s var(--hx-spring); }
+body.ac .hx-facts dd.ac-tick, body.ac .hx-slab .v.ac-tick { animation: acFade .5s var(--hx-ease); }
+
+@keyframes acIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes acPop { 0% { transform: scale(1); } 45% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes acFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── 8 · responsive ──────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  body.ac .ac-pair { grid-template-columns: 1fr; }
+  body.ac .hx-facts { grid-template-columns: repeat(3, 1fr); }
+  body.ac .hx-facts > div.wide { grid-column: auto; }
+}
+@media (max-width: 768px) {
+  body.ac .hx-facts { grid-template-columns: 1fr 1fr; }
+  body.ac .ac-modules { grid-template-columns: 1fr 1fr; }
+  body.ac .hx-mast .hx-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+@media (max-width: 480px) {
+  body.ac .ac-modules { grid-template-columns: 1fr; }
+}
+
+/* ── 9 · reduced motion ──────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.ac *, body.ac *::before, body.ac *::after { animation: none !important; transition: none !important; }
+}

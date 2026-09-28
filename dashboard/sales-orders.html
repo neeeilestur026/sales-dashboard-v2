@@ -9,59 +9,59 @@
     /* ─── Form ──────────────────────────────────────── */
     .so-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
     .so-form-grid .full { grid-column: 1 / -1; }
-    .so-form-grid label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; }
+    .so-form-grid label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--hx-ink-3); margin-bottom: 0.25rem; }
     .so-form-grid input, .so-form-grid select {
-      width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155); border-radius: 8px;
-      color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit;
+      width: 100%; padding: 0.5rem 0.7rem; background: var(--hx-inset);
+      border: 1px solid var(--hx-hair); border-radius: 8px;
+      color: var(--hx-ink); font-size: 0.875rem; font-family: inherit;
     }
-    .so-form-grid input:focus, .so-form-grid select:focus { outline: none; border-color: #14b8a6; }
+    .so-form-grid input:focus, .so-form-grid select:focus { outline: none; border-color: var(--hx-navy); }
     /* ─── Items Table in Form ────────────────────────── */
     .items-wrapper { overflow-x: auto; margin-bottom: 0.75rem; }
     .items-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 640px; }
-    .items-table th { text-align: left; padding: 0.45rem 0.5rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
-    .items-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid #e2e8f0; }
+    .items-table th { text-align: left; padding: 0.45rem 0.5rem; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); font-weight: 600; white-space: nowrap; }
+    .items-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--hx-hair-2); }
     .items-table input {
-      width: 100%; padding: 0.35rem 0.5rem; background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155); border-radius: 6px;
-      color: var(--text-primary, #f1f5f9); font-size: 0.82rem; font-family: inherit;
+      width: 100%; padding: 0.35rem 0.5rem; background: var(--hx-inset);
+      border: 1px solid var(--hx-hair); border-radius: 6px;
+      color: var(--hx-ink); font-size: 0.82rem; font-family: inherit;
     }
-    .items-table input:focus { outline: none; border-color: #14b8a6; }
-    .items-table .amt-cell { text-align: right; color: var(--text-secondary, #94a3b8); font-size: 0.82rem; padding: 0.35rem 0.5rem; white-space: nowrap; }
-    .rm-btn { background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.75rem; line-height: 1; }
-    .rm-btn:hover { background: rgba(239,68,68,0.22); }
+    .items-table input:focus { outline: none; border-color: var(--hx-navy); }
+    .items-table .amt-cell { text-align: right; color: var(--hx-ink-2); font-size: 0.82rem; padding: 0.35rem 0.5rem; white-space: nowrap; }
+    .rm-btn { background: var(--hx-red-soft); color: var(--hx-red); border: 1px solid var(--hx-red-soft); border-radius: 6px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.75rem; line-height: 1; }
+    .rm-btn:hover { background: var(--hx-red-soft); }
     /* ─── Summary Box ────────────────────────────────── */
-    .so-summary { background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
-    .so-summary-row { display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0; border-bottom: 1px solid #e2e8f0; }
-    .so-summary-row:last-child { border-bottom: none; font-weight: 700; font-size: 0.95rem; color: #14b8a6; }
-    .so-summary-row .lbl { color: var(--text-muted, #64748b); }
+    .so-summary { background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
+    .so-summary-row { display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0; border-bottom: 1px solid var(--hx-hair-2); }
+    .so-summary-row:last-child { border-bottom: none; font-weight: 700; font-size: 0.95rem; color: var(--hx-navy-text); }
+    .so-summary-row .lbl { color: var(--hx-ink-3); }
     .so-summary-row .val { font-weight: 600; }
     /* ─── Records Table ──────────────────────────────── */
     .so-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; min-width: 800px; }
-    .so-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
-    .so-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
-    .so-table tr.main-row:hover td { background: #e2e8f0; }
-    .so-table tr.items-row td { background: rgba(20,184,166,0.04); padding: 0; }
+    .so-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); font-weight: 600; white-space: nowrap; }
+    .so-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2); color: var(--hx-ink); }
+    .so-table tr.main-row:hover td { background: var(--hx-hair-2); }
+    .so-table tr.items-row td { background: var(--hx-cyan-soft); padding: 0; }
     .so-table tr.items-row .inner { padding: 0.7rem 1rem 0.7rem 2.5rem; }
     .so-table tr.items-row.hidden { display: none; }
     .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge-pending { background: rgba(234,179,8,0.15); color: #eab308; }
-    .badge-delivered { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-pending { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .badge-delivered { background: var(--hx-ok-soft); color: var(--hx-ok); }
     /* ─── Filter bar ─────────────────────────────────── */
     .filter-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.25rem; }
-    .filter-bar input { flex: 1; min-width: 180px; padding: 0.5rem 0.75rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem; }
-    .filter-bar input::placeholder { color: var(--text-muted, #64748b); }
-    .filter-tab { padding: 0.4rem 0.85rem; border-radius: 8px; border: 1px solid var(--border, #334155); background: transparent; color: var(--text-muted, #64748b); font-size: 0.8rem; cursor: pointer; }
-    .filter-tab.active { background: #14b8a6; border-color: #14b8a6; color: #fff; }
-    .count-label { font-size: 0.8rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+    .filter-bar input { flex: 1; min-width: 180px; padding: 0.5rem 0.75rem; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.875rem; }
+    .filter-bar input::placeholder { color: var(--hx-ink-3); }
+    .filter-tab { padding: 0.4rem 0.85rem; border-radius: 8px; border: 1px solid var(--hx-hair); background: transparent; color: var(--hx-ink-3); font-size: 0.8rem; cursor: pointer; }
+    .filter-tab.active { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-slab-ink); }
+    .count-label { font-size: 0.8rem; color: var(--hx-ink-3); margin-bottom: 0.75rem; }
     /* ─── Status Modal ───────────────────────────────── */
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: var(--hx-scrim); z-index: 1000; align-items: center; justify-content: center; }
     .modal-overlay.open { display: flex; }
-    .modal-box { background: var(--surface, #1e293b); border: 1px solid var(--border, #334155); border-radius: 14px; padding: 1.5rem; width: 100%; max-width: 400px; }
+    .modal-box { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: 14px; padding: 1.5rem; width: 100%; max-width: 400px; }
     .modal-box h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 1rem; }
-    .modal-box label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b); margin-bottom: 0.25rem; margin-top: 0.75rem; }
-    .modal-box select, .modal-box input { width: 100%; padding: 0.5rem 0.7rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.875rem; font-family: inherit; }
-    .modal-box select:focus, .modal-box input:focus { outline: none; border-color: #14b8a6; }
+    .modal-box label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--hx-ink-3); margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .modal-box select, .modal-box input { width: 100%; padding: 0.5rem 0.7rem; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.875rem; font-family: inherit; }
+    .modal-box select:focus, .modal-box input:focus { outline: none; border-color: var(--hx-navy); }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
     /* ─── Form visible/hidden ────────────────────────── */
     .form-section { display: none; }
@@ -82,7 +82,7 @@
     <!-- ─── New SO Form (collapsible) ─────────────────────── -->
     <div class="chart-card" style="margin-bottom:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:0.4rem;">
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);display:flex;align-items:center;gap:0.4rem;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Sales Order
         </h3>
@@ -96,11 +96,11 @@
           <!-- Header fields -->
           <div class="so-form-grid">
             <div>
-              <label for="soDate">Date <span style="color:#ef4444;">*</span></label>
+              <label for="soDate">Date <span style="color: var(--hx-red);">*</span></label>
               <input type="date" id="soDate" required>
             </div>
             <div>
-              <label for="soNo">SO No. <span style="color:var(--text-muted,#64748b);font-weight:400;">(auto-generated if empty)</span></label>
+              <label for="soNo">SO No. <span style="color: var(--hx-ink-3);font-weight:400;">(auto-generated if empty)</span></label>
               <input type="text" id="soNo" placeholder="e.g. SO-202604-001">
             </div>
             <div>
@@ -108,7 +108,7 @@
               <input type="text" id="soCustomerId" placeholder="e.g. CUS-001">
             </div>
             <div>
-              <label for="soCustomerName">Customer Name <span style="color:#ef4444;">*</span></label>
+              <label for="soCustomerName">Customer Name <span style="color: var(--hx-red);">*</span></label>
               <input type="text" id="soCustomerName" required placeholder="Company or person name">
             </div>
             <div>
@@ -128,14 +128,14 @@
               </select>
             </div>
             <div class="full">
-              <label for="soInvoiceNo">Invoice No. <span style="color:var(--text-muted,#64748b);font-weight:400;">(optional)</span></label>
+              <label for="soInvoiceNo">Invoice No. <span style="color: var(--hx-ink-3);font-weight:400;">(optional)</span></label>
               <input type="text" id="soInvoiceNo" placeholder="e.g. INV-2026-001">
             </div>
           </div>
 
           <!-- Items table -->
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
-            <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted,#64748b);">LINE ITEMS</span>
+            <span style="font-size:0.82rem;font-weight:600;color: var(--hx-ink-3);">LINE ITEMS</span>
             <button type="button" class="btn btn-sm btn-secondary" onclick="addItemRow()" style="font-size:0.75rem;padding:0.25rem 0.6rem;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Add Item
@@ -186,14 +186,14 @@
             <button type="button" class="btn btn-secondary" onclick="resetForm()">Clear</button>
           </div>
         </form>
-        <div id="formMsg" style="display:none;padding:0.55rem 0.75rem;border-radius:8px;font-size:0.85rem;margin-top:0.75rem;"></div>
+        <div id="formMsg" style="display:none;padding:0.55rem 0.75rem;border-radius: 8px;font-size:0.85rem;margin-top:0.75rem;"></div>
       </div>
     </div>
 
     <!-- ─── Records List ───────────────────────────────────── -->
     <div class="chart-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;flex-wrap:wrap;gap:0.5rem;">
-        <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);">Sales Order Records</h3>
+        <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);">Sales Order Records</h3>
         <button class="btn btn-sm btn-secondary" onclick="exportExcel()" id="exportBtn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export Excel
@@ -204,7 +204,7 @@
         <button class="filter-tab"        id="tab-pending"  onclick="setFilter('pending')">Pending</button>
         <button class="filter-tab"        id="tab-delivered" onclick="setFilter('delivered')">Delivered</button>
         <input type="text" id="soSearch" placeholder="Search SO No, customer, invoice..." oninput="renderTable()">
-        <select id="dateRange" onchange="renderTable()" style="padding:0.5rem 0.75rem;background:var(--surface-2,#1e293b);border:1px solid var(--border,#334155);border-radius:8px;color:var(--text-primary,#f1f5f9);font-size:0.875rem;">
+        <select id="dateRange" onchange="renderTable()" style="padding:0.5rem 0.75rem;background: var(--hx-inset);border: 1px solid var(--hx-hair);border-radius: 8px;color: var(--hx-ink);font-size:0.875rem;">
           <option value="30d">Last 30 days</option>
           <option value="7d">Last 7 days</option>
           <option value="90d">Last 90 days</option>
@@ -226,8 +226,8 @@
   <!-- ─── Edit Sales Order Modal (full edit) ─────────────── -->
   <div class="modal-overlay" id="statusModal" onclick="closeModal(event)">
     <div class="modal-box" onclick="event.stopPropagation()" style="max-width:880px;width:96%;max-height:92vh;overflow-y:auto;">
-      <h4 style="margin-bottom:0.25rem;">Edit Sales Order — <span id="editSoNoTitle" style="color:#14b8a6;"></span></h4>
-      <p style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-bottom:1rem;">All fields are editable. Saving replaces the existing rows; uploaded documents and original creator are preserved.</p>
+      <h4 style="margin-bottom:0.25rem;">Edit Sales Order — <span id="editSoNoTitle" style="color: var(--hx-navy-text);"></span></h4>
+      <p style="font-size:0.78rem;color: var(--hx-ink-3);margin-bottom:1rem;">All fields are editable. Saving replaces the existing rows; uploaded documents and original creator are preserved.</p>
 
       <input type="hidden" id="modalSONo">
       <input type="hidden" id="modalCustomerName">
@@ -238,7 +238,7 @@
           <input type="date" id="editSoDate">
         </div>
         <div>
-          <label for="modalSONoDisplay">SO No. <span style="color:var(--text-muted,#64748b);font-weight:400;">(read-only)</span></label>
+          <label for="modalSONoDisplay">SO No. <span style="color: var(--hx-ink-3);font-weight:400;">(read-only)</span></label>
           <input type="text" id="modalSONoDisplay" readonly style="opacity:0.6;">
         </div>
         <div>
@@ -273,7 +273,7 @@
 
       <!-- Editable items -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;margin-top:0.5rem;">
-        <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted,#64748b);">LINE ITEMS</span>
+        <span style="font-size:0.82rem;font-weight:600;color: var(--hx-ink-3);">LINE ITEMS</span>
         <button type="button" class="btn btn-sm btn-secondary" onclick="editAddItemRow()" style="font-size:0.75rem;padding:0.25rem 0.6rem;">+ Add Item</button>
       </div>
       <div class="items-wrapper">
@@ -305,24 +305,24 @@
       <div id="uploadSection" style="display:none;margin-top:0.75rem;">
         <label style="display:block;margin-bottom:0.3rem;">Upload SI Documents (optional)</label>
         <input type="file" id="modalFiles" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx" style="width:100%;font-size:0.82rem;">
-        <div id="uploadProgress" style="display:none;margin-top:0.4rem;font-size:0.8rem;color:#14b8a6;">Uploading files…</div>
+        <div id="uploadProgress" style="display:none;margin-top:0.4rem;font-size:0.8rem;color: var(--hx-navy-text);">Uploading files…</div>
       </div>
 
       <div class="modal-actions">
         <button class="btn btn-primary" style="flex:1;" onclick="saveStatus()" id="editSaveBtn">Save Changes</button>
         <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('statusModal').classList.remove('open')">Cancel</button>
       </div>
-      <div id="modalMsg" style="display:none;margin-top:0.5rem;font-size:0.82rem;padding:0.4rem 0.6rem;border-radius:8px;"></div>
+      <div id="modalMsg" style="display:none;margin-top:0.5rem;font-size:0.82rem;padding:0.4rem 0.6rem;border-radius: 8px;"></div>
     </div>
   </div>
 
   <!-- ─── Documents Mini-Window ─────────────────────────────── -->
   <div class="modal-overlay" id="docsModal" onclick="closeDocsModal(event)">
     <div class="modal-box" onclick="event.stopPropagation()" style="max-width:640px;width:95%;">
-      <h4 style="margin-bottom:0.25rem;">Documents — <span id="docsModalSONo" style="color:#14b8a6;"></span></h4>
+      <h4 style="margin-bottom:0.25rem;">Documents — <span id="docsModalSONo" style="color: var(--hx-navy-text);"></span></h4>
       <div id="docsModalList" style="margin:1rem 0;min-height:60px;"></div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-        <a id="docsModalFolderLink" href="#" target="_blank" style="display:none;font-size:0.82rem;color:#3b82f6;text-decoration:underline;">Open folder in Drive ↗</a>
+        <a id="docsModalFolderLink" href="#" target="_blank" style="display:none;font-size:0.82rem;color: var(--hx-cyan-ink);text-decoration:underline;">Open folder in Drive ↗</a>
         <button class="btn btn-secondary" style="margin-left:auto;" onclick="closeDocsModal()">Close</button>
       </div>
     </div>
@@ -375,7 +375,7 @@
       const tr = document.createElement('tr');
       tr.id = 'item-row-' + id;
       tr.innerHTML = `
-        <td style="color:var(--text-muted,#64748b);font-size:0.78rem;padding:0.35rem 0.5rem;">${id}</td>
+        <td style="color: var(--hx-ink-3);font-size:0.78rem;padding:0.35rem 0.5rem;">${id}</td>
         <td><input type="text" id="iCode${id}" placeholder="e.g. PRD-001"></td>
         <td><input type="text" id="iDesc${id}" placeholder="Description" required></td>
         <td><input type="number" id="iQty${id}"   min="0" step="any" value="1"   oninput="calcRow(${id})" style="width:70px;"></td>
@@ -532,7 +532,7 @@
         expandedRows.clear();
         renderTable();
       } catch (err) {
-        container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Error: ' + esc(err.message) + '</div>';
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color: var(--hx-red);">Error: ' + esc(err.message) + '</div>';
       }
     }
 
@@ -578,7 +578,7 @@
 
       const container = document.getElementById('soContainer');
       if (rows.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted,#64748b);">No sales orders found.</div>';
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color: var(--hx-ink-3);">No sales orders found.</div>';
         return;
       }
 
@@ -601,25 +601,25 @@
           : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
 
         html += `<tr class="main-row" id="main-${esc(r.soNo)}">
-          <td><button onclick="toggleItems('${escQ(r.soNo)}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted,#64748b);display:flex;align-items:center;">${expandIcon}</button></td>
-          <td><strong style="color:#14b8a6;">${esc(r.soNo)}</strong></td>
+          <td><button onclick="toggleItems('${escQ(r.soNo)}')" style="background: none;border: none;cursor:pointer;color: var(--hx-ink-3);display:flex;align-items:center;">${expandIcon}</button></td>
+          <td><strong style="color: var(--hx-navy-text);">${esc(r.soNo)}</strong></td>
           <td style="white-space:nowrap;">${esc(r.date)}</td>
-          <td style="font-size:0.8rem;color:var(--text-muted,#64748b);">${esc(r.customerId)}</td>
+          <td style="font-size:0.8rem;color: var(--hx-ink-3);">${esc(r.customerId)}</td>
           <td><strong>${esc(r.customerName)}</strong></td>
           <td style="text-align:center;">
-            <button onclick="toggleItems('${escQ(r.soNo)}')" style="background:rgba(20,184,166,0.12);color:#14b8a6;border:none;border-radius:999px;padding:0.15rem 0.5rem;font-size:0.72rem;font-weight:600;cursor:pointer;">${r.items ? r.items.length : 0} item${(r.items && r.items.length !== 1) ? 's' : ''}</button>
+            <button onclick="toggleItems('${escQ(r.soNo)}')" style="background: var(--hx-cyan-soft);color: var(--hx-navy-text);border: none;border-radius: 999px;padding:0.15rem 0.5rem;font-size:0.72rem;font-weight:600;cursor:pointer;">${r.items ? r.items.length : 0} item${(r.items && r.items.length !== 1) ? 's' : ''}</button>
           </td>
           <td style="text-align:right;">${php(r.totalAmount)}</td>
           <td style="text-align:right;">${php(r.sales)}</td>
-          <td style="text-align:right;color:var(--text-muted,#64748b);">${php(r.vat)}</td>
-          <td style="text-align:right;font-weight:700;color:#14b8a6;">${php(r.grandTotal)}</td>
-          <td><span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:999px;font-weight:600;background:${r.vatType === 'VAT Inclusive' ? 'rgba(168,85,247,0.15)' : 'rgba(20,184,166,0.12)'};color:${r.vatType === 'VAT Inclusive' ? '#a855f7' : '#14b8a6'};">${esc(r.vatType || 'VAT Exclusive')}</span></td>
+          <td style="text-align:right;color: var(--hx-ink-3);">${php(r.vat)}</td>
+          <td style="text-align:right;font-weight:700;color: var(--hx-navy-text);">${php(r.grandTotal)}</td>
+          <td><span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius: 999px;font-weight:600;background: ${r.vatType === 'VAT Inclusive' ? 'var(--hx-navy-line)' : 'var(--hx-cyan-soft)'};color: ${r.vatType === 'VAT Inclusive' ? 'var(--hx-navy-text)' : 'var(--hx-cyan-ink)'};">${esc(r.vatType || 'VAT Exclusive')}</span></td>
           <td><span class="badge ${badgeClass}">${esc(r.status)}</span></td>
           <td style="font-size:0.8rem;">${esc(r.invoiceNo)}</td>
           <td style="white-space:nowrap;">
             <button class="btn btn-sm btn-secondary" onclick="openModal('${escQ(r.soNo)}','${escQ(r.status)}','${escQ(r.invoiceNo)}','${escQ(r.customerName)}')" style="font-size:0.7rem;padding:0.15rem 0.5rem;margin-right:0.25rem;">Edit</button>
-            ${r.driveFolderLink ? `<button onclick="viewDocs('${escQ(r.soNo)}')" title="View Documents" style="font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid rgba(20,184,166,0.3);background:rgba(20,184,166,0.1);color:#14b8a6;cursor:pointer;margin-right:0.25rem;">📎 Docs</button>` : ''}
-            <button onclick="deleteSO('${escQ(r.soNo)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.12);color:#ef4444;cursor:pointer;">Del</button>
+            ${r.driveFolderLink ? `<button onclick="viewDocs('${escQ(r.soNo)}')" title="View Documents" style="font-size:0.7rem;padding:0.15rem 0.4rem;border-radius: 4px;border: 1px solid var(--hx-cyan-ring);background: var(--hx-cyan-soft);color: var(--hx-navy-text);cursor:pointer;margin-right:0.25rem;">Docs</button>` : ''}
+            <button onclick="deleteSO('${escQ(r.soNo)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;border-radius: 4px;border: 1px solid var(--hx-red-soft);background: var(--hx-red-soft);color: var(--hx-red);cursor:pointer;">Del</button>
           </td>
         </tr>`;
 
@@ -628,18 +628,18 @@
           <td colspan="14">
             <div class="inner">`;
         if (r.items && r.items.length > 0) {
-          html += `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+          html += `<table style="width:100%;border-collapse: collapse;font-size:0.8rem;">
             <tr>
-              <th style="text-align:left;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">#</th>
-              <th style="text-align:left;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Product Code</th>
-              <th style="text-align:left;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Description</th>
-              <th style="text-align:right;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Qty</th>
-              <th style="text-align:right;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Unit Price</th>
-              <th style="text-align:right;padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);border-bottom:1px solid #e2e8f0;">Amount</th>
+              <th style="text-align:left;padding:0.25rem 0.5rem;color: var(--hx-ink-3);border-bottom: 1px solid var(--hx-hair-2);">#</th>
+              <th style="text-align:left;padding:0.25rem 0.5rem;color: var(--hx-ink-3);border-bottom: 1px solid var(--hx-hair-2);">Product Code</th>
+              <th style="text-align:left;padding:0.25rem 0.5rem;color: var(--hx-ink-3);border-bottom: 1px solid var(--hx-hair-2);">Description</th>
+              <th style="text-align:right;padding:0.25rem 0.5rem;color: var(--hx-ink-3);border-bottom: 1px solid var(--hx-hair-2);">Qty</th>
+              <th style="text-align:right;padding:0.25rem 0.5rem;color: var(--hx-ink-3);border-bottom: 1px solid var(--hx-hair-2);">Unit Price</th>
+              <th style="text-align:right;padding:0.25rem 0.5rem;color: var(--hx-ink-3);border-bottom: 1px solid var(--hx-hair-2);">Amount</th>
             </tr>`;
           r.items.forEach((it, idx) => {
             html += `<tr>
-              <td style="padding:0.25rem 0.5rem;color:var(--text-muted,#64748b);">${idx + 1}</td>
+              <td style="padding:0.25rem 0.5rem;color: var(--hx-ink-3);">${idx + 1}</td>
               <td style="padding:0.25rem 0.5rem;">${esc(it.productCode)}</td>
               <td style="padding:0.25rem 0.5rem;">${esc(it.productDescription)}</td>
               <td style="text-align:right;padding:0.25rem 0.5rem;">${Number(it.qty).toLocaleString('en-PH')}</td>
@@ -649,7 +649,7 @@
           });
           html += `</table>`;
         } else {
-          html += `<span style="color:var(--text-muted,#64748b);font-size:0.8rem;">No items.</span>`;
+          html += `<span style="color: var(--hx-ink-3);font-size:0.8rem;">No items.</span>`;
         }
         html += `</div></td></tr>`;
       });
@@ -675,7 +675,7 @@
       tr.id = 'edit-item-row-' + id;
       const p = prefill || {};
       tr.innerHTML = `
-        <td style="color:var(--text-muted,#64748b);font-size:0.78rem;padding:0.35rem 0.5rem;">${id}</td>
+        <td style="color: var(--hx-ink-3);font-size:0.78rem;padding:0.35rem 0.5rem;">${id}</td>
         <td><input type="text" id="eCode${id}" value="${esc(p.productCode || '')}" placeholder="PRD-001"></td>
         <td><input type="text" id="eDesc${id}" value="${esc(p.productDescription || '')}" placeholder="Description"></td>
         <td><input type="number" id="eQty${id}"   min="0" step="any"  value="${Number(p.qty || 1)}"        oninput="editCalcRow(${id})" style="width:70px;"></td>
@@ -871,7 +871,7 @@
       const listEl   = document.getElementById('docsModalList');
       const folderEl = document.getElementById('docsModalFolderLink');
       document.getElementById('docsModalSONo').textContent = soNo;
-      listEl.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div>';
+      listEl.innerHTML = '<div style="color: var(--hx-ink-3);font-size:0.85rem;">Loading…</div>';
       folderEl.style.display = 'none';
       modal.classList.add('open');
 
@@ -885,21 +885,21 @@
         }
 
         if (!result.files || result.files.length === 0) {
-          listEl.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No documents uploaded yet.</div>';
+          listEl.innerHTML = '<div style="color: var(--hx-ink-3);font-size:0.85rem;">No documents uploaded yet.</div>';
         } else {
           let html = '<div style="display:flex;flex-direction:column;gap:0.4rem;">';
           result.files.forEach(f => {
-            const icon = f.mimeType && f.mimeType.includes('pdf') ? '📄' : (f.mimeType && f.mimeType.startsWith('image') ? '🖼️' : '📎');
-            html += `<a href="${esc(f.link)}" target="_blank" style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(20,184,166,0.08);color:#14b8a6;text-decoration:none;font-size:0.83rem;">
+            const icon = f.mimeType && f.mimeType.includes('pdf') ? 'PDF' : (f.mimeType && f.mimeType.startsWith('image') ? 'IMG' : 'DOC');
+            html += `<a href="${esc(f.link)}" target="_blank" style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;border-radius: 8px;background: var(--hx-cyan-soft);color: var(--hx-navy-text);text-decoration:none;font-size:0.83rem;">
               <span>${icon}</span><span>${esc(f.name)}</span>
-              <span style="margin-left:auto;font-size:0.72rem;color:var(--text-muted,#64748b);">View ↗</span>
+              <span style="margin-left:auto;font-size:0.72rem;color: var(--hx-ink-3);">View ↗</span>
             </a>`;
           });
           html += '</div>';
           listEl.innerHTML = html;
         }
       } catch (err) {
-        listEl.innerHTML = '<div style="color:#ef4444;font-size:0.85rem;">Error: ' + esc(err.message) + '</div>';
+        listEl.innerHTML = '<div style="color: var(--hx-red);font-size:0.85rem;">Error: ' + esc(err.message) + '</div>';
       }
     }
 

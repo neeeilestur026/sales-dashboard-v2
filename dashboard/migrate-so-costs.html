@@ -8,34 +8,34 @@
   <link rel="stylesheet" href="css/flow.css">
   <style>
     .report { max-width: 1280px; margin: 0 auto; }
-    .report-sheet { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card, var(--shadow-sm)); overflow: hidden; }
-    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, #ffffff, #f6faf9); }
+    .report-sheet { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-lg); box-shadow: var(--hx-sh-2); overflow: hidden; }
+    .report-head { padding: 1.4rem 1.6rem; border-bottom: 2px solid var(--hx-navy); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; background: linear-gradient(180deg, var(--hx-card), var(--hx-inset)); }
     .report-head h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
-    .report-head .meta { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    .report-head .meta { font-size: 0.82rem; color: var(--hx-ink-2); margin-top: 0.3rem; }
     .report-body { padding: 1.4rem 1.6rem; }
     .mig-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1.3rem; }
-    .mig-tile { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--bg-inset); }
-    .mig-tile .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; }
-    .mig-tile .v { font-size: clamp(0.95rem, 1.8vw, 1.3rem); font-weight: 800; color: var(--text-primary); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .mig-tile { border: 1px solid var(--hx-hair); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--hx-inset); }
+    .mig-tile .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--hx-ink-3); font-weight: 700; }
+    .mig-tile .v { font-size: clamp(0.95rem, 1.8vw, 1.3rem); font-weight: 800; color: var(--hx-ink); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
     .mig-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
-    .mig-toolbar input, .mig-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: #fff; }
-    .mig-prog { height: 8px; border-radius: 99px; background: var(--bg-inset); overflow: hidden; margin: 0.4rem 0 0.8rem; display: none; }
-    .mig-prog > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+    .mig-toolbar input, .mig-toolbar select { padding: 0.45rem 0.6rem; border: 1px solid var(--hx-hair); border-radius: 8px; font-size: 0.85rem; background: var(--hx-card); }
+    .mig-prog { height: 8px; border-radius: 99px; background: var(--hx-inset); overflow: hidden; margin: 0.4rem 0 0.8rem; display: none; }
+    .mig-prog > span { display: block; height: 100%; background: var(--hx-navy); width: 0; transition: width .2s; }
     .mig-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .mig-table th { text-align: left; padding: 0.5rem 0.6rem; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; border-bottom: 2px solid var(--border); background: var(--bg-inset); white-space: nowrap; }
+    .mig-table th { text-align: left; padding: 0.5rem 0.6rem; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--hx-ink-3); font-weight: 700; border-bottom: 2px solid var(--hx-hair); background: var(--hx-inset); white-space: nowrap; }
     .mig-table th.num, .mig-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .mig-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .mig-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--hx-hair); }
     .mig-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.66rem; font-weight: 700; }
-    .mig-badge.done { background: rgba(22,163,74,0.12); color: #15803d; }
-    .mig-badge.pend { background: rgba(245,158,11,0.14); color: #b45309; }
-    .mig-warn { color: #d97706; font-weight: 700; }
-    .mig-link { background: none; border: none; color: var(--accent-dark, #0f766e); cursor: pointer; font-size: 0.78rem; font-weight: 600; padding: 0; }
-    .mig-bd { background: #f8fafc; }
+    .mig-badge.done { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .mig-badge.pend { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .mig-warn { color: var(--hx-warn); font-weight: 700; }
+    .mig-link { background: none; border: none; color: var(--hx-navy-ink); cursor: pointer; font-size: 0.78rem; font-weight: 600; padding: 0; }
+    .mig-bd { background: var(--hx-inset); }
     .mig-bd table { width: 100%; max-width: 560px; border-collapse: collapse; font-size: 0.8rem; margin: 0.3rem 0; }
-    .mig-bd td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .mig-bd td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--hx-hair); color: var(--hx-ink-2); }
     .mig-bd td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .mig-bd tr.tot td { font-weight: 800; color: var(--text-primary); border-top: 2px solid var(--border); border-bottom: none; }
-    .dr-empty { padding: 1.4rem; text-align: center; color: var(--text-muted); font-style: italic; font-size: 0.86rem; }
+    .mig-bd tr.tot td { font-weight: 800; color: var(--hx-ink); border-top: 2px solid var(--hx-hair); border-bottom: none; }
+    .dr-empty { padding: 1.4rem; text-align: center; color: var(--hx-ink-3); font-style: italic; font-size: 0.86rem; }
   </style>
 </head>
 <body>
@@ -64,8 +64,8 @@
             <button class="btn btn-sm btn-secondary" id="migSelBtn">Migrate selected</button>
             <button class="btn btn-sm btn-primary" id="migAllBtn">Migrate all pending</button>
             <button class="btn btn-sm btn-secondary" id="backfillBtn" title="Create migrated Invoices &amp; Receiving records so the Financial Snapshot, Summary and Balance Sheet include migrated sales orders">↻ Backfill Invoices &amp; Receiving</button>
-            <button class="btn btn-sm btn-secondary" id="matchTypeBtn" title="Label each sales order International or Local to match its migrated COGS Type">🏷 Match Supplier Types</button>
-            <button class="btn btn-sm btn-secondary" id="removeMigBtn" title="Delete all migrated sales orders, cost details, invoices and receiving so you can migrate again cleanly" style="color:#b91c1c;border-color:#fca5a5;">🗑 Remove all migrated</button>
+            <button class="btn btn-sm btn-secondary" id="matchTypeBtn" title="Label each sales order International or Local to match its migrated COGS Type">Match Supplier Types</button>
+            <button class="btn btn-sm btn-secondary" id="removeMigBtn" title="Delete all migrated sales orders, cost details, invoices and receiving so you can migrate again cleanly" style="color: var(--hx-red);border-color: var(--hx-red-soft);">Remove all migrated</button>
           </div>
           <div class="mig-prog" id="prog"><span id="progBar"></span></div>
           <div id="container"><div class="dr-empty">Loading…</div></div>

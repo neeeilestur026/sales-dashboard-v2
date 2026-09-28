@@ -15,66 +15,66 @@
     }
     .filter-bar input, .filter-bar select {
       padding: 0.45rem 0.75rem; border-radius: 8px;
-      border: 1px solid var(--border, #e2e8f0);
-      background: var(--bg-card, #fff);
-      color: var(--text-primary, #1e293b);
+      border: 1px solid var(--hx-hair);
+      background: var(--hx-card);
+      color: var(--hx-ink);
       font-family: inherit; font-size: 0.83rem;
     }
     .filter-bar input:focus, .filter-bar select:focus {
-      outline: none; border-color: var(--accent, #fb923c);
-      box-shadow: 0 0 0 3px rgba(251,146,60,0.15);
+      outline: none; border-color: var(--hx-navy);
+      box-shadow: var(--hx-sh-1);
     }
     .filter-spacer { flex: 1; }
 
     /* ── KPI row ────────────────────────────────────── */
     .kpi-row { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .kpi-pill {
-      background: var(--bg-card, #fff);
-      border: 1px solid var(--border, #e2e8f0);
+      background: var(--hx-card);
+      border: 1px solid var(--hx-hair);
       border-radius: 10px; padding: 0.6rem 1.1rem;
       min-width: 140px; flex: 1;
     }
-    .kpi-pill .kp-label { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary, #475569); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
-    .kpi-pill .kp-val   { font-size: 1.35rem; font-weight: 700; color: var(--text-primary, #1e293b); }
-    .kpi-pill .kp-sub   { font-size: 0.72rem; color: var(--text-muted, #94a3b8); margin-top: 0.1rem; }
+    .kpi-pill .kp-label { font-size: 0.72rem; font-weight: 600; color: var(--hx-ink-2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    .kpi-pill .kp-val   { font-size: 1.35rem; font-weight: 700; color: var(--hx-ink); }
+    .kpi-pill .kp-sub   { font-size: 0.72rem; color: var(--hx-ink-3); margin-top: 0.1rem; }
 
     /* ── Table ─────────────────────────────────────── */
     .billing-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
     .billing-table th {
       text-align: left; padding: 0.55rem 0.75rem;
-      color: var(--text-secondary, #475569);
-      border-bottom: 1px solid var(--border, #e2e8f0);
+      color: var(--hx-ink-2);
+      border-bottom: 1px solid var(--hx-hair);
       font-weight: 600; font-size: 0.75rem;
       text-transform: uppercase; letter-spacing: 0.04em;
-      background: var(--bg-inset, #f1f5f9);
+      background: var(--hx-inset);
       white-space: nowrap;
     }
     .billing-table td {
       padding: 0.6rem 0.75rem;
-      border-bottom: 1px solid var(--border, #e2e8f0);
-      color: var(--text-primary, #1e293b);
+      border-bottom: 1px solid var(--hx-hair);
+      color: var(--hx-ink);
       vertical-align: middle;
     }
-    .billing-table tr:hover td { background: var(--bg-inset, #f1f5f9); cursor: pointer; }
+    .billing-table tr:hover td { background: var(--hx-inset); cursor: pointer; }
 
     /* ── Status badges ──────────────────────────────── */
     .badge {
       display: inline-block; padding: 0.18rem 0.6rem; border-radius: 999px;
       font-size: 0.72rem; font-weight: 600; white-space: nowrap;
     }
-    .badge-unpaid  { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
-    .badge-paid    { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-    .badge-pending { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .badge-unpaid  { background: var(--hx-warn-soft); color: var(--hx-warn); border: 1px solid var(--hx-warn-soft); }
+    .badge-paid    { background: var(--hx-ok-soft); color: var(--hx-ok); border: 1px solid var(--hx-ok-soft); }
+    .badge-pending { background: var(--hx-inset); color: var(--hx-ink-2); border: 1px solid var(--hx-hair-2); }
 
     /* ── Priority pill ──────────────────────────────── */
-    .pri-high   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-    .pri-medium { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-    .pri-low    { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .pri-high   { background: var(--hx-red-soft); color: var(--hx-red); border: 1px solid var(--hx-red-soft); }
+    .pri-medium { background: var(--hx-warn-soft); color: var(--hx-warn); border: 1px solid var(--hx-warn-soft); }
+    .pri-low    { background: var(--hx-ok-soft); color: var(--hx-ok); border: 1px solid var(--hx-ok-soft); }
 
     /* ── Empty / loading ────────────────────────────── */
     .empty-state {
       text-align: center; padding: 3rem 1rem;
-      color: var(--text-muted, #94a3b8);
+      color: var(--hx-ink-3);
     }
     .empty-state svg { opacity: 0.3; margin-bottom: 0.75rem; }
     .empty-state p   { font-size: 0.9rem; }
@@ -82,7 +82,7 @@
     /* ── Overlay backdrop ───────────────────────────── */
     .overlay-backdrop {
       display: none; position: fixed; inset: 0;
-      background: rgba(15,23,42,0.45); z-index: 1000;
+      background: var(--hx-scrim); z-index: 1000;
       align-items: center; justify-content: center;
       padding: 1rem;
     }
@@ -90,10 +90,10 @@
 
     /* ── Detail modal ───────────────────────────────── */
     .detail-modal {
-      background: var(--bg-card, #fff);
-      border: 1px solid var(--border, #e2e8f0);
+      background: var(--hx-card);
+      border: 1px solid var(--hx-hair);
       border-radius: 14px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.18);
+      box-shadow: var(--hx-sh-1);
       width: 100%; max-width: 900px;
       max-height: 92vh; display: flex; flex-direction: column;
       overflow: hidden;
@@ -101,27 +101,27 @@
     .detail-modal-header {
       display: flex; align-items: center; gap: 0.75rem;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--border, #e2e8f0);
+      border-bottom: 1px solid var(--hx-hair);
       flex-shrink: 0;
     }
-    .detail-modal-header h3 { font-size: 1rem; font-weight: 700; color: var(--text-primary,#1e293b); margin: 0; flex: 1; }
+    .detail-modal-header h3 { font-size: 1rem; font-weight: 700; color: var(--hx-ink); margin: 0; flex: 1; }
     .detail-modal-body { flex: 1; overflow-y: auto; padding: 0; }
 
     /* ── Detail tabs ─────────────────────────────────── */
     .detail-tabs {
-      display: flex; gap: 0; border-bottom: 1px solid var(--border,#e2e8f0);
-      background: var(--bg-inset, #f1f5f9); flex-shrink: 0;
+      display: flex; gap: 0; border-bottom: 1px solid var(--hx-hair);
+      background: var(--hx-inset); flex-shrink: 0;
       padding: 0 1.25rem;
     }
     .detail-tab-btn {
       padding: 0.65rem 1rem; border: none; background: transparent;
-      color: var(--text-muted, #94a3b8); font-family: inherit;
+      color: var(--hx-ink-3); font-family: inherit;
       font-size: 0.83rem; font-weight: 600; cursor: pointer;
       border-bottom: 2px solid transparent; margin-bottom: -1px;
       transition: all 0.15s; white-space: nowrap;
     }
-    .detail-tab-btn:hover { color: var(--text-primary,#1e293b); }
-    .detail-tab-btn.active { color: var(--accent,#fb923c); border-bottom-color: var(--accent,#fb923c); }
+    .detail-tab-btn:hover { color: var(--hx-ink); }
+    .detail-tab-btn.active { color: var(--hx-navy); border-bottom-color: var(--hx-navy); }
     .detail-tab-panel { display: none; padding: 1.25rem; }
     .detail-tab-panel.active { display: block; }
 
@@ -130,50 +130,50 @@
       display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
       gap: 0.75rem 1.25rem; margin-bottom: 1.25rem;
     }
-    .info-item .info-label { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary,#475569); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.18rem; }
-    .info-item .info-val   { font-size: 0.88rem; color: var(--text-primary,#1e293b); font-weight: 500; }
+    .info-item .info-label { font-size: 0.72rem; font-weight: 600; color: var(--hx-ink-2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.18rem; }
+    .info-item .info-val   { font-size: 0.88rem; color: var(--hx-ink); font-weight: 500; }
 
     /* ── Section title ───────────────────────────────── */
     .sec-title {
       font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--accent,#fb923c);
+      letter-spacing: 0.05em; color: var(--hx-navy);
       margin-bottom: 0.6rem; padding-bottom: 0.3rem;
-      border-bottom: 1px solid var(--border,#e2e8f0);
+      border-bottom: 1px solid var(--hx-hair);
     }
 
     /* ── Amount highlight ─────────────────────────────── */
     .amt-highlight {
-      background: var(--bg-inset,#f1f5f9);
-      border: 1px solid var(--border,#e2e8f0);
+      background: var(--hx-inset);
+      border: 1px solid var(--hx-hair);
       border-radius: 10px; padding: 0.75rem 1.1rem;
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 1.25rem;
     }
-    .amt-highlight .amt-label { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary,#475569); }
-    .amt-highlight .amt-val   { font-size: 1.4rem; font-weight: 700; color: var(--text-primary,#1e293b); }
+    .amt-highlight .amt-label { font-size: 0.78rem; font-weight: 600; color: var(--hx-ink-2); }
+    .amt-highlight .amt-val   { font-size: 1.4rem; font-weight: 700; color: var(--hx-ink); }
 
     /* ── PDF side-by-side ─────────────────────────────── */
     .pdf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media (max-width: 640px) { .pdf-grid { grid-template-columns: 1fr; } }
 
     .pdf-card {
-      border: 1px solid var(--border,#e2e8f0); border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--hx-hair); border-radius: 10px; overflow: hidden;
       display: flex; flex-direction: column;
     }
     .pdf-card-header {
-      padding: 0.65rem 0.9rem; background: var(--bg-inset,#f1f5f9);
-      border-bottom: 1px solid var(--border,#e2e8f0);
-      font-size: 0.78rem; font-weight: 700; color: var(--text-secondary,#475569);
+      padding: 0.65rem 0.9rem; background: var(--hx-inset);
+      border-bottom: 1px solid var(--hx-hair);
+      font-size: 0.78rem; font-weight: 700; color: var(--hx-ink-2);
       text-transform: uppercase; letter-spacing: 0.04em;
       display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;
     }
     .pdf-card-body {
-      flex: 1; min-height: 360px; background: #f8fafc;
+      flex: 1; min-height: 360px; background: var(--hx-inset);
       display: flex; align-items: center; justify-content: center;
     }
     .pdf-card-body iframe { width: 100%; height: 360px; border: none; display: block; }
     .pdf-placeholder {
-      text-align: center; color: var(--text-muted,#94a3b8); padding: 2rem 1rem;
+      text-align: center; color: var(--hx-ink-3); padding: 2rem 1rem;
     }
     .pdf-placeholder svg { opacity: 0.3; margin-bottom: 0.5rem; }
     .pdf-placeholder p { font-size: 0.8rem; margin: 0; }
@@ -183,14 +183,14 @@
     @media (max-width: 580px) { .cv-form { grid-template-columns: 1fr; } }
     .cv-form .full-col { grid-column: 1 / -1; }
     .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
-    .form-lbl { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary,#475569); text-transform: uppercase; letter-spacing: 0.03em; }
+    .form-lbl { font-size: 0.72rem; font-weight: 600; color: var(--hx-ink-2); text-transform: uppercase; letter-spacing: 0.03em; }
     .form-inp {
       padding: 0.5rem 0.7rem; border-radius: 8px;
-      border: 1px solid var(--border,#e2e8f0);
-      background: var(--bg-card,#fff); color: var(--text-primary,#1e293b);
+      border: 1px solid var(--hx-hair);
+      background: var(--hx-card); color: var(--hx-ink);
       font-family: inherit; font-size: 0.875rem;
     }
-    .form-inp:focus { outline: none; border-color: var(--accent,#fb923c); box-shadow: 0 0 0 3px rgba(251,146,60,0.15); }
+    .form-inp:focus { outline: none; border-color: var(--hx-navy); box-shadow: var(--hx-sh-1); }
     textarea.form-inp { resize: vertical; min-height: 60px; }
 
     /* ── Buttons ─────────────────────────────────────── */
@@ -200,32 +200,32 @@
       font-family: inherit; font-size: 0.83rem; font-weight: 600;
       cursor: pointer; transition: all 0.15s; text-decoration: none;
     }
-    .btn-primary   { background: var(--accent,#fb923c); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover,#f97316); }
-    .btn-success   { background: #16a34a; color: #fff; }
-    .btn-success:hover { background: #15803d; }
-    .btn-ghost     { background: transparent; color: var(--text-secondary,#475569); border: 1px solid var(--border,#e2e8f0); }
-    .btn-ghost:hover { background: var(--bg-inset,#f1f5f9); }
+    .btn-primary   { background: var(--hx-navy); color: var(--hx-slab-ink); }
+    .btn-primary:hover { background: var(--hx-navy-ink); }
+    .btn-success   { background: var(--hx-ok); color: var(--hx-slab-ink); }
+    .btn-success:hover { background: var(--hx-ok); }
+    .btn-ghost     { background: transparent; color: var(--hx-ink-2); border: 1px solid var(--hx-hair); }
+    .btn-ghost:hover { background: var(--hx-inset); }
     .btn-sm        { padding: 0.35rem 0.75rem; font-size: 0.77rem; border-radius: 6px; }
     .btn-icon      { padding: 0.35rem; border-radius: 6px; }
 
-    .modal-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 1rem 1.25rem; border-top: 1px solid var(--border,#e2e8f0); background: var(--bg-inset,#f1f5f9); flex-shrink: 0; }
+    .modal-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 1rem 1.25rem; border-top: 1px solid var(--hx-hair); background: var(--hx-inset); flex-shrink: 0; }
     .modal-actions .spacer { flex: 1; }
 
     /* ── Mark-paid confirm ──────────────────────────── */
     .confirm-overlay {
       display: none; position: fixed; inset: 0;
-      background: rgba(15,23,42,0.5); z-index: 1100;
+      background: var(--hx-scrim); z-index: 1100;
       align-items: center; justify-content: center; padding: 1rem;
     }
     .confirm-overlay.open { display: flex; }
     .confirm-box {
-      background: var(--bg-card,#fff); border: 1px solid var(--border,#e2e8f0);
-      border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      background: var(--hx-card); border: 1px solid var(--hx-hair);
+      border-radius: 12px; box-shadow: var(--hx-sh-1);
       padding: 1.5rem; max-width: 420px; width: 100%;
     }
-    .confirm-box h4 { font-size: 1rem; font-weight: 700; margin: 0 0 0.5rem; color: var(--text-primary,#1e293b); }
-    .confirm-box p  { font-size: 0.875rem; color: var(--text-secondary,#475569); margin: 0 0 1.25rem; }
+    .confirm-box h4 { font-size: 1rem; font-weight: 700; margin: 0 0 0.5rem; color: var(--hx-ink); }
+    .confirm-box p  { font-size: 0.875rem; color: var(--hx-ink-2); margin: 0 0 1.25rem; }
     .confirm-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
     /* ── Spinner ─────────────────────────────────────── */
@@ -252,12 +252,12 @@
       </div>
       <div class="kpi-pill">
         <div class="kp-label">Unpaid</div>
-        <div class="kp-val" id="kpiUnpaid" style="color:#d97706">—</div>
+        <div class="kp-val" id="kpiUnpaid" style="color: var(--hx-warn)">—</div>
         <div class="kp-sub">pending payment</div>
       </div>
       <div class="kpi-pill">
         <div class="kp-label">Paid</div>
-        <div class="kp-val" id="kpiPaid" style="color:#16a34a">—</div>
+        <div class="kp-val" id="kpiPaid" style="color: var(--hx-ok)">—</div>
         <div class="kp-sub">processed</div>
       </div>
       <div class="kpi-pill">
@@ -281,7 +281,7 @@
         <option value="Medium">Medium</option>
         <option value="Low">Low</option>
       </select>
-      <input type="month" id="filterMonth" title="Filter by month" style="padding:0.45rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+      <input type="month" id="filterMonth" title="Filter by month" style="padding:0.45rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;">
       <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('filterMonth').value='';applyFilters();" title="Clear month filter">Clear month</button>
       <span class="filter-spacer"></span>
       <button class="btn btn-ghost btn-sm" onclick="loadBillingRecords()">
@@ -291,7 +291,7 @@
     </div>
 
     <!-- Table card -->
-    <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#e2e8f0);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+    <div style="background: var(--hx-card);border: 1px solid var(--hx-hair);border-radius: 12px;overflow:hidden;box-shadow: var(--hx-sh-1);">
       <table class="billing-table" id="billingTable">
         <thead>
           <tr>
@@ -321,7 +321,7 @@
       <div class="detail-modal-header">
         <div>
           <h3 id="detailTitle">Payment Request Details</h3>
-          <div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:0.15rem;" id="detailSubtitle"></div>
+          <div style="font-size:0.78rem;color: var(--hx-ink-3);margin-top:0.15rem;" id="detailSubtitle"></div>
         </div>
         <button class="btn btn-ghost btn-icon" onclick="closeDetailOverlay()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -352,7 +352,7 @@
 
           <div id="remarkSection" style="display:none">
             <div class="sec-title">Remarks</div>
-            <div id="detailRemark" style="font-size:0.875rem;color:var(--text-primary,#1e293b);background:var(--bg-inset,#f1f5f9);border-radius:8px;padding:0.75rem;margin-bottom:1.25rem;"></div>
+            <div id="detailRemark" style="font-size:0.875rem;color: var(--hx-ink);background: var(--hx-inset);border-radius: 8px;padding:0.75rem;margin-bottom:1.25rem;"></div>
           </div>
 
           <div id="billingStatusSection">
@@ -364,7 +364,7 @@
         <!-- Tab: Documents ─────────────────────────────── -->
         <div class="detail-tab-panel" id="panelDocuments">
           <div id="noPdfsMsg" style="display:none;margin-bottom:1rem;">
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.75rem 1rem;font-size:0.83rem;color:#92400e;">
+            <div style="background: var(--hx-warn-soft);border: 1px solid var(--hx-warn-soft);border-radius: 8px;padding:0.75rem 1rem;font-size:0.83rem;color: var(--hx-warn);">
               No documents generated yet. Mark the request as Paid to auto-generate the Payment Slip.
             </div>
           </div>
@@ -413,21 +413,21 @@
 
         <!-- Tab: CV Form ────────────────────────────────── -->
         <div class="detail-tab-panel" id="panelCvForm">
-          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.75rem 1rem;font-size:0.83rem;color:#92400e;margin-bottom:1.25rem;" id="cvFormNote">
+          <div style="background: var(--hx-warn-soft);border: 1px solid var(--hx-warn-soft);border-radius: 8px;padding:0.75rem 1rem;font-size:0.83rem;color: var(--hx-warn);margin-bottom:1.25rem;" id="cvFormNote">
             This request must be marked as Paid before generating a Cash Voucher.
           </div>
           <form id="cvForm" onsubmit="return false">
             <div class="cv-form">
               <div class="form-group">
-                <label class="form-lbl">CV Number <span style="color:#dc2626">*</span></label>
+                <label class="form-lbl">CV Number <span style="color: var(--hx-red)">*</span></label>
                 <input class="form-inp" id="cvNumber" placeholder="e.g. CV-2025-001">
               </div>
               <div class="form-group">
-                <label class="form-lbl">CV Date <span style="color:#dc2626">*</span></label>
+                <label class="form-lbl">CV Date <span style="color: var(--hx-red)">*</span></label>
                 <input class="form-inp" type="date" id="cvDate">
               </div>
               <div class="form-group">
-                <label class="form-lbl">Prepared by <span style="color:#dc2626">*</span></label>
+                <label class="form-lbl">Prepared by <span style="color: var(--hx-red)">*</span></label>
                 <input class="form-inp" id="cvPreparedBy" placeholder="Accounting staff name">
               </div>
               <div class="form-group">

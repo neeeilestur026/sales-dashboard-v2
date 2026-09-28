@@ -108,7 +108,7 @@ async function loadAR() {
     arData = (res && res.data) || [];
     arInvoices = (invs && invs.data) || null;
     render();
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 // Migrated (legacy) AR records carry a Notes value starting with "Migrated (legacy)".
@@ -176,7 +176,7 @@ function arReconcileBanner() {
 
   if (r.unagedLive.length) {
     const rows = r.unagedLive.slice().sort((a2, b2) => String(a2.date).localeCompare(String(b2.date)));
-    out.push(`<div style="border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;
+    out.push(`<div style="border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);border-radius:10px;
         padding:0.6rem 0.8rem;margin-bottom:0.6rem;font-size:0.8rem;">
       <div style="font-weight:700;margin-bottom:0.3rem;">
         ⚠ ${r.unagedLive.length} invoice(s) totalling ${money(r.unagedLiveValue)} should have a
@@ -197,7 +197,7 @@ function arReconcileBanner() {
   }
 
   if (r.viaSo.length) {
-    out.push(`<div style="border:1px solid #fed7aa;background:#fffbeb;color:#92400e;border-radius:10px;
+    out.push(`<div style="border:1px solid var(--hx-warn-line);background:var(--hx-warn-soft);color:var(--hx-warn);border-radius:10px;
         padding:0.55rem 0.8rem;margin-bottom:0.6rem;font-size:0.78rem;">
       <strong>${r.viaSo.length} receivable(s) are matched to their invoice through the sales order,
       not the invoice number.</strong> They carry the older INV-YYYY-NNN numbering while invoices now
@@ -220,9 +220,9 @@ function arReconcileBanner() {
       order${r.unresolvedAllPaid ? ' — all settled, nothing to chase' : ''}.`);
   }
   if (notes.length) {
-    out.push(`<div style="color:var(--text-muted,#64748b);font-size:0.75rem;margin-bottom:0.6rem;">
+    out.push(`<div style="color:var(--hx-ink-3);font-size:0.75rem;margin-bottom:0.6rem;">
       ${notes.map(t => `<div style="margin-bottom:0.2rem;">${t}</div>`).join('')}
-      <div style="color:var(--text-muted,#94a3b8);">Baseline ${esc(r.baseline)} is the earliest row in
+      <div style="color:var(--hx-ink-3);">Baseline ${esc(r.baseline)} is the earliest row in
         this ledger, derived rather than fixed.</div></div>`);
   }
   return out.join('');
@@ -236,7 +236,7 @@ function render() {
        the one case that matters: an invoice WAS issued and produced nothing. The banner runs first,
        so if that is what happened the reader is told so instead of being sent to do it again. */
     c.innerHTML = arReconcileBanner() +
-      '<p style="color:var(--text-muted,#64748b);">No receivables recorded' +
+      '<p style="color:var(--hx-ink-3);">No receivables recorded' +
       (arInvoices && arInvoices.length ? ' — even though there are invoices on the book.' : ' yet.') +
       '</p>';
     updateKpis([]); return;
@@ -251,7 +251,7 @@ function render() {
 
   const openTable = open.length
     ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${open.map(rowHtml).join('')}${arFoot(open)}</tbody></table>`
-    : '<p style="color:var(--text-muted,#64748b);">No open receivables in this period.</p>';
+    : '<p style="color:var(--hx-ink-3);">No open receivables in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';
 

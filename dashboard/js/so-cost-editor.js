@@ -46,11 +46,11 @@ function _sceEl() {
       <!-- A224: what the bank actually charged on this order's payments. It REPORTS; the buckets
            above stay hand-entered. See getSOBankCharges for why nothing here writes. -->
       <div id="sceBank" style="display:none;font-size:0.76rem;line-height:1.55;margin-top:0.6rem;
-           border:1px solid var(--border);border-radius:7px;padding:0.5rem 0.7rem;
-           background:var(--bg-subtle,#f8fafc);"></div>
+           border:1px solid var(--hx-hair);border-radius:7px;padding:0.5rem 0.7rem;
+           background:var(--hx-inset);"></div>
       <div style="display:flex;justify-content:space-between;gap:1rem;margin-top:0.75rem;font-weight:700;">
-        <span>Total COGS: <span id="sceTotalCogs" style="color:#ef4444;">0.00</span></span>
-        <span>Gross Profit: <span id="sceGross" style="color:#16a34a;">0.00</span></span>
+        <span>Total COGS: <span id="sceTotalCogs" style="color:var(--hx-red);">0.00</span></span>
+        <span>Gross Profit: <span id="sceGross" style="color:var(--hx-ok);">0.00</span></span>
       </div>
       <div id="sceMsg" class="flow-msg" style="display:none;"></div>
       <div class="flow-modal-foot">
@@ -114,7 +114,7 @@ function _sceApplyMode() {
     i.disabled = ro;
     // A disabled field still has to be legible — this is the whole point of the mode.
     i.style.opacity = ro ? '1' : '';
-    i.style.background = ro ? 'var(--bg-inset, #f8fafc)' : '';
+    i.style.background = ro ? 'var(--hx-inset)' : '';
     i.style.cursor = ro ? 'default' : '';
   });
   const save = document.getElementById('sceSaveBtn');
@@ -172,7 +172,7 @@ function _sceRenderBank() {
         ? 'It is <b>not</b> entered for you: it belongs either in Bank Charge (COGS) or in Bank Charge '
           + '(Shipping), and only you know which — writing to the wrong one would double-count against '
           + 'whichever you have been using.'
-        : '<span style="color:#b45309;">This order is <b>Local</b>, and both bank-charge buckets are '
+        : '<span style="color:var(--hx-warn);">This order is <b>Local</b>, and both bank-charge buckets are '
           + 'excluded from Total COGS on a local order — so entering it above would store it without '
           + 'counting it. Reclassify the order first if this charge belongs in its cost.</span>');
   box.style.display = '';
@@ -199,7 +199,7 @@ function _sceRecalc() {
   const gp = sales - total;
   const g = document.getElementById('sceGross');
   g.textContent = flowMoney(gp, 'PHP');
-  g.style.color = gp < 0 ? '#ef4444' : '#16a34a';
+  g.style.color = gp < 0 ? 'var(--hx-red)' : 'var(--hx-ok)';
   _sceRenderBank();     // A224: the advice differs for a local order, so it follows the COGS Type
 }
 
@@ -223,7 +223,7 @@ async function _sceSave() {
     closeSoCostEditor();
     if (_sceOnSaved) _sceOnSaved(res);
   } catch (e) {
-    msg.style.display = 'block'; msg.style.color = '#ef4444'; msg.textContent = e.message;
+    msg.style.display = 'block'; msg.style.color = 'var(--hx-red)'; msg.textContent = e.message;
   } finally {
     btn.disabled = false; btn.textContent = 'Save costs';
   }

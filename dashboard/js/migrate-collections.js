@@ -77,7 +77,7 @@ async function loadAll() {
 
     render();
   } catch (e) {
-    c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
+    c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`;
   }
 }
 
@@ -157,7 +157,7 @@ function render() {
 function statusBadge(rec) {
   if (rec.status === 'Collected') return '<span class="mig-badge b-mig">Collected</span>';
   if (rec.status === 'Partial') return '<span class="mig-badge b-pend">Partial</span>';
-  return '<span class="mig-badge b-pend" style="background:rgba(239,68,68,0.14);color:#b91c1c;">Outstanding</span>';
+  return '<span class="mig-badge b-pend" style="background:var(--hx-red-line);color:var(--hx-red);">Outstanding</span>';
 }
 
 function rowHtml(rec, idx) {
@@ -249,7 +249,7 @@ async function migrate(list) {
 
   document.getElementById('runTitle').textContent = 'Migration complete';
   stat.innerHTML = `<strong>Receivables ${createdAR}</strong> · payments ${createdPayments} · skipped ${skipped} · errors ${errors.length}` +
-    (errors.length ? `<div style="margin-top:0.4rem;color:#b45309;">Failed: ${errors.slice(0, 20).map(e => flowEsc(e.invoiceNo) + ' (' + flowEsc(e.message) + ')').join(', ')}${errors.length > 20 ? '…' : ''}</div>` : '');
+    (errors.length ? `<div style="margin-top:0.4rem;color:var(--hx-warn);">Failed: ${errors.slice(0, 20).map(e => flowEsc(e.invoiceNo) + ' (' + flowEsc(e.message) + ')').join(', ')}${errors.length > 20 ? '…' : ''}</div>` : '');
 
   setBusy(false);
   selected.clear();
@@ -265,5 +265,5 @@ function flash(text, ok) {
   const m = document.getElementById('msg');
   m.style.display = 'block';
   m.textContent = text;
-  m.style.color = ok ? '#0f766e' : '#b45309';
+  m.style.color = ok ? 'var(--hx-ok)' : 'var(--hx-warn)';
 }

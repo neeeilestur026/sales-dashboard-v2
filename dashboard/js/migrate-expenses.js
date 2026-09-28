@@ -88,7 +88,7 @@ async function loadAll() {
       .map(e => expSig(e.date, e.voucherNo, e.category, e.amount, e.description)));
     render();
   } catch (e) {
-    c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
+    c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`;
   }
 }
 
@@ -235,7 +235,7 @@ async function migrate(list) {
 
   document.getElementById('runTitle').textContent = 'Migration complete';
   stat.innerHTML = `<strong>Created ${created}</strong> · skipped ${skipped} · errors ${errors.length}` +
-    (errors.length ? `<div style="margin-top:0.4rem;color:#b45309;">Failed: ${errors.slice(0, 20).map(e => flowEsc(e.description || '?') + ' (' + flowEsc(e.message) + ')').join(', ')}${errors.length > 20 ? '…' : ''}</div>` : '');
+    (errors.length ? `<div style="margin-top:0.4rem;color:var(--hx-warn);">Failed: ${errors.slice(0, 20).map(e => flowEsc(e.description || '?') + ' (' + flowEsc(e.message) + ')').join(', ')}${errors.length > 20 ? '…' : ''}</div>` : '');
 
   setBusy(false);
   selected.clear();
@@ -248,5 +248,5 @@ function setBusy(on) {
 }
 function flash(text, ok) {
   const m = document.getElementById('msg');
-  m.style.display = 'block'; m.textContent = text; m.style.color = ok ? '#0f766e' : '#b45309';
+  m.style.display = 'block'; m.textContent = text; m.style.color = ok ? 'var(--hx-ok)' : 'var(--hx-warn)';
 }

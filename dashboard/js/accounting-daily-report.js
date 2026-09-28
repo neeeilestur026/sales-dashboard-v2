@@ -37,7 +37,7 @@ function _date() { return document.getElementById('datePicker').value; }
 let drEmailMeta = null;
 function _emailMetaHint() {
   const m = drEmailMeta;
-  return (m && m.folder) ? ` <span style="color:var(--text-muted,#94a3b8);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>` : '';
+  return (m && m.folder) ? ` <span style="color:var(--hx-ink-3);font-size:0.72rem;">· checked “${_esc(m.folder)}”, ${m.windowCount || 0} in window</span>` : '';
 }
 
 // Live refresh of read-only sections (activity + sent emails) — never touches the notes field.
@@ -157,7 +157,7 @@ async function loadEmails() {
   document.getElementById('emailCount').textContent = emails.length;
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
   if (needsSetup) {
-    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--accent,#0f766e);font-weight:600;">Connect email →</a></td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="dr-empty">Connect your GoDaddy mailbox to auto-pull your sent emails — <a href="email-setup.html" style="color:var(--hx-navy);font-weight:600;">Connect email →</a></td></tr>`;
     return;
   }
   body.innerHTML = emails.length ? emails.map(r => {

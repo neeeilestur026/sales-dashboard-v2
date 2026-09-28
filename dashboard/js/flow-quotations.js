@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
   } catch (e) {
     const c = document.getElementById('listContainer');
-    if (c) c.innerHTML = `<p style="color:#ef4444;">Could not load quotations — ${flowEsc(e.message || 'unknown error')}</p>`;
+    if (c) c.innerHTML = `<p style="color:var(--hx-red);">Could not load quotations — ${flowEsc(e.message || 'unknown error')}</p>`;
   }
   /* A183/A191: the pricing behind each quotation, for the review breakdown. Fetched only for roles
      allowed to SEE cost figures — so admin and sales never pay this call and, just as importantly,
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('Quote builder failed to start:', e);
     const msg = document.getElementById('qcMsg');
     if (msg) msg.innerHTML = '<div style="margin:.5rem 0 1rem;padding:.6rem .85rem;border-radius:10px;font-size:.86rem;' +
-      'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">The quotation builder could not start — reload the page. ' +
+      'background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);">The quotation builder could not start — reload the page. ' +
       'The list below is unaffected.</div>';
   }
 });
@@ -171,10 +171,10 @@ async function loadQuotations() {
     });
     try { qCanClose = await flowVersionAtLeast(91); } catch (e) { qCanClose = false; }  // A152: Close/Reopen need v91
     try { qCanTrack = await flowVersionAtLeast(113); } catch (e) { qCanTrack = false; } // A208
-    if (!qList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No quotations yet.</p>'; return; }
+    if (!qList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No quotations yet.</p>'; return; }
     qBuildMonthOptions();
     renderQuotationList();
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 /** 'yyyy-MM' of the month a quotation was created in. */
@@ -183,12 +183,12 @@ function qMonthKey(q) { return String(flowDate(q.date) || '').slice(0, 7); }
 /* A208 — one colour per follow-up state. 'unknown' is deliberately grey, not red: we are saying we
    cannot see, which is not the same as saying the client ignored us. */
 const QFU_STYLE = {
-  'not-sent': 'background:rgba(99,102,241,0.14);color:#4338ca;',
-  'ok':       'background:rgba(16,185,129,0.12);color:#047857;',
-  'due':      'background:rgba(245,158,11,0.16);color:#b45309;',
-  'overdue':  'background:rgba(239,68,68,0.14);color:#b91c1c;',
-  'replied':  'background:rgba(59,130,246,0.14);color:#1d4ed8;',
-  'unknown':  'background:rgba(100,116,139,0.12);color:#475569;'
+  'not-sent': 'background:var(--hx-navy-line);color:var(--hx-navy-text);',
+  'ok':       'background:var(--hx-ok-soft);color:var(--hx-ok);',
+  'due':      'background:var(--hx-warn-line);color:var(--hx-warn);',
+  'overdue':  'background:var(--hx-red-line);color:var(--hx-red);',
+  'replied':  'background:var(--hx-cyan-ring);color:var(--hx-cyan-ink);',
+  'unknown':  'background:var(--hx-inset);color:var(--hx-ink-2);'
 };
 
 /** The Follow-ups card — what needs chasing, worst first. Deliberately on this page rather than a
@@ -207,17 +207,17 @@ let qwList = null;            // the last computed worklist, so a tab switch doe
 /** Colour per step. Reuses the follow-up palette where the meaning matches, so a rep who has learned
  *  the badge colours on the table does not have to learn a second language here. */
 const QW_STYLE = {
-  answer:         'background:rgba(59,130,246,0.14);color:#1d4ed8;',
-  fix:            'background:rgba(239,68,68,0.14);color:#b91c1c;',
-  send:           'background:rgba(99,102,241,0.14);color:#4338ca;',
-  chase:          'background:rgba(245,158,11,0.16);color:#b45309;',
-  'no-send-date': 'background:rgba(100,116,139,0.12);color:#475569;',
-  'wait-approval':'background:rgba(100,116,139,0.12);color:#475569;',
-  'wait-client':  'background:rgba(16,185,129,0.12);color:#047857;',
-  snoozed:        'background:rgba(100,116,139,0.12);color:#475569;',
-  draft:          'background:rgba(100,116,139,0.12);color:#475569;',
-  won:            'background:rgba(16,185,129,0.12);color:#047857;',
-  closed:         'background:rgba(100,116,139,0.12);color:#475569;'
+  answer:         'background:var(--hx-cyan-ring);color:var(--hx-cyan-ink);',
+  fix:            'background:var(--hx-red-line);color:var(--hx-red);',
+  send:           'background:var(--hx-navy-line);color:var(--hx-navy-text);',
+  chase:          'background:var(--hx-warn-line);color:var(--hx-warn);',
+  'no-send-date': 'background:var(--hx-inset);color:var(--hx-ink-2);',
+  'wait-approval':'background:var(--hx-inset);color:var(--hx-ink-2);',
+  'wait-client':  'background:var(--hx-ok-soft);color:var(--hx-ok);',
+  snoozed:        'background:var(--hx-inset);color:var(--hx-ink-2);',
+  draft:          'background:var(--hx-inset);color:var(--hx-ink-2);',
+  won:            'background:var(--hx-ok-soft);color:var(--hx-ok);',
+  closed:         'background:var(--hx-inset);color:var(--hx-ink-2);'
 };
 
 function qRenderFollowUps(rows) {
@@ -576,7 +576,7 @@ function renderQuotationList() {
       : `0 of ${qList.length} quotation(s)`;
   }
   if (!rows.length) {
-    c.innerHTML = `<p style="color:var(--text-muted,#64748b);">No quotations match this filter${
+    c.innerHTML = `<p style="color:var(--hx-ink-3);">No quotations match this filter${
       month ? ` — nothing in ${flowEsc(qMonthLabel(month))}` : ''}.</p>`;
     return;
   }
@@ -645,16 +645,16 @@ function qtnTotal(q) { return flowQuotationNet(q); }
 function quotationRow(q) {
   const st = q.status || 'Draft';
   const noteTip = (st === 'Rejected' && q.approvalNote) ? ` title="Reason: ${flowEsc(q.approvalNote)}"` : '';
-  const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
+  const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(q.approvalNote)}</div>` : '';
   // A145: a Sent quotation with no sales order yet — nudge to create the SO.
   const soNudge = (st === 'Sent' && !qHasSO[String(q.quotationNo)])
-    ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="Sent to the client but no sales order created yet">no SO</span>` : '';
+    ? ` <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" title="Sent to the client but no sales order created yet">no SO</span>` : '';
   // A208: the same document number AND the same customer on another row. Flagged, never merged —
   // the two rows differ in amount and status and may be a legitimate re-quote by a second rep.
   const dupPair = (qDupPairs || []).filter(p =>
     p.rows.some(r => String(r.quotationNo) === String(q.quotationNo)))[0];
   const dupBadge = dupPair
-    ? ` <span class="flow-badge" style="background:rgba(239,68,68,0.12);color:#b91c1c;" title="${flowEsc(
+    ? ` <span class="flow-badge" style="background:var(--hx-red-soft);color:var(--hx-red);" title="${flowEsc(
         dupPair.rows.filter(r => String(r.quotationNo) !== String(q.quotationNo))
           .map(r => r.quotationNo + ' — ' + r.status + ' — ' + flowMoney(flowQuotationNet(r), 'PHP')).join(' · ')
       )}">dup?</span>` : '';
@@ -663,13 +663,13 @@ function quotationRow(q) {
   const fuBadge = (fu && fu.label) ? ` <span class="flow-badge" style="${QFU_STYLE[fu.state] || ''}" title="${flowEsc(fu.reason || fu.label)}">${flowEsc(fu.label)}</span>` : '';
   return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}${fuBadge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
-    <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:#0f766e;">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
+    <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:var(--hx-cyan-ink);">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn"${qPdfState(q) === 'fresh'
         ? ' title="The saved PDF matches this quotation."'
-        : ` style="color:#b91c1c;" title="${qPdfState(q) === 'stale'
+        : ` style="color:var(--hx-red);" title="${qPdfState(q) === 'stale'
             ? 'This saved PDF no longer matches the quotation — click PDF to regenerate.'
             : 'This PDF predates change-tracking, so it can\'t be confirmed to match — click PDF to regenerate.'}"`
-      }>${qPdfState(q) === 'fresh' ? '' : '⚠ '}View saved</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+      }>${qPdfState(q) === 'fresh' ? '' : '⚠ '}View saved</a>` : '<span style="color:var(--hx-ink-3);">—</span>'}</td>
     <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
 }
 
@@ -770,17 +770,17 @@ function openReviewModal(no) {
      quotation against what was actually requested. */
   const prLink = q.prNo
     ? ` · <a href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}" target="_blank"
-           style="color:var(--accent,#0d9488);font-weight:700;text-decoration:none;"
+           style="color:var(--hx-navy);font-weight:700;text-decoration:none;"
            title="Open the purchase request this quotation was priced from">📋 ${flowEsc(q.prNo)} ↗</a>`
-    : ` · <span style="color:#b45309;font-weight:600;" title="No purchase request is linked, so the quoted prices cannot be checked against a request">⚠ no purchase request linked</span>`;
+    : ` · <span style="color:var(--hx-warn);font-weight:600;" title="No purchase request is linked, so the quoted prices cannot be checked against a request">⚠ no purchase request linked</span>`;
   document.getElementById('qrSub').innerHTML =
     `${flowEsc(q.customer)} · ${flowDate(q.date)} · ${flowStatusBadge(st)} · by ${flowEsc(q.createdBy || '—')}${prLink}`;
   const items = q.items || [];
   const qDisc = Math.max(0, Math.min(100, flowNum(q.discountPct) || 0));
   const discRows = qDisc > 0
     ? `<tr><td colspan="3">Subtotal</td><td class="num">${flowMoney(qtnGross(q), 'PHP')}</td></tr>
-       <tr style="color:#0f766e;"><td colspan="3">Less: Discount (${flowNum(q.discountPct)}%)</td><td class="num">− ${flowMoney(qtnGross(q) * qDisc / 100, 'PHP')}</td></tr>` : '';
-  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowLineAmount(it), 'PHP')}</td></tr>`).join('')}${discRows}<tr style="font-weight:700;background:var(--bg-inset,#f8fafc);"><td colspan="3">Total${qDisc > 0 ? ' (after discount, before VAT)' : ''}</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
+       <tr style="color:var(--hx-cyan-ink);"><td colspan="3">Less: Discount (${flowNum(q.discountPct)}%)</td><td class="num">− ${flowMoney(qtnGross(q) * qDisc / 100, 'PHP')}</td></tr>` : '';
+  document.getElementById('qrItems').innerHTML = `<table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line Total</th></tr></thead><tbody>${items.map(it => `<tr><td>${flowEsc(it.itemNo)} ${flowEsc(it.itemName)}</td><td class="num">${flowNum(it.qty)}</td><td class="num">${flowMoney(it.price, 'PHP')}</td><td class="num">${flowMoney(flowLineAmount(it), 'PHP')}</td></tr>`).join('')}${discRows}<tr style="font-weight:700;background:var(--hx-inset);"><td colspan="3">Total${qDisc > 0 ? ' (after discount, before VAT)' : ''}</td><td class="num">${flowMoney(qtnTotal(q), 'PHP')}</td></tr></tbody></table>`;
   const pv = document.getElementById('qrPdf');
   const fid = q.pdfLink ? ((q.pdfLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || [])[1]) : null;
   // The panel below is a FILE saved on Drive, not a live render — say so loudly when it no longer
@@ -790,22 +790,22 @@ function openReviewModal(no) {
   let warn = '';
   if (pdfState === 'stale') {
     const was = qPdfSavedTotals(q);
-    warn = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">
-      <div style="font-weight:700;color:#b91c1c;font-size:0.85rem;">⚠ This document is out of date</div>
-      <div style="font-size:0.8rem;color:#7f1d1d;margin-top:0.25rem;">
+    warn = `<div style="background:var(--hx-red-soft);border:1px solid var(--hx-red-line);border-left:4px solid var(--hx-red);border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">
+      <div style="font-weight:700;color:var(--hx-red);font-size:0.85rem;">⚠ This document is out of date</div>
+      <div style="font-size:0.8rem;color:var(--hx-red);margin-top:0.25rem;">
         It shows <b>${flowMoney(was.net, 'PHP')}</b>${was.discountPct ? ` (${was.discountPct}% discount)` : ''} —
         the quotation is now <b>${flowMoney(qtnTotal(q), 'PHP')}</b>${flowNum(q.discountPct) ? ` (${flowNum(q.discountPct)}% discount)` : ''}.
         ${qPdfInfo(q).hasImages ? 'Its product photos are restored automatically.' : ''}
       </div>${regenBtn}</div>`;
   } else if (pdfState === 'unverified') {
-    warn = `<div style="background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">
-      <div style="font-weight:700;color:#92400e;font-size:0.85rem;">⚠ This document can't be verified</div>
-      <div style="font-size:0.8rem;color:#78350f;margin-top:0.25rem;">It was generated before change-tracking, so it may not match the figures above. Regenerate it to confirm.</div>
+    warn = `<div style="background:var(--hx-warn-soft);border:1px solid var(--hx-warn-line);border-left:4px solid var(--hx-warn);border-radius:8px;padding:0.7rem 0.85rem;margin-bottom:0.6rem;">
+      <div style="font-weight:700;color:var(--hx-warn);font-size:0.85rem;">⚠ This document can't be verified</div>
+      <div style="font-size:0.8rem;color:var(--hx-warn);margin-top:0.25rem;">It was generated before change-tracking, so it may not match the figures above. Regenerate it to confirm.</div>
       ${regenBtn}</div>`;
   }
-  if (fid) pv.innerHTML = warn + `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--border,#e2e8f0);border-radius:8px;" allowfullscreen></iframe>`;
+  if (fid) pv.innerHTML = warn + `<iframe src="https://drive.google.com/file/d/${fid}/preview" style="width:100%;height:440px;border:1px solid var(--hx-hair);border-radius:8px;" allowfullscreen></iframe>`;
   else if (q.pdfLink) pv.innerHTML = warn + `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn">Open PDF in Drive →</a>`;
-  else pv.innerHTML = `<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();qcOpen('${flowEsc(q.quotationNo)}','document')">generate the PDF</button> first.</div>`;
+  else pv.innerHTML = `<div style="color:var(--hx-ink-3);font-size:0.85rem;">No PDF generated yet — review the details above, or <button class="link-btn" onclick="closeReviewModal();qcOpen('${flowEsc(q.quotationNo)}','document')">generate the PDF</button> first.</div>`;
   /* A183/A191: the pricing this quotation was built from. Accounting, management and director see
      the cost/margin breakdown; a loud banner fires when the quoted total no longer matches what
      management priced; and when that viewer is the approver, a tick "I've reviewed the pricing"
@@ -821,14 +821,14 @@ function openReviewModal(no) {
   if (bd) {
     if (review && review.hasPr) {
       bd.innerHTML =
-        `<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Pricing management set</div>` +
+        `<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-ink-3);margin-bottom:0.3rem;">Pricing management set</div>` +
         flowDeviationBanner(review) + flowOptionReviewHtml(review) + review.breakdownHtml +
         (needTick
           ? `<label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.6rem;font-size:0.82rem;font-weight:600;cursor:pointer;">
                <input type="checkbox" id="qrTick" onchange="qrSyncApprove()"> I've reviewed the pricing above and confirm it.</label>`
           : '');
     } else if (qCanSeeCosts && q.prNo) {
-      bd.innerHTML = `<div style="font-size:0.78rem;color:#b45309;">Pricing record for ${flowEsc(q.prNo)} not found — approval is governed by the server's pricing check.</div>`;
+      bd.innerHTML = `<div style="font-size:0.78rem;color:var(--hx-warn);">Pricing record for ${flowEsc(q.prNo)} not found — approval is governed by the server's pricing check.</div>`;
     } else {
       bd.innerHTML = '';
     }
@@ -842,9 +842,9 @@ function openReviewModal(no) {
   qrGate = { block: blockApprove, needTick: needTick };
   foot.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Close</button>` +
     (isApprover
-      ? `<button type="button" class="btn btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>` +
+      ? `<button type="button" class="btn btn-secondary" style="color:var(--hx-red);border-color:var(--hx-red-line);" onclick="qrReject('${flowEsc(q.quotationNo)}')">Reject</button>` +
         `<button type="button" class="btn btn-primary" id="qrApproveBtn" onclick="qrApprove('${flowEsc(q.quotationNo)}')">Approve</button>`
-      : `<span style="font-size:0.78rem;color:var(--text-muted,#64748b);margin-left:auto;">${st.indexOf('Pending') === 0 ? 'Awaiting ' + st.replace('Pending ', '') + ' approval' : ''}</span>`);
+      : `<span style="font-size:0.78rem;color:var(--hx-ink-3);margin-left:auto;">${st.indexOf('Pending') === 0 ? 'Awaiting ' + st.replace('Pending ', '') + ' approval' : ''}</span>`);
   qrSyncApprove();
   document.getElementById('qrModal').classList.add('open');
 }
@@ -995,7 +995,7 @@ async function qOpenEmailLink(no) {
   document.getElementById('qeMsg').style.display = 'none';
   qeRenderLinked();
   document.getElementById('qeSuggest').innerHTML =
-    '<div style="padding:1.2rem;color:var(--text-muted,#64748b);font-size:0.85rem;">Reading your sent mail…</div>';
+    '<div style="padding:1.2rem;color:var(--hx-ink-3);font-size:0.85rem;">Reading your sent mail…</div>';
   await qeLoadMail(false);
 }
 
@@ -1030,12 +1030,12 @@ function qeBuildCtx() {
 async function qeLoadMail(force) {
   const box = document.getElementById('qeSuggest');
   if (qeMailLoaded && !force) { qeRenderSuggest(); return; }
-  box.innerHTML = '<div style="padding:1.2rem;color:var(--text-muted,#64748b);font-size:0.85rem;">Reading your sent mail…</div>';
+  box.innerHTML = '<div style="padding:1.2rem;color:var(--hx-ink-3);font-size:0.85rem;">Reading your sent mail…</div>';
   try {
     const r = await apiFetchEmailFeed('sent', 60, !!force);
     if (r && r.needsSetup) {
-      box.innerHTML = '<div style="padding:1rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;' +
-        'color:#92400e;font-size:0.85rem;">Your GoDaddy mailbox is not connected' +
+      box.innerHTML = '<div style="padding:1rem;background:var(--hx-warn-soft);border:1px solid var(--hx-warn-line);border-radius:10px;' +
+        'color:var(--hx-warn);font-size:0.85rem;">Your GoDaddy mailbox is not connected' +
         (r.reconnect ? ' any more (the stored password could not be read)' : '') +
         '. <a href="email-setup.html">Connect it</a> to attach the emails you sent.</div>';
       return;
@@ -1048,7 +1048,7 @@ async function qeLoadMail(force) {
     qeCached = !!r.cached;
     qeRenderSuggest();
   } catch (e) {
-    box.innerHTML = `<div style="padding:1rem;color:#b91c1c;font-size:0.85rem;">${flowEsc(e.message)}</div>`;
+    box.innerHTML = `<div style="padding:1rem;color:var(--hx-red);font-size:0.85rem;">${flowEsc(e.message)}</div>`;
   }
 }
 let qeFetchedAt = '', qeCached = false;
@@ -1057,17 +1057,17 @@ function qeRenderLinked() {
   const el = document.getElementById('qeLinked');
   const links = (qLinks[qeQuotationNo] || []).filter(l => String(l.status || 'Active') === 'Active');
   if (!links.length) {
-    el.innerHTML = '<div style="font-size:0.82rem;color:var(--text-muted,#64748b);padding:0.5rem 0;">' +
+    el.innerHTML = '<div style="font-size:0.82rem;color:var(--hx-ink-3);padding:0.5rem 0;">' +
       'No email attached yet.</div>';
     return;
   }
-  el.innerHTML = '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Attached</div>' +
-    links.map(l => `<div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.5rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:9px;margin-bottom:0.35rem;">
+  el.innerHTML = '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-ink-3);margin-bottom:0.3rem;">Attached</div>' +
+    links.map(l => `<div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.5rem 0.6rem;border:1px solid var(--hx-hair);border-radius:9px;margin-bottom:0.35rem;">
       <div style="flex:1;min-width:0;">
         <div style="font-size:0.85rem;font-weight:600;">${flowEsc(l.subject || '(no subject)')}</div>
-        <div style="font-size:0.74rem;color:var(--text-muted,#64748b);margin-top:0.15rem;">
+        <div style="font-size:0.74rem;color:var(--hx-ink-3);margin-top:0.15rem;">
           ${flowEsc(l.to || '')} · ${flowEsc(flowDate(l.sentAt))} · ${flowEsc(l.kind || 'Initial')}
-          ${l.replyAt ? ` · <span style="color:#1d4ed8;font-weight:600;">client replied ${flowEsc(flowDate(l.replyAt))}</span>`
+          ${l.replyAt ? ` · <span style="color:var(--hx-cyan-ink);font-weight:600;">client replied ${flowEsc(flowDate(l.replyAt))}</span>`
             : (l.replyCheckedAt ? ' · no reply yet' : ' · reply not checked')}
         </div>
       </div>
@@ -1128,24 +1128,24 @@ function qeRenderSuggest() {
   const confident = !term.trim() && qemIsConfident(qemRank(q, qeMail, qeCtx));
 
   if (!ranked.length) {
-    box.innerHTML = '<div style="padding:1.2rem;color:var(--text-muted,#64748b);font-size:0.85rem;">' +
+    box.innerHTML = '<div style="padding:1.2rem;color:var(--hx-ink-3);font-size:0.85rem;">' +
       (qeMail.length ? 'Nothing matches that search.' : 'No sent mail in the last 60 days.') + '</div>';
     return;
   }
   const stamp = qeFetchedAt
-    ? `<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:0.4rem;">Mailbox read ${flowEsc(String(qeFetchedAt).slice(11, 16))}${qeCached ? ' (cached — Refresh for live)' : ' (live)'}</div>`
+    ? `<div style="font-size:0.7rem;color:var(--hx-ink-3);margin-bottom:0.4rem;">Mailbox read ${flowEsc(String(qeFetchedAt).slice(11, 16))}${qeCached ? ' (cached — Refresh for live)' : ' (live)'}</div>`
     : '';
   box.innerHTML = stamp + ranked.map((r, i) => {
     const m = r.msg, id = flowEsc(m.messageId || '');
     const top = (i === 0 && confident);
     const already = qeCtx.linked[String(m.messageId || '').toLowerCase()];
-    return `<div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.55rem 0.65rem;border:1px solid ${top ? 'var(--accent,#4f46e5)' : 'var(--border,#e2e8f0)'};border-radius:9px;margin-bottom:0.35rem;${top ? 'box-shadow:0 0 0 3px rgba(79,70,229,0.10);' : ''}">
+    return `<div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.55rem 0.65rem;border:1px solid ${top ? 'var(--hx-navy)' : 'var(--hx-hair)'};border-radius:9px;margin-bottom:0.35rem;${top ? 'box-shadow:0 0 0 3px var(--hx-navy-soft);' : ''}">
       <div style="flex:1;min-width:0;">
         <div style="font-size:0.85rem;font-weight:600;">${flowEsc(m.subject || '(no subject)')}</div>
-        <div style="font-size:0.74rem;color:var(--text-muted,#64748b);margin-top:0.15rem;">
+        <div style="font-size:0.74rem;color:var(--hx-ink-3);margin-top:0.15rem;">
           ${flowEsc((m.recipients || []).map(x => x.addr).join(', ') || m.recipient || '')} · ${flowEsc(flowDate(m.sentAt || m.date))}
         </div>
-        <div style="font-size:0.72rem;color:${already ? '#b45309' : '#475569'};margin-top:0.2rem;">
+        <div style="font-size:0.72rem;color:${already ? 'var(--hx-warn)' : 'var(--hx-ink-2)'};margin-top:0.2rem;">
           ${already ? 'already attached to ' + flowEsc(already) : flowEsc(r.reasons.join(' · ') || 'no strong signal')}
         </div>
       </div>

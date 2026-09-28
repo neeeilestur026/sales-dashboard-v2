@@ -31,28 +31,28 @@
       <div id="formBody" hidden style="margin-top:0.75rem;">
       <input type="hidden" id="soNo" value="">
       <div class="flow-form">
-        <div><label>SO No * <span style="font-weight:400;color:var(--text-muted,#64748b);">(the client's PO number — required)</span></label><input type="text" id="soNoInput" required placeholder="e.g. 180100003867 / PDC1811…"></div>
+        <div><label>SO No * <span style="font-weight:400;color: var(--hx-ink-3);">(the client's PO number — required)</span></label><input type="text" id="soNoInput" required placeholder="e.g. 180100003867 / PDC1811…"></div>
         <div><label>Load Quotation</label><select id="loadQuotation" onchange="loadFromQuotation()"></select></div>
         <div><label>Source Quotation No</label><input type="text" id="quotationNo" readonly></div>
         <div><label>Customer *</label><input type="text" id="customer" required></div>
-        <div><label>Date <span style="font-weight:400;color:var(--text-muted,#64748b);">(can be back-dated, e.g. 2024 / 2025, to record historical orders)</span></label><input type="date" id="date"></div>
+        <div><label>Date <span style="font-weight:400;color: var(--hx-ink-3);">(can be back-dated, e.g. 2024 / 2025, to record historical orders)</span></label><input type="date" id="date"></div>
         <div><label>Status</label><select id="status"><option>Open</option><option>Delivered</option><option>Invoiced</option><option>Closed</option></select></div>
-        <div><label>Supplier Type <span style="font-weight:400;color:var(--text-muted,#64748b);">(label)</span></label><select id="soSupplierType"><option value="">—</option><option>Local</option><option>International</option></select></div>
+        <div><label>Supplier Type <span style="font-weight:400;color: var(--hx-ink-3);">(label)</span></label><select id="soSupplierType"><option value="">—</option><option>Local</option><option>International</option></select></div>
         <!-- A186: the client's PO is dated one day and reaches us on another — routinely days apart.
              Both are recorded so the gap is on the record instead of in somebody's inbox. -->
-        <div><label>Client PO date <span style="font-weight:400;color:var(--text-muted,#64748b);">(the date printed on their PO)</span></label><input type="date" id="clientPoDate"></div>
-        <div><label>PO received on <span style="font-weight:400;color:var(--text-muted,#64748b);">(the day it actually reached us)</span></label><input type="date" id="poReceivedDate"></div>
+        <div><label>Client PO date <span style="font-weight:400;color: var(--hx-ink-3);">(the date printed on their PO)</span></label><input type="date" id="clientPoDate"></div>
+        <div><label>PO received on <span style="font-weight:400;color: var(--hx-ink-3);">(the day it actually reached us)</span></label><input type="date" id="poReceivedDate"></div>
         <!-- A193: normally blank. The SO No above already IS the client's PO number, and that is what
              names the Drive folder. Fill this in only on the rare order numbered SO-YYYYMM-NNN by the
              system, where the client's PO number is a different string. -->
-        <div><label>Client PO No <span style="font-weight:400;color:var(--text-muted,#64748b);">(only if it differs from the SO No above)</span></label><input type="text" id="clientPoNo" placeholder="leave blank — the SO No is normally their PO number"></div>
+        <div><label>Client PO No <span style="font-weight:400;color: var(--hx-ink-3);">(only if it differs from the SO No above)</span></label><input type="text" id="clientPoNo" placeholder="leave blank — the SO No is normally their PO number"></div>
       </div>
 
       <!-- A186 — attach the client's PO and stamp it RECEIVED. The original is filed untouched and
            the stamped copy alongside it, so the customer's own document is never altered. -->
-      <div style="margin-top:0.75rem;padding:0.7rem 0.8rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;background:var(--bg-subtle,#f8fafc);">
+      <div style="margin-top:0.75rem;padding:0.7rem 0.8rem;border: 1px solid var(--hx-hair);border-radius: 8px;background: var(--hx-inset);">
         <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.35rem;">Client PO document</div>
-        <div style="font-size:0.76rem;color:var(--text-muted,#64748b);margin-bottom:0.5rem;">
+        <div style="font-size:0.76rem;color: var(--hx-ink-3);margin-bottom:0.5rem;">
           Attaching stamps <strong>RECEIVED</strong> with the date above onto page 1. We keep their
           original exactly as sent, and file the stamped copy next to it.
         </div>
@@ -73,7 +73,7 @@
       </div>
       <!-- A182: shown when the loaded quotation carries a discount, so the reduced unit prices are
            never mistaken for a typo or deducted a second time. -->
-      <div id="soDiscountNote" style="display:none;margin-top:0.4rem;font-size:0.78rem;color:#0f766e;"></div>
+      <div id="soDiscountNote" style="display:none;margin-top:0.4rem;font-size:0.78rem;color: var(--hx-navy-text);"></div>
 
       <div class="flow-actions">
         <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveSO()">Save Sales Order</button>
@@ -89,17 +89,17 @@
         <button class="btn btn-sm btn-secondary" onclick="loadSOs()">Refresh</button>
       </div>
       <div class="flow-actions" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
-        <input type="text" id="soSearch" placeholder="Search SO / quotation…" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;min-width:180px;">
-        <select id="soYear" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;"></select>
-        <select id="soMonth" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;">
+        <input type="text" id="soSearch" placeholder="Search SO / quotation…" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.85rem;min-width:180px;">
+        <select id="soYear" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.85rem;"></select>
+        <select id="soMonth" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.85rem;">
           <option value="">All months</option>
           <option value="01">January</option><option value="02">February</option><option value="03">March</option>
           <option value="04">April</option><option value="05">May</option><option value="06">June</option>
           <option value="07">July</option><option value="08">August</option><option value="09">September</option>
           <option value="10">October</option><option value="11">November</option><option value="12">December</option>
         </select>
-        <select id="soCustomer" style="padding:0.4rem 0.6rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;font-size:0.85rem;"><option value="">All customers</option></select>
-        <span id="soFilterMeta" style="margin-left:auto;font-size:0.78rem;color:var(--text-muted,#64748b);"></span>
+        <select id="soCustomer" style="padding:0.4rem 0.6rem;border: 1px solid var(--hx-hair);border-radius: 8px;font-size:0.85rem;"><option value="">All customers</option></select>
+        <span id="soFilterMeta" style="margin-left:auto;font-size:0.78rem;color: var(--hx-ink-3);"></span>
       </div>
       <!-- A266: this div is the ONLY scrolling region. It must stay a child of the card, never the
            card itself — the old skin put overflow:hidden on .chart-card and a hover transform

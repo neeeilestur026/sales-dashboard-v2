@@ -197,7 +197,7 @@ async function cmLoadClaimable() {
     cmClaimable = res.data || [];
     cmRenderClaimable();
   } catch (e) {
-    el.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`;
+    el.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`;
   }
 }
 
@@ -210,7 +210,7 @@ async function cmLoadRequests() {
     cmRequests = res.data || [];
     cmRenderRequests();
   } catch (e) {
-    el.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`;
+    el.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`;
   }
 }
 
@@ -339,7 +339,7 @@ function cmRenderRequests() {
   const open = cmRequests.filter(isOpen), done = cmRequests.filter(r => !isOpen(r));
   let html = `<table class="flow-table">${cmHead()}<tbody>${open.map(cmRow).join('')}</tbody></table>`;
   if (done.length) {
-    html += `<details style="margin-top:14px;"><summary style="cursor:pointer;font:600 12.5px 'Inter',sans-serif;color:#475569;">` +
+    html += `<details style="margin-top:14px;"><summary style="cursor:pointer;font:600 12.5px 'Inter',sans-serif;color:var(--hx-ink-2);">` +
             `History (${done.length})</summary>` +
             `<table class="flow-table" style="margin-top:8px;">${cmHead()}<tbody>${done.map(cmRow).join('')}</tbody></table></details>`;
   }
@@ -349,13 +349,13 @@ function cmRenderRequests() {
 function cmRow(r) {
   const adj = flowNum(r.adjustment);
   return `<tr>
-    <td><b>${flowEsc(r.commNo)}</b><br><span style="font:400 11px 'Inter',sans-serif;color:#8b93a1;">${flowEsc(flowDate(r.date))} · ${r.collectionCount} payment(s)</span></td>
+    <td><b>${flowEsc(r.commNo)}</b><br><span style="font:400 11px 'Inter',sans-serif;color:var(--hx-ink-3);">${flowEsc(flowDate(r.date))} · ${r.collectionCount} payment(s)</span></td>
     <td>${flowEsc(r.soNo)}</td>
     <td>${flowEsc(r.customer)}</td>
     <td class="num">${flowMoney(r.base, 'PHP')}</td>
     <td class="num">${flowNum(r.rate)}%</td>
     <td class="num"><b>${flowMoney(r.netPayable, 'PHP')}</b>${
-      adj ? `<br><span style="font:500 11px 'Inter',sans-serif;color:#b45309;">adjusted by ${flowMoney(adj, 'PHP')}</span>` : ''}</td>
+      adj ? `<br><span style="font:500 11px 'Inter',sans-serif;color:var(--hx-warn);">adjusted by ${flowMoney(adj, 'PHP')}</span>` : ''}</td>
     <td>${cmStatusCell(r)}</td>
     <td style="white-space:nowrap;">${cmActions(r)}</td>
   </tr>`;
@@ -373,9 +373,9 @@ function cmStatusCell(r) {
   }
   if (r.releasedAt) bits.push('released to payroll');
   let out = badge;
-  if (bits.length) out += `<br><span style="font:500 11px 'Inter',sans-serif;color:#64748b;">${flowEsc(bits.join(' · '))}</span>`;
+  if (bits.length) out += `<br><span style="font:500 11px 'Inter',sans-serif;color:var(--hx-ink-3);">${flowEsc(bits.join(' · '))}</span>`;
   if (r.status === 'Rejected' && r.approvalNote) {
-    out += `<br><span style="font:500 11px 'Inter',sans-serif;color:#dc2626;">${flowEsc(r.approvalNote)}</span>`;
+    out += `<br><span style="font:500 11px 'Inter',sans-serif;color:var(--hx-red);">${flowEsc(r.approvalNote)}</span>`;
   }
   return out;
 }

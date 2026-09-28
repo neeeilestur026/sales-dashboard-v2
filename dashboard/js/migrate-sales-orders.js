@@ -77,7 +77,7 @@ async function loadAll() {
 
     render();
   } catch (e) {
-    c.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${flowEsc(e.message)}</div>`;
+    c.innerHTML = `<div class="dr-empty" style="color:var(--hx-red);">${flowEsc(e.message)}</div>`;
   }
 }
 
@@ -170,9 +170,9 @@ function rowHtml(so, idx) {
        <div class="mig-items" id="items-${idx}"><table>
          <thead><tr><th>Code</th><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr></thead>
          <tbody>${itemsRows}</tbody></table></div>`
-    : '<span style="color:var(--text-muted);">no items</span>';
+    : '<span style="color:var(--hx-ink-3);">no items</span>';
   const grand = so.grandTotal && Math.abs(so.grandTotal - so.exVat) > 0.005
-    ? `<div style="font-size:0.7rem;color:var(--text-muted);">incl-VAT ${flowMoney(so.grandTotal, 'PHP')}</div>` : '';
+    ? `<div style="font-size:0.7rem;color:var(--hx-ink-3);">incl-VAT ${flowMoney(so.grandTotal, 'PHP')}</div>` : '';
   return `<tr>
     <td>${cb}</td>
     <td class="ref">${flowEsc(so.soNo)}</td>
@@ -236,7 +236,7 @@ async function migrate(list) {
 
   document.getElementById('runTitle').textContent = 'Migration complete';
   stat.innerHTML = `<strong>Created ${created}</strong> · skipped ${skipped} · errors ${errors.length}` +
-    (errors.length ? `<div style="margin-top:0.4rem;color:#b45309;">Failed: ${errors.slice(0, 20).map(e => flowEsc(e.soNo) + ' (' + flowEsc(e.message) + ')').join(', ')}${errors.length > 20 ? '…' : ''}</div>` : '');
+    (errors.length ? `<div style="margin-top:0.4rem;color:var(--hx-warn);">Failed: ${errors.slice(0, 20).map(e => flowEsc(e.soNo) + ' (' + flowEsc(e.message) + ')').join(', ')}${errors.length > 20 ? '…' : ''}</div>` : '');
 
   setBusy(false);
   selected.clear();
@@ -252,5 +252,5 @@ function flash(text, ok) {
   const m = document.getElementById('msg');
   m.style.display = 'block';
   m.textContent = text;
-  m.style.color = ok ? '#0f766e' : '#b45309';
+  m.style.color = ok ? 'var(--hx-ok)' : 'var(--hx-warn)';
 }

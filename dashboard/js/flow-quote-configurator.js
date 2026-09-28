@@ -793,8 +793,8 @@ function qcBanner(html, tone) {
   // A251 — 'warn' is for the request that has nothing left to give: not an error, but not business
   // as usual either, and it must not look like the ordinary blue "here is your request" note.
   const skin = tone === 'warn'
-    ? 'background:#fffbeb;color:#92400e;border:1px solid #fcd34d;'
-    : 'background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe;';
+    ? 'background:var(--hx-warn-soft);color:var(--hx-warn);border:1px solid var(--hx-warn-line);'
+    : 'background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);border:1px solid var(--hx-cyan);';
   el.innerHTML = '<div style="margin:.5rem 0 1rem;padding:.65rem .9rem;border-radius:10px;font-size:.86rem;'
     + skin + '">' + html + '</div>';
 }
@@ -871,7 +871,7 @@ function qcRenderItems() {
       .map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${v ? 'Opt ' + v : '—'}</option>`).join('');
     const star = cur
       ? `<button type="button" class="qc-del qc-rec${qcRecommended === cur ? ' on' : ''}"
-           style="margin-left:.25rem;${qcRecommended === cur ? 'color:#b45309;' : 'color:#cbd5e1;'}"
+           style="margin-left:.25rem;${qcRecommended === cur ? 'color:var(--hx-warn);' : 'color:var(--hx-hair);'}"
            onclick="qcSetRecommended('${esc(cur)}')"
            title="${qcRecommended === cur ? 'This option is the one the quotation total is built from' : 'Make this the recommended option'}">★</button>`
       : '';
@@ -891,12 +891,12 @@ function qcRenderItems() {
          once in the banner, which is where a rep looks to answer "where did this item go". */
       return `<td class="num" title="Already quoted on ${esc(i.prQuotedOn)}"
                   style="text-align:center;">
-                <span style="font-size:.9rem;color:#94a3b8;display:block;overflow:hidden;">✓</span></td>`;
+                <span style="font-size:.9rem;color:var(--hx-ink-3);display:block;overflow:hidden;">✓</span></td>`;
     }
     const warn = i.prPriced ? '' : ' title="Management has not priced this item — it would print as free."';
     return `<td class="num"><input type="checkbox"${i.qtSel ? ' checked' : ''}${warn}
               onchange="qcSetSel('${esc(i.lineKey)}',this.checked)">
-            ${i.prPriced ? '' : '<div style="font-size:.62rem;color:#b45309;">no price</div>'}</td>`;
+            ${i.prPriced ? '' : '<div style="font-size:.62rem;color:var(--hx-warn);">no price</div>'}</td>`;
   };
   /* A281 — the two cells a hire line needs and a supply line must not grow. Both write straight
      onto the item; the basis also writes UOM, because that is the field the renderer reads to
@@ -913,7 +913,7 @@ function qcRenderItems() {
     const opts = QC_CHARGE_KINDS.map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${v}</option>`).join('');
     const warn = cur === 'Deposit' ? ' title="Refundable — credits the deposits liability, never revenue, and is not VATed."' : '';
     return `<td><select${ro}${warn} onchange="qcSet('${esc(i.lineKey)}','chargeKind',this.value)"
-              style="width:100%;box-sizing:border-box;${cur === 'Deposit' ? 'color:#b45309;font-weight:600;' : ''}">${opts}</select></td>`;
+              style="width:100%;box-sizing:border-box;${cur === 'Deposit' ? 'color:var(--hx-warn);font-weight:600;' : ''}">${opts}</select></td>`;
   };
   const basisCell = (i) => {
     if (!svc) return '';
@@ -929,11 +929,11 @@ function qcRenderItems() {
   const durCell = (i) => {
     if (!svc) return '';
     if (!qcIsTimeBasis(i.rateBasis)) {
-      return `<td class="num" style="color:#94a3b8;" title="A flat charge is not multiplied by how long the tool is out.">&mdash;</td>`;
+      return `<td class="num" style="color:var(--hx-ink-3);" title="A flat charge is not multiplied by how long the tool is out.">&mdash;</td>`;
     }
     return `<td class="num"><input type="number" min="0" step="any" value="${i.duration == null || i.duration === '' ? 1 : i.duration}"${ro}${title}
               oninput="qcSet('${esc(i.lineKey)}','duration',this.value)">
-            <div style="font-size:.62rem;color:#64748b;margin-top:.15rem;">= ${
+            <div style="font-size:.62rem;color:var(--hx-ink-3);margin-top:.15rem;">= ${
               (typeof flowMoney === 'function') ? flowMoney(qcLineAmount(i), 'PHP') : qcLineAmount(i).toFixed(2)
             }</div></td>`;
   };
@@ -945,7 +945,7 @@ function qcRenderItems() {
             oninput="qcSet('${esc(i.lineKey)}','itemNo',this.value)"></td>
       <td><input type="text" value="${esc(i.itemName)}"${ro}${title}
             oninput="qcSet('${esc(i.lineKey)}','itemName',this.value)">
-          ${i.origItemNo || i.origItemName ? `<div style="font-size:.7rem;color:#64748b;margin-top:.2rem;">
+          ${i.origItemNo || i.origItemName ? `<div style="font-size:.7rem;color:var(--hx-ink-3);margin-top:.2rem;">
             requested: ${esc(i.origItemNo || '')} ${esc(i.origItemName || '')}</div>` : ''}</td>
       ${kindCell(i)}
       <td class="num"><input type="number" min="0" step="any" value="${i.qty}"${ro}${title}
@@ -1053,7 +1053,7 @@ function qcRenderBlocks() {
   const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
   const ro = qcLocked ? ' readonly' : '';
   host.innerHTML = qcBlkDraft.map((b, i) => `
-    <div class="qc-blk" style="border:1px solid var(--line,#e5e7eb);border-radius:8px;padding:.5rem;margin-top:.4rem;">
+    <div class="qc-blk" style="border:1px solid var(--hx-hair);border-radius:8px;padding:.5rem;margin-top:.4rem;">
       <div style="display:flex;gap:.4rem;align-items:center;">
         <input type="text" value="${esc(b.t)}"${ro} style="flex:1;"
                placeholder="FACTORY ACCEPTANCE TEST — ITEMS 01 &amp; 02"
@@ -1452,7 +1452,7 @@ function qcRenderTotals() {
      fault. Name the reason beside the figure, not only in the banner at the top of a long page. */
   let html = '';
   if (qcPartial && qcPartialUI && !qcQuotedItems().length) {
-    html += `<div class="row" style="color:#92400e;"><span>No items are ticked — nothing to total</span>
+    html += `<div class="row" style="color:var(--hx-warn);"><span>No items are ticked — nothing to total</span>
       <span class="v" style="font-size:.72rem;">every line is already on another quotation</span></div>`;
   }
   html += `<div class="row"><span>Subtotal (VAT Exclusive)</span><span class="v">${m(t.gross)}</span></div>`;
@@ -1461,30 +1461,30 @@ function qcRenderTotals() {
     html += `<div class="row"><span>Net</span><span class="v">${m(t.net)}</span></div>`;
   }
   if (t.opt === 'inclusive') html += `<div class="row"><span>VAT (12%)${
-    t.deposit > 0 ? ' <span style="font-size:.7rem;color:#64748b;">on ' + m(t.vatBase) + ' — the refundable deposit is not VATed</span>' : ''
+    t.deposit > 0 ? ' <span style="font-size:.7rem;color:var(--hx-ink-3);">on ' + m(t.vatBase) + ' — the refundable deposit is not VATed</span>' : ''
   }</span><span class="v">${m(t.vat)}</span></div>`;
   html += `<div class="row grand"><span>${label}</span><span class="v">${m(t.grand)}</span></div>`;
   /* A205 — the alternatives, each priced on its own. Shown BELOW the total so it is obvious the
      total is one of them rather than all of them, which is the misreading that costs money. */
   if (t.groups.length) {
-    html += `<div class="row" style="margin-top:.5rem;border-top:1px dashed #cbd5e1;padding-top:.4rem;">
-      <span style="font-weight:700;color:#b91c1c;">Alternative offers</span>
-      <span class="v" style="font-size:.72rem;color:#64748b;">client picks one · not cumulative</span></div>`;
+    html += `<div class="row" style="margin-top:.5rem;border-top:1px dashed var(--hx-hair);padding-top:.4rem;">
+      <span style="font-weight:700;color:var(--hx-red);">Alternative offers</span>
+      <span class="v" style="font-size:.72rem;color:var(--hx-ink-3);">client picks one · not cumulative</span></div>`;
     t.groups.forEach(g => {
       const vat = Math.max(0, g.gross - (qcIsService() ? (g.deposit || 0) : 0)) * QC_VAT_PCT;
       const on = g.key === t.rec;
       html += `<div class="row"><span>${on ? '★ ' : ''}Option ${g.key}${on ? ' (in the total above)' : ''}</span>
         <span class="v">${m(g.gross)}</span></div>`;
-      html += `<div class="row" style="font-size:.72rem;color:#64748b;"><span>&nbsp;&nbsp;+ VAT 12% ${m(vat)} → VAT-inc</span>
+      html += `<div class="row" style="font-size:.72rem;color:var(--hx-ink-3);"><span>&nbsp;&nbsp;+ VAT 12% ${m(vat)} → VAT-inc</span>
         <span class="v">${m(g.gross + vat)}</span></div>`;
     });
     if (!qcRecommended) {
-      html += `<div class="row" style="color:#b45309;font-size:.74rem;"><span>⚠ No option marked ★ —
+      html += `<div class="row" style="color:var(--hx-warn);font-size:.74rem;"><span>⚠ No option marked ★ —
         the cheapest is being used. Pick one before finalising.</span><span class="v"></span></div>`;
     }
     const lonely = t.groups.filter(g => g.lines.length === 1 && t.groups.length === 1);
     if (lonely.length) {
-      html += `<div class="row" style="color:#b45309;font-size:.74rem;"><span>⚠ Only one option group —
+      html += `<div class="row" style="color:var(--hx-warn);font-size:.74rem;"><span>⚠ Only one option group —
         an alternative needs something to be an alternative to.</span><span class="v"></span></div>`;
     }
   }
@@ -1654,8 +1654,8 @@ async function qcRenderPreview() {
 function qcMsg(text, good) {
   document.getElementById('qcMsg').innerHTML =
     `<div style="margin:.5rem 0 1rem;padding:.6rem .85rem;border-radius:10px;font-size:.86rem;
-      background:${good ? '#ecfdf5' : '#fef2f2'};color:${good ? '#065f46' : '#991b1b'};
-      border:1px solid ${good ? '#a7f3d0' : '#fecaca'};">${(typeof flowEsc === 'function' ? flowEsc(text) : text)}</div>`;
+      background:${good ? 'var(--hx-ok-soft)' : 'var(--hx-red-soft)'};color:${good ? 'var(--hx-ok)' : 'var(--hx-red)'};
+      border:1px solid ${good ? 'var(--hx-ok-line)' : 'var(--hx-red-line)'};">${(typeof flowEsc === 'function' ? flowEsc(text) : text)}</div>`;
 }
 
 function qcLayoutJson() {

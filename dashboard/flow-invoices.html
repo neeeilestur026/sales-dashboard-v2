@@ -42,12 +42,12 @@
         <div><label>Load Sales Order *</label><select id="loadSO" onchange="loadFromSO()"></select></div>
         <div><label>Source SO No</label><input type="text" id="soNo" readonly></div>
         <div><label>Customer *</label><input type="text" id="customer"></div>
-        <div><label>Invoice No <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional — auto if blank)</span></label><input type="text" id="invNo" placeholder="auto-generated"></div>
+        <div><label>Invoice No <span style="font-weight:400;color: var(--text-muted);">(optional — auto if blank)</span></label><input type="text" id="invNo" placeholder="auto-generated"></div>
         <div><label>Date</label><input type="date" id="date"></div>
         <!-- A278: hidden until the backend can store a rate (v153). Against an older backend the
              field must not appear at all, or it would promise a VAT the server will not record. -->
         <div id="vatBlock" style="display:none;"><label>VAT Rate %
-          <span style="font-weight:400;color:var(--text-muted,#64748b);">(0 for exempt / zero-rated)</span></label>
+          <span style="font-weight:400;color: var(--text-muted);">(0 for exempt / zero-rated)</span></label>
           <input type="number" step="any" min="0" max="100" id="vatRate" value="12" oninput="recalc()"></div>
       </div>
 
@@ -60,7 +60,7 @@
              otherwise. Total Due is what the client is billed and what the receivable carries. -->
         <span>Net Sales: <span id="totalSales">0.00</span></span>
         <span id="vatRow" style="display:none;">VAT: <span id="totalVat">0.00</span></span>
-        <span id="dueRow" style="display:none;color:var(--accent-dark,#3730a3);">Total Due: <span id="totalDue">0.00</span></span>
+        <span id="dueRow" style="display:none;color: var(--accent-dark);">Total Due: <span id="totalDue">0.00</span></span>
         <span>Total COGS: <span id="totalCOGS">0.00</span></span>
         <span>Gross Profit: <span id="grossProfit">0.00</span></span>
       </div>
@@ -77,9 +77,9 @@
     <div class="chart-card" id="vatRepairCard" style="margin-bottom:1.25rem;display:none;">
       <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
         <h3 style="font-size:0.95rem;font-weight:600;margin:0;">Pre-VAT receivables</h3>
-        <span style="font-size:0.78rem;color:var(--text-muted,#64748b);">Invoices raised before VAT was recorded booked the receivable NET. This corrects them.</span>
+        <span style="font-size:0.78rem;color: var(--text-muted);">Invoices raised before VAT was recorded booked the receivable NET. This corrects them.</span>
         <span style="margin-left:auto;display:inline-flex;gap:.4rem;align-items:center;">
-          <label style="font-size:0.78rem;color:var(--text-muted,#64748b);">Rate %
+          <label style="font-size:0.78rem;color: var(--text-muted);">Rate %
             <input type="number" step="any" min="0" max="100" id="vrRate" value="12" style="width:4.5rem;margin-left:.3rem;"></label>
           <button type="button" class="btn btn-sm btn-secondary" id="vrPreviewBtn" onclick="vatRepairPreview()">Preview</button>
         </span>

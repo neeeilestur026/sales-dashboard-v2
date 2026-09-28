@@ -16,7 +16,8 @@ const D = path.join(__dirname, '..', '..', 'dashboard') + '/';
 let FAIL = 0, N = 0;
 const ok = (l, c, e) => { N++; if (c) console.log('  ok   ' + l); else { FAIL++; console.log('  FAIL ' + l + (e === undefined ? '' : '\n     ' + JSON.stringify(e).slice(0, 300))); } };
 const sec = (t) => console.log('\n== ' + t + ' ==');
-const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+/* Pictographs and dingbats. ✓ ✔ ✕ (2713–2715) are glyphs the UI keeps, not emoji. */
+const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u;
 const HEX = /#(?:[0-9a-fA-F]{3}){1,2}\b/g;
 
 const STUB = 'director-recommender.html';
@@ -32,7 +33,16 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'dashboard.html', 'clients.html', 'pending-items.html', 'performance.html', 'quotation-summary.html', 'weekly-itinerary.html', 'sales-emails.html', 'product-finder.html',
   // A291 — the admin family
   'admin.html', 'admin-daily-report.html', 'admin-hr-reports.html', 'admin-import-quotation.html', 'admin-login-log.html', 'admin-reports.html', 'admin-summary.html',
-  'admin-targets.html', 'admin-team.html', 'admin-users.html', 'pr-tracker.html', 'po-approvals.html', 'quotation-approvals.html', 'purchase-request-tracker.html'];
+  'admin-targets.html', 'admin-team.html', 'admin-users.html', 'pr-tracker.html', 'po-approvals.html', 'quotation-approvals.html', 'purchase-request-tracker.html',
+  // A292 — accounting, the flow pages, the migration tools
+  'accounting-home.html', 'accounting-billing.html', 'accounting.html', 'accounting-daily-report.html', 'accounting-summary.html',
+  'flow-accounting.html', 'flow-ap-aging.html', 'flow-ar-aging.html', 'flow-clients.html', 'flow-collections.html', 'flow-commissions.html', 'flow-expenses.html',
+  'flow-guide.html', 'flow-home.html', 'flow-inventory.html', 'flow-invoices.html', 'flow-ledger.html', 'flow-lifecycle.html', 'flow-other-payables.html',
+  'flow-payment-requests.html', 'flow-payments.html', 'flow-pricing-request.html', 'flow-purchase-orders.html', 'flow-quotations.html', 'flow-receiving.html',
+  'flow-sales-orders.html', 'flow-shipments.html', 'flow-suppliers.html', 'flow-travel.html',
+  'migrate-collections.html', 'migrate-expenses.html', 'migrate-pricing.html', 'migrate-sales-orders.html', 'migrate-so-costs.html', 'reconcile-2026-costs.html',
+  'replace-2026-sos.html', 'update-2025-costs.html', 'supplier-quotation.html', 'payment-requests.html', 'sales-orders.html', 'mi-queue.html', 'mro-queue.html',
+  'pricing-submissions.html', 'quotation-board.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

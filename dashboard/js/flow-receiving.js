@@ -81,7 +81,7 @@ function renderItems() {
   if (!rcCurrent) { tb.innerHTML = ''; return; }
   tb.innerHTML = (rcCurrent.items || []).map((it, i) => `
     <tr data-i="${i}">
-      <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}${_rcIsNA(it.itemNo) ? ' <span style="color:#b45309;font-size:0.72rem;" title="No part number — all N/A items share one inventory cost row">⚠ N/A</span>' : ''}</td>
+      <td>${flowEsc(it.itemNo)} — ${flowEsc(it.itemName)}${_rcIsNA(it.itemNo) ? ' <span style="color:var(--hx-warn);font-size:0.72rem;" title="No part number — all N/A items share one inventory cost row">⚠ N/A</span>' : ''}</td>
       <td class="num"><input type="number" step="any" min="0" class="qty" value="${flowNum(it.qty)}" oninput="recalc()"></td>
       <td class="num"><input type="number" step="any" min="0" class="price" value="${flowNum(it.price)}" oninput="recalc()"></td>
       <td class="num purchasePHP">0.00</td><td class="num shipUnit">0.00</td><td class="num landed">0.00</td><td class="num totLanded">0.00</td>
@@ -240,12 +240,12 @@ async function loadReceiving() {
   try {
     const res = await fetchFlow('getReceiving');
     const list = (res && res.data) || [];
-    if (!list.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No receiving records yet.</p>'; return; }
+    if (!list.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No receiving records yet.</p>'; return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>MR No</th><th>PO</th><th>Date</th><th>Supplier</th><th class="num">VAT (PHP)</th><th class="num">Shipping (PHP)</th><th>Items</th><th></th></tr></thead><tbody>${list.map(m => `
       <tr><td>${flowEsc(m.mrNo)}</td><td>${flowEsc(m.poNo)}</td><td>${flowDate(m.date)}</td><td>${flowEsc(m.supplier)}</td>
       <td class="num">${flowMoney(m.vat, 'PHP')}</td><td class="num">${flowMoney(m.totalShipping, 'PHP')}</td><td>${m.items.length}</td>
       <td style="white-space:nowrap;"><button class="link-btn" onclick='openDocsModal("Receiving","${flowEsc(m.mrNo)}")'>Docs</button></td></tr>`).join('')}</tbody></table>`;
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
   finally { setTimeout(() => flowFitScroll('listContainer'), 0); }   // A268: size the list to the window
 }
 

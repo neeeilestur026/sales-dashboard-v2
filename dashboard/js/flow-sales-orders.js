@@ -60,19 +60,19 @@ function soOptionPickerHtml(q) {
     const net = flowQuotationNetForOption(q, k);
     const on = k === (soChosenOption || g.recommended);
     return `<label style="display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:8px;
-              ${on ? 'background:#eef2ff;' : ''}cursor:pointer;">
+              ${on ? 'background:var(--hx-navy-soft);' : ''}cursor:pointer;">
         <input type="radio" name="soOpt" value="${flowEsc(k)}"${on ? ' checked' : ''}
                onchange="soPickOption(this.value)">
         <span><strong>Option ${flowEsc(k)}</strong>${k === g.recommended ? ' · recommended' : ''}</span>
         <span style="margin-left:auto;font-variant-numeric:tabular-nums;">${flowMoney(net, 'PHP')}</span>
       </label>`;
   }).join('');
-  return `<div id="soOptWrap" style="margin:.5rem 0;padding:.6rem .7rem;border:1px solid #fca5a5;
-            border-radius:10px;background:#fff7f7;">
-      <div style="font-weight:700;color:#b91c1c;font-size:.82rem;margin-bottom:.35rem;">
+  return `<div id="soOptWrap" style="margin:.5rem 0;padding:.6rem .7rem;border:1px solid var(--hx-red-line);
+            border-radius:10px;background:var(--hx-red-soft);">
+      <div style="font-weight:700;color:var(--hx-red);font-size:.82rem;margin-bottom:.35rem;">
         This quotation offered alternatives — which did the client accept?</div>
       ${rows}
-      <div style="font-size:.74rem;color:#64748b;margin-top:.3rem;">
+      <div style="font-size:.74rem;color:var(--hx-ink-3);margin-top:.3rem;">
         Only the base items plus the option you pick are carried into this sales order.</div>
     </div>`;
 }
@@ -268,7 +268,7 @@ async function soAttachClientPo() {
       (warn.length ? ' ' + warn.join(' ') : ''), !warn.length);
     if (warn.length) {                     // a warning must not read as an error, but must be seen
       const m = document.getElementById('clientPoMsg');
-      if (m) { m.style.display = 'block'; m.style.color = '#b45309'; }
+      if (m) { m.style.display = 'block'; m.style.color = 'var(--hx-warn)'; }
     }
     input.value = '';
   } catch (e) {
@@ -433,7 +433,7 @@ async function loadSOs() {
       String(b.soNo).localeCompare(String(a.soNo)));
     buildSOFilters();
     renderSOs();
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 function buildSOFilters() {
@@ -480,7 +480,7 @@ function soViewItems(no) {
     (cd ? ` · recorded COGS ${flowMoney(cd.totalCOGS, 'PHP')}` : '');
   const body = document.getElementById('soItemsBody');
   if (!items.length) {
-    body.innerHTML = '<p style="color:var(--text-muted,#64748b);">This order has no line items recorded.</p>';
+    body.innerHTML = '<p style="color:var(--hx-ink-3);">This order has no line items recorded.</p>';
   } else {
     let total = 0;
     const rows = items.map((it, i) => {
@@ -493,12 +493,12 @@ function soViewItems(no) {
     // The order header carries its own total; show both when they disagree rather than hiding it.
     const header = flowNum(s.total);
     const drift = Math.abs(header - total) > 0.01
-      ? `<tr><td colspan="5" style="color:#b45309;">Order total recorded on the header</td>
-           <td class="num" style="color:#b45309;">${flowMoney(header, 'PHP')}</td></tr>` : '';
+      ? `<tr><td colspan="5" style="color:var(--hx-warn);">Order total recorded on the header</td>
+           <td class="num" style="color:var(--hx-warn);">${flowMoney(header, 'PHP')}</td></tr>` : '';
     body.innerHTML = `<table class="flow-table"><thead><tr><th class="num">#</th><th>Item No</th>
       <th>Description</th><th class="num">Qty</th><th class="num">Price/Unit</th><th class="num">Line Total</th>
       </tr></thead><tbody>${rows}
-      <tr style="font-weight:700;background:var(--bg-inset,#f8fafc);">
+      <tr style="font-weight:700;background:var(--hx-inset);">
         <td colspan="5">Total of ${items.length} line${items.length === 1 ? '' : 's'}</td>
         <td class="num">${flowMoney(total, 'PHP')}</td></tr>${drift}</tbody></table>`;
   }
@@ -566,19 +566,19 @@ function toggleSOForm(force) {
 // International / Local supplier label badge (blank → em dash).
 function soTypeBadge(t) {
   const v = String(t || '');
-  if (v === 'International') return '<span class="flow-badge" style="background:rgba(37,99,235,0.12);color:#1d4ed8;">International</span>';
-  if (v === 'Local') return '<span class="flow-badge" style="background:rgba(100,116,139,0.14);color:#475569;">Local</span>';
-  return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  if (v === 'International') return '<span class="flow-badge" style="background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);">International</span>';
+  if (v === 'Local') return '<span class="flow-badge" style="background:var(--hx-hair);color:var(--hx-ink-2);">Local</span>';
+  return '<span style="color:var(--hx-ink-3);">—</span>';
 }
 
 /* A186 — the received date, with the lag flagged when their PO sat somewhere before reaching us.
    Three days is the threshold: shorter is ordinary post/email latency, longer is worth seeing. */
 function soReceivedCell(s) {
   const got = flowDate(s.poReceivedDate);
-  if (!got) return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  if (!got) return '<span style="color:var(--hx-ink-3);">—</span>';
   const gap = soReceiptGap(s.clientPoDate, s.poReceivedDate);
   if (gap === null || gap < 3) return flowEsc(got);
-  return `${flowEsc(got)} <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" ` +
+  return `${flowEsc(got)} <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" ` +
          `title="Their PO is dated ${flowEsc(flowDate(s.clientPoDate))} but only reached us ${gap} days later">+${gap}d</span>`;
 }
 
@@ -599,10 +599,10 @@ function renderSOs() {
   const meta = document.getElementById('soFilterMeta');
   if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
   setTimeout(soFitList, 0);   // A266: after the rows exist
-  if (!soList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders yet.</p>'; return; }
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No sales orders match the filters.</p>'; return; }
+  if (!soList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No sales orders yet.</p>'; return; }
+  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No sales orders match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Process</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
-    <tr><td><button class="link-btn" style="font-weight:600;" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${flowEsc(s.soNo)}</button>${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
+    <tr><td><button class="link-btn" style="font-weight:600;" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${flowEsc(s.soNo)}</button>${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
     <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td><button class="link-btn" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${s.items.length}</button></td>
     <td style="white-space:nowrap;">${`<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>${soViewer ? 'View costs' : 'Costs'}</button>`}
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
@@ -658,7 +658,7 @@ async function deleteSO(no) {
 // COGS cell: the recorded Total COGS, or an amber "no cost" badge (same gap the audits flag).
 function soCogsCell(s) {
   const cd = soCds[String(s.soNo)];
-  if (!cd) return '<span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;">no cost</span>';
+  if (!cd) return '<span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);">no cost</span>';
   const gp = flowNum(cd.sales) - flowNum(cd.totalCOGS);
   return `<span title="Gross profit ₱${gp.toLocaleString('en-US', { minimumFractionDigits: 2 })}">${flowMoney(cd.totalCOGS, 'PHP')}</span>`;
 }

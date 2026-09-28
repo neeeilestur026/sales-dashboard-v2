@@ -55,7 +55,7 @@ async function loadInventory() {
     }));
     render();
   } catch (e) {
-    c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`;
+    c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`;
   }
 }
 
@@ -66,7 +66,7 @@ function render() {
   const rows = invData.filter(r => !q || String(r.itemNo).toLowerCase().includes(q) || String(r.description).toLowerCase().includes(q));
   const c = document.getElementById('container');
   const fit = () => setTimeout(() => flowFitScroll('container'), 0);   // A273
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No items.</p>'; fit(); return; }
+  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No items.</p>'; fit(); return; }
   /* A274 — two column sets, because the Catalog and the Stocks hold different things. Measured on
      the live 994: every one of the Catalog's 896 rows has zero balance, zero cost and zero total,
      so showing it five money columns was five columns of blanks on 90% of the table — and that,
@@ -86,8 +86,8 @@ function render() {
   const group = (label, list, sub, kind) => `
     <div style="font-size:0.9rem;font-weight:700;margin:0 0 0.5rem;display:flex;align-items:center;gap:0.5rem;">
       ${label}
-      <span style="font-weight:600;font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;background:var(--bg-inset,#eef2f6);color:var(--text-secondary,#475569);">${list.length}</span>
-      ${sub ? `<span style="font-weight:500;font-size:0.75rem;color:var(--text-muted,#64748b);">${sub}</span>` : ''}
+      <span style="font-weight:600;font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;background:var(--hx-inset);color:var(--hx-ink-2);">${list.length}</span>
+      ${sub ? `<span style="font-weight:500;font-size:0.75rem;color:var(--hx-ink-3);">${sub}</span>` : ''}
     </div>
     ${list.length
       /* A273 — do NOT wrap this table in an overflow container. `overflow-x:auto` forces overflow-y
@@ -96,7 +96,7 @@ function render() {
       ? `<table class="flow-table inv-table">${kind === 'stock' ? stockCols : listCols}
            <thead><tr>${kind === 'stock' ? stockHead : listHead}</tr></thead>
            <tbody>${list.map(kind === 'stock' ? invStockRow : invListRow).join('')}</tbody></table>`
-      : '<p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
+      : '<p style="color:var(--hx-ink-3);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
   const typed = rows.some(r => r.type === 'Stock' || r.type === 'Catalog');
   if (typed) {
     // Authoritative split: Stocks (real inventory — migrated old-system stocks, received goods,
@@ -162,7 +162,7 @@ function invStockRow(r) {
   const total = flowNum(r.totalLanded);
   // Currency is PHP on all 994 rows today, so it gets no column — but say so inline if that changes.
   const cur = String(r.currency || 'PHP').trim();
-  const curTag = cur && cur !== 'PHP' ? ` <span class="flow-badge" style="background:rgba(37,99,235,0.12);color:#1d4ed8;">${flowEsc(cur)}</span>` : '';
+  const curTag = cur && cur !== 'PHP' ? ` <span class="flow-badge" style="background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);">${flowEsc(cur)}</span>` : '';
 
   const parts = [];
   if (purch) parts.push(`purchase ${flowMoney(purch, cur)}`);
@@ -274,32 +274,32 @@ async function findDuplicates() {
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not scan the catalogue.');
     const groups = (r.data || []);
     if (!groups.length) {
-      box.innerHTML = '<p style="color:var(--text-muted,#64748b);padding:0.6rem 0;">No likely duplicates found — every item has a distinct description.</p>';
+      box.innerHTML = '<p style="color:var(--hx-ink-3);padding:0.6rem 0;">No likely duplicates found — every item has a distinct description.</p>';
       return;
     }
     box.innerHTML = `
-      <div style="margin:0.6rem 0 1rem;padding:0.8rem 1rem;border:1px solid var(--border,#334155);border-radius:10px;">
+      <div style="margin:0.6rem 0 1rem;padding:0.8rem 1rem;border:1px solid var(--hx-hair);border-radius:10px;">
         <div style="font-weight:600;margin-bottom:0.5rem;">
           ${groups.length} possible duplicate${groups.length === 1 ? '' : ' groups'} · ${r.items} item${r.items === 1 ? '' : 's'}
         </div>
-        <p style="color:var(--text-muted,#64748b);font-size:0.85rem;margin:0 0 0.7rem;">
+        <p style="color:var(--hx-ink-3);font-size:0.85rem;margin:0 0 0.7rem;">
           Same description, separate records. Nothing is merged automatically — merging moves stock and
           cost history, so decide per group and edit or delete the extra record yourself.
         </p>
         <table class="flow-table" style="min-width:640px;"><thead><tr>
           <th>Description</th><th>Item No</th><th>Item ID</th><th class="num">Balance</th><th class="num">Landed/Unit</th><th>Type</th>
         </tr></thead><tbody>${groups.map(g => g.items.map((it, k) => `
-          <tr${k === 0 ? ' style="border-top:2px solid var(--border,#334155);"' : ''}>
+          <tr${k === 0 ? ' style="border-top:2px solid var(--hx-hair);"' : ''}>
             <td>${k === 0 ? flowEsc(it.description || '') : ''}</td>
             <td>${flowEsc(it.itemNo || '')}</td>
-            <td style="font-family:monospace;font-size:0.8rem;color:var(--text-muted,#64748b);">${flowEsc(it.itemId || '—')}</td>
+            <td style="font-family:monospace;font-size:0.8rem;color:var(--hx-ink-3);">${flowEsc(it.itemId || '—')}</td>
             <td class="num">${flowNum(it.balance)}</td>
             <td class="num">${flowMoney(it.landedCost, 'PHP')}</td>
             <td>${flowEsc(it.type || '')}</td>
           </tr>`).join('')).join('')}</tbody></table>
       </div>`;
   } catch (e) {
-    box.innerHTML = `<p style="color:#ef4444;padding:0.6rem 0;">${flowEsc(e.message)}</p>`;
+    box.innerHTML = `<p style="color:var(--hx-red);padding:0.6rem 0;">${flowEsc(e.message)}</p>`;
   }
 }
 

@@ -407,7 +407,7 @@ function loadFromPO() {
     /* A225 FIRST and styled as a refusal, not an amber FYI — it is the reason Save is disabled, so it
        has to be the first thing read. The AP-duplicate and already-partly-paid notes stay below it. */
     const perPO = prSyncCreateGate();
-    if (perPO) msgs.push(`<span style="color:#b91c1c;">🚫 ${flowEsc(perPO)}</span>`);
+    if (perPO) msgs.push(`<span style="color:var(--hx-red);">🚫 ${flowEsc(perPO)}</span>`);
     if (n > 1) msgs.push(`⚠ ${n} AP entries found for this PO — the payable above is their SUM. Check AP Aging for stale duplicates before submitting; the portion buttons stay disabled until it is resolved.`);
     // A158: a second request on the same PO is legitimate (deposit → balance) but worth flagging,
     // since re-requesting the full payable is exactly how a PO gets paid twice.
@@ -527,7 +527,7 @@ async function loadPRs() {
     const res = await fetchFlow('getPaymentRequests', { type: 'PO' });
     prList = (res && res.data) || [];
     renderPRs();
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 /** Still in play: everything before it is paid or rejected. */
@@ -547,11 +547,11 @@ function prHead() {
 /** A180: which slice of the PO this request is. '' on every pre-A180 row — an em-dash, never a guess. */
 function prPortionCell(r) {
   const p = String(r.paymentPortion || '');
-  if (!p) return '<span style="color:var(--text-muted,#64748b);">—</span>';
+  if (!p) return '<span style="color:var(--hx-ink-3);">—</span>';
   const total = flowNum(r.poTotal);
   const label = p === 'Custom' ? 'Partial' : p;
   const tip = total > 0 ? ` title="of ${flowEsc(flowMoney(total, 'PHP'))} payable"` : '';
-  const tone = p === 'Full' ? '#0f766e' : '#b45309';
+  const tone = p === 'Full' ? 'var(--hx-ok)' : 'var(--hx-warn)';
   return `<span${tip} style="font-size:0.72rem;font-weight:700;color:${tone};border:1px solid currentColor;` +
          `border-radius:999px;padding:1px 7px;white-space:nowrap;">${flowEsc(label)}</span>`;
 }
@@ -564,14 +564,14 @@ function renderPRs() {
   const c = document.getElementById('listContainer');
   if (!c) return;
   flowLedgerInjectCss();
-  if (!prList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
+  if (!prList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
   flowLedgerBuildPeriod(prList, 'createdAt', 'prYear', 'prMonth');
   const rows = flowLedgerFilterPeriod(prList, 'createdAt', 'prYear', 'prMonth');
   const { open, history } = flowLedgerSplit(rows, prIsOpen);
 
   const openTable = open.length
     ? `<table class="flow-table">${prHead()}<tbody>${open.map(prRow).join('')}${flowLedgerFootRow([{ at: 3, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amount), 0), 'PHP') }], PR_COLS)}</tbody></table>`
-    : '<p style="color:var(--text-muted,#64748b);">No open payment requests in this period.</p>';
+    : '<p style="color:var(--hx-ink-3);">No open payment requests in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table">${prHead()}<tbody>${history.map(prRow).join('')}</tbody></table>` : '';
 
@@ -605,17 +605,17 @@ function prUpdateKpis(open) {
 
 function prRow(r) {
   const st = r.status || 'Draft';
-  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
+  const note = (st === 'Rejected' && r.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(r.approvalNote)}</div>` : '';
   // A156: three sign-offs then payment — show how far along it is, not just the status word.
   const appr = [r.adminApprovedBy ? 'Admin ✓' : (r.acctApprovedBy ? 'Acct ✓' : ''),
     r.mgmtApprovedBy ? 'Mgmt ✓' : '', r.dirApprovedBy ? 'Dir ✓' : '',
     r.paidBy ? 'Paid ✓' : '']
-    .filter(Boolean).join(' · ') || '<span style="color:var(--text-muted,#64748b);">—</span>';
+    .filter(Boolean).join(' · ') || '<span style="color:var(--hx-ink-3);">—</span>';
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowEsc(r.poNo)}</td><td>${flowEsc(r.payee)}</td>
     <td class="num">${flowMoney(r.amount, 'PHP')}</td><td>${prPortionCell(r)}</td>
     <td>${flowStatusBadge(st)}${note}</td>
-    <td style="font-size:0.74rem;color:var(--text-secondary,#475569);">${appr}</td>
-    <td>${r.pdfLink ? `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+    <td style="font-size:0.74rem;color:var(--hx-ink-2);">${appr}</td>
+    <td>${r.pdfLink ? `<a href="${flowEsc(r.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--hx-ink-3);">—</span>'}</td>
     <td style="white-space:nowrap;">${prActions(r)}</td></tr>`;
 }
 

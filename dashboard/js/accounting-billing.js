@@ -120,7 +120,7 @@ function renderTable(data) {
     const amt    = r.amount ? '₱' + parseFloat(String(r.amount).replace(/,/g,'')).toLocaleString('en-PH',{minimumFractionDigits:2}) : '—';
     return `
       <tr onclick="openDetailOverlay('${esc(r.prNumber)}')">
-        <td><span style="font-weight:600;color:var(--accent,#fb923c)">${esc(r.prNumber)}</span></td>
+        <td><span style="font-weight:600;color:var(--hx-navy)">${esc(r.prNumber)}</span></td>
         <td>${esc(r.requestDate||'—')}</td>
         <td>${esc(r.requestedBy||'—')}</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.purpose||'—')}</td>
@@ -129,7 +129,7 @@ function renderTable(data) {
         <td>${esc(r.dueDate||'—')}</td>
         <td><span class="badge ${priCls}">${esc(r.priority||'—')}</span></td>
         <td><span class="badge ${bsCls}">${bs}</span></td>
-        <td style="font-size:0.78rem;color:var(--text-muted,#94a3b8)">${esc(r.cvNumber||'—')}</td>
+        <td style="font-size:0.78rem;color:var(--hx-ink-3)">${esc(r.cvNumber||'—')}</td>
         <td onclick="event.stopPropagation()">
           ${bs === 'Unpaid'
             ? `<button class="btn btn-primary btn-sm" onclick="quickMarkPaid('${esc(r.prNumber)}')">Mark Paid</button>`
@@ -524,5 +524,5 @@ function setTbodyLoading(yes) {
 
 function setTbodyError(msg) {
   document.getElementById('billingTbody').innerHTML =
-    `<tr><td colspan="11"><div class="empty-state" style="color:#dc2626"><p>Error: ${esc(msg)}</p></div></td></tr>`;
+    `<tr><td colspan="11"><div class="empty-state" style="color:var(--hx-red)"><p>Error: ${esc(msg)}</p></div></td></tr>`;
 }

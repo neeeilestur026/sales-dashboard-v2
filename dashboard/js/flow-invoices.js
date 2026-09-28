@@ -228,7 +228,7 @@ async function loadInvoices() {
   try {
     const res = await fetchFlow('getInvoices');
     const list = (res && res.data) || [];
-    if (!list.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No invoices yet.</p>'; return; }
+    if (!list.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No invoices yet.</p>'; return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>INV No</th><th>SO</th><th>Date</th><th>Customer</th><th class="num">Net Sales</th><th class="num">VAT</th><th class="num">Total Due</th><th class="num">COGS</th><th class="num">Gross Profit</th><th>Items</th><th></th></tr></thead><tbody>${list.map(v => `
       <tr><td>${flowEsc(v.invNo)}</td><td>${flowEsc(v.soNo)}</td><td>${flowDate(v.date)}</td><td>${flowEsc(v.customer)}</td>
       <td class="num">${flowMoney(v.totalSales, 'PHP')}</td>
@@ -241,7 +241,7 @@ async function loadInvoices() {
       }${
         ivCanVoid ? `<button class="link-btn del-btn" style="margin-left:0.4rem;" onclick='voidInvoiceAction(${JSON.stringify(String(v.invNo))})'>Void</button>` : ''
       }</td></tr>`).join('')}</tbody></table>`;
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
   finally { setTimeout(() => flowFitScroll('listContainer'), 0); }   // A268: size the list to the window
 }
 
@@ -314,30 +314,30 @@ async function vatRepairPreview() {
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not read the receivables.');
     vrRows = res.rows || [];
     if (!vrRows.length) {
-      body.innerHTML = `<div style="font-size:0.85rem;color:var(--text-muted,#64748b);">Nothing to repair — no receivable matches an invoice that was booked net of VAT.${
+      body.innerHTML = `<div style="font-size:0.85rem;color:var(--hx-ink-3);">Nothing to repair — no receivable matches an invoice that was booked net of VAT.${
         (res.skipped || []).length ? ` (${res.skipped.length} row(s) are out of scope.)` : ''}</div>`;
       return;
     }
     const cat = { unpaid: 'Unpaid', overCollected: 'Over-collected', partial: 'Part-paid' };
     body.innerHTML = `
-      <div style="font-size:0.82rem;color:#b45309;font-weight:600;margin-bottom:.5rem;">${flowEsc(res.message)}</div>
+      <div style="font-size:0.82rem;color:var(--hx-warn);font-weight:600;margin-bottom:.5rem;">${flowEsc(res.message)}</div>
       <div style="overflow-x:auto;"><table class="flow-table">
         <thead><tr><th style="width:2rem;"><input type="checkbox" id="vrAll" onclick="vrToggleAll(this)"></th>
           <th>Invoice</th><th>Customer</th><th>Date</th><th>State</th>
           <th class="num">Receivable now</th><th class="num">+ VAT (imputed)</th><th class="num">After</th><th class="num">Outstanding after</th></tr></thead>
-        <tbody>${vrRows.map((r, i) => `<tr${r.ambiguous ? ' style="background:rgba(245,158,11,0.10);"' : ''}>
+        <tbody>${vrRows.map((r, i) => `<tr${r.ambiguous ? ' style="background:var(--hx-warn-soft);"' : ''}>
           <td><input type="checkbox" class="vr-pick" data-i="${i}"></td>
           <td>${flowEsc(r.invNo)}${r.ambiguous ? ` <span class="lv-warn" title="${flowEsc(r.ambiguousWhy.join('; '))}">⚠</span>` : ''}</td>
           <td>${flowEsc(r.customer)}</td><td>${flowEsc(String(r.date).slice(0, 10))}</td>
           <td>${flowEsc(cat[r.category] || r.category)}</td>
           <td class="num">${flowMoney(r.amountNow, 'PHP')}</td>
-          <td class="num">${flowMoney(r.imputedVat, 'PHP')} <span style="color:var(--text-muted,#64748b);">@${r.imputedRate}%</span></td>
+          <td class="num">${flowMoney(r.imputedVat, 'PHP')} <span style="color:var(--hx-ink-3);">@${r.imputedRate}%</span></td>
           <td class="num">${flowMoney(r.amountAfter, 'PHP')}</td>
           <td class="num">${flowMoney(r.outstandingAfter, 'PHP')}</td></tr>`).join('')}</tbody>
       </table></div>
       <div class="flow-actions" style="margin-top:.6rem;">
         <button type="button" class="btn btn-sm btn-primary primary" id="vrApplyBtn" onclick="vatRepairApply()">Repair the ticked invoices</button>
-        <span style="font-size:0.78rem;color:var(--text-muted,#64748b);">Rows shaded amber need confirming — the sales order carries more than one live invoice, or the invoice more than one receivable.</span>
+        <span style="font-size:0.78rem;color:var(--hx-ink-3);">Rows shaded amber need confirming — the sales order carries more than one live invoice, or the invoice more than one receivable.</span>
       </div>`;
   } catch (e) { flowMsg('vrMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Preview'; }

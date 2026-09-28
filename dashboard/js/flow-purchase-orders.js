@@ -131,7 +131,7 @@ function poSyncCurrencyOptions(keep) {
       : kind === 'intl' ? `<b>${flowEsc(soNo)}</b> is an <b>International</b> order, so this purchase is stated in the supplier's own currency. The peso figure is an estimate until the bank executes.`
       : kind === 'local' ? `<b>${flowEsc(soNo)}</b> is a <b>Local</b> order, so this purchase is in pesos.`
       : `<b>${flowEsc(soNo)}</b> has no supplier type, so every currency is offered. Set it on Shipment Monitoring and this narrows to the right list.`
-    ) + (stale ? ` <span style="color:#b91c1c;">This order is stored as ${flowEsc(want)}, which that rule does not allow — saving will be refused until it is changed here or the supplier type is corrected.</span>` : '');
+    ) + (stale ? ` <span style="color:var(--hx-red);">This order is stored as ${flowEsc(want)}, which that rule does not allow — saving will be refused until it is changed here or the supplier type is corrected.</span>` : '');
     note.style.display = '';
   }
   recalc();
@@ -335,22 +335,22 @@ async function loadPOs() {
     poList = (res && res.data) || [];
     const poReceived = {};
     ((rcRes && rcRes.data) || []).forEach(m => { if (m.poNo) poReceived[String(m.poNo)] = true; });
-    if (!poList.length) { c.innerHTML = '<p style="color:var(--text-muted,#64748b);">No purchase orders yet.</p>'; return; }
+    if (!poList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No purchase orders yet.</p>'; return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>PO No</th><th>SO</th><th>Date</th><th>Supplier</th><th>Cur</th><th class="num">Total (FC)</th><th>Status</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${poList.map(p => {
       const st = p.status || 'Draft';
       const noteTip = (st === 'Rejected' && p.approvalNote) ? ` title="Reason: ${flowEsc(p.approvalNote)}"` : '';
-      const noteLine = (st === 'Rejected' && p.approvalNote) ? `<div style="font-size:0.72rem;color:#dc2626;margin-top:0.2rem;">✗ ${flowEsc(p.approvalNote)}</div>` : '';
+      const noteLine = (st === 'Rejected' && p.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✗ ${flowEsc(p.approvalNote)}</div>` : '';
       const soCell = p.soNo ? flowEsc(p.soNo) : '<span class="flow-badge b-pending" title="Purchase order without a sales order — for restocking stock">Restock</span>';
       // A145: an approved/sent PO with no receiving yet — nudge to receive the goods.
       const rcBadge = (!poReceived[String(p.poNo)] && (st === 'Approved' || st === 'Sent'))
-        ? ` <span class="flow-badge" style="background:rgba(245,158,11,0.14);color:#b45309;" title="Approved but no materials receiving recorded yet">not received</span>` : '';
+        ? ` <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" title="Approved but no materials receiving recorded yet">not received</span>` : '';
       return `<tr><td>${flowEsc(p.poNo)}${rcBadge}</td><td>${soCell}</td><td>${flowDate(p.date)}</td><td>${flowEsc(p.supplier)}</td>
       <td>${flowEsc(p.currency)}</td><td class="num">${flowMoney(p.total, p.currency)}</td>
       <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td><td>${p.items.length}</td>
-      <td>${p.pdfLink ? `<a href="${flowEsc(p.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>'}</td>
+      <td>${p.pdfLink ? `<a href="${flowEsc(p.pdfLink)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--hx-ink-3);">—</span>'}</td>
       <td style="white-space:nowrap;">${poActions(p)}</td></tr>`;
     }).join('')}</tbody></table>`;
-  } catch (e) { c.innerHTML = `<p style="color:#ef4444;">${flowEsc(e.message)}</p>`; }
+  } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
 function poActions(p) {
