@@ -1,0 +1,96 @@
+/* director-pages.css — A288 · the director's three reference pages on the shared system.
+ *
+ * Linked after css/director.css by director-expenses.html (body.dh.dh-expenses),
+ * director-sales-orders.html (body.dh.dh-so) and director-emails.html (body.dh.dh-emails). The
+ * shell (rail + column, glass, buttons, fields, tables, both themes) comes from director.css; this
+ * file is the kit those pages share — ranking tables with a classed bar, one control bar, a
+ * segmented status control, expandable line items — plus the mailbox's chips and badges rebuilt in
+ * brand colours. Every selector hangs off body.dh. */
+
+/* ── the analytics pair and the ranking tables ───────────────────────────────────────────────── */
+body.dh .dx-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+body.dh .dx-panel { border: 1px solid var(--dh-hair-2); border-radius: var(--dh-r-md); background: var(--dh-glass-solid); padding: 14px 16px; min-width: 0; }
+body.dh .dx-panel h3 { margin: 0 0 8px; font: 700 13px/1.3 var(--dh-text); color: var(--dh-ink); }
+body.dh .dx-rank { width: 100%; border-collapse: collapse; font: 400 12.5px/1.4 var(--dh-text); }
+body.dh .dx-rank th { text-align: left; padding: 6px 6px; font: 600 11px/1.3 var(--dh-text); color: var(--dh-ink-3); border-bottom: 1px solid var(--dh-hair-2); white-space: nowrap; }
+body.dh .dx-rank td { padding: 8px 6px; border-top: 1px solid var(--dh-hair-2); color: var(--dh-ink); font-variant-numeric: tabular-nums; vertical-align: middle; }
+body.dh .dx-rank tr:first-child td { border-top: 0; }
+body.dh .dx-rank td.dim { color: var(--dh-ink-3); }
+body.dh .dx-rank td.tot { font: 800 13px/1.3 var(--dh-display); color: var(--dh-navy-text); }
+body.dh .dx-rank .dx-bar { display: block; height: 3px; border-radius: var(--dh-r-pill); background: var(--dh-navy); width: calc(var(--dh-w, 0) * 100%); margin-top: 5px; transform-origin: left center; transition: width .5s var(--dh-ease); }
+body.dh .dx-rank .dx-bar.cyan { background: var(--dh-cyan); }
+body.dh .dx-rank td.dh-empty { text-align: left; padding: 10px 6px; }
+
+/* ── one control bar ─────────────────────────────────────────────────────────────────────────── */
+body.dh .dx-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+body.dh .dx-tools .grow { flex: 1 1 220px; min-width: 200px; }
+body.dh .dx-tools label { font: 600 11.5px/1.3 var(--dh-text); color: var(--dh-ink-2); }
+body.dh .dx-count { font: 500 12px/1.4 var(--dh-text); color: var(--dh-ink-3); margin: 0 0 10px; }
+body.dh .dx-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--dh-r-pill); background: var(--dh-inset); border: 1px solid var(--dh-hair-2); }
+body.dh .dx-tab { padding: 6px 12px; border-radius: var(--dh-r-pill); border: 0; background: transparent; color: var(--dh-ink-2); font: 600 12px/1.2 var(--dh-text); cursor: pointer; transition: background .15s var(--dh-ease), color .15s var(--dh-ease); }
+body.dh .dx-tab:hover { color: var(--dh-ink); }
+body.dh .dx-tab.active { background: var(--dh-navy); color: #fff; }
+
+/* ── the main tables ─────────────────────────────────────────────────────────────────────────── */
+body.dh .dx-table td.dim { color: var(--dh-ink-3); }
+body.dh .dx-table td.tot { font-weight: 700; color: var(--dh-navy-text); }
+body.dh .dx-table td.desc { white-space: normal; min-width: 220px; }
+body.dh .dx-pill { display: inline-block; padding: 1px 8px; border-radius: var(--dh-r-pill); font: 600 10.5px/1.6 var(--dh-text); background: var(--dh-navy-soft); color: var(--dh-navy-text); margin-left: 4px; }
+body.dh .dx-table tr.main-row { cursor: pointer; }
+body.dh .dx-table tr.items-row td { padding: 0; background: var(--dh-inset); }
+body.dh .dx-table tr.items-row.hidden { display: none; }
+body.dh .dx-inner { padding: 10px 14px 12px 44px; }
+body.dh .dx-items { width: 100%; border-collapse: collapse; font: 400 12px/1.4 var(--dh-text); }
+body.dh .dx-items th { text-align: left; padding: 6px 8px; font: 600 11px/1.3 var(--dh-text); color: var(--dh-ink-3); position: static; background: transparent; border-bottom: 1px solid var(--dh-hair-2); }
+body.dh .dx-items td { padding: 6px 8px; color: var(--dh-ink); border-top: 1px solid var(--dh-hair-2); border-bottom: 0; background: transparent; }
+body.dh .dx-items tr:first-child td { border-top: 0; }
+body.dh .dx-chevron { display: inline-flex; color: var(--dh-ink-3); transition: transform .18s var(--dh-ease); }
+body.dh .dx-chevron svg { width: 14px; height: 14px; }
+body.dh .dx-chevron.open { transform: rotate(90deg); color: var(--dh-navy-text); }
+body.dh .dx-note { font: 400 12px/1.5 var(--dh-text); color: var(--dh-ink-3); padding: 6px 0; }
+
+/* ── the rail on these pages ─────────────────────────────────────────────────────────────────── */
+body.dh .dh-rail-kicker { font: 700 12px/1.3 var(--dh-text); color: var(--dh-ink-2); letter-spacing: 0; }
+body.dh .dh-rail > .dh-btn { align-self: flex-start; }
+body.dh .dh-slab .v.em-who { font: 700 15px/1.3 var(--dh-text); letter-spacing: 0; word-break: break-all; min-height: 20px; }
+body.dh .em-card { background: var(--dh-glass); -webkit-backdrop-filter: var(--dh-blur); backdrop-filter: var(--dh-blur); border: 1px solid var(--dh-glass-line); border-radius: var(--dh-r-lg); box-shadow: var(--dh-sh-2); }
+
+/* ── the mailbox ─────────────────────────────────────────────────────────────────────────────── */
+body.dh .em-setup { text-align: center; padding: 28px 16px; }
+body.dh .em-setup .ic { width: 44px; height: 44px; border-radius: 50%; background: var(--dh-navy-soft); color: var(--dh-navy-text); display: inline-grid; place-items: center; }
+body.dh .em-setup .ic svg { width: 20px; height: 20px; }
+body.dh .em-setup h2 { margin: 12px 0 6px; font: 700 16px/1.3 var(--dh-text); color: var(--dh-ink); }
+body.dh .em-setup p { color: var(--dh-ink-2); font: 400 13px/1.5 var(--dh-text); margin: 0 auto 14px; max-width: 48ch; }
+body.dh .em-tab .cnt { font: 600 11px/1.3 var(--dh-text); opacity: .8; margin-left: 4px; }
+body.dh .em-cats { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+body.dh .em-chip { padding: 4px 10px; border-radius: var(--dh-r-pill); font: 600 11.5px/1.4 var(--dh-text); cursor: pointer; border: 1px solid var(--dh-hair); background: var(--dh-glass-solid); color: var(--dh-ink-2); }
+body.dh .em-chip b { font-weight: 700; color: var(--dh-ink-3); margin-left: 2px; }
+body.dh .em-chip:hover { border-color: var(--dh-navy-line); color: var(--dh-ink); }
+body.dh .em-chip.active { background: var(--dh-navy-soft); border-color: var(--dh-navy-line); color: var(--dh-navy-text); }
+body.dh .em-chip.active b { color: var(--dh-navy-text); }
+body.dh .em-table { width: 100%; border-collapse: collapse; font: 400 12.5px/1.4 var(--dh-text); }
+body.dh .em-table th { text-align: left; padding: 9px 12px; font: 700 11px/1.3 var(--dh-text); color: var(--dh-ink-2); border-bottom: 1px solid var(--dh-hair); background: var(--dh-inset); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+body.dh .em-table td { padding: 9px 12px; border-bottom: 1px solid var(--dh-hair-2); vertical-align: top; color: var(--dh-ink); }
+body.dh .em-table tr:last-child td { border-bottom: 0; }
+body.dh .em-table tr:hover td { background: rgba(46,49,146,.05); }
+body.dh .em-table .subj { font-weight: 600; }
+body.dh .em-from { color: var(--dh-ink-2); }
+body.dh .em-from .addr { color: var(--dh-ink-3); font-size: 11.5px; }
+body.dh .em-date { white-space: nowrap; color: var(--dh-ink-3); font-size: 12px; }
+body.dh .cat-badge { display: inline-block; padding: 2px 9px; border-radius: var(--dh-r-pill); font: 700 10.5px/1.5 var(--dh-text); white-space: nowrap; background: var(--dh-inset); color: var(--dh-ink-3); }
+body.dh .cat-rfq { background: var(--dh-cyan-soft); color: var(--dh-cyan-ink); }
+body.dh .cat-po { background: var(--dh-navy-soft); color: var(--dh-navy-text); }
+body.dh .cat-finance { background: transparent; color: var(--dh-navy-text); border: 1px solid var(--dh-navy-line); }
+body.dh .cat-supplier, body.dh .cat-internal { background: var(--dh-inset); color: var(--dh-ink-2); }
+body.dh .cat-promo, body.dh .cat-other { background: var(--dh-inset); color: var(--dh-ink-3); }
+body.dh .dr-empty { padding: 18px; text-align: center; color: var(--dh-ink-3); font: 400 12.5px/1.5 var(--dh-text); }
+body.dh .dr-empty.dh-error { color: var(--dh-red); background: transparent; border: 0; }
+
+/* ── responsive ──────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  body.dh .dx-two { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  body.dh .dx-inner { padding-left: 16px; }
+  body.dh .dx-tools .grow { flex-basis: 100%; }
+}

@@ -183,6 +183,35 @@ async function loadPeriod() {
   renderHoursGrid('B');
   renderPayGrid('A');
   renderPayGrid('B');
+  _prefillEmployerShare(periodA, periodB);   // A288 — fire-and-forget; never delays the grids
+}
+
+/* A288 — the employer share was only ever read from the two inputs and never persisted, so the
+   rail's "employer share" read ₱0.00 on every load. The payroll-approvals ledger stores the share
+   with every submitted cutoff: when an input is empty, carry the latest submitted figure for that
+   period (else the newest submission overall). The director's own figure always wins — a filled
+   input is never overwritten. Outside loadPeriod's Promise.all on purpose: the older suites stub
+   the payroll reads by name and pin that literal, and this must be free to fail quietly. */
+async function _prefillEmployerShare(pA, pB) {
+  if (typeof apiGetPayrollApprovals !== 'function') return;
+  let rows = [];
+  try { rows = ((await apiGetPayrollApprovals()) || {}).data || []; } catch (e) { return; }
+  if (!Array.isArray(rows) || !rows.length) return;
+  const newestFirst = (list) => list.slice().sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+  const newest = newestFirst(rows)[0];
+  let touched = false;
+  [['A', pA], ['B', pB]].forEach(([c, p]) => {
+    const el = document.getElementById('employerShare' + c);
+    if (!el || String(el.value || '').trim() !== '') return;
+    const src = newestFirst(rows.filter(r => r.period === p))[0] || newest;
+    const v = src && src.totals && Number(src.totals.employerShare);
+    if (!v || isNaN(v)) return;
+    el.value = v.toFixed(2);
+    if (el.classList) el.classList.add('dh-prefilled');
+    el.title = 'Carried from ' + (src.cutoffLabel || '') + ' ' + (src.period || '');
+    touched = true;
+  });
+  if (touched) _updateKpis();
 }
 
 // ── EE: Load ──────────────────────────────────────────────────
@@ -2089,11 +2118,21 @@ function _updateKpis() {
     const net = gross - ded;
     set('spotGross', peso(gross));
     set('spotDed', peso(ded));
-    set('spotTotal', peso(net + share));
+    // A288 — gross + share: the approval document (:1669), the stored totalPayrollCost and the
+    // Pulse trend all define total payroll cost this way; the rail used to say net + share.
+    set('spotTotal', peso(gross + share));
     set('kpiNet', peso(net));
     set('kpiShare', peso(share));
     const tag = document.getElementById('spotTag');
     if (tag) tag.textContent = C === 'A' ? '1st Cutoff' : '2nd Cutoff';
+    // A288 — the page's rail (composition bar) and the Pulse band listen; the numbers above stay the
+    // only thing this function writes. Guarded: the test harness has no CustomEvent.
+    if (typeof CustomEvent === 'function' && typeof document.dispatchEvent === 'function') {
+      document.dispatchEvent(new CustomEvent('dh:kpis', { detail: {
+        cutoff: C, gross, ded, net, share, total: gross + share,
+        active: _employees.filter(e => String(e.status) === 'Active').length,
+      } }));
+    }
   }
   if (_thirteenthData.length) {
     set('kpi13', peso(_thirteenthData.reduce((s, r) => s + (Number(r.thirteenthMonth) || 0), 0)));

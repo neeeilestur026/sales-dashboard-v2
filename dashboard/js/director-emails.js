@@ -62,7 +62,7 @@ function showSetup() {
   const box = document.getElementById('setupBox');
   box.style.display = '';
   box.innerHTML = `<div class="em-card em-setup">
-    <div class="ic">✉️</div>
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
     <h2>Connect your GoDaddy mailbox</h2>
     <p>To feed your Inbox, Sent and Spam folders here, connect your GoDaddy email once. Your password is encrypted and never shown again.</p>
     <a href="email-setup.html" class="btn btn-primary">Connect Email</a>
@@ -121,7 +121,7 @@ async function loadFolder(folder, force) {
     renderList();
   } catch (e) {
     deEmails = [];
-    box.innerHTML = `<div class="dr-empty" style="color:#ef4444;">${_esc(e.message)}</div>`;
+    box.innerHTML = `<div class="dr-empty dh-error">${_esc(e.message)}</div>`;
   }
 }
 
@@ -153,10 +153,10 @@ function renderList() {
     ? deFetchedAt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false })
     : '—';
   document.getElementById('metaLine').textContent =
-    `${rows.length} message${rows.length === 1 ? '' : 's'} · last ${deDays} days · newest first · updated ${stamp}`;
+    `${rows.length} message${rows.length === 1 ? '' : 's'} from the last ${deDays} days, newest first, read at ${stamp}`;
 
   const box = document.getElementById('listBox');
-  if (!rows.length) { box.innerHTML = '<div class="dr-empty">No messages.</div>'; return; }
+  if (!rows.length) { box.innerHTML = '<div class="dr-empty">No messages in this folder for the selected days.</div>'; return; }
 
   const head = isSent
     ? '<th>To</th><th>Subject</th><th>Sent</th>'

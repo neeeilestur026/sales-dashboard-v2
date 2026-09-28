@@ -6,288 +6,304 @@
   <title>Director Dashboard</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
-  <!-- A285 — this page's whole look. Director-only; every rule is scoped to body.dh. -->
+  <!-- A288 — the director's shared system (tokens, both themes, glass, buttons, tables) then this page's own look. -->
+  <link rel="stylesheet" href="css/director.css">
   <link rel="stylesheet" href="css/director-home.css">
 </head>
 <body class="dh">
+  <script src="js/director-theme.js"></script>
   <header class="navbar" id="navbar"></header>
 
   <main class="main-content dh-main">
+    <div class="dh-deck">
 
-    <!-- ══ ZONE A · Today ══════════════════════════════════════════════════════════════════════ -->
-    <header class="dh-hband dh-reveal">
-      <div class="left">
-        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
-        <div>
-          <div class="eyebrow">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 5.2 5.6.6-4.2 3.9 1.2 5.6L12 14.6 7 17.3l1.2-5.6L4 7.8l5.6-.6z"/></svg>
-            Director
-          </div>
-          <h1>Director Dashboard</h1>
-          <p id="greeting">Approvals first, the business at a glance, then payroll — everything that needs you is on this page.</p>
+      <!-- ══ THE RAIL — sticky: the payroll position, the theme, and where to go ═══════════════ -->
+      <aside class="dh-rail" id="rail">
+        <div class="dh-rail-date">
+          <b id="hbDay">—</b><span id="hbMon">&nbsp;</span>
+          <button type="button" class="dh-theme" id="themeToggle" aria-pressed="false" aria-label="Dark theme">
+            <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <span>Dark</span>
+          </button>
         </div>
+
+        <section class="dh-slab" id="spot">
+          <div class="cap"><span class="l">Payroll cost</span><span class="tag" id="spotTag">Current cutoff</span></div>
+          <div class="v" id="spotTotal">₱—</div>
+          <div class="sub">Gross pay plus employer share</div>
+          <div class="dh-comp" aria-hidden="true"><i class="net"></i><i class="ded"></i><i class="share"></i></div>
+          <div class="dh-comp-key"><span><i class="net"></i>Net pay</span><span><i class="ded"></i>Deductions</span><span><i class="share"></i>Employer share</span></div>
+          <dl class="dh-facts">
+            <div><dt>Gross pay</dt><dd id="spotGross">₱—</dd></div>
+            <div><dt>Deductions</dt><dd id="spotDed">₱—</dd></div>
+            <div><dt>Net pay</dt><dd id="kpiNet">₱—</dd></div>
+            <div><dt>Employer share</dt><dd id="kpiShare">₱—</dd></div>
+            <div><dt>Active employees</dt><dd id="kpiActive">—</dd></div>
+            <div><dt>13th month accrued</dt><dd class="accent" id="kpi13">₱—</dd></div>
+          </dl>
+        </section>
+
+        <nav class="dh-rail-nav" aria-label="On this page">
+          <a href="#inbox">Needs you <span class="dh-count" id="inboxCount">0</span></a>
+          <a href="#pulse">Pulse</a>
+          <a href="#team">Team</a>
+          <a href="#payroll">Payroll</a>
+          <div class="dh-rail-tabs">
+            <button type="button" class="dh-jump" data-tab="ee">Employees</button>
+            <button type="button" class="dh-jump" data-tab="hoursA">Hours 1</button>
+            <button type="button" class="dh-jump" data-tab="payA">Pay 1</button>
+            <button type="button" class="dh-jump" data-tab="hoursB">Hours 2</button>
+            <button type="button" class="dh-jump" data-tab="payB">Pay 2</button>
+            <button type="button" class="dh-jump" data-tab="thirteenth">13th month</button>
+            <button type="button" class="dh-jump" data-tab="deductions">Deductions</button>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- ══ THE COLUMN ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="dh-col">
+        <header class="dh-mast">
+          <div>
+            <h1>Director</h1>
+            <p id="greeting">Decide what is waiting, check the team, then run payroll.</p>
+          </div>
+          <a href="product-finder.html" class="dh-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.9 2.9M16.9 16.9l2.9 2.9M1 12h4M19 12h4M4.2 19.8l2.9-2.9M16.9 7.1l2.9-2.9"/></svg>
+            Product Finder
+          </a>
+        </header>
+
+        <!-- The one inbox. Three loaders write into their own containers; this section only PLACES
+             them (A146 action center, A190 approvals queue, the purchase-order strip) and counts. -->
+        <section class="dh-glass dh-inbox" id="inbox" data-filter="all">
+          <div class="dh-head">
+            <h2>Needs you</h2>
+            <div class="dh-chips">
+              <button type="button" class="dh-chip on" data-k="all">All</button>
+              <button type="button" class="dh-chip" data-k="approve">Approvals <span class="n">0</span></button>
+              <button type="button" class="dh-chip" data-k="act">Follow-ups <span class="n">0</span></button>
+              <button type="button" class="dh-chip" data-k="po">Purchase orders <span class="n">0</span></button>
+            </div>
+            <div class="dh-actions">
+              <button type="button" class="dh-btn sm" id="dirApprRefresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+          <div class="dh-inbox-sec" data-inbox="approve">
+            <div class="dh-sec-label">Awaiting your approval</div>
+            <div id="dirApprovals"><div class="da-empty">Loading…</div></div>
+          </div>
+          <div class="dh-inbox-sec" data-inbox="act">
+            <div class="dh-sec-label">Follow-ups across the team</div>
+            <div id="flowActionCenter"></div>
+          </div>
+          <div class="dh-inbox-sec" data-inbox="po" hidden>
+            <div class="dh-sec-label">Purchase orders</div>
+            <section id="flowApprovalStrip" style="display:none;"></section>
+          </div>
+        </section>
+
+        <!-- Pulse — the trend band, drawn by js/director-pulse.js -->
+        <section class="dh-glass" id="pulse">
+          <div class="dh-head"><h2>Pulse</h2><span class="dh-meta" id="pulseMeta">Payroll over the last cutoffs, the 13th month, the headcount, and what is being collected.</span></div>
+          <div class="dh-pulse">
+            <div class="dh-chart" id="pulseCostBox">
+              <h3>Payroll cost per cutoff</h3>
+              <div class="dh-chart-host"><canvas id="pulseCost" aria-label="Payroll cost per cutoff" role="img"></canvas></div>
+              <div class="dh-chart-fb" id="pulseCostFallback" hidden></div>
+            </div>
+            <div class="dh-ring" id="pulseAccrual"><div class="dh-empty">Loading…</div></div>
+            <div class="dh-dots" id="pulseHeads"><div class="dh-empty">Loading…</div></div>
+            <div class="dh-ded" id="pulseDed"><div class="dh-empty">Loading…</div></div>
+          </div>
+        </section>
+
+        <!-- Team — A215 the quotation worklist grouped by rep; A216 this week's field plans -->
+        <section class="dh-glass" id="team">
+          <div class="dh-head"><h2>Team</h2></div>
+          <div class="dh-team">
+            <div class="dh-team-col" id="qtwCard">
+              <h3>Quotations the team owes</h3>
+              <div id="qtwPanel"></div>
+            </div>
+            <div class="dh-team-col" id="iwpCard">
+              <h3>Field plans this week</h3>
+              <div id="iwpPanel"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- A275 — shown only when the director personally has a salary deduction (salary-deduction-card.js) -->
+        <section class="dh-glass" id="myDeductionCard" style="display:none;"></section>
+
+        <!-- ══ Payroll workspace ══════════════════════════════════════════════════════════════ -->
+        <section class="dh-glass dh-work" id="payroll">
+          <div class="dh-head"><h2>Payroll workspace</h2></div>
+
+          <div class="dh-toolbar">
+            <div class="dh-seg">
+              <span class="dh-seg-ind"></span>
+              <div class="dh-seg-group">
+                <button type="button" class="dh-tab active" onclick="switchPayTab('ee')" id="tabEE"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Employees</button>
+              </div>
+              <div class="dh-seg-group">
+                <span class="dh-seg-label">1st cutoff</span>
+                <button type="button" class="dh-tab" onclick="switchPayTab('hoursA')" id="tabHoursA"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours</button>
+                <button type="button" class="dh-tab" onclick="switchPayTab('payA')" id="tabPayA"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay</button>
+              </div>
+              <div class="dh-seg-group">
+                <span class="dh-seg-label">2nd cutoff</span>
+                <button type="button" class="dh-tab" onclick="switchPayTab('hoursB')" id="tabHoursB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours</button>
+                <button type="button" class="dh-tab" onclick="switchPayTab('payB')" id="tabPayB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay</button>
+              </div>
+              <div class="dh-seg-group">
+                <button type="button" class="dh-tab" onclick="switchPayTab('thirteenth')" id="tabThirteenth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>13th month</button>
+              </div>
+              <div class="dh-seg-group">
+                <button type="button" class="dh-tab" onclick="switchPayTab('deductions')" id="tabDeductions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>Deductions</button>
+              </div>
+            </div>
+            <div class="dh-period">
+              <label for="payMonth">Period</label>
+              <select id="payMonth">
+                <option value="01">January</option><option value="02">February</option>
+                <option value="03">March</option><option value="04">April</option>
+                <option value="05">May</option><option value="06">June</option>
+                <option value="07">July</option><option value="08">August</option>
+                <option value="09">September</option><option value="10">October</option>
+                <option value="11">November</option><option value="12">December</option>
+              </select>
+              <input type="number" id="payYear" value="2026" min="2020" max="2099" aria-label="Year">
+              <button type="button" class="btn-sm primary" onclick="loadPeriod()">Load</button>
+              <span class="dh-pill" id="periodLabel">Select a period and load it</span>
+            </div>
+          </div>
+
+          <!-- Employees -->
+          <section class="dh-panel active" id="panelEE">
+            <div class="dh-panel-head">
+              <h3>Employee master list</h3>
+              <div class="dh-actions">
+                <button type="button" class="btn-sm primary" onclick="openEEModal(null)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  Add employee
+                </button>
+              </div>
+            </div>
+            <div class="dh-table-wrap">
+              <table class="pay-table" id="eeTable">
+                <thead>
+                  <tr><th>#</th><th>Last name</th><th>First name</th><th>Pay</th><th class="num">Daily rate (₱)</th><th class="num">Hourly rate (₱)</th><th class="num">Other income (₱)</th><th class="num">HDMF amt</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="eeBody"><tr><td colspan="10"><div class="dh-skel"><i></i><i></i><i></i></div></td></tr></tbody>
+              </table>
+            </div>
+            <!-- A198 — recent salary changes across everyone, so a raise is visible at a glance -->
+            <h4 class="dh-sub">Recent salary changes</h4>
+            <div id="rateChangesBox"><div class="dh-skel"><i></i><i></i></div></div>
+            <!-- A229 — the same, for incentives, so the cutoff's bonuses read without opening each person -->
+            <h4 class="dh-sub">Recent incentives</h4>
+            <div id="incentivesBox"><div class="dh-skel"><i></i><i></i></div></div>
+          </section>
+
+          <!-- Hours A -->
+          <section class="dh-panel" id="panelHoursA">
+            <div class="dh-panel-head"><h3 id="hoursATitle">1st Cutoff Timesheet — 26th prev month – 10th this month</h3></div>
+            <div id="hoursAGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
+            <div class="dh-savebar">
+              <button type="button" class="btn-sm primary" onclick="saveHours('A')">Save Hours A</button>
+              <button type="button" class="btn-sm" onclick="exportCutoff('A')">Export PDF</button>
+              <span id="saveHoursAMsg" class="save-msg" style="display:none;">Saved</span>
+            </div>
+          </section>
+
+          <!-- Pay A -->
+          <section class="dh-panel" id="panelPayA">
+            <div class="dh-panel-head"><h3>1st Cutoff Payroll Register</h3></div>
+            <div id="payAGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
+            <div class="dh-savebar">
+              <div class="employer-field"><label for="employerShareA">Employer share (₱)</label><input type="number" id="employerShareA" min="0" step="0.01" placeholder="0.00"><span class="hint">SSS, PhilHealth and Pag-IBIG. Carried from the last submitted cutoff when empty.</span></div>
+              <button type="button" class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
+              <button type="button" class="btn-sm" onclick="exportCutoff('A')">Export PDF</button>
+              <button type="button" class="btn-sm" onclick="downloadAllPayslips('A')">Payslips (all)</button>
+              <button type="button" class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
+              <span id="savePayAMsg" class="save-msg" style="display:none;">Saved</span>
+            </div>
+          </section>
+
+          <!-- Hours B -->
+          <section class="dh-panel" id="panelHoursB">
+            <div class="dh-panel-head"><h3 id="hoursBTitle">2nd Cutoff Timesheet — Days 16–end of month</h3></div>
+            <div id="hoursBGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
+            <div class="dh-savebar">
+              <button type="button" class="btn-sm primary" onclick="saveHours('B')">Save Hours B</button>
+              <button type="button" class="btn-sm" onclick="exportCutoff('B')">Export PDF</button>
+              <span id="saveHoursBMsg" class="save-msg" style="display:none;">Saved</span>
+            </div>
+          </section>
+
+          <!-- Pay B -->
+          <section class="dh-panel" id="panelPayB">
+            <div class="dh-panel-head"><h3>2nd Cutoff Payroll Register</h3></div>
+            <div id="payBGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
+            <div class="dh-savebar">
+              <div class="employer-field"><label for="employerShareB">Employer share (₱)</label><input type="number" id="employerShareB" min="0" step="0.01" placeholder="0.00"><span class="hint">SSS, PhilHealth and Pag-IBIG. Carried from the last submitted cutoff when empty.</span></div>
+              <button type="button" class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
+              <button type="button" class="btn-sm" onclick="exportCutoff('B')">Export PDF</button>
+              <button type="button" class="btn-sm" onclick="downloadAllPayslips('B')">Payslips (all)</button>
+              <button type="button" class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>
+              <span id="savePayBMsg" class="save-msg" style="display:none;">Saved</span>
+            </div>
+          </section>
+
+          <!-- 13th month -->
+          <section class="dh-panel" id="panelThirteenth">
+            <div class="dh-panel-head">
+              <h3>13th month pay</h3>
+              <div class="dh-actions">
+                <label class="dh-inline-label" for="thirteenthYear">Year</label>
+                <select id="thirteenthYear" class="dh-sel" onchange="load13thMonth()"></select>
+                <button type="button" class="btn-sm" onclick="load13thMonth()">Refresh</button>
+                <button type="button" class="btn-sm" onclick="export13thMonthExcel()">Export Excel</button>
+                <button type="button" class="btn-sm" onclick="print13thMonth()">Print or PDF</button>
+              </div>
+            </div>
+            <p class="dh-note">Computed from the payroll register: total basic pay earned in the selected year divided by 12. Inactive or resigned employees are prorated automatically, since their basic pay reflects only the months worked.</p>
+            <div class="dh-table-wrap">
+              <table class="pay-table" id="thirteenthTable">
+                <thead><tr><th>#</th><th>Last name</th><th>First name</th><th>Status</th><th class="num">Months worked</th><th class="num">Cutoffs</th><th class="num">Total basic pay (₱)</th><th class="num">13th month pay (₱)</th></tr></thead>
+                <tbody id="thirteenthBody"><tr><td colspan="8" class="dh-empty">Select a year to load.</td></tr></tbody>
+                <tfoot id="thirteenthFoot"></tfoot>
+              </table>
+            </div>
+          </section>
+
+          <!-- A275 — Salary deductions: an employee buys something and repays it from payroll -->
+          <section class="dh-panel" id="panelDeductions">
+            <div class="dh-panel-head">
+              <h3>Salary deductions</h3>
+              <div class="dh-actions">
+                <button type="button" class="btn-sm" onclick="loadSalaryDeductions()">Refresh</button>
+                <button type="button" class="btn-sm primary" onclick="openDeductionModal('')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  New deduction
+                </button>
+              </div>
+            </div>
+            <p class="dh-note">
+              Each record is a signed authorization already agreed on paper. The instalment appears in the pay register as
+              <strong>Salary Ded.</strong> and on the payslip by name. A cutoff that cannot cover the full amount takes what it
+              can and the rest carries forward, so the per-cutoff figure never rises. Money is counted as collected only when the
+              cutoff is <em>approved</em>.
+            </p>
+            <div id="sdBody"><div class="dh-skel"><i></i><i></i><i></i></div></div>
+          </section>
+        </section>
       </div>
-      <!-- A165: the Product Finder (RFQ, match, cylinder selector, cross-ref, calculators, logbook) -->
-      <div class="right">
-        <a href="product-finder.html" class="dh-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.9 2.9M16.9 16.9l2.9 2.9M1 12h4M19 12h4M4.2 19.8l2.9-2.9M16.9 7.1l2.9-2.9"/></svg>
-          Product Finder
-        </a>
-      </div>
-    </header>
-
-    <section class="dh-grid">
-
-      <!-- The one inbox. Three loaders write into their own containers below; this card only PLACES
-           them (A146 action center, A190 approvals queue, the purchase-order strip) and counts. -->
-      <section class="dh-card dh-inbox span-12 dh-reveal" id="inbox" data-filter="all">
-        <div class="dh-card-head">
-          <span class="dh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg></span>
-          <h3>Needs you</h3>
-          <span class="dh-count" id="inboxCount">0</span>
-          <div class="dh-chips">
-            <button type="button" class="dh-chip on" data-k="all">All</button>
-            <button type="button" class="dh-chip" data-k="approve">Approvals <span class="n">0</span></button>
-            <button type="button" class="dh-chip" data-k="act">Follow-ups <span class="n">0</span></button>
-            <button type="button" class="dh-chip" data-k="po">Purchase orders <span class="n">0</span></button>
-          </div>
-          <div class="dh-actions">
-            <button type="button" class="dh-btn sm" id="dirApprRefresh">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
-              Refresh
-            </button>
-          </div>
-        </div>
-        <div class="dh-inbox-sec" data-inbox="approve">
-          <div class="dh-sec-label">Awaiting your approval</div>
-          <div id="dirApprovals"><div class="dh-empty">Loading…</div></div>
-        </div>
-        <div class="dh-inbox-sec" data-inbox="act">
-          <div class="dh-sec-label">Follow-ups across the team</div>
-          <div id="flowActionCenter"></div>
-        </div>
-        <div class="dh-inbox-sec" data-inbox="po" hidden>
-          <div class="dh-sec-label">Purchase orders</div>
-          <section id="flowApprovalStrip" style="display:none;"></section>
-        </div>
-      </section>
-
-      <!-- ══ ZONE B · Business at a glance ═════════════════════════════════════════════════════ -->
-      <div class="dh-sect span-12 dh-reveal"><div class="eyebrow">Business at a glance</div></div>
-
-      <section class="dh-spot span-4 dh-reveal" id="spot">
-        <div class="cap"><span class="l">Total payroll cost</span><span class="tag" id="spotTag">Current cutoff</span></div>
-        <div><div class="v" id="spotTotal">₱—</div><div class="sub">Net pay + employer share</div></div>
-        <div class="mini">
-          <div><div class="l">Gross</div><div class="v" id="spotGross">₱—</div></div>
-          <div><div class="l">Deductions</div><div class="v" id="spotDed">₱—</div></div>
-        </div>
-      </section>
-
-      <div class="dh-kpis span-8 dh-reveal">
-        <div class="dh-kpi">
-          <div class="top"><span class="l">Active employees</span><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span></div>
-          <div class="v" id="kpiActive">—</div>
-        </div>
-        <div class="dh-kpi">
-          <div class="top"><span class="l">Net pay (cutoff)</span><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></span></div>
-          <div class="v" id="kpiNet">₱—</div>
-        </div>
-        <div class="dh-kpi">
-          <div class="top"><span class="l">Employer share</span><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span></div>
-          <div class="v" id="kpiShare">₱—</div>
-        </div>
-        <div class="dh-kpi">
-          <div class="top"><span class="l">13th month accrual</span><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span></div>
-          <div class="v accent" id="kpi13">₱—</div>
-        </div>
-      </div>
-
-      <!-- A215 — the team's quotation worklist: the SAME engine the rep sees, grouped by whose work it is. -->
-      <section class="dh-card span-7 dh-reveal" id="qtwCard">
-        <div class="dh-card-head">
-          <span class="dh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg></span>
-          <h3>Quotations — what the team owes</h3>
-        </div>
-        <div id="qtwPanel"></div>
-      </section>
-
-      <!-- A216 — this week's field plans. The director approves an itinerary FIRST; the rep who submitted
-           nothing is the point, and only this panel can show them. -->
-      <section class="dh-card span-5 dh-reveal" id="iwpCard">
-        <div class="dh-card-head">
-          <span class="dh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
-          <h3>Field plans this week</h3>
-        </div>
-        <div id="iwpPanel"></div>
-      </section>
-
-      <!-- A275 — shown only when the director personally has a salary deduction (salary-deduction-card.js) -->
-      <section class="dh-card span-12" id="myDeductionCard" style="display:none;"></section>
-
-      <!-- ══ ZONE C · Payroll workspace ════════════════════════════════════════════════════════ -->
-      <div class="dh-sect span-12 dh-reveal"><div class="eyebrow">Payroll</div><h2>Payroll workspace</h2></div>
-
-      <div class="dh-toolbar span-12 dh-reveal">
-        <div class="dh-seg">
-          <span class="dh-seg-ind"></span>
-          <div class="dh-seg-group">
-            <button type="button" class="dh-tab active" onclick="switchPayTab('ee')" id="tabEE"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Employees</button>
-          </div>
-          <div class="dh-seg-group">
-            <span class="dh-seg-label">1st cutoff</span>
-            <button type="button" class="dh-tab" onclick="switchPayTab('hoursA')" id="tabHoursA"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours</button>
-            <button type="button" class="dh-tab" onclick="switchPayTab('payA')" id="tabPayA"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay</button>
-          </div>
-          <div class="dh-seg-group">
-            <span class="dh-seg-label">2nd cutoff</span>
-            <button type="button" class="dh-tab" onclick="switchPayTab('hoursB')" id="tabHoursB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Hours</button>
-            <button type="button" class="dh-tab" onclick="switchPayTab('payB')" id="tabPayB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pay</button>
-          </div>
-          <div class="dh-seg-group">
-            <button type="button" class="dh-tab" onclick="switchPayTab('thirteenth')" id="tabThirteenth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>13th Month</button>
-          </div>
-          <div class="dh-seg-group">
-            <button type="button" class="dh-tab" onclick="switchPayTab('deductions')" id="tabDeductions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>Deductions</button>
-          </div>
-        </div>
-        <div class="dh-period">
-          <label for="payMonth">Period</label>
-          <select id="payMonth">
-            <option value="01">January</option><option value="02">February</option>
-            <option value="03">March</option><option value="04">April</option>
-            <option value="05">May</option><option value="06">June</option>
-            <option value="07">July</option><option value="08">August</option>
-            <option value="09">September</option><option value="10">October</option>
-            <option value="11">November</option><option value="12">December</option>
-          </select>
-          <input type="number" id="payYear" value="2026" min="2020" max="2099" aria-label="Year">
-          <button type="button" class="btn-sm primary" onclick="loadPeriod()">Load</button>
-          <span class="dh-pill" id="periodLabel">Select a period and click Load</span>
-        </div>
-      </div>
-
-      <!-- Employees -->
-      <section class="dh-panel dh-card span-12 active" id="panelEE">
-        <div class="dh-card-head">
-          <h3>Employee master list</h3>
-          <div class="dh-actions">
-            <button type="button" class="btn-sm primary" onclick="openEEModal(null)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              Add employee
-            </button>
-          </div>
-        </div>
-        <div class="dh-table-wrap">
-          <table class="pay-table" id="eeTable">
-            <thead>
-              <tr><th>#</th><th>Last name</th><th>First name</th><th>Pay</th><th class="num">Daily rate (₱)</th><th class="num">Hourly rate (₱)</th><th class="num">Other income (₱)</th><th class="num">HDMF amt</th><th>Status</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="eeBody"><tr><td colspan="10"><div class="dh-skel"><i></i><i></i><i></i></div></td></tr></tbody>
-          </table>
-        </div>
-        <!-- A198 — recent salary changes across everyone, so a raise is visible at a glance -->
-        <h4 class="dh-sub">Recent salary changes</h4>
-        <div id="rateChangesBox"><div class="dh-skel"><i></i><i></i></div></div>
-        <!-- A229 — the same, for incentives, so the cutoff's bonuses read without opening each person -->
-        <h4 class="dh-sub">Recent incentives</h4>
-        <div id="incentivesBox"><div class="dh-skel"><i></i><i></i></div></div>
-      </section>
-
-      <!-- Hours A -->
-      <section class="dh-panel dh-card span-12" id="panelHoursA">
-        <div class="dh-card-head"><h3 id="hoursATitle">1st Cutoff Timesheet — 26th prev month – 10th this month</h3></div>
-        <div id="hoursAGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
-        <div class="dh-savebar">
-          <button type="button" class="btn-sm primary" onclick="saveHours('A')">Save Hours A</button>
-          <button type="button" class="btn-sm" onclick="exportCutoff('A')">Export PDF</button>
-          <span id="saveHoursAMsg" class="save-msg" style="display:none;">Saved!</span>
-        </div>
-      </section>
-
-      <!-- Pay A -->
-      <section class="dh-panel dh-card span-12" id="panelPayA">
-        <div class="dh-card-head"><h3>1st Cutoff Payroll Register</h3></div>
-        <div id="payAGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
-        <div class="dh-savebar">
-          <div class="employer-field"><label for="employerShareA">Employer share (₱)</label><input type="number" id="employerShareA" min="0" step="0.01" placeholder="0.00"><span class="hint">SSS / PhilHealth / Pag-IBIG — total payroll cost</span></div>
-          <button type="button" class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
-          <button type="button" class="btn-sm" onclick="exportCutoff('A')">Export PDF</button>
-          <button type="button" class="btn-sm" onclick="downloadAllPayslips('A')">Payslips (all)</button>
-          <button type="button" class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
-          <span id="savePayAMsg" class="save-msg" style="display:none;">Saved!</span>
-        </div>
-      </section>
-
-      <!-- Hours B -->
-      <section class="dh-panel dh-card span-12" id="panelHoursB">
-        <div class="dh-card-head"><h3 id="hoursBTitle">2nd Cutoff Timesheet — Days 16–end of month</h3></div>
-        <div id="hoursBGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
-        <div class="dh-savebar">
-          <button type="button" class="btn-sm primary" onclick="saveHours('B')">Save Hours B</button>
-          <button type="button" class="btn-sm" onclick="exportCutoff('B')">Export PDF</button>
-          <span id="saveHoursBMsg" class="save-msg" style="display:none;">Saved!</span>
-        </div>
-      </section>
-
-      <!-- Pay B -->
-      <section class="dh-panel dh-card span-12" id="panelPayB">
-        <div class="dh-card-head"><h3>2nd Cutoff Payroll Register</h3></div>
-        <div id="payBGrid"><div class="dh-skel"><i></i><i></i><i></i></div></div>
-        <div class="dh-savebar">
-          <div class="employer-field"><label for="employerShareB">Employer share (₱)</label><input type="number" id="employerShareB" min="0" step="0.01" placeholder="0.00"><span class="hint">SSS / PhilHealth / Pag-IBIG — total payroll cost</span></div>
-          <button type="button" class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
-          <button type="button" class="btn-sm" onclick="exportCutoff('B')">Export PDF</button>
-          <button type="button" class="btn-sm" onclick="downloadAllPayslips('B')">Payslips (all)</button>
-          <button type="button" class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>
-          <span id="savePayBMsg" class="save-msg" style="display:none;">Saved!</span>
-        </div>
-      </section>
-
-      <!-- 13th month -->
-      <section class="dh-panel dh-card span-12" id="panelThirteenth">
-        <div class="dh-card-head">
-          <h3>13th month pay</h3>
-          <div class="dh-actions">
-            <label class="dh-seg-label" for="thirteenthYear">Year</label>
-            <select id="thirteenthYear" class="dh-sel" onchange="load13thMonth()"></select>
-            <button type="button" class="btn-sm" onclick="load13thMonth()">Refresh</button>
-            <button type="button" class="btn-sm" onclick="export13thMonthExcel()">Export Excel</button>
-            <button type="button" class="btn-sm" onclick="print13thMonth()">Print / PDF</button>
-          </div>
-        </div>
-        <p class="dh-note">Auto-computed from the payroll register: total basic pay earned in the selected year ÷ 12. Inactive or resigned employees are prorated automatically, since their basic pay reflects only the months worked.</p>
-        <div class="dh-table-wrap">
-          <table class="pay-table" id="thirteenthTable">
-            <thead><tr><th>#</th><th>Last name</th><th>First name</th><th>Status</th><th class="num">Months worked</th><th class="num">Cutoffs</th><th class="num">Total basic pay (₱)</th><th class="num">13th month pay (₱)</th></tr></thead>
-            <tbody id="thirteenthBody"><tr><td colspan="8" class="dh-empty">Select a year to load.</td></tr></tbody>
-            <tfoot id="thirteenthFoot"></tfoot>
-          </table>
-        </div>
-      </section>
-
-      <!-- A275 — Salary deductions: an employee buys something and repays it from payroll -->
-      <section class="dh-panel dh-card span-12" id="panelDeductions">
-        <div class="dh-card-head">
-          <h3>Salary deductions</h3>
-          <div class="dh-actions">
-            <button type="button" class="btn-sm" onclick="loadSalaryDeductions()">Refresh</button>
-            <button type="button" class="btn-sm primary" onclick="openDeductionModal('')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              New deduction
-            </button>
-          </div>
-        </div>
-        <p class="dh-note">
-          Each record is a signed authorization already agreed on paper. The instalment appears in the pay register as
-          <strong>Salary Ded.</strong> and on the payslip by name. A cutoff that cannot cover the full amount takes what it
-          can and the rest carries forward — the per-cutoff figure never rises. Money is counted as collected only when the
-          cutoff is <em>approved</em>.
-        </p>
-        <div id="sdBody"><div class="dh-skel"><i></i><i></i><i></i></div></div>
-      </section>
-
-    </section>
+    </div>
   </main>
 
   <!-- Salary-deduction modal: the whole content is built by openDeductionModal (.modal-box inside) -->
@@ -304,21 +320,21 @@
            statutory contribution. Sits above Daily Rate because it decides whether Daily Rate matters at all. -->
       <div class="dh-field"><label for="eePayType">Pay type</label>
         <select id="eePayType" onchange="_eeSyncPayType()">
-          <option value="Hourly">Hourly — paid from recorded hours</option>
-          <option value="Fixed">Fixed salary — same amount every cutoff</option>
+          <option value="Hourly">Hourly, paid from recorded hours</option>
+          <option value="Fixed">Fixed salary, the same amount every cutoff</option>
         </select></div>
       <div class="dh-field" id="eeFixedRow" style="display:none;">
-        <label for="eeFixedAmount">Fixed amount (₱) <span class="lc">— per cutoff, twice a month</span></label>
+        <label for="eeFixedAmount">Fixed amount (₱) <span class="lc">per cutoff, twice a month</span></label>
         <input type="number" id="eeFixedAmount" min="0" step="0.01" placeholder="0.00" oninput="_eeCheckPayChange()">
         <div class="help">Paid in full on both cutoffs whatever the hours. No Pag-IBIG, SSS or PhilHealth; holiday pay does not apply. Withholding tax, cash advances and incentives still do.</div>
       </div>
       <div class="dh-field" id="eeDailyRow"><label for="eeDailyRate">Daily rate (₱)</label><input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00"></div>
-      <div class="dh-field"><label for="eeOtherIncome">Other income (₱) <span class="lc">— e.g. allowances, per 2nd cutoff</span></label><input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="dh-field"><label for="eeOtherIncome">Other income (₱) <span class="lc">e.g. allowances, per 2nd cutoff</span></label><input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00"></div>
       <div class="dh-field"><label for="eeHdmf">HDMF / Pag-IBIG amount (₱)</label><input type="number" id="eeHdmf" min="0" step="0.01" placeholder="100.00"></div>
       <div class="dh-field"><label for="eeStatus">Status</label><select id="eeStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
       <!-- A198 — revealed only when the pay changes on an edit, so the raise is recorded with a date + reason -->
       <div class="dh-banner ok" id="eePayChange" style="display:none;">
-        <strong id="eePayChangeMsg">Pay change — recorded in the salary history</strong>
+        <strong id="eePayChangeMsg">Pay change, recorded in the salary history</strong>
         <div class="dh-field"><label for="eeEffectiveDate">Effective date</label><input type="date" id="eeEffectiveDate"></div>
         <div class="dh-field"><label for="eeReason">Reason</label><input type="text" id="eeReason" placeholder="e.g. annual increase"></div>
       </div>
@@ -360,7 +376,7 @@
         <label for="incReason">Reason <span class="lc">(shows in this employee's history)</span></label>
         <input type="text" id="incReason" maxlength="120" placeholder="e.g. no absences for the whole cutoff">
       </div>
-      <p class="dh-note">This is paid once, in this cutoff only — it will not carry over to the next one. It adds to gross pay and take-home, and does not change SSS or PhilHealth.</p>
+      <p class="dh-note">This is paid once, in this cutoff only. It will not carry over to the next one. It adds to gross pay and take-home, and does not change SSS or PhilHealth.</p>
       <p id="incAddMsg" class="dh-error-text"></p>
       <div class="modal-actions">
         <button type="button" class="btn-sm" onclick="closeIncentiveAdd()">Cancel</button>
@@ -390,22 +406,28 @@
   <script src="js/itinerary-week.js"></script>       <!-- A216: iwTime12 + the engine the panel shares with the full page -->
   <script src="js/itinerary-week-panel.js"></script> <!-- A216 -->
   <script src="js/director-approvals.js"></script>   <!-- A190 -->
+  <script src="js/director-pulse.js"></script>       <!-- A288: the Pulse band -->
   <script>
-    /* A285 — the page's own glue: the date pill, the purchase-order strip, the three panel mounts, the
-       inbox (chips + count), and the motion layer. Page-local: the only global it defines on purpose
-       is dhSetNumber, which director-home.js calls when it exists. Nothing here shadows esc/peso. */
+    /* A288 — the page's own glue: the date, the purchase-order strip, the three panel mounts, the
+       inbox (chips + count), the rail (composition bar, jumps, active link), the one load moment,
+       and the tab indicator. The theme toggle is wired by js/director-theme.js, shared by all four
+       director pages. Page-local: the only global it defines on purpose is
+       dhSetNumber, which director-home.js calls when it exists. Every browser API is feature-checked
+       so the script also runs inside the test harness's bare DOM. */
     (function () {
       'use strict';
       document.body.classList.add('dh-js');   // the CSS shows everything without this class — scripting-off safety
       var REDUCED = false;
       try { REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
       var $ = function (id) { return document.getElementById(id); };
+      var on = function (target, ev, fn) { if (target && typeof target.addEventListener === 'function') target.addEventListener(ev, fn); };
+      var later = function (fn, ms) { return setTimeout(fn, ms); };
 
-      // ── Date pill ──
+      // ── Date ──
       (function () {
         var d = new Date();
         var dd = $('hbDay'); if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-        var dm = $('hbMon'); if (dm) dm.innerHTML = d.toLocaleDateString('en-US', { weekday: 'short' }) + ',<br>' + d.toLocaleDateString('en-US', { month: 'long' });
+        var dm = $('hbMon'); if (dm) dm.textContent = d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleDateString('en-US', { month: 'long' });
       })();
 
       // ── Numbers count up. Writes the exact final text on the last frame; synchronous under reduced motion. ──
@@ -420,7 +442,7 @@
         var decimals = ((text.split('.')[1] || '').match(/^[0-9]*/) || [''])[0].length;
         var t0 = performance.now(), dur = 650;
         if (el._dhRaf) cancelAnimationFrame(el._dhRaf);
-        el.classList.remove('dh-tick'); void el.offsetWidth; el.classList.add('dh-tick');
+        if (el.classList) { el.classList.remove('dh-tick'); void el.offsetWidth; el.classList.add('dh-tick'); }
         var step = function (now) {
           var p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
           var v = from + (to - from) * e;
@@ -441,7 +463,6 @@
           fetchFlow('getPurchaseOrders').catch(function () { return { data: [] }; })
         ]).then(function (r) {
           // A271 — the director no longer approves quotations, so this stays at zero for them.
-          // Purchase orders are unchanged: that chain still ends at 'Pending Management'.
           var qn = 0;
           var po = r[1];
           var pn = ((po && po.data) || []).filter(function (x) { return x.status === 'Pending Management'; }).length;
@@ -457,12 +478,12 @@
         }).catch(function () {});
       }
 
-      // ── Panel mounts (staggered, as before, so the payroll calls go first) ──
-      document.addEventListener('DOMContentLoaded', function () {
+      // ── Panel mounts (staggered, so the payroll calls go first) ──
+      on(document, 'DOMContentLoaded', function () {
         dhLoadPoStrip();
-        if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300);
-        if (typeof quotationTeamWorklist === 'function') setTimeout(function () { quotationTeamWorklist('qtwPanel'); }, 500);
-        if (typeof itineraryWeekPanel === 'function') setTimeout(function () { itineraryWeekPanel('iwpPanel'); }, 700);
+        if (typeof flowActionsStrip === 'function') later(function () { flowActionsStrip('flowActionCenter'); }, 300);
+        if (typeof quotationTeamWorklist === 'function') later(function () { quotationTeamWorklist('qtwPanel'); }, 500);
+        if (typeof itineraryWeekPanel === 'function') later(function () { itineraryWeekPanel('iwpPanel'); }, 700);
       });
 
       // ── The inbox: chips filter, counts follow whatever the three loaders render ──
@@ -486,7 +507,7 @@
           inbox.classList.toggle('zero', tot === 0);
           if (count) {
             dhSetNumber(count, String(tot));
-            if (last !== null && last !== tot) { count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop'); }
+            if (last !== null && last !== tot && count.classList) { count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop'); }
           }
           last = tot;
         }
@@ -497,14 +518,13 @@
           });
         }
         inbox.querySelectorAll('.dh-chip').forEach(function (ch) {
-          ch.addEventListener('click', function () {
+          on(ch, 'click', function () {
             inbox.setAttribute('data-filter', ch.getAttribute('data-k'));
             inbox.querySelectorAll('.dh-chip').forEach(function (x) { x.classList.toggle('on', x === ch); });
             inbox.querySelectorAll('.dh-inbox-sec').forEach(function (s) { s.classList.remove('dh-in'); void s.offsetWidth; s.classList.add('dh-in'); });
           });
         });
-        var rf = $('dirApprRefresh');
-        if (rf) rf.addEventListener('click', function () {
+        on($('dirApprRefresh'), 'click', function () {
           // daLoad (director-approvals.js) has its own listener on this button; this covers the other two sources.
           if (typeof flowActionsStrip === 'function') flowActionsStrip('flowActionCenter');
           dhLoadPoStrip();
@@ -512,32 +532,54 @@
         recount();
       })();
 
-      // ── Entrance reveal: in DOM order with a 60ms stagger, below-the-fold cards when they scroll into view ──
+      // ── The rail: composition bar from the KPI event, and the one load moment ──
       (function () {
-        var els = Array.prototype.slice.call(document.querySelectorAll('.dh-reveal'));
-        /* Arrive, then hand the element back: once the entrance has played (.55s) the reveal classes
-           come OFF, because .dh-reveal's transition (opacity, transform) would otherwise outlive it
-           and override the card's own hover transition — the lift's shadow would snap instead of
-           easing. A timer rather than transitionend: the event is skipped when a transition never
-           starts (a hidden or not-yet-painted card) and the classes would stay on for good. */
-        var arrive = function (el, delay) {
-          setTimeout(function () {
-            el.classList.add('in');
-            setTimeout(function () { el.classList.remove('dh-reveal', 'in'); }, 700);
-          }, delay || 0);
-        };
-        var showAll = function () { els.forEach(function (e) { if (e.classList.contains('dh-reveal') && !e.classList.contains('in')) arrive(e, 0); }); };
-        if (REDUCED || typeof IntersectionObserver !== 'function') { showAll(); return; }
-        var i = 0;
+        var armed = false, timer = null;
+        function loadMoment() {
+          if (armed || REDUCED || !document.body.classList) return;
+          armed = true;
+          document.body.classList.add('dh-load');
+          later(function () { document.body.classList.remove('dh-load'); }, 1400);
+        }
+        on(document, 'dh:kpis', function (ev) {
+          var d = (ev && ev.detail) || {};
+          var tot = (d.gross || 0) + (d.share || 0);
+          var comp = document.querySelector('.dh-comp');
+          if (comp && tot > 0) {
+            var set = function (cls, v) { var i = comp.querySelector('i.' + cls); if (i && i.style && typeof i.style.setProperty === 'function') i.style.setProperty('--dh-w', String(Math.max(0, Math.min(1, v / tot)))); };
+            set('net', d.net || 0); set('ded', d.ded || 0); set('share', d.share || 0);
+          }
+          if ((d.gross || 0) > 0) { clearTimeout(timer); loadMoment(); }
+        });
+        on(document, 'DOMContentLoaded', function () { timer = later(loadMoment, 1500); });
+      })();
+
+      // ── Rail jumps and the active section link ──
+      (function () {
+        var scrollTo = function (el) { if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }); };
+        document.querySelectorAll('.dh-jump[data-tab]').forEach(function (b) {
+          on(b, 'click', function () {
+            if (typeof switchPayTab === 'function') switchPayTab(b.getAttribute('data-tab'));
+            scrollTo($('payroll'));
+          });
+        });
+        var links = Array.prototype.slice.call(document.querySelectorAll('.dh-rail-nav a[href^="#"]'));
+        links.forEach(function (a) {
+          on(a, 'click', function (ev) {
+            var t = $(a.getAttribute('href').slice(1));
+            if (!t) return;
+            ev.preventDefault(); scrollTo(t);
+            if (typeof history !== 'undefined' && history.replaceState) history.replaceState(null, '', a.getAttribute('href'));
+          });
+        });
+        if (typeof IntersectionObserver !== 'function' || !links.length) return;
         var io = new IntersectionObserver(function (entries) {
           entries.forEach(function (en) {
             if (!en.isIntersecting) return;
-            var el = en.target; io.unobserve(el);
-            arrive(el, Math.min(i++ * 60, 480));
+            links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + en.target.id); });
           });
-        }, { threshold: .12, rootMargin: '0px 0px -5% 0px' });
-        els.forEach(function (e) { io.observe(e); });
-        setTimeout(showAll, 1500);   // nothing may stay invisible, whatever the observer did
+        }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
+        ['inbox', 'pulse', 'team', 'payroll'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
       })();
 
       // ── The tab indicator slides under whichever .dh-tab is active ──
@@ -546,26 +588,26 @@
         if (!seg || !ind) return;
         var tabs = Array.prototype.slice.call(seg.querySelectorAll('.dh-tab'));
         function place() {
-          var a = seg.querySelector('.dh-tab.active'); if (!a) return;
-          /* Measured against the TRACK, not offsetLeft: offsetLeft is relative to the nearest positioned
-             ancestor, and the tab sits inside a group. The indicator's left:0 is the track's padding edge,
-             so the border (clientLeft) comes off, and the scroll offset goes on for the ≤760px scroller. */
+          var a = seg.querySelector('.dh-tab.active'); if (!a || typeof seg.getBoundingClientRect !== 'function') return;
+          /* Measured against the TRACK, not offsetLeft: the tab sits inside a group. The indicator's
+             left:0 is the track's padding edge, so the border comes off and the scroll offset goes on. */
           var sr = seg.getBoundingClientRect(), ar = a.getBoundingClientRect();
           ind.style.width = ar.width + 'px';
           ind.style.transform = 'translateX(' + (ar.left - sr.left - seg.clientLeft + seg.scrollLeft) + 'px)';
           if (!seg.classList.contains('has-ind')) seg.classList.add('has-ind');
         }
-        if (REDUCED) { return; }   // the CSS fallback paints the active tab itself
+        if (REDUCED) return;   // the CSS fallback paints the active tab itself
         if (typeof MutationObserver === 'function') {
           var mo = new MutationObserver(place);
           tabs.forEach(function (t) { mo.observe(t, { attributes: true, attributeFilter: ['class'] }); });
         } else {
-          seg.addEventListener('click', function () { setTimeout(place, 0); });
+          on(seg, 'click', function () { later(place, 0); });
         }
         var timer = null;
-        window.addEventListener('resize', function () { clearTimeout(timer); timer = setTimeout(place, 80); });
+        on(window, 'resize', function () { clearTimeout(timer); timer = later(place, 80); });
+        on(seg, 'scroll', place);
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
-        window.addEventListener('load', place);
+        on(window, 'load', place);
         place();
       })();
     })();

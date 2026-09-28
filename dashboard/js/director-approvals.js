@@ -23,6 +23,14 @@ function _daCommLive() {
 
 function _dae(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
 function _dam(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
+/** A288 — how long a record has waited: "today", "1 d", "3 d"; empty when the date is unknown. */
+function _daAge(iso) {
+  const t = Date.parse(iso || '');
+  if (isNaN(t)) return '';
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days <= 0) return 'today';
+  return days + ' d';
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('dirApprovals')) return;
@@ -34,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function daLoad() {
   const c = document.getElementById('dirApprovals');
   if (!c) return;
-  c.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">Loading…</div>';
+  c.innerHTML = '<div class="da-empty">Loading…</div>';
   try {
     const [itn, pr, cm] = await Promise.all([
       fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),
@@ -56,26 +64,28 @@ async function daLoad() {
     daCommByNo = {}; comms.forEach(x => { daCommByNo[String(x.commNo)] = x; });
 
     if (!itins.length && !prs.length && !comms.length) {
-      c.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:0.85rem;">✓ Nothing waiting on you.</div>';
+      c.innerHTML = '<div class="da-empty">Nothing waiting on you.</div>';
       return;
     }
 
     const iRows = itins.map(x => `<tr>
-      <td><span class="flow-badge b-pending">Itinerary</span></td>
-      <td>${_dae(x.itineraryNo)}</td>
-      <td>${_dae(x.user)}</td>
-      <td>${(x.items || []).length} visit(s)<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_dae(x.weekStart)} – ${_dae(x.weekEnd)}</div></td>
-      <td style="white-space:nowrap;">
+      <td class="da-type"><span class="flow-badge b-pending">Itinerary</span></td>
+      <td class="da-no">${_dae(x.itineraryNo)}</td>
+      <td class="da-who">${_dae(x.user)}</td>
+      <td class="da-amt da-n">${(x.items || []).length} visit${(x.items || []).length === 1 ? '' : 's'}<div class="da-sub">${_dae(x.weekStart)} to ${_dae(x.weekEnd)}</div></td>
+      <td class="da-age">${_daAge(x.createdAt)}</td>
+      <td class="da-act">
         <button class="link-btn" onclick="daViewItinerary('${_dae(x.itineraryNo)}')">View plan</button>
         <button class="link-btn" onclick="daApprove('approveWeeklyItinerary','${_dae(x.itineraryNo)}','itineraryNo')">Approve</button>
         <button class="link-btn del-btn" onclick="daReject('rejectWeeklyItinerary','${_dae(x.itineraryNo)}','itineraryNo')">Reject</button></td></tr>`).join('');
 
     const pRows = prs.map(x => `<tr>
-      <td><span class="flow-badge b-pending">Payment Req</span></td>
-      <td>${_dae(x.prNo)}</td>
-      <td>${_dae(x.payee || x.supplier)}</td>
-      <td>${_dam(x.amount)}</td>
-      <td style="white-space:nowrap;">
+      <td class="da-type"><span class="flow-badge b-pending">Payment Req</span></td>
+      <td class="da-no">${_dae(x.prNo)}</td>
+      <td class="da-who">${_dae(x.payee || x.supplier)}</td>
+      <td class="da-amt num">${_dam(x.amount)}</td>
+      <td class="da-age">${_daAge(x.acctApprovedAt || x.createdAt)}</td>
+      <td class="da-act">
         <button class="link-btn" onclick="daApprove('approvePaymentRequest','${_dae(x.prNo)}','prNo')">Approve</button>
         <button class="link-btn del-btn" onclick="daReject('rejectPaymentRequest','${_dae(x.prNo)}','prNo')">Reject</button></td></tr>`).join('');
 
@@ -83,23 +93,23 @@ async function daLoad() {
        order is collected enough to pay on. So the coverage sentence is in the row itself, not
        hidden behind the View button, and View opens the individual payments being claimed. */
     const cRows = comms.map(x => `<tr>
-      <td><span class="flow-badge b-pending">Commission</span></td>
-      <td>${_dae(x.commNo)}</td>
-      <td>${_dae(x.salesperson)}</td>
-      <td>${_dam(x.netPayable)} <span style="color:var(--text-muted,#64748b);">on ${_dam(x.base)} collected</span>
-        <div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_dae(x.soNo)} · ${_dae(x.customer)}</div>
-        <div style="font-size:0.7rem;margin-top:2px;${/OVER-COLLECTED/.test(x.coverageNote || '') ? 'color:#b91c1c;font-weight:600;'
-          : (/PARTIAL/.test(x.coverageNote || '') ? 'color:#b45309;font-weight:600;' : 'color:var(--text-muted,#64748b);')}">${_dae(x.coverageNote)}</div></td>
-      <td style="white-space:nowrap;">
+      <td class="da-type"><span class="flow-badge b-pending">Commission</span></td>
+      <td class="da-no">${_dae(x.commNo)}</td>
+      <td class="da-who">${_dae(x.salesperson)}</td>
+      <td class="da-amt num">${_dam(x.netPayable)} <span class="da-sub">on ${_dam(x.base)} collected</span>
+        <div class="da-sub">${_dae(x.soNo)}, ${_dae(x.customer)}</div>
+        <div class="da-note ${/OVER-COLLECTED/.test(x.coverageNote || '') ? 'bad' : (/PARTIAL/.test(x.coverageNote || '') ? 'warn' : '')}">${_dae(x.coverageNote)}</div></td>
+      <td class="da-age">${_daAge(x.createdAt || x.submittedAt)}</td>
+      <td class="da-act">
         <button class="link-btn" onclick="daViewCommission('${_dae(x.commNo)}')">View payments</button>
         <button class="link-btn" onclick="daApprove('approveCommissionRequest','${_dae(x.commNo)}','commNo')">Approve</button>
         <button class="link-btn del-btn" onclick="daReject('rejectCommissionRequest','${_dae(x.commNo)}','commNo')">Reject</button></td></tr>`).join('');
 
-    c.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table">
-      <thead><tr><th>Type</th><th>No</th><th>Who</th><th>Detail</th><th></th></tr></thead>
+    c.innerHTML = `<div class="da-wrap"><table class="flow-table">
+      <thead><tr><th>Type</th><th>No</th><th>Who</th><th>Detail</th><th>Waiting</th><th>Decide</th></tr></thead>
       <tbody>${iRows}${pRows}${cRows}</tbody></table></div>`;
   } catch (e) {
-    c.innerHTML = `<div style="color:#ef4444;font-size:0.85rem;">${_dae(e.message)}</div>`;
+    c.innerHTML = `<div class="da-error">${_dae(e.message)}</div>`;
   }
 }
 

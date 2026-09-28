@@ -25,7 +25,10 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 
 const HTML = fs.readFileSync(D + 'director-home.html', 'utf8');
 const CSS  = fs.readFileSync(D + 'css/director-home.css', 'utf8');
+const CSS_SHARED = fs.readFileSync(D + 'css/director.css', 'utf8');   // A288 — the shared director system
 const JS   = fs.readFileSync(D + 'js/director-home.js', 'utf8');
+const DA   = fs.readFileSync(D + 'js/director-approvals.js', 'utf8');
+const PULSE = fs.readFileSync(D + 'js/director-pulse.js', 'utf8');
 
 /** The tag an id sits on, or null when the id is absent. */
 const tagOf = (id) => { const m = HTML.match(new RegExp('<(\\w+)[^>]*\\sid="' + id + '"')); return m ? m[1].toLowerCase() : null; };
@@ -36,7 +39,7 @@ ok('head links styles.css, flow.css, then director-home.css — in that order',
    /styles\.css[\s\S]*flow\.css[\s\S]*director-home\.css/.test(HTML));
 ok('  and no shared skin', !/bento-skin|flow-screen/.test(HTML));
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
-ok('  and the new CSS imports no font (styles.css already does)', !/fonts\.googleapis/.test(CSS));
+ok('  and the new CSS imports no font (styles.css already does)', !/fonts\.googleapis/.test(CSS) && !/fonts\.googleapis/.test(CSS_SHARED));
 ok('<body class="dh"> — the scope every rule hangs off', /<body class="dh">/.test(HTML));
 
 const TAGS = {
@@ -84,6 +87,41 @@ ok('html2pdf is still loaded', /html2pdf\.bundle\.min\.js/.test(HTML));
 ok('the scripts load in the same order as before',
    /js\/api\.js[\s\S]*salary-deduction-card\.js[\s\S]*js\/auth\.js[\s\S]*flow-api\.js[\s\S]*flow-docs\.js[\s\S]*quotation-worklist\.js[\s\S]*quotation-team-worklist\.js[\s\S]*director-home\.js[\s\S]*itinerary-week\.js[\s\S]*itinerary-week-panel\.js[\s\S]*director-approvals\.js/.test(HTML));
 
+/* ── 1d · A288 — the command centre ─────────────────────────────────────────────────────────── */
+sec('1d · the command centre (A288)');
+ok('director.css sits between flow.css and director-home.css', /flow\.css[\s\S]*css\/director\.css[\s\S]*director-home\.css/.test(HTML));
+ok('the theme script is the FIRST child of <body> (no flash, and it is a src script, not a second inline one)',
+   /<body class="dh">\s*<script src="js\/director-theme\.js"><\/script>/.test(HTML));
+ok('director-pulse.js loads after director-approvals.js', /director-approvals\.js[\s\S]*director-pulse\.js/.test(HTML));
+eq('the exact script list', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
+   'director-theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js');
+const TAGS2 = { button: ['themeToggle'], canvas: ['pulseCost'], aside: ['rail'], section: ['pulse', 'team', 'payroll'],
+                div: ['pulseAccrual', 'pulseHeads', 'pulseDed', 'pulseCostBox', 'pulseCostFallback', 'spotTotal'], dd: ['kpiNet', 'kpiShare', 'kpi13', 'kpiActive', 'spotGross', 'spotDed'] };
+Object.keys(TAGS2).forEach(tag => TAGS2[tag].forEach(id => eq('#' + id, tagOf(id), tag)));
+{
+  const jumps = (HTML.match(/class="dh-jump" data-tab="(\w+)"/g) || []).map(s => s.match(/data-tab="(\w+)"/)[1]);
+  eq('seven rail jumps, one per payroll tab', jumps.sort().join(','), Object.keys(KEYS).sort().join(','));
+  ok('  and they are not tabs (no id="tab…", no .dh-tab) — the indicator counts those', !/dh-jump"[^>]*id="tab/.test(HTML) && (HTML.match(/class="dh-tab[ "]/g) || []).length === 7);
+}
+ok('the theme is runtime-only: no data-theme in the markup', !/data-theme=/.test(HTML));
+ok('the entrance reveal is gone (one load moment instead)', !/dh-reveal/.test(HTML));
+ok('no arrows, middle dots or eyebrows in the markup', !/→|·|class="eyebrow"/.test(HTML));
+ok('the rail composition bar and facts exist', /class="dh-comp"/.test(HTML) && /class="dh-facts"/.test(HTML));
+ok('director-home.js dispatches dh:kpis, guarded', /typeof CustomEvent === 'function'/.test(JS) && /new CustomEvent\('dh:kpis'/.test(JS));
+ok('  total payroll cost is gross + share, as the approval document defines it', /set\('spotTotal', peso\(gross \+ share\)\)/.test(JS));
+ok('  the employer share prefill is typeof-guarded and outside the pinned Promise.all', /typeof apiGetPayrollApprovals !== 'function'/.test(JS) && !/Promise\.all\(\[[^\]]*apiGetPayrollApprovals/.test(JS));
+ok('director-approvals.js: an age cell, classed cells, no tick, no inline style in the rows',
+   /class="da-age"/.test(DA) && !/✓/.test(DA) && !/style="/.test(DA.slice(0, DA.indexOf('function daViewItinerary'))));
+ok('director-pulse.js carries no hex colour (tokens come from the stylesheet at draw time)', !/#[0-9a-fA-F]{6}\b/.test(PULSE));
+ok('director.css: a dark token set, two Archivo faces on disk, a no-blur fallback, a print block',
+   /body\.dh\[data-theme="dark"\] \{/.test(CSS_SHARED) && /@supports not \(\(backdrop-filter/.test(CSS_SHARED) && /@media print/.test(CSS_SHARED));
+(CSS_SHARED.match(/@font-face\s*\{[^}]*\}/g) || []).forEach(f => {
+  const u = (f.match(/url\('\/static\/fonts\/([^']+)'\)/) || [])[1];
+  ok('  ' + u + ' exists on disk', !!u && fs.existsSync(path.join(__dirname, '../../static/fonts/' + u)));
+});
+eq('  exactly two @font-face blocks', (CSS_SHARED.match(/@font-face/g) || []).length, 2);
+ok('no hover-lift anywhere in either sheet', !/:hover[^{]*\{[^}]*translateY\(-/.test(CSS) && !/:hover[^{]*\{[^}]*translateY\(-/.test(CSS_SHARED));
+
 /* ── 2 · boot the real page script against the real markup ──────────────────────────────────── */
 sec('2 · director-home.js boots on the new markup and every tab switches');
 (async () => {
@@ -110,13 +148,37 @@ sec('2 · director-home.js boots on the new markup and every tab switches');
   ok('the 13th-month accrual reaches its KPI', /1,000\.00/.test(p.els.kpi13.textContent), p.els.kpi13.textContent);
   ok('  and the footer is a .total-row now', /class="total-row"/.test(p.els.thirteenthFoot.innerHTML));
 
+  // A288 — the employer share prefill: an empty input takes the ledger's figure; a filled one is left alone
+  p.run(`document.getElementById('employerShareA').value = ''; document.getElementById('employerShareB').value = '99';
+         apiGetPayrollApprovals = async () => ({ success: true, data: [
+           { period: '2026-08-B', cutoffLabel: '2nd Cutoff', status: 'Approved', submittedAt: '2026-08-27 10:00:00', totals: { employerShare: 900 } },
+           { period: '2026-09-A', cutoffLabel: '1st Cutoff', status: 'Approved', submittedAt: '2026-09-12 10:00:00', totals: { employerShare: 1234.5 } } ] });`);
+  await p.run(`_prefillEmployerShare('2026-09-A', '2026-09-B')`);
+  eq('an empty employer share is carried from that period\'s submission', p.els.employerShareA.value, '1234.50');
+  eq('  a filled one is never overwritten', p.els.employerShareB.value, '99');
+  p.run(`document.getElementById('employerShareB').value = '';`);
+  await p.run(`_prefillEmployerShare('2026-10-A', '2026-10-B')`);
+  eq('  a period with no submission takes the newest overall', p.els.employerShareB.value, '1234.50');
+
+  // A288 — the Pulse band on the same markup, with no Chart.js: the CSS fallback renders
+  const p2 = page(['js/director-home.js', 'js/director-pulse.js'], 'director-home.html', { role: 'director', name: 'Test Director', username: 'td' });
+  p2.run(apis.map(a => `${a} = async () => ({ success: true, data: [] });`).join('') + `fetchFromAPI = async () => ({ success: true, data: [] }); loadLib = async () => {}; setInterval = () => 0;`);
+  const errP = threw(() => p2.run('dhPulse.mount()'));
+  ok('dhPulse.mount() runs on the stub DOM', errP === null, errP);
+  await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+  ok('  with no ledger and no period it shows the empty copy in the fallback box', /submitted/.test(p2.els.pulseCostFallback.innerHTML), p2.els.pulseCostFallback.innerHTML);
+  eq('  the headcount transform', JSON.stringify(p2.run("(function(){var h=dhPulse.t.headcount([{status:'Active'},{status:'Active',payType:'Fixed'},{status:'Inactive'}]); return [h.active,h.inactive,h.fixed];})()")), '[2,1,1]');
+
   /* ── 4 · the page's own inline script, under reduced motion ────────────────────────────────── */
   sec('4 · the inline script degrades: reduced motion means a synchronous write');
   const inline = (HTML.match(/<script>([\s\S]*?)<\/script>/) || [])[1];
   ok('the page has exactly one inline <script>', (HTML.match(/<script>/g) || []).length === 1 && !!inline);
-  p.run(`matchMedia = () => ({ matches: true }); document.body.classList = { add() {}, remove() {}, toggle() {}, contains: () => false };`);
+  p.run(`matchMedia = () => ({ matches: true }); document.body.classList = { add() {}, remove() {}, toggle() {}, contains: () => false };
+         var __ev = []; var __oldAdd = document.addEventListener; document.addEventListener = function (e, f) { __ev.push(e); return __oldAdd(e, f); };`);
   const err4 = threw(() => p.run(inline));
   ok('it runs in the stub DOM without throwing', err4 === null, err4);
+  ok('  and it listens for dh:kpis (the rail composition bar)', p.run("__ev.indexOf('dh:kpis') !== -1"), p.run('__ev'));
+  ok('  the theme toggle is wired by the shared theme script, not here', !/themeToggle/.test(inline) && /getElementById\('themeToggle'\)/.test(fs.readFileSync(D + 'js/director-theme.js', 'utf8')));
   ok('dhSetNumber is now defined', p.run('typeof dhSetNumber') === 'function');
   p.run(`dhSetNumber(document.getElementById('kpiNet'), '₱1,234.00')`);
   eq('  under reduced motion it writes the final text at once', p.els.kpiNet.textContent, '₱1,234.00');
@@ -141,8 +203,8 @@ sec('3b · the stylesheet');
 ok('.dh-panel hides and .dh-panel.active shows', /\.dh-panel\s*\{\s*display:\s*none/.test(CSS) && /\.dh-panel\.active\s*\{\s*display:\s*block/.test(CSS));
 ok('prefers-reduced-motion block present', /@media\s*\(prefers-reduced-motion:\s*reduce\)/.test(CSS));
 ok('#flowDocsModal sits above the deduction modal', /#flowDocsModal\s*\{\s*z-index:\s*1200/.test(CSS));
-{
-  const noComments = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+[['director-home.css', CSS], ['director.css', CSS_SHARED]].forEach(([name, sheet]) => {
+  const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
   const bad = [];
   const re = /(?:^|[{}])\s*([^{}@]+?)\s*\{/g; let m;
   while ((m = re.exec(noComments))) {
@@ -151,8 +213,8 @@ ok('#flowDocsModal sits above the deduction modal', /#flowDocsModal\s*\{\s*z-ind
       if (!/^body\.dh\b/.test(sel)) bad.push(sel);
     });
   }
-  ok('every selector starts with body.dh (' + (bad.length ? bad.length + ' do not' : 'all of them') + ')', bad.length === 0, bad.slice(0, 8));
-}
+  ok(name + ': every selector starts with body.dh (' + (bad.length ? bad.length + ' do not' : 'all of them') + ')', bad.length === 0, bad.slice(0, 8));
+});
 {
   const names = ['dhIn', 'dhPanelIn', 'dhPop', 'dhGlow', 'dhDrift', 'dhSheen', 'dhFill', 'dhShimmer', 'dhFade'];
   names.forEach(n => ok('@keyframes ' + n, new RegExp('@keyframes\\s+' + n + '\\s*\\{').test(CSS)));
