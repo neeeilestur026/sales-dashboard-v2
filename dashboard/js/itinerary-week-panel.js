@@ -82,31 +82,31 @@ const IWP_LABEL = { 'needs-you': 'Waiting on you', 'no-plan': 'No plan filed', '
   const s = document.createElement('style');
   s.id = 'iwpCss';
   s.textContent = `
-    .iwp-head { font-size:.82rem; color:var(--text-secondary,#475569); margin-bottom:.5rem; }
-    .iwp-empty { padding:.7rem 0; color:var(--text-muted,#64748b); font-size:.85rem; }
+    .iwp-head { font-size:.82rem; color:var(--hx-ink-2); margin-bottom:.5rem; }
+    .iwp-empty { padding:.7rem 0; color:var(--hx-ink-3); font-size:.85rem; }
     .iwp-alert { padding:.4rem .65rem; border-radius:9px; font-size:.78rem; line-height:1.5;
       border-left:3px solid; margin-bottom:.4rem; }
-    .iwp-alert.warn { background:#fffbeb; border-color:#f59e0b; color:#92400e; }
-    .iwp-alert.bad  { background:#fef2f2; border-color:#ef4444; color:#991b1b; }
+    .iwp-alert.warn { background:var(--hx-warn-soft); border-color:var(--hx-warn); color:var(--hx-warn); }
+    .iwp-alert.bad  { background:var(--hx-red-soft); border-color:var(--hx-red); color:var(--hx-red); }
     .iwp-row { display:flex; align-items:baseline; gap:.5rem; padding:.26rem 0;
-      border-top:1px solid var(--border,#e2e8f0); font-size:.8rem; }
+      border-top:1px solid var(--hx-hair); font-size:.8rem; }
     .iwp-row:first-of-type { border-top:0; }
     .iwp-row .dot { width:7px; height:7px; border-radius:50%; flex:none; align-self:center; }
-    .iwp-row .who { font-weight:700; color:var(--text-primary,#0f172a); min-width:132px; }
+    .iwp-row .who { font-weight:700; color:var(--hx-ink); min-width:132px; }
     .iwp-row .st { font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
-    .iwp-row .n { margin-left:auto; color:var(--text-muted,#64748b); font-variant-numeric:tabular-nums; }
+    .iwp-row .n { margin-left:auto; color:var(--hx-ink-3); font-variant-numeric:tabular-nums; }
     /* Same colour per state as the full page, so one state never looks like two things. */
     .iwp-row .b-needs-you,.iwp-row .b-no-plan,.iwp-row .b-pending,.iwp-row .b-draft,
     .iwp-row .b-rejected,.iwp-row .b-approved,.iwp-row .b-idle { white-space:nowrap; }
-    .b-needs-you { color:#b45309; } .d-needs-you { background:#f59e0b; }
-    .b-no-plan   { color:#b91c1c; } .d-no-plan   { background:#ef4444; }
-    .b-pending   { color:#4f46e5; } .d-pending   { background:#6366f1; }
-    .b-draft     { color:#64748b; } .d-draft     { background:#94a3b8; }
-    .b-rejected  { color:#b91c1c; } .d-rejected  { background:#ef4444; }
-    .b-approved  { color:#047857; } .d-approved  { background:#10b981; }
-    .b-idle      { color:#94a3b8; } .d-idle      { background:#cbd5e1; }
+    .iwp-row .b-needs-you { color:var(--hx-warn); } .iwp-row .d-needs-you { background:var(--hx-warn); }
+    .iwp-row .b-no-plan   { color:var(--hx-red); } .iwp-row .d-no-plan   { background:var(--hx-red); }
+    .iwp-row .b-pending   { color:var(--hx-navy-text); } .iwp-row .d-pending   { background:var(--hx-navy); }
+    .iwp-row .b-draft     { color:var(--hx-ink-3); } .iwp-row .d-draft     { background:var(--hx-ink-3); }
+    .iwp-row .b-rejected  { color:var(--hx-red); } .iwp-row .d-rejected  { background:var(--hx-red); }
+    .iwp-row .b-approved  { color:var(--hx-ok); } .iwp-row .d-approved  { background:var(--hx-ok); }
+    .iwp-row .b-idle      { color:var(--hx-ink-3); } .iwp-row .d-idle      { background:var(--hx-inset); }
     .iwp-foot { margin-top:.5rem; font-size:.8rem; }
-    .iwp-go { color:var(--accent-dark,#0f766e); font-weight:600; text-decoration:none; }
+    .iwp-go { color:var(--hx-navy-text); font-weight:600; text-decoration:none; }
     @media (max-width:760px) {
       .iwp-row { flex-wrap:wrap; }
       .iwp-row .n { margin-left:0; width:100%; }

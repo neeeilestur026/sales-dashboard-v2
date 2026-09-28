@@ -7,20 +7,20 @@
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .leave-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .leave-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155); font-weight: 600; white-space: nowrap; }
-    .leave-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: var(--text-primary, #f1f5f9); }
-    .leave-table tr:hover td { background: #e2e8f0; }
+    .leave-table th { text-align: left; padding: 0.6rem 0.75rem; color: var(--hx-ink-3); border-bottom: 1px solid var(--hx-hair); font-weight: 600; white-space: nowrap; }
+    .leave-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2); color: var(--hx-ink); }
+    .leave-table tr:hover td { background: var(--hx-hair-2); }
     .status-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-    .status-pending { background: rgba(234,179,8,0.12); color: #eab308; }
-    .status-approved { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .status-rejected { background: rgba(239,68,68,0.12); color: #ef4444; }
-    .role-badge { padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; background: rgba(59,130,246,0.12); color: #3b82f6; text-transform: uppercase; letter-spacing: 0.03em; }
+    .status-pending { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .status-approved { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .status-rejected { background: var(--hx-red-soft); color: var(--hx-red); }
+    .role-badge { padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); text-transform: uppercase; letter-spacing: 0.03em; }
     .stats-row { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-    .stat-card { flex: 1; min-width: 140px; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }
-    .stat-card .num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary, #f1f5f9); }
-    .stat-card .lbl { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-top: 0.15rem; }
+    .stat-card { flex: 1; min-width: 140px; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }
+    .stat-card .num { font-size: 1.5rem; font-weight: 700; color: var(--hx-ink); }
+    .stat-card .lbl { font-size: 0.72rem; color: var(--hx-ink-3); margin-top: 0.15rem; }
     .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
-    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--surface-2, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; color: var(--text-primary, #f1f5f9); font-size: 0.82rem; }
+    .filter-bar select, .filter-bar input { padding: 0.45rem 0.6rem; background: var(--hx-inset); border: 1px solid var(--hx-hair); border-radius: 8px; color: var(--hx-ink); font-size: 0.82rem; }
   </style>
 </head>
 <body>
@@ -40,7 +40,7 @@
     </div>
 
     <div class="chart-card">
-      <h3 style="font-size:0.95rem;font-weight:600;color:var(--text-primary,#f1f5f9);margin-bottom:0.75rem;">All Leave Requests</h3>
+      <h3 style="font-size:0.95rem;font-weight:600;color: var(--hx-ink);margin-bottom:0.75rem;">All Leave Requests</h3>
       <div class="filter-bar">
         <select id="filterStatus" onchange="loadLeave()">
           <option value="Pending">Pending</option>

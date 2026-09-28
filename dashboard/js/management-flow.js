@@ -102,11 +102,11 @@ async function mfLoadLifecycleHealth() {
     const tile = (v, l, col) => `<div class="mf-lh-tile"><div class="mf-lh-v" style="color:${col || 'inherit'}">${v}</div><div class="mf-lh-l">${l}</div></div>`;
     c.innerHTML = `<div class="mf-lh">
       ${tile(sos.length, 'Sales Orders')}
-      ${tile(noPO, 'No PO yet', noPO ? '#b45309' : '')}
-      ${tile(recvNotInv, 'Received, not invoiced', recvNotInv ? '#b45309' : '')}
-      ${tile(notCollected, 'Invoiced, uncollected', notCollected ? '#ef4444' : '')}
-      ${tile(closed, 'Closed (collected)', '#16a34a')}
-    </div><div style="margin-top:.4rem;"><a href="flow-lifecycle.html" style="color:var(--accent,#4f46e5);font-weight:600;">Open the SO Lifecycle Tracker →</a></div>`;
+      ${tile(noPO, 'No PO yet', noPO ? 'var(--hx-warn)' : '')}
+      ${tile(recvNotInv, 'Received, not invoiced', recvNotInv ? 'var(--hx-warn)' : '')}
+      ${tile(notCollected, 'Invoiced, uncollected', notCollected ? 'var(--hx-red)' : '')}
+      ${tile(closed, 'Closed (collected)', 'var(--hx-ok)')}
+    </div><div style="margin-top:.4rem;"><a href="flow-lifecycle.html" style="color:var(--hx-navy);font-weight:600;">Open the SO Lifecycle Tracker →</a></div>`;
   } catch (e) { c.innerHTML = '<div class="mf-empty">Could not load lifecycle health.</div>'; }
 }
 
@@ -170,7 +170,7 @@ async function mfLoadApprovals() {
     const iRows = itins.map(x => `<tr>
       <td><span class="flow-badge b-pending">Itinerary</span></td>
       <td>${_mfe(x.itineraryNo)}</td><td>${_mfe(x.user)}</td>
-      <td class="num">${(x.items || []).length} visit(s)<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_mfe(x.weekStart)} – ${_mfe(x.weekEnd)}</div></td>
+      <td class="num">${(x.items || []).length} visit(s)<div style="font-size:0.7rem;color:var(--hx-ink-3);">${_mfe(x.weekStart)} – ${_mfe(x.weekEnd)}</div></td>
       <td class="num" style="white-space:nowrap;">
         <button class="link-btn" onclick="mfViewItinerary('${_mfe(x.itineraryNo)}')">View plan</button>
         <button class="link-btn" onclick="mfApprove('approveWeeklyItinerary','${_mfe(x.itineraryNo)}','itineraryNo')">Approve</button>
@@ -179,10 +179,10 @@ async function mfLoadApprovals() {
        enough to pay commission on is exactly the judgement being asked for. */
     const cRows = comms.map(x => `<tr>
       <td><span class="flow-badge b-pending">Commission</span></td>
-      <td>${_mfe(x.commNo)}</td><td>${_mfe(x.salesperson)}<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">${_mfe(x.soNo)} · ${_mfe(x.customer)}</div></td>
-      <td class="num">${_mfm(x.netPayable)}<div style="font-size:0.7rem;color:var(--text-muted,#64748b);">on ${_mfm(x.base)} collected · director ✓</div>
-        <div style="font-size:0.7rem;margin-top:2px;text-align:left;${/OVER-COLLECTED/.test(x.coverageNote || '') ? 'color:#b91c1c;font-weight:600;'
-          : (/PARTIAL/.test(x.coverageNote || '') ? 'color:#b45309;font-weight:600;' : 'color:var(--text-muted,#64748b);')}">${_mfe(x.coverageNote)}</div></td>
+      <td>${_mfe(x.commNo)}</td><td>${_mfe(x.salesperson)}<div style="font-size:0.7rem;color:var(--hx-ink-3);">${_mfe(x.soNo)} · ${_mfe(x.customer)}</div></td>
+      <td class="num">${_mfm(x.netPayable)}<div style="font-size:0.7rem;color:var(--hx-ink-3);">on ${_mfm(x.base)} collected · director ✓</div>
+        <div style="font-size:0.7rem;margin-top:2px;text-align:left;${/OVER-COLLECTED/.test(x.coverageNote || '') ? 'color:var(--hx-red);font-weight:600;'
+          : (/PARTIAL/.test(x.coverageNote || '') ? 'color:var(--hx-warn);font-weight:600;' : 'color:var(--hx-ink-3);')}">${_mfe(x.coverageNote)}</div></td>
       <td class="num" style="white-space:nowrap;">
         <button class="link-btn" onclick="mfViewCommission('${_mfe(x.commNo)}')">View payments</button>
         <button class="link-btn" onclick="mfApprove('approveCommissionRequest','${_mfe(x.commNo)}','commNo')">Approve</button>
@@ -192,7 +192,7 @@ async function mfLoadApprovals() {
     c.innerHTML = `<div style="overflow-x:auto;"><table class="flow-table">
       <thead><tr><th>Type</th><th>No</th><th>Party</th><th class="num">Total</th><th></th></tr></thead>
       <tbody>${qRows}${pRows}${prRows}${iRows}${cRows}</tbody></table></div>`;
-  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
+  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:var(--hx-red);">${_mfe(e.message)}</div>`; }
 }
 
 /* A183: the quotation review modal — management must SEE the pricing breakdown and TICK before
@@ -209,11 +209,11 @@ function mfOpenReview(no) {
     (q.items || []).map(it => `<tr><td>${_mfe(it.itemNo)} ${_mfe(it.itemName)}</td><td class="num">${_mfn(it.qty)}</td><td class="num">${_mfm(_mfn(it.price))}</td></tr>`).join('') +
     `</tbody></table></div>`;
   const pricing = review && review.hasPr
-    ? `<div style="margin-top:0.9rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:0.3rem;">Pricing management set</div>` +
+    ? `<div style="margin-top:0.9rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-ink-3);margin-bottom:0.3rem;">Pricing management set</div>` +
       flowDeviationBanner(review) + flowOptionReviewHtml(review) + review.breakdownHtml +
       `<label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.6rem;font-size:0.82rem;font-weight:600;cursor:pointer;">
          <input type="checkbox" id="mfrTick" onchange="mfSyncApprove()"> I've reviewed the pricing above and confirm it.</label>`
-    : (q.prNo ? `<div style="margin-top:0.6rem;font-size:0.78rem;color:#b45309;">Pricing record for ${_mfe(q.prNo)} not found — approval is governed by the server's pricing check.</div>` : '');
+    : (q.prNo ? `<div style="margin-top:0.6rem;font-size:0.78rem;color:var(--hx-warn);">Pricing record for ${_mfe(q.prNo)} not found — approval is governed by the server's pricing check.</div>` : '');
   document.getElementById('mfrBody').innerHTML = itemsTable + pricing;
   mfrGate = { needTick: needTick };
   document.getElementById('mfrFoot').innerHTML =
@@ -309,7 +309,7 @@ async function mfLoadInventory() {
     const chip = (l, v, color) => `<div class="mf-invkpi"><div class="l">${l}</div><div class="v"${color ? ` style="color:${color};"` : ''}>${v}</div></div>`;
     const rowHtml = i => `<tr>
       <td>${_mfe(i.itemNo)}</td><td>${_mfe(i.description)}</td>
-      <td class="num"${_mfn(i.balance) > 0 && _mfn(i.balance) < 10 ? ' style="color:#d97706;font-weight:700;"' : ''}>${_mfn(i.balance)}</td>
+      <td class="num"${_mfn(i.balance) > 0 && _mfn(i.balance) < 10 ? ' style="color:var(--hx-warn);font-weight:700;"' : ''}>${_mfn(i.balance)}</td>
       <td class="num">${_mfm(i.landedCost)}</td><td class="num">${_mfm(i.totalLanded)}</td></tr>`;
     const tbl = list => `<div class="mf-invscroll"><table class="flow-table"><thead><tr>
       <th>Item No</th><th>Description</th><th class="num">Qty</th><th class="num">Landed/Unit</th><th class="num">Value</th></tr></thead>
@@ -319,16 +319,16 @@ async function mfLoadInventory() {
         ${chip('On Hand', onHand.length)}
         ${chip('Units', units.toLocaleString())}
         ${chip('Stock Value', _mfm(value))}
-        ${chip('Running Low', lowN, lowN ? '#d97706' : null)}
-        ${chip('Zero Balance', zero.length, zero.length ? '#94a3b8' : null)}
+        ${chip('Running Low', lowN, lowN ? 'var(--hx-warn)' : null)}
+        ${chip('Zero Balance', zero.length, zero.length ? 'var(--hx-ink-3)' : null)}
       </div>
       ${onHand.length ? tbl(onHand) : '<div class="mf-empty">Nothing on hand.</div>'}
       ${zero.length ? `<details style="margin-top:0.55rem;">
-        <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted,#64748b);font-weight:600;">📋 Stock records at zero balance (${zero.length}) — purchased/ordered items, none on hand</summary>
+        <summary style="cursor:pointer;font-size:0.78rem;color:var(--hx-ink-3);font-weight:600;">Stock records at zero balance (${zero.length}) — purchased/ordered items, none on hand</summary>
         <div style="margin-top:0.45rem;">${tbl(zero)}</div>
       </details>` : ''}
       <div class="mf-invmeta" style="margin:0.55rem 0 0;">${items.length} stock item(s)${typed ? ` · ${everything.length - items.length} catalog hidden` : ''} · <a href="flow-inventory.html" class="link-btn">View all inventory →</a></div>`;
-  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
+  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:var(--hx-red);">${_mfe(e.message)}</div>`; }
 }
 
 // ── Pricing History (all Pricing Requests incl. migrated legacy history) ──
@@ -341,7 +341,7 @@ async function mfLoadPricing() {
     const r = await fetchFlow('getPricingRequests');
     mfPricing = (r && r.data) || [];
     mfRenderPricing();
-  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:#ef4444;">${_mfe(e.message)}</div>`; }
+  } catch (e) { c.innerHTML = `<div class="mf-empty" style="color:var(--hx-red);">${_mfe(e.message)}</div>`; }
 }
 
 function mfRenderPricing() {
@@ -364,11 +364,11 @@ function mfRenderPricing() {
   if (!list.length) { c.innerHTML = '<div class="mf-empty">No pricing requests match.</div>'; return; }
   const rows = list.map((p, i) => {
     const migrated = String(p.status) === 'Migrated';
-    const badge = migrated ? '<span class="flow-badge" style="background:rgba(13,148,136,0.14);color:#0f766e;">Migrated</span>'
+    const badge = migrated ? '<span class="flow-badge" style="background:var(--hx-cyan-ring);color:var(--hx-cyan-ink);">Migrated</span>'
       : `<span class="flow-badge">${_mfe(p.status === 'Returned to Sales' ? 'For Quotation' : (p.status || '—'))}</span>`;
     const principals = [...new Set((p.items || []).map(it => it.principal).filter(Boolean))].join(', ') || '—';
     return `<tr class="mf-prrow" onclick="mfTogglePricing(${i})" style="cursor:pointer;">
-        <td><strong>${_mfe(p.prNo)}</strong>${p.legacyId ? `<div style="font-size:0.68rem;color:var(--text-muted,#64748b);">${_mfe(p.legacyId)}</div>` : ''}</td>
+        <td><strong>${_mfe(p.prNo)}</strong>${p.legacyId ? `<div style="font-size:0.68rem;color:var(--hx-ink-3);">${_mfe(p.legacyId)}</div>` : ''}</td>
         <td>${_mfe(_mfPrDate(p.date))}</td>
         <td>${_mfe(p.customer || '—')}</td>
         <td>${_mfe(principals)}</td>
@@ -377,7 +377,7 @@ function mfRenderPricing() {
         <td>${badge}</td>
         <td class="num"><button type="button" class="mf-prexp" id="mfPrBtn${i}">▸</button></td>
       </tr>
-      <tr id="mfPrDetail${i}" style="display:none;"><td colspan="8" style="background:var(--bg-inset,#f8fafc);">${mfPricingDetail(p)}</td></tr>`;
+      <tr id="mfPrDetail${i}" style="display:none;"><td colspan="8" style="background:var(--hx-inset);">${mfPricingDetail(p)}</td></tr>`;
   }).join('');
   c.innerHTML = `<table class="flow-table"><thead><tr>
     <th>PR No</th><th>Date</th><th>Customer</th><th>Principal(s)</th><th>By</th><th class="num">Items</th><th>Status</th><th></th>
@@ -387,7 +387,7 @@ function mfRenderPricing() {
 function _mfPrDate(d) { return (typeof flowDate === 'function') ? (flowDate(d) || d || '') : (d || ''); }
 
 function mfPricingDetail(p) {
-  const head = `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin:0.4rem 0;">
+  const head = `<div style="font-size:0.72rem;color:var(--hx-ink-3);margin:0.4rem 0;">
     Destination: <strong>${_mfe(p.destination || '—')}</strong> · Commission: <strong>${_mfn(p.commission)}%</strong> · Margin: <strong>${_mfn(p.margin)}%</strong>${p.legacyId ? ' · <em>legacy pricing history</em>' : ''}</div>`;
   /* A181: this held its own copy of the breakdown table and the same fault as the pricing-history
      page — it rendered the saved breakdown rows ALONE, hiding every item the breakdown did not cover.
@@ -486,10 +486,10 @@ async function mfLoadAllEmails(seq) {
 
 function mfEmailHtml(name) {
   const date = document.getElementById('mgmtDrDate').value;
-  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted,#64748b);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_mfe(date)}</div>`;
+  const head = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-ink-3);margin:0.6rem 0 0.3rem;">✉️ Sent Emails — ${_mfe(date)}</div>`;
   const rec = mfDrEmails[name];
   if (!rec) {
-    if (mfDrRosterError) return head + `<div class="mf-empty" style="font-size:0.8rem;color:#b45309;">Sent emails unavailable — ${_mfe(mfDrRosterError)}</div>`;
+    if (mfDrRosterError) return head + `<div class="mf-empty" style="font-size:0.8rem;color:var(--hx-warn);">Sent emails unavailable — ${_mfe(mfDrRosterError)}</div>`;
     if (mfDrEmailsLoading) return head + `<div class="mf-empty" style="font-size:0.8rem;">Loading sent emails…</div>`;
     return head + `<div class="mf-empty" style="font-size:0.8rem;">—</div>`;
   }
@@ -497,7 +497,7 @@ function mfEmailHtml(name) {
     const why = rec.reconnect ? `${_mfe(name)} needs to reconnect their mailbox.` : `${_mfe(name)} hasn't connected their mailbox.`;
     return head + `<div class="mf-empty" style="font-size:0.8rem;">${why}</div>`;
   }
-  if (rec.error) return head + `<div class="mf-empty" style="font-size:0.8rem;color:#b45309;">Couldn't load (${_mfe(rec.error)}) — retrying on the next refresh.</div>`;
+  if (rec.error) return head + `<div class="mf-empty" style="font-size:0.8rem;color:var(--hx-warn);">Couldn't load (${_mfe(rec.error)}) — retrying on the next refresh.</div>`;
   const emails = rec.emails || [];
   if (!emails.length) return head + `<div class="mf-empty" style="font-size:0.8rem;">No emails sent on ${_mfe(date)}.</div>`;
   return head + `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Time</th><th>To</th><th>Subject</th></tr></thead>
@@ -546,10 +546,10 @@ function mfRenderDailyReports() {
     + '<div style="overflow-x:auto;margin-bottom:1rem;"><table class="flow-table"><thead><tr><th>User</th><th class="num">Tasks</th><th>Output</th><th style="width:26%;"></th><th class="num">Emails</th><th>Submitted</th></tr></thead><tbody>'
     + prodRows.map(function (r) {
       return '<tr><td style="font-weight:600;">' + _mfe(r.name) + '</td><td class="num" style="font-weight:700;">' + r.tasks + '</td>'
-        + '<td style="font-size:0.78rem;color:var(--text-secondary,#475569);">' + (r.top || '—') + '</td>'
-        + '<td><div style="height:8px;border-radius:999px;background:var(--bg-inset,#f1f5f9);overflow:hidden;"><div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--accent,#4f46e5);"></div></div></td>'
+        + '<td style="font-size:0.78rem;color:var(--hx-ink-2);">' + (r.top || '—') + '</td>'
+        + '<td><div style="height:8px;border-radius:999px;background:var(--hx-inset);overflow:hidden;"><div style="height:100%;width:' + Math.round(r.tasks / max * 100) + '%;background:var(--hx-navy);"></div></div></td>'
         + '<td class="num">' + (r.emails || '') + '</td>'
-        + '<td>' + (r.submitted ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#b45309;">—</span>') + '</td></tr>';
+        + '<td>' + (r.submitted ? '<span style="color:var(--hx-ok);font-weight:700;">✓</span>' : '<span style="color:var(--hx-warn);">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
 
   cont.innerHTML = prodHtml + names.map((name, i) => {
@@ -559,13 +559,13 @@ function mfRenderDailyReports() {
       .map(m => `<span class="mod-badge ${_mfModClass(m)}">${_mfe(m)} ${c.byModule[m]}</span>`).join('');
     const sub = mfDrSubs[String(name).trim()];
     const emCount = (mfDrEmails[name] && (mfDrEmails[name].emails || []).length) || 0;
-    const emChip = emCount ? ` · ✉️ ${emCount} sent` : '';
+    const emChip = emCount ? `, ${emCount} sent` : '';
     const subChip = sub
-      ? ` · <span style="color:${sub.status === 'Reviewed' ? '#0d9488' : '#15803d'};">✓ submitted ${_mfe(_mfTime(sub.submittedAt))}${sub.status === 'Reviewed' ? ' · reviewed' : ''}</span>`
-      : ' · <span style="color:#b45309;">not submitted</span>';
+      ? ` · <span style="color:${sub.status === 'Reviewed' ? 'var(--hx-cyan-ink)' : 'var(--hx-ok)'};">✓ submitted ${_mfe(_mfTime(sub.submittedAt))}${sub.status === 'Reviewed' ? ' · reviewed' : ''}</span>`
+      : ' · <span style="color:var(--hx-warn);">not submitted</span>';
     return `<details class="urep"${i === 0 ? ' open' : ''}>
       <summary><span class="uname">${_mfe(name)}</span>
-        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${emChip}${note ? ' · 📝 note' : ''}${subChip}</span></summary>
+        <span class="ustat">${c.tasks} task(s) · ${c.docs} doc(s)${emChip}${note ? ', note' : ''}${subChip}</span></summary>
       <div class="urep-body">
         ${modChips ? `<div class="umods">${modChips}</div>` : ''}
         ${flowRenderTaskCards(tasks, { moduleOrder: MF_MODULE_ORDER, emptyText: 'No movements (note only).' })}
@@ -581,20 +581,20 @@ function mfRenderDailyReports() {
 function mfSubmissionHtml(sub) {
   if (!sub) return '';
   const part = (label, text) => text
-    ? `<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#0d9488;margin-top:0.4rem;">${label}</div>
+    ? `<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:var(--hx-cyan-ink);margin-top:0.4rem;">${label}</div>
        <div style="font-size:0.84rem;white-space:pre-wrap;">${_mfe(text)}</div>` : '';
   const body = part('Highlights', sub.highlights) + part('Blockers', sub.blockers) + part('Plan', sub.plan);
   const review = sub.status === 'Reviewed'
-    ? `<span style="font-size:0.75rem;color:#0d9488;font-weight:700;">✓ Reviewed by ${_mfe(sub.reviewedBy)}${sub.reviewNote ? ` — ${_mfe(sub.reviewNote)}` : ''}</span>`
+    ? `<span style="font-size:0.75rem;color:var(--hx-cyan-ink);font-weight:700;">✓ Reviewed by ${_mfe(sub.reviewedBy)}${sub.reviewNote ? ` — ${_mfe(sub.reviewNote)}` : ''}</span>`
     : `<button class="link-btn" onclick="mfReviewReport('${_mfe(sub.reportNo)}')">Mark reviewed</button>`;
-  return `<div style="margin-top:0.7rem;border-left:3px solid var(--accent,#0d9488);background:var(--bg-inset,#f8fafc);padding:0.6rem 0.85rem;border-radius:0 8px 8px 0;">
+  return `<div style="margin-top:0.7rem;border-left:3px solid var(--hx-navy);background:var(--hx-inset);padding:0.6rem 0.85rem;border-radius:0 8px 8px 0;">
     <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
       <strong style="font-size:0.8rem;">Daily report submitted</strong>
-      <span style="font-size:0.75rem;color:var(--text-muted,#64748b);">${_mfe(_mfTime(sub.submittedAt))}${_mfn(sub.submitCount) > 1 ? ` · updated ${_mfn(sub.submitCount)}×` : ''}</span>
+      <span style="font-size:0.75rem;color:var(--hx-ink-3);">${_mfe(_mfTime(sub.submittedAt))}${_mfn(sub.submitCount) > 1 ? ` · updated ${_mfn(sub.submitCount)}×` : ''}</span>
       <span style="margin-left:auto;">${review}</span>
     </div>
     ${typeof flowReportCountersHtml === 'function' ? flowReportCountersHtml(sub) : ''}
-    ${body || '<div style="font-size:0.82rem;color:var(--text-muted,#94a3b8);font-style:italic;">Submitted with no written notes.</div>'}
+    ${body || '<div style="font-size:0.82rem;color:var(--hx-ink-3);font-style:italic;">Submitted with no written notes.</div>'}
   </div>`;
 }
 
@@ -640,14 +640,14 @@ function mfViewItinerary(no) {
     String(a.date || '').localeCompare(String(b.date || '')) ||
     String(a.plannedTime || '').localeCompare(String(b.plannedTime || '')));
   const body = rows.length ? rows.map(r => `<tr>
-      <td>${_mfe(r.day || '')}<div style="font-size:0.7rem;color:#64748b;">${_mfe(r.date || '')}</div></td>
+      <td>${_mfe(r.day || '')}<div style="font-size:0.7rem;color:var(--hx-ink-3);">${_mfe(r.date || '')}</div></td>
       <td>${_mfe((typeof iwTime12 === 'function' ? iwTime12(r.plannedTime) : r.plannedTime) || '—')}</td>
-      <td><strong>${_mfe(r.company || '—')}</strong><div style="font-size:0.72rem;color:#64748b;">${_mfe(r.personToMeet || '')}</div></td>
+      <td><strong>${_mfe(r.company || '—')}</strong><div style="font-size:0.72rem;color:var(--hx-ink-3);">${_mfe(r.personToMeet || '')}</div></td>
       <td>${_mfe(r.cityArea || '—')}</td>
       <td>${_mfe(r.purpose || '')}</td>
       <td>${_mfe(r.agenda || '')}</td>
       <td>${_mfe(r.expectedOutcome || '')}</td></tr>`).join('')
-    : '<tr><td colspan="7" style="text-align:center;padding:1rem;color:#64748b;">No planned visits.</td></tr>';
+    : '<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--hx-ink-3);">No planned visits.</td></tr>';
 
   const el = document.createElement('div');
   /* `.flow-modal-overlay` is display:none in flow.css and only `.open` reveals it (flow.css:49-50).
@@ -655,16 +655,16 @@ function mfViewItinerary(no) {
      then never shown: "View plan" looked like a dead button. The inline cssText below does not set
      `display`, so the stylesheet won. */
   el.className = 'flow-modal-overlay open';
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:2rem 1rem;display:flex;align-items:flex-start;justify-content:center;';
+  el.style.cssText = 'position:fixed;inset:0;background:var(--hx-scrim);z-index:3000;overflow-y:auto;padding:2rem 1rem;display:flex;align-items:flex-start;justify-content:center;';
   el.innerHTML = `<div class="flow-modal" style="max-width:1000px;margin:0 auto;background:#fff;border-radius:12px;padding:1.2rem 1.4rem;">
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;">
       <h3 style="margin:0;font-size:1rem;">${_mfe(it.itineraryNo)} — ${_mfe(it.user)}</h3>
-      <span style="font-size:0.8rem;color:#64748b;">${_mfe(it.weekStart)} – ${_mfe(it.weekEnd)}</span>
+      <span style="font-size:0.8rem;color:var(--hx-ink-3);">${_mfe(it.weekStart)} – ${_mfe(it.weekEnd)}</span>
       <button class="btn btn-sm btn-secondary" style="margin-left:auto;">Close</button>
     </div>
     ${it.objectives ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;"><strong>Objectives:</strong> ${_mfe(it.objectives)}</p>` : ''}
-    ${it.notes ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;color:#64748b;">${_mfe(it.notes)}</p>` : ''}
-    <p style="margin:0 0 0.7rem;font-size:0.78rem;color:#15803d;">Director approved${it.dirApprovedBy ? ' by ' + _mfe(it.dirApprovedBy) : ''}${
+    ${it.notes ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;color:var(--hx-ink-3);">${_mfe(it.notes)}</p>` : ''}
+    <p style="margin:0 0 0.7rem;font-size:0.78rem;color:var(--hx-ok);">Director approved${it.dirApprovedBy ? ' by ' + _mfe(it.dirApprovedBy) : ''}${
       it.dirApprovedAt ? ' on ' + _mfe(typeof flowDate === 'function' ? flowDate(it.dirApprovedAt) : it.dirApprovedAt) : ''}.</p>
     <div style="overflow-x:auto;"><table class="flow-table"><thead><tr>
       <th>Day</th><th>Time</th><th>Company / who</th><th>City / area</th><th>Purpose</th><th>Agenda</th><th>Expected outcome</th>

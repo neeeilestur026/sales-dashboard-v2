@@ -106,7 +106,7 @@ async function miLoad() {
     miRender();
   } catch (e) {
     if (state) state.textContent = 'Unavailable';
-    if (body) body.innerHTML = `<div class="is-empty" style="color:#ef4444;">${_ie(e.message)}</div>`;
+    if (body) body.innerHTML = `<div class="is-empty" style="color:var(--hx-red);">${_ie(e.message)}</div>`;
   }
 }
 
@@ -222,7 +222,7 @@ function miRender() {
 }
 
 const _miPar = v => '(' + _im(v) + ')';
-const _miCol = v => v >= 0 ? '#16a34a' : '#ef4444';
+const _miCol = v => v >= 0 ? 'var(--hx-ok)' : 'var(--hx-red)';
 
 function miRenderMonthly(models, expByMonth) {
   // group models by month
@@ -245,9 +245,9 @@ function miRenderMonthly(models, expByMonth) {
     const sumRow = `<tr class="is-mrow" onclick="miToggleMonth(${i})">
       <td><span class="is-mname">${_ie(_miFmtMonth(ym))}</span><span class="is-sub">${list.length} SO${list.length !== 1 ? 's' : ''}</span>${_miMonthNoteBadge(list)}</td>
       <td class="num">${rev ? _im(rev) : '—'}</td>
-      <td class="num" style="color:#ef4444;">${cogs ? _miPar(cogs) : '—'}</td>
+      <td class="num" style="color:var(--hx-red);">${cogs ? _miPar(cogs) : '—'}</td>
       <td class="num" style="color:${_miCol(gp)};font-weight:600;">${_im(gp)}<span class="is-sub">${gpPct}</span></td>
-      <td class="num" style="color:#f97316;">${exp ? _miPar(exp) : '—'}</td>
+      <td class="num" style="color:var(--hx-warn);">${exp ? _miPar(exp) : '—'}</td>
       <td class="num" style="color:${_miCol(net)};font-weight:700;">${_im(net)}<span class="is-sub">${netPct}</span></td>
       <td class="num"><button type="button" class="is-exp" id="isMBtn${i}">▸</button></td>
     </tr>`;
@@ -257,8 +257,8 @@ function miRenderMonthly(models, expByMonth) {
 
   const gGP = gRev - gCOGS, gNet = gGP - gExp;
   const grand = `<tr class="is-grand"><td>All Periods</td><td class="num">${_im(gRev)}</td>
-    <td class="num" style="color:#ef4444;">${_miPar(gCOGS)}</td><td class="num" style="color:${_miCol(gGP)};">${_im(gGP)}</td>
-    <td class="num" style="color:#f97316;">${_miPar(gExp)}</td><td class="num" style="color:${_miCol(gNet)};font-weight:800;">${_im(gNet)}</td><td></td></tr>`;
+    <td class="num" style="color:var(--hx-red);">${_miPar(gCOGS)}</td><td class="num" style="color:${_miCol(gGP)};">${_im(gGP)}</td>
+    <td class="num" style="color:var(--hx-warn);">${_miPar(gExp)}</td><td class="num" style="color:${_miCol(gNet)};font-weight:800;">${_im(gNet)}</td><td></td></tr>`;
 
   return `<div style="overflow-x:auto;"><table class="is-table">
     <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th><th class="num">Expenses</th><th class="num">Net Profit</th><th></th></tr></thead>
@@ -281,7 +281,7 @@ function miSoTable(list, periodExp, periodRev, tag) {
       <td><strong>${_ie(m.soNo)}</strong>${_miNoteBadge(m.soNo)}${m.costNotSet ? ' <span class="is-warn" title="No cost recorded — click to open, then Edit costs">⚠ cost not set</span>' : ''}${m.date ? `<span class="is-sub2">${_ie(_id(m.date))}</span>` : ''}</td>
       <td>${_ie(m.customer) || '—'}</td>
       <td class="num">${_im(m.sales)}</td>
-      <td class="num" style="color:#ef4444;">${m.cogs ? _miPar(m.cogs) : '—'}</td>
+      <td class="num" style="color:var(--hx-red);">${m.cogs ? _miPar(m.cogs) : '—'}</td>
       <td class="num" style="color:${_miCol(m.gp)};font-weight:700;">${_im(m.gp)}</td>
       <td class="num"><button type="button" class="is-exp" id="isSBtn_${rid}">▸</button></td>
     </tr>`;
@@ -291,10 +291,10 @@ function miSoTable(list, periodExp, periodRev, tag) {
   const tRev = list.reduce((s, m) => s + m.sales, 0), tCogs = list.reduce((s, m) => s + m.cogs, 0);
   const tGp = tRev - tCogs, tNet = tGp - periodExp;
   const foot = `<tr class="is-subtotal"><td colspan="2">Total (${list.length} SO${list.length !== 1 ? 's' : ''})</td>
-    <td class="num">${_im(tRev)}</td><td class="num" style="color:#ef4444;">${_miPar(tCogs)}</td>
+    <td class="num">${_im(tRev)}</td><td class="num" style="color:var(--hx-red);">${_miPar(tCogs)}</td>
     <td class="num" style="color:${_miCol(tGp)};">${_im(tGp)}</td><td></td></tr>
     <tr class="is-subtotal"><td colspan="4" class="num">Less: Operating Expenses (this period)</td>
-    <td class="num" style="color:#f97316;">${periodExp ? _miPar(periodExp) : '—'}</td><td></td></tr>
+    <td class="num" style="color:var(--hx-warn);">${periodExp ? _miPar(periodExp) : '—'}</td><td></td></tr>
     <tr class="is-subtotal"><td colspan="4" class="num" style="font-weight:800;">Net Profit</td>
     <td class="num" style="color:${_miCol(tNet)};font-weight:800;">${_im(tNet)}</td><td></td></tr>`;
   return `<table class="is-subtable"><thead><tr><th>Sales Order</th><th>Client</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Gross Profit</th><th></th></tr></thead><tbody>${rows}${foot}</tbody></table>`;
@@ -302,7 +302,7 @@ function miSoTable(list, periodExp, periodRev, tag) {
 
 /** Level 3: revenue + COGS component breakdown for one SO. */
 function miSoBreakdown(m) {
-  const line = (label, val, neg, bold) => `<tr${bold ? ' class="b"' : ''}><td>${label}</td><td class="num"${neg ? ' style="color:#ef4444;"' : ''}>${neg ? _miPar(val) : _im(val)}</td></tr>`;
+  const line = (label, val, neg, bold) => `<tr${bold ? ' class="b"' : ''}><td>${label}</td><td class="num"${neg ? ' style="color:var(--hx-red);"' : ''}>${neg ? _miPar(val) : _im(val)}</td></tr>`;
   let cogsRows, note;
   if (m.migrated && m.cd) {
     // Migrated from the old Profit Report — show the exact recorded cost lines.
@@ -323,14 +323,14 @@ function miSoBreakdown(m) {
       + line('Duties &amp; Taxes', c.duties, true)
       + line('Delivery to Office', c.delivery, true)
       + line('Other Charges', c.other, true)
-      + `<tr class="sub"><td>Procurement landed cost</td><td class="num" style="color:#ef4444;">${_miPar(procurement)}</td></tr>`;
+      + `<tr class="sub"><td>Procurement landed cost</td><td class="num" style="color:var(--hx-red);">${_miPar(procurement)}</td></tr>`;
     note = `COGS components come from the order's Materials Receiving (Input VAT ${_im(c.vat)} is a recoverable asset, excluded from COGS). Total COGS is the landed cost actually issued on the invoice.`;
   }
   const editBtn = miCanEditCost
     ? `<button type="button" class="btn btn-sm btn-secondary" style="float:right;" onclick="miEditCost(${miModels.indexOf(m)})">✎ Edit costs</button>`
     : '';
   return `<div class="is-bd">
-    <div class="is-bd-h">${editBtn}${_ie(m.soNo)} — Income breakdown${m.edited ? ' · <span style="color:#0f766e;">edited</span>' : m.migrated ? ' · <span style="color:#0f766e;">migrated</span>' : ''}</div>
+    <div class="is-bd-h">${editBtn}${_ie(m.soNo)} — Income breakdown${m.edited ? ' · <span style="color:var(--hx-cyan-ink);">edited</span>' : m.migrated ? ' · <span style="color:var(--hx-cyan-ink);">migrated</span>' : ''}</div>
     <table class="is-bd-table"><tbody>
       <tr class="sect"><td colspan="2">Revenue</td></tr>
       ${line('Sales', m.sales)}
@@ -344,19 +344,19 @@ function miSoBreakdown(m) {
   </div>`;
 }
 
-/* A198 — a small 📝 badge marking a sales order that carries a note, so a manager sees it without
+/* A198 — a small pencil badge marking a sales order that carries a note, so a manager sees it without
    drilling in. The full note is the hover title (attribute-escaped). Empty when the order has none. */
 function _miNoteBadge(soNo) {
   const t = miNoteBySo[String(soNo)];
   if (!t) return '';
-  return ` <span title="${_ie(t)}" style="cursor:help;font-size:0.82rem;" aria-label="has a note">📝</span>`;
+  return ` <span title="${_ie(t)}" style="cursor:help;font-size:0.82rem;" aria-label="has a note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>`;
 }
 
 /* A198 — the month-row badge: how many of that month's orders carry a note. */
 function _miMonthNoteBadge(list) {
   const n = list.filter(m => miNoteBySo[String(m.soNo)]).length;
   if (!n) return '';
-  return ` <span class="is-sub" title="${n} sales order${n !== 1 ? 's' : ''} with a note this month" style="color:#0f766e;">📝 ${n}</span>`;
+  return ` <span class="is-sub" title="${n} sales order${n !== 1 ? 's' : ''} with a note this month" style="color:var(--hx-cyan-ink);">${n} with notes</span>`;
 }
 
 /* A198 — the consolidated "Sales Order Notes" panel: every noted order in one place, with who wrote
@@ -367,7 +367,7 @@ function miNotesPanelHtml() {
   if (!el) return;
   const soNos = Object.keys(miNoteBySo);
   if (!soNos.length) {
-    el.innerHTML = `<div class="card" style="margin-bottom:1rem;"><div class="card-title" style="display:flex;align-items:center;gap:0.5rem;">📝 Sales Order Notes</div>
+    el.innerHTML = `<div class="card" style="margin-bottom:1rem;"><div class="card-title" style="display:flex;align-items:center;gap:0.5rem;">Sales order notes</div>
       <div class="is-empty" style="padding:0.6rem 0;">No notes yet. Accounting and Admin add these on the Revenue &amp; Net Profit report.</div></div>`;
     return;
   }
@@ -383,17 +383,17 @@ function miNotesPanelHtml() {
     const who = meta.updatedBy ? `${_ie(meta.updatedBy)}${meta.updatedAt ? ' · ' + _ie(_id(meta.updatedAt)) : ''}` : '';
     const cust = custBySo[String(soNo)] || '';
     return `<div class="mi-note-row" onclick="miJumpToSo('${_ie(String(soNo)).replace(/'/g, "\\'")}')" title="Open this order in the report below"
-        style="padding:0.55rem 0.65rem;border-left:3px solid #0f766e;background:var(--bg-inset,#f1f5f9);border-radius:0 6px 6px 0;margin-bottom:0.5rem;cursor:pointer;">
+        style="padding:0.55rem 0.65rem;border-left:3px solid var(--hx-cyan);background:var(--hx-inset);border-radius:0 6px 6px 0;margin-bottom:0.5rem;cursor:pointer;">
       <div style="display:flex;gap:0.5rem;align-items:baseline;flex-wrap:wrap;">
         <strong>${_ie(String(soNo))}</strong>
-        ${cust ? `<span style="color:var(--text-secondary,#475569);font-size:0.82rem;">${_ie(cust)}</span>` : ''}
-        ${who ? `<span style="margin-left:auto;font-size:0.72rem;color:var(--text-muted,#64748b);">— ${who}</span>` : ''}
+        ${cust ? `<span style="color:var(--hx-ink-2);font-size:0.82rem;">${_ie(cust)}</span>` : ''}
+        ${who ? `<span style="margin-left:auto;font-size:0.72rem;color:var(--hx-ink-3);">— ${who}</span>` : ''}
       </div>
-      <div style="white-space:pre-wrap;color:var(--text-primary,#0f172a);margin-top:0.2rem;font-size:0.86rem;">${_ie(miNoteBySo[soNo])}</div>
+      <div style="white-space:pre-wrap;color:var(--hx-ink);margin-top:0.2rem;font-size:0.86rem;">${_ie(miNoteBySo[soNo])}</div>
     </div>`;
   }).join('');
   el.innerHTML = `<div class="card" style="margin-bottom:1rem;">
-    <div class="card-title" style="display:flex;align-items:center;gap:0.5rem;">📝 Sales Order Notes <span class="is-sub" style="font-weight:400;">${soNos.length} order${soNos.length !== 1 ? 's' : ''} · from Accounting &amp; Admin</span></div>
+    <div class="card-title" style="display:flex;align-items:center;gap:0.5rem;">Sales order notes <span class="is-sub" style="font-weight:400;">${soNos.length} order${soNos.length !== 1 ? 's' : ''} · from Accounting &amp; Admin</span></div>
     <div style="margin-top:0.5rem;">${rows}</div></div>`;
 }
 
@@ -432,9 +432,9 @@ function miJumpToSo(soNo) {
 function miNoteHtml(soNo) {
   const t = miNoteBySo[String(soNo)];
   if (!t) return '';
-  return `<p class="is-note" style="margin:0.5rem 0 0;padding:0.45rem 0.6rem;border-left:3px solid #0f766e;` +
-         `background:var(--bg-inset,#f1f5f9);white-space:pre-wrap;color:var(--text-primary,#0f172a);">` +
-         `<strong style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:#0f766e;">Note</strong><br>` +
+  return `<p class="is-note" style="margin:0.5rem 0 0;padding:0.45rem 0.6rem;border-left:3px solid var(--hx-cyan);` +
+         `background:var(--hx-inset);white-space:pre-wrap;color:var(--hx-ink);">` +
+         `<strong style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--hx-cyan-ink);">Note</strong><br>` +
          `${_ie(t)}</p>`;
 }
 

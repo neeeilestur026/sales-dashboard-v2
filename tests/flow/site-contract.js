@@ -42,7 +42,9 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'flow-sales-orders.html', 'flow-shipments.html', 'flow-suppliers.html', 'flow-travel.html',
   'migrate-collections.html', 'migrate-expenses.html', 'migrate-pricing.html', 'migrate-sales-orders.html', 'migrate-so-costs.html', 'reconcile-2026-costs.html',
   'replace-2026-sos.html', 'update-2025-costs.html', 'supplier-quotation.html', 'payment-requests.html', 'sales-orders.html', 'mi-queue.html', 'mro-queue.html',
-  'pricing-submissions.html', 'quotation-board.html'];
+  'pricing-submissions.html', 'quotation-board.html',
+  // A293 — management
+  'management-home.html', 'management-leave.html', 'management-sales-orders.html', 'management-itinerary.html', 'pricing.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');
