@@ -29,7 +29,10 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'director-home.html', 'director-expenses.html', 'director-sales-orders.html', 'director-emails.html',
   'leadgen-home.html', 'leadgen-daily-report.html',
   // A290 — the sales family
-  'dashboard.html', 'clients.html', 'pending-items.html', 'performance.html', 'quotation-summary.html', 'weekly-itinerary.html', 'sales-emails.html', 'product-finder.html'];
+  'dashboard.html', 'clients.html', 'pending-items.html', 'performance.html', 'quotation-summary.html', 'weekly-itinerary.html', 'sales-emails.html', 'product-finder.html',
+  // A291 — the admin family
+  'admin.html', 'admin-daily-report.html', 'admin-hr-reports.html', 'admin-import-quotation.html', 'admin-login-log.html', 'admin-reports.html', 'admin-summary.html',
+  'admin-targets.html', 'admin-team.html', 'admin-users.html', 'pr-tracker.html', 'po-approvals.html', 'quotation-approvals.html', 'purchase-request-tracker.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

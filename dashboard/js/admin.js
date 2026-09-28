@@ -21,21 +21,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const feedEl = document.getElementById('activityFeed');
     const icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
     if (!entries.length) {
-      feedEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">No flow activity today.</div>';
+      feedEl.innerHTML = '<div class="ad-empty">No flow activity today.</div>';
     } else {
       feedEl.innerHTML = entries.slice(0, 20).map(e => {
         const t = (() => { const d = new Date(e.timestamp); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); })();
         const who = e.user ? `<strong>${esc(e.user)}</strong> ` : '';
         return `<div class="feedrow">
           <span class="fi">${icon}</span>
-          <div style="flex:1;font:500 12px 'Inter',sans-serif;color:#475569;">${who}${esc(e.action)} <strong>${esc(e.module)}</strong>${e.refNo ? ' · ' + esc(e.refNo) : ''}</div>
-          <span style="font:600 11px 'Inter',sans-serif;color:#8b93a1;white-space:nowrap;">${t}</span>
+          <div class="ft">${who}${esc(e.action)} <strong>${esc(e.module)}</strong>${e.refNo ? ' · ' + esc(e.refNo) : ''}</div>
+          <span class="fw">${t}</span>
         </div>`;
       }).join('');
     }
   } catch (err) {
     const feedEl = document.getElementById('activityFeed');
-    if (feedEl) feedEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.82rem;">Could not load activity.</div>';
+    if (feedEl) feedEl.innerHTML = '<div class="ad-empty">Could not load activity.</div>';
   }
 
   // Load task overview (non-blocking — runs after activity feed)
@@ -73,7 +73,7 @@ function _docsBtn(module, ref) {
   return `<button class="link-btn" onclick='openDocsModal("${module}","${esc(ref)}")'>Docs</button>`;
 }
 function _pdfCell(link) {
-  return link ? `<a href="${esc(link)}" target="_blank" class="link-btn">View</a>` : '<span style="color:var(--text-muted,#64748b);">—</span>';
+  return link ? `<a href="${esc(link)}" target="_blank" class="link-btn">View</a>` : '<span class="hx-dim">—</span>';
 }
 function _isOpenStatus(s) { return !/(closed|paid|delivered|done|quoted|cancel|complete)/i.test(String(s || '')); }
 
@@ -249,7 +249,7 @@ function _tableHtml(headers, rows) {
 }
 
 function _emptyMsg(msg) {
-  return `<div style="padding:1.5rem;text-align:center;color:var(--text-muted,#64748b);font-size:0.85rem;">${msg}</div>`;
+  return `<div class="ad-empty">${msg}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +281,7 @@ async function loadInventorySnapshot() {
     const orderedN = all.filter(isOrdered).length;
     const rows = all.slice(0, 30);
     wrap.innerHTML =
-      `<div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-bottom:0.4rem;font-weight:600;">${typed ? `${all.length} stock item(s) · ${everything.length - all.length} catalog hidden` : `${orderedN} ordered · ${all.length - orderedN} not ordered`}</div>` +
+      `<div class="ad-inv-meta">${typed ? `${all.length} stock item(s) · ${everything.length - all.length} catalog hidden` : `${orderedN} ordered · ${all.length - orderedN} not ordered`}</div>` +
       _tableHtml(
         ['Item No', 'Description', 'Balance', 'Landed/Unit', 'Ordered?'],
         rows.map(item => [
@@ -289,7 +289,7 @@ async function loadInventorySnapshot() {
           esc(item.description || '—'),
           `<span class="amt">${flowNum(item.balance).toLocaleString()}</span>`,
           `<span class="amt">${flowMoney(item.landedCost, item.currency)}</span>`,
-          isOrdered(item) ? '<span style="color:#16a34a;font-weight:700;">✅ PO</span>' : '<span style="color:#94a3b8;">—</span>',
+          isOrdered(item) ? '<span class="hx-pos">PO</span>' : '<span class="hx-dim">—</span>',
         ])
       );
   } catch (err) {
@@ -306,7 +306,7 @@ let _smAllRows = [];
 async function _loadSmPanel() {
   const wrap = document.getElementById('smTableWrap');
   if (!wrap) return;
-  wrap.innerHTML = '<div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>';
+  wrap.innerHTML = '<div class="ad-loading"><div class="spinner"></div></div>';
   try {
     const r = await apiGetShipments();
     _smAllRows = (r.success && r.data) ? r.data : [];
@@ -359,11 +359,12 @@ function _smStageDots(row) {
     totalDone += done;
     const complete = (done + skipped) === phase.stages.length;
     const partial  = (done + skipped) > 0;
-    const bg = complete ? '#22c55e' : partial ? '#f59e0b' : '#e2e8f0';
-    return `<span title="Phase ${pi+1}: ${phase.name} (${done}/${phase.stages.length})" style="width:8px;height:8px;border-radius:50%;display:inline-block;background:${bg};"></span>`;
+    const cls = complete ? 'done' : partial ? 'partial' : '';
+    return `<i class="${cls}" title="Phase ${pi+1}: ${phase.name} (${done}/${phase.stages.length})"></i>`;
   }).join('');
 
-  return `<div style="display:flex;gap:3px;align-items:center;">${dots}</div><div style="font-size:0.63rem;color:var(--text-muted,#64748b);margin-top:2px;">${totalDone}/${_SM_LIFECYCLE_STAGES.length}</div>`;
+  // Classed dots; css/shipments.css paints them.
+  return `<div class="sm-dots">${dots}</div><div class="sm-dots-n">${totalDone}/${_SM_LIFECYCLE_STAGES.length}</div>`;
 }
 
 function _renderSmTable(rows) {
@@ -381,15 +382,15 @@ function _renderSmTable(rows) {
       <td><span class="ref">${esc(s.shipmentId || '—')}</span></td>
       <td><span class="ref">${esc(s.poNo || '—')}</span></td>
       <td>${esc(s.client || '—')}</td>
-      <td>${s.mode ? `<span class="sbadge sbadge-default">${esc(s.mode)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${s.mode ? `<span class="sbadge sbadge-default">${esc(s.mode)}</span>` : '<span class="hx-dim">—</span>'}</td>
       <td>${esc(s.etd || '—')}</td>
       <td>${esc(s.eta || '—')}</td>
       <td>${_smBadge(s.status || 'Pending')}</td>
       <td>${_smStageDots(s)}</td>
-      <td style="white-space:nowrap;">
-        <button onclick="openSmTimeline(${JSON.stringify(idx)})" style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.35);color:#14b8a6;border-radius:5px;padding:0.18rem 0.6rem;font-size:0.72rem;cursor:pointer;margin-right:0.3rem;">Timeline</button>
-        <button onclick="openSmModal(${JSON.stringify(idx)})" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#818cf8;border-radius:5px;padding:0.18rem 0.6rem;font-size:0.72rem;cursor:pointer;">Edit</button>
-      </td>
+      <td><span class="sm-act">
+        <button type="button" onclick="openSmTimeline(${JSON.stringify(idx)})">Timeline</button>
+        <button type="button" onclick="openSmModal(${JSON.stringify(idx)})">Edit</button>
+      </span></td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `<table class="task-tbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
@@ -450,7 +451,7 @@ async function openSmModal(idx) {
 async function _loadSmSoPicker(preSelected, isStocking) {
   const listEl   = document.getElementById('smSoCheckList');
   const pickerWrap = document.getElementById('smSoPickerWrap');
-  listEl.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.78rem;color:var(--text-muted,#64748b);">Loading…</div>';
+  listEl.innerHTML = '<div class="sm-picker-empty">Loading…</div>';
 
   try {
     if (!_smPendingSOs.length) {
@@ -476,16 +477,16 @@ async function _loadSmSoPicker(preSelected, isStocking) {
 function _smRenderSoChecks(sos, preSelected) {
   const listEl = document.getElementById('smSoCheckList');
   if (!sos.length) {
-    listEl.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.78rem;color:var(--text-muted,#64748b);">No pending Sales Orders found.</div>';
+    listEl.innerHTML = '<div class="sm-picker-empty">No pending sales orders found.</div>';
     _smUpdateChips();
     return;
   }
   listEl.innerHTML = sos.map(so => {
     const checked = preSelected && preSelected.includes(so.soNo) ? 'checked' : '';
-    return `<label style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0.75rem;cursor:pointer;font-size:0.8rem;color:var(--text-secondary,#94a3b8);">
-      <input type="checkbox" class="sm-so-cb" value="${esc(so.soNo)}" ${checked} onchange="_smUpdateChips()" style="accent-color:#6366f1;">
-      <span style="font-weight:600;color:var(--text-primary,#f1f5f9);">${esc(so.soNo)}</span>
-      <span style="color:var(--text-muted,#64748b);">${esc(so.customerName)}</span>
+    return `<label>
+      <input type="checkbox" class="sm-so-cb" value="${esc(so.soNo)}" ${checked} onchange="_smUpdateChips()">
+      <b>${esc(so.soNo)}</b>
+      <span>${esc(so.customerName)}</span>
     </label>`;
   }).join('');
   _smUpdateChips();
@@ -506,9 +507,9 @@ function _smUpdateChips() {
   const chips = document.getElementById('smSoChips');
   if (!chips) return;
   chips.innerHTML = checked.map(soNo =>
-    `<span style="display:inline-flex;align-items:center;gap:0.3rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;border-radius:99px;padding:0.18rem 0.55rem;font-size:0.72rem;font-weight:600;">
+    `<span class="sm-chip">
       ${esc(soNo)}
-      <span onclick="smRemoveSO('${esc(soNo)}')" style="cursor:pointer;opacity:0.7;font-size:0.85rem;line-height:1;">×</span>
+      <span onclick="smRemoveSO('${esc(soNo)}')" title="Remove">×</span>
     </span>`
   ).join('');
 }
@@ -572,7 +573,7 @@ async function saveSmEdit() {
     };
     const r = await apiSaveShipment(payload);
     if (r && r.success) {
-      msg.style.color = '#22c55e';
+      msg.style.color = 'var(--hx-ok)';
       msg.textContent = 'Saved!';
       setTimeout(() => {
         closeSmModal();
@@ -582,11 +583,11 @@ async function saveSmEdit() {
         _loadSmPanel();
       }, 700);
     } else {
-      msg.style.color = '#ef4444';
+      msg.style.color = 'var(--hx-red)';
       msg.textContent = r.message || 'Save failed.';
     }
   } catch (err) {
-    msg.style.color = '#ef4444';
+    msg.style.color = 'var(--hx-red)';
     msg.textContent = 'Error: ' + err.message;
   }
 }
@@ -662,10 +663,10 @@ async function openSmTimeline(idx) {
       if (!activated) _smTlOpenPhases.add(_SM_PHASES.length - 1);
       _smTlRender();
     } else {
-      document.getElementById('smTlContent').innerHTML = `<div style="padding:2rem;text-align:center;color:#ef4444;">${esc(r.message || 'Failed to load.')}</div>`;
+      document.getElementById('smTlContent').innerHTML = `<div style="padding:2rem;text-align:center;color:var(--hx-red);">${esc(r.message || 'Failed to load.')}</div>`;
     }
   } catch (err) {
-    document.getElementById('smTlContent').innerHTML = `<div style="padding:2rem;text-align:center;color:#ef4444;">Error: ${esc(err.message)}</div>`;
+    document.getElementById('smTlContent').innerHTML = `<div style="padding:2rem;text-align:center;color:var(--hx-red);">Error: ${esc(err.message)}</div>`;
   }
 }
 
@@ -704,10 +705,10 @@ function _smTlRender() {
     const isOpen       = _smTlOpenPhases.has(pi);
 
     const hdrState  = allComplete ? 'done' : isOpen ? 'open' : anyDone ? 'partial' : 'pending';
-    const cntColor  = allComplete ? '#22c55e' : anyDone ? '#f59e0b' : 'var(--text-muted,#64748b)';
-    const lblColor  = allComplete ? 'var(--text-primary,#f1f5f9)' : 'var(--text-secondary,#94a3b8)';
-    const numBg     = allComplete ? 'rgba(34,197,94,0.15)' : '#e2e8f0';
-    const numBorder = allComplete ? 'rgba(34,197,94,0.5)' : '#e2e8f0';
+    const cntColor  = allComplete ? 'var(--hx-ok)' : anyDone ? 'var(--hx-warn)' : 'var(--hx-ink-3)';
+    const lblColor  = allComplete ? 'var(--hx-ink)' : 'var(--hx-ink-2)';
+    const numBg     = allComplete ? 'var(--hx-ok-soft)' : 'var(--hx-inset)';
+    const numBorder = allComplete ? 'var(--hx-ok-line)' : 'var(--hx-hair)';
 
     html += `<div class="sm-tl-phase-wrap" id="smTlPhase${pi}">
       <div class="sm-tl-phase-hdr ${hdrState}" onclick="smTlTogglePhase(${pi})"
@@ -793,7 +794,7 @@ function _smTlRenderRibbon(apiMap) {
 function _smTlRenderNextUp(apiMap, nextKey) {
   if (!nextKey) {
     return `<div class="sm-tl-next-up done">
-      <div class="sm-tl-next-up-icon">🎉</div>
+      <div class="sm-tl-next-up-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
       <div class="sm-tl-next-up-body">
         <div class="sm-tl-next-up-kicker">All complete</div>
         <div class="sm-tl-next-up-stage"><strong>All ${_SM_LIFECYCLE_STAGES.length} stages done!</strong></div>
@@ -813,7 +814,9 @@ function _smTlRenderNextUp(apiMap, nextKey) {
   const phaseLabel = phaseIdx >= 0 ? `Phase ${phaseIdx+1}: ${_SM_PHASES[phaseIdx].name}` : '';
   const ownerCls = _SM_OWNER_BADGE_CLASS[def.owner] || 'sm-owner-admin';
 
-  const icon = blocked ? '⚠️' : '➡️';
+  const icon = blocked
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
   const cls  = blocked ? 'blocked' : '';
   const kicker = blocked ? 'Waiting on prerequisites' : 'Next up';
 
@@ -871,14 +874,14 @@ function _smTlRenderStageRow(def, apiStage, nextKey, apiMap) {
         <div class="sm-tl-card-meta">
           <span class="sm-owner-badge ${ownerCls}">${esc(def.owner)}</span>
           ${isAuto ? '<span class="auto-badge">AUTO</span>' : ''}
-          ${skipReason ? `<span style="color:#f59e0b;font-style:italic;font-size:0.64rem;">– ${esc(skipReason)}</span>` : ''}
+          ${skipReason ? `<span style="color:var(--hx-warn);font-style:italic;font-size:0.64rem;">– ${esc(skipReason)}</span>` : ''}
         </div>
         ${dateNote ? `<div class="sm-tl-card-date">${dateNote}</div>` : ''}
       </div>
       <div class="sm-tl-card-right">
         ${docs.length > 0 ? `<span class="doc-badge">${docs.length}</span>` : ''}
         ${isBlocked ? '<span class="blocked-icon" title="Prerequisites not yet met (advisory)">⚠</span>' : ''}
-        <span style="font-size:0.7rem;color:var(--text-muted,#64748b);">${isOpen ? '▾' : '▸'}</span>
+        <span style="font-size:0.7rem;color:var(--hx-ink-3);">${isOpen ? '▾' : '▸'}</span>
       </div>
     </div>
     ${isOpen ? `<div class="sm-tl-detail">${_smTlStageDetail(def, apiStage, apiMap)}</div>` : ''}
@@ -899,11 +902,11 @@ function _smTlStageDetail(def, apiStage, apiMap) {
   if (meta.description) {
     html += `<div class="sm-tl-detail-section">
       <div class="sm-tl-section-label">About this stage</div>
-      <div style="font-size:0.76rem;color:var(--text-secondary,#94a3b8);line-height:1.5;">${esc(meta.description)}</div>
+      <div style="font-size:0.76rem;color:var(--hx-ink-2);line-height:1.5;">${esc(meta.description)}</div>
       ${isAuto && apiStage.autoderivedNote
         ? `<div style="margin-top:0.35rem;display:inline-flex;align-items:center;gap:0.35rem;">
             <span class="auto-badge">AUTO</span>
-            <span style="font-size:0.7rem;color:var(--text-muted,#64748b);">${esc(apiStage.autoderivedNote)}</span>
+            <span style="font-size:0.7rem;color:var(--hx-ink-3);">${esc(apiStage.autoderivedNote)}</span>
            </div>`
         : ''}
     </div>`;
@@ -913,14 +916,14 @@ function _smTlStageDetail(def, apiStage, apiMap) {
   if (!meta.description && isAuto && apiStage.autoderivedNote) {
     html += `<div class="sm-tl-detail-section" style="display:flex;align-items:center;gap:0.35rem;">
       <span class="auto-badge">AUTO</span>
-      <span style="font-size:0.73rem;color:var(--text-muted,#64748b);">${esc(apiStage.autoderivedNote)}</span>
+      <span style="font-size:0.73rem;color:var(--hx-ink-3);">${esc(apiStage.autoderivedNote)}</span>
     </div>`;
   }
 
   // Skip reason
   if (status === 'skipped' && apiStage.skippedReason) {
     html += `<div class="sm-tl-detail-section">
-      <div style="font-size:0.76rem;color:#f59e0b;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);border-radius:5px;padding:0.4rem 0.6rem;">
+      <div style="font-size:0.76rem;color:var(--hx-warn);background:var(--hx-warn-soft);border:1px solid var(--hx-warn-line);border-radius:5px;padding:0.4rem 0.6rem;">
         <strong>Skip reason:</strong> ${esc(apiStage.skippedReason)}
       </div>
     </div>`;
@@ -980,7 +983,7 @@ function _smTlStageDetail(def, apiStage, apiMap) {
     });
 
     if (unlocks.length > 0) {
-      if (requires.length > 0) html += `<span style="font-size:0.65rem;color:var(--text-muted,#64748b);align-self:center;">→ unlocks:</span>`;
+      if (requires.length > 0) html += `<span style="font-size:0.65rem;color:var(--hx-ink-3);align-self:center;">→ unlocks:</span>`;
       unlocks.forEach(uk => {
         const uDef = _SM_LIFECYCLE_STAGES.find(d => d.key === uk);
         if (!uDef) return;
@@ -1004,29 +1007,29 @@ function _smTlStageDetail(def, apiStage, apiMap) {
     html += '<div>';
     docs.forEach(f => {
       html += `<div class="sm-doc-file">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         <span class="sm-doc-name" title="${esc(f.name)}">${esc(f.name)}</span>
         <button class="sm-tl-btn" onclick="smViewDoc('${esc(f.previewUrl)}','${esc(f.url)}','${esc(f.name)}')"
-          style="background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.3);color:#818cf8;font-weight:400;" aria-label="View ${esc(f.name)}">👁 View</button>
+          style="background:var(--hx-navy-soft);border-color:var(--hx-navy-line);color:var(--hx-navy-text);font-weight:400;" aria-label="View ${esc(f.name)}">View</button>
         <button class="sm-tl-btn" onclick="smTlDeleteDoc('${esc(f.fileId)}','${def.key}','${esc(f.name)}')"
-          style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.25);color:#ef4444;font-weight:400;" aria-label="Remove ${esc(f.name)}">×</button>
+          style="background:var(--hx-red-soft);border-color:var(--hx-red-line);color:var(--hx-red);font-weight:400;" aria-label="Remove ${esc(f.name)}">×</button>
       </div>`;
     });
     html += '</div>';
   } else if (def.docLabel) {
-    html += `<div style="font-size:0.73rem;color:var(--text-muted,#64748b);font-style:italic;">Expected: ${esc(def.docLabel)}</div>`;
+    html += `<div style="font-size:0.73rem;color:var(--hx-ink-3);font-style:italic;">Expected: ${esc(def.docLabel)}</div>`;
   } else {
-    html += `<div style="font-size:0.73rem;color:var(--text-muted,#64748b);">No documents attached.</div>`;
+    html += `<div style="font-size:0.73rem;color:var(--hx-ink-3);">No documents attached.</div>`;
   }
 
   if (docs.length < 5) {
-    html += `<label style="display:inline-flex;align-items:center;gap:0.4rem;cursor:pointer;padding:0.3rem 0.6rem;border:1px dashed rgba(99,102,241,0.4);border-radius:5px;background:rgba(99,102,241,0.04);margin-top:0.4rem;" tabindex="0" role="button">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <span style="font-size:0.73rem;color:#818cf8;">Upload document <span style="color:var(--text-muted,#64748b);font-weight:400;">(${5 - docs.length} slot${docs.length === 4 ? '' : 's'} left)</span></span>
+    html += `<label style="display:inline-flex;align-items:center;gap:0.4rem;cursor:pointer;padding:0.3rem 0.6rem;border:1px dashed var(--hx-navy-line);border-radius:5px;background:var(--hx-navy-soft);margin-top:0.4rem;" tabindex="0" role="button">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span style="font-size:0.73rem;color:var(--hx-navy-text);">Upload document <span style="color:var(--hx-ink-3);font-weight:400;">(${5 - docs.length} slot${docs.length === 4 ? '' : 's'} left)</span></span>
       <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" style="display:none;" onchange="smTlUploadDoc(this,'${def.key}')" aria-label="Upload document for ${esc(def.label)}">
     </label>`;
   } else {
-    html += `<div style="font-size:0.72rem;color:var(--text-muted,#64748b);margin-top:0.4rem;">Max 5 files reached.</div>`;
+    html += `<div style="font-size:0.72rem;color:var(--hx-ink-3);margin-top:0.4rem;">Max 5 files reached.</div>`;
   }
   html += '</div>';
 
@@ -1034,13 +1037,13 @@ function _smTlStageDetail(def, apiStage, apiMap) {
   if (status !== 'pending') {
     html += `<div class="sm-tl-detail-section">
       <div class="sm-tl-section-label">Activity</div>
-      <div style="font-size:0.73rem;color:var(--text-secondary,#94a3b8);line-height:1.55;">`;
+      <div style="font-size:0.73rem;color:var(--hx-ink-2);line-height:1.55;">`;
     if (apiStage.completedAt || apiStage.completedBy) {
       const verb = status === 'skipped' ? 'Skipped' : 'Completed';
       html += `<div>• ${verb}${apiStage.completedAt ? ' on <strong>' + esc(apiStage.completedAt) + '</strong>' : ''}${apiStage.completedBy ? ' by <strong>' + esc(apiStage.completedBy) + '</strong>' : ''}</div>`;
     }
     if (apiStage.notes) {
-      html += `<div style="margin-top:0.25rem;padding:0.35rem 0.5rem;background:#f8fafc;border-radius:4px;border:1px solid #e2e8f0;">
+      html += `<div style="margin-top:0.25rem;padding:0.35rem 0.5rem;background:var(--hx-inset);border-radius:4px;border:1px solid var(--hx-hair);">
         ${esc(apiStage.notes)}
       </div>`;
     }
@@ -1064,7 +1067,7 @@ function _smTlStageDetail(def, apiStage, apiMap) {
   if (status !== 'pending')
     html += `<button class="sm-tl-btn reset-btn" onclick="smTlMarkStage('${def.key}','pending')" aria-label="Reset ${esc(def.label)}">↺ Reset</button>`;
   if (needsWarn)
-    html += `<span style="font-size:0.68rem;color:var(--text-muted,#64748b);align-self:center;">— owned by ${esc(def.owner)}</span>`;
+    html += `<span style="font-size:0.68rem;color:var(--hx-ink-3);align-self:center;">— owned by ${esc(def.owner)}</span>`;
   html += '</div></div>';
 
   return html;
@@ -1128,7 +1131,7 @@ async function smTlUploadDoc(input, stageKey) {
   const file = input.files[0];
   const shipmentId = _smTlData.shipment.shipmentId;
   const uploadLabel = input.closest('label');
-  if (uploadLabel) uploadLabel.innerHTML = '<span style="font-size:0.73rem;color:var(--text-muted,#64748b);">Uploading…</span>';
+  if (uploadLabel) uploadLabel.innerHTML = '<span style="font-size:0.73rem;color:var(--hx-ink-3);">Uploading…</span>';
   try {
     const base64 = await _smFileToBase64(file);
     const r = await apiUploadShipmentDoc(shipmentId, stageKey, file.name, base64, file.type || 'application/octet-stream');
@@ -1268,7 +1271,14 @@ function _smHistoryClearFilters() {
 
 function _smHistoryRenderEvent(ev) {
   const cat      = ev.event_category || 'system';
-  const iconMap  = { field:'✏️', stage:'🔖', document:'📎', lifecycle:'🚀', system:'⚙️' };
+  const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+  const iconMap  = {
+    field: I('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+    stage: I('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>'),
+    document: I('<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>'),
+    lifecycle: I('<path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>'),
+    system: I('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>')
+  };
   const icon     = iconMap[cat] || '•';
   const sentence = _smEventToSentence(ev);
   const rel      = _smRelativeTime(ev.event_timestamp);
@@ -1276,7 +1286,7 @@ function _smHistoryRenderEvent(ev) {
   const actor    = ev.actor_name || ev.actor_email || '';
   let meta = `<span title="${_esc(ts)}">${_esc(rel)}</span>`;
   if (actor) meta += ` · <span class="sm-hist-actor">${_esc(actor)}</span>`;
-  if (ev.source === 'auto') meta += ` · <span style="font-size:0.62rem;color:#818cf8;">auto</span>`;
+  if (ev.source === 'auto') meta += ` · <span style="font-size:0.62rem;color:var(--hx-navy-text);">auto</span>`;
   let diffHtml = '';
   if (ev.event_type === 'FIELD_CHANGE' && (ev.old_value || ev.new_value)) {
     diffHtml = `<div class="sm-hist-diff">`;

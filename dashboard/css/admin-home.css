@@ -1,0 +1,91 @@
+/* admin-home.css — A291 · the admin's home, on the brand system.
+ *
+ * Linked by admin.html after css/styles.css (tokens, both themes, the deck, glass, buttons, the
+ * segmented control), css/flow.css (the documents modal), css/pnl-report.css (the profit report)
+ * and css/shipments.css (the queue tables and the three shipment dialogs, shared with the
+ * accounting home). This file is only what the page adds: the queue panels' heads, the activity
+ * feed rows, the inventory host, the mast buttons, the rail's jump chips and the load moment.
+ * Every rule hangs off body.ad. Keyframes animate transform or opacity only; everything is
+ * switched off under prefers-reduced-motion. */
+
+/* ── 1 · the slab and the rail ───────────────────────────────────────────────────────────────── */
+body.ad .hx-facts { grid-template-columns: 1fr 1fr; }
+body.ad .hx-facts > div.wide { grid-column: 1 / -1; }
+body.ad .hx-rail-nav .hx-count { transition: background .3s, color .3s; }
+body.ad .hx-rail-nav .hx-count.zero, body.ad #inbox.zero .hx-count { background: var(--hx-inset); color: var(--hx-ink-3); border-color: var(--hx-hair); }
+body.ad .hx-jump.on { color: var(--hx-navy-text); border-color: var(--hx-navy-line); background: var(--hx-navy-soft); }
+
+/* ── 2 · the mast ────────────────────────────────────────────────────────────────────────────── */
+body.ad .hx-mast .hx-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+body.ad .hx-mast .btn svg { width: 14px; height: 14px; }
+
+/* ── 3 · needs you ───────────────────────────────────────────────────────────────────────────── */
+body.ad #inbox .hx-head { margin-bottom: 8px; }
+body.ad #flowActionCenter { min-height: 24px; }
+
+/* ── 4 · the queues ──────────────────────────────────────────────────────────────────────────── */
+body.ad #queues .hx-seg { overflow-x: auto; scrollbar-width: none; margin-bottom: 14px; max-width: 100%; }
+body.ad #queues .hx-seg::-webkit-scrollbar { display: none; }
+body.ad .hx-tab { white-space: nowrap; }
+body.ad .hx-tab .ct:empty { display: none; }
+body.ad .ad-panel { min-width: 0; }
+body.ad .ad-qhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+body.ad .ad-qhead .hx-meta { margin: 0; }
+body.ad .ad-qhead .ad-qtools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+body.ad .ad-qlink { font: 600 12px/1.3 var(--hx-text); color: var(--hx-navy-text); text-decoration: none; white-space: nowrap; }
+body.ad .ad-qlink:hover { text-decoration: underline; }
+body.ad .ad-sel { padding: 5px 9px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); background: var(--hx-glass-solid); color: var(--hx-ink); font: 500 12px/1.3 var(--hx-text); }
+body.ad #queues .hx-scroll { max-height: 56vh; }
+body.ad .ad-loading { padding: 1.5rem; text-align: center; }
+body.ad .ad-loading .spinner { margin: 0 auto; }
+
+/* ── 5 · activity and inventory, side by side ────────────────────────────────────────────────── */
+body.ad .ad-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+body.ad .ad-pair > section { margin: 0; }
+body.ad .ad-feed { max-height: 380px; overflow: auto; }
+body.ad .feedrow { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--hx-hair-2); }
+body.ad .feedrow:last-child { border-bottom: none; }
+body.ad .feedrow .fi { width: 30px; height: 30px; border-radius: 9px; background: var(--hx-navy-soft); color: var(--hx-navy-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+body.ad .feedrow .ft { flex: 1; min-width: 0; font: 500 12.5px/1.4 var(--hx-text); color: var(--hx-ink-2); }
+body.ad .feedrow .ft strong { color: var(--hx-ink); font-weight: 700; }
+body.ad .feedrow .fw { font: 600 11px/1.3 var(--hx-text); color: var(--hx-ink-3); white-space: nowrap; }
+body.ad .ad-empty { text-align: center; padding: 1.5rem; color: var(--hx-ink-3); font: 400 12.5px/1.5 var(--hx-text); }
+body.ad #inventory .hx-scroll { max-height: 380px; }
+body.ad .ad-inv-meta { font: 600 11.5px/1.4 var(--hx-text); color: var(--hx-ink-3); margin: 0 0 8px; }
+
+/* ── 6 · the profit report sits on the glass ─────────────────────────────────────────────────── */
+body.ad #profit { margin-top: 0; }
+
+/* ── 7 · the load moment ─────────────────────────────────────────────────────────────────────── */
+body.ad.ad-load .hx-facts dd { animation: adIn .45s var(--hx-ease) both; }
+body.ad.ad-load .hx-facts > div:nth-child(2) dd { animation-delay: .05s; }
+body.ad.ad-load .hx-facts > div:nth-child(3) dd { animation-delay: .10s; }
+body.ad.ad-load .hx-facts > div:nth-child(4) dd { animation-delay: .15s; }
+body.ad.ad-load .hx-facts > div:nth-child(5) dd { animation-delay: .20s; }
+body.ad.ad-load .feedrow { animation: adIn .38s var(--hx-ease) both; }
+body.ad.ad-load .feedrow:nth-child(2) { animation-delay: .04s; }
+body.ad.ad-load .feedrow:nth-child(3) { animation-delay: .08s; }
+body.ad.ad-load .feedrow:nth-child(4) { animation-delay: .12s; }
+body.ad.ad-load .feedrow:nth-child(n+5) { animation-delay: .16s; }
+body.ad .hx-count.pop { animation: adPop .32s var(--hx-spring); }
+body.ad .hx-facts dd.ad-tick { animation: adFade .5s var(--hx-ease); }
+
+@keyframes adIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes adPop { 0% { transform: scale(1); } 45% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes adFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── 8 · responsive ──────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  body.ad .ad-pair { grid-template-columns: 1fr; }
+  body.ad .hx-facts { grid-template-columns: repeat(3, 1fr); }
+  body.ad .hx-facts > div.wide { grid-column: auto; }
+}
+@media (max-width: 768px) {
+  body.ad .hx-facts { grid-template-columns: 1fr 1fr; }
+  body.ad .hx-mast .hx-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ── 9 · reduced motion ──────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.ad *, body.ad *::before, body.ad *::after { animation: none !important; transition: none !important; }
+}

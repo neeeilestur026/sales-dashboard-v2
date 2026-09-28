@@ -11,12 +11,12 @@
       display: flex; gap: 0.75rem; align-items: center;
       margin-bottom: 1.25rem; flex-wrap: wrap;
     }
-    .filter-bar label { font-size: 0.85rem; color: var(--text-muted, #64748b); font-weight: 500; }
+    .filter-bar label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
     .filter-bar input[type="date"] {
       padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
-      border-radius: 8px; color: var(--text-primary, #f1f5f9);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text-primary);
       font-size: 0.875rem;
     }
     .filter-bar input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
@@ -25,24 +25,24 @@
     }
     .reports-table th {
       text-align: left; padding: 0.65rem 0.9rem;
-      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
       font-weight: 600; white-space: nowrap;
     }
     .reports-table td {
-      padding: 0.65rem 0.9rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-primary, #f1f5f9); vertical-align: middle;
+      padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--hx-hair-2);
+      color: var(--text-primary); vertical-align: middle;
     }
-    .reports-table tr:hover td { background: #e2e8f0; }
-    .not-submitted td { color: var(--text-muted, #64748b); font-style: italic; opacity: 0.6; }
-    .badge-success { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: rgba(34,197,94,0.15); color: #22c55e; }
-    .badge-fail { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: rgba(239,68,68,0.15); color: #ef4444; }
-    .badge-muted { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .reports-table tr:hover td { background: var(--hx-hair-2); }
+    .not-submitted td { color: var(--text-muted); font-style: italic; opacity: 0.6; }
+    .badge-success { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .badge-fail { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: var(--hx-red-soft); color: var(--hx-red); }
+    .badge-muted { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: var(--hx-inset); color: var(--hx-ink-3); }
     .details-btn {
-      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
-      color: #3b82f6; border-radius: 6px; padding: 0.25rem 0.6rem;
+      background: var(--hx-cyan-soft); border: 1px solid var(--hx-cyan-soft);
+      color: var(--hx-cyan-ink); border-radius: 6px; padding: 0.25rem 0.6rem;
       font-size: 0.75rem; font-weight: 600; cursor: pointer;
     }
-    .details-btn:hover { background: rgba(59,130,246,0.2); }
+    .details-btn:hover { background: var(--hx-cyan-soft); }
     .call-details-row { display: none; }
     .call-details-row.open { display: table-row; }
     .call-details-row td { padding: 0.5rem 0.9rem; background: rgba(30,41,59,0.5); }
@@ -51,14 +51,14 @@
     }
     .mini-table th {
       text-align: left; padding: 0.3rem 0.6rem; font-weight: 600;
-      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
     }
     .mini-table td {
-      padding: 0.3rem 0.6rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-secondary, #94a3b8);
+      padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--hx-hair-2);
+      color: var(--text-secondary);
     }
-    .no-results { text-align: center; padding: 3rem 1rem; color: var(--text-muted, #64748b); }
-    .date-label { font-size: 0.85rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+    .no-results { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+    .date-label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; }
   </style>
 </head>
 <body>

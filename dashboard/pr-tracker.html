@@ -17,19 +17,19 @@
       flex: 1;
       min-width: 200px;
       padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
       font-size: 0.875rem;
     }
-    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted, #64748b); }
+    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted); }
     .tracker-toolbar select {
       padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
       font-size: 0.875rem;
       cursor: pointer;
     }
@@ -42,18 +42,18 @@
     .tracker-table th {
       text-align: left;
       padding: 0.65rem 0.9rem;
-      color: var(--text-muted, #64748b);
-      border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
       font-weight: 600;
       white-space: nowrap;
     }
     .tracker-table td {
       padding: 0.7rem 0.9rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--hx-hair-2);
       vertical-align: middle;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
     }
-    .tracker-table tr:hover td { background: #e2e8f0; }
+    .tracker-table tr:hover td { background: var(--hx-hair-2); }
     .badge {
       display: inline-block;
       padding: 0.2rem 0.55rem;
@@ -61,11 +61,11 @@
       font-size: 0.72rem;
       font-weight: 600;
     }
-    .badge-pending      { background: rgba(234,179,8,0.15);   color: #eab308; }
-    .badge-for-pricing   { background: rgba(59,130,246,0.15);  color: #3b82f6; }
-    .badge-for-quotation { background: rgba(168,85,247,0.15);  color: #a855f7; }
-    .badge-approved      { background: rgba(34,197,94,0.2);    color: #22c55e; }
-    .badge-rejected      { background: rgba(239,68,68,0.15);   color: #ef4444; }
+    .badge-pending      { background: var(--hx-warn-soft);   color: var(--hx-warn); }
+    .badge-for-pricing   { background: var(--hx-cyan-soft);  color: var(--hx-cyan-ink); }
+    .badge-for-quotation { background: rgba(168,85,247,0.15);  color: var(--hx-navy-text); }
+    .badge-approved      { background: var(--hx-ok-soft);    color: var(--hx-ok); }
+    .badge-rejected      { background: var(--hx-red-soft);   color: var(--hx-red); }
     .days-badge {
       display: inline-block;
       padding: 0.2rem 0.55rem;
@@ -73,19 +73,19 @@
       font-size: 0.8rem;
       font-weight: 600;
     }
-    .days-fresh  { background: rgba(34,197,94,0.12);  color: #22c55e; }
-    .days-ok     { background: rgba(234,179,8,0.12);  color: #eab308; }
-    .days-old    { background: rgba(249,115,22,0.12); color: #f97316; }
-    .days-stale  { background: rgba(239,68,68,0.12);  color: #ef4444; }
+    .days-fresh  { background: var(--hx-ok-soft);  color: var(--hx-ok); }
+    .days-ok     { background: var(--hx-warn-soft);  color: var(--hx-warn); }
+    .days-old    { background: var(--hx-warn-soft); color: var(--hx-warn); }
+    .days-stale  { background: var(--hx-red-soft);  color: var(--hx-red); }
     .tracker-count {
       font-size: 0.8rem;
-      color: var(--text-muted, #64748b);
+      color: var(--text-muted);
       margin-bottom: 0.75rem;
     }
     .no-results {
       text-align: center;
       padding: 3rem 1rem;
-      color: var(--text-muted, #64748b);
+      color: var(--text-muted);
     }
     .status-select {
       display: inline-block;
@@ -100,25 +100,25 @@
       text-align: center;
       min-width: 70px;
     }
-    .status-select.badge-pending      { background: rgba(234,179,8,0.15);   color: #eab308; }
-    .status-select.badge-for-pricing   { background: rgba(59,130,246,0.15);  color: #3b82f6; }
-    .status-select.badge-for-quotation { background: rgba(168,85,247,0.15);  color: #a855f7; }
-    .status-select.badge-approved      { background: rgba(34,197,94,0.2);    color: #22c55e; }
-    .status-select.badge-rejected      { background: rgba(239,68,68,0.15);   color: #ef4444; }
-    .status-select option { background: #1e293b; color: #f1f5f9; }
+    .status-select.badge-pending      { background: var(--hx-warn-soft);   color: var(--hx-warn); }
+    .status-select.badge-for-pricing   { background: var(--hx-cyan-soft);  color: var(--hx-cyan-ink); }
+    .status-select.badge-for-quotation { background: rgba(168,85,247,0.15);  color: var(--hx-navy-text); }
+    .status-select.badge-approved      { background: var(--hx-ok-soft);    color: var(--hx-ok); }
+    .status-select.badge-rejected      { background: var(--hx-red-soft);   color: var(--hx-red); }
+    .status-select option { background: var(--hx-slab); color: var(--hx-ink-3); }
     .followup-input {
       background: transparent;
-      border: 1px solid var(--border, #334155);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      color: var(--text-primary, #f1f5f9);
+      color: var(--text-primary);
       font-size: 0.78rem;
       padding: 0.2rem 0.4rem;
       cursor: pointer;
       width: 120px;
     }
     .followup-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
-    .followup-due { background: rgba(239,68,68,0.1); }
-    .followup-due .followup-input { border-color: #ef4444; color: #ef4444; }
+    .followup-due { background: var(--hx-red-soft); }
+    .followup-due .followup-input { border-color: var(--hx-red); color: var(--hx-red); }
   </style>
 </head>
 <body>

@@ -9,593 +9,304 @@
        (flow-docs.js) builds its dialog from — without it that modal renders as an unstyled
        block at the page bottom and appears not to open. -->
   <link rel="stylesheet" href="css/flow.css">
-  <link rel="stylesheet" href="css/flow-screen.css">
-  <!-- A188: the Revenue & Net Profit report's styles, shared with the Accounting dashboard. Must
-       stay after the base sheet (A289: the retired skin used to style .pnl-card/.pnl-tile too). -->
+  <!-- A188: the Revenue & Net Profit report's styles, shared with the Accounting dashboard. -->
   <link rel="stylesheet" href="css/pnl-report.css">
-  <style>
-    .hero {
-      position: relative;
-      border-radius: var(--radius-lg, 18px);
-      padding: 1.75rem 2rem;
-      margin-bottom: 1.6rem;
-      overflow: hidden;
-      background:
-        radial-gradient(900px 220px at 0% 0%, rgba(15,118,110,0.10), transparent 62%),
-        radial-gradient(700px 220px at 100% 120%, rgba(13,148,136,0.07), transparent 60%),
-        linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
-      border: 1px solid var(--border, #e2e8f0);
-      box-shadow: var(--shadow-sm);
-      animation: fadeInUp 0.4s var(--ease-out, ease) both;
-    }
-    .hero::before {
-      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
-      background: linear-gradient(180deg, var(--accent, #0f766e), var(--accent-light, #ccfbf1));
-    }
-    .hero-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; }
-    .hero h1 { font-size:1.55rem; font-weight:700; color:var(--text-primary); margin:0; letter-spacing:-0.02em; }
-    .hero p { color:var(--text-secondary); font-size:0.9rem; margin-top:0.3rem; }
-    .hero-meta { display:flex; gap:0.55rem; flex-wrap:wrap; }
-    .hero-pill {
-      display:inline-flex; align-items:center; gap:0.4rem;
-      padding:0.45rem 0.95rem; border-radius:999px;
-      font-size:0.78rem; font-weight:600;
-      background:#fff; border:1px solid var(--border); color:var(--text-secondary);
-      transition: var(--transition-fast, all 0.14s ease);
-    }
-    .hero-pill:hover { border-color: var(--accent, #0f766e); color: var(--accent, #0f766e); transform: translateY(-1px); box-shadow: var(--shadow-xs); }
-    .hero-pill.accent { background: var(--accent, #0f766e); color:#fff; border-color: var(--accent, #0f766e); }
-    .hero-pill.accent:hover { background: var(--accent-hover, #115e59); color:#fff; }
-
-    /* Section header — consistent across the page */
-    .section-head {
-      display:flex; align-items:center; gap:0.5rem;
-      font-size:0.95rem; font-weight:700; color:var(--text-primary);
-      margin:0 0 1rem; letter-spacing:-0.01em;
-    }
-    .section-head svg { color: var(--accent, #0f766e); flex-shrink:0; }
-    .section-head .sh-meta { margin-left:auto; font-size:0.74rem; font-weight:500; color:var(--text-muted, #94a3b8); }
-
-    /* Sticky sub-toolbar for task panels */
-    .task-toolbar {
-      position: sticky; top: 0; z-index: 30;
-      display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
-      padding:0.6rem 0.75rem; margin-bottom:0.6rem;
-      background:rgba(255,255,255,0.92); backdrop-filter:saturate(140%) blur(8px);
-      border:1px solid var(--border, #e2e8f0); border-radius:12px;
-      box-shadow:var(--shadow-xs);
-      flex-wrap:wrap;
-      animation: slideDown 0.3s ease both;
-    }
-    .ttb-mini:hover { transform: translateY(-1px); }
-    .ttb-left, .ttb-right { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
-    .ttb-search {
-      display:flex; align-items:center; gap:0.4rem;
-      padding:0.35rem 0.6rem; border:1px solid var(--border); border-radius:8px;
-      background:#fff; min-width:240px;
-    }
-    .ttb-search svg { color:var(--text-muted); flex-shrink:0; }
-    .ttb-search input {
-      border:none; outline:none; font-size:0.82rem; width:100%;
-      background:transparent; color:var(--text-primary);
-    }
-    .ttb-dates { display:flex; align-items:center; gap:0.35rem; }
-    .ttb-dates input[type="date"] {
-      padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:8px;
-      font-size:0.78rem; background:#fff; color:var(--text-primary);
-    }
-    .ttb-dash { color:var(--text-muted); font-size:0.78rem; }
-    .ttb-mini {
-      padding:0.4rem 0.7rem; border:1px solid var(--border); border-radius:8px;
-      background:#fff; font-size:0.78rem; font-weight:600; color:var(--text-secondary);
-      cursor:pointer; transition:all 0.15s ease;
-    }
-    .ttb-mini:hover { background:var(--bg-inset); border-color:var(--border-strong); color:var(--text-primary); }
-    .ttb-updated {
-      font-size:0.72rem; color:var(--text-muted);
-      padding:0.3rem 0.55rem; background:var(--bg-inset); border-radius:6px;
-    }
-
-    /* Density toggle: compact rows */
-    body.density-compact .chart-card table th,
-    body.density-compact .chart-card table td {
-      padding-top:0.35rem !important; padding-bottom:0.35rem !important;
-      font-size:0.78rem !important;
-    }
-
-    /* 2-column main + sidebar layout */
-    .admin-2col {
-      display:grid; grid-template-columns: minmax(0, 1fr) 320px;
-      gap:1rem; align-items:start;
-    }
-    .admin-main { min-width:0; }
-    .admin-side { display:flex; flex-direction:column; gap:1rem; position:sticky; top:1rem; }
-    .admin-side .chart-card { margin:0 !important; }
-    @media (max-width: 1100px) {
-      .admin-2col { grid-template-columns: 1fr; }
-      .admin-side { position:static; }
-    }
-
-    /* KPI cards as clickable filters (Admin item 1) */
-    #taskStatCards .chart-card {
-      cursor: pointer; user-select: none;
-      transition: var(--transition-fast, all 0.14s ease);
-      border: 1px solid var(--border, #e2e8f0);
-      position: relative; overflow: hidden;
-    }
-    #taskStatCards .chart-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
-      border-color: var(--border-strong, #cbd5e1);
-    }
-    #taskStatCards .chart-card:active { transform: translateY(0); }
-    #taskStatCards .chart-card.kpi-active {
-      border-color: var(--accent, #0f766e);
-      box-shadow: 0 0 0 2px var(--accent-ring, rgba(15,118,110,0.20));
-      background: linear-gradient(180deg, var(--accent-light, #ccfbf1) 0%, #ffffff 42%);
-    }
-    #taskStatCards .chart-card.kpi-active::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      background: var(--accent, #0f766e);
-    }
-
-    /* Process Flow snapshot KPI tiles */
-    .fkpi { padding:0.9rem 1rem; text-align:left; transition: var(--transition-fast, all 0.14s ease); }
-    .fkpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong, #cbd5e1); }
-    .fkpi .fkpi-l { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted,#94a3b8); font-weight:700; }
-    .fkpi .fkpi-v { font-size:1.3rem; font-weight:700; margin-top:0.25rem; color:var(--text-primary); font-variant-numeric: tabular-nums; }
-
-    /* Sidebar panels */
-    .side-panel-head {
-      padding:0.7rem 1rem; border-bottom:1px solid var(--border, #e2e8f0);
-      display:flex; align-items:center; justify-content:space-between; gap:0.5rem;
-      background: linear-gradient(180deg, #ffffff, #fafcfc);
-    }
-    .side-panel-head h3 { font-size:0.82rem; font-weight:700; margin:0; display:flex; align-items:center; gap:0.4rem; color:var(--text-primary); }
-    .side-panel-head h3 svg { color: var(--accent, #0f766e); }
-    .side-scroll { max-height:340px; overflow-y:auto; }
-    .side-scroll::-webkit-scrollbar { width:8px; }
-    .side-scroll::-webkit-scrollbar-thumb { background:var(--border, #cbd5e1); border-radius:8px; }
-
-    /* ─── Email Modal (light, harmonized) ─── */
-    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.45); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); z-index:11000; align-items:center; justify-content:center; }
-    .modal-overlay.open { display:flex; }
-    .modal-box { background:var(--bg-card,#ffffff); border:1px solid var(--border,#e2e8f0); border-radius:16px; padding:1.5rem; width:min(520px,95vw); max-height:90vh; overflow-y:auto; box-shadow:0 24px 60px -20px rgba(15,23,42,0.5); }
-    .modal-overlay.open .modal-box { animation: popIn 0.2s var(--ease-spring, cubic-bezier(0.34,1.4,0.5,1)); }
-    .modal-box h3 { font-size:1rem; font-weight:700; margin:0 0 1rem; color:var(--text-primary,#0f172a); }
-    .modal-label { font-size:0.78rem; color:var(--text-muted,#64748b); margin-bottom:0.25rem; }
-    .modal-input, .modal-textarea { width:100%; padding:0.5rem 0.75rem; border-radius:8px; border:1px solid var(--border,#e2e8f0); background:#fff; color:var(--text-primary,#0f172a); font-size:0.85rem; box-sizing:border-box; transition:border-color 0.14s ease, box-shadow 0.14s ease; }
-    .modal-input:focus, .modal-textarea:focus { outline:none; border-color:var(--accent,#0f766e); box-shadow:0 0 0 3px var(--accent-ring, rgba(15,118,110,0.2)); }
-    .modal-textarea { resize:vertical; min-height:120px; }
-    .modal-footer { display:flex; gap:0.6rem; justify-content:flex-end; margin-top:1rem; }
-    .btn-modal-send { background:var(--accent,#0f766e); color:#fff; border:none; border-radius:8px; padding:0.45rem 1rem; font-size:0.83rem; font-weight:600; cursor:pointer; transition:background 0.14s ease; }
-    .btn-modal-send:hover { background:var(--accent-hover,#115e59); }
-    .btn-modal-send:disabled { opacity:.5; cursor:not-allowed; }
-    .btn-cancel { background:transparent; color:var(--text-secondary,#475569); border:1px solid var(--border,#e2e8f0); border-radius:8px; padding:0.45rem 1rem; font-size:0.83rem; cursor:pointer; transition:background 0.14s ease; }
-    .btn-cancel:hover { background:var(--bg-inset,#e2e8f0); }
-    .form-row { margin-bottom:0.9rem; }
-
-    @keyframes popIn { from { opacity:0; transform: translateY(10px) scale(0.985); } to { opacity:1; transform:none; } }
-    @media (prefers-reduced-motion: reduce) {
-      .hero, .modal-overlay.open .modal-box { animation: none !important; }
-      .hero-pill:hover, #taskStatCards .chart-card:hover, .fkpi:hover, a.afmod:hover { transform: none !important; }
-    }
-  </style>
+  <!-- A291: the queue tables and the three shipment dialogs, shared with the Accounting dashboard. -->
+  <link rel="stylesheet" href="css/shipments.css">
+  <link rel="stylesheet" href="css/admin-home.css">
 </head>
-<body class="flow-screen">
+<body class="ad">
   <script src="js/theme.js"></script>
-  <!-- Navigation -->
   <header class="navbar" id="navbar"></header>
 
-  <!-- Main Content -->
-  <main class="main-content">
-    <section class="hband">
-      <div class="left">
-        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
-        <div>
-          <div class="eyebrow">Admin · Operations Hub</div>
-          <h1 class="greeting" id="greeting">Good morning!</h1>
-          <p id="todayLabel">Admin hub — manage orders and track your team.</p>
-        </div>
-      </div>
-      <div class="hero-meta">
-        <a href="admin-summary.html" class="hero-pill accent">Summary →</a>
-        <a href="admin-team.html" class="hero-pill">Team →</a>
-        <a href="admin-reports.html" class="hero-pill">Reports →</a>
-      </div>
-    </section>
+  <main class="main-content hx-main">
+    <div class="hx-deck">
 
-    <!-- A146: What needs you (unified action center) -->
-    <div class="chart-card" id="flowActionCenterCard" style="margin-bottom:1rem;">
-      <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;">⚑ What needs you</h3>
-      <div id="flowActionCenter"></div>
+      <!-- ══ THE RAIL — sticky: the team's month, the theme, and where to go ═══════════════════ -->
+      <aside class="hx-rail" id="rail">
+        <div class="hx-rail-date">
+          <b id="hbDay">—</b><span id="hbMon">&nbsp;</span>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Dark theme">
+            <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <span>Dark</span>
+          </button>
+        </div>
+
+        <!-- The slab: the team's quotations this month and the facts. admin.js writes the four
+             kpi ids from the process flow; admin-home-page.js derives the queue and activity totals. -->
+        <section class="hx-slab" id="spot">
+          <div class="cap"><span class="l">Team quotations</span><span class="tag">This month</span></div>
+          <div class="v" id="kpiQt">—</div>
+          <div class="sub">Every rep, from the process flow</div>
+          <dl class="hx-facts">
+            <div><dt>Purchase requests</dt><dd id="kpiPr">—</dd></div>
+            <div><dt>Purchase orders</dt><dd id="kpiPo">—</dd></div>
+            <div><dt>Open purchase orders</dt><dd id="kpiPoOpen">—</dd></div>
+            <div><dt>Activity today</dt><dd id="activityCount">—</dd></div>
+            <div class="wide"><dt>Records in the queues</dt><dd class="accent" id="queueTotal">—</dd></div>
+          </dl>
+        </section>
+
+        <nav class="hx-rail-nav" aria-label="On this page">
+          <a href="#inbox">Needs you <span class="hx-count" id="inboxCount">0</span></a>
+          <a href="#queues">Queues</a>
+          <a href="#activity">Activity</a>
+          <a href="#inventory">Inventory</a>
+          <a href="#profit">Profit</a>
+          <div class="hx-rail-tabs">
+            <button type="button" class="hx-jump" data-tab="qt">Quotations</button>
+            <button type="button" class="hx-jump" data-tab="so">Sales orders</button>
+            <button type="button" class="hx-jump" data-tab="po">Purchase orders</button>
+            <button type="button" class="hx-jump" data-tab="ap">AP aging</button>
+            <button type="button" class="hx-jump" data-tab="rc">Receiving</button>
+            <button type="button" class="hx-jump" data-tab="iv">Invoices</button>
+            <button type="button" class="hx-jump" data-tab="pr">Pricing requests</button>
+            <button type="button" class="hx-jump" data-tab="sm">Shipments</button>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- ══ THE COLUMN ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="hx-col">
+        <header class="hx-mast">
+          <div>
+            <h1 id="greeting">Good morning!</h1>
+            <p id="todayLabel">Admin hub — manage orders and track your team.</p>
+          </div>
+          <div class="hx-actions">
+            <a href="admin-summary.html" class="btn btn-primary">Summary</a>
+            <a href="admin-team.html" class="btn">Team</a>
+            <a href="admin-reports.html" class="btn">Reports</a>
+          </div>
+        </header>
+
+        <!-- A146: what needs you — the unified action center, mounted by admin-home-page.js -->
+        <section class="hx-glass" id="inbox">
+          <div class="hx-head"><h2>Needs you</h2><span class="hx-meta">Approvals waiting, requests in flight, follow-ups due across the team.</span></div>
+          <div id="flowActionCenter"></div>
+        </section>
+
+        <!-- A275: shown only when the admin has a salary deduction (js/salary-deduction-card.js) -->
+        <section class="hx-glass" id="myDeductionCard" style="display:none;"></section>
+
+        <!-- The queues: eight process-flow lists behind one segmented control. switchTaskTab
+             (admin.js) toggles .active on the tabs and display on the panels by id. -->
+        <section class="hx-glass" id="queues">
+          <div class="hx-head"><h2>Queues</h2><span class="hx-meta">The most recent fifty of each, from the process flow.</span></div>
+          <div class="hx-seg">
+            <span class="hx-seg-ind"></span>
+            <div class="hx-seg-group">
+              <button type="button" class="hx-tab active" onclick="switchTaskTab('qt')" id="tabTaskQt">Quotations <span class="ct" id="tcQt"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('so')" id="tabTaskSo">Sales orders <span class="ct" id="tcSo"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('po')" id="tabTaskPo">Purchase orders <span class="ct" id="tcPo"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('ap')" id="tabTaskAp">AP aging <span class="ct" id="tcAp"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('rc')" id="tabTaskRc">Receiving <span class="ct" id="tcRc"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('iv')" id="tabTaskIv">Invoices <span class="ct" id="tcIv"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('pr')" id="tabTaskPr">Pricing requests <span class="ct" id="tcPr"></span></button>
+              <button type="button" class="hx-tab" onclick="switchTaskTab('sm')" id="tabTaskSm">Shipments <span class="ct" id="tcSm"></span></button>
+            </div>
+          </div>
+
+          <div class="ad-panel" id="taskPanelQt">
+            <div class="ad-qhead"><span class="hx-meta">Most recent first</span><a href="flow-quotations.html" class="ad-qlink">Open quotations</a></div>
+            <div class="hx-scroll" id="qtTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelSo" style="display:none;">
+            <div class="ad-qhead"><span class="hx-meta">Most recent first</span><a href="flow-sales-orders.html" class="ad-qlink">Open sales orders</a></div>
+            <div class="hx-scroll" id="soTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelPo" style="display:none;">
+            <div class="ad-qhead"><span class="hx-meta">Most recent first</span><a href="flow-purchase-orders.html" class="ad-qlink">Open purchase orders</a></div>
+            <div class="hx-scroll" id="poTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelAp" style="display:none;">
+            <div class="ad-qhead"><span class="hx-meta">Payables from purchase orders, most recent first</span><a href="flow-ap-aging.html" class="ad-qlink">Open AP aging</a></div>
+            <div class="hx-scroll" id="apTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelRc" style="display:none;">
+            <div class="ad-qhead"><span class="hx-meta">Materials receiving and landed cost, most recent first</span><a href="flow-receiving.html" class="ad-qlink">Open receiving</a></div>
+            <div class="hx-scroll" id="rcTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelIv" style="display:none;">
+            <div class="ad-qhead"><span class="hx-meta">Issued invoices, sales and cost of goods, most recent first</span><a href="flow-invoices.html" class="ad-qlink">Open invoices</a></div>
+            <div class="hx-scroll" id="ivTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelPr" style="display:none;">
+            <div class="ad-qhead"><span class="hx-meta">Pricing and purchase requests, most recent first</span><a href="flow-pricing-request.html" class="ad-qlink">Open pricing requests</a></div>
+            <div class="hx-scroll" id="prTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="ad-panel" id="taskPanelSm" style="display:none;">
+            <div class="ad-qhead">
+              <span class="hx-meta">Most recent first, up to fifty</span>
+              <div class="ad-qtools">
+                <label class="hx-meta" for="smStatusFilter">Status</label>
+                <select id="smStatusFilter" class="ad-sel" onchange="applySmFilter()">
+                  <option value="">All statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Awaiting Confirmation">Awaiting Confirmation</option>
+                  <option value="Payment Processing">Payment Processing</option>
+                  <option value="Goods Ready">Goods Ready</option>
+                  <option value="Booked">Booked</option>
+                  <option value="In Transit">In Transit</option>
+                  <option value="Customs Clearance">Customs Clearance</option>
+                  <option value="Arrived">Arrived</option>
+                  <option value="Delivered">Delivered</option>
+                </select>
+              </div>
+            </div>
+            <div class="hx-scroll" id="smTableWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </div>
+        </section>
+
+        <!-- Today's movements beside the stock on hand -->
+        <div class="ad-pair">
+          <section class="hx-glass" id="activity">
+            <div class="hx-head"><h2>Recent activity</h2><span class="hx-meta">Today's movements in the process flow.</span></div>
+            <div id="activityFeed" class="ad-feed"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </section>
+          <section class="hx-glass" id="inventory">
+            <div class="hx-head"><h2>Inventory</h2><div class="hx-actions"><a href="flow-inventory.html" class="btn btn-sm">View all</a></div></div>
+            <div class="hx-scroll" id="invSnapshotWrap"><div class="ad-loading"><div class="spinner"></div></div></div>
+          </section>
+        </div>
+
+        <!-- A188 — Revenue & Net Profit report. Identical markup, styles and behaviour to the
+             Accounting dashboard: accounting-profit.js renders into these ids and so-cost-editor.js
+             supplies the per-order cost editing, which admin has always been permitted to use
+             (pnlCanEditCost covers accounting and admin alike). -->
+        <section class="pnl-card" id="profit">
+          <div class="pnl-head">
+            <div>
+              <h2>Revenue &amp; Net Profit Report</h2>
+              <div class="pnl-state" id="pnlState">Loading…</div>
+            </div>
+            <div class="pnl-controls">
+              <label for="pnlYear">Year</label>
+              <select id="pnlYear"></select>
+            </div>
+          </div>
+          <div class="pnl-tiles" id="pnlTotals"></div>
+          <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
+        </section>
+      </div>
     </div>
-    <div class="chart-card" id="myDeductionCard" style="margin-bottom:1rem;display:none;"></div>
-    <script>document.addEventListener('DOMContentLoaded', function () { if (typeof flowActionsStrip === 'function') setTimeout(function () { flowActionsStrip('flowActionCenter'); }, 300); });</script>
-
-    <!-- ── KPI cards (4, comp) ─────────────────────────── -->
-    <div class="kpi-row kpi3">
-      <div class="kpi spot"><div class="top"><span class="l">Team Quotations · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div><div class="v" id="kpiQt">—</div><div class="d">this month</div></div>
-      <div class="kpi"><div class="top"><span class="l">PRs · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span></div><div class="v" id="kpiPr">—</div><div class="d">this month</div></div>
-      <div class="kpi"><div class="top"><span class="l">POs · Month</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span></div><div class="v" id="kpiPo">—</div><div class="d"><span id="kpiPoOpen">—</span> open</div></div>
-    </div>
-
-
-
-    <!-- ── Task Overview (comp: ctitle + tab pills + card>ptable | sidebar) ── -->
-    <div style="margin-bottom:2rem;">
-      <div class="admin-2col">
-        <div class="admin-main">
-          <div class="ctitle" style="margin-bottom:12px;"><span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Task Overview</div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;">
-            <button class="tab active" onclick="switchTaskTab('qt')" id="tabTaskQt">Quotations <span class="ct" id="tcQt"></span></button>
-            <button class="tab" onclick="switchTaskTab('so')" id="tabTaskSo">Sales Orders <span class="ct" id="tcSo"></span></button>
-            <button class="tab" onclick="switchTaskTab('po')" id="tabTaskPo">Purchase Orders <span class="ct" id="tcPo"></span></button>
-            <button class="tab" onclick="switchTaskTab('ap')" id="tabTaskAp">AP Aging <span class="ct" id="tcAp"></span></button>
-            <button class="tab" onclick="switchTaskTab('rc')" id="tabTaskRc">Receiving <span class="ct" id="tcRc"></span></button>
-            <button class="tab" onclick="switchTaskTab('iv')" id="tabTaskIv">Invoices <span class="ct" id="tcIv"></span></button>
-            <button class="tab" onclick="switchTaskTab('pr')" id="tabTaskPr">PR <span class="ct" id="tcPr"></span></button>
-            <button class="tab" onclick="switchTaskTab('sm')" id="tabTaskSm">Shipments <span class="ct" id="tcSm"></span></button>
-          </div>
-
-      <!-- Tab Panels -->
-      <div class="chart-card" style="padding:0;overflow:hidden;">
-
-        <!-- Quotations Panel (flow) -->
-        <div id="taskPanelQt">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">From the process flow · most recent first</span>
-            <a href="flow-quotations.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="qtTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- Sales Orders Panel (flow) -->
-        <div id="taskPanelSo" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">From the process flow · most recent first</span>
-            <a href="flow-sales-orders.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="soTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- Purchase Orders Panel (flow) -->
-        <div id="taskPanelPo" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">From the process flow · most recent first</span>
-            <a href="flow-purchase-orders.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="poTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- AP Aging Panel (flow) -->
-        <div id="taskPanelAp" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Payables from purchase orders · most recent first</span>
-            <a href="flow-ap-aging.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="apTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- Receiving Panel (flow) -->
-        <div id="taskPanelRc" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Materials receiving · landed cost · most recent first</span>
-            <a href="flow-receiving.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="rcTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- Invoices Panel (flow) -->
-        <div id="taskPanelIv" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Issued invoices · sales &amp; COGS · most recent first</span>
-            <a href="flow-invoices.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="ivTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- Purchase Requests Panel (flow) -->
-        <div id="taskPanelPr" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Pricing / purchase requests · most recent first</span>
-            <a href="flow-pricing-request.html" style="font-size:0.78rem;color:var(--accent,#0f766e);">Open module →</a>
-          </div>
-          <div style="overflow-x:auto;" id="prTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-        <!-- Shipments Panel -->
-        <div id="taskPanelSm" style="display:none;">
-          <div style="padding:0.6rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:1rem;">
-              <span style="font-size:0.8rem;color:var(--text-muted,#64748b);">Most recent first · up to 50 rows</span>
-              <select id="smStatusFilter" onchange="applySmFilter()" style="font-size:0.75rem;background:var(--surface,#1e293b);color:var(--text-secondary,#94a3b8);border:1px solid #e2e8f0;border-radius:4px;padding:0.2rem 0.4rem;">
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Awaiting Confirmation">Awaiting Confirmation</option>
-                <option value="Payment Processing">Payment Processing</option>
-                <option value="Goods Ready">Goods Ready</option>
-                <option value="Booked">Booked</option>
-                <option value="In Transit">In Transit</option>
-                <option value="Customs Clearance">Customs Clearance</option>
-                <option value="Arrived">Arrived</option>
-                <option value="Delivered">Delivered</option>
-              </select>
-            </div>
-          </div>
-          <div style="overflow-x:auto;" id="smTableWrap">
-            <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-          </div>
-        </div>
-
-      </div>
-        </div><!-- /admin-main -->
-
-        <aside class="admin-side">
-          <!-- Recent Activity -->
-          <div class="chart-card" style="padding:0;overflow:hidden;">
-            <div class="side-panel-head">
-              <h3>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Recent Activity
-              </h3>
-            </div>
-            <div id="activityFeed" class="side-scroll" style="padding:0.5rem 0.75rem;">
-              <div class="loading-overlay" style="padding:1.5rem;"><div class="spinner"></div></div>
-            </div>
-          </div>
-
-          <!-- Inventory Snapshot -->
-          <div class="chart-card" style="padding:0;overflow:hidden;">
-            <div class="side-panel-head">
-              <h3>
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/></svg>
-                Inventory
-              </h3>
-              <a href="flow-inventory.html" style="font-size:0.74rem;font-weight:600;color:var(--accent,#0f766e);">View All →</a>
-            </div>
-            <div class="side-scroll" style="overflow-x:auto;" id="invSnapshotWrap">
-              <div style="padding:1.5rem;text-align:center;"><div class="spinner"></div></div>
-            </div>
-          </div>
-        </aside>
-      </div><!-- /admin-2col -->
-    </div>
-    <!-- ── End Task Overview ──────────────────────────────── -->
-
-    <!-- A188 — Revenue & Net Profit report. Identical markup, styles and behaviour to the
-         Accounting dashboard: accounting-profit.js renders into these ids and so-cost-editor.js
-         supplies the per-order cost editing, which admin has always been permitted to use
-         (pnlCanEditCost covers accounting and admin alike). -->
-    <section class="pnl-card" style="margin-top:1.5rem;">
-      <div class="pnl-head">
-        <div>
-          <h2>Revenue &amp; Net Profit Report</h2>
-          <div class="pnl-state" id="pnlState">Loading…</div>
-        </div>
-        <div class="pnl-controls">
-          <label style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Year</label>
-          <select id="pnlYear"></select>
-        </div>
-      </div>
-      <div class="pnl-tiles" id="pnlTotals"></div>
-      <div id="pnlBody"><div class="pnl-empty">Loading…</div></div>
-    </section>
-
   </main>
 
-  <script src="js/api.js"></script>
-  <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
-  <script src="js/auth.js"></script>
-  <script src="js/flow-api.js"></script>
-  <script src="js/flow-docs.js"></script>
-  <script src="js/stage-meta.js"></script>
-  <script src="js/admin.js"></script>
-  <!-- A188 — Revenue & Net Profit report, same pair and same order as accounting-home.html.
-       so-cost-editor.js must come first: accounting-profit.js calls openSoCostEditor() from it. -->
-  <script src="js/so-cost-editor.js"></script>
-  <script src="js/so-note-editor.js"></script>   <!-- A191 -->
-  <script src="js/accounting-profit.js"></script>
-  <!-- Shipment Edit Modal -->
-  <div id="smEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;overflow-y:auto;padding:2rem 1rem;">
-    <div style="max-width:720px;margin:0 auto;background:var(--surface,#1e293b);border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
-      <div style="padding:1.2rem 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+  <!-- ══ Shipment edit dialog — admin.js fills every field by id and shows the overlay by clearing its display ══ -->
+  <div id="smEditOverlay" class="sm-overlay" style="display:none;">
+    <div class="sm-dialog">
+      <div class="sm-dialog-head">
         <div>
-          <div style="font-size:1rem;font-weight:700;color:var(--text-primary,#f1f5f9);">Shipment Details</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.15rem;" id="smEditSubtitle">—</div>
+          <div class="sm-dialog-title">Shipment details</div>
+          <div class="sm-dialog-sub" id="smEditSubtitle">—</div>
         </div>
-        <button onclick="closeSmModal()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+        <button type="button" class="sm-x" onclick="closeSmModal()" aria-label="Close">×</button>
       </div>
-      <!-- Tab Bar -->
-      <div id="smEditTabs" style="padding:0 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;gap:0;">
-        <button id="smEditTabBtnDetails" onclick="_smModalSwitchTab('details')" class="sm-edit-tab active">Shipment</button>
-        <button id="smEditTabBtnPayment" onclick="_smModalSwitchTab('payment')" class="sm-edit-tab">Payment</button>
-        <button id="smEditTabBtnHistory" onclick="_smModalSwitchTab('history')" class="sm-edit-tab">History</button>
+      <div id="smEditTabs" class="sm-tabs">
+        <button type="button" id="smEditTabBtnDetails" onclick="_smModalSwitchTab('details')" class="sm-edit-tab active">Shipment</button>
+        <button type="button" id="smEditTabBtnPayment" onclick="_smModalSwitchTab('payment')" class="sm-edit-tab">Payment</button>
+        <button type="button" id="smEditTabBtnHistory" onclick="_smModalSwitchTab('history')" class="sm-edit-tab">History</button>
       </div>
-      <!-- Details Tab Panel -->
       <div id="smEditTabDetails">
-      <div style="padding:1.2rem 1.5rem;">
-        <input type="hidden" id="smEditId">
-        <input type="hidden" id="smEditPoNo">
-        <input type="hidden" id="smEditClient">
+        <div class="sm-dialog-body">
+          <input type="hidden" id="smEditId">
+          <input type="hidden" id="smEditPoNo">
+          <input type="hidden" id="smEditClient">
 
-        <!-- Shipment fields block -->
-        <div id="smShipmentBlock">
-        <!-- Status + Mode row -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Status</label>
-            <select id="smEditStatus" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;">
-              <option value="Pending">Pending</option>
-              <option value="Awaiting Confirmation">Awaiting Confirmation</option>
-              <option value="Payment Processing">Payment Processing</option>
-              <option value="Goods Ready">Goods Ready</option>
-              <option value="Booked">Booked</option>
-              <option value="In Transit">In Transit</option>
-              <option value="Customs Clearance">Customs Clearance</option>
-              <option value="Arrived">Arrived</option>
-              <option value="Delivered">Delivered</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Mode (AIR / SEA / LOCAL)</label>
-            <select id="smEditMode" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;">
-              <option value="">— Select —</option>
-              <option value="AIR">AIR</option>
-              <option value="SEA">SEA</option>
-              <option value="LOCAL">LOCAL</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Linked Sales Orders -->
-        <div style="margin-bottom:0.75rem;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);">Linked Sales Orders <span style="font-weight:400;opacity:0.7;">(select all that apply)</span></label>
-            <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:var(--text-secondary,#94a3b8);cursor:pointer;">
-              <input type="checkbox" id="smEditForStocking" onchange="smToggleStocking(this)"> For Stocking — no SO
-            </label>
-          </div>
-          <div id="smSoPickerWrap" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
-            <div style="padding:0.35rem 0.6rem;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
-              <input id="smSoSearch" type="text" placeholder="Search SO # or client…" oninput="smFilterSOs()" style="width:100%;background:transparent;border:none;color:var(--text-primary,#f1f5f9);font-size:0.78rem;outline:none;">
+          <div id="smShipmentBlock">
+            <div class="sm-grid-2">
+              <div class="sm-f">
+                <label for="smEditStatus">Status</label>
+                <select id="smEditStatus">
+                  <option value="Pending">Pending</option>
+                  <option value="Awaiting Confirmation">Awaiting Confirmation</option>
+                  <option value="Payment Processing">Payment Processing</option>
+                  <option value="Goods Ready">Goods Ready</option>
+                  <option value="Booked">Booked</option>
+                  <option value="In Transit">In Transit</option>
+                  <option value="Customs Clearance">Customs Clearance</option>
+                  <option value="Arrived">Arrived</option>
+                  <option value="Delivered">Delivered</option>
+                </select>
+              </div>
+              <div class="sm-f">
+                <label for="smEditMode">Mode (air, sea or local)</label>
+                <select id="smEditMode">
+                  <option value="">— Select —</option>
+                  <option value="AIR">AIR</option>
+                  <option value="SEA">SEA</option>
+                  <option value="LOCAL">LOCAL</option>
+                </select>
+              </div>
             </div>
-            <div id="smSoCheckList" style="max-height:140px;overflow-y:auto;padding:0.3rem 0;">
-              <div style="padding:0.5rem 0.75rem;font-size:0.78rem;color:var(--text-muted,#64748b);">Loading pending SOs…</div>
+
+            <div class="sm-so">
+              <div class="sm-so-head">
+                <label>Linked sales orders <span>(select all that apply)</span></label>
+                <label class="sm-check"><input type="checkbox" id="smEditForStocking" onchange="smToggleStocking(this)"> For stocking, no sales order</label>
+              </div>
+              <div id="smSoPickerWrap" class="sm-picker">
+                <div class="sm-picker-search"><input id="smSoSearch" type="text" placeholder="Search SO # or client…" oninput="smFilterSOs()"></div>
+                <div id="smSoCheckList" class="sm-picker-list"><div class="sm-picker-empty">Loading pending sales orders…</div></div>
+              </div>
+              <div id="smSoChips" class="sm-chips"></div>
+            </div>
+
+            <div class="sm-grid-2">
+              <div class="sm-f"><label for="smEditClientsPO">Client's PO #</label><input id="smEditClientsPO" type="text" placeholder="Client PO number"></div>
+              <div class="sm-f"><label for="smEditHiPO">HI-ESCORP PO #</label><input id="smEditHiPO" type="text" placeholder="Internal PO number"></div>
+            </div>
+            <div class="sm-grid-2">
+              <div class="sm-f"><label for="smEditPrincipal">Principal or supplier</label><input id="smEditPrincipal" type="text" placeholder="Supplier name"></div>
+              <div class="sm-f"><label for="smEditItem">Item description</label><input id="smEditItem" type="text" placeholder="Item or product description"></div>
+            </div>
+            <div class="sm-grid-3">
+              <div class="sm-f"><label for="smEditShipmentDate">Shipment date</label><input id="smEditShipmentDate" type="date"></div>
+              <div class="sm-f"><label for="smEditETD">ETD</label><input id="smEditETD" type="date"></div>
+              <div class="sm-f"><label for="smEditETA">ETA</label><input id="smEditETA" type="date"></div>
+            </div>
+            <div class="sm-grid-2">
+              <div class="sm-f"><label for="smEditAWB">AWB or tracking #</label><input id="smEditAWB" type="text" placeholder="Airway bill or tracking number"></div>
+              <div class="sm-f"><label for="smEditLogistics">Logistics company</label><input id="smEditLogistics" type="text" placeholder="e.g. Foureleven Freight"></div>
+            </div>
+            <div class="sm-f sm-f-short sm-remarks"><label for="smEditDateArrived">Date arrived</label><input id="smEditDateArrived" type="date"></div>
+          </div>
+
+          <div id="smPaymentBlock" style="display:none;">
+            <div class="sm-section-label">Payment</div>
+            <div class="sm-grid-3">
+              <div class="sm-f"><label for="smEditTotalAmount">Total amount (₱)</label><input id="smEditTotalAmount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+              <div class="sm-f"><label for="smEditAmountPaid">Amount paid (₱)</label><input id="smEditAmountPaid" type="number" min="0" step="0.01" placeholder="0.00"></div>
+              <div class="sm-f"><label for="smEditDatePayment">Date of payment</label><input id="smEditDatePayment" type="date"></div>
+            </div>
+            <div class="sm-grid-2">
+              <div class="sm-f">
+                <label for="smEditPaymentStatus">Payment status</label>
+                <select id="smEditPaymentStatus">
+                  <option value="">— Select —</option>
+                  <option value="Unpaid">Unpaid</option>
+                  <option value="Partial">Partial</option>
+                  <option value="Paid">Paid</option>
+                </select>
+              </div>
+              <div class="sm-f"><label for="smEditPaymentMethod">Payment method</label><input id="smEditPaymentMethod" type="text" placeholder="e.g. Telegraphic Transfer"></div>
+              <div class="sm-f"><label for="smEditSalesInvoice">Sales invoice #</label><input id="smEditSalesInvoice" type="text" placeholder="SI number"></div>
+              <div class="sm-f"><label for="smEditDeliveryReceipt">Delivery receipt #</label><input id="smEditDeliveryReceipt" type="text" placeholder="DR number"></div>
             </div>
           </div>
-          <div id="smSoChips" style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.4rem;min-height:0;"></div>
-        </div>
 
-        <!-- PO Numbers + Principal + Item -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Client's PO #</label>
-            <input id="smEditClientsPO" type="text" placeholder="Client PO number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">HI-ESCORP PO #</label>
-            <input id="smEditHiPO" type="text" placeholder="Internal PO number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Principal / Supplier</label>
-            <input id="smEditPrincipal" type="text" placeholder="Supplier name" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Item Description</label>
-            <input id="smEditItem" type="text" placeholder="Item or product description" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-        </div>
+          <div class="sm-f sm-remarks"><label for="smEditRemarks">Remarks</label><textarea id="smEditRemarks" rows="2" placeholder="Notes, delivery confirmations, etc."></textarea></div>
 
-        <!-- Dates -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Shipment Date</label>
-            <input id="smEditShipmentDate" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
+          <div class="sm-dialog-foot">
+            <div id="smEditMsg" class="sm-msg"></div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeSmModal()">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openSmTimeline(_smTlShipmentIdx)">View timeline</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveSmEdit()">Save changes</button>
           </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">ETD</label>
-            <input id="smEditETD" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">ETA</label>
-            <input id="smEditETA" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">AWB / Tracking #</label>
-            <input id="smEditAWB" type="text" placeholder="Airway bill or tracking number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Logistics Company</label>
-            <input id="smEditLogistics" type="text" placeholder="e.g. Foureleven Freight" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-        </div>
-        <div>
-          <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Date Arrived</label>
-          <input id="smEditDateArrived" type="date" style="width:240px;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;margin-bottom:0.75rem;">
-        </div>
-
-        </div><!-- /smShipmentBlock -->
-
-        <!-- Payment block -->
-        <div id="smPaymentBlock" style="display:none;">
-        <!-- Payment -->
-        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted,#64748b);margin-bottom:0.5rem;margin-top:0.25rem;">Payment</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Total Amount (₱)</label>
-            <input id="smEditTotalAmount" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Amount Paid (₱)</label>
-            <input id="smEditAmountPaid" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Date of Payment</label>
-            <input id="smEditDatePayment" type="date" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Payment Status</label>
-            <select id="smEditPaymentStatus" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;">
-              <option value="">— Select —</option>
-              <option value="Unpaid">Unpaid</option>
-              <option value="Partial">Partial</option>
-              <option value="Paid">Paid</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Payment Method</label>
-            <input id="smEditPaymentMethod" type="text" placeholder="e.g. Telegraphic Transfer" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Sales Invoice #</label>
-            <input id="smEditSalesInvoice" type="text" placeholder="SI number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Delivery Receipt #</label>
-            <input id="smEditDeliveryReceipt" type="text" placeholder="DR number" style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;box-sizing:border-box;">
-          </div>
-        </div>
-
-        </div><!-- /smPaymentBlock -->
-
-        <!-- Remarks -->
-        <div style="margin-bottom:1rem;">
-          <label style="font-size:0.72rem;color:var(--text-muted,#64748b);display:block;margin-bottom:0.3rem;">Remarks</label>
-          <textarea id="smEditRemarks" rows="2" placeholder="Notes, delivery confirmations, etc." style="width:100%;background:#f8fafc;color:var(--text-primary,#f1f5f9);border:1px solid #e2e8f0;border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;resize:vertical;box-sizing:border-box;"></textarea>
-        </div>
-
-        <!-- Actions -->
-        <div style="display:flex;gap:0.6rem;justify-content:flex-end;border-top:1px solid #e2e8f0;padding-top:1rem;">
-          <div id="smEditMsg" style="flex:1;font-size:0.8rem;color:var(--text-muted,#64748b);align-self:center;"></div>
-          <button onclick="closeSmModal()" style="background:transparent;border:1px solid #e2e8f0;color:var(--text-secondary,#94a3b8);border-radius:6px;padding:0.5rem 1.2rem;font-size:0.82rem;cursor:pointer;">Cancel</button>
-          <button onclick="openSmTimeline(_smTlShipmentIdx)" style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.35);color:#14b8a6;border-radius:6px;padding:0.5rem 1.1rem;font-size:0.82rem;cursor:pointer;">View Timeline</button>
-          <button onclick="saveSmEdit()" style="background:#6366f1;border:none;color:#fff;border-radius:6px;padding:0.5rem 1.4rem;font-size:0.82rem;font-weight:600;cursor:pointer;">Save Changes</button>
         </div>
       </div>
-      </div><!-- /smEditTabDetails -->
-      <!-- History Tab Panel -->
-      <div id="smEditTabHistory" style="display:none;padding:1.2rem 1.5rem;min-height:340px;flex-direction:column;">
-        <!-- Filter Bar -->
+      <div id="smEditTabHistory" class="sm-history" style="display:none;">
         <div class="sm-hist-filters" id="smHistoryFilters">
           <input type="date" id="smHistDateFrom" class="sm-hist-filter-input" title="From date" onchange="_smHistoryLoad(1)">
           <input type="date" id="smHistDateTo" class="sm-hist-filter-input" title="To date" onchange="_smHistoryLoad(1)">
@@ -612,551 +323,62 @@
             <option value="AUTO_DERIVATION">Auto-derived</option>
             <option value="CORRECTION">Manual correction</option>
           </select>
-          <input type="text" id="smHistActor" class="sm-hist-filter-input" placeholder="Actor…" style="width:130px;" oninput="_smHistoryLoad(1)">
-          <label class="sm-hist-toggle">
-            <input type="checkbox" id="smHistHideSystem" checked onchange="_smHistoryLoad(1)"> Hide system events
-          </label>
-          <button class="sm-hist-filter-btn" onclick="_smHistoryClearFilters()">Clear</button>
+          <input type="text" id="smHistActor" class="sm-hist-filter-input sm-hist-actor-in" placeholder="Actor…" oninput="_smHistoryLoad(1)">
+          <label class="sm-hist-toggle"><input type="checkbox" id="smHistHideSystem" checked onchange="_smHistoryLoad(1)"> Hide system events</label>
+          <button type="button" class="sm-hist-filter-btn" onclick="_smHistoryClearFilters()">Clear</button>
         </div>
-        <!-- Event List -->
-        <div id="smHistoryList" style="flex:1;"></div>
-        <!-- Pager -->
-        <div id="smHistoryPager" style="display:none;" class="sm-hist-pager">
-          <button class="sm-hist-pager-btn" id="smHistPrevBtn" onclick="_smHistoryLoad(_smHistoryPage - 1)" disabled>← Prev</button>
+        <div id="smHistoryList" class="sm-hist-list"></div>
+        <div id="smHistoryPager" class="sm-hist-pager" style="display:none;">
+          <button type="button" class="sm-hist-pager-btn" id="smHistPrevBtn" onclick="_smHistoryLoad(_smHistoryPage - 1)" disabled>Previous</button>
           <span id="smHistPageInfo"></span>
-          <button class="sm-hist-pager-btn" id="smHistNextBtn" onclick="_smHistoryLoad(_smHistoryPage + 1)" disabled>Next →</button>
+          <button type="button" class="sm-hist-pager-btn" id="smHistNextBtn" onclick="_smHistoryLoad(_smHistoryPage + 1)" disabled>Next</button>
         </div>
       </div>
     </div>
   </div>
-  <style>
-    .task-tab {
-      background: transparent;
-      border: 1px solid var(--border, #e2e8f0);
-      color: var(--text-secondary, #64748b);
-      border-radius: 999px;
-      padding: 0.4rem 0.95rem;
-      font-size: 0.8rem; font-weight: 600;
-      cursor: pointer;
-      transition: var(--transition-fast, all 0.14s ease);
-    }
-    .task-tab:hover { background: var(--bg-inset, #eef2f6); color: var(--text-primary, #0f172a); border-color: var(--border-strong, #cbd5e1); }
-    .task-tab.active { background: var(--accent, #0f766e); border-color: var(--accent, #0f766e); color: #fff; box-shadow: 0 2px 10px -3px var(--accent-ring, rgba(15,118,110,0.4)); }
-    .task-tbl { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .task-tbl thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-inset, #eef2f6); }
-    .task-tbl th { padding: 0.6rem 0.9rem; text-align: left; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border, #e2e8f0); white-space: nowrap; }
-    .task-tbl td { padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border, #e2e8f0); color: var(--text-secondary, #475569); vertical-align: middle; }
-    .task-tbl tbody tr:nth-child(even) td { background: rgba(15,118,110,0.018); }
-    .task-tbl tr:last-child td { border-bottom: none; }
-    .task-tbl tbody tr { transition: background 0.12s ease; }
-    .task-tbl tr:hover td { background: var(--accent-light, #ccfbf1); }
-    .task-tbl .amt { font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--text-primary, #0f172a); }
-    .task-tbl .ref { font-weight: 700; color: var(--text-primary, #0f172a); font-size: 0.8rem; }
-    .sbadge { display:inline-block; padding:0.18rem 0.6rem; border-radius:999px; font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; }
-    .sbadge-pending    { background:rgba(245,158,11,0.15);  color:#f59e0b; }
-    .sbadge-awaiting   { background:rgba(251,191,36,0.15);  color:#fbbf24; }
-    .sbadge-payment    { background:rgba(59,130,246,0.15);  color:#3b82f6; }
-    .sbadge-goodsready { background:rgba(16,185,129,0.15);  color:#10b981; }
-    .sbadge-booked     { background:rgba(139,92,246,0.15);  color:#a78bfa; }
-    .sbadge-intransit  { background:rgba(99,102,241,0.15);  color:#818cf8; }
-    .sbadge-customs    { background:rgba(249,115,22,0.15);  color:#fb923c; }
-    .sbadge-arrived    { background:rgba(34,197,94,0.15);   color:#22c55e; }
-    .sbadge-delivered  { background:rgba(20,184,166,0.15);  color:#14b8a6; }
-    .sbadge-default    { background:var(--bg-inset,#eef2f6); color:var(--text-secondary,#475569); }
-    .sbadge-approved   { background:rgba(13,148,136,0.14);  color:#0f766e; }
-    .sbadge-sent       { background:rgba(59,130,246,0.15);  color:#3b82f6; }
-    .sbadge-paid       { background:rgba(20,184,166,0.15);  color:#0d9488; }
-    .sbadge-rejected   { background:rgba(239,68,68,0.15);   color:#ef4444; }
-    #smEditOverlay input, #smEditOverlay select, #smEditOverlay textarea { outline:none; }
-    #smEditOverlay input:focus, #smEditOverlay select:focus, #smEditOverlay textarea:focus { border-color:var(--accent,#0f766e); box-shadow:0 0 0 3px var(--accent-ring, rgba(15,118,110,0.18)); }
-    .sm-doc-file { display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.45rem;border-radius:6px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:0.35rem; }
-    .sm-doc-file:last-child { margin-bottom:0; }
-    .sm-doc-name { flex:1;font-size:0.78rem;color:var(--text-secondary,#94a3b8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 
-    /* ── Phase Ribbon ───────────────────────────────── */
-    .sm-tl-ribbon { display:flex; gap:4px; padding-bottom:0.55rem; }
-    .sm-tl-ribbon-seg {
-      flex:1; position:relative; overflow:hidden; cursor:pointer;
-      background:#e2e8f0; border:1px solid #e2e8f0;
-      border-radius:7px; padding:0.4rem 0.5rem; text-align:left;
-      transition:border-color 0.15s, box-shadow 0.15s;
-      min-width:0;
-    }
-    .sm-tl-ribbon-seg:hover  { border-color:rgba(99,102,241,0.5); box-shadow:0 2px 8px rgba(99,102,241,0.15); }
-    .sm-tl-ribbon-seg:focus  { outline:2px solid #6366f1; outline-offset:2px; }
-    .sm-tl-ribbon-seg.partial { border-color:rgba(245,158,11,0.4); }
-    .sm-tl-ribbon-seg.done    { border-color:rgba(34,197,94,0.45); }
-    .sm-tl-ribbon-fill {
-      position:absolute; left:0; top:0; height:100%; pointer-events:none;
-      background:rgba(34,197,94,0.08); transition:width 0.4s ease;
-    }
-    .sm-tl-ribbon-seg.partial .sm-tl-ribbon-fill { background:rgba(245,158,11,0.08); }
-    .sm-tl-ribbon-icon  { font-size:0.85rem; display:block; line-height:1; margin-bottom:2px; position:relative; }
-    .sm-tl-ribbon-label {
-      font-size:0.62rem; font-weight:700; text-transform:uppercase;
-      letter-spacing:0.04em; color:var(--text-secondary,#94a3b8);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      display:block; position:relative;
-    }
-    .sm-tl-ribbon-seg.done .sm-tl-ribbon-label { color:#22c55e; }
-    .sm-tl-ribbon-seg.partial .sm-tl-ribbon-label { color:#f59e0b; }
-    .sm-tl-ribbon-count {
-      font-size:0.63rem; font-weight:600; color:var(--text-muted,#64748b);
-      display:block; position:relative;
-    }
-    .sm-tl-ribbon-seg.done .sm-tl-ribbon-count { color:#16a34a; }
-    .sm-tl-ribbon-overall {
-      font-size:0.7rem; color:var(--text-muted,#64748b);
-      padding-top:0.25rem; text-align:right;
-    }
-
-    /* ── Next-Up Callout Card ────────────────────────── */
-    .sm-tl-next-up {
-      display:flex; align-items:flex-start; gap:0.65rem;
-      padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0.85rem;
-      border:1px solid rgba(99,102,241,0.4);
-      background:rgba(99,102,241,0.07);
-    }
-    .sm-tl-next-up.blocked { border-color:rgba(239,68,68,0.4); background:rgba(239,68,68,0.06); }
-    .sm-tl-next-up.done    { border-color:rgba(34,197,94,0.4);  background:rgba(34,197,94,0.06); }
-    .sm-tl-next-up-icon { font-size:1.1rem; flex-shrink:0; margin-top:2px; }
-    .sm-tl-next-up-body { flex:1; min-width:0; }
-    .sm-tl-next-up-kicker {
-      font-size:0.62rem; font-weight:700; text-transform:uppercase;
-      letter-spacing:0.06em; color:#818cf8; margin-bottom:0.2rem;
-    }
-    .sm-tl-next-up.blocked .sm-tl-next-up-kicker { color:#f87171; }
-    .sm-tl-next-up.done    .sm-tl-next-up-kicker { color:#22c55e; }
-    .sm-tl-next-up-stage { font-size:0.83rem; font-weight:700; color:var(--text-primary,#f1f5f9); display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap; }
-    .sm-tl-next-up-sub   { font-size:0.7rem; color:var(--text-muted,#64748b); margin-top:0.15rem; }
-
-    /* ── Owner Badges ───────────────────────────────── */
-    .sm-owner-badge {
-      display:inline-block; font-size:0.6rem; font-weight:700; line-height:1;
-      padding:0.15rem 0.45rem; border-radius:99px; border:1px solid transparent;
-      white-space:nowrap; vertical-align:middle;
-    }
-    .sm-owner-sales       { background:rgba(59,130,246,0.15);  color:#60a5fa; border-color:rgba(59,130,246,0.3);  }
-    .sm-owner-admin       { background:rgba(100,116,139,0.18); color:#94a3b8; border-color:rgba(100,116,139,0.35);}
-    .sm-owner-sir-larry   { background:rgba(168,85,247,0.15);  color:#c084fc; border-color:rgba(168,85,247,0.3);  }
-    .sm-owner-accounting  { background:rgba(16,185,129,0.15);  color:#34d399; border-color:rgba(16,185,129,0.3);  }
-    .sm-owner-supplier    { background:rgba(249,115,22,0.15);  color:#fb923c; border-color:rgba(249,115,22,0.3);  }
-    .sm-owner-broker      { background:rgba(245,158,11,0.15);  color:#fbbf24; border-color:rgba(245,158,11,0.3);  }
-    .sm-owner-bank        { background:rgba(6,182,212,0.15);   color:#22d3ee; border-color:rgba(6,182,212,0.3);   }
-    .sm-owner-forwarder   { background:rgba(244,63,94,0.15);   color:#fb7185; border-color:rgba(244,63,94,0.3);   }
-
-    /* ── Stage Cards ────────────────────────────────── */
-    .sm-tl-phase-wrap { margin-bottom:0.6rem; }
-    .sm-tl-phase-hdr {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:0.55rem 0.85rem; border-radius:8px; cursor:pointer;
-      user-select:none; border:1px solid transparent;
-      transition:background 0.12s, border-color 0.12s;
-    }
-    .sm-tl-phase-hdr:hover   { background:#f8fafc; }
-    .sm-tl-phase-hdr:focus   { outline:2px solid #6366f1; outline-offset:2px; }
-    .sm-tl-phase-hdr.pending { background:#f8fafc; border-color:#e2e8f0; }
-    .sm-tl-phase-hdr.partial { background:rgba(245,158,11,0.04);  border-color:rgba(245,158,11,0.3); }
-    .sm-tl-phase-hdr.done    { background:rgba(34,197,94,0.04);   border-color:rgba(34,197,94,0.3); }
-    .sm-tl-phase-hdr.open    { background:rgba(99,102,241,0.05);  border-color:rgba(99,102,241,0.35); }
-    .sm-tl-phase-left   { display:flex; align-items:center; gap:0.55rem; }
-    .sm-tl-phase-num    { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:700; flex-shrink:0; }
-    .sm-tl-phase-name   { font-size:0.82rem; font-weight:700; }
-    .sm-tl-phase-right  { display:flex; align-items:center; gap:0.5rem; }
-    .sm-tl-phase-cnt    { font-size:0.72rem; font-weight:600; }
-    .sm-tl-phase-chevron { font-size:0.7rem; color:var(--text-muted,#64748b); }
-
-    /* Phase body (stage list container) */
-    .sm-tl-phase-body {
-      margin-top:0.25rem; padding-left:0.4rem;
-      border-left:2px solid #e2e8f0;
-    }
-    .sm-tl-phase-body.partial { border-left-color:rgba(245,158,11,0.35); }
-    .sm-tl-phase-body.done    { border-left-color:rgba(34,197,94,0.4);   }
-
-    /* Stage card */
-    .sm-tl-card {
-      border-radius:7px; margin-bottom:0.3rem; overflow:hidden;
-      border:1px solid #e2e8f0; background:#f8fafc;
-      transition:box-shadow 0.15s, border-color 0.15s, transform 0.1s;
-      border-left-width:3px;
-    }
-    .sm-tl-card:hover { box-shadow:0 2px 12px rgba(0,0,0,0.25); transform:translateY(-1px); }
-    .sm-tl-card.done    { border-left-color:#22c55e; background:rgba(34,197,94,0.03); }
-    .sm-tl-card.skipped { border-left-color:#f59e0b; background:rgba(245,158,11,0.03); }
-    .sm-tl-card.next    { border-left-color:#6366f1; background:rgba(99,102,241,0.04); animation:sm-pulse-border 2s ease-in-out infinite; }
-    .sm-tl-card.blocked { border-left-color:#ef4444; background:rgba(239,68,68,0.03); }
-    .sm-tl-card.pending { border-left-color:#e2e8f0; }
-    .sm-tl-card.open    { box-shadow:0 4px 16px rgba(0,0,0,0.3); }
-    @keyframes sm-pulse-border {
-      0%,100% { box-shadow:0 0 0 0 rgba(99,102,241,0); }
-      50%      { box-shadow:0 0 0 3px rgba(99,102,241,0.25); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .sm-tl-card.next { animation:none; }
-      .sm-tl-card, .sm-tl-ribbon-fill, .sm-tl-ribbon-seg { transition:none; }
-    }
-
-    /* Stage card header row */
-    .sm-tl-card-hdr {
-      display:flex; align-items:center; gap:0.6rem;
-      padding:0.5rem 0.75rem; cursor:pointer; user-select:none;
-    }
-    .sm-tl-card-hdr:focus { outline:2px solid #6366f1; outline-offset:-2px; }
-    .sm-tl-card-dot {
-      width:22px; height:22px; border-radius:50%; flex-shrink:0;
-      display:flex; align-items:center; justify-content:center;
-      font-size:0.63rem; font-weight:700;
-    }
-    .sm-tl-card-dot.done    { background:rgba(34,197,94,0.2);  color:#22c55e; border:1px solid rgba(34,197,94,0.5);  }
-    .sm-tl-card-dot.skipped { background:rgba(245,158,11,0.2); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
-    .sm-tl-card-dot.next    { background:rgba(99,102,241,0.25); color:#818cf8; border:1px solid rgba(99,102,241,0.5); }
-    .sm-tl-card-dot.blocked { background:rgba(239,68,68,0.2);  color:#ef4444; border:1px solid rgba(239,68,68,0.4);  }
-    .sm-tl-card-dot.pending { background:#e2e8f0;   color:#475569; border:1px solid #e2e8f0; }
-    .sm-tl-card-main { flex:1; min-width:0; }
-    .sm-tl-card-label {
-      font-size:0.79rem; font-weight:600; color:var(--text-secondary,#94a3b8);
-    }
-    .sm-tl-card.done .sm-tl-card-label    { color:var(--text-primary,#f1f5f9); }
-    .sm-tl-card.next .sm-tl-card-label    { color:var(--text-primary,#f1f5f9); }
-    .sm-tl-card.skipped .sm-tl-card-label { text-decoration:line-through; color:var(--text-muted,#64748b); }
-    .sm-tl-card-meta {
-      font-size:0.67rem; color:var(--text-muted,#64748b);
-      margin-top:0.05rem; display:flex; align-items:center; gap:0.3rem; flex-wrap:wrap;
-    }
-    .sm-tl-card-date { font-size:0.67rem; font-weight:600; color:#22c55e; margin-top:0.1rem; }
-    .sm-tl-card.skipped .sm-tl-card-date  { color:#f59e0b; }
-    .sm-tl-card-right { display:flex; align-items:center; gap:0.35rem; flex-shrink:0; }
-    .auto-badge {
-      font-size:0.6rem; font-weight:700; background:rgba(99,102,241,0.15);
-      color:#818cf8; border-radius:3px; padding:0 0.28rem;
-      border:1px solid rgba(99,102,241,0.3);
-    }
-    .doc-badge {
-      font-size:0.65rem; font-weight:600; background:rgba(34,197,94,0.12);
-      color:#22c55e; border-radius:99px; padding:0.1rem 0.38rem;
-      border:1px solid rgba(34,197,94,0.25);
-    }
-    .blocked-icon { font-size:0.72rem; color:#ef4444; }
-
-    /* Stage card detail panel */
-    .sm-tl-detail { padding:0.65rem 0.75rem 0.8rem; border-top:1px solid #e2e8f0; }
-    .sm-tl-detail-section { margin-bottom:0.65rem; }
-    .sm-tl-detail-section:last-child { margin-bottom:0; }
-    .sm-tl-section-label {
-      font-size:0.62rem; font-weight:700; text-transform:uppercase;
-      letter-spacing:0.06em; color:var(--text-muted,#64748b); margin-bottom:0.3rem;
-    }
-
-    /* Dependency chips */
-    .sm-dep-chips { display:flex; gap:0.3rem; flex-wrap:wrap; }
-    .sm-dep-chip {
-      display:inline-flex; align-items:center; gap:0.25rem;
-      font-size:0.67rem; padding:0.18rem 0.5rem; border-radius:99px;
-      border:1px solid #e2e8f0; color:var(--text-muted,#64748b);
-      background:#e2e8f0; cursor:pointer; transition:border-color 0.1s;
-    }
-    .sm-dep-chip:hover { border-color:rgba(99,102,241,0.5); color:#818cf8; }
-    .sm-dep-chip.done    { border-color:rgba(34,197,94,0.4);  color:#22c55e; background:rgba(34,197,94,0.08);  }
-    .sm-dep-chip.skipped { border-color:rgba(245,158,11,0.4); color:#f59e0b; background:rgba(245,158,11,0.08); }
-    .sm-dep-chip.blocked { border-color:rgba(239,68,68,0.4);  color:#f87171; background:rgba(239,68,68,0.07);  }
-
-    /* Fields table */
-    .sm-tl-fields { width:100%; font-size:0.73rem; border-collapse:collapse; }
-    .sm-tl-fields td { padding:0.22rem 0; vertical-align:top; }
-    .sm-tl-fields .fl { color:var(--text-muted,#64748b); width:38%; padding-right:0.5rem; }
-    .sm-tl-fields .fv { color:var(--text-primary,#f1f5f9); font-weight:500; }
-    .sm-tl-fields .fv.empty { color:var(--text-muted,#64748b); font-style:italic; font-weight:400; }
-    .sm-set-now {
-      font-size:0.65rem; color:#818cf8; background:none; border:none; cursor:pointer;
-      text-decoration:underline; padding:0; margin-left:0.4rem;
-    }
-
-    /* Action buttons in detail panel */
-    .sm-tl-actions { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.1rem; }
-    .sm-tl-btn {
-      border-radius:5px; padding:0.28rem 0.7rem; font-size:0.73rem;
-      cursor:pointer; font-weight:600; border:1px solid; transition:opacity 0.1s;
-    }
-    .sm-tl-btn:hover { opacity:0.85; }
-    .sm-tl-btn:focus { outline:2px solid #6366f1; outline-offset:2px; }
-    .sm-tl-btn.done-btn    { background:rgba(34,197,94,0.12);  border-color:rgba(34,197,94,0.3);  color:#22c55e; }
-    .sm-tl-btn.skip-btn    { background:rgba(245,158,11,0.1);  border-color:rgba(245,158,11,0.3); color:#f59e0b; }
-    .sm-tl-btn.reset-btn   { background:#e2e8f0;    border-color:#e2e8f0;   color:var(--text-muted,#64748b); }
-
-    /* ── Responsive ─────────────────────────────────── */
-    @media (max-width:640px) {
-      #smTlOverlay { padding:0.75rem 0.4rem; }
-      #smTlOverlay > div { border-radius:10px; }
-      #smTlRibbon  { padding:0.5rem 0.75rem 0; }
-      .sm-tl-ribbon { gap:3px; }
-      .sm-tl-ribbon-label { display:none; }
-      .sm-tl-ribbon-icon  { font-size:1rem; margin-bottom:1px; }
-      .sm-tl-ribbon-count { font-size:0.6rem; }
-      #smTlContent { padding:0.65rem 0.75rem 1.2rem; }
-      .sm-tl-next-up { position:sticky; top:0; z-index:10; }
-      .sm-tl-actions { flex-direction:column; }
-      .sm-tl-btn { width:100%; text-align:center; padding:0.4rem 0.7rem; }
-      .sm-dep-chips { gap:0.25rem; }
-    }
-    @media (min-width:641px) and (max-width:1023px) {
-      .sm-tl-ribbon-label { font-size:0.58rem; }
-    }
-
-    /* ── Edit Modal Tab Bar ─────────────────────────── */
-    .sm-edit-tab {
-      background: transparent;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--text-muted, #64748b);
-      padding: 0.55rem 0.9rem 0.45rem;
-      font-size: 0.82rem;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s;
-      font-weight: 500;
-      margin-bottom: -1px;
-    }
-    .sm-edit-tab:hover { color: var(--text-secondary, #475569); }
-    .sm-edit-tab.active { color: var(--accent, #0f766e); border-bottom-color: var(--accent, #0f766e); font-weight: 700; }
-
-    /* ── History Timeline ───────────────────────────── */
-    .sm-hist-filters {
-      display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
-      margin-bottom: 1rem;
-    }
-    .sm-hist-filter-input {
-      background: #f8fafc; color: var(--text-primary,#f1f5f9);
-      border: 1px solid #e2e8f0; border-radius: 6px;
-      padding: 0.35rem 0.6rem; font-size: 0.75rem; outline: none;
-    }
-    .sm-hist-filter-input:focus { border-color: #6366f1; }
-    .sm-hist-filter-select { min-width: 120px; }
-    .sm-hist-filter-btn {
-      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35);
-      color: #818cf8; border-radius: 6px; padding: 0.35rem 0.75rem;
-      font-size: 0.75rem; cursor: pointer; font-weight: 600;
-    }
-    .sm-hist-filter-btn:hover { background: rgba(99,102,241,0.2); }
-    .sm-hist-toggle {
-      font-size: 0.72rem; color: var(--text-muted,#64748b); cursor: pointer;
-      display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;
-    }
-
-    /* Event row */
-    .sm-hist-event {
-      display: flex; gap: 0.6rem; padding: 0.65rem 0;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .sm-hist-event:last-child { border-bottom: none; }
-    .sm-hist-icon {
-      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.75rem; margin-top: 2px;
-    }
-    .sm-hist-icon.field      { background: rgba(99,102,241,0.15); color: #818cf8; }
-    .sm-hist-icon.stage      { background: rgba(34,197,94,0.12);  color: #22c55e; }
-    .sm-hist-icon.document   { background: rgba(6,182,212,0.12);  color: #22d3ee; }
-    .sm-hist-icon.lifecycle  { background: rgba(168,85,247,0.12); color: #c084fc; }
-    .sm-hist-icon.system     { background: #e2e8f0;    color: #94a3b8; }
-    .sm-hist-body { flex: 1; min-width: 0; }
-    .sm-hist-sentence {
-      font-size: 0.8rem; color: var(--text-secondary,#94a3b8); line-height: 1.4;
-    }
-    .sm-hist-sentence strong { color: var(--text-primary,#f1f5f9); font-weight: 600; }
-    .sm-hist-diff {
-      display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
-      margin-top: 0.3rem; font-size: 0.73rem;
-    }
-    .sm-hist-old {
-      text-decoration: line-through; color: var(--text-muted,#64748b);
-      background: rgba(239,68,68,0.08); border-radius: 3px; padding: 0.1rem 0.35rem;
-    }
-    .sm-hist-new {
-      color: #22c55e; background: rgba(34,197,94,0.1);
-      border-radius: 3px; padding: 0.1rem 0.35rem; font-weight: 500;
-    }
-    .sm-hist-arrow { color: var(--text-muted,#64748b); font-size: 0.65rem; }
-    .sm-hist-meta {
-      font-size: 0.67rem; color: var(--text-muted,#64748b);
-      margin-top: 0.2rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
-    }
-    .sm-hist-actor {
-      display: inline-block; padding: 0.1rem 0.4rem; border-radius: 99px;
-      background: rgba(99,102,241,0.12); color: #818cf8;
-      font-size: 0.63rem; font-weight: 600;
-    }
-
-    /* Pager */
-    .sm-hist-pager {
-      display: flex; align-items: center; justify-content: space-between;
-      padding-top: 0.75rem; margin-top: 0.25rem;
-      border-top: 1px solid #e2e8f0; font-size: 0.75rem;
-      color: var(--text-muted,#64748b);
-    }
-    .sm-hist-pager-btn {
-      background: #f8fafc; border: 1px solid #e2e8f0;
-      color: var(--text-secondary,#94a3b8); border-radius: 5px;
-      padding: 0.3rem 0.75rem; font-size: 0.75rem; cursor: pointer;
-    }
-    .sm-hist-pager-btn:disabled { opacity: 0.35; cursor: default; }
-    .sm-hist-pager-btn:not(:disabled):hover { border-color: #6366f1; color: #818cf8; }
-
-    /* Empty / banner states */
-    .sm-hist-empty {
-      text-align: center; padding: 2.5rem 1rem; color: var(--text-muted,#64748b);
-      font-size: 0.82rem;
-    }
-    .sm-hist-tracking-banner {
-      font-size: 0.72rem; color: var(--text-muted,#64748b);
-      background: #e2e8f0; border-radius: 6px;
-      padding: 0.45rem 0.75rem; margin-top: 0.75rem; text-align: center;
-    }
-  </style>
-
-  <!-- PDF Mini Viewer -->
-  <div id="smPdfOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:3000;align-items:center;justify-content:center;padding:1.5rem;">
-    <div style="width:100%;max-width:860px;height:85vh;background:#1e293b;border-radius:12px;border:1px solid #e2e8f0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.6);">
-      <div style="padding:0.75rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-        <div style="font-size:0.85rem;font-weight:600;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%;" id="smPdfTitle">Document</div>
-        <div style="display:flex;gap:0.6rem;align-items:center;flex-shrink:0;">
-          <a id="smPdfOpenLink" href="#" target="_blank" style="font-size:0.75rem;color:#6366f1;text-decoration:none;">Open in Drive ↗</a>
-          <button onclick="smClosePdf()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+  <!-- PDF viewer — admin.js shows it with display:flex -->
+  <div id="smPdfOverlay" class="sm-overlay sm-pdf" style="display:none;">
+    <div class="sm-pdf-box">
+      <div class="sm-pdf-head">
+        <div class="sm-pdf-title" id="smPdfTitle">Document</div>
+        <div class="sm-pdf-actions">
+          <a id="smPdfOpenLink" href="#" target="_blank">Open in Drive</a>
+          <button type="button" class="sm-x" onclick="smClosePdf()" aria-label="Close">×</button>
         </div>
       </div>
-      <iframe id="smPdfFrame" src="" style="flex:1;border:none;width:100%;background:#fff;"></iframe>
+      <iframe id="smPdfFrame" src="" class="sm-pdf-frame" title="Document preview"></iframe>
     </div>
   </div>
 
-  <!-- Shipment Lifecycle Timeline Modal -->
-  <div id="smTlOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2500;overflow-y:auto;padding:1.5rem 1rem;">
-    <div style="max-width:680px;margin:0 auto;background:var(--surface,#1e293b);border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 24px 64px rgba(0,0,0,0.55);">
-      <!-- Header -->
-      <div style="padding:1.2rem 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;">
-        <div style="min-width:0;">
-          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted,#64748b);margin-bottom:0.3rem;">Shipment Lifecycle Timeline</div>
-          <div style="font-size:1rem;font-weight:700;color:var(--text-primary,#f1f5f9);margin-bottom:0.2rem;" id="smTlHeader">—</div>
-          <div style="font-size:0.75rem;color:var(--text-muted,#64748b);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-            <span id="smTlSubtitle">—</span>
-            <span id="smTlStatusBadge"></span>
-          </div>
+  <!-- Shipment lifecycle timeline — admin.js renders the ribbon and the stage list into the two hosts -->
+  <div id="smTlOverlay" class="sm-overlay sm-tl" style="display:none;">
+    <div class="sm-dialog sm-dialog-tl">
+      <div class="sm-dialog-head">
+        <div>
+          <div class="sm-kicker">Shipment lifecycle timeline</div>
+          <div class="sm-dialog-title" id="smTlHeader">—</div>
+          <div class="sm-dialog-sub"><span id="smTlSubtitle">—</span><span id="smTlStatusBadge"></span></div>
         </div>
-        <button onclick="closeSmTimeline()" style="background:none;border:none;color:var(--text-muted,#64748b);font-size:1.5rem;cursor:pointer;line-height:1;flex-shrink:0;">×</button>
+        <button type="button" class="sm-x" onclick="closeSmTimeline()" aria-label="Close">×</button>
       </div>
-      <!-- Phase ribbon (replaces single progress bar) -->
-      <div id="smTlRibbon" style="padding:0.65rem 1.2rem 0;border-bottom:1px solid #e2e8f0;">
-        <div style="height:52px;"></div>
-      </div>
-      <!-- Stage list (next-up card rendered here by JS as first child) -->
-      <div id="smTlContent" style="padding:0.85rem 1.2rem 1.5rem;">
-        <div style="padding:2rem;text-align:center;"><div class="spinner"></div></div>
-      </div>
+      <div id="smTlRibbon" class="sm-tl-ribbon-host"><div class="sm-tl-ribbon-ph"></div></div>
+      <div id="smTlContent" class="sm-tl-content"><div class="sm-loading"><div class="spinner"></div></div></div>
     </div>
   </div>
-  <script>
-    (function setDate() {
-      const tl = document.getElementById('todayLabel');
-      if (!tl) return;
-      const d = new Date();
-      tl.textContent = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
-    })();
-  </script>
 
-  <script>
-    // Shipment edit-modal tab switcher: adds the Payment sub-tab on top of admin.js's base.
-    (function () {
-      const _origModalSwitch = window._smModalSwitchTab;
-      window._smModalSwitchTab = function (tab) {
-        const ship = document.getElementById('smShipmentBlock');
-        const pay = document.getElementById('smPaymentBlock');
-        const btnD = document.getElementById('smEditTabBtnDetails');
-        const btnP = document.getElementById('smEditTabBtnPayment');
-        const btnH = document.getElementById('smEditTabBtnHistory');
-        if (tab === 'payment') {
-          if (typeof _origModalSwitch === 'function') _origModalSwitch('details');
-          if (ship) ship.style.display = 'none';
-          if (pay) pay.style.display = '';
-          if (btnD) btnD.classList.remove('active');
-          if (btnP) btnP.classList.add('active');
-          if (btnH) btnH.classList.remove('active');
-          return;
-        }
-        if (tab === 'details') {
-          if (ship) ship.style.display = '';
-          if (pay) pay.style.display = 'none';
-          if (btnP) btnP.classList.remove('active');
-        } else if (tab === 'history') {
-          if (btnP) btnP.classList.remove('active');
-        }
-        if (typeof _origModalSwitch === 'function') return _origModalSwitch(tab);
-      };
-    })();
-  </script>
-
-
-  <!-- ══ Comp component classes (this page uses the comps' exact markup) ══ -->
-  <style>
-    body.flow-screen .kpi-row.kpi3 { grid-template-columns: repeat(3, 1fr); }
-    @media (max-width: 1000px){ body.flow-screen .kpi-row.kpi3 { grid-template-columns: repeat(2,1fr); } }
-    body.flow-screen .card { background:#fff; border:1px solid #e2e6ec; border-radius:18px;
-      box-shadow:0 1px 2px rgba(15,23,42,.05),0 12px 30px -20px rgba(15,23,42,.4); }
-    body.flow-screen .ctitle { font:700 15px 'Inter',sans-serif; color:#111827; display:flex; align-items:center; gap:9px; }
-    body.flow-screen .ctitle .ci { width:30px; height:30px; border-radius:9px; background:#eef2ff; color:#4f46e5;
-      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    /* Task Overview tab pills (switchTaskTab toggles .active) with count badges */
-    body.flow-screen .tab { padding:8px 14px; border-radius:999px; font:600 12px 'Inter',sans-serif;
-      background:#fff; border:1px solid #e2e6ec; color:#8b93a1; display:inline-flex; align-items:center; gap:7px;
-      cursor:pointer; transition:transform .18s cubic-bezier(.4,0,.2,1), border-color .18s; }
-    body.flow-screen .tab:hover { transform:translateY(-1px); border-color:#c7d2fe; }
-    body.flow-screen .tab.active { color:#fff; background:linear-gradient(180deg,#6a63ea,#4f46e5);
-      border-color:#4f46e5; box-shadow:0 8px 18px -8px rgba(79,70,229,.7); }
-    body.flow-screen .tab .ct { background:#eef2ff; color:#4f46e5; border-radius:999px; padding:0 7px;
-      font:700 10px 'Inter',sans-serif; }
-    body.flow-screen .tab.active .ct { background:rgba(255,255,255,.25); color:#fff; }
-    body.flow-screen .tab .ct:empty { display:none; }
-    /* Recent-activity feed rows */
-    body.flow-screen .feedrow { display:flex; align-items:center; gap:11px; padding:10px 0; border-bottom:1px solid #eef1f5; }
-    body.flow-screen .feedrow:last-child { border-bottom:none; }
-    body.flow-screen .feedrow .fi { width:30px; height:30px; border-radius:9px; background:#e0e7ff; color:#4f46e5;
-      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    /* JS-built task tables → comp .ptable */
-    body.flow-screen .task-tbl { width:100%; border-collapse:collapse; font:400 12.5px 'Inter',sans-serif; }
-    body.flow-screen .task-tbl th { text-align:left; padding:11px 14px; font:700 10px 'Inter',sans-serif;
-      text-transform:uppercase; letter-spacing:.05em; color:#8b93a1; background:#f4f6f9; white-space:nowrap;
-      border-bottom:1px solid #e5e9ef; }
-    body.flow-screen .task-tbl td { padding:12px 14px; border-bottom:1px solid #eef1f5; color:#111827; }
-    body.flow-screen .task-tbl tbody tr:nth-child(even) td { background:#fbfcfe; }
-    body.flow-screen .task-tbl tbody tr:hover td { background:#f0f2fb; }
-    /* status pills → comp .badge shape */
-    body.flow-screen .sbadge { border-radius:999px !important; padding:3px 10px !important;
-      font:700 10.5px 'Inter',sans-serif !important; }
-    /* sidebar card head → ctitle look */
-    body.flow-screen .side-panel-head { background:#fff !important; border-bottom:1px solid #eef1f5 !important;
-      padding:15px 20px 10px !important; }
-    body.flow-screen .side-panel-head h3 { font:700 14px 'Inter',sans-serif !important; color:#111827; gap:9px; }
-    body.flow-screen .side-panel-head h3 svg { width:26px !important; height:26px !important; padding:6px;
-      box-sizing:border-box; border-radius:9px; background:#eef2ff; color:#4f46e5 !important; }
-    /* 2-col task layout → comp 1.5fr / 1fr.
-       minmax(0,…) + min-width:0 let each track shrink below its content's min-size, so a
-       wide table (esp. the 5-col Inventory Snapshot once loaded) scrolls inside its card
-       instead of ballooning the sidebar track and overlapping the main column. */
-    body.flow-screen .admin-2col { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) !important;
-      align-items: start; }
-    body.flow-screen .admin-main, body.flow-screen .admin-side { min-width: 0; }
-    body.flow-screen .admin-side .chart-card { min-width: 0; }
-    body.flow-screen #invSnapshotWrap, body.flow-screen #activityFeed { overflow: auto; }
-    @media (max-width:1100px){ body.flow-screen .admin-2col { grid-template-columns:1fr !important; } }
-  </style>
-
-  <script>
-    // Header date pill
-    (function () {
-      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
-      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
-    })();
-  </script>
-
+  <script src="js/api.js"></script>
+  <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/flow-docs.js"></script>
+  <script src="js/stage-meta.js"></script>
+  <script src="js/admin.js"></script>
+  <!-- A188 — Revenue & Net Profit report, same pair and same order as accounting-home.html.
+       so-cost-editor.js must come first: accounting-profit.js calls openSoCostEditor() from it. -->
+  <script src="js/so-cost-editor.js"></script>
+  <script src="js/so-note-editor.js"></script>   <!-- A191 -->
+  <script src="js/accounting-profit.js"></script>
+  <script src="js/admin-home-page.js"></script>   <!-- A291: the page's own glue — date, the strip mount, the rail, the payment sub-tab -->
 </body>
 </html>

@@ -32,7 +32,7 @@
         <span id="importSource" class="flow-badge" style="display:none;"></span>
       </div>
       <div id="importMsg" class="flow-msg" style="display:none;"></div>
-      <div id="importWarnings" style="display:none;margin-top:0.5rem;font-size:0.82rem;color:#b45309;"></div>
+      <div id="importWarnings" style="display:none;margin-top:0.5rem;font-size:0.82rem;color: var(--hx-warn);"></div>
     </div>
 
     <!-- Editable form -->
@@ -40,7 +40,7 @@
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">2 · Review &amp; edit</h3>
       <div class="flow-form">
         <div><label>Customer *</label><input type="text" id="customer" required></div>
-        <div><label>Quotation No <span style="font-weight:400;color:var(--text-muted,#64748b);">(optional — auto if blank)</span></label><input type="text" id="quotationNo" placeholder="auto-generated"></div>
+        <div><label>Quotation No <span style="font-weight:400;color: var(--text-muted);">(optional — auto if blank)</span></label><input type="text" id="quotationNo" placeholder="auto-generated"></div>
         <div><label>Date</label><input type="date" id="date"></div>
         <div><label>VAT</label><select id="vatOption">
           <option value="inclusive">VAT Inclusive (12%)</option>
@@ -61,7 +61,7 @@
         <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Add line</button>
       </div>
 
-      <h4 style="font-size:0.85rem;font-weight:600;margin:1rem 0 0.5rem;">Document details <span style="font-weight:400;color:var(--text-muted,#64748b);">(used when you generate the PDF)</span></h4>
+      <h4 style="font-size:0.85rem;font-weight:600;margin:1rem 0 0.5rem;">Document details <span style="font-weight:400;color: var(--text-muted);">(used when you generate the PDF)</span></h4>
       <div class="flow-form">
         <div class="full"><label>Subject</label><input type="text" id="docSubject"></div>
         <div class="full"><label>Address</label><input type="text" id="docAddress"></div>

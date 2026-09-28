@@ -117,7 +117,7 @@ async function pnlLoad() {
     pnlRender();
   } catch (e) {
     if (state) state.textContent = 'Unavailable';
-    if (body) body.innerHTML = `<div class="pnl-empty" style="color:#ef4444;">${_pe(e.message)}</div>`;
+    if (body) body.innerHTML = `<div class="pnl-empty" style="color:var(--hx-red);">${_pe(e.message)}</div>`;
   }
 }
 
@@ -207,7 +207,7 @@ function pnlRenderSimple(months, year) {
   const body = document.getElementById('acctRevBody');
   if (!body) return;
   if (!months || !months.length) {
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#8b93a1;padding:1rem;">No data for this period.</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--hx-ink-3);padding:1rem;">No data for this period.</td></tr>';
     return;
   }
   const asc = months.slice().sort((a, b) => String(a.ym).localeCompare(String(b.ym)));   // Jan → Dec
@@ -217,8 +217,8 @@ function pnlRenderSimple(months, year) {
     tR += m.revenue; tC += m.cogs; tN += net;
     return `<tr><td style="font-weight:700">${_pnlFmtMonth(m.ym)}</td>` +
       `<td class="n">${_pm(m.revenue)}</td>` +
-      `<td class="n" style="color:#8b93a1">${_pm(m.cogs)}</td>` +
-      `<td class="n" style="color:${net >= 0 ? '#15803d' : '#b91c1c'};font-weight:700">${_pm(net)}</td></tr>`;
+      `<td class="n" style="color:var(--hx-ink-3)">${_pm(m.cogs)}</td>` +
+      `<td class="n" style="color:${net >= 0 ? 'var(--hx-ok)' : 'var(--hx-red)'};font-weight:700">${_pm(net)}</td></tr>`;
   }).join('');
   body.innerHTML = rows +
     `<tr class="tot"><td>Total</td><td class="n">${_pm(tR)}</td><td class="n">${_pm(tC)}</td><td class="n">${_pm(tN)}</td></tr>`;
@@ -266,7 +266,7 @@ function pnlRender() {
   }
 
   const par = v => '(' + _pm(v) + ')';
-  const gpColor = v => v >= 0 ? '#16a34a' : '#ef4444';
+  const gpColor = v => v >= 0 ? 'var(--hx-ok)' : 'var(--hx-red)';
 
   const rowsHtml = months.map((m, i) => {
     const gpPct = m.revenue > 0 ? (m.grossProfit / m.revenue * 100).toFixed(1) + '%' : '—';
@@ -274,9 +274,9 @@ function pnlRender() {
     const summary = `<tr class="pnl-mrow" onclick="pnlToggleMonth(${i})">
       <td><span class="pnl-mname">${_pe(_pnlFmtMonth(m.ym))}</span>${m.soCount ? `<span class="pnl-sub">${m.soCount} SO${m.soCount !== 1 ? 's' : ''}</span>` : ''}</td>
       <td class="num">${m.revenue ? _pm(m.revenue) : '<span class="pnl-muted">—</span>'}</td>
-      <td class="num" style="color:#ef4444;">${m.cogs ? par(m.cogs) : '<span class="pnl-muted">—</span>'}</td>
+      <td class="num" style="color:var(--hx-red);">${m.cogs ? par(m.cogs) : '<span class="pnl-muted">—</span>'}</td>
       <td class="num" style="color:${gpColor(m.grossProfit)};font-weight:600;">${_pm(m.grossProfit)}<span class="pnl-sub">${gpPct}</span></td>
-      <td class="num" style="color:#f97316;">${m.expTotal ? par(m.expTotal) : '<span class="pnl-muted">—</span>'}</td>
+      <td class="num" style="color:var(--hx-warn);">${m.expTotal ? par(m.expTotal) : '<span class="pnl-muted">—</span>'}</td>
       <td class="num" style="color:${gpColor(m.net)};font-weight:700;">${_pm(m.net)}<span class="pnl-sub">${netPct}</span></td>
       <td class="num"><button type="button" class="pnl-expand" id="pnlBtn${i}" aria-label="Expand">▸</button></td>
     </tr>`;
@@ -287,9 +287,9 @@ function pnlRender() {
   const grand = `<tr class="pnl-grand">
     <td>All Periods</td>
     <td class="num">${_pm(totRev)}</td>
-    <td class="num" style="color:#ef4444;">${par(totCOGS)}</td>
+    <td class="num" style="color:var(--hx-red);">${par(totCOGS)}</td>
     <td class="num" style="color:${gpColor(totGP)};">${_pm(totGP)}</td>
-    <td class="num" style="color:#f97316;">${par(totExp)}</td>
+    <td class="num" style="color:var(--hx-warn);">${par(totExp)}</td>
     <td class="num" style="color:${gpColor(totNet)};font-weight:800;">${_pm(totNet)}</td>
     <td></td>
   </tr>`;
@@ -310,7 +310,7 @@ function pnlRender() {
 
 function pnlDetailHtml(m) {
   const par = v => '(' + _pm(v) + ')';
-  const gpColor = v => v >= 0 ? '#16a34a' : '#ef4444';
+  const gpColor = v => v >= 0 ? 'var(--hx-ok)' : 'var(--hx-red)';
 
   // Sales orders
   // A191: one extra header cell for the Note control, on the same gate as ✎ Edit.
@@ -334,11 +334,11 @@ function pnlDetailHtml(m) {
       return `<tr><td><strong>${_pe(e.soNo || '—')}</strong>${chip}${e.date ? `<span class="pnl-sub2">${_pymd(e.date)}</span>` : ''}${noteLine}</td>
         <td>${_pe(e.customer || '—')}</td>
         <td class="num">${_pm(e.sales)}</td>
-        <td class="num" style="color:#ef4444;">${e.cogs ? par(e.cogs) : '—'}</td>
+        <td class="num" style="color:var(--hx-red);">${e.cogs ? par(e.cogs) : '—'}</td>
         <td class="num" style="color:${gpColor(e.gp)};font-weight:600;">${_pm(e.gp)}</td>${editCell}</tr>`;
     }).join('');
     so += `<tr class="pnl-subtotal"><td colspan="2">Total (${m.soCount} SO${m.soCount !== 1 ? 's' : ''})</td>
-      <td class="num">${_pm(m.revenue)}</td><td class="num" style="color:#ef4444;">${par(m.cogs)}</td>
+      <td class="num">${_pm(m.revenue)}</td><td class="num" style="color:var(--hx-red);">${par(m.cogs)}</td>
       <td class="num" style="color:${gpColor(m.grossProfit)};">${_pm(m.grossProfit)}</td>${pnlCanEditCost ? '<td></td><td></td>' : ''}</tr>`;
   } else {
     so += `<tr><td colspan="${pnlCanEditCost ? 7 : 5}" class="pnl-muted" style="text-align:center;padding:0.6rem;">No sales orders this month.</td></tr>`;
@@ -351,8 +351,8 @@ function pnlDetailHtml(m) {
     <thead><tr><th>Category</th><th class="num">Amount</th></tr></thead><tbody>`;
   const cats = Object.keys(m.expByCat).sort();
   if (cats.length) {
-    ex += cats.map(c => `<tr><td>${_pe(c)}</td><td class="num" style="color:#f97316;">${par(m.expByCat[c])}</td></tr>`).join('');
-    ex += `<tr class="pnl-subtotal"><td>Total Expenses</td><td class="num" style="color:#f97316;">${par(m.expTotal)}</td></tr>`;
+    ex += cats.map(c => `<tr><td>${_pe(c)}</td><td class="num" style="color:var(--hx-warn);">${par(m.expByCat[c])}</td></tr>`).join('');
+    ex += `<tr class="pnl-subtotal"><td>Total Expenses</td><td class="num" style="color:var(--hx-warn);">${par(m.expTotal)}</td></tr>`;
   } else {
     ex += `<tr><td colspan="2" class="pnl-muted" style="text-align:center;padding:0.6rem;">No expenses this month.</td></tr>`;
   }

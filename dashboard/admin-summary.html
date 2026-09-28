@@ -12,38 +12,38 @@
     }
     .toggle-btn {
       padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
-      cursor: pointer; border: 1px solid var(--border, #334155);
-      background: transparent; color: var(--text-muted, #64748b);
+      cursor: pointer; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
     }
     .toggle-btn.active {
-      background: var(--accent, #f97316); color: #fff; border-color: var(--accent, #f97316);
+      background: var(--accent); color: var(--hx-slab-ink); border-color: var(--accent);
     }
     .export-btns { margin-left: auto; display: flex; gap: 0.4rem; }
     .export-btn {
       padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
-      cursor: pointer; border: 1px solid var(--border, #334155);
-      background: #f8fafc; color: var(--text-secondary, #94a3b8);
+      cursor: pointer; border: 1px solid var(--border);
+      background: var(--hx-inset); color: var(--text-secondary);
     }
-    .export-btn:hover { background: #f1f5f9; color: var(--text-primary, #f1f5f9); }
+    .export-btn:hover { background: var(--hx-inset); color: var(--text-primary); }
     .summary-table {
       width: 100%; border-collapse: collapse; font-size: 0.85rem;
     }
     .summary-table th {
       text-align: left; padding: 0.6rem 0.75rem;
-      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
       font-weight: 600; white-space: nowrap;
     }
     .summary-table td {
-      padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-primary, #f1f5f9);
+      padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2);
+      color: var(--text-primary);
     }
-    .summary-table tr:hover td { background: #e2e8f0; }
+    .summary-table tr:hover td { background: var(--hx-hair-2); }
     .summary-table tfoot td {
-      font-weight: 700; border-top: 2px solid var(--border, #334155);
-      color: var(--accent, #f97316);
+      font-weight: 700; border-top: 2px solid var(--border);
+      color: var(--accent);
     }
-    .date-range-label { font-size: 0.82rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
-    .zero { color: var(--text-muted, #64748b); }
+    .date-range-label { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+    .zero { color: var(--text-muted); }
     .chart-section { margin-top: 1.5rem; }
     .chart-section canvas { max-height: 300px; }
   </style>
@@ -82,7 +82,7 @@
 
       <!-- Activity Breakdown Chart -->
       <div class="chart-section" id="chartSection" style="display:none;">
-        <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:0.75rem;color:var(--text-secondary,#94a3b8);">Activity Breakdown by Agent</h3>
+        <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:0.75rem;color: var(--text-secondary);">Activity Breakdown by Agent</h3>
         <canvas id="summaryChart"></canvas>
       </div>
     </div>
@@ -121,7 +121,7 @@
         const data = result.data || [];
         lastData = data;
         if (data.length === 0) {
-          container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No agents found.</div>';
+          container.innerHTML = '<div style="text-align:center;padding:2rem;color: var(--text-muted);">No agents found.</div>';
           return;
         }
 
@@ -145,14 +145,14 @@
             <td style="text-align:center;">${a.totalLeadsEmails}</td>
             <td style="text-align:center;">${a.totalFollowUpEmails}</td>
             <td style="text-align:center;font-weight:600;">${a.totalCalls}</td>
-            <td style="text-align:center;color:#22c55e;">${a.successfulCalls}</td>
-            <td style="text-align:center;color:#ef4444;">${a.unsuccessfulCalls}</td>
-            <td style="text-align:center;color:${a.urgentIssues > 0 ? '#ef4444' : 'inherit'};">${a.urgentIssues}</td>
+            <td style="text-align:center;color: var(--hx-ok);">${a.successfulCalls}</td>
+            <td style="text-align:center;color: var(--hx-red);">${a.unsuccessfulCalls}</td>
+            <td style="text-align:center;color: ${a.urgentIssues > 0 ? 'var(--hx-red)' : 'inherit'};">${a.urgentIssues}</td>
           </tr>`;
         }).join('');
 
         container.innerHTML = `
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">
+          <div style="font-size:0.8rem;color: var(--text-muted);margin-bottom:0.75rem;">
             ${data.filter(a => a.daysSubmitted > 0).length}/${data.length} agents reported
           </div>
           <table class="summary-table" id="summaryTable">
@@ -176,7 +176,7 @@
 
         renderChart(data);
       } catch (err) {
-        container.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text-muted);">Error: ${err.message}</div>`;
+        container.innerHTML = `<div style="text-align:center;padding:2rem;color: var(--text-muted);">Error: ${err.message}</div>`;
       }
     }
 

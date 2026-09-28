@@ -9,43 +9,43 @@
   <style>
     .tab-bar {
       display: flex; gap: 0.25rem; margin-bottom: 1.5rem;
-      border-bottom: 2px solid var(--border, #334155);
+      border-bottom: 2px solid var(--border);
       padding-bottom: 0;
     }
     .tab-btn {
       padding: 0.6rem 1.25rem; border: none; background: transparent;
-      color: var(--text-muted, #64748b); font-family: inherit; font-size: 0.875rem;
+      color: var(--text-muted); font-family: inherit; font-size: 0.875rem;
       font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent;
       margin-bottom: -2px; transition: all 0.2s;
     }
-    .tab-btn:hover { color: var(--text-primary, #f1f5f9); }
-    .tab-btn.active { color: var(--accent, #f97316); border-bottom-color: var(--accent, #f97316); }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
     /* Target progress in leaderboard */
     .target-cell { min-width: 100px; }
     .target-text { font-size: 0.8rem; font-weight: 600; }
-    .target-text .actual { color: var(--text-primary, #f1f5f9); }
-    .target-text .sep { color: var(--text-muted, #64748b); }
-    .target-text .goal { color: var(--text-muted, #64748b); font-weight: 400; }
-    .target-bar { width: 100%; height: 4px; border-radius: 999px; background: #f8fafc; margin-top: 4px; overflow: hidden; }
+    .target-text .actual { color: var(--text-primary); }
+    .target-text .sep { color: var(--text-muted); }
+    .target-text .goal { color: var(--text-muted); font-weight: 400; }
+    .target-bar { width: 100%; height: 4px; border-radius: 999px; background: var(--hx-inset); margin-top: 4px; overflow: hidden; }
     .target-bar-fill { height: 100%; border-radius: 999px; transition: width 0.5s; }
-    .no-target { color: var(--text-muted, #64748b); font-size: 0.8rem; }
+    .no-target { color: var(--text-muted); font-size: 0.8rem; }
 
     /* Trend badge */
     .trend { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.45rem; border-radius: 6px; }
-    .trend-up { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .trend-down { background: rgba(239,68,68,0.12); color: #ef4444; }
-    .trend-flat { background: rgba(148,163,184,0.1); color: #94a3b8; }
-    .trend-new { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .trend-up { background: var(--hx-ok-soft); color: var(--hx-ok); }
+    .trend-down { background: var(--hx-red-soft); color: var(--hx-red); }
+    .trend-flat { background: var(--hx-inset); color: var(--hx-ink-3); }
+    .trend-new { background: var(--hx-cyan-soft); color: var(--hx-cyan-ink); }
 
     /* Conversion rate */
     .conv-rate { font-size: 0.82rem; font-weight: 600; }
-    .conv-good { color: #22c55e; }
-    .conv-mid { color: #eab308; }
-    .conv-low { color: #ef4444; }
-    .conv-none { color: var(--text-muted, #64748b); }
+    .conv-good { color: var(--hx-ok); }
+    .conv-mid { color: var(--hx-warn); }
+    .conv-low { color: var(--hx-red); }
+    .conv-none { color: var(--text-muted); }
 
     /* Activity tab styles */
     .toggle-bar {
@@ -53,40 +53,40 @@
     }
     .toggle-btn {
       padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
-      cursor: pointer; border: 1px solid var(--border, #334155);
-      background: transparent; color: var(--text-muted, #64748b);
+      cursor: pointer; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
     }
     .toggle-btn.active {
-      background: var(--accent, #f97316); color: #fff; border-color: var(--accent, #f97316);
+      background: var(--accent); color: var(--hx-slab-ink); border-color: var(--accent);
     }
     .export-btns { margin-left: auto; display: flex; gap: 0.4rem; }
     .export-btn {
       padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
-      cursor: pointer; border: 1px solid var(--border, #334155);
-      background: #f8fafc; color: var(--text-secondary, #94a3b8);
+      cursor: pointer; border: 1px solid var(--border);
+      background: var(--hx-inset); color: var(--text-secondary);
     }
-    .export-btn:hover { background: #f1f5f9; color: var(--text-primary, #f1f5f9); }
+    .export-btn:hover { background: var(--hx-inset); color: var(--text-primary); }
     .summary-table {
       width: 100%; border-collapse: collapse; font-size: 0.85rem;
     }
     .summary-table th {
       text-align: left; padding: 0.6rem 0.75rem;
-      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
       font-weight: 600; white-space: nowrap;
     }
     .summary-table td {
-      padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-primary, #f1f5f9);
+      padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--hx-hair-2);
+      color: var(--text-primary);
     }
-    .summary-table tr:hover td { background: #e2e8f0; }
+    .summary-table tr:hover td { background: var(--hx-hair-2); }
     .summary-table tfoot td {
-      font-weight: 700; border-top: 2px solid var(--border, #334155);
-      color: var(--accent, #f97316);
+      font-weight: 700; border-top: 2px solid var(--border);
+      color: var(--accent);
     }
-    .zero { color: var(--text-muted, #64748b); }
+    .zero { color: var(--text-muted); }
     .chart-section { margin-top: 1.5rem; }
     .chart-section canvas { max-height: 300px; }
-    .date-range-label { font-size: 0.82rem; color: var(--text-muted, #64748b); margin-bottom: 0.75rem; }
+    .date-range-label { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem; }
   </style>
 </head>
 <body>
@@ -162,7 +162,7 @@
           <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
         </div>
         <div class="chart-section" id="activityChartSection" style="display:none;">
-          <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:0.75rem;color:var(--text-secondary,#94a3b8);">Activity Breakdown by Agent</h3>
+          <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:0.75rem;color: var(--text-secondary);">Activity Breakdown by Agent</h3>
           <canvas id="activityChart"></canvas>
         </div>
       </div>

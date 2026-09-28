@@ -11,12 +11,12 @@
       display: flex; gap: 0.75rem; align-items: center;
       margin-bottom: 1.25rem; flex-wrap: wrap;
     }
-    .filter-bar label { font-size: 0.85rem; color: var(--text-muted, #64748b); font-weight: 500; }
+    .filter-bar label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
     .filter-bar input[type="month"] {
       padding: 0.5rem 0.75rem;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
-      border-radius: 8px; color: var(--text-primary, #f1f5f9);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text-primary);
       font-size: 0.875rem;
     }
     .filter-bar input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
@@ -25,30 +25,30 @@
     }
     .targets-table th {
       text-align: left; padding: 0.65rem 0.9rem;
-      color: var(--text-muted, #64748b); border-bottom: 1px solid var(--border, #334155);
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
       font-weight: 600;
     }
     .targets-table td {
-      padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0;
-      color: var(--text-primary, #f1f5f9);
+      padding: 0.5rem 0.9rem; border-bottom: 1px solid var(--hx-hair-2);
+      color: var(--text-primary);
     }
     .targets-table input[type="number"] {
       width: 80px; padding: 0.35rem 0.5rem; text-align: center;
-      background: var(--surface-2, #1e293b);
-      border: 1px solid var(--border, #334155);
-      border-radius: 6px; color: var(--text-primary, #f1f5f9);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary);
       font-size: 0.85rem;
     }
     .save-btn {
-      background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3);
-      color: #22c55e; border-radius: 6px; padding: 0.3rem 0.7rem;
+      background: var(--hx-ok-soft); border: 1px solid var(--hx-ok-soft);
+      color: var(--hx-ok); border-radius: 6px; padding: 0.3rem 0.7rem;
       font-size: 0.75rem; font-weight: 600; cursor: pointer;
     }
-    .save-btn:hover { background: rgba(34,197,94,0.25); }
+    .save-btn:hover { background: var(--hx-ok-soft); }
     .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .status-msg { font-size: 0.75rem; margin-left: 0.5rem; }
-    .status-msg.success { color: #22c55e; }
-    .status-msg.error { color: #ef4444; }
+    .status-msg.success { color: var(--hx-ok); }
+    .status-msg.error { color: var(--hx-red); }
   </style>
 </head>
 <body>
@@ -161,7 +161,7 @@
             <tbody>${rows}</tbody>
           </table>`;
       } catch (err) {
-        container.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text-muted);">Error: ${err.message}</div>`;
+        container.innerHTML = `<div style="text-align:center;padding:2rem;color: var(--text-muted);">Error: ${err.message}</div>`;
       }
     }
 
