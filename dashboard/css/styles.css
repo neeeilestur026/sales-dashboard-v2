@@ -133,7 +133,7 @@ html.hx-theming *, html.hx-theming *::before, html.hx-theming *::after {
 .navbar-brand { display: flex; align-items: center; gap: .75rem; font-weight: 700; font-size: 1.125rem; color: var(--hx-ink); }
 .navbar-brand img { height: 56px; width: auto; image-rendering: -webkit-optimize-contrast; transform: translateZ(0); }
 .navbar-brand svg { display: none; }
-html[data-theme="dark"] .navbar-brand img { filter: brightness(0) invert(1); }
+/* A296 — the logo keeps its own colours in both themes (no inversion in dark). */
 .navbar-nav { display: flex; align-items: center; flex-wrap: wrap; row-gap: .25rem; gap: .25rem; list-style: none; }
 .navbar-nav a, .nav-dropdown-btn {
   display: flex; align-items: center; gap: .5rem; padding: .5rem .95rem; border-radius: var(--hx-r-pill);
@@ -497,7 +497,6 @@ tr.total-row td, tr.total td, tfoot tr td { font-weight: 800; color: var(--hx-na
 .login-card { width: min(420px, 100%); padding: 32px 30px; background: var(--hx-glass); -webkit-backdrop-filter: var(--hx-blur); backdrop-filter: var(--hx-blur); border: 1px solid var(--hx-glass-line); border-radius: var(--hx-r-lg); box-shadow: var(--hx-sh-2); animation: none; }
 .login-logo { max-width: 300px; margin: 0 auto 1.25rem; display: block; }
 .login-logo img { width: 100%; height: auto; image-rendering: -webkit-optimize-contrast; transform: translateZ(0); }
-html[data-theme="dark"] .login-logo img { filter: brightness(0) invert(1); }
 .login-title { text-align: center; font: 800 22px/1.1 var(--hx-display); letter-spacing: -.02em; margin-bottom: .25rem; color: var(--hx-navy-text); }
 .login-subtitle { text-align: center; color: var(--hx-ink-2); font-size: .875rem; margin-bottom: 1.5rem; }
 .login-foot { text-align: center; margin-top: .9rem; font: 400 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
