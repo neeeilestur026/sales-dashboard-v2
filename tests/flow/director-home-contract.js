@@ -93,8 +93,8 @@ ok('director.css sits between flow.css and director-home.css', /flow\.css[\s\S]*
 ok('the theme script is the FIRST child of <body> (no flash, and it is a src script, not a second inline one)',
    /<body class="dh">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 ok('director-pulse.js loads after director-approvals.js', /director-approvals\.js[\s\S]*director-pulse\.js/.test(HTML));
-eq('the exact script list', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js');
+eq('the exact script list (A305: the page script last, where its inline block was)', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
+   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,director-home-inline.js');
 const TAGS2 = { button: ['themeToggle'], canvas: ['pulseCost'], aside: ['rail'], section: ['pulse', 'team', 'payroll'],
                 div: ['pulseAccrual', 'pulseHeads', 'pulseDed', 'pulseCostBox', 'pulseCostFallback', 'spotTotal'], dd: ['kpiNet', 'kpiShare', 'kpi13', 'kpiActive', 'spotGross', 'spotDed'] };
 Object.keys(TAGS2).forEach(tag => TAGS2[tag].forEach(id => eq('#' + id, tagOf(id), tag)));
