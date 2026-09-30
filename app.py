@@ -2,7 +2,9 @@
 
 import logging
 import os
+import re
 from flask import Flask, send_from_directory, abort, make_response, request
+from flask_compress import Compress
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -33,6 +35,17 @@ def create_app():
 
     # ── Security & limits ────────────────────────────────────────
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
+
+    # ── A300: compression. 3.3 MB of hand-written JS becomes ~1 MB on the wire; brotli when the
+    # browser offers it, gzip otherwise. Small bodies and images are left alone.
+    app.config.update(
+        COMPRESS_ALGORITHM=["br", "gzip"],
+        COMPRESS_ALGORITHM_STREAMING=["br", "gzip"],   # file responses stream; the default list left gzip out
+        COMPRESS_MIMETYPES=["text/html", "text/css", "application/javascript", "text/javascript",
+                            "application/json", "text/csv", "text/plain", "image/svg+xml"],
+        COMPRESS_MIN_SIZE=500, COMPRESS_LEVEL=6, COMPRESS_BR_LEVEL=5,
+    )
+    Compress(app)
 
     # ── Base directories ──────────────────────────────────────────
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -66,6 +79,16 @@ def create_app():
     app.register_blueprint(flow_bp)  # routes are /flow/quotation-pdf, /flow/po-pdf
     app.register_blueprint(session_bp)  # POST /api/session/logout
 
+    # ── A300: revalidation must stay cheap. Flask-Compress suffixes a strong ETag with the
+    # encoding ("...:br"), so the browser's If-None-Match would never match the file's own ETag and
+    # every revalidation would be a full 200 plus a fresh compression. Stripping the suffix lets
+    # send_from_directory answer 304 itself, before any compression work.
+    @app.before_request
+    def _plain_if_none_match():
+        inm = request.environ.get("HTTP_IF_NONE_MATCH")
+        if inm and ":" in inm:
+            request.environ["HTTP_IF_NONE_MATCH"] = re.sub(r':(?:br|gzip|deflate|zstd)"', '"', inm)
+
     # ── Security + cache headers ────────────────────────────────────
     @app.after_request
     def add_security_headers(response):
@@ -75,21 +98,22 @@ def create_app():
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         response.headers.pop('Server', None)
-        # A299 — HSTS ramps 300 s → 1 day (A300) → 1 year (A304) so a misstep is cheap to undo.
-        response.headers['Strict-Transport-Security'] = 'max-age=300'
+        # A299 — HSTS ramps 300 s → 1 day (A300, now) → 1 year (A304) so a misstep is cheap to undo.
+        response.headers['Strict-Transport-Security'] = 'max-age=86400'
         # A299 — report-only for one release; the harness console must show no violations before
         # A304 makes it enforcing. 'unsafe-inline' stays until A305 moves the inline blocks out.
         if (response.content_type or "").startswith("text/html"):
             response.headers['Content-Security-Policy-Report-Only'] = _CSP
 
-        # ── Static asset cache headers (saves ~900KB per page load) ──
+        # ── Cache policy (A300). Pages are hand-edited and served as they are, with no version in
+        # their URLs, so scripts, sheets and pages are cached but always revalidated: the browser
+        # sends If-None-Match and gets a 304 unless the file changed. Images and fonts, which never
+        # change without a new name, are cached for 30 days.
         ct = response.content_type or ""
-        if ct.startswith("image/"):
-            response.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 days
-        elif "javascript" in ct or "css" in ct:
-            response.headers['Cache-Control'] = 'no-cache'  # always revalidate; ETag/Last-Modified prevents re-download
-        elif ct.startswith("font/") or "woff" in ct:
-            response.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 days
+        if ct.startswith("image/") or ct.startswith("font/") or "woff" in ct:
+            response.headers['Cache-Control'] = 'public, max-age=2592000'
+        elif "javascript" in ct or "css" in ct or ct.startswith("text/html"):
+            response.headers['Cache-Control'] = 'public, max-age=0, must-revalidate'
 
         return response
 
