@@ -30,10 +30,12 @@ ok('the HTML-escape body appears only in api.js and flow-api.js', bodies.length 
 const inlineBodies = pages.filter(p => BODY.test(inline[p]));
 ok('  and in no inline page script', inlineBodies.length === 0, inlineBodies);
 
-const toggles = js.filter(f => f !== 'api.js' && /^function toggleForm\(/m.test(src[f]));
-ok('toggleForm is defined once, in api.js (two pages override it inline on purpose)', toggles.length === 0, toggles);
+const OVERRIDES = new Set(['sales-orders-inline.js', 'supplier-quotation-inline.js']);   // A305: their richer form toggle, moved out with the page script
+const toggles = js.filter(f => f !== 'api.js' && !OVERRIDES.has(f) && /^function toggleForm\(/m.test(src[f]));
+ok('toggleForm is defined once, in api.js (two page scripts override it on purpose)', toggles.length === 0, toggles);
+ok('  exactly those two: sales-orders-inline.js and supplier-quotation-inline.js', [...OVERRIDES].every(f => /function toggleForm\(/.test(src[f] || '')));
 const inlineToggles = pages.filter(p => /function toggleForm\(/.test(inline[p]));
-ok('  exactly those two pages: sales-orders and supplier-quotation', inlineToggles.join(',') === 'sales-orders.html,supplier-quotation.html', inlineToggles);
+ok('  and no inline page script defines one', inlineToggles.length === 0, inlineToggles);
 
 const badgeMaps = js.filter(f => f !== 'api.js' && /'awaiting confirmation': 'sbadge-awaiting'/.test(src[f]));
 ok('the shipment badge map lives once', badgeMaps.length === 0, badgeMaps);

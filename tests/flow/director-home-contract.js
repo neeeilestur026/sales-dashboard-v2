@@ -172,8 +172,8 @@ sec('2 · director-home.js boots on the new markup and every tab switches');
 
   /* ── 4 · the page's own inline script, under reduced motion ────────────────────────────────── */
   sec('4 · the inline script degrades: reduced motion means a synchronous write');
-  const inline = (HTML.match(/<script>([\s\S]*?)<\/script>/) || [])[1];
-  ok('the page has exactly one inline <script>', (HTML.match(/<script>/g) || []).length === 1 && !!inline);
+  const inline = fs.readFileSync(D + 'js/director-home-inline.js', 'utf8');   // A305: the page's script moved out verbatim
+  ok('A305: no inline <script> left; the page script is js/director-home-inline.js, loaded where the block was', (HTML.match(/<script>/g) || []).length === 0 && /<script src="js\/director-home-inline\.js"><\/script>/.test(HTML) && inline.length > 1000);
   p.run(`matchMedia = () => ({ matches: true }); document.body.classList = { add() {}, remove() {}, toggle() {}, contains: () => false };
          var __ev = []; var __oldAdd = document.addEventListener; document.addEventListener = function (e, f) { __ev.push(e); return __oldAdd(e, f); };`);
   const err4 = threw(() => p.run(inline));
@@ -223,6 +223,6 @@ ok('#flowDocsModal sits above the deduction modal', /#flowDocsModal\s*\{\s*z-ind
   const layout = blocks.filter(b => /\b(width|height|top|left|margin|padding)\s*:/.test(b)).map(b => b.match(/@keyframes\s+(\w+)/)[1]);
   ok('no keyframe animates a layout property (transform/opacity only)', layout.length === 0, layout);
 }
-ok('the inline script checks prefers-reduced-motion', /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/.test(HTML));
+ok('the page script checks prefers-reduced-motion', /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
 ok('  and director-home.js calls dhSetNumber when it exists', /typeof dhSetNumber === 'function'/.test(JS));
 ok('director-home.js no longer paints teal', !/#0f766e/.test(JS.replace(/_PAYSLIP_CSS[\s\S]*?`;/, '')));

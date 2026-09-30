@@ -1,0 +1,133 @@
+/* pf-admin-inline.js — A305 · the page's own script, moved verbatim out of pf-admin.html so it is
+   cached like every other script. It runs at the same point in the page it always did. */
+let pfaTarget = null;
+const PFA_SHAPES = { 'products.json': 'products', 'synonyms.json': 'synonyms',
+                     'cross_reference.json': 'rows', 'torque_chart.json': 'rows' };
+const pfaEsc = hxEsc;   // A302: the shared escaper (it also escapes quotes, which is harmless in text)
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const session = requireDirector();
+  if (!session) return;
+  renderNavbar('pf-admin');
+  await pfaRender();
+  document.getElementById('pfaUpload').addEventListener('change', pfaHandleUpload);
+});
+
+let pfaData = null;   // { products, synonyms, crossRef, torque } as currently loaded (incl. overrides)
+const PFA_DATA_KEY = { 'products.json': 'products', 'synonyms.json': 'synonyms',
+                       'cross_reference.json': 'crossRef', 'torque_chart.json': 'torque' };
+
+async function pfaRender() {
+  const box = document.getElementById('pfaFiles');
+  const cards = [];
+  pfaData = { products: [], synonyms: [], crossRef: [], torque: [] };
+  for (const file of PF_DATA_FILES) {
+    let html = '<div class="pfa-card"><div class="pfa-row">'
+      + '<span class="pfa-name">' + file + '</span>';
+    try {
+      const data = await pfFetchFile(file);
+      const rows = data[PFA_SHAPES[file]] || [];
+      pfaData[PFA_DATA_KEY[file]] = rows;
+      // same rule as the matcher: only verified === true counts (a missing flag is NOT verified)
+      const ver = rows.filter(r => r.verified === true).length;
+      const unver = rows.length - ver;
+      html += '<span>' + rows.length + ' rows</span>'
+        + (ver ? '<span class="pfa-badge b-ok">' + ver + ' verified</span>' : '')
+        + (unver ? '<span class="pfa-badge b-warn">' + unver + ' unverified — never given as a safe answer</span>' : '')
+        + (pfOverride(file) ? '<span class="pfa-badge b-ov">device override active</span>' : '');
+    } catch (e) {
+      html += '<span class="pfa-badge b-warn">failed to load: ' + pfaEsc(e.message) + '</span>';
+    }
+    html += '<span style="flex:1"></span>'
+      + '<button class="pfa-btn" onclick="pfaDownload(\'' + file + '\')">⬇ Download</button>'
+      + '<button class="pfa-btn" onclick="pfaPickUpload(\'' + file + '\')">⬆ Upload replacement</button>'
+      + (pfOverride(file) ? '<button class="pfa-btn" onclick="pfaClearOverride(\'' + file + '\')">Clear override</button>' : '')
+      + '</div>'
+      + (pfOverride(file) ? '<p class="pfa-note">This device is using an uploaded replacement, not the bundled file. To make it permanent, replace <b>dashboard/data/' + file + '</b> in the app.</p>' : '')
+      + '</div>';
+    cards.push(html);
+  }
+  box.innerHTML = cards.join('');
+  pfaRenderHealth();
+
+  const misses = pfGetList('pf_misses');
+  document.getElementById('pfaMisses').innerHTML = misses.length
+    ? '<table><thead><tr><th>Date</th><th>Customer typed</th></tr></thead><tbody>'
+      + misses.slice(0, 50).map(m => '<tr><td>' + pfaEsc(String(m.date).slice(0, 10)) + '</td><td>' + pfaEsc(m.text) + '</td></tr>').join('')
+      + '</tbody></table>'
+    : '<p class="pfa-note">No misses logged — every query so far matched a category.</p>';
+  document.getElementById('pfaInqCount').textContent = pfGetList('pf_inquiries').length + ' on this device';
+}
+
+async function pfaDownload(file) {
+  const data = await pfFetchFile(file);
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = file;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function pfaPickUpload(file) { pfaTarget = file; document.getElementById('pfaUpload').click(); }
+
+/** Data-health panel: pfValidateData over what is currently loaded (incl. any overrides). */
+function pfaRenderHealth() {
+  const box = document.getElementById('pfaHealth');
+  const count = document.getElementById('pfaHealthCount');
+  if (!box || !pfaData) return;
+  const issues = pfValidateData(pfaData);
+  const errs = issues.filter(i => i.level === 'error');
+  const warns = issues.filter(i => i.level === 'warn');
+  if (count) {
+    count.innerHTML = errs.length
+      ? '<span class="pfa-badge b-warn">' + errs.length + ' error(s)' + (warns.length ? ' · ' + warns.length + ' warning(s)' : '') + '</span>'
+      : (warns.length ? '<span class="pfa-badge b-warn">' + warns.length + ' warning(s)</span>'
+                      : '<span class="pfa-badge b-ok">all checks passed</span>');
+  }
+  box.innerHTML = issues.length
+    ? issues.map(i => '<p class="pfa-note" style="color: ' + (i.level === 'error' ? 'var(--hx-red)' : 'var(--hx-warn)') + ';margin:2px 0;">'
+        + (i.level === 'error' ? 'Error: ' : 'Warning: ') + pfaEsc(i.file) + ' — ' + pfaEsc(i.msg) + '</p>').join('')
+    : '<p class="pfa-note">All schema and cross-file reference checks passed.</p>';
+}
+
+function pfaHandleUpload(ev) {
+  const f = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!f || !pfaTarget) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      const key = PFA_SHAPES[pfaTarget];
+      if (!Array.isArray(data[key])) throw new Error('expected a "' + key + '" array — check the file shape against the bundled ' + pfaTarget);
+      // Validate the merged dataset BEFORE staging — a bad upload can't poison the device.
+      const merged = Object.assign({}, pfaData);
+      merged[PFA_DATA_KEY[pfaTarget]] = data[key];
+      const before = new Set(pfValidateData(pfaData || {}).filter(i => i.level === 'error').map(i => i.file + '|' + i.msg));
+      const newErrs = pfValidateData(merged).filter(i => i.level === 'error' && !before.has(i.file + '|' + i.msg));
+      if (newErrs.length) {
+        throw new Error('the file introduces ' + newErrs.length + ' data error(s):\n'
+          + newErrs.slice(0, 6).map(i => '• ' + i.file + ' — ' + i.msg).join('\n')
+          + (newErrs.length > 6 ? '\n…and ' + (newErrs.length - 6) + ' more' : ''));
+      }
+      localStorage.setItem('pf_override_' + pfaTarget, JSON.stringify(data));
+      pfData = null; pfLoading = null;    // force the finder to re-read (both caches)
+      alert('Replacement staged for ' + pfaTarget + ' on this device (' + data[key].length + ' rows).');
+      pfaRender();
+    } catch (e) { alert('Not accepted: ' + e.message); }
+  };
+  reader.readAsText(f);
+}
+
+function pfaClearOverride(file) {
+  localStorage.removeItem('pf_override_' + file);
+  pfData = null; pfLoading = null;
+  pfaRender();
+}
+
+function pfaClearMisses() { pfSetList('pf_misses', []); pfaRender(); }
+
+function pfaExportMisses() {
+  pfDownloadCsv(pfMissesCsv(pfGetList('pf_misses')), 'product-finder-misses-' + new Date().toISOString().slice(0, 10) + '.csv');
+}

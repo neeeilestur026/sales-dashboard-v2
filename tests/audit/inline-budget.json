@@ -1,0 +1,450 @@
+{
+ "accounting-billing.html": {
+  "styleBytes": 10552,
+  "scriptLines": 0
+ },
+ "accounting-daily-report.html": {
+  "styleBytes": 3594,
+  "scriptLines": 0
+ },
+ "accounting-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "accounting-summary.html": {
+  "styleBytes": 3424,
+  "scriptLines": 0
+ },
+ "accounting.html": {
+  "styleBytes": 7904,
+  "scriptLines": 0
+ },
+ "admin-daily-report.html": {
+  "styleBytes": 3746,
+  "scriptLines": 3
+ },
+ "admin-hr-reports.html": {
+  "styleBytes": 1552,
+  "scriptLines": 0
+ },
+ "admin-import-quotation.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "admin-login-log.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "admin-reports.html": {
+  "styleBytes": 2772,
+  "scriptLines": 0
+ },
+ "admin-summary.html": {
+  "styleBytes": 1712,
+  "scriptLines": 0
+ },
+ "admin-targets.html": {
+  "styleBytes": 1755,
+  "scriptLines": 0
+ },
+ "admin-team.html": {
+  "styleBytes": 3720,
+  "scriptLines": 0
+ },
+ "admin-users.html": {
+  "styleBytes": 1981,
+  "scriptLines": 0
+ },
+ "admin.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "all-daily-reports.html": {
+  "styleBytes": 4559,
+  "scriptLines": 0
+ },
+ "ap-aging-monthly.html": {
+  "styleBytes": 4233,
+  "scriptLines": 0
+ },
+ "balance-sheet.html": {
+  "styleBytes": 4152,
+  "scriptLines": 0
+ },
+ "change-password.html": {
+  "styleBytes": 0,
+  "scriptLines": 56
+ },
+ "client-tracker.html": {
+  "styleBytes": 5031,
+  "scriptLines": 8
+ },
+ "clients.html": {
+  "styleBytes": 2826,
+  "scriptLines": 0
+ },
+ "commission-payout-report.html": {
+  "styleBytes": 4118,
+  "scriptLines": 0
+ },
+ "commission-rates.html": {
+  "styleBytes": 3463,
+  "scriptLines": 0
+ },
+ "dashboard.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "director-banks.html": {
+  "styleBytes": 3646,
+  "scriptLines": 0
+ },
+ "director-duties.html": {
+  "styleBytes": 3094,
+  "scriptLines": 0
+ },
+ "director-emails.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "director-expenses.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "director-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "director-payables.html": {
+  "styleBytes": 4296,
+  "scriptLines": 0
+ },
+ "director-recommender.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "director-sales-orders.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "email-setup.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "financial-reports.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "flow-accounting.html": {
+  "styleBytes": 1403,
+  "scriptLines": 3
+ },
+ "flow-ap-aging.html": {
+  "styleBytes": 0,
+  "scriptLines": 6
+ },
+ "flow-ar-aging.html": {
+  "styleBytes": 0,
+  "scriptLines": 6
+ },
+ "flow-clients.html": {
+  "styleBytes": 0,
+  "scriptLines": 8
+ },
+ "flow-collections.html": {
+  "styleBytes": 0,
+  "scriptLines": 3
+ },
+ "flow-commissions.html": {
+  "styleBytes": 7257,
+  "scriptLines": 3
+ },
+ "flow-expenses.html": {
+  "styleBytes": 10032,
+  "scriptLines": 16
+ },
+ "flow-guide.html": {
+  "styleBytes": 1428,
+  "scriptLines": 0
+ },
+ "flow-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 12
+ },
+ "flow-inventory.html": {
+  "styleBytes": 0,
+  "scriptLines": 19
+ },
+ "flow-invoices.html": {
+  "styleBytes": 0,
+  "scriptLines": 25
+ },
+ "flow-ledger.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "flow-lifecycle.html": {
+  "styleBytes": 3921,
+  "scriptLines": 8
+ },
+ "flow-other-payables.html": {
+  "styleBytes": 0,
+  "scriptLines": 6
+ },
+ "flow-payment-requests.html": {
+  "styleBytes": 4598,
+  "scriptLines": 6
+ },
+ "flow-payments.html": {
+  "styleBytes": 1851,
+  "scriptLines": 8
+ },
+ "flow-pricing-request.html": {
+  "styleBytes": 8691,
+  "scriptLines": 0
+ },
+ "flow-purchase-orders.html": {
+  "styleBytes": 0,
+  "scriptLines": 24
+ },
+ "flow-quotations.html": {
+  "styleBytes": 9980,
+  "scriptLines": 16
+ },
+ "flow-receiving.html": {
+  "styleBytes": 0,
+  "scriptLines": 19
+ },
+ "flow-sales-orders.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "flow-shipments.html": {
+  "styleBytes": 5192,
+  "scriptLines": 16
+ },
+ "flow-suppliers.html": {
+  "styleBytes": 0,
+  "scriptLines": 8
+ },
+ "flow-travel.html": {
+  "styleBytes": 6766,
+  "scriptLines": 8
+ },
+ "hr-accreditations.html": {
+  "styleBytes": 2993,
+  "scriptLines": 0
+ },
+ "hr-analytics.html": {
+  "styleBytes": 5047,
+  "scriptLines": 0
+ },
+ "hr-campaigns.html": {
+  "styleBytes": 2722,
+  "scriptLines": 0
+ },
+ "hr-content-calendar.html": {
+  "styleBytes": 4479,
+  "scriptLines": 0
+ },
+ "hr-daily-report.html": {
+  "styleBytes": 3518,
+  "scriptLines": 0
+ },
+ "hr-employees.html": {
+  "styleBytes": 1954,
+  "scriptLines": 0
+ },
+ "hr-grievances.html": {
+  "styleBytes": 3335,
+  "scriptLines": 0
+ },
+ "hr-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "hr-leave.html": {
+  "styleBytes": 2538,
+  "scriptLines": 0
+ },
+ "hr-memos.html": {
+  "styleBytes": 4085,
+  "scriptLines": 0
+ },
+ "hr-recruitment.html": {
+  "styleBytes": 2829,
+  "scriptLines": 0
+ },
+ "hr-reviews.html": {
+  "styleBytes": 2507,
+  "scriptLines": 0
+ },
+ "hr-tasks.html": {
+  "styleBytes": 2866,
+  "scriptLines": 0
+ },
+ "hr-training.html": {
+  "styleBytes": 2674,
+  "scriptLines": 0
+ },
+ "index.html": {
+  "styleBytes": 0,
+  "scriptLines": 50
+ },
+ "leadgen-daily-report.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "leadgen-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 55
+ },
+ "leave-request.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "management-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "management-itinerary.html": {
+  "styleBytes": 6774,
+  "scriptLines": 8
+ },
+ "management-leave.html": {
+  "styleBytes": 1740,
+  "scriptLines": 0
+ },
+ "management-sales-orders.html": {
+  "styleBytes": 3149,
+  "scriptLines": 0
+ },
+ "marketing-daily-report.html": {
+  "styleBytes": 3573,
+  "scriptLines": 0
+ },
+ "marketing-home.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
+ "mi-queue.html": {
+  "styleBytes": 811,
+  "scriptLines": 0
+ },
+ "migrate-collections.html": {
+  "styleBytes": 3359,
+  "scriptLines": 0
+ },
+ "migrate-expenses.html": {
+  "styleBytes": 3627,
+  "scriptLines": 0
+ },
+ "migrate-pricing.html": {
+  "styleBytes": 3513,
+  "scriptLines": 0
+ },
+ "migrate-sales-orders.html": {
+  "styleBytes": 3358,
+  "scriptLines": 0
+ },
+ "migrate-so-costs.html": {
+  "styleBytes": 3426,
+  "scriptLines": 0
+ },
+ "mro-queue.html": {
+  "styleBytes": 811,
+  "scriptLines": 0
+ },
+ "my-reports.html": {
+  "styleBytes": 3489,
+  "scriptLines": 0
+ },
+ "payment-requests.html": {
+  "styleBytes": 6152,
+  "scriptLines": 0
+ },
+ "pending-items.html": {
+  "styleBytes": 4277,
+  "scriptLines": 0
+ },
+ "performance.html": {
+  "styleBytes": 7813,
+  "scriptLines": 0
+ },
+ "pf-admin.html": {
+  "styleBytes": 1526,
+  "scriptLines": 0
+ },
+ "po-approvals.html": {
+  "styleBytes": 7859,
+  "scriptLines": 0
+ },
+ "pr-tracker.html": {
+  "styleBytes": 4067,
+  "scriptLines": 0
+ },
+ "pricing-submissions.html": {
+  "styleBytes": 3694,
+  "scriptLines": 0
+ },
+ "pricing.html": {
+  "styleBytes": 12202,
+  "scriptLines": 0
+ },
+ "product-finder.html": {
+  "styleBytes": 6261,
+  "scriptLines": 0
+ },
+ "purchase-request-tracker.html": {
+  "styleBytes": 17446,
+  "scriptLines": 8
+ },
+ "quotation-approvals.html": {
+  "styleBytes": 5989,
+  "scriptLines": 0
+ },
+ "quotation-board.html": {
+  "styleBytes": 4094,
+  "scriptLines": 8
+ },
+ "quotation-summary.html": {
+  "styleBytes": 2109,
+  "scriptLines": 0
+ },
+ "reconcile-2026-costs.html": {
+  "styleBytes": 3332,
+  "scriptLines": 0
+ },
+ "replace-2026-sos.html": {
+  "styleBytes": 2137,
+  "scriptLines": 0
+ },
+ "report.html": {
+  "styleBytes": 3255,
+  "scriptLines": 0
+ },
+ "sales-emails.html": {
+  "styleBytes": 11669,
+  "scriptLines": 0
+ },
+ "sales-orders.html": {
+  "styleBytes": 5603,
+  "scriptLines": 0
+ },
+ "supplier-quotation.html": {
+  "styleBytes": 4884,
+  "scriptLines": 0
+ },
+ "team-performance.html": {
+  "styleBytes": 6875,
+  "scriptLines": 0
+ },
+ "update-2025-costs.html": {
+  "styleBytes": 3526,
+  "scriptLines": 0
+ },
+ "weekly-itinerary.html": {
+  "styleBytes": 3074,
+  "scriptLines": 0
+ }
+}
