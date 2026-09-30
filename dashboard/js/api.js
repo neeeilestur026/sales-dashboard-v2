@@ -157,7 +157,10 @@ async function fetchFromAPI(params, options = {}) {
     // Google HTML error page WITH HTTP 200 on heavy reads (getStats/getClients/getCollections/…) —
     // response.json() then throws a SyntaxError, and one retry almost always succeeds, so
     // JSON-parse failures are retried below like timeouts.
-    const _retryable = s => s === 408 || s === 429 || s >= 500;
+    // A308: 404 too — under a burst of parallel reads (a home page fires ~17 at once) Google's echo hop
+    // intermittently answers 404 'unable to open the file at this time' for an execution that never ran;
+    // measured 10 of 17 parallel getCodeVersion calls. Reads are idempotent, so retry them like a 5xx.
+    const _retryable = s => s === 404 || s === 408 || s === 429 || s >= 500;
     const _sleep = ms => new Promise(r => setTimeout(r, ms));
     const attempts = 3;
     let lastErr;
