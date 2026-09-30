@@ -800,7 +800,7 @@ function _payslipHtml(emp, cutoff) {
     : money('Holiday', s.holidayPay);
   return `<div class="payslip">
     <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
-      <img class="ps-logo" src="${location.origin}/images/logo-login.png" alt="" onerror="this.style.display='none'">
+      <img class="ps-logo" src="${location.origin}/images/logo-login-2x.png" alt="" onerror="this.style.display='none'">
       <div class="ps-doc">PAYSLIP</div></div>
     <div class="ps-sep"></div>
     <div class="ps-kv"><b>Employee:</b> ${esc(s.empName)}</div>

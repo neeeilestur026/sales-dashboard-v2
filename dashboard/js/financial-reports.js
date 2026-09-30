@@ -96,8 +96,8 @@
   }
   function chart(id, build) {
     CHARTS[id] = { build: build, chart: (CHARTS[id] && CHARTS[id].chart) || null, dirty: true };
-    if (typeof loadLib !== 'function') return;
-    loadLib('https://cdn.jsdelivr.net/npm/chart.js').then(function () { paint(id); }).catch(function () {});
+    if (typeof loadLib !== 'function' || typeof CHART_JS_CDN !== 'string') return;   // no api.js (the test harness) → no charts
+    loadLib(CHART_JS_CDN).then(function () { paint(id); }).catch(function () {});
   }
   function paintDirty() { Object.keys(CHARTS).forEach(function (id) { if (CHARTS[id].dirty) paint(id); }); }
   on(document, 'hx:theme', function () { Object.keys(CHARTS).forEach(function (id) { CHARTS[id].dirty = true; }); paintDirty(); });

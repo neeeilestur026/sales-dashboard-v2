@@ -601,7 +601,7 @@ function _tpHx(name, fallback) {
 
 async function _tpDrawCharts(names) {
   try {
-    if (typeof loadLib === 'function') await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+    if (typeof loadLib === 'function') await loadLib(CHART_JS_CDN);
     if (typeof Chart === 'undefined') return;
     _tpCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
     _tpCharts = [];

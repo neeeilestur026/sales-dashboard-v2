@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard — Sales Targets</title>
   <link rel="stylesheet" href="css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     .filter-bar {
       display: flex; gap: 0.75rem; align-items: center;
@@ -223,6 +222,7 @@
         });
 
         document.getElementById('historySection').style.display = 'block';
+        await loadLib(CHART_JS_CDN);   // A301: Chart.js loads on demand, like every other chart page
         if (historyChartInstance) historyChartInstance.destroy();
 
         historyChartInstance = new Chart(document.getElementById('historyChart'), {

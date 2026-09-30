@@ -326,7 +326,7 @@ function renderActivityTable(data) {
 }
 
 async function renderActivityChart(data) {
-  await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+  await loadLib(CHART_JS_CDN);
   if (activityChartInstance) activityChartInstance.destroy();
   document.getElementById('activityChartSection').style.display = 'block';
   const ctx = document.getElementById('activityChart');

@@ -19,7 +19,7 @@
   'use strict';
 
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  var CHART_URL = 'https://cdn.jsdelivr.net/npm/chart.js';
+  var CHART_URL = typeof CHART_JS_CDN === 'string' ? CHART_JS_CDN : 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js';
 
   /* ── transforms ──────────────────────────────────────────────────────────────────────────── */
   var T = {};

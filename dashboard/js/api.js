@@ -296,6 +296,9 @@ async function postToAPI(body) {
 }
 
 // ─── Lazy Library Loader ─────────────────────────
+// A301 — one pinned Chart.js for every chart page. 4.5.1 is what the unpinned URL served on the day
+// it was pinned, so nothing drew differently; bump it here, once, on purpose.
+const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js';
 const _loadedLibs = {};
 function loadLib(url) {
   if (_loadedLibs[url]) return _loadedLibs[url];

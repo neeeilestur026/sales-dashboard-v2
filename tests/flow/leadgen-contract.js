@@ -119,7 +119,7 @@ sec('4 · leadgen.css');
   }
   ok('every selector is scoped body.lg', bad.length === 0, bad.slice(0, 5));
   const faces = CSS.match(/@font-face\s*\{[^}]*\}/g) || [];
-  eq('exactly two @font-face blocks (Archivo 800 and 700)', faces.length, 2);
+  eq('A301: no @font-face of its own (styles.css owns the type)', faces.length, 0);
   faces.forEach(f => {
     const u = (f.match(/url\('\/static\/fonts\/([^']+)'\)/) || [])[1];
     ok('  ' + u + ' exists on disk', !!u && fs.existsSync(path.join(__dirname, '../../static/fonts/' + u)));

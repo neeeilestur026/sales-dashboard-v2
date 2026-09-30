@@ -4,7 +4,7 @@
  *
  * Section 1 walks every dashboard/*.html (the redirect stub excepted): styles.css first and once, no
  * bento skin, the theme script as the first child of <body>, no Google Fonts import outside the
- * base. Section 2 lints the shared sheets: the dark set, the two Archivo faces on disk, no hover-lift,
+ * base. Section 2 lints the shared sheets: the dark set, the self-hosted faces on disk, no hover-lift,
  * the cyan focus ring, print and reduced-motion blocks, flow-screen.css free of literal colour, the
  * semantic status classes. Section 3 pins the shared scripts' classed output. Section 4 is the
  * burn-down: literal colours, emoji and non-hidden inline styles per page — a metric that each
@@ -86,8 +86,8 @@ sec('2 · the shared sheets');
   ok('styles.css carries the light set on :root and the dark set on html[data-theme="dark"]', /:root \{[\s\S]*--hx-navy:#2E3192/.test(S) && /html\[data-theme="dark"\] \{/.test(S));
   ok('  the old app names are aliases of hx tokens', /--accent:var\(--hx-navy\)/.test(S) && /--bg-card:var\(--hx-card\)/.test(S) && /--border:var\(--hx-hair\)/.test(S) && /--text-primary:var\(--hx-ink\)/.test(S));
   const faces = S.match(/@font-face\s*\{[^}]*\}/g) || [];
-  ok('  exactly two Archivo faces, both on disk', faces.length === 2 && faces.every(f => { const u = (f.match(/url\('\/static\/fonts\/([^']+)'\)/) || [])[1]; return u && fs.existsSync(path.join(__dirname, '../../static/fonts/' + u)); }));
-  ok('  one Google Fonts import site-wide, in styles.css', (S.match(/fonts\.googleapis/g) || []).length === 1 && !/fonts\.googleapis/.test(F) && !/fonts\.googleapis/.test(FS));
+  ok('  A301: four self-hosted WOFF2 faces (Inter latin + latin-ext, Archivo 800 + 700), all on disk', faces.length === 4 && faces.every(f => { const u = (f.match(/url\('\/static\/fonts\/([^']+\.woff2)'\)/) || [])[1]; return u && fs.existsSync(path.join(__dirname, '../../static/fonts/' + u)); }), faces.map(f => (f.match(/url\('([^']+)'\)/) || [])[1]));
+  ok('  no Google Fonts import anywhere in the shared sheets', ![S, F, FS].some(c => /fonts\.googleapis/.test(c)));
   ok('  no hover-lift anywhere in the base or the flow sheets', ![S, F, FS].some(c => /:hover[^{]*\{[^}]*translateY\(-/.test(c)));
   ok('  the focus ring is cyan', /:focus-visible \{ outline: 2px solid var\(--hx-cyan\)/.test(S));
   ok('  print and reduced-motion blocks', /@media print/.test(S) && /@media \(prefers-reduced-motion: reduce\)/.test(S));

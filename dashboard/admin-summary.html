@@ -181,7 +181,7 @@
     }
 
     async function renderChart(data) {
-      await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+      await loadLib(CHART_JS_CDN);
       if (chartInstance) chartInstance.destroy();
       document.getElementById('chartSection').style.display = 'block';
       const ctx = document.getElementById('summaryChart');

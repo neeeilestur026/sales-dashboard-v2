@@ -209,7 +209,7 @@ async function renderFinancialOverview(result, collectionsResult, soDataResult) 
   // P&L Chart
   var monthly = data.monthly || [];
   if (monthly.length > 0) {
-    await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+    await loadLib(CHART_JS_CDN);
     var ctx = document.getElementById('plChart').getContext('2d');
     if (plChartInstance) plChartInstance.destroy();
     plChartInstance = new Chart(ctx, {
@@ -3315,7 +3315,7 @@ async function decidePayrollApproval(decision) {
   approveBtn.disabled = true; rejectBtn.disabled = true;
 
   var pdfBase64 = '';
-  if (decision === 'Approved' && rec.snapshotHtml && typeof html2pdf !== 'undefined') {
+  if (decision === 'Approved' && rec.snapshotHtml) {   // A301: _renderPayrollSnapshotPdfBase64 loads html2pdf itself
     try {
       approveBtn.textContent = 'Rendering PDF...';
       pdfBase64 = await _renderPayrollSnapshotPdfBase64(rec.snapshotHtml);

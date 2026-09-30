@@ -28,7 +28,7 @@ function pfOverride(file) {
 async function pfFetchFile(file) {
   const ov = pfOverride(file);
   if (ov) return ov;
-  const res = await fetch('/data/' + file, { cache: 'no-cache' });
+  const res = await fetch('/data/' + file);
   if (!res.ok) {
     // 404 almost always means the SERVER is not serving /data — not that the file is missing.
     throw new Error(res.status === 404

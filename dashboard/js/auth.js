@@ -1082,7 +1082,7 @@ function renderNavbar(activePage) {
 
   nav.innerHTML = `
     <div class="navbar-brand">
-      <img src="images/logo-nav.png" alt="Hi-Escorp">
+      <img src="images/logo-nav-2x.png" alt="Hi-Escorp" width="224" height="56">
     </div>
     <button class="mobile-menu-toggle" onclick="document.getElementById('navLinks').classList.toggle('open')" aria-label="Menu">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>

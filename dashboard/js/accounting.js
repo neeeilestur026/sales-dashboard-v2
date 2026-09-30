@@ -255,7 +255,7 @@ function _hx(name, fallback) {
 }
 
 async function renderPLChart(monthly) {
-  await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+  await loadLib(CHART_JS_CDN);
   if (plChartInst) plChartInst.destroy();
   var ctx = document.getElementById('plChart');
   if (!ctx) return;
@@ -285,7 +285,7 @@ async function renderPLChart(monthly) {
 }
 
 async function renderExpBreakdownChart(expByCat, summary) {
-  await loadLib('https://cdn.jsdelivr.net/npm/chart.js');
+  await loadLib(CHART_JS_CDN);
   if (expChartInst) expChartInst.destroy();
   var ctx = document.getElementById('expBreakdownChart');
   if (!ctx) return;

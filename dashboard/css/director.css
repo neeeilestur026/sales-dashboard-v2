@@ -11,8 +11,7 @@
  * Keyframes here are dx-prefixed: the nine dh* names the home page's contract test pins live in
  * director-home.css. */
 
-@font-face { font-family: 'Archivo'; font-weight: 800; font-style: normal; font-display: swap; src: url('/static/fonts/Archivo-ExtraBold.ttf') format('truetype'); }
-@font-face { font-family: 'Archivo'; font-weight: 700; font-style: normal; font-display: swap; src: url('/static/fonts/Archivo-Bold.ttf') format('truetype'); }
+/* A301 — the Archivo faces are declared once, in styles.css. */
 
 /* ── 1 · tokens ──────────────────────────────────────────────────────────────────────────────── */
 body.dh {

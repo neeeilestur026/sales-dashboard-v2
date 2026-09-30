@@ -83,7 +83,7 @@ ok('#eeStatus has value="Active"', /<option value="Active">/.test(HTML));
 });
 ok('Export PDF still calls exportCutoff for both cutoffs (payroll-export-pdf.js pins this too)',
    (HTML.match(/onclick="exportCutoff\('[AB]'\)"/g) || []).length >= 2);
-ok('html2pdf is still loaded', /html2pdf\.bundle\.min\.js/.test(HTML));
+ok('A301: html2pdf is loaded on demand by director-home.js, never eagerly by the page', !/html2pdf\.bundle\.min\.js/.test(HTML) && /const _HTML2PDF_CDN = 'https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/html2pdf\.js/.test(JS));
 ok('the scripts load in the same order as before',
    /js\/api\.js[\s\S]*salary-deduction-card\.js[\s\S]*js\/auth\.js[\s\S]*flow-api\.js[\s\S]*flow-docs\.js[\s\S]*quotation-worklist\.js[\s\S]*quotation-team-worklist\.js[\s\S]*director-home\.js[\s\S]*itinerary-week\.js[\s\S]*itinerary-week-panel\.js[\s\S]*director-approvals\.js/.test(HTML));
 
@@ -113,13 +113,14 @@ ok('  the employer share prefill is typeof-guarded and outside the pinned Promis
 ok('director-approvals.js: an age cell, classed cells, no tick, no inline style in the rows',
    /class="da-age"/.test(DA) && !/✓/.test(DA) && !/style="/.test(DA.slice(0, DA.indexOf('function daViewItinerary'))));
 ok('director-pulse.js carries no hex colour (tokens come from the stylesheet at draw time)', !/#[0-9a-fA-F]{6}\b/.test(PULSE));
-ok('director.css: a dark token set, two Archivo faces on disk, a no-blur fallback, a print block',
+ok('director.css: a dark token set, a no-blur fallback, a print block',
    /body\.dh\[data-theme="dark"\] \{/.test(CSS_SHARED) && /@supports not \(\(backdrop-filter/.test(CSS_SHARED) && /@media print/.test(CSS_SHARED));
+ok('  A301: it declares no font face of its own (styles.css owns the type)', !/@font-face/.test(CSS_SHARED));
 (CSS_SHARED.match(/@font-face\s*\{[^}]*\}/g) || []).forEach(f => {
   const u = (f.match(/url\('\/static\/fonts\/([^']+)'\)/) || [])[1];
   ok('  ' + u + ' exists on disk', !!u && fs.existsSync(path.join(__dirname, '../../static/fonts/' + u)));
 });
-eq('  exactly two @font-face blocks', (CSS_SHARED.match(/@font-face/g) || []).length, 2);
+eq('  A301: no @font-face of its own (styles.css owns the type)', (CSS_SHARED.match(/@font-face/g) || []).length, 0);
 ok('no hover-lift anywhere in either sheet', !/:hover[^{]*\{[^}]*translateY\(-/.test(CSS) && !/:hover[^{]*\{[^}]*translateY\(-/.test(CSS_SHARED));
 
 /* ── 2 · boot the real page script against the real markup ──────────────────────────────────── */

@@ -108,7 +108,7 @@ console.log('\n7 · the button still points at it');
 const HTML = fs.readFileSync(path.join(__dirname, '../../dashboard/director-home.html'), 'utf8');
 ok('Export PDF calls exportCutoff for both cutoffs',
    (HTML.match(/onclick="exportCutoff\('[AB]'\)"/g) || []).length >= 2);
-ok('html2pdf is loaded on the page', /html2pdf\.bundle\.min\.js/.test(HTML));
+ok('A301: html2pdf is fetched on demand by _renderPayslipPdf, not by a page tag', !/html2pdf\.bundle\.min\.js/.test(HTML) && /_HTML2PDF_CDN/.test(fs.readFileSync(path.join(__dirname, '../../dashboard/js/director-home.js'), 'utf8')));
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);
