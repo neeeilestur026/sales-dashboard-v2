@@ -94,3 +94,17 @@ its secret is missing, refuses mutations over GET, and reads each tab once per r
 
 Rollback: Manage deployments → previous version; the Flask/JS lists are a superset the old script
 ignores.
+
+## Deploying the hardened receiving writers (AS-3)
+
+`apps-script/MRO_Writer.gs` and `apps-script/MI_Writer.gs` now require the server's shared secret,
+take their sheet ids from Script Properties (never from the request) and write each batch in one
+call per sheet. Flask already sends the secret on every call (A299).
+
+1. In each writer project: Project Settings → Script properties → `INTERNAL_SHARED_SECRET`
+   (same value as the server), `INVENTORY_SHEET_ID`, and for the MRO writer `MRO_SHEET_ID`.
+2. Paste the file, Save, Deploy → Manage deployments → Edit → New version → Deploy.
+3. Smoke: submit one receiving from `/mro/` and one issuance from `/mi/`; the rows appear and the
+   Inventory tab moves by the quantities.
+
+Rollback: Manage deployments → previous version.
