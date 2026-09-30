@@ -2,9 +2,7 @@
    hr-analytics.js — HR-Marketing Analytics Dashboard
    ═══════════════════════════════════════════════ */
 
-function esc(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const session = requireHROrAdmin();

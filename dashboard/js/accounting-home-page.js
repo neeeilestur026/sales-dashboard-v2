@@ -21,17 +21,12 @@
     var mo = new MutationObserver(fn); mo.observe(el, opts); return mo;
   };
   var pop = function (el) { if (el && el.classList) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } };
-  var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+  var esc = hxEsc;
   // ONE DOMContentLoaded listener for the whole file (the test harness keeps only the last one registered).
   var READY = []; var ready = function (fn) { READY.push(fn); };
 
   // ── Date and the day line ──
-  (function () {
-    var d = new Date();
-    var dd = $('hbDay'); if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-    var dm = $('hbMon'); if (dm) dm.textContent = d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleDateString('en-US', { month: 'long' });
-    var tl = $('todayLabel'); if (tl) tl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  })();
+  if (typeof hxDatePill === 'function') hxDatePill();   // A302: the shared date pill
 
   // ── The action strip (A146) ──
   ready(function () {

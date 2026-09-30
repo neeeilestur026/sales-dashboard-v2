@@ -27,7 +27,7 @@
  */
 
 /** Coerce to a number the way flowNum does, without depending on it (this file must stay pure). */
-function _prgNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _prgNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }   // stays self-contained: this module also runs under Node's require in the tests
 function _prgKey(v) { return String(v == null ? '' : v).trim(); }
 
 /* Two peso figures agree when they agree to the centavo. A tolerance wider than this would start

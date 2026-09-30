@@ -12,11 +12,7 @@
   var accounts = [];
   var currentAccountCode = null;
 
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function escapeHtml(s) { return hxEsc(s); }
 
   function fmtPHP(n) {
     var v = parseFloat(n) || 0;

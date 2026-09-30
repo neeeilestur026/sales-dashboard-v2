@@ -17,7 +17,7 @@ let _rwOpts = null;      // last init opts — week navigation re-renders with t
 let _rwOffset = 0;       // weeks relative to the week of the picked date (0 = that week)
 let _rwData = null;      // last rendered aggregate — lets the PDF build without re-fetching
 
-function _rwEsc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _rwEsc(s) { return hxEsc(s); }
 
 /** The 7 yyyy-MM-dd dates of the Mon–Sun week containing dateStr, shifted by offset weeks. */
 /* A190: was a byte-identical copy of team-performance.js's _tpWeekDates. Both now defer to

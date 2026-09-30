@@ -119,7 +119,7 @@ ok('management-home.js writes no hex colour but the chart helper\'s fallbacks an
   const left = (JS.match(/#(?:[0-9a-fA-F]{3}){1,2}\b/g) || []).filter(h => !fb.has(h) && !/^#(fff|ffffff|666|666666|999|999999|c00|cc0000)$/i.test(h));
   return left.length === 0;
 })(), (JS.match(/#(?:[0-9a-fA-F]{3}){1,2}\b/g) || []).slice(0, 8));
-ok('  the shipment badges are classed', /function _mgmtSmBadge/.test(JS) && !/statusColor/.test(JS) && /class="sbadge \$\{cls\}"/.test(JS));
+ok('  the shipment badges are classed (A302: through the shared hxSmBadge)', /function _mgmtSmBadge\(status\) \{ return hxSmBadge\(status\); \}/.test(JS) && /_mgmtSmBadge\(/.test(JS));
 ok('  no chrome emoji left in management-home.js (✓ and ⚠ stay)', !EMOJI_JS.test(JS), (JS.match(EMOJI_JS) || [])[0]);
 ok('management-flow.js and management-income.js write no hex colour and no emoji (✉ stays)', !/#[0-9a-fA-F]{6}\b/.test(FLOW) && !/#[0-9a-fA-F]{6}\b/.test(INC) && !EMOJI_JS.test(FLOW) && !EMOJI_JS.test(INC), [(FLOW.match(EMOJI_JS) || [])[0], (INC.match(EMOJI_JS) || [])[0]]);
 ok('management-home-page.js writes no hex colour', !/#[0-9a-fA-F]{6}\b/.test(PJS));

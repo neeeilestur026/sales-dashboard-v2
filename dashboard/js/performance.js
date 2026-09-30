@@ -274,9 +274,7 @@ function followUpToISO(dateStr) {
   return d.toISOString().split('T')[0];
 }
 
-function escapeHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function escapeHtml(str) { return hxEscBlank(str); }
 
 async function exportTrackerExcel() {
   if (!allRecords || allRecords.length === 0) return;

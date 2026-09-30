@@ -35,9 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ─── Helpers ─────────────────────────────────────
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
 function peso(n) {
   if (n === undefined || n === null) return '—';
@@ -249,10 +247,7 @@ function agingItem(label, val, cls) {
 
 // A292 — Chart.js paints on a canvas, so it needs real colours, not var() strings. Read the token
 // at draw time so the charts follow the theme; the fallback keeps them drawing in a bare context.
-function _hx(name, fallback) {
-  try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
-  return fallback || '#888';
-}
+function _hx(name, fallback) { return hxToken(name, fallback || '#888'); }
 
 async function renderPLChart(monthly) {
   await loadLib(CHART_JS_CDN);

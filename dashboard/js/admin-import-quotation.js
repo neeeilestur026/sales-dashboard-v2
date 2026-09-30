@@ -12,8 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('date').value = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
 });
 
-function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
-function _num(v) { return (typeof flowNum === 'function') ? flowNum(v) : (parseFloat(v) || 0); }
+function _esc(s) { return hxEsc(s); }
+function _num(v) { return hxNum(v); }
 function _money(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + _num(v).toFixed(2); }
 function _msg(id, text, ok) {
   const el = document.getElementById(id);

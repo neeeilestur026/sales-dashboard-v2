@@ -234,9 +234,7 @@ function toggleDetails(id) {
   if (row) row.classList.toggle('open');
 }
 
-function escapeHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function escapeHtml(str) { return hxEscBlank(str); }
 
 let lastReportData = [];
 

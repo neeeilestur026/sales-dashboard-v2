@@ -18,7 +18,7 @@
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var on = function (t, ev, fn) { if (t && typeof t.addEventListener === 'function') t.addEventListener(ev, fn); };
-  var esc = function (s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); };
+  var esc = hxEsc;
   var num = function (v) { return typeof flowNum === 'function' ? flowNum(v) : (parseFloat(v) || 0); };
   var money = function (v) { return typeof flowMoney === 'function' ? flowMoney(v, 'PHP') : String(v); };
   var ymd = function (d) { return typeof flowDate === 'function' ? flowDate(d) : String(d || ''); };
@@ -68,18 +68,11 @@
   var EXP_TAB = 'Daily', TOP_TAB = 'Day';
 
   // ── Date and the theme toggle live in the rail ──
-  (function () {
-    var d = new Date();
-    setText('hbDay', pad(d.getDate()));
-    setText('hbMon', d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleDateString('en-US', { month: 'long' }));
-  })();
+  if (typeof hxDatePill === 'function') hxDatePill();   // A302: the shared date pill
 
   // ── Charts: built from tokens at draw time, rebuilt on the theme event ──
   var CHARTS = {};   // id -> { build, chart, dirty }
-  function hx(name, fallback) {
-    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
-    return fallback;
-  }
+  function hx(name, fallback) { return hxToken(name, fallback); }
   function visible(el) { return !!el && (typeof el.offsetParent === 'undefined' || el.offsetParent !== null); }
   function paint(id) {
     var c = CHARTS[id], canvas = $(id);

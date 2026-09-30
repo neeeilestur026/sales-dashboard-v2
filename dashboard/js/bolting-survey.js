@@ -297,7 +297,7 @@ async function bsSuggest() {
   bsResult = { answers: a, rec: r };
   box.style.display = '';
 
-  const esc = (typeof pfEsc === 'function') ? pfEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const confirmMsg = (typeof PF_CONFIRM_MSG === 'string')
     ? PF_CONFIRM_MSG : 'Needs engineer confirmation — Hi-ESCORP will contact you.';
 
@@ -365,7 +365,7 @@ async function bsSuggest() {
 
 /** The override control: the suggestion, its alternates, or the rep's own text. */
 function bsToolPickerHtml(r) {
-  const esc = (typeof pfEsc === 'function') ? pfEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const opts = [r.primary].concat(r.alternates).map((p, i) =>
     '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
   return '<div class="bs-pick"><label for="bsTool">Tool on the document</label>' +

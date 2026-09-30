@@ -90,7 +90,7 @@ ok('no emoji in the page', !EMOJI.test(HTML));
 ok('no "→" in the page', !/→/.test(HTML));
 ok('the old kit is gone: hero, hband, kpi-row, acct-kpis, acct-2col, sect-head, app-grid-v2, sm-section', !/class="(hero|hband|acct-kpis|acct-2col|sect-head|app-grid-v2 stagger|sm-section|sm-section-hdr|ctitle)"/.test(HTML) && !/hero-pill|ptable/.test(HTML));
 ok('accounting-home.js writes no hex colour', !/#[0-9a-fA-F]{6}\b/.test(JS));
-ok('  the list, the recent rows and the badges are classed', /class="sm-row"/.test(JS) && /class="sm-mini"/.test(JS) && /class="po"/.test(JS) && /function _acctSmBadge/.test(JS) && /class="sbadge \$\{cls\}"/.test(JS) && !/statusColor/.test(JS));
+ok('  the list, the recent rows and the badges are classed', /class="sm-row"/.test(JS) && /class="sm-mini"/.test(JS) && /class="po"/.test(JS) && /function _acctSmBadge\(status\) \{ return hxSmBadge\(status\); \}/.test(JS) && !/statusColor/.test(JS));
 ok('  no chrome emoji left in accounting-home.js (✓ and ⚠ stay)', !EMOJI_JS.test(JS), (JS.match(EMOJI_JS) || [])[0]);
 ok('stage-meta.js: the six phase icons are inline SVG', /const _SM_PHASE_ICONS = \(function/.test(META) && !EMOJI.test(META) && (META.match(/<svg width="14" height="14"/g) || []).length >= 1);
 ok('accounting-home-page.js writes no hex colour and defines only the three named globals', !/#[0-9a-fA-F]{6}\b/.test(PJS) && ['acctOpenDocViewer', 'acctCloseDocViewer', 'acctSmToggleSection'].every(n => new RegExp('window\\.' + n + ' = function').test(PJS)) && (PJS.match(/window\.\w+\s*=/g) || []).length === 3);

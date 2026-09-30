@@ -146,11 +146,7 @@
       var allEntries = [];
       var scope = 'all';
 
-      function esc(s) {
-        return String(s == null ? '' : s)
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      }
+      function esc(s) { return hxEsc(s); }
       function php(n) { return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
       function pct(n) { return (isFinite(n) ? n.toFixed(1) : '0.0') + '%'; }
       function fmtDate(d) {

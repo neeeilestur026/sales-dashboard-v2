@@ -219,9 +219,7 @@ async function loadTaskOverview() {
 
 // ── Helpers ──────────────────────────────────────────────
 
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(s) { return hxEsc(s); }
 
 function fmtPHP(val) {
   const n = parseFloat(val);
@@ -324,20 +322,7 @@ function applySmFilter() {
   _renderSmTable(filtered);
 }
 
-function _smBadge(status) {
-  const s = String(status || '').toLowerCase().trim();
-  let cls = 'sbadge-default';
-  if (s === 'pending')                cls = 'sbadge-pending';
-  else if (s === 'awaiting confirmation') cls = 'sbadge-awaiting';
-  else if (s === 'payment processing') cls = 'sbadge-payment';
-  else if (s === 'goods ready')       cls = 'sbadge-goodsready';
-  else if (s === 'booked')            cls = 'sbadge-booked';
-  else if (s === 'in transit')        cls = 'sbadge-intransit';
-  else if (s === 'customs clearance') cls = 'sbadge-customs';
-  else if (s === 'arrived')           cls = 'sbadge-arrived';
-  else if (s === 'delivered')         cls = 'sbadge-delivered';
-  return `<span class="sbadge ${cls}">${esc(status)}</span>`;
-}
+function _smBadge(status) { return hxSmBadge(status); }
 
 function _smStageDots(row) {
   let stages = {}, docs = {};
@@ -1377,8 +1362,5 @@ function _smFmtDate(iso) {
   catch(_) { return iso.slice(0,10); }
 }
 
-function _esc(str) {
-  if (str == null) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function _esc(str) { return hxEsc(str); }
 

@@ -44,6 +44,7 @@ function boot() {
   };
   ctx.window = ctx;
   vm.createContext(ctx);
+  require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
   vm.runInContext(SRC + `
 this.__t = {
   el: (id) => this.document.getElementById(id),

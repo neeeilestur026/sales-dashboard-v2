@@ -39,6 +39,7 @@ const ctx = { console,
   localStorage: { getItem: () => null, setItem() {} },
   location: { origin: 'http://localhost' }, window: {} };
 vm.createContext(ctx);
+require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 vm.runInContext(SRC + `
 this.__t = {
   set(emps, hours, hols, reg, y, m) { _employees = emps; _hoursA = hours; _hoursB = hours;

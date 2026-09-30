@@ -7,9 +7,9 @@ let drEntries = [];        // all activity entries for the selected date
 let drEmailCount = 0;      // today's sent-email count (also feeds the daily-report submission)
 const MODULE_ORDER = ['Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory'];
 
-function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _esc(s) { return hxEsc(s); }
 function _money(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
-function _num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _num(v) { return hxNum(v); }
 function _modClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _time(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
 

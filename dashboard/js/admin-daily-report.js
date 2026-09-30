@@ -19,7 +19,7 @@ function _emailMetaHint() {
 const MODULE_ORDER = ['Purchase Order', 'Sales Order', 'Shipment', 'Payment Request',
                       'Pricing Request', 'Quotation', 'Receiving', 'Invoice', 'Inventory', 'Document'];
 
-function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _esc(s) { return hxEsc(s); }
 function _money(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
 function _modClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _time(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }

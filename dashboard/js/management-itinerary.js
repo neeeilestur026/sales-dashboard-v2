@@ -31,7 +31,7 @@ let miSeq = 0;                 // discard a slow week that a faster later click 
 const MI_LABEL = { 'needs-you': 'Waiting on you', 'no-plan': 'No plan filed', 'pending': 'Under review',
                    'draft': 'Draft', 'rejected': 'Sent back', 'approved': 'Approved', 'idle': 'Nothing filed' };
 
-function _mie(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _mie(s) { return hxEsc(s); }
 
 document.addEventListener('DOMContentLoaded', () => {
   /* hr and admin land here read-only; the Approve/Reject buttons are drawn only for the role whose

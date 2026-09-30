@@ -2,7 +2,7 @@
    accounting-home.js — Accounting Home page logic
    ═══════════════════════════════════════════════ */
 
-function _acctEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function _acctEsc(s) { return hxEscBlank(s); }
 
 document.addEventListener('DOMContentLoaded', () => {
   const session = requireAccounting();
@@ -43,13 +43,7 @@ function setAppLink(elementId, url) {
 
 let _acctSmAll = [];
 
-function _acctSmBadge(status) {
-  // Classed, like admin.js's _smBadge; css/shipments.css paints it.
-  const k = String(status || '').toLowerCase().trim();
-  const cls = { pending: 'sbadge-pending', 'awaiting confirmation': 'sbadge-awaiting', 'payment processing': 'sbadge-payment', 'goods ready': 'sbadge-goodsready',
-                booked: 'sbadge-booked', 'in transit': 'sbadge-intransit', 'customs clearance': 'sbadge-customs', arrived: 'sbadge-arrived', delivered: 'sbadge-delivered', cancelled: 'sbadge-rejected' }[k] || 'sbadge-default';
-  return `<span class="sbadge ${cls}">${_acctEsc(status || '—')}</span>`;
-}
+function _acctSmBadge(status) { return hxSmBadge(status); }
 
 function _acctSmRenderList(result) {
   const container = document.getElementById('acctSmContainer');

@@ -29,6 +29,7 @@ function load(today) {
   ctx.window = ctx;
   ctx.globalThis = ctx;
   vm.createContext(ctx);
+  require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 
   vm.runInContext(fs.readFileSync(path.join(DASH, 'flow-api.js'), 'utf8'), ctx, { filename: 'flow-api.js' });
   vm.runInContext(fs.readFileSync(path.join(DASH, 'quotation-worklist.js'), 'utf8'), ctx,

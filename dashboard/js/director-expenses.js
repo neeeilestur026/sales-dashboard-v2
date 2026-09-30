@@ -13,9 +13,7 @@
   var allExpenses = [];
   var $ = function (id) { return document.getElementById(id); };
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function esc(s) { return hxEsc(s); }
   function php(n) { return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function dateVal(o) { return new Date(o.date || 0); }
   function fmtDate(d) {

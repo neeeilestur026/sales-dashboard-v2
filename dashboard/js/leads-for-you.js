@@ -10,7 +10,7 @@
 (function () {
   const CARD = 'leadsForYou';
   const OPEN = ['Handed Off', 'Presentation Booked', 'Quoted'];
-  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function esc(v) { return hxEsc(v); }
 
   function render(el, rows, session) {
     if (!rows.length) { el.style.display = 'none'; el.innerHTML = ''; return; }

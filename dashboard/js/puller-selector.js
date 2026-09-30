@@ -426,7 +426,7 @@ async function psSuggest() {
   psResult = { answers: a, rec: r };
   box.style.display = '';
 
-  const esc = (typeof pfEsc === 'function') ? pfEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const confirmMsg = (typeof PF_CONFIRM_MSG === 'string')
     ? PF_CONFIRM_MSG : 'Needs engineer confirmation — Hi-ESCORP will contact you.';
 
@@ -514,7 +514,7 @@ async function psSuggest() {
 
 /** The override control: the suggestion, its alternates, or the rep's own text. */
 function psToolPickerHtml(r) {
-  const esc = (typeof pfEsc === 'function') ? pfEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const list = [r.primary].concat(r.alternates || []).filter(Boolean);
   const opts = list.map((p, i) =>
     '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');

@@ -79,7 +79,7 @@ ok('  no chrome emoji in the script', !EMOJI_JS.test(JS), (JS.match(EMOJI_JS) ||
 ok('  it never posts', !/postFlow\(/.test(JS));
 ok('  it reads the four actions and nothing else', ["fetchFlow('getInvoices'", "fetchFlow('getExpenses'", "fetchFlow('getARAging'", "fetchFlow('getCollections'"].every(c => JS.includes(c)) && (JS.match(/fetchFlow\('/g) || []).length === 4);
 ok('  refresh bypasses the cache', /\{ fresh: true \}/.test(JS));
-ok('  charts are rebuilt on hx:theme and read tokens at draw time', /'hx:theme'/.test(JS) && /getComputedStyle\(document\.documentElement\)\.getPropertyValue/.test(JS));
+ok('  charts are rebuilt on hx:theme and read tokens at draw time', /'hx:theme'/.test(JS) && /function hx\(name, fallback\) \{ return hxToken\(name, fallback\); \}/.test(JS));
 ok('  the accounting guard runs at load', /requireAccounting\(\)/.test(JS) && /renderNavbar\('financial-reports'\)/.test(JS));
 
 /* ── 4 · the sheet and the navbar ─────────────────────────────────────────────────────────────── */

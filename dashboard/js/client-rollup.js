@@ -62,7 +62,7 @@ function crDisplay(names, key, registry) {
     (b.length - a.length) || a.localeCompare(b))[0] || key;
 }
 
-function _crNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _crNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }   // stays self-contained: this module also runs under Node's require in the tests
 function _crDate(v) { return String(v == null ? '' : v).slice(0, 10); }
 
 /* ── the repeat-price check ─────────────────────────────────────────────────────────────────────

@@ -21,7 +21,7 @@ function _daCommLive() {
   return (typeof flowCommissionsLiveFor !== 'function') || flowCommissionsLiveFor('director');
 }
 
-function _dae(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _dae(s) { return hxEsc(s); }
 function _dam(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
 /** A288 — how long a record has waited: "today", "1 d", "3 d"; empty when the date is unknown. */
 function _daAge(iso) {

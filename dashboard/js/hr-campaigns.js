@@ -19,21 +19,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadCampaignStats(), loadCampaigns()]);
 });
 
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
 function formatCurrency(num) {
   const n = parseFloat(num) || 0;
   return 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function toggleForm() {
-  const section = document.getElementById('formSection');
-  const label = document.getElementById('toggleLabel');
-  section.classList.toggle('open');
-  label.textContent = section.classList.contains('open') ? 'Hide Form' : 'Show Form';
-}
 
 function resetForm() {
   document.getElementById('campForm').reset();

@@ -21,10 +21,7 @@
   function peso(n) {
     return '₱' + (Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-  function esc(v) {
-    return String(v == null ? '' : v).replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
+  function esc(v) { return hxEsc(v); }
   /* '2026-09-A' → '1st cutoff, September 2026'. Written out rather than shown as a key, because the
      employee reading this has never seen a period key and should not have to learn one. */
   function label(period) {

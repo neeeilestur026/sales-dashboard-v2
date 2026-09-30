@@ -259,9 +259,7 @@
       XLSX.writeFile(wb, `report-summary-${currentRange}-${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    function esc(str) {
-      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
+    function esc(str) { return hxEscBlank(str); }
   </script>
 </body>
 </html>

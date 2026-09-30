@@ -368,7 +368,7 @@ function qcLoadExisting(q) {
      un-await it at every one of those call sites. qcSavePdf awaits qcPhotoLoad instead. */
   if (qcQuotationNo) qcPhotoLoad = qcLoadPhotos(qcQuotationNo);
 
-  const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const title = document.getElementById('formTitle');
   const savedDate = dt(q.date);
   const today = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
@@ -858,7 +858,7 @@ function qcSetRecommended(key) {
 }
 
 function qcRenderItems() {
-  const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const ro = qcLocked ? ' disabled' : '';
   const title = qcLocked ? ' title="Set by management on the purchase request"' : '';
   /* A205 — the Option cell. Blank keeps the line an ordinary charged item; a number puts it in a
@@ -1050,7 +1050,7 @@ function qcRenderBlocks() {
   const host = document.getElementById('qcBlkList');
   if (!host) return;
   // `esc` is function-local in qcRenderItems, not a global — the same line, for the same reason.
-  const esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
+  const esc = hxEsc;
   const ro = qcLocked ? ' readonly' : '';
   host.innerHTML = qcBlkDraft.map((b, i) => `
     <div class="qc-blk" style="border:1px solid var(--hx-hair);border-radius:8px;padding:.5rem;margin-top:.4rem;">

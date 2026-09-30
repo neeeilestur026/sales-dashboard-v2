@@ -116,7 +116,7 @@
     return (values || []).map(function (v) { return max > 0 ? Math.max(0, Math.min(1, num(v) / max)) : 0; });
   };
   T.money = function (n) { return '₱' + num(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
-  T.esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  T.esc = function (s) { return hxEsc(s); };
 
   /* ── state and DOM ───────────────────────────────────────────────────────────────────────── */
   var S = { chart: null, series: null, approvals: null, rows13: null, deds: null, reduced: false, mounted: false };

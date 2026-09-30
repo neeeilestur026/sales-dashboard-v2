@@ -18,7 +18,7 @@ let ctPick = null;
 let ctPhotos = {}, ctPhotoDone = {};
 let ctSeq = 0;
 
-function _cte(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _cte(s) { return hxEsc(s); }
 
 /** The same rule as the board and the quotation list (flow-quotations.js:41): everyone but a sales
  *  rep sees the whole book. Three copies of this test would eventually disagree, and the most

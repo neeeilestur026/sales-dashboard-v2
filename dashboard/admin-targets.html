@@ -191,9 +191,7 @@
       setTimeout(() => { msgEl.textContent = ''; }, 3000);
     }
 
-    function escapeHtml(str) {
-      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
+    function escapeHtml(str) { return hxEscBlank(str); }
 
     let historyChartInstance = null;
     async function loadTargetHistory() {

@@ -575,14 +575,8 @@
   <script src="js/flow-quotations.js"></script>
 
   <script>
-    // Header date pill
-    (function () {
-      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
-      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
-    })();
+    // Header date pill (A302: the shared helper in api.js)
+    hxDatePill('long');
     /* A208 — the tiles used to be computed HERE, from their own fetchFlow('getQuotations') with their
        own arithmetic off the raw `total` column, no sales-order join and no awareness of the page's
        filters. That is why this screen showed PHP 10.7M in the Open Value tile and PHP 18.4M in the

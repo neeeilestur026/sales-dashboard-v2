@@ -688,9 +688,7 @@
 
     // ─── Helpers ────────────────────────────────────
 
-    function esc(str) {
-      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
+    function esc(str) { return hxEscBlank(str); }
 
     function formatNum(n) {
       return Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

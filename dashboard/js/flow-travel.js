@@ -174,7 +174,7 @@ function tvWeek() {
   return (typeof flowWeekDates === 'function') ? flowWeekDates(flowToday(), tvOffset) : [];
 }
 function tvWho() { return String((tvSession && tvSession.name) || ''); }
-function tvNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function tvNum(v) { return hxNum(v); }
 
 async function tvLoad() {
   const wk = tvWeek();

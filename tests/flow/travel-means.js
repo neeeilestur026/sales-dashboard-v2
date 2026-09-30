@@ -24,6 +24,7 @@ if (cut < 0) { console.log('  FAIL could not find the DOMContentLoaded boundary'
 const ctx = { flowEsc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) };
 vm.createContext(ctx);
+require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 vm.runInContext(SRC.slice(0, cut) + '\n;this.TV_MEANS=TV_MEANS;this.TV_KINDS=TV_KINDS;' +
                 'this.tvMeansSpec=tvMeansSpec;this.tvMeansOptions=tvMeansOptions;', ctx);
 const { TV_MEANS, TV_KINDS, tvMeansSpec, tvMeansOptions } = ctx;

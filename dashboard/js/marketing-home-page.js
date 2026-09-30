@@ -22,11 +22,7 @@
   var READY = []; var ready = function (fn) { READY.push(fn); };
 
   // ── Date ──
-  (function () {
-    var d = new Date();
-    var dd = $('hbDay'); if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-    var dm = $('hbMon'); if (dm) dm.textContent = d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleDateString('en-US', { month: 'long' });
-  })();
+  if (typeof hxDatePill === 'function') hxDatePill();   // A302: the shared date pill
 
   // ── Rail links and the active section ──
   (function () {

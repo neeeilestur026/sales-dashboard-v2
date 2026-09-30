@@ -49,6 +49,7 @@ function load(anom) {
   };
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
+  require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../dashboard/js/flow-ap-aging.js'), 'utf8'),
                   ctx, { filename: 'flow-ap-aging.js' });
   /* NOT `this.apAnomalies = …`. A top-level `let` in a vm script lives in LEXICAL scope, not on

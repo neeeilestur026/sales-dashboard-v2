@@ -15,8 +15,8 @@
    passes the field and the label says which one it is.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function _lvNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
-function _lvEsc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _lvNum(v) { return hxNum(v); }
+function _lvEsc(s) { return hxEsc(s); }
 function _lvMoney(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + _lvNum(v).toFixed(2); }
 
 /** 'YYYY-MM' for a date cell, tolerating ISO strings, Date objects and blanks. */

@@ -5,6 +5,60 @@
 // ─── Configuration ───────────────────────────────
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxWd3bhOWhMx0jc5CiaFKxaKDKpkQQgq-w7th4OSrB-QXpNl29L4BArzA-m8efKDDgvQA/exec';
 
+/* ─── hx-util (A302) ─────────────────────────────────────────────────────────────────────────
+   The one copy of the helpers every page script used to carry. api.js is on every page before any
+   page script, so these are always defined; tests/flow/pageload.js evaluates this block (between
+   the two markers) so the stub DOM has them too. flow-api.js keeps its own flowEsc/flowNum because
+   it must also run without api.js. */
+function hxEsc(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+/* The older copies did String(v || ''): 0 and false render blank. Kept as its own name so every
+   caller keeps the exact output it had. */
+function hxEscBlank(v) { return hxEsc(v || ''); }
+function hxNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+/* A CSS token at draw time — Chart.js paints on a canvas and needs a real colour, not var(). */
+function hxToken(name, fallback) {
+  try { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
+  return fallback == null ? '' : fallback;
+}
+function hxDebounce(fn, ms) {
+  let t; return function () { const a = arguments, c = this; clearTimeout(t); t = setTimeout(function () { fn.apply(c, a); }, ms); };
+}
+function hxRaf(fn) {
+  let queued = false;
+  return function () { if (queued) return; queued = true; requestAnimationFrame(function () { queued = false; fn(); }); };
+}
+/* The rail's date pill: dd, "Wed September" (or "Wed,<br>September" on the older header band) and
+   the long day line when the page has one. */
+function hxDatePill(style) {
+  const d = new Date();
+  const dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon'), tl = document.getElementById('todayLabel');
+  if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
+  if (mm) {
+    const wk = d.toLocaleDateString('en-US', { weekday: 'short' }), mo = d.toLocaleDateString('en-US', { month: 'long' });
+    if (style === 'long') mm.innerHTML = wk + ',<br>' + mo; else mm.textContent = wk + ' ' + mo;
+  }
+  if (tl) tl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+/* The list pages' "Show Form / Hide Form" section toggle (clients and the HR modules); two pages
+   with a richer form define their own toggleForm inline and override this one. */
+function toggleForm() {
+  const section = document.getElementById('formSection');
+  const label = document.getElementById('toggleLabel');
+  if (!section) return;
+  section.classList.toggle('open');
+  if (label) label.textContent = section.classList.contains('open') ? 'Hide Form' : 'Show Form';
+}
+/* A shipment status badge; css/shipments.css paints the classes. */
+function hxSmBadge(status) {
+  const k = String(status || '').toLowerCase().trim();
+  const cls = { pending: 'sbadge-pending', 'awaiting confirmation': 'sbadge-awaiting', 'payment processing': 'sbadge-payment', 'goods ready': 'sbadge-goodsready',
+                booked: 'sbadge-booked', 'in transit': 'sbadge-intransit', 'customs clearance': 'sbadge-customs', arrived: 'sbadge-arrived', delivered: 'sbadge-delivered', cancelled: 'sbadge-rejected' }[k] || 'sbadge-default';
+  return '<span class="sbadge ' + cls + '">' + hxEsc(status || '—') + '</span>';
+}
+/* ─── end hx-util ─────────────────────────────────────────────────────────────────────────── */
+
 // ─── API Cache (sessionStorage, 5-min TTL) ────────
 const API_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const _inflight = {}; // de-duplicate concurrent identical requests

@@ -529,7 +529,7 @@ function soProcessState(soNo) {
   return { label: 'No invoice', cls: 'b-proc-noinv', title: 'Nothing downstream: no invoice, no receivable, no payment.' };
 }
 
-function _soNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _soNum(v) { return hxNum(v); }
 
 /* A266 — every status used to render with the same `b-open` class, so Open and Delivered were
    indistinguishable. Unknown values fall back to the neutral slate rather than mis-colouring. */

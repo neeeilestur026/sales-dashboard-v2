@@ -3,10 +3,7 @@
    READ-ONLY executive overview — no mutations
    ═══════════════════════════════════════════════ */
 // A293 — Chart.js paints on a canvas, so it needs real colours, not var() strings.
-function _hx(name, fallback) {
-  try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
-  return fallback || '';
-}
+function _hx(name, fallback) { return hxToken(name, fallback || ''); }
 
 
 let plChartInstance = null;
@@ -18,7 +15,7 @@ var _storedProfitReportsResult = null;
 var _storedSoDataResult = null;
 var _incomeStatementEntries = [];
 
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function esc(s) { return hxEscBlank(s); }
 
 function fmtEmailSentAt(iso) {
   if (!iso) return '';
@@ -2362,13 +2359,7 @@ function renderMgmtShipments(result) {
   _mgmtSmRender('All');
 }
 
-function _mgmtSmBadge(status) {
-  // Classed, like admin.js's _smBadge; css/shipments.css paints it.
-  const k = String(status || '').toLowerCase().trim();
-  const cls = { pending: 'sbadge-pending', 'awaiting confirmation': 'sbadge-awaiting', 'payment processing': 'sbadge-payment', 'goods ready': 'sbadge-goodsready',
-                booked: 'sbadge-booked', 'in transit': 'sbadge-intransit', 'customs clearance': 'sbadge-customs', arrived: 'sbadge-arrived', delivered: 'sbadge-delivered', cancelled: 'sbadge-rejected' }[k] || 'sbadge-default';
-  return `<span class="sbadge ${cls}">${esc(status || '—')}</span>`;
-}
+function _mgmtSmBadge(status) { return hxSmBadge(status); }
 function mgmtSmFilter(status, btn) {
   document.querySelectorAll('.sm-filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');

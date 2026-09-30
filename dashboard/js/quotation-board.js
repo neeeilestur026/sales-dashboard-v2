@@ -26,7 +26,7 @@ let qbSeq = 0;
 
 const QB_PAGE = 25;           // cards drawn per column before "show the rest"
 
-function _qbe(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _qbe(s) { return hxEsc(s); }
 
 document.addEventListener('DOMContentLoaded', () => {
   qbSession = requireQuotationAccess();

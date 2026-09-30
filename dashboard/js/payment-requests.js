@@ -19,9 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadPaymentRequests();
 });
 
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
 const CURRENCY_SYMBOLS = {
   PHP: '₱', USD: '$', EUR: '€', GBP: '£', JPY: '¥',

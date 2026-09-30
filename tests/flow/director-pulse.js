@@ -51,6 +51,7 @@ function boot(opts) {
   if (!opts.noChart) ctx.Chart = ChartStub;
   ctx.window = ctx;
   vm.createContext(ctx);
+  require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
   vm.runInContext(SRC, ctx);
   return { ctx, els, charts, T: ctx.dhPulse.t, mount: () => ctx.dhPulse.mount(), tick: () => new Promise(r => setImmediate(r)).then(() => new Promise(r => setImmediate(r))) };
 }

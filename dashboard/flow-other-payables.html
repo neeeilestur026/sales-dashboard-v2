@@ -79,14 +79,8 @@
   <script src="js/flow-other-payables.js"></script>
 
   <script>
-    // Header date pill
-    (function () {
-      var d = new Date(), D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-          M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      var dd = document.getElementById('hbDay'), mm = document.getElementById('hbMon');
-      if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-      if (mm) mm.innerHTML = D[d.getDay()] + ',<br>' + M[d.getMonth()];
-    })();
+    // Header date pill (A302: the shared helper in api.js)
+    hxDatePill('long');
     // KPI cards — outstanding + due-soon computed from the payables listed below.
     /* A157: the KPI cards are computed in flow-other-payables.js from the rows it renders — a
        second fetch here left them stale after an approval or a payment. */

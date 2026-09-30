@@ -37,6 +37,7 @@ const eq = (label, got, want) => ok(label + ' = ' + JSON.stringify(want), got ==
 const SRC = fs.readFileSync(path.join(__dirname, '../../dashboard/js/flow-ar-aging.js'), 'utf8');
 const ctx = { console, flowNum: v => parseFloat(v) || 0, flowMoney: v => String(v), flowEsc: v => String(v) };
 vm.createContext(ctx);
+require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 vm.runInContext(SRC.slice(SRC.indexOf('function arReconcile('), SRC.indexOf('/* A254')), ctx);
 const R = ctx.arReconcile;
 

@@ -49,6 +49,7 @@ const ctx = {
   window: {},
 };
 vm.createContext(ctx);
+require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 /* The module's state is top-level `let`, which in a vm script lives in LEXICAL scope and never
    reaches the context object — so it cannot be set from out here. The epilogue runs INSIDE the same
    script, where those bindings are visible, and hands out a setter. */

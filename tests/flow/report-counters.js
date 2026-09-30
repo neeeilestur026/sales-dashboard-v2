@@ -29,6 +29,7 @@ const ctx = { console, document: { addEventListener() {}, getElementById: () => 
   localStorage: { getItem: () => null }, setTimeout: () => 0 };
 ctx.window = ctx;
 vm.createContext(ctx);
+require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 vm.runInContext(fs.readFileSync(SRC, 'utf8'), ctx);
 const counters = ctx.flowReportCounters, html = ctx.flowReportCountersHtml;
 

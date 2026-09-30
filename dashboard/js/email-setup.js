@@ -28,9 +28,7 @@ async function refreshStatus() {
   }
 }
 
-function escapeHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function escapeHtml(s) { return hxEscBlank(s); }
 
 function _readForm() {
   return {

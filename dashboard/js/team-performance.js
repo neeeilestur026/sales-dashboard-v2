@@ -32,8 +32,8 @@ let _tpPrevRate = null;             // A156: last week's submission rate — the
 /** One normalization for every name key. ActivityLog 'User', the roster's fullName and
  *  DailyReports 'User' all originate from session.name; any drift splits one person into two cards. */
 function _tpKey(n) { return String(n == null ? '' : n).trim(); }
-function _tpe(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
-function _tpn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _tpe(s) { return hxEsc(s); }
+function _tpn(v) { return hxNum(v); }
 
 // Each role sees ITS tasks on the chart/summary (label → counter key; keys: calls/emails/other or a module).
 const TP_ROLE_TASKS = {
@@ -594,10 +594,7 @@ function tpClosePerson() {
 }
 
 // A295 — Chart.js paints on a canvas, so it needs a real colour, read from the token at draw time.
-function _tpHx(name, fallback) {
-  try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
-  return fallback || '';
-}
+function _tpHx(name, fallback) { return hxToken(name, fallback || ''); }
 
 async function _tpDrawCharts(names) {
   try {

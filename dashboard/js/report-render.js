@@ -14,9 +14,9 @@
    Emails and calls are already distinct and are handled by their own sections.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function _rrEsc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _rrEsc(s) { return hxEsc(s); }
 function _rrMoney(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
-function _rrNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _rrNum(v) { return hxNum(v); }
 function _rrModClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _rrTime(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
 function _rrTsNum(ts) { const d = new Date(ts); return isNaN(d) ? 0 : d.getTime(); }

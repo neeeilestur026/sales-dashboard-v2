@@ -12,16 +12,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadEmployees();
 });
 
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
-function toggleForm() {
-  const section = document.getElementById('formSection');
-  const label = document.getElementById('toggleLabel');
-  section.classList.toggle('open');
-  label.textContent = section.classList.contains('open') ? 'Hide Form' : 'Show Form';
-}
 
 function resetForm() {
   document.getElementById('empForm').reset();

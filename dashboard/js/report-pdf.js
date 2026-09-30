@@ -158,11 +158,8 @@ const FLOW_PDF_CSS = `
 const _FPD_ROLE_COLOR = { sales: '#0d9488', accounting: '#7c3aed', admin: '#2563eb',
   management: '#b45309', director: '#b45309', marketing: '#db2777', hr: '#0891b2', leadgen: '#4f46e5' };
 
-function _fpdEsc(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-function _fpdNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _fpdEsc(s) { return hxEsc(s); }
+function _fpdNum(v) { return hxNum(v); }
 function _fpdMoney(v) { return '₱' + _fpdNum(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function _fpdRole(role) {
   const r = String(role || '').toLowerCase();

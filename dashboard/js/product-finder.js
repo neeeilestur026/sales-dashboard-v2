@@ -776,8 +776,7 @@ function pfSyncMeta() {
 
 /* ─────────────────────────── Page wiring (Product Finder tabs) ─────────────────────────── */
 
-const pfEsc = s => String(s === undefined || s === null ? '' : s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const pfEsc = hxEsc;
 
 /** A data failure is shown as a DATA problem with a retry — never disguised as "no product match". */
 function pfLoadErrorHtml(errors) {

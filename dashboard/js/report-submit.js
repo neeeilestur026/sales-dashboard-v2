@@ -26,8 +26,8 @@ let _rsDirty = false;        // true once the user types — protects against re
 let _rsAvailable = null;     // null = unknown, true/false once the version gate resolves
 let _rsBusy = false;
 
-function _rsEsc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
-function _rsNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _rsEsc(s) { return hxEsc(s); }
+function _rsNum(v) { return hxNum(v); }
 function _rsVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
 function _rsSet(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
 

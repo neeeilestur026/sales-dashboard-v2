@@ -348,10 +348,7 @@
 
     /* ─── Helpers ───────────────────────────────────────── */
     function today() { return new Date().toISOString().slice(0, 10); }
-    function esc(s) {
-      return String(s == null ? '' : s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
+    function esc(s) { return hxEsc(s); }
     // For values embedded inside single-quoted onclick="fn('...')" attributes
     function escQ(s) { return esc(s).replace(/'/g, '&#39;'); }
     function php(n) {

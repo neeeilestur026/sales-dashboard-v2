@@ -23,7 +23,7 @@ let wiAll = [];                // this rep's itineraries, for the history table
 
 const WI_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function _wie(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _wie(s) { return hxEsc(s); }
 
 document.addEventListener('DOMContentLoaded', () => {
   wiSession = requireSales();

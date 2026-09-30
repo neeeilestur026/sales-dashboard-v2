@@ -231,18 +231,7 @@ function requireQuotationAccess() {
  * A280 — this guard also fronts purchase-request-tracker.html. Widening it was not enough on its
  * own: the pages behind it decided capability with `role !== 'sales'`, so see flowIsOversightRole.
  */
-function requirePricingFlowAccess() {
-  const session = getSession();
-  if (!session) {
-    window.location.href = 'index.html';
-    return null;
-  }
-  if (!FLOW_OVERSIGHT_ROLES.concat(FLOW_OWN_SCOPE_ROLES).includes(_flowRoleOf(session))) {
-    window.location.href = _homeForRole(session.role);
-    return null;
-  }
-  return session;
-}
+function requirePricingFlowAccess() { return requireQuotationAccess(); }   // A302: the two guards were identical
 
 /**
  * Require Product Finder access — sales and admin are the people who take the customer call and

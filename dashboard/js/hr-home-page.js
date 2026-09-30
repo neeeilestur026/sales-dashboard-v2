@@ -20,12 +20,7 @@
   var READY = []; var ready = function (fn) { READY.push(fn); };
 
   // ── Date and the day line ──
-  (function () {
-    var d = new Date();
-    var dd = $('hbDay'); if (dd) dd.textContent = String(d.getDate()).padStart(2, '0');
-    var dm = $('hbMon'); if (dm) dm.textContent = d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleDateString('en-US', { month: 'long' });
-    var tl = $('todayLabel'); if (tl) tl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  })();
+  if (typeof hxDatePill === 'function') hxDatePill();   // A302: the shared date pill
 
   // ── Rail links and the active section ──
   (function () {

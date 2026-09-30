@@ -13,7 +13,7 @@ const DAILY_TASKS = [
   'Coordinate with the sales team on immediate material needs',
 ];
 
-function _esc(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _esc(s) { return hxEsc(s); }
 function _time(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
 function _modClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 // Marketing activity refNo carries the record id prefix → entity bucket.

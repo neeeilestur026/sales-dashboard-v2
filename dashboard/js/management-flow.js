@@ -7,9 +7,9 @@
    Namespaced mf* to avoid clashing with the production management-home.js globals.
    ═══════════════════════════════════════════════ */
 
-function _mfe(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _mfe(s) { return hxEsc(s); }
 function _mfm(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
-function _mfn(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _mfn(v) { return hxNum(v); }
 
 let mfPrByNo = {};   // A183: prNo → pricing record, for the quotation approval review
 let mfQByNo = {};    // A183: quotationNo → quotation

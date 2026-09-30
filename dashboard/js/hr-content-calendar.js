@@ -37,21 +37,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadContent();
 });
 
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
 function platformBadge(platform) {
   const cls = PLATFORM_CLASS[platform] || 'platform-website';
   return '<span class="platform-badge ' + cls + '">' + esc(platform) + '</span>';
 }
 
-function toggleForm() {
-  const section = document.getElementById('formSection');
-  const label = document.getElementById('toggleLabel');
-  section.classList.toggle('open');
-  label.textContent = section.classList.contains('open') ? 'Hide Form' : 'Show Form';
-}
 
 function resetForm() {
   document.getElementById('contentForm').reset();

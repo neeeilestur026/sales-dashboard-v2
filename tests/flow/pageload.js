@@ -92,6 +92,14 @@ function page(jsFiles, htmlFile, session, opts) {
 
   ctx.__calls = calls; ctx.__params = params; ctx.__session = session; ctx.__data = opts.data || {};
 
+  /* A302 — the shared helpers live in api.js (hxEsc, hxNum, hxToken, hxDatePill, toggleForm …) and
+     every page script delegates to them. api.js itself is not loaded here (it polls), so the block
+     between its two markers is evaluated on its own. */
+  const apiSrc = fs.readFileSync(D + 'js/api.js', 'utf8');
+  const hx = apiSrc.slice(apiSrc.indexOf('/* ─── hx-util (A302)'), apiSrc.indexOf('/* ─── end hx-util'));
+  if (!hx) throw new Error('pageload: the hx-util block was not found in js/api.js');
+  vm.runInContext(hx, ctx);
+
   /* A280 — opts.withAuth loads the REAL dashboard/js/auth.js, for pages that now call a predicate
      defined there (flowOwnsRecordsOnly / flowIsOversightRole). Opt-in, because auth.js also defines
      the require* guards and would replace the stubs above — which is exactly what a role-scope suite

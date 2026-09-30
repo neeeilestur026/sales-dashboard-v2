@@ -16,9 +16,9 @@ let adrPhotoLoaded = {};    // A190 — user -> true once their photos have been
 let adrPlans = {};          // A190 — user -> their APPROVED itinerary for the week containing the date
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 
-function _e(s) { return (typeof flowEsc === 'function') ? flowEsc(s) : String(s == null ? '' : s); }
+function _e(s) { return hxEsc(s); }
 function _m(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
-function _n(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function _n(v) { return hxNum(v); }
 function _modClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _time(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
 

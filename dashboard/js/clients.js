@@ -23,9 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ─── Helpers ─────────────────────────────────────
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(str) { return hxEscBlank(str); }
 
 function typeBadge(type) {
   var t = (type || 'Active').toLowerCase();
@@ -52,12 +50,6 @@ async function loadAgentFilter() {
 }
 
 // ─── Form Toggle ──────────────────────────────────
-function toggleForm() {
-  var section = document.getElementById('formSection');
-  var label = document.getElementById('toggleLabel');
-  section.classList.toggle('open');
-  label.textContent = section.classList.contains('open') ? 'Hide Form' : 'Show Form';
-}
 
 // ─── Load Clients ─────────────────────────────────
 async function loadClients() {

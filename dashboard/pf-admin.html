@@ -68,7 +68,7 @@
     let pfaTarget = null;
     const PFA_SHAPES = { 'products.json': 'products', 'synonyms.json': 'synonyms',
                          'cross_reference.json': 'rows', 'torque_chart.json': 'rows' };
-    const pfaEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const pfaEsc = hxEsc;   // A302: the shared escaper (it also escapes quotes, which is harmless in text)
 
     document.addEventListener('DOMContentLoaded', async () => {
       const session = requireDirector();

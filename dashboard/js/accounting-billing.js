@@ -487,9 +487,7 @@ function _downloadB64(b64, filename) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(s) { return hxEscBlank(s); }
 
 /** Convert camelCase record to snake_case dict for PDF generators. */
 function _recordToPdfDetails(r) {

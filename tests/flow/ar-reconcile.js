@@ -42,6 +42,7 @@ const ctx = {
 };
 ctx.window = ctx; ctx.globalThis = ctx;
 vm.createContext(ctx);
+require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../dashboard/js/flow-ar-aging.js'), 'utf8'),
                 ctx, { filename: 'flow-ar-aging.js' });
 const R = ctx.arReconcile;

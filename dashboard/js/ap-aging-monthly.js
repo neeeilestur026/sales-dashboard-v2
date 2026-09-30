@@ -15,7 +15,7 @@ let apmSession = null;
 let apmBuilt = null;              // apmSlices() output, rebuilt only on load
 let apmRaw = { ap: [], pr: [] };
 
-const _e = s => (typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s));
+const _e = hxEsc;
 const _m = v => (typeof flowMoney === 'function' ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2));
 const _fc = (v, cur) => (typeof flowMoney === 'function' ? flowMoney(v, cur || 'PHP')
                                                          : (cur || '') + ' ' + Number(v || 0).toFixed(2));

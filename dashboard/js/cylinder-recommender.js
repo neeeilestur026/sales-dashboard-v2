@@ -384,8 +384,7 @@ function crCollect() {
   };
 }
 
-const crEsc = s => String(s === undefined || s === null ? '' : s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const crEsc = hxEsc;
 
 function crRecommend() {
   const a = crCollect();
