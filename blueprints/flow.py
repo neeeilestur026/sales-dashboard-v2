@@ -619,87 +619,40 @@ def payment_request_pdf():
 # Mirrors _SECURED in FlowAPI.gs. Kept as a list the client also fetches (/flow/secured-actions)
 # so the two can't silently drift apart.
 SECURED_ACTIONS = [
-    # A277 — the lead-gen rows are one person's performance record; the actor is the session.
-    # Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
-    # A277-3 — logSalesCall/deleteSalesCall deliberately NOT here: they are existing actions the
-    # deployed report.html already calls, and securing them before the client shipped refused every
-    # rep's call log live. See the deploy-order note in FlowAPI.gs _SECURED.
-    "saveLeadgenRecord", "deleteLeadgenRecord",
-    # A276 — the hire register: custody of a tool and the fate of a deposit both answer to
-    # who is asking, so identity is stamped by the server rather than claimed by the browser.
-    "createHire", "dispatchHireUnit", "returnHireUnit", "closeHire",
-    "approveQuotation", "rejectQuotation", "approvePO", "rejectPO",
-    "approvePaymentRequest", "rejectPaymentRequest", "markPaymentRequestPaid",
-    # A225 — raising/editing a PO payment request is now role-gated (admin or accounting only), so
-    # the role has to come from the session rather than the payload. Must stay in step with _SECURED
-    # in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
-    "createPaymentRequest", "updatePaymentRequest",
-    "setMgmtPricing", "rejectMgmtPricing", "verifyReturnToSales",
-    "deleteQuotation", "deleteSalesOrder", "deletePurchaseOrder", "deletePaymentRequest",
-    # A220 — a rename re-keys fourteen sheets and every money record on the order.
-    "renameSalesOrder",
-    "renameInvoice",
-    "deleteAPEntry", "updateAPAging", "recordCollection", "correctCollection",
-    "voidCollection", "voidInvoice",
-    # A190 — must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
-    "approveWeeklyItinerary", "rejectWeeklyItinerary",
-    # A220 — reclassifying International <-> Local rewrites the document contract at four money
-    # gates. Must match _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS in flow-api.js.
-    "setSOSupplierType",
-    # A222-U — rewrites stock valuation and deletes a journal; no undo.
-    "reverseReceiving",
-    # A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
-    "seedClientAliases", "runDriveMigration", "buildDriveSkeleton",
-    # A194 run-it-all wrappers + the folder setup call. previewDriveMigration,
-    # previewDriveMigrationReport and verifyDriveIntegrity stay out: all three are read-only.
-    "buildDriveSkeletonAll", "runDriveMigrationAll", "setupFlowDrive",
-    "cleanupLegacyFolders", "cleanupLegacyFoldersApply",
-    # A207 — commission decides what a named person is PAID, so identity must come from the session.
-    # submitCommissionRequest is here too: submitting freezes the payable figure and takes exclusive
-    # hold of the collections behind it.
-    "submitCommissionRequest", "approveCommissionRequest", "rejectCommissionRequest",
-    "adjustCommissionRequest", "markCommissionReleased",
-    "setCommissionRate", "deleteCommissionRate", "deleteCommissionRequest",
-    # A211 — the rest of the commission surface, including two READS, which is the one place this
-    # file deliberately breaks its own "reads stay direct and cached" rule. getCommissionRequests
-    # with no salesperson returns every claim in the company; the only honest way to scope it is to
-    # know who is asking, and a name the browser sent is not that. createCommissionRequest's
-    # "you can only claim on your own quotations" guard read the browser's own actorRole, so it
-    # answered to whoever it was defending against.
-    "createCommissionRequest", "updateCommissionRequest", "reviseCommissionRequest",
-    "getCommissionRequests", "getCommissionClaimable",
-    "seedCommissionDemo", "clearCommissionDemo",
-    # A212 — the travel surface. The READ is here for the same reason as the commission reads:
-    # getTravelReplenishments with no `user` returns everybody's weeks, and scoping it honestly
-    # means knowing who is asking. saveTravelReplenishment decides whose name a claim is banked
-    # under, so identity cannot come from the browser either.
-    "getTravelReplenishments", "saveTravelReplenishment", "deleteTravelReplenishment",
-    # A214 — the receipt photographs of somebody's week, keyed by a guessable TRAV number.
-    "getTravelReceipts",
-    # A212-3/4/5 — the approval chain and the float. Each of these decides whether cash leaves, how
-    # much and to whom, off an actorRole the browser supplies. getTravelFloats with no `user` lists
-    # what every rep is holding, so it is a read that has to know who is asking.
-    "submitTravelReplenishment", "approveTravelReplenishment",
-    "rejectTravelReplenishment", "reviseTravelReplenishment",
-    "getTravelFloats", "setTravelFloat", "requestTravelFloatCash",
-    # A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
-    # A218/A226 — runQuotationOwnerBackfill was added to _SECURED in FlowAPI.gs and to NEITHER
-    # mirror, so `_flowIsSecured` said no, the browser posted it straight to /exec with no
-    # flowSecret, and the server refused it: the quotation-owner backfill has been unreachable
-    # from the UI ever since. Fails closed, so no hole — just a dead feature. A243 restored it.
-    # A249 — backfillMissingAR creates receivables off a browser-supplied call and had no role check
-    # of its own. Minting debt should require a real signed-in session, like every other money action.
-    "backfillMissingAR",
-    # A278 — the VAT repair raises receivables to the gross they always should have been and
-    # re-posts the invoice's journal entry. Same argument as backfillMissingAR above.
-    "applyInvoiceVatRepair",
-    "runQuotationSentAtBackfill", "runQuotationOwnerBackfill",
-    # A243 — correcting who a quotation belongs to decides whose tracker it appears in and whose
-    # commission it feeds, so the role must come from the session, not the browser.
-    "setQuotationSalesperson",
-    # A226 — reattributing a purchase request decides whose tracker it appears in, so the role has to
-    # come from the session. Must stay in step with _SECURED in FlowAPI.gs and FLOW_SECURED_ACTIONS.
-    "runPricingRequestOwnerBackfill", "setPricingRequestSalesperson",
+    # AS-2 — every FlowAPI mutation plus the identity-scoped reads. Generated from FlowAPI.gs
+    # MUTATIONS ∪ _SECURED; tests/audit/registration.js fails if the three copies drift.
+    "addDocument", "addExpense", "addInventoryItem", "adjustCommissionRequest", "advanceShipmentStage",
+    "applyInvoiceVatRepair", "approveCommissionRequest", "approvePO", "approvePaymentRequest", "approveQuotation",
+    "approveTravelReplenishment", "approveWeeklyItinerary", "attachOrphanToSO", "backfillItemIds", "backfillMigratedRecords",
+    "backfillMissingAR", "backfillPdfDocuments", "backfillShipments", "buildDriveSkeleton", "buildDriveSkeletonAll",
+    "classifyInventory", "cleanupLegacyFolders", "cleanupLegacyFoldersApply", "clearCommissionDemo", "closeHire",
+    "closeQuotation", "correctCollection", "createCommissionRequest", "createHire", "createInvoice",
+    "createPaymentRequest", "createPricingRequest", "createPurchaseOrder", "createQuotation", "createQuotationFromPR",
+    "createReceiving", "createSalesOrder", "deleteAPEntry", "deleteClient", "deleteClientVisit",
+    "deleteCommissionRate", "deleteCommissionRequest", "deleteDocument", "deleteExpense", "deleteInventoryItem",
+    "deleteLeadgenRecord", "deleteMarketingRecord", "deleteMigratedRecords", "deletePaymentRequest", "deletePurchaseOrder",
+    "deleteQuotation", "deleteSalesCall", "deleteSalesOrder", "deleteSupplier", "deleteTravelReplenishment",
+    "deleteWeeklyItinerary", "dismissQuotationEmail", "dispatchHireUnit", "getCommissionClaimable", "getCommissionRequests",
+    "getTravelFloats", "getTravelReceipts", "getTravelReplenishments", "importCollections", "importExpenses",
+    "importInventory", "importPricingSubmissions", "importSOCostDetails", "importSalesOrders", "linkQuotationEmail",
+    "logClientVisit", "logSalesCall", "markCommissionReleased", "markPaymentRequestPaid", "matchSupplierTypes",
+    "reclassifyExpenses", "recordCollection", "rejectCommissionRequest", "rejectMgmtPricing", "rejectPO",
+    "rejectPaymentRequest", "rejectQuotation", "rejectTravelReplenishment", "rejectWeeklyItinerary", "renameInvoice",
+    "renameSalesOrder", "reopenQuotation", "reorderQuotationItems", "requestTravelFloatCash", "resetSequenceCounters",
+    "returnHireUnit", "reverseReceiving", "reviewDailyReport", "reviseCommissionRequest", "revisePaymentRequest",
+    "reviseQuotation", "reviseTravelReplenishment", "reviseWeeklyItinerary", "runDriveMigration", "runDriveMigrationAll",
+    "runPricingRequestOwnerBackfill", "runQuotationOwnerBackfill", "runQuotationSentAtBackfill", "saveClient", "saveDailyNote",
+    "saveLeadgenRecord", "saveMarketingRecord", "savePOPDF", "savePRPDF", "savePaymentRequestPDF",
+    "savePfInquiry", "saveQuotationPDF", "saveSOCostDetails", "saveSONotes", "saveSupplier",
+    "saveTravelPDF", "saveTravelReplenishment", "saveWeeklyItinerary", "seedClientAliases", "seedCommissionDemo",
+    "sendQuotation", "setCollectionMeta", "setCommissionRate", "setFlowDriveFolder", "setFlowSettings",
+    "setMgmtPricing", "setOpeningBalance", "setPricingRequestSalesperson", "setQuotationEmailReply", "setQuotationFollowUp",
+    "setQuotationSalesperson", "setSOSupplierType", "setTravelFloat", "setupFlowDrive", "snoozeQuotation",
+    "submitCommissionRequest", "submitDailyReport", "submitForPricing", "submitPOApproval", "submitPaymentRequest",
+    "submitQuotationApproval", "submitTravelReplenishment", "submitWeeklyItinerary", "unlinkQuotationEmail", "updateAPAging",
+    "updateARAging", "updateCommissionRequest", "updateExpense", "updateInventoryItem", "updatePRSourcing",
+    "updatePaymentRequest", "updatePurchaseOrder", "updateQuotation", "updateSalesOrder", "updateShipment",
+    "verifyReturnToSales", "voidCollection", "voidInvoice",
 ]
 
 

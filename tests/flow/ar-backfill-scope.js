@@ -110,7 +110,7 @@ ok('backfillMissingAR still honours invNos', /if \(only && !only\[invNo\]\)/.tes
 const secStart = GS.indexOf('var _SECURED = {');
 const secBlock = GS.slice(secStart, GS.indexOf('\n};', secStart));
 ok('  and is still _SECURED', /backfillMissingAR: 1/.test(secBlock));
-ok('  (the whole block was read, not a fixed window)', secBlock.length > 5000);
+ok('  (the whole block was read, not a fixed window)', secBlock.length > 2000);   // AS-2: the list is generated and compact
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);

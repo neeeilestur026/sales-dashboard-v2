@@ -32,8 +32,8 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ['saveLeadgenRecord', 'deleteLeadgenRecord'].forEach(a =>
     ok(a + ' is MUTATIONS + _SECURED + _MODULE_MAP', c.MUTATIONS[a] === 1 && c._SECURED[a] === 1 && !!c._MODULE_MAP[a]));
   ['logSalesCall', 'deleteSalesCall'].forEach(a =>
-    ok(a + ' takes the lock and logs, but is NOT secured — the deployed report.html calls it directly, and securing it before the client ships refuses every rep\'s call log (A277-3)',
-       c.MUTATIONS[a] === 1 && !!c._MODULE_MAP[a] && c._SECURED[a] === undefined));
+    ok(a + ' takes the lock, logs, and IS secured (AS-2: every mutation goes through Flask; the client list ships first)',
+       c.MUTATIONS[a] === 1 && !!c._MODULE_MAP[a] && c._SECURED[a] === 1));
   ok('Clients is 12 wide and ends in Stage', c.SCHEMA.Clients.length === 12 && c.SCHEMA.Clients[11] === 'Stage');
   ok('SalesCalls is 11 wide, Kind + Contact No + Reached appended', c.SCHEMA.SalesCalls.slice(8).join() === 'Kind,Contact No,Reached');
   ok('LgTouches carries no Deleted On (it follows its batch)', c.SCHEMA.LgTouches.indexOf('Deleted On') === -1);
@@ -591,17 +591,21 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   /* report.html posts straight to /exec with actorName from localStorage and NO flowSecret — it
      has no idea the action was secured, because only its own FLOW_SECURED_ACTIONS decides. This is
      the exact call that alerted "This action must be performed through the app (signed in)". */
-  let r = call(c, 'logSalesCall', { contact: 'Somebody', company: 'Local Supply', outcome: 'Connected', actorName: 'Gerald', actorRole: 'sales' });
-  ok('a rep\'s plain call log goes through again', r.success, r);
-  r = call(c, 'logSalesCall', callp('Cold', cn, 'No answer', 'Voicemail / no answer'));
-  ok('…and so does the lead-gen call', r.success, r);
-  r = call(c, 'deleteSalesCall', { rowIndex: 2, actorRole: 'sales', actorName: 'Gerald' });
+  /* AS-2 — every mutation is secured, the call log included: the browser now routes it through
+     Flask, which stamps the real actor. A plain post to /exec without the secret is refused. */
+  let r = call(c, 'logSalesCall', { contact: 'Somebody', company: 'Local Supply', outcome: 'Connected', actorName: 'Gerald', actorRole: 'sales', flowSecret: '' });
+  ok('a call log posted straight to /exec without the secret is refused (AS-2)', !r.success && /through the app/.test(r.message), r);
+  r = call(c, 'logSalesCall', { contact: 'Somebody', company: 'Local Supply', outcome: 'Connected', actorName: 'Gerald', actorRole: 'sales', flowSecret: 's3cret' });
+  ok('…and goes through with the secret Flask stamps', r.success, r);
+  r = call(c, 'logSalesCall', Object.assign(callp('Cold', cn, 'No answer', 'Voicemail / no answer'), { flowSecret: 's3cret' }));
+  ok('…as does the lead-gen call', r.success, r);
+  r = call(c, 'deleteSalesCall', { rowIndex: 2, actorRole: 'sales', actorName: 'Gerald', flowSecret: 's3cret' });
   ok('…and removing one', r.success, r);
 
   // The new actions stay shut: nothing deployed calls them, so there is no one to break.
-  r = call(c, 'saveLeadgenRecord', { entity: 'plants', record: JSON.stringify({ company: 'Spoof', sector: 'Cement', territory: 'Luzon' }), actorName: 'Not Ana', actorRole: 'leadgen' });
+  r = call(c, 'saveLeadgenRecord', { entity: 'plants', record: JSON.stringify({ company: 'Spoof', sector: 'Cement', territory: 'Luzon' }), flowSecret: '', actorName: 'Not Ana', actorRole: 'leadgen' });
   ok('saveLeadgenRecord without the secret is still refused', !r.success && /through the app/.test(r.message), r);
-  r = call(c, 'deleteLeadgenRecord', { entity: 'plants', id: pn, rowIndex: 2, actorName: 'x', actorRole: 'leadgen' });
+  r = call(c, 'deleteLeadgenRecord', { entity: 'plants', id: pn, rowIndex: 2, flowSecret: '', actorName: 'x', actorRole: 'leadgen' });
   ok('deleteLeadgenRecord without the secret is still refused', !r.success && /through the app/.test(r.message), r);
   r = call(c, 'saveLeadgenRecord', Object.assign({ entity: 'plants', record: JSON.stringify({ company: 'Via Flask', sector: 'Cement', territory: 'Luzon' }) }, LG, { flowSecret: 's3cret' }));
   ok('…and go through when Flask stamps the secret', r.success, r);

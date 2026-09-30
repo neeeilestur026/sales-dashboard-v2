@@ -71,3 +71,26 @@ hashed. Order matters — do it in this sequence and nobody is locked out:
 
 Rollback: Manage deployments → previous version. A user migrated in the meantime keeps working
 after the sheet owner re-enters a Base64 value in column B for them (the old file reads it).
+
+## Deploying the hardened FlowAPI.gs (AS-2)
+
+The repo's `apps-script/FlowAPI.gs` (FLOW_VERSION 157) secures every mutation, fails closed when
+its secret is missing, refuses mutations over GET, and reads each tab once per read call.
+
+1. Render must already carry this commit: `blueprints/flow.py` and `js/flow-api.js` list every
+   mutation as secured, so the browser routes each write through `/flow/secure` and Flask stamps
+   the caller. The old Apps Script ignores the extra `flowSecret`, so nothing breaks in between.
+2. In the FlowAPI Apps Script project: Project Settings → Script properties → set
+   `FLOW_MUTATION_SECRET` to the same value as the server's `INTERNAL_SHARED_SECRET` (Flask sends
+   that value as `flowSecret`). **If it is missing, every write is refused with a clear message.**
+   Optionally add `FLOW_SHEET_ID` and `FLOW_DRIVE_FOLDER_ID`; the file falls back to its literals
+   this release and drops them next release.
+3. Paste the file, Save, Deploy → Manage deployments → Edit → New version → Deploy (same deployment).
+4. Smoke: `<exec>?action=getVersion` → 157; `<exec>?action=getClients` → data; a save from any flow
+   page (e.g. a daily note) succeeds; a direct POST of `approveQuotation` to the /exec URL without
+   `flowSecret` is refused. Open Shipments and compare its load time with the 36.7 s recorded in
+   the file's A270 note.
+5. Then switch `linkPRToQuotation` in `blueprints/quotation.py` to `json=` (see the AS-1 notes).
+
+Rollback: Manage deployments → previous version; the Flask/JS lists are a superset the old script
+ignores.

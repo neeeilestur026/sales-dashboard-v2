@@ -163,7 +163,7 @@ console.log('\n== why this is not updateSalesOrder ==');
   ok('and p.customer is written straight through, blanking it when omitted',
      /1, 1, SCHEMA\.SalesOrders\.length\)\.setValues\(\[\[no, [\s\S]{0,200}p\.customer,/.test(upd));
   const sec = liftVar('_SECURED');
-  ok('updateSalesOrder is NOT secured', !/\bupdateSalesOrder: 1/.test(sec));
+  ok('updateSalesOrder IS secured (AS-2: every mutation goes through Flask)', /\bupdateSalesOrder: 1/.test(sec));
   ok('renameSalesOrder IS', /\brenameSalesOrder: 1/.test(sec), sec.slice(0, 80));
 }
 

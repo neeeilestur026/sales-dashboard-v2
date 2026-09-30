@@ -20,7 +20,7 @@ const GS = path.join(__dirname, '..', '..', 'apps-script', 'FlowAPI.gs');
 
 function makeCtx(store) {
   store = store || {};                                   // { sheetName: [ {header: value}, ... ] }
-  const props = {};
+  const props = { FLOW_MUTATION_SECRET: 'test-secret' };   // AS-2: enforcement is always on; call() sends the secret unless a test passes its own
 
   function sheetStub(name) {
     return {
@@ -111,7 +111,10 @@ function makeCtx(store) {
       },
       base64Decode: (s) => Buffer.from(String(s), 'base64'),
       base64Encode: (b) => Buffer.from(b).toString('base64'),
-      newBlob: (bytes, mime, name) => ({ bytes, mime, name, getBytes: () => bytes })
+      newBlob: (bytes, mime, name) => ({ bytes, mime, name, getBytes: () => bytes }),
+      /* AS-2 — the constant-time secret compare */
+      getUuid: () => require('crypto').randomUUID(),
+      computeHmacSha256Signature: (data, key) => { const toBuf = (v) => Buffer.isBuffer(v) ? v : Array.isArray(v) ? Buffer.from(v) : Buffer.from(String(v)); return [...require('crypto').createHmac('sha256', toBuf(key)).update(toBuf(data)).digest()]; }
     },
     PropertiesService: {
       getScriptProperties: () => ({
@@ -174,7 +177,10 @@ function load(gsPath, store) {
 
 /** Call through the dispatcher and parse the JSON back out, the way the browser sees it. */
 function call(ctx, action, params) {
-  const out = ctx._dispatch(Object.assign({ action: action }, params || {}));
+  // AS-2 — every mutation is secured. The loader's default secret is attached unless the test passes
+  // flowSecret itself (pass '' to exercise the refusal); a suite that sets its own property value
+  // must pass that value explicitly, so a call without one is refused, as in production.
+  const out = ctx._dispatch(Object.assign({ action: action, flowSecret: 'test-secret' }, params || {}));
   return JSON.parse(out._text !== undefined ? out._text : out.getContent());
 }
 

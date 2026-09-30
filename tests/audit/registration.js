@@ -172,6 +172,25 @@ console.log('\n== the three _SECURED copies agree ==');
      'only in .gs: [' + diff(SECURED, J) + ']  only in .js: [' + diff(J, SECURED) + ']');
 }
 
+/* ── AS-2 · no mutation goes over GET ─────────────────────────────────────────────────────────
+   FlowAPI's doGet refuses every MUTATIONS action, so a fetchFlow('<mutation>') literal anywhere in
+   the dashboard would be a write that silently stopped working. postFlow is the only way to write. */
+console.log('\n== no fetchFlow() of a mutation ==');
+{
+  const dir = path.join(ROOT, 'dashboard');
+  const files = [...fs.readdirSync(path.join(dir, 'js')).filter(f => f.endsWith('.js')).map(f => path.join(dir, 'js', f)),
+                 ...fs.readdirSync(dir).filter(f => f.endsWith('.html')).map(f => path.join(dir, f))];
+  const bad = [];
+  files.forEach(f => {
+    const src = fs.readFileSync(f, 'utf8');
+    (src.match(/fetchFlow\(\s*['"]([A-Za-z_$][\w$]*)['"]/g) || []).forEach(m => {
+      const a = m.match(/['"]([^'"]+)['"]/)[1];
+      if (MUTATIONS.has(a)) bad.push(path.basename(f) + ':' + a);
+    });
+  });
+  ok('every mutation the browser sends goes through postFlow', bad.length === 0, bad);
+}
+
 /* ── 6 · every action the browser calls actually exists ────────────────────────────────────────
    Three call shapes, and missing any one of them makes this check lie. The plain literal is the
    easy 134; the ternary form hides 7 more (a naive scan reports those as unused handlers); and 15

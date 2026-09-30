@@ -124,74 +124,40 @@ function _flowIdempotentAction(action) {
    ever advisory: the browser could claim any role it liked. Keep this list in step with SECURED_ACTIONS
    in blueprints/flow.py and _SECURED in FlowAPI.gs. */
 const FLOW_SECURED_ACTIONS = [
-  // A276 — the hire register. Drift between this list and the other two fails CLOSED: the
-  // browser posts direct, the server refuses for want of a flowSecret, and the feature is
-  // silently dead — which is exactly what happened to runQuotationOwnerBackfill in A218.
-  'createHire', 'dispatchHireUnit', 'returnHireUnit', 'closeHire',
-  /* A277 — the lead-gen writes. Same drift rule. A277-3: logSalesCall/deleteSalesCall are NOT
-     here — securing an action the deployed client already calls breaks it the moment FlowAPI.gs
-     is pasted, which is exactly what happened to the reps' call log. */
-  'saveLeadgenRecord', 'deleteLeadgenRecord',
-  'approveQuotation', 'rejectQuotation', 'approvePO', 'rejectPO',
-  'approvePaymentRequest', 'rejectPaymentRequest', 'markPaymentRequestPaid',
-  // A225 — admin/accounting only, enforced server-side, so identity comes from the session.
-  'createPaymentRequest', 'updatePaymentRequest',
-  'setMgmtPricing', 'rejectMgmtPricing', 'verifyReturnToSales',
-  'deleteQuotation', 'deleteSalesOrder', 'deletePurchaseOrder', 'deletePaymentRequest',
-  // A220 — a rename re-keys fourteen sheets and every money record on the order.
-  'renameSalesOrder',
-  'renameInvoice',
-  'deleteAPEntry', 'updateAPAging', 'recordCollection', 'correctCollection',
-  'voidCollection', 'voidInvoice',
-  // A190 — mirrors _SECURED (FlowAPI.gs) and SECURED_ACTIONS (blueprints/flow.py). If this list
-  // omits an action the other two secure, the POST goes direct and the server rejects it.
-  'approveWeeklyItinerary', 'rejectWeeklyItinerary',
-  // A220 — reclassifying International <-> Local rewrites the document contract at four money gates.
-  'setSOSupplierType',
-  // A222-U — rewrites stock valuation and deletes a journal; no undo.
-  'reverseReceiving',
-  // A193 — bulk Drive filing. previewDriveMigration stays out: it is read-only.
-  'seedClientAliases', 'runDriveMigration', 'buildDriveSkeleton',
-  // A194 run-it-all wrappers + the folder setup call. The three preview/verify actions stay out:
-  // they are read-only.
-  'buildDriveSkeletonAll', 'runDriveMigrationAll', 'setupFlowDrive',
-  'cleanupLegacyFolders', 'cleanupLegacyFoldersApply',
-  // A207 — commission actions. submitCommissionRequest is secured too: it freezes what someone gets
-  // paid and takes exclusive hold of the collections behind the claim.
-  'submitCommissionRequest', 'approveCommissionRequest', 'rejectCommissionRequest',
-  'adjustCommissionRequest', 'markCommissionReleased',
-  'setCommissionRate', 'deleteCommissionRate', 'deleteCommissionRequest',
-  // A211 — the rest of the commission surface. The two getters break the "reads stay direct and
-  // cached" rule on purpose: getCommissionRequests with no salesperson returns every claim in the
-  // company, and the only honest way to scope it is to know who is asking. A name the browser sent
-  // is not that. They lose the 60s cache; the page is opened a few times a day.
-  'createCommissionRequest', 'updateCommissionRequest', 'reviseCommissionRequest',
-  'getCommissionRequests', 'getCommissionClaimable',
-  'seedCommissionDemo', 'clearCommissionDemo',
-  // A212 — the travel surface, READ included: getTravelReplenishments with no `user` returns
-  // everybody's weeks, and saveTravelReplenishment decides whose name a claim is banked under.
-  'getTravelReplenishments', 'saveTravelReplenishment', 'deleteTravelReplenishment',
-  // A214 — the receipt photographs of somebody's week, keyed by a guessable TRAV number.
-  'getTravelReceipts',
-  // A212-3/4/5 — the approval chain and the float: what leaves, how much, and to whom.
-  'submitTravelReplenishment', 'approveTravelReplenishment',
-  'rejectTravelReplenishment', 'reviseTravelReplenishment',
-  'getTravelFloats', 'setTravelFloat', 'requestTravelFloatCash',
-  // A215 — rewrites the send date on up to 60 quotations off a browser-supplied actorRole.
-  // A218/A226 — runQuotationOwnerBackfill was added to _SECURED in FlowAPI.gs and to NEITHER
-  // mirror, so `_flowIsSecured` said no, the browser posted it straight to /exec with no
-  // flowSecret, and the server refused it: the quotation-owner backfill has been unreachable
-  // from the UI ever since. Fails closed, so no hole — just a dead feature. A243 restored it.
-  // A249 — backfillMissingAR creates receivables off a browser-supplied call and had no role check
-  // of its own. Minting debt should require a real signed-in session, like every other money action.
-  'backfillMissingAR',
-  // A278 — the VAT repair moves receivables and rewrites journal entries.
-  'applyInvoiceVatRepair',
-  'runQuotationSentAtBackfill', 'runQuotationOwnerBackfill',
-  // A243 — reattributing a quotation decides whose tracker it appears in and whose commission it feeds.
-  'setQuotationSalesperson',
-  // A226 — both rewrite who a purchase request belongs to, which is what the tracker filters by.
-  'runPricingRequestOwnerBackfill', 'setPricingRequestSalesperson'
+  // AS-2 — every FlowAPI mutation plus the identity-scoped reads; mirrors _SECURED in FlowAPI.gs
+  // and SECURED_ACTIONS in blueprints/flow.py (tests/audit/registration.js pins all three).
+  'addDocument', 'addExpense', 'addInventoryItem', 'adjustCommissionRequest', 'advanceShipmentStage',
+  'applyInvoiceVatRepair', 'approveCommissionRequest', 'approvePO', 'approvePaymentRequest', 'approveQuotation',
+  'approveTravelReplenishment', 'approveWeeklyItinerary', 'attachOrphanToSO', 'backfillItemIds', 'backfillMigratedRecords',
+  'backfillMissingAR', 'backfillPdfDocuments', 'backfillShipments', 'buildDriveSkeleton', 'buildDriveSkeletonAll',
+  'classifyInventory', 'cleanupLegacyFolders', 'cleanupLegacyFoldersApply', 'clearCommissionDemo', 'closeHire',
+  'closeQuotation', 'correctCollection', 'createCommissionRequest', 'createHire', 'createInvoice',
+  'createPaymentRequest', 'createPricingRequest', 'createPurchaseOrder', 'createQuotation', 'createQuotationFromPR',
+  'createReceiving', 'createSalesOrder', 'deleteAPEntry', 'deleteClient', 'deleteClientVisit',
+  'deleteCommissionRate', 'deleteCommissionRequest', 'deleteDocument', 'deleteExpense', 'deleteInventoryItem',
+  'deleteLeadgenRecord', 'deleteMarketingRecord', 'deleteMigratedRecords', 'deletePaymentRequest', 'deletePurchaseOrder',
+  'deleteQuotation', 'deleteSalesCall', 'deleteSalesOrder', 'deleteSupplier', 'deleteTravelReplenishment',
+  'deleteWeeklyItinerary', 'dismissQuotationEmail', 'dispatchHireUnit', 'getCommissionClaimable', 'getCommissionRequests',
+  'getTravelFloats', 'getTravelReceipts', 'getTravelReplenishments', 'importCollections', 'importExpenses',
+  'importInventory', 'importPricingSubmissions', 'importSOCostDetails', 'importSalesOrders', 'linkQuotationEmail',
+  'logClientVisit', 'logSalesCall', 'markCommissionReleased', 'markPaymentRequestPaid', 'matchSupplierTypes',
+  'reclassifyExpenses', 'recordCollection', 'rejectCommissionRequest', 'rejectMgmtPricing', 'rejectPO',
+  'rejectPaymentRequest', 'rejectQuotation', 'rejectTravelReplenishment', 'rejectWeeklyItinerary', 'renameInvoice',
+  'renameSalesOrder', 'reopenQuotation', 'reorderQuotationItems', 'requestTravelFloatCash', 'resetSequenceCounters',
+  'returnHireUnit', 'reverseReceiving', 'reviewDailyReport', 'reviseCommissionRequest', 'revisePaymentRequest',
+  'reviseQuotation', 'reviseTravelReplenishment', 'reviseWeeklyItinerary', 'runDriveMigration', 'runDriveMigrationAll',
+  'runPricingRequestOwnerBackfill', 'runQuotationOwnerBackfill', 'runQuotationSentAtBackfill', 'saveClient', 'saveDailyNote',
+  'saveLeadgenRecord', 'saveMarketingRecord', 'savePOPDF', 'savePRPDF', 'savePaymentRequestPDF',
+  'savePfInquiry', 'saveQuotationPDF', 'saveSOCostDetails', 'saveSONotes', 'saveSupplier',
+  'saveTravelPDF', 'saveTravelReplenishment', 'saveWeeklyItinerary', 'seedClientAliases', 'seedCommissionDemo',
+  'sendQuotation', 'setCollectionMeta', 'setCommissionRate', 'setFlowDriveFolder', 'setFlowSettings',
+  'setMgmtPricing', 'setOpeningBalance', 'setPricingRequestSalesperson', 'setQuotationEmailReply', 'setQuotationFollowUp',
+  'setQuotationSalesperson', 'setSOSupplierType', 'setTravelFloat', 'setupFlowDrive', 'snoozeQuotation',
+  'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
+  'submitQuotationApproval', 'submitTravelReplenishment', 'submitWeeklyItinerary', 'unlinkQuotationEmail', 'updateAPAging',
+  'updateARAging', 'updateCommissionRequest', 'updateExpense', 'updateInventoryItem', 'updatePRSourcing',
+  'updatePaymentRequest', 'updatePurchaseOrder', 'updateQuotation', 'updateSalesOrder', 'updateShipment',
+  'verifyReturnToSales', 'voidCollection', 'voidInvoice',
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
