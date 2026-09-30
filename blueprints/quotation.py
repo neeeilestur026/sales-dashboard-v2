@@ -1424,6 +1424,8 @@ def generate():
                     pr_sid = _submit_data.get("pr_sheet_id", "").strip()
                     if rfq_no and pr_sid and DASHBOARD_APPS_SCRIPT_URL:
                         try:
+                            # linkPRToQuotation exists only in doGet until the hardened Code.gs (AS-1)
+                            # adds its doPost case; switch this to json= (POST) right after that paste.
                             link_pr_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
                                 params={
@@ -1520,9 +1522,10 @@ def submit_to_sheets():
         if not DASHBOARD_APPS_SCRIPT_URL:
             return jsonify({"success": False, "message": "Dashboard Apps Script URL not configured"}), 500
 
+        # A307: a mutation goes as POST; the hardened Code.gs refuses mutations over GET.
         resp = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
-            params={"action": "finalizeQuotation", "sheetId": sheet_id, "rowIndex": str(row_index)},
+            json={"action": "finalizeQuotation", "sheetId": sheet_id, "rowIndex": str(row_index)},
             timeout=15,
         )
 
