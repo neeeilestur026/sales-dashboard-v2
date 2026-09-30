@@ -21,7 +21,7 @@ Two properties this module exists to guarantee, in order of importance:
 The client's original file is never modified in place; the caller stores it separately.
 
 ── Four library facts this module is built around ────────────────────────────────────────────────
-Each was verified against the pinned versions (PyPDF2 3.0.1, reportlab 5.0.0, pdfplumber 0.11.4),
+Each was verified against PyPDF2 3.0.1 and re-verified on pypdf 6 (A299), reportlab 5.0.0, pdfplumber 0.11.4;
 and each is a SILENT failure if ignored — no exception, just a wrong document:
 
   a) `merge_transformed_page` does not exist in PyPDF2 3.0.1 (it is a pypdf 3.x/4.x name), and the
@@ -50,8 +50,8 @@ from io import BytesIO
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas as _canvas
 
-from PyPDF2 import PdfReader, PdfWriter, PageObject, Transformation
-from PyPDF2.generic import RectangleObject, NameObject, NumberObject, createStringObject
+from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+from pypdf.generic import RectangleObject, NameObject, NumberObject, create_string_object
 
 from .utils import ph_date, ph_date_long
 
@@ -522,7 +522,7 @@ def build_stamped_po_bytes(pdf_bytes, received_date, *, received_by="", po_numbe
         for i in range(1, n_pages):
             writer.add_page(reader.pages[i])
         try:
-            writer.add_metadata({_STAMP_KEY: createStringObject(date_text)})
+            writer.add_metadata({_STAMP_KEY: create_string_object(date_text)})
         except Exception:
             pass
 

@@ -251,7 +251,7 @@ function prPdfPayload(r) {
  *  save path). Returns the Drive link, or '' when the Drive save was skipped. */
 async function prRenderPdf(r, background) {
   const resp = await fetch('/flow/payment-request-pdf', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prPdfPayload(r))
+    method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(prPdfPayload(r))
   });
   if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.message || 'PDF generation failed.'); }
   const blob = await resp.blob();

@@ -34,6 +34,9 @@ from io import BytesIO                                           # noqa: E402
 from pdfminer.high_level import extract_text                     # noqa: E402
 
 from app import app                                              # noqa: E402
+import blueprints.session_auth as _sa                            # noqa: E402
+_sa.validate_session = lambda token: {"username": "tester", "role": "admin"} if token else None   # A299: routes need a session
+_HDRS = {"X-Session-Token": "test"}
 
 FAIL = 0
 
@@ -86,7 +89,7 @@ BASE = {
 
 def render(payload):
     with app.test_client() as c:
-        r = c.post("/flow/quotation-pdf", json=payload)
+        r = c.post("/flow/quotation-pdf", json=payload, headers=_HDRS)
     assert r.status_code == 200, (r.status_code, r.data[:300])
     assert r.headers["Content-Type"] == "application/pdf", r.headers["Content-Type"]
     raw = extract_text(BytesIO(r.data))

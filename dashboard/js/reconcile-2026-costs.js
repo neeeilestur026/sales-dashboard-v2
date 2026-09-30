@@ -67,7 +67,7 @@ async function loadAll() {
   _msg('', true);
   try {
     const [csvResp, soRes, cdRes, invRes] = await Promise.all([
-      fetch('/flow/sheet-csv?id=' + encodeURIComponent(id) + '&gid=0'),
+      fetch('/flow/sheet-csv?id=' + encodeURIComponent(id) + '&gid=0', { headers: hxAuthHeaders() }),
       fetchFlow('getSalesOrders').catch(() => ({ data: [] })),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
       fetchFlow('getInvoices').catch(() => ({ data: [] })),

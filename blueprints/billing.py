@@ -6,7 +6,6 @@ import logging
 from io import BytesIO
 from datetime import datetime, timezone
 
-import requests as http_requests
 from flask import Blueprint, request, jsonify, send_file
 
 from pdf_generators.payment_slip_pdf import build_payment_slip_pdf
@@ -17,64 +16,18 @@ logger = logging.getLogger(__name__)
 
 billing_bp = Blueprint("billing_bp", __name__)
 
-DASHBOARD_APPS_SCRIPT_URL = os.environ.get("DASHBOARD_APPS_SCRIPT_URL", "")
+from blueprints import _config
+from blueprints.session_auth import require_session
+from blueprints._upstream import gs_json
+
+DASHBOARD_APPS_SCRIPT_URL = _config.DASHBOARD_APPS_SCRIPT_URL
 
 MAX_FILE_SIZE = 10 * 1024 * 1024   # 10 MB
 
 
 def _gs_post(payload: dict) -> dict:
-    """POST to Apps Script, following one redirect."""
-    if not DASHBOARD_APPS_SCRIPT_URL:
-        return {"success": False, "message": "DASHBOARD_APPS_SCRIPT_URL not configured"}
-    try:
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                   timeout=60, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            loc = resp.headers.get("Location")
-            if loc:
-                resp = http_requests.get(loc, timeout=60)
-        return resp.json()
-    except Exception as exc:
-        logger.error("_gs_post error: %s", exc)
-        return {"success": False, "message": str(exc)}
-
-
-def _gs_get(params: dict) -> dict:
-    """GET from Apps Script."""
-    if not DASHBOARD_APPS_SCRIPT_URL:
-        return {"success": False, "message": "DASHBOARD_APPS_SCRIPT_URL not configured"}
-    try:
-        resp = http_requests.get(DASHBOARD_APPS_SCRIPT_URL, params=params, timeout=60)
-        return resp.json()
-    except Exception as exc:
-        logger.error("_gs_get error: %s", exc)
-        return {"success": False, "message": str(exc)}
-
-
-def _upload_pdf_to_drive(pdf_bytes: bytes, filename: str, pr_number: str, folder_type: str) -> str:
-    """Upload PDF bytes to Google Drive via Apps Script, return drive link."""
-    if not DASHBOARD_APPS_SCRIPT_URL or not pdf_bytes:
-        return ""
-    try:
-        payload = {
-            "action": "saveBillingPdf",
-            "fileBase64": base64.b64encode(pdf_bytes).decode("ascii"),
-            "fileName": filename,
-            "mimeType": "application/pdf",
-            "prNumber": pr_number,
-            "folderType": folder_type,   # 'payment_slip' | 'cash_voucher'
-        }
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                   timeout=60, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            loc = resp.headers.get("Location")
-            if loc:
-                resp = http_requests.get(loc, timeout=60)
-        result = resp.json()
-        return result.get("driveLink", "") if result.get("success") else ""
-    except Exception as exc:
-        logger.warning("_upload_pdf_to_drive failed for %s: %s", filename, exc)
-        return ""
+    """POST to Code.gs through the shared upstream client."""
+    return gs_json(DASHBOARD_APPS_SCRIPT_URL, json=payload, timeout=60)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +35,7 @@ def _upload_pdf_to_drive(pdf_bytes: bytes, filename: str, pr_number: str, folder
 # ─────────────────────────────────────────────────────────────────────────────
 
 @billing_bp.route("/mark-paid", methods=["POST"])
+@require_session()
 def mark_paid():
     """Mark a PR as Paid, generate a Payment Slip PDF, upload to Drive, save link."""
     body = request.get_json(silent=True) or {}
@@ -105,17 +59,18 @@ def mark_paid():
 
     pdf_bytes = buf.getvalue()
     filename  = f"PaymentSlip_{sanitize_filename(pr_number)}.pdf"
+    drive_link = ""   # A299: the Drive save called an action no Apps Script has; the slip is returned inline below
 
-    # 2. Upload to Drive (best-effort)
-    drive_link = _upload_pdf_to_drive(pdf_bytes, filename, pr_number, "payment_slip")
-
-    # 3. Update sheet
-    gs_result = _gs_post({
+    # 2. Update sheet. Code.gs requires bankAccountCode; it is passed through whenever the UI sends it.
+    gs_payload = {
         "action":           "markBillPaid",
         "rowIndex":         row_index,
         "paidBy":           paid_by,
         "paymentSlipLink":  drive_link,
-    })
+    }
+    if body.get("bankAccountCode"):
+        gs_payload["bankAccountCode"] = body.get("bankAccountCode")
+    gs_result = _gs_post(gs_payload)
     if not gs_result.get("success"):
         return jsonify({"success": False, "message": gs_result.get("message", "Sheet update failed")}), 500
 
@@ -130,6 +85,7 @@ def mark_paid():
 
 
 @billing_bp.route("/download-payment-slip", methods=["POST"])
+@require_session()
 def download_payment_slip():
     """Re-generate and return a Payment Slip PDF as a file download."""
     body    = request.get_json(silent=True) or {}
@@ -155,6 +111,7 @@ def download_payment_slip():
 
 
 @billing_bp.route("/generate-cash-voucher", methods=["POST"])
+@require_session()
 def generate_cash_voucher():
     """Generate Cash Voucher PDF, upload to Drive, save link + CV number in sheet."""
     body        = request.get_json(silent=True) or {}
@@ -180,9 +137,7 @@ def generate_cash_voucher():
     pdf_bytes = buf.getvalue()
     cv_no     = cv_details["cv_number"]
     filename  = f"CashVoucher_{sanitize_filename(cv_no)}.pdf"
-
-    # Upload to Drive (best-effort)
-    drive_link = _upload_pdf_to_drive(pdf_bytes, filename, pr_number, "cash_voucher")
+    drive_link = ""   # A299: see mark_paid
 
     # Save to sheet
     gs_result = _gs_post({
@@ -202,26 +157,3 @@ def generate_cash_voucher():
         "filename":     filename,
     })
 
-
-@billing_bp.route("/download-cash-voucher", methods=["POST"])
-def download_cash_voucher():
-    """Re-generate and return a Cash Voucher PDF as a file download."""
-    body        = request.get_json(silent=True) or {}
-    pr_details  = body.get("prDetails", {})
-    cv_details  = body.get("cvDetails", {})
-    pr_no       = pr_details.get("pr_number") or pr_details.get("prNumber", "cv")
-
-    buf = BytesIO()
-    try:
-        build_cash_voucher_pdf(buf, pr_details, cv_details)
-    except Exception as exc:
-        logger.error("download_cash_voucher failed: %s", exc)
-        return jsonify({"success": False, "message": str(exc)}), 500
-
-    buf.seek(0)
-    return send_file(
-        buf,
-        mimetype="application/pdf",
-        as_attachment=True,
-        download_name=f"CashVoucher_{sanitize_filename(pr_no)}.pdf",
-    )

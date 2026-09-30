@@ -3,7 +3,7 @@
 #
 #   bash tests/run.sh          all JS and Python suites
 #   bash tests/run.sh --js     the node suites only (tests/flow/*.js, tests/audit/*.js)
-#   bash tests/run.sh --py     the Python suites only (tests/flow/*.py, via ./venv/bin/python)
+#   bash tests/run.sh --py     the Python suites only (tests/flow/*.py, tests/audit/*.py, via ./venv/bin/python)
 #
 # Library files (loaders, harnesses, fixtures) are skipped: they define helpers and print nothing.
 # Each suite's own output is shown only when it fails, so a green run is one line per suite.
@@ -39,7 +39,7 @@ if [ "$MODE" = all ] || [ "$MODE" = --py ]; then
   if [ ! -x "$PY" ]; then
     echo "  skip python suites: $PY not found (set PYTHON=...)"
   else
-    for f in tests/flow/*.py; do
+    for f in tests/flow/*.py tests/audit/*.py; do
       case " $SKIP_PY " in *" $(basename "$f") "*) continue;; esac
       run_one "$PY" "$f"
     done

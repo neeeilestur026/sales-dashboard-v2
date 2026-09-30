@@ -9,9 +9,11 @@
 let currentItems = [];
 let productCodes = {};       // { "CEJN": ["code1","code2",...], ... }
 
-function getUserKey() {
-    try { return JSON.parse(localStorage.getItem('session') || '{}').name || 'anonymous'; }
-    catch { return 'anonymous'; }
+// A299: every Flask route requires the login session; the server keys per-user state by it.
+function _hdrs(extra) {
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('session') || '{}').token || ''; } catch (e) {}
+    return Object.assign({ 'X-Session-Token': token }, extra || {});
 }
 let productPriceTypes = {};  // { "CEJN": { "code1": "numeric", "code2": "POR" }, ... }
 let savedTerms = {
@@ -60,7 +62,7 @@ function loadData() {
 
     fetch("/quotation/load_data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: _hdrs({ "Content-Type": "application/json" }),
         body: JSON.stringify({ principal: principal })
     })
     .then(r => r.json())
@@ -245,7 +247,6 @@ function addItem() {
     formData.append("input_mode", mode);
     formData.append("product_name", productName);
     formData.append("description", description);
-    formData.append("user_key", getUserKey());
     if (productPrice) formData.append("product_price", productPrice);
     if (imageFile) formData.append("item_image", imageFile);
 
@@ -253,6 +254,7 @@ function addItem() {
 
     fetch("/quotation/add_item", {
         method: "POST",
+        headers: _hdrs(),
         body: formData
     })
     .then(r => r.json())
@@ -335,12 +337,11 @@ function applyEditItem() {
         quantity: parseInt(document.getElementById("editQuantity").value) || 1,
         total_unit_price: (parseFloat(document.getElementById("editUnitPrice").value) || 0) * (parseInt(document.getElementById("editQuantity").value) || 1),
         description: document.getElementById("editDescription").value,
-        user_key: getUserKey()
     };
 
     fetch("/quotation/update_item", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: _hdrs({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload)
     })
     .then(r => r.json())
@@ -375,10 +376,10 @@ function attachItemImage(itemNo) {
         const formData = new FormData();
         formData.append('item_no', itemNo);
         formData.append('item_image', file);
-        formData.append('user_key', getUserKey());
 
         fetch('/quotation/attach_item_image', {
             method: 'POST',
+            headers: _hdrs(),
             body: formData
         })
         .then(r => r.json())
@@ -404,7 +405,7 @@ function removeItem(itemNo) {
 
     fetch("/quotation/remove_item/" + itemNo, {
         method: "POST",
-        headers: { "X-User-Key": getUserKey() }
+        headers: _hdrs()
     })
     .then(r => r.json())
     .then(data => {
@@ -428,7 +429,7 @@ function clearItems() {
 
     fetch("/quotation/clear_items", {
         method: "POST",
-        headers: { "X-User-Key": getUserKey() }
+        headers: _hdrs()
     })
     .then(r => r.json())
     .then(data => {
@@ -589,7 +590,6 @@ function generateQuotation() {
     formData.append('quotation_sheet_id', quotationSheetId);
     formData.append('pr_sheet_id', prSheetId);
     formData.append('creator_role', (userSession.role || '').trim());
-    formData.append('user_key', getUserKey());
 
     // If in revision mode, include revision context as JSON string
     if (revisionContext) {
@@ -616,6 +616,7 @@ function generateQuotation() {
 
     fetch("/quotation/generate", {
         method: "POST",
+        headers: _hdrs(),
         body: formData
     })
     .then(response => {
@@ -644,7 +645,7 @@ function generateQuotation() {
         appendLog("Success: Quotation PDF downloaded — " + filename);
 
         // Fetch submission info (sheetId, rowIndex) from server
-        return fetch('/quotation/last_submission_info?user_key=' + encodeURIComponent(getUserKey())).then(r => r.json());
+        return fetch('/quotation/last_submission_info', { headers: _hdrs() }).then(r => r.json());
     })
     .then(info => {
         if (info && info.success) {
@@ -695,7 +696,7 @@ function submitToGoogleSheet() {
 
     fetch('/quotation/submit_to_sheets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
             sheetId: pendingApprovalContext.sheetId,
             rowIndex: pendingApprovalContext.rowIndex,
@@ -785,7 +786,7 @@ function checkApprovalStatus() {
         rowIndex: pendingApprovalContext.rowIndex,
     });
 
-    fetch('/quotation/check_approval_status?' + params)
+    fetch('/quotation/check_approval_status?' + params, { headers: _hdrs() })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
@@ -838,7 +839,7 @@ function fetchRejectedQuotations() {
     const modal = new bootstrap.Modal(document.getElementById('rejectedQuotationsModal'));
     modal.show();
 
-    fetch('/quotation/get_rejected?quotation_sheet_id=' + encodeURIComponent(quotationSheetId))
+    fetch('/quotation/get_rejected?quotation_sheet_id=' + encodeURIComponent(quotationSheetId), { headers: _hdrs() })
     .then(r => r.json())
     .then(result => {
         document.getElementById('rejectedQuotationsLoading').classList.remove('d-none');
@@ -901,8 +902,8 @@ function loadRejectedQuotation(idx) {
     // Send JSON to Flask to populate server-side quotation_items
     fetch('/quotation/load_quotation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quotationData: q.quotationData, user_key: getUserKey() })
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ quotationData: q.quotationData })
     })
     .then(r => r.json())
     .then(data => {
@@ -991,8 +992,8 @@ function cancelRevision() {
 function loadPRQuotationItems(quotationDataStr) {
     fetch('/quotation/load_quotation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quotationData: quotationDataStr, user_key: getUserKey() })
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ quotationData: quotationDataStr })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {

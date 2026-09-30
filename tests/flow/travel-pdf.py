@@ -207,15 +207,18 @@ print("\n== 11. THE ROUTE returns JSON on failure, never an HTML page ==")
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import app as _app                                                        # noqa: E402
 _a = _app.create_app() if hasattr(_app, "create_app") else _app.app
+import blueprints.session_auth as _sa                                     # noqa: E402
+_sa.validate_session = lambda token: {"username": "tester", "role": "admin"} if token else None   # A299
+_HDRS = {"X-Session-Token": "test"}
 _c = _a.test_client()
 for label, body in [("normal", SAMPLE), ("empty", {}), ("garbage items", {"items": ["x"]}),
                     ("garbage receipts", {**SAMPLE, "receipts": ["x", 42]})]:
-    r = _c.post("/flow/travel-allowance-pdf", json=body)
+    r = _c.post("/flow/travel-allowance-pdf", json=body, headers=_HDRS)
     ct = r.headers.get("Content-Type", "")
     ok("%s: %d %s" % (label, r.status_code, ct[:20]),
        r.status_code == 200 and ct.startswith("application/pdf"))
 ok("a malformed body never yields text/html",
-   not _c.post("/flow/travel-allowance-pdf", data="not json").headers
+   not _c.post("/flow/travel-allowance-pdf", data="not json", headers=_HDRS).headers
        .get("Content-Type", "").startswith("text/html"))
 
 print("\n%s — %d failure(s)" % ("PASS" if not fail else "FAIL", fail))

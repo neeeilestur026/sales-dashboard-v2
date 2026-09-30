@@ -1,38 +1,31 @@
 """Unified CRM Flask Application — combines Dashboard, PO, PR, MRO, and Quotation tools."""
 
+import logging
 import os
-import time
-import threading
 from flask import Flask, send_from_directory, abort, make_response, request
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# ── In-memory state cleanup (TTL-based eviction) ──────────────────
-_STATE_TTL_SECONDS = 3600  # 1 hour
+# A299 — INFO lines from the blueprints are otherwise dropped under gunicorn's defaults.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-def _start_cleanup_thread(app):
-    """Periodically evict stale per-user state from all blueprints."""
-    def _cleanup():
-        while True:
-            time.sleep(300)  # Run every 5 minutes
-            now = time.time()
-            try:
-                from blueprints import po, pr, mro, mi, quotation, payment_request
-                for mod in [po, pr, mro, mi, quotation, payment_request]:
-                    for store_name in dir(mod):
-                        store = getattr(mod, store_name, None)
-                        if isinstance(store, dict) and store_name.startswith("_user_"):
-                            stale = [k for k in list(store.keys())
-                                     if isinstance(store.get(k), dict) and
-                                     now - store[k].get("_ts", now) > _STATE_TTL_SECONDS]
-                            for k in stale:
-                                store.pop(k, None)
-            except Exception:
-                pass  # Cleanup is best-effort
-    t = threading.Thread(target=_cleanup, daemon=True)
-    t.start()
+# A299 — a decompression bomb in an uploaded receipt or brochure must not take the worker down.
+try:
+    from PIL import Image as _PILImage
+    _PILImage.MAX_IMAGE_PIXELS = 40_000_000
+except Exception:                       # Pillow is a hard dependency, but never let a cap break boot
+    pass
+
+_CSP = ("default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; "
+        "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://docs.google.com; "
+        "frame-src 'self' https://drive.google.com https://docs.google.com; "
+        "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'")
 
 
 def create_app():
@@ -60,6 +53,7 @@ def create_app():
     from blueprints.billing import billing_bp
     from blueprints.email_log import email_log_bp
     from blueprints.flow import flow_bp
+    from blueprints.session_auth import session_bp
 
     app.register_blueprint(po_bp, url_prefix="/po")
     app.register_blueprint(pr_bp, url_prefix="/pr")
@@ -70,6 +64,7 @@ def create_app():
     app.register_blueprint(billing_bp, url_prefix="/billing")
     app.register_blueprint(email_log_bp)
     app.register_blueprint(flow_bp)  # routes are /flow/quotation-pdf, /flow/po-pdf
+    app.register_blueprint(session_bp)  # POST /api/session/logout
 
     # ── Security + cache headers ────────────────────────────────────
     @app.after_request
@@ -80,6 +75,12 @@ def create_app():
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         response.headers.pop('Server', None)
+        # A299 — HSTS ramps 300 s → 1 day (A300) → 1 year (A304) so a misstep is cheap to undo.
+        response.headers['Strict-Transport-Security'] = 'max-age=300'
+        # A299 — report-only for one release; the harness console must show no violations before
+        # A304 makes it enforcing. 'unsafe-inline' stays until A305 moves the inline blocks out.
+        if (response.content_type or "").startswith("text/html"):
+            response.headers['Content-Security-Policy-Report-Only'] = _CSP
 
         # ── Static asset cache headers (saves ~900KB per page load) ──
         ct = response.content_type or ""
@@ -107,8 +108,9 @@ def create_app():
 
     @app.route("/<path:page>", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
     def serve_dashboard(page):
-        # Only serve static files on GET; let other methods fall through to blueprints
-        if request.method != "GET":
+        # Only serve static files on GET (and HEAD, which Flask answers from the GET view — uptime
+        # probes and `curl -I` used to get a 404 here); other methods fall through to blueprints
+        if request.method not in ("GET", "HEAD"):
             abort(404)
         # Serve dashboard HTML pages
         if page.endswith(".html"):

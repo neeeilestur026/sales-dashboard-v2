@@ -439,7 +439,7 @@ async function bsExportPdf() {
   };
   try {
     const res = await fetch('/flow/bolting-survey-pdf', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(payload)
     });
     if (!res.ok) {
       let msg = 'HTTP ' + res.status;

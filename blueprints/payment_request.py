@@ -20,6 +20,10 @@ from flask import (
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
 from pdf_generators.utils import sanitize_filename
 
+from flask import g
+from blueprints.session_auth import require_session
+from blueprints._upstream import gs_call, remember_user
+
 logger = logging.getLogger(__name__)
 
 payment_request_bp = Blueprint("payment_request_bp", __name__, template_folder="../templates")
@@ -38,11 +42,10 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "pdf"}
 
 
 def _get_user_key():
-    return (request.headers.get('X-User-Key', '') or
-            request.args.get('user_key', '') or
-            (request.get_json(silent=True) or {}).get('user_key', '') or
-            request.form.get('user_key', '') or
-            'anonymous')
+    """The per-user state key is the validated login, never a value the browser chose (A299)."""
+    uk = g.session["username"]
+    remember_user(globals(), uk)
+    return uk
 
 
 def _files(uk): return _user_files.setdefault(uk, [])
@@ -69,12 +72,8 @@ def _upload_supporting_docs_to_drive(pr_number: str, files: list, requested_by: 
                 "prNumber": pr_number,
                 "creatorName": requested_by,
             }
-            resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                      timeout=60, allow_redirects=False)
-            if resp.status_code in (301, 302, 303, 307, 308):
-                redir = resp.headers.get("Location")
-                if redir:
-                    resp = http_requests.get(redir, timeout=60)
+            resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=payload,
+                                      timeout=60)
             if resp.status_code == 200:
                 result = resp.json()
                 if result.get("success"):
@@ -106,12 +105,8 @@ def _upload_payment_request_pdf_to_drive(requested_by: str, uk: str) -> str:
             "creatorName": requested_by or "Unknown",
         }
         logger.info("_upload_payment_request_pdf_to_drive: POSTing %d bytes", len(pdf_b64))
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                  timeout=60, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            redir = resp.headers.get("Location")
-            if redir:
-                resp = http_requests.get(redir, timeout=60)
+        resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=payload,
+                                  timeout=60)
         if resp.status_code == 200:
             result = resp.json()
             if result.get("success"):
@@ -164,12 +159,8 @@ def _submit_to_google_sheet(details: dict, files_info: list[dict], drive_link: s
             "attachmentLinks": attachment_links,
         }
 
-        response = http_requests.post(url, json=payload, timeout=30, allow_redirects=False)
+        response = gs_call(url, json=payload, timeout=30)
 
-        if response.status_code in (301, 302, 303, 307, 308):
-            redirect_url = response.headers.get("Location")
-            if redirect_url:
-                response = http_requests.get(redirect_url, timeout=30)
 
         if response.status_code == 200:
             raw = response.text[:200]
@@ -202,6 +193,7 @@ def index():
 
 
 @payment_request_bp.route("/upload_file", methods=["POST"])
+@require_session()
 def upload_file():
     """Upload a supporting document (image or PDF)."""
     uk = _get_user_key()
@@ -236,6 +228,7 @@ def upload_file():
 
 
 @payment_request_bp.route("/remove_file/<int:file_index>", methods=["POST"])
+@require_session()
 def remove_file(file_index):
     """Remove a previously uploaded file."""
     uk = _get_user_key()
@@ -251,6 +244,7 @@ def remove_file(file_index):
 
 
 @payment_request_bp.route("/generate", methods=["POST"])
+@require_session()
 def generate():
     """Generate a Payment Request PDF."""
     uk = _get_user_key()
@@ -353,6 +347,7 @@ def generate():
 
 
 @payment_request_bp.route("/submit_to_sheets", methods=["POST"])
+@require_session()
 def submit_to_sheets():
     """Submit payment request data to Google Sheets."""
     uk = _get_user_key()

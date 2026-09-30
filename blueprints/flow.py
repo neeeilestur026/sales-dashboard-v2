@@ -14,9 +14,8 @@ import re
 from io import BytesIO
 from datetime import datetime
 
-import requests as http_requests
 from flask import Blueprint, request, jsonify, make_response
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 
 from pdf_generators.flow_quotation_pdf import (build_quotation_pdf_bytes, build_summary_table,
                                               rate_span, _norm_bullets)
@@ -27,7 +26,9 @@ from pdf_generators.payment_request_pdf import build_payment_request_pdf
 from pdf_generators.travel_allowance_pdf import build_travel_allowance_pdf_bytes
 from pdf_generators.leadgen_report_pdf import build_leadgen_week_pdf_bytes, build_leadgen_lead_pdf_bytes   # A277
 from pdf_generators.utils import sanitize_filename, ph_date_ymd, ph_date_long
-from blueprints.session_auth import validate_session, display_name_for, INTERNAL_SHARED_SECRET
+from flask import g
+from blueprints.session_auth import require_session, display_name_for, INTERNAL_SHARED_SECRET
+from blueprints._upstream import gs_call, http as _http
 
 logger = logging.getLogger(__name__)
 
@@ -99,10 +100,17 @@ def _decode_data_url(s):
         return None
 
 
+_MAX_BROCHURES = 10                      # A299: one request can no longer merge an unbounded stack
+_MAX_BROCHURE_BYTES = 20 * 1024 * 1024
+
+
 def _merge_brochures(pdf_bytes, brochures):
     """Append optional brochure PDFs (list of base64 strings) to the generated PDF."""
-    blobs = [_decode_data_url(b) for b in (brochures or [])]
+    blobs = [_decode_data_url(b) for b in (brochures or [])[:_MAX_BROCHURES]]
     blobs = [b for b in blobs if b]
+    if sum(len(b) for b in blobs) > _MAX_BROCHURE_BYTES:
+        logger.warning("Brochures skipped: %d bytes exceeds the %d cap", sum(len(b) for b in blobs), _MAX_BROCHURE_BYTES)
+        return pdf_bytes
     if not blobs:
         return pdf_bytes
     try:
@@ -191,6 +199,7 @@ def _read_quo_data(pdf_bytes):
 
 
 @flow_bp.route("/flow/quotation-pdf", methods=["POST"])
+@require_session()
 def quotation_pdf():
     """Render a flow quotation as a branded PDF (identical layout to the legacy generator)."""
     data = request.get_json(force=True, silent=True) or {}
@@ -364,6 +373,7 @@ def quotation_pdf():
 
 
 @flow_bp.route("/flow/po-pdf", methods=["POST"])
+@require_session()
 def po_pdf():
     """Render a flow purchase order as a branded PDF (identical layout to the legacy generator)."""
     data = request.get_json(force=True, silent=True) or {}
@@ -434,6 +444,7 @@ def po_pdf():
 
 
 @flow_bp.route("/flow/pr-pdf", methods=["POST"])
+@require_session()
 def pr_pdf():
     """Render a flow pricing/purchase request as a branded PDF (identical layout to the legacy PR generator)."""
     data = request.get_json(force=True, silent=True) or {}
@@ -486,6 +497,7 @@ def pr_pdf():
 
 
 @flow_bp.route("/flow/bolting-survey-pdf", methods=["GET", "POST"])
+@require_session()
 def bolting_survey_pdf():
     """A177 — the Bolting Application Survey, from ONE generator in two modes.
 
@@ -516,6 +528,7 @@ def bolting_survey_pdf():
 
 
 @flow_bp.route("/flow/puller-survey-pdf", methods=["GET", "POST"])
+@require_session()
 def puller_survey_pdf():
     """A185 — the Hydraulic Puller Application Survey, same two modes from one generator.
 
@@ -543,6 +556,7 @@ def puller_survey_pdf():
 
 
 @flow_bp.route("/flow/payment-request-pdf", methods=["POST"])
+@require_session()
 def payment_request_pdf():
     """Render a flow Payment Request (PRF) using the legacy generator — identical output."""
     data = request.get_json(silent=True) or {}
@@ -689,13 +703,8 @@ SECURED_ACTIONS = [
 ]
 
 
-@flow_bp.route("/flow/secured-actions", methods=["GET"])
-def secured_actions():
-    """The list of actions the client must route through /flow/secure."""
-    return jsonify({"success": True, "actions": SECURED_ACTIONS})
-
-
 @flow_bp.route("/flow/secure", methods=["POST"])
+@require_session()
 def secure_mutation():
     """Validate the caller, stamp their real identity, and forward to FlowAPI."""
     if not FLOW_APPS_SCRIPT_URL:
@@ -708,10 +717,7 @@ def secure_mutation():
                         "is not set."}), 503
 
     body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
-    session = validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Your session has expired — sign in again."}), 401
+    session = g.session
 
     action = str(body.get("action") or "").strip()
     if action not in SECURED_ACTIONS:
@@ -732,12 +738,7 @@ def secure_mutation():
     params["flowSecret"] = INTERNAL_SHARED_SECRET
 
     try:
-        resp = http_requests.post(FLOW_APPS_SCRIPT_URL, json=params,
-                                  timeout=60, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            loc = resp.headers.get("Location")
-            if loc:
-                resp = http_requests.get(loc, timeout=60)
+        resp = gs_call(FLOW_APPS_SCRIPT_URL, json=params, timeout=60)
         text = resp.text or ""
         if text.lstrip().startswith("<"):
             # The known Apps Script flake: an HTML error page returned with HTTP 200. Mutations
@@ -756,9 +757,9 @@ def secure_mutation():
 # Browsers can't fetch the docs.google.com CSV export cross-origin. This is NOT an
 # open proxy: the URL is constructed server-side from two validated params only.
 @flow_bp.route("/flow/sheet-csv", methods=["GET"])
+@require_session()
 def sheet_csv():
     import re as _re
-    import requests as http_requests
     sheet_id = (request.args.get("id") or "").strip()
     gid = (request.args.get("gid") or "0").strip()
     if not _re.fullmatch(r"[A-Za-z0-9_-]{10,80}", sheet_id):
@@ -767,7 +768,7 @@ def sheet_csv():
         return jsonify({"success": False, "message": "Invalid gid."}), 400
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
-        resp = http_requests.get(url, timeout=30, allow_redirects=True)
+        resp = _http.get(url, timeout=(5, 30), allow_redirects=True)
         if resp.status_code != 200:
             return jsonify({"success": False, "message": f"Sheet fetch failed (HTTP {resp.status_code}). Is the sheet link-accessible?"}), 502
         out = make_response(resp.content)
@@ -797,6 +798,7 @@ def _pp_num(v):
 # pdf_generators/quotation_parser.py, which reads the page geometry instead.
 
 @flow_bp.route("/flow/import-quotation-pdf", methods=["POST"])
+@require_session()
 def import_quotation_pdf():
     """Read an uploaded quotation PDF → return editable draft data.
 
@@ -852,6 +854,7 @@ def _upload_too_large(_e):
 
 
 @flow_bp.route("/flow/stamp-po-received", methods=["POST"])
+@require_session()
 def stamp_po_received():
     """A186 — stamp an uploaded client PO 'RECEIVED <date>' on page 1.
 
@@ -921,6 +924,7 @@ def stamp_po_received():
 # (getLeadgenCounts / a getLeadgen lead row), nothing is re-read here, so the document agrees with
 # the screen by construction.
 @flow_bp.route("/flow/leadgen-report-pdf", methods=["POST"])
+@require_session()
 def leadgen_report_pdf():
     try:
         data = request.get_json(force=True, silent=True) or {}
@@ -934,6 +938,7 @@ def leadgen_report_pdf():
 
 
 @flow_bp.route("/flow/leadgen-lead-pdf", methods=["POST"])
+@require_session()
 def leadgen_lead_pdf():
     try:
         data = request.get_json(force=True, silent=True) or {}
@@ -947,6 +952,7 @@ def leadgen_lead_pdf():
 
 
 @flow_bp.route("/flow/travel-allowance-pdf", methods=["POST"])
+@require_session()
 def travel_allowance_pdf():
     """Render a travel replenishment as its three-page pack (+ receipt annex).
 

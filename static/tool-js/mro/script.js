@@ -5,10 +5,11 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-// User key for per-user state isolation
-function getUserKey() {
-    try { return JSON.parse(localStorage.getItem('session') || '{}').name || 'anonymous'; }
-    catch { return 'anonymous'; }
+// A299: every Flask route requires the login session; the server keys per-user state by it.
+function _hdrs(extra) {
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('session') || '{}').token || ''; } catch (e) {}
+    return Object.assign({ 'X-Session-Token': token }, extra || {});
 }
 
 // Initialize Bootstrap modal
@@ -69,12 +70,11 @@ function addItem() {
         item_description: itemDescriptionRaw,
         quantity:         quantity,
         item_remarks:     itemRemarks,
-        user_key:         getUserKey()
     };
 
     fetch('/mro/add_item', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
     })
     .then(response => response.json())
@@ -109,7 +109,7 @@ function removeItem(itemNo) {
     console.log(`Removing item ${itemNo}`);
     fetch(`/mro/remove_item/${itemNo}`, {
         method: 'POST',
-        headers: { 'X-User-Key': getUserKey() }
+        headers: _hdrs()
     })
     .then(response => response.json())
     .then(data => {
@@ -156,11 +156,11 @@ function generatePurchaseOrder() {
     if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
 
     const formData = new FormData(form);
-    formData.append('user_key', getUserKey());
     updateOutputLog(['Generating PDF...']);
 
     fetch('/mro/generate', {
         method: 'POST',
+        headers: _hdrs(),
         body: formData
     })
     .then(response => {
@@ -204,7 +204,7 @@ function resetForm() {
     document.getElementById('output_log').textContent = '';
     fetch('/mro/reset_items', {
         method: 'POST',
-        headers: { 'X-User-Key': getUserKey() }
+        headers: _hdrs()
     })
     .then(response => response.json())
     .then(data => {
@@ -268,14 +268,13 @@ function submitToGoogleSheet() {
         remarks:          remarks,
         received_by:      receivedBy,
         item_count:       itemCount,
-        user_key:         getUserKey()
     };
 
     console.log('Submitting data:', data);
 
     fetch('/mro/submit_to_sheets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
     })
     .then(response => response.json())

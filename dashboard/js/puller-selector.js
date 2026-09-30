@@ -602,7 +602,7 @@ async function psExportPdf() {
       preparedBy: psSessionName()
     };
     const res = await fetch('/flow/puller-survey-pdf', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(payload)
     });
     if (!res.ok) {
       let msg = 'Could not build the PDF.';

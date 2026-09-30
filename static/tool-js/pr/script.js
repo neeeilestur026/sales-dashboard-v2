@@ -1,7 +1,8 @@
-// User key for per-user state isolation
-function getUserKey() {
-    try { return JSON.parse(localStorage.getItem('session') || '{}').name || 'anonymous'; }
-    catch { return 'anonymous'; }
+// A299: every Flask route requires the login session; the server keys per-user state by it.
+function _hdrs(extra) {
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('session') || '{}').token || ''; } catch (e) {}
+    return Object.assign({ 'X-Session-Token': token }, extra || {});
 }
 
 // Initialize Bootstrap modal
@@ -88,7 +89,6 @@ function addItem() {
         quantity:         quantity,
         unit_of_measure:  unitOfMeasure,
         item_remarks:     itemRemarks,
-        user_key:         getUserKey(),
     };
 
     const isEdit = _editingItemNo !== null;
@@ -96,7 +96,7 @@ function addItem() {
 
     fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
     })
     .then(r => r.json())
@@ -149,7 +149,7 @@ function escapeHtml(text) {
 
 // Remove an item from the backend and refresh table
 function removeItem(itemNo) {
-    fetch(`/pr/remove_item/${itemNo}`, { method: 'POST', headers: { 'X-User-Key': getUserKey() } })
+    fetch(`/pr/remove_item/${itemNo}`, { method: 'POST', headers: _hdrs() })
     .then(r => r.json())
     .then(data => {
         updateOutputLog(data.output_log);
@@ -182,7 +182,6 @@ function generatePR() {
     }
 
     const formData = new FormData(form);
-    formData.append('user_key', getUserKey());
 
     // Pass session info so backend can auto-submit to Drive + Sheet
     try {
@@ -203,6 +202,7 @@ function generatePR() {
 
     fetch('/pr/generate', {
         method: 'POST',
+        headers: _hdrs(),
         body: formData
     })
     .then(response => {
@@ -252,7 +252,7 @@ function resetForm() {
     document.getElementById('pr_form').reset();
     document.querySelector('#items_table tbody').innerHTML = '';
     document.getElementById('output_log').textContent = '';
-    fetch('/pr/reset_items', { method: 'POST', headers: { 'X-User-Key': getUserKey() } })
+    fetch('/pr/reset_items', { method: 'POST', headers: _hdrs() })
     .then(r => r.json())
     .then(data => updateOutputLog(data.output_log))
     .catch(() => updateOutputLog(['Error: Failed to reset form.']));
@@ -307,13 +307,12 @@ function submitToGoogleSheet() {
         pr_number_client:  prNumberClient,
         pr_date:           prDate,
         prepared_by_name:  preparedByName,
-        user_key:          getUserKey(),
         pr_sheet_id:       prSheetId,
     };
 
     fetch('/pr/submit_to_sheets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
     })
     .then(r => r.json())

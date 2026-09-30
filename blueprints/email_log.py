@@ -23,29 +23,27 @@ from datetime import datetime, timezone, timedelta
 PH_TZ = timezone(timedelta(hours=8))
 from typing import Optional
 
-import requests as http_requests
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from cryptography.fernet import Fernet, InvalidToken
 
 logger = logging.getLogger(__name__)
 
 email_log_bp = Blueprint("email_log_bp", __name__)
 
-DASHBOARD_APPS_SCRIPT_URL = os.environ.get("DASHBOARD_APPS_SCRIPT_URL", "")
+from blueprints import _config
+from blueprints.session_auth import require_session, gs_post as _gs_post, get_roster
+
+DASHBOARD_APPS_SCRIPT_URL = _config.DASHBOARD_APPS_SCRIPT_URL
 EMAIL_CRED_KEY = os.environ.get("EMAIL_CRED_KEY", "")
-INTERNAL_SHARED_SECRET = os.environ.get("INTERNAL_SHARED_SECRET", "")
+INTERNAL_SHARED_SECRET = _config.INTERNAL_SHARED_SECRET
 GODADDY_IMAP_HOST = os.environ.get("GODADDY_IMAP_HOST", "imap.secureserver.net")
 GODADDY_IMAP_PORT = int(os.environ.get("GODADDY_IMAP_PORT", "993"))
 
-_SESSION_CACHE_TTL = 300       # validated sessions cached 5 min
 _CREDS_CACHE_TTL = 1800        # encrypted creds cached 30 min
-_USERS_CACHE_TTL = 600         # backend user roster cached 10 min
 _SENT_TTL_TODAY = 120          # sent-mail cache: today's list refreshes every ~2 min
 _SENT_TTL_PAST = 3600          # past dates are immutable history — cache 1 h
 _SENT_CACHE_MAX = 500          # bound memory
-_session_cache: dict[str, dict] = {}   # token -> { username, role, _ts }
 _creds_cache: dict[str, dict] = {}     # username -> { enc_blob, _ts }
-_users_cache: dict = {}                # { users: [...], _ts }
 _sent_mail_cache: dict = {}            # (username, date) -> { emails, meta, addr, _ts }
 
 # A208 — /api/email/feed had NO cache at all: every page load was a fresh IMAP login + SEARCH +
@@ -82,50 +80,6 @@ def _fernet() -> Optional[Fernet]:
     except Exception as exc:
         logger.error("Invalid EMAIL_CRED_KEY: %s", exc)
         return None
-
-
-def _gs_post(payload: dict, timeout: int = 30) -> dict:
-    if not DASHBOARD_APPS_SCRIPT_URL:
-        return {"success": False, "message": "DASHBOARD_APPS_SCRIPT_URL not configured"}
-    try:
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                  timeout=timeout, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            loc = resp.headers.get("Location")
-            if loc:
-                resp = http_requests.get(loc, timeout=timeout)
-        return resp.json()
-    except Exception as exc:
-        logger.error("_gs_post error: %s", exc)
-        return {"success": False, "message": str(exc)}
-
-
-def _validate_session(token: str) -> Optional[dict]:
-    """Return { username, role } if token is valid, else None. Caches 5 min.
-
-    Retries once on a TRANSPORT failure (Code.gs unreachable / transient error) so a burst of
-    concurrent requests on a cold cache doesn't 401 spuriously. An explicitly invalid token
-    (Code.gs answered, said no) is never retried."""
-    if not token:
-        return None
-    now = time.time()
-    cached = _session_cache.get(token)
-    if cached and (now - cached["_ts"]) < _SESSION_CACHE_TTL:
-        return {"username": cached["username"], "role": cached["role"]}
-    result = _gs_post({"action": "validateSession", "token": token})
-    # _gs_post's exception path returns {success:False, message:<transport error>} with no 'valid' key;
-    # a real Code.gs "invalid token" reply carries valid:False. Retry only the former.
-    if not result.get("success") and "valid" not in result:
-        time.sleep(0.5)
-        result = _gs_post({"action": "validateSession", "token": token})
-    if not result.get("success") or not result.get("valid"):
-        return None
-    username = result.get("username") or result.get("name") or ""
-    role = result.get("role") or ""
-    if not username:
-        return None
-    _session_cache[token] = {"username": username, "role": role, "_ts": now}
-    return {"username": username, "role": role}
 
 
 def _get_enc_creds(username: str) -> Optional[str]:
@@ -698,19 +652,18 @@ EMAIL_OVERSIGHT_ROLES = ("admin", "accounting", "management", "director", "hr")
 
 
 @email_log_bp.route("/api/email/setup", methods=["POST"])
+@require_session()
 def email_setup():
     _cfg = _email_config_problem()
     if _cfg or not INTERNAL_SHARED_SECRET:
         return jsonify({"success": False, "message": _cfg or "Email service is not configured on the server: INTERNAL_SHARED_SECRET is not set."}), 503
     body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "")
+    token = g.session_token
+    session = g.session
     addr = (body.get("godaddyEmail") or "").strip()
     pwd = body.get("godaddyPassword") or ""
     if not addr or not pwd:
         return jsonify({"success": False, "message": "Email and password required"}), 400
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
     # Verify creds work before storing
     try:
         conn = _imap_login(addr, pwd)
@@ -745,16 +698,14 @@ def email_setup():
 
 
 @email_log_bp.route("/api/email/test", methods=["POST"])
+@require_session()
 def email_test():
     _cfg = _email_config_problem()
     if _cfg:
         return jsonify({"success": False, "message": _cfg}), 503
     body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "")
     addr = (body.get("godaddyEmail") or "").strip()
     pwd = body.get("godaddyPassword") or ""
-    if not _validate_session(token):
-        return jsonify({"success": False, "message": "Invalid session"}), 401
     if not addr or not pwd:
         return jsonify({"success": False, "message": "Email and password required"}), 400
     try:
@@ -771,18 +722,12 @@ def email_test():
 
 
 @email_log_bp.route("/api/email/today", methods=["GET", "POST"])
+@require_session()
 def email_today():
     _cfg = _email_config_problem()
     if _cfg:
         return jsonify({"success": False, "message": _cfg}), 503
-    token = ""
-    if request.method == "POST":
-        body = request.get_json(silent=True) or {}
-        token = body.get("sessionToken", "")
-    token = token or request.headers.get("X-Session-Token", "") or request.args.get("sessionToken", "")
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
+    session = g.session
     # Oversight roles may request another user's sent mail (management "see what each user is doing").
     body = request.get_json(silent=True) or {} if request.method == "POST" else {}
     target_user = (body.get("user") or "").strip()
@@ -841,6 +786,7 @@ def email_today():
 
 
 @email_log_bp.route("/api/email/users", methods=["POST"])
+@require_session()
 def email_users():
     """User roster for the oversight sent-email aggregation (all-daily-reports).
 
@@ -850,61 +796,26 @@ def email_users():
     _cfg = _email_config_problem()
     if _cfg:
         return jsonify({"success": False, "message": _cfg}), 503
-    body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
-    if str(session.get("role", "")).lower() not in EMAIL_OVERSIGHT_ROLES:
+    if str(g.session.get("role", "")).lower() not in EMAIL_OVERSIGHT_ROLES:
         return jsonify({"success": False, "message": "Forbidden (oversight roles only)"}), 403
-
-    now = time.time()
-    if _users_cache.get("users") and (now - _users_cache.get("_ts", 0)) < _USERS_CACHE_TTL:
-        return jsonify({"success": True, "users": _users_cache["users"], "cached": True})
-
-    # Apps Script cold starts routinely exceed 30s — give the roster scan headroom, and retry once
-    # on a transport-style failure (timeout / connection error; never on an explicit Code.gs reply).
-    payload = {"action": "getUsersForBackend", "sharedSecret": INTERNAL_SHARED_SECRET}
-    result = _gs_post(payload, timeout=60)
-    def _is_explicit(res):
-        m = str(res.get("message", "")).strip().lower()
-        return m == "forbidden" or "unknown action" in m
-    if not result.get("success") and not _is_explicit(result):
-        time.sleep(0.5)
-        result = _gs_post(payload, timeout=60)
-    if not result.get("success"):
-        # Stale fallback: the roster changes rarely — serve the last good list rather than dropping
-        # the whole sent-email section because Apps Script was slow this once.
-        if _users_cache.get("users"):
-            logger.warning("email_users: Code.gs failed (%s) — serving stale roster",
-                           result.get("message"))
-            return jsonify({"success": True, "users": _users_cache["users"], "stale": True})
-        msg = str(result.get("message", "")).strip()
-        if msg.lower() == "forbidden":
-            msg = ("Code.gs rejected the request: INTERNAL_SHARED_SECRET mismatch. Set the matching "
-                   "Script Property in the Code.gs project.")
-        elif "unknown action" in msg.lower():
-            msg = ("The production Code.gs does not have the getUsersForBackend action yet — paste "
-                   "handleGetUsersForBackend + its doPost case from the repo Code.gs into the live "
-                   "project and redeploy.")
-        return jsonify({"success": False, "message": msg or "Could not load users."}), 502
-    users = result.get("users") or []
-    _users_cache["users"] = users
-    _users_cache["_ts"] = now
+    # session_auth.get_roster: cached ~10 min, one retry on a transport failure, stale-serve fallback.
+    users = get_roster()
+    if not users:
+        return jsonify({"success": False, "message":
+                        "Could not load users. If this persists, check that the Code.gs INTERNAL_SHARED_SECRET "
+                        "Script Property matches the server and that getUsersForBackend is deployed."}), 502
     return jsonify({"success": True, "users": users})
 
 
 @email_log_bp.route("/api/email/feed", methods=["POST"])
+@require_session()
 def email_feed():
     """Feed recent messages from a logical folder (inbox/sent/spam); inbox/spam classified."""
     _cfg = _email_config_problem()
     if _cfg:
         return jsonify({"success": False, "message": _cfg}), 503
     body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
+    session = g.session
     kind = (body.get("folder") or "inbox").strip().lower()
     if kind not in ("inbox", "sent", "spam"):
         return jsonify({"success": False, "message": "Invalid folder"}), 400
@@ -1082,6 +993,7 @@ def _fetch_headers(conn, since: str, cap: int = 400) -> list[dict]:
 
 
 @email_log_bp.route("/api/email/quotation-threads", methods=["POST"])
+@require_session()
 def email_quotation_threads():
     """Has the client replied to any of these sent messages? Scoped to the caller's own mailbox,
     exactly like /api/email/feed — there is deliberately no `user` parameter."""
@@ -1089,10 +1001,7 @@ def email_quotation_threads():
     if _cfg:
         return jsonify({"success": False, "message": _cfg}), 503
     body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "") or request.headers.get("X-Session-Token", "")
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
+    session = g.session
     ids = body.get("messageIds") or []
     if not isinstance(ids, list):
         return jsonify({"success": False, "message": "messageIds must be a list"}), 400
@@ -1126,18 +1035,12 @@ def email_quotation_threads():
 
 
 @email_log_bp.route("/api/email/status", methods=["GET", "POST"])
+@require_session()
 def email_status():
     _cfg = _email_config_problem()
     if _cfg:
         return jsonify({"success": False, "configured": False, "message": _cfg}), 503
-    token = ""
-    if request.method == "POST":
-        body = request.get_json(silent=True) or {}
-        token = body.get("sessionToken", "")
-    token = token or request.headers.get("X-Session-Token", "") or request.args.get("sessionToken", "")
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
+    session = g.session
     enc_blob = _get_enc_creds(session["username"])
     if not enc_blob:
         return jsonify({"success": True, "configured": False})
@@ -1147,15 +1050,13 @@ def email_status():
 
 
 @email_log_bp.route("/api/email/disconnect", methods=["POST"])
+@require_session()
 def email_disconnect():
     _cfg = _email_config_problem()
     if _cfg or not INTERNAL_SHARED_SECRET:
         return jsonify({"success": False, "message": _cfg or "Email service is not configured on the server: INTERNAL_SHARED_SECRET is not set."}), 503
-    body = request.get_json(silent=True) or {}
-    token = body.get("sessionToken", "")
-    session = _validate_session(token)
-    if not session:
-        return jsonify({"success": False, "message": "Invalid session"}), 401
+    token = g.session_token
+    session = g.session
     result = _gs_post({
         "action": "setEmailCredentials",
         "token": token,

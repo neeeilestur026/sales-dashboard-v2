@@ -3,10 +3,11 @@
  * All fetch URLs are prefixed with /po/ for the unified Flask blueprint.
  */
 
-// User key for per-user state isolation
-function getUserKey() {
-    try { return JSON.parse(localStorage.getItem('session') || '{}').name || 'anonymous'; }
-    catch { return 'anonymous'; }
+// A299: every Flask route requires the login session; the server keys per-user state by it.
+function _hdrs(extra) {
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('session') || '{}').token || ''; } catch (e) {}
+    return Object.assign({ 'X-Session-Token': token }, extra || {});
 }
 
 // Initialize Bootstrap modal
@@ -62,13 +63,12 @@ function addItem() {
 
     fetch('/po/add_item', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
             item_code: itemCode,
             item_description: itemDescriptionRaw,
             quantity: quantity,
             unit_price: unitPrice,
-            user_key: getUserKey()
         })
     })
     .then(response => response.json())
@@ -92,7 +92,7 @@ function removeItem(itemNo) {
 
     fetch(`/po/remove_item/${itemNo}`, {
         method: 'POST',
-        headers: { 'X-User-Key': getUserKey() }
+        headers: _hdrs()
     })
     .then(response => response.json())
     .then(data => {
@@ -150,7 +150,6 @@ function generatePurchaseOrder() {
     }
 
     const formData = new FormData(form);
-    formData.append('user_key', getUserKey());
 
     // Pass session info so backend can auto-submit to PO Approvals
     try {
@@ -168,6 +167,7 @@ function generatePurchaseOrder() {
 
     fetch('/po/generate', {
         method: 'POST',
+        headers: _hdrs(),
         body: formData
     })
     .then(response => {
@@ -210,7 +210,7 @@ function pollSubmissionStatus(attempts) {
         return;
     }
     setTimeout(() => {
-        fetch('/po/last_submission_info?user_key=' + encodeURIComponent(getUserKey()))
+        fetch('/po/last_submission_info', { headers: _hdrs() })
             .then(r => r.json())
             .then(data => {
                 if (data.status === 'pending' || data.status === 'none') {
@@ -231,7 +231,7 @@ function pollSubmissionStatus(attempts) {
 function resetForm() {
     if (!confirm('Reset all items and form fields?')) return;
 
-    fetch('/po/reset_items', { method: 'POST', headers: { 'X-User-Key': getUserKey() } })
+    fetch('/po/reset_items', { method: 'POST', headers: _hdrs() })
     .then(response => response.json())
     .then(data => {
         if (data.status === 'ok') {
@@ -286,7 +286,7 @@ function submitToGoogleSheet() {
 
     fetch('/po/submit_to_sheets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
             po_number: poNumber,
             vendor_name: vendorName,
@@ -298,7 +298,6 @@ function submitToGoogleSheet() {
             items_summary: itemsSummary,
             created_by: createdBy,
             creator_role: creatorRole,
-            user_key: getUserKey()
         })
     })
     .then(response => response.json())

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from io import BytesIO                                            # noqa: E402
 from pdfminer.high_level import extract_text                      # noqa: E402
-from PyPDF2 import PdfReader                                      # noqa: E402
+from pypdf import PdfReader                                      # noqa: E402
 
 from pdf_generators.leadgen_report_pdf import (                   # noqa: E402
     build_leadgen_week_pdf_bytes, build_leadgen_lead_pdf_bytes)

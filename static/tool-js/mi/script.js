@@ -5,10 +5,11 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-// User key for per-user state isolation
-function getUserKey() {
-    try { return JSON.parse(localStorage.getItem('session') || '{}').name || 'anonymous'; }
-    catch { return 'anonymous'; }
+// A299: every Flask route requires the login session; the server keys per-user state by it.
+function _hdrs(extra) {
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('session') || '{}').token || ''; } catch (e) {}
+    return Object.assign({ 'X-Session-Token': token }, extra || {});
 }
 
 // Initialize Bootstrap modal
@@ -62,12 +63,11 @@ function addItem() {
         item_description: itemDescriptionRaw,
         quantity:         quantity,
         item_remarks:     itemRemarks,
-        user_key:         getUserKey()
     };
 
     fetch('/mi/add_item', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
     })
     .then(response => response.json())
@@ -100,7 +100,7 @@ function addItem() {
 function removeItem(itemNo) {
     fetch(`/mi/remove_item/${itemNo}`, {
         method: 'POST',
-        headers: { 'X-User-Key': getUserKey() }
+        headers: _hdrs()
     })
     .then(response => response.json())
     .then(data => {
@@ -145,11 +145,11 @@ function generateMI() {
     if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
 
     const formData = new FormData(form);
-    formData.append('user_key', getUserKey());
     updateOutputLog(['Generating PDF...']);
 
     fetch('/mi/generate', {
         method: 'POST',
+        headers: _hdrs(),
         body: formData,
         cache: 'no-store'
     })
@@ -198,7 +198,7 @@ function resetForm() {
     document.getElementById('output_log').textContent = '';
     fetch('/mi/reset_items', {
         method: 'POST',
-        headers: { 'X-User-Key': getUserKey() }
+        headers: _hdrs()
     })
     .then(response => response.json())
     .then(data => {
@@ -247,12 +247,11 @@ function submitToGoogleSheet() {
         remarks:        remarks,
         issued_by:      issuedBy,
         item_count:     itemCount,
-        user_key:       getUserKey()
     };
 
     fetch('/mi/submit_to_sheets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: _hdrs({ 'Content-Type': 'application/json', 'Accept': 'application/json' }),
         body: JSON.stringify(data),
         cache: 'no-store'
     })

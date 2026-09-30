@@ -476,7 +476,10 @@ function logout() {
     const raw = localStorage.getItem(SESSION_KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s && s.token) apiLogout(s.token);
+      if (s && s.token) {
+        try { fetch('/api/session/logout', { method: 'POST', headers: { 'X-Session-Token': s.token }, keepalive: true }).catch(() => {}); } catch (e) {}
+        apiLogout(s.token);
+      }
     }
   } catch {}
   localStorage.removeItem(SESSION_KEY);

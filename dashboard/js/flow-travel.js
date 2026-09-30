@@ -785,7 +785,7 @@ async function tvRenderPreview() {
   const withReceipts = tvPreviewReceipts;
   try {
     const res = await fetch('/flow/travel-allowance-pdf', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(tvPayload(withReceipts)),
       signal: tvAbort ? tvAbort.signal : undefined
     });
@@ -829,7 +829,7 @@ async function tvFilePack(travNo) {
   if (!travNo || !tvReady) return '';
   try {
     const res = await fetch('/flow/travel-allowance-pdf', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(tvPayload(true))          // true = with the receipt bytes
     });
     if (!res.ok) return 'the pack could not be rendered for filing';

@@ -6,7 +6,6 @@ import logging
 import traceback
 from datetime import datetime
 
-import requests as http_requests
 import pandas as pd
 from flask import (
     Blueprint,
@@ -20,11 +19,15 @@ import base64
 from io import BytesIO
 
 from PIL import Image as PILImage
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib.utils import ImageReader
 
 from pdf_generators.quotation_pdf import QuotationDocTemplate
 from pdf_generators.utils import sanitize_filename
+
+from flask import g
+from blueprints.session_auth import require_session
+from blueprints._upstream import gs_call, remember_user
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +47,10 @@ _user_submission: dict[str, dict] = {}
 
 
 def _get_user_key():
-    """Extract user key from any request type (header, query, form, or JSON body)."""
-    return (request.headers.get('X-User-Key', '') or
-            request.args.get('user_key', '') or
-            (request.get_json(silent=True) or {}).get('user_key', '') or
-            request.form.get('user_key', '') or
-            'anonymous')
+    """The per-user state key is the validated login, never a value the browser chose (A299)."""
+    uk = g.session["username"]
+    remember_user(globals(), uk)
+    return uk
 
 
 def _items(uk): return _user_items.setdefault(uk, [])
@@ -289,6 +290,7 @@ def index():
 
 
 @quotation_bp.route("/load_data", methods=["GET", "POST"])
+@require_session()
 def load_data_route():
     """Load data and return destinations and product codes.
 
@@ -329,6 +331,7 @@ def load_data_route():
 
 
 @quotation_bp.route("/add_item", methods=["POST"])
+@require_session()
 def add_item():
     """Add an item to the quotation with optional image."""
     global destinations_df, products_by_principal
@@ -483,6 +486,7 @@ def add_item():
 
 
 @quotation_bp.route("/remove_item/<int:item_no>", methods=["POST"])
+@require_session()
 def remove_item(item_no):
     """Remove an item from the quotation and delete its image if present."""
     uk = _get_user_key()
@@ -510,6 +514,7 @@ def remove_item(item_no):
 
 
 @quotation_bp.route("/clear_items", methods=["POST"])
+@require_session()
 def clear_items():
     """Clear all items and attempt to delete uploaded images."""
     uk = _get_user_key()
@@ -525,6 +530,7 @@ def clear_items():
 
 
 @quotation_bp.route("/attach_item_image", methods=["POST"])
+@require_session()
 def attach_item_image():
     """Attach or replace an image for an existing item. Accepts multipart/form-data."""
     uk = _get_user_key()
@@ -572,6 +578,7 @@ def attach_item_image():
 
 
 @quotation_bp.route("/update_item", methods=["POST"])
+@require_session()
 def update_item():
     """Update an existing item identified by item_no. Accepts JSON payload."""
     uk = _get_user_key()
@@ -641,17 +648,12 @@ def _get_next_quotation_number() -> tuple[int, int]:
 
     for attempt in range(2):
         try:
-            resp = http_requests.get(
+            resp = gs_call(
                 DASHBOARD_APPS_SCRIPT_URL,
                 params={"action": "getNextQuotationNumber"},
-                timeout=30, allow_redirects=False,
+                timeout=30,
             )
             logger.info("_get_next_quotation_number: attempt=%d status=%d", attempt + 1, resp.status_code)
-            if resp.status_code in (301, 302, 303, 307, 308):
-                redir = resp.headers.get("Location")
-                if redir:
-                    resp = http_requests.get(redir, timeout=30)
-                    logger.info("_get_next_quotation_number: redirect status=%d", resp.status_code)
             if resp.status_code == 200:
                 result = resp.json()
                 logger.info("_get_next_quotation_number: result=%s", str(result)[:200])
@@ -696,16 +698,10 @@ def _upload_pdf_to_drive(agent_name: str, uk: str) -> str:
         try:
             logger.info("_upload_pdf_to_drive: attempt=%d POSTing %d bytes (~%.1f KB) to %s...",
                         attempt + 1, len(pdf_b64), len(pdf_b64) / 1024, DASHBOARD_APPS_SCRIPT_URL[:60])
-            drive_resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=drive_payload,
-                                             timeout=90, allow_redirects=False)
+            drive_resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=drive_payload,
+                                             timeout=90)
             logger.info("_upload_pdf_to_drive: Initial response status=%d", drive_resp.status_code)
             # Google Apps Script often returns 302 after a POST — follow the redirect as GET
-            if drive_resp.status_code in (301, 302, 303, 307, 308):
-                redir = drive_resp.headers.get("Location")
-                logger.info("_upload_pdf_to_drive: Redirecting (GET) to %s", redir[:80] if redir else "None")
-                if redir:
-                    drive_resp = http_requests.get(redir, timeout=90)
-                    logger.info("_upload_pdf_to_drive: Redirect response status=%d", drive_resp.status_code)
             if drive_resp.status_code == 200:
                 try:
                     drive_result = drive_resp.json()
@@ -741,6 +737,7 @@ def _upload_pdf_to_drive(agent_name: str, uk: str) -> str:
 
 
 @quotation_bp.route("/generate", methods=["POST"])
+@require_session()
 def generate():
     """Generate a quotation PDF with items, images, and optional brochures."""
     global destinations_df
@@ -1312,14 +1309,10 @@ def generate():
                             "rfqNo": _submit_data["reference_rfq_no"],
                             "creatorRole": creator_role,
                         }
-                        resp = http_requests.post(
+                        resp = gs_call(
                             DASHBOARD_APPS_SCRIPT_URL, json=revise_payload,
-                            timeout=15, allow_redirects=False,
+                            timeout=15,
                         )
-                        if resp.status_code in (301, 302, 303, 307, 308):
-                            redir = resp.headers.get("Location")
-                            if redir:
-                                resp = http_requests.get(redir, timeout=15)
                         if resp.status_code == 200:
                             rev_result = resp.json()
                             if rev_result.get("success"):
@@ -1355,14 +1348,10 @@ def generate():
                         quotation_json,  # P - QuotationData
                     ]]
                     payload = {"sheet_id": quotation_sheet_id, "rows": rows}
-                    response = http_requests.post(
+                    response = gs_call(
                         QUOTATION_GOOGLE_APPS_SCRIPT_URL,
-                        json=payload, timeout=15, allow_redirects=False,
+                        json=payload, timeout=15,
                     )
-                    if response.status_code in (301, 302, 303, 307, 308):
-                        redirect_url = response.headers.get("Location")
-                        if redirect_url:
-                            response = http_requests.get(redirect_url, timeout=15)
 
                     row_index = 0
                     if response.status_code == 200:
@@ -1389,15 +1378,11 @@ def generate():
                                 "creatorRole": creator_role,
                                 "refNo": ref_no,
                             }
-                            link_resp = http_requests.post(
+                            link_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
                                 json=link_payload,
-                                timeout=15, allow_redirects=False,
+                                timeout=15,
                             )
-                            if link_resp.status_code in (301, 302, 303, 307, 308):
-                                redir2 = link_resp.headers.get("Location")
-                                if redir2:
-                                    link_resp = http_requests.get(redir2, timeout=15)
                             if link_resp.status_code == 200:
                                 link_result = link_resp.json()
                                 logger.info("updateQuotationDriveLink result: %s", str(link_result)[:200])
@@ -1418,15 +1403,11 @@ def generate():
                                 "creatorRole": creator_role,
                                 "refNo": ref_no,
                             }
-                            link_resp = http_requests.post(
+                            link_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
                                 json=link_payload,
-                                timeout=15, allow_redirects=False,
+                                timeout=15,
                             )
-                            if link_resp.status_code in (301, 302, 303, 307, 308):
-                                redir2 = link_resp.headers.get("Location")
-                                if redir2:
-                                    link_resp = http_requests.get(redir2, timeout=15)
                         except Exception as link_err:
                             logger.warning("Could not update approval columns: %s", link_err)
 
@@ -1443,7 +1424,7 @@ def generate():
                     pr_sid = _submit_data.get("pr_sheet_id", "").strip()
                     if rfq_no and pr_sid and DASHBOARD_APPS_SCRIPT_URL:
                         try:
-                            link_pr_resp = http_requests.get(
+                            link_pr_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
                                 params={
                                     "action": "linkPRToQuotation",
@@ -1451,12 +1432,8 @@ def generate():
                                     "prSheetId": pr_sid,
                                     "quotationRef": _submit_data["reference_no"],
                                 },
-                                timeout=15, allow_redirects=False,
+                                timeout=15,
                             )
-                            if link_pr_resp.status_code in (301, 302, 303, 307, 308):
-                                redir3 = link_pr_resp.headers.get("Location")
-                                if redir3:
-                                    link_pr_resp = http_requests.get(redir3, timeout=15)
                             if link_pr_resp.status_code == 200:
                                 logger.info("linkPRToQuotation result: %s", link_pr_resp.text[:200])
                         except Exception as pr_err:
@@ -1485,6 +1462,7 @@ def generate():
 # Route: last_submission_info (for frontend to get sheetId/rowIndex after generate)
 # ---------------------------------------------------------------------------
 @quotation_bp.route("/last_submission_info", methods=["GET"])
+@require_session()
 def get_last_submission_info():
     """Return the sheetId/rowIndex/refNo from the most recent auto-submit during generate."""
     uk = _get_user_key()
@@ -1498,6 +1476,7 @@ def get_last_submission_info():
 # Route: check_approval_status
 # ---------------------------------------------------------------------------
 @quotation_bp.route("/check_approval_status", methods=["GET"])
+@require_session()
 def check_approval_status():
     """Proxy to Code.gs getQuotationApprovalStatus action."""
     sheet_id = request.args.get("sheetId", "")
@@ -1507,15 +1486,11 @@ def check_approval_status():
     if not DASHBOARD_APPS_SCRIPT_URL:
         return jsonify({"success": False, "message": "Dashboard Apps Script URL not configured"}), 500
     try:
-        resp = http_requests.get(
+        resp = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
             params={"action": "getQuotationApprovalStatus", "sheetId": sheet_id, "rowIndex": row_index},
-            timeout=15, allow_redirects=False,
+            timeout=15,
         )
-        if resp.status_code in (301, 302, 303, 307, 308):
-            redir = resp.headers.get("Location")
-            if redir:
-                resp = http_requests.get(redir, timeout=15)
         if resp.status_code == 200:
             return jsonify(resp.json())
         return jsonify({"success": False, "message": f"Status {resp.status_code}"}), 500
@@ -1528,6 +1503,7 @@ def check_approval_status():
 # Route: submit_to_sheets (FINALIZATION ONLY — quotation row already written during generate)
 # ---------------------------------------------------------------------------
 @quotation_bp.route("/submit_to_sheets", methods=["POST"])
+@require_session()
 def submit_to_sheets():
     """Finalize an approved quotation (writes 'Finalized' to Status col J)."""
     try:
@@ -1544,15 +1520,11 @@ def submit_to_sheets():
         if not DASHBOARD_APPS_SCRIPT_URL:
             return jsonify({"success": False, "message": "Dashboard Apps Script URL not configured"}), 500
 
-        resp = http_requests.get(
+        resp = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
             params={"action": "finalizeQuotation", "sheetId": sheet_id, "rowIndex": str(row_index)},
-            timeout=15, allow_redirects=False,
+            timeout=15,
         )
-        if resp.status_code in (301, 302, 303, 307, 308):
-            redir = resp.headers.get("Location")
-            if redir:
-                resp = http_requests.get(redir, timeout=15)
 
         if resp.status_code == 200:
             result = resp.json()
@@ -1569,6 +1541,7 @@ def submit_to_sheets():
 # Get Rejected Quotations (for revision workflow)
 # ---------------------------------------------------------------------------
 @quotation_bp.route("/get_rejected", methods=["GET"])
+@require_session()
 def get_rejected():
     """Fetch rejected quotations for the agent's sheet via Code.gs."""
     sheet_id = request.args.get("quotation_sheet_id", "")
@@ -1578,16 +1551,11 @@ def get_rejected():
         return jsonify({"success": False, "message": "Dashboard Apps Script URL not configured"}), 500
 
     try:
-        response = http_requests.get(
+        response = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
             params={"action": "getMyRejectedQuotations", "sheetId": sheet_id},
             timeout=15,
-            allow_redirects=False,
         )
-        if response.status_code in (301, 302, 303, 307, 308):
-            redirect_url = response.headers.get("Location")
-            if redirect_url:
-                response = http_requests.get(redirect_url, timeout=15)
 
         if response.status_code == 200:
             return jsonify(response.json())
@@ -1602,6 +1570,7 @@ def get_rejected():
 # Load Quotation (populate server-side items from saved JSON)
 # ---------------------------------------------------------------------------
 @quotation_bp.route("/load_quotation", methods=["POST"])
+@require_session()
 def load_quotation():
     """Load a quotation's items into server-side state for editing/regeneration."""
     import json as _json

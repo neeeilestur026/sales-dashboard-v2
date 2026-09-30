@@ -337,7 +337,7 @@ async function doMarkPaid() {
     const details = _recordToPdfDetails(r);
     const res = await fetch('/billing/mark-paid', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hxAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         rowIndex:  r.rowIndex,
         prNumber:  r.prNumber,
@@ -411,7 +411,7 @@ async function generateCashVoucher() {
   try {
     const res = await fetch('/billing/generate-cash-voucher', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hxAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         rowIndex:  r.rowIndex,
         prNumber:  r.prNumber,
@@ -453,7 +453,7 @@ function downloadSlip() {
   // Re-generate on demand
   fetch('/billing/download-payment-slip', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: hxAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       details: _recordToPdfDetails(_currentRecord),
       paidAt:  _currentRecord.paidAt  || '',

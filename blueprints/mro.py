@@ -16,10 +16,14 @@ from flask import (
     jsonify,
     current_app,
 )
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 
 from pdf_generators.mro_pdf import MRODocTemplate
 from pdf_generators.utils import sanitize_filename
+
+from flask import g
+from blueprints.session_auth import require_session
+from blueprints._upstream import gs_call, remember_user
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +48,10 @@ MRO_SHEET_ID = os.environ.get("MRO_SHEET_ID", "")
 # ---------------------------------------------------------------------------
 
 def _get_user_key():
-    return (request.headers.get('X-User-Key', '') or
-            request.args.get('user_key', '') or
-            (request.get_json(silent=True) or {}).get('user_key', '') or
-            request.form.get('user_key', '') or
-            'anonymous')
+    """The per-user state key is the validated login, never a value the browser chose (A299)."""
+    uk = g.session["username"]
+    remember_user(globals(), uk)
+    return uk
 
 
 def _items(uk): return _user_items.setdefault(uk, [])
@@ -84,12 +87,8 @@ def _upload_mro_pdf_to_drive(created_by: str, uk: str) -> str:
             "creatorName": created_by or "Unknown",
         }
         logger.info("_upload_mro_pdf_to_drive: POSTing %d bytes", len(pdf_b64))
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload,
-                                  timeout=60, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            redir = resp.headers.get("Location")
-            if redir:
-                resp = http_requests.get(redir, timeout=60)
+        resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=payload,
+                                  timeout=60)
         if resp.status_code == 200:
             result = resp.json()
             if result.get("success"):
@@ -130,17 +129,12 @@ def submit_to_google_sheet(vendor_name, po_date, po_number, purchase_order_no,
         payload = {"rows": rows, "inventory_sheet_id": INVENTORY_SHEET_ID, "mro_sheet_id": MRO_SHEET_ID}
 
         # Step 1: POST to exec URL -- Google runs doPost() here, then redirects
-        response = http_requests.post(
-            MRO_GOOGLE_APPS_SCRIPT_URL, json=payload, timeout=15,
-            allow_redirects=False
+        response = gs_call(
+            MRO_GOOGLE_APPS_SCRIPT_URL, json=payload, timeout=15
         )
 
         # Step 2: The redirect URL only accepts GET (it's an "echo" response page)
         # POST runs the script; GET the redirect URL just reads the response back
-        if response.status_code in (301, 302, 303, 307, 308):
-            redirect_url = response.headers.get("Location")
-            if redirect_url:
-                response = http_requests.get(redirect_url, timeout=15)
 
         if response.status_code == 200:
             raw = response.text[:200]
@@ -171,6 +165,7 @@ def index():
 
 
 @mro_bp.route("/add_item", methods=["POST"])
+@require_session()
 def add_item():
     """Add an item to the current MRO item list."""
     uk = _get_user_key()
@@ -211,6 +206,7 @@ def add_item():
 
 
 @mro_bp.route("/remove_item/<int:item_no>", methods=["POST"])
+@require_session()
 def remove_item(item_no):
     """Remove an item by its item number, then re-index."""
     uk = _get_user_key()
@@ -224,6 +220,7 @@ def remove_item(item_no):
 
 
 @mro_bp.route("/reset_items", methods=["POST"])
+@require_session()
 def reset_items():
     """Clear all items and the output log."""
     uk = _get_user_key()
@@ -234,6 +231,7 @@ def reset_items():
 
 
 @mro_bp.route("/generate", methods=["POST"])
+@require_session()
 def generate():
     """Generate a Materials Receiving Report PDF."""
     uk = _get_user_key()
@@ -344,6 +342,7 @@ def generate():
 
 
 @mro_bp.route("/submit_to_sheets", methods=["POST"])
+@require_session()
 def submit_to_sheets():
     """Submit the current MRO items to Google Sheets via Apps Script (async)."""
     uk = _get_user_key()
@@ -404,6 +403,7 @@ def submit_to_sheets():
 
 
 @mro_bp.route("/last_submission_info", methods=["GET"])
+@require_session()
 def last_submission_info():
     """Check status of last async sheet submission."""
     uk = _get_user_key()

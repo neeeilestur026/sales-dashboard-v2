@@ -1619,7 +1619,7 @@ async function qcRenderPreview() {
 
   try {
     const res = await fetch('/flow/quotation-pdf', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(qcPayload(withImages)),
       signal: qcAbort ? qcAbort.signal : undefined
     });
@@ -2023,7 +2023,7 @@ async function qcSavePdf(no) {
     });
   }
   const res = await fetch('/flow/quotation-pdf', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(payload)
   });
   if (!res.ok) throw new Error('The quotation saved, but the PDF could not be generated. Open it and use Generate PDF.');
   const blob = await res.blob();

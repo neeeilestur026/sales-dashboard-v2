@@ -32,7 +32,7 @@ async function doImport() {
   try {
     const fd = new FormData();
     fd.append('pdf', f);
-    const res = await fetch('/flow/import-quotation-pdf', { method: 'POST', body: fd });
+    const res = await fetch('/flow/import-quotation-pdf', { method: 'POST', headers: hxAuthHeaders(), body: fd });
     const d = await res.json();
     if (!d.success) throw new Error(d.message || 'Import failed.');
     fillForm(d);

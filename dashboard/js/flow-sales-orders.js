@@ -246,7 +246,7 @@ async function soAttachClientPo() {
     fd.append('receivedBy', soSession.name || '');
     fd.append('soNumber', soNo);
     fd.append('poNumber', soNo);          // in this system the SO No IS the client's PO number
-    const res = await fetch('/flow/stamp-po-received', { method: 'POST', body: fd });
+    const res = await fetch('/flow/stamp-po-received', { method: 'POST', headers: hxAuthHeaders(), body: fd });
     const out = await res.json().catch(() => ({ success: false, message: 'Server did not answer with JSON.' }));
     if (!out.success) throw new Error(out.message || 'The PO could not be stamped.');
 

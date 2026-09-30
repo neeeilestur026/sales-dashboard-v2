@@ -445,6 +445,12 @@ async function apiGetAgentDayActivity(agentName, date) {
 // These hit the Flask backend, NOT Apps Script. Flask validates the session
 // against Apps Script and decrypts stored credentials server-side.
 
+/** A299 — the header every Flask route now requires. Pass extra headers to merge. */
+function hxAuthHeaders(extra) {
+  const session = _getSessionForToken();
+  return Object.assign({ 'X-Session-Token': (session && session.token) || '' }, extra || {});
+}
+
 async function _flaskFetch(path, body) {
   const session = _getSessionForToken();
   const token = (session && session.token) || '';

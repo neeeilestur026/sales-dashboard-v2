@@ -7,7 +7,6 @@ import traceback
 from io import BytesIO
 from datetime import datetime
 
-import requests as http_requests
 from flask import (
     Blueprint,
     render_template,
@@ -16,10 +15,14 @@ from flask import (
     jsonify,
     current_app,
 )
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 
 from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.utils import sanitize_filename
+
+from flask import g
+from blueprints.session_auth import require_session
+from blueprints._upstream import gs_call, remember_user
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +42,10 @@ DASHBOARD_APPS_SCRIPT_URL = os.environ.get("DASHBOARD_APPS_SCRIPT_URL", "")
 
 
 def _get_user_key():
-    return (request.headers.get('X-User-Key', '') or
-            request.args.get('user_key', '') or
-            (request.get_json(silent=True) or {}).get('user_key', '') or
-            request.form.get('user_key', '') or
-            'anonymous')
+    """The per-user state key is the validated login, never a value the browser chose (A299)."""
+    uk = g.session["username"]
+    remember_user(globals(), uk)
+    return uk
 
 
 def _items(uk): return _user_items.setdefault(uk, [])
@@ -83,14 +85,8 @@ def _upload_po_pdf_to_drive(created_by: str, uk: str) -> str:
             "creatorName": created_by or "Unknown",
         }
         logger.info("_upload_po_pdf_to_drive: POSTing %d bytes to %s...", len(pdf_b64), DASHBOARD_APPS_SCRIPT_URL[:60])
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload, timeout=60)
+        resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=payload, timeout=60)
         logger.info("_upload_po_pdf_to_drive: Response status=%d", resp.status_code)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            redir = resp.headers.get("Location")
-            logger.info("_upload_po_pdf_to_drive: Redirecting (GET) to %s", redir[:80] if redir else "None")
-            if redir:
-                resp = http_requests.get(redir, timeout=60)
-                logger.info("_upload_po_pdf_to_drive: Redirect response status=%d", resp.status_code)
         if resp.status_code == 200:
             result = resp.json()
             logger.info("_upload_po_pdf_to_drive: result=%s", str(result)[:200])
@@ -116,6 +112,7 @@ def index():
 
 
 @po_bp.route("/add_item", methods=["POST"])
+@require_session()
 def add_item():
     """Add an item to the current PO item list."""
     uk = _get_user_key()
@@ -133,6 +130,7 @@ def add_item():
 
 
 @po_bp.route("/remove_item/<int:item_no>", methods=["POST"])
+@require_session()
 def remove_item(item_no):
     """Remove an item by its item number, then re-index."""
     uk = _get_user_key()
@@ -144,6 +142,7 @@ def remove_item(item_no):
 
 
 @po_bp.route("/reset_items", methods=["POST"])
+@require_session()
 def reset_items():
     """Clear all items and the output log."""
     uk = _get_user_key()
@@ -154,6 +153,7 @@ def reset_items():
 
 
 @po_bp.route("/generate", methods=["POST"])
+@require_session()
 def generate():
     """Generate a Purchase Order PDF."""
     uk = _get_user_key()
@@ -333,7 +333,7 @@ def generate():
                         # Retry up to 3 times — Apps Script can return transient 502/timeout
                         for attempt in range(3):
                             try:
-                                rec_resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=dashboard_payload, timeout=60)
+                                rec_resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=dashboard_payload, timeout=60)
                                 logger.info("PO auto-submit savePORecord attempt %d: status=%d, body=%s",
                                             attempt + 1, rec_resp.status_code, rec_resp.text[:200])
                                 if rec_resp.status_code == 200:
@@ -359,7 +359,7 @@ def generate():
 
                 if legacy_rows:
                     try:
-                        http_requests.post(PO_GOOGLE_APPS_SCRIPT_URL, json={"rows": legacy_rows}, timeout=30)
+                        gs_call(PO_GOOGLE_APPS_SCRIPT_URL, json={"rows": legacy_rows}, timeout=30)
                     except Exception as leg_err:
                         logger.warning("Legacy PO sheet submission failed: %s", leg_err)
 
@@ -401,6 +401,7 @@ def generate():
 
 
 @po_bp.route("/submit_to_sheets", methods=["POST"])
+@require_session()
 def submit_to_sheets():
     """Submit the current PO items to Google Sheets via Apps Script."""
     uk = _get_user_key()
@@ -438,7 +439,7 @@ def submit_to_sheets():
                     "total_cost": total_cost,
                 })
             try:
-                http_requests.post(PO_GOOGLE_APPS_SCRIPT_URL, json={"rows": rows}, timeout=30)
+                gs_call(PO_GOOGLE_APPS_SCRIPT_URL, json={"rows": rows}, timeout=30)
             except Exception as e:
                 logger.warning("Legacy PO sheet submission failed: %s", e)
 
@@ -460,11 +461,7 @@ def submit_to_sheets():
                 "creatorRole": creator_role,
             }
             try:
-                resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=dashboard_payload, timeout=30, allow_redirects=False)
-                if resp.status_code in (301, 302, 303, 307, 308):
-                    redir = resp.headers.get("Location")
-                    if redir:
-                        resp = http_requests.get(redir, timeout=30)
+                resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=dashboard_payload, timeout=30)
             except Exception as e:
                 logger.warning("Dashboard PO record save failed: %s", e)
 
@@ -478,6 +475,7 @@ def submit_to_sheets():
 
 
 @po_bp.route("/upload_brochure", methods=["POST"])
+@require_session()
 def upload_brochure():
     """Store brochure PDF bytes in memory for merging during generate."""
     uk = _get_user_key()
@@ -492,6 +490,7 @@ def upload_brochure():
 
 
 @po_bp.route("/last_submission_info", methods=["GET"])
+@require_session()
 def last_submission_info():
     """Check status of last async PO sheet submission."""
     uk = _get_user_key()

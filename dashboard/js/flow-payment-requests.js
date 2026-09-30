@@ -724,7 +724,7 @@ async function prGenPdf(no) {
       // A222: the peso estimate, printed under a foreign obligation and labelled as an estimate.
       amountPHPEst: r.amountPHPEst || '',
     };
-    const resp = await fetch('/flow/payment-request-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const resp = await fetch('/flow/payment-request-pdf', { method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(payload) });
     if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.message || 'PDF generation failed.'); }
     const blob = await resp.blob();
     window.open(URL.createObjectURL(blob), '_blank');

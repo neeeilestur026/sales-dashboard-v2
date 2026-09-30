@@ -26,6 +26,8 @@ services:
         sync: false
       - key: DASHBOARD_APPS_SCRIPT_URL
         sync: false
+      - key: FLOW_APPS_SCRIPT_URL
+        sync: false
       - key: PAYMENT_REQUEST_APPS_SCRIPT_URL
         sync: false
       - key: EMAIL_CRED_KEY

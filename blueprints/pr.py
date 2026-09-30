@@ -18,7 +18,7 @@ from flask import (
     jsonify,
     current_app,
 )
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
     Table,
@@ -33,6 +33,10 @@ from reportlab.lib.units import inch
 
 from pdf_generators.pr_pdf import PRDocTemplate
 from pdf_generators.utils import sanitize_filename
+
+from flask import g
+from blueprints.session_auth import require_session
+from blueprints._upstream import gs_call, remember_user
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +54,10 @@ DASHBOARD_APPS_SCRIPT_URL = os.environ.get("DASHBOARD_APPS_SCRIPT_URL", "")
 
 
 def _get_user_key():
-    return (request.headers.get('X-User-Key', '') or
-            request.args.get('user_key', '') or
-            (request.get_json(silent=True) or {}).get('user_key', '') or
-            request.form.get('user_key', '') or
-            'anonymous')
+    """The per-user state key is the validated login, never a value the browser chose (A299)."""
+    uk = g.session["username"]
+    remember_user(globals(), uk)
+    return uk
 
 
 def _items(uk): return _user_items.setdefault(uk, [])
@@ -102,18 +105,13 @@ def _submit_to_google_sheet(details: dict, items_list: list[dict], pr_sheet_id: 
             "rows": rows,
         }
         logger.info("_submit_to_google_sheet: POSTing %d rows to dashboard script for sheet %s", len(rows), pr_sheet_id[:20])
-        response = http_requests.post(
+        response = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
             json=payload,
             timeout=30,
-            allow_redirects=False,
         )
 
         # Google Apps Script typically redirects POST -> 302 -> GET
-        if response.status_code in (301, 302, 303, 307, 308):
-            redirect_url = response.headers.get("Location")
-            if redirect_url:
-                response = http_requests.get(redirect_url, timeout=30)
 
         if response.status_code == 200:
             raw = response.text[:200]
@@ -157,14 +155,8 @@ def _upload_pr_pdf_to_drive(created_by: str, uk: str) -> str:
             "creatorName": created_by or "Unknown",
         }
         logger.info("_upload_pr_pdf_to_drive: POSTing %d bytes to %s...", len(pdf_b64), DASHBOARD_APPS_SCRIPT_URL[:60])
-        resp = http_requests.post(DASHBOARD_APPS_SCRIPT_URL, json=payload, timeout=60)
+        resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=payload, timeout=60)
         logger.info("_upload_pr_pdf_to_drive: Response status=%d", resp.status_code)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            redir = resp.headers.get("Location")
-            logger.info("_upload_pr_pdf_to_drive: Redirecting (GET) to %s", redir[:80] if redir else "None")
-            if redir:
-                resp = http_requests.get(redir, timeout=60)
-                logger.info("_upload_pr_pdf_to_drive: Redirect response status=%d", resp.status_code)
         if resp.status_code == 200:
             result = resp.json()
             logger.info("_upload_pr_pdf_to_drive: result=%s", str(result)[:200])
@@ -215,6 +207,7 @@ def index():
 
 
 @pr_bp.route("/add_item", methods=["POST"])
+@require_session()
 def add_item():
     """Add an item to the current PR item list."""
     uk = _get_user_key()
@@ -255,6 +248,7 @@ def add_item():
 
 
 @pr_bp.route("/remove_item/<int:item_no>", methods=["POST"])
+@require_session()
 def remove_item(item_no):
     """Remove an item by its item number, then re-index."""
     uk = _get_user_key()
@@ -268,6 +262,7 @@ def remove_item(item_no):
 
 
 @pr_bp.route("/update_item/<int:item_no>", methods=["POST"])
+@require_session()
 def update_item(item_no):
     """Update an existing item in place. Returns the updated item list."""
     uk = _get_user_key()
@@ -302,6 +297,7 @@ def update_item(item_no):
 
 
 @pr_bp.route("/reset_items", methods=["POST"])
+@require_session()
 def reset_items():
     """Clear all items and the output log."""
     uk = _get_user_key()
@@ -312,6 +308,7 @@ def reset_items():
 
 
 @pr_bp.route("/generate", methods=["POST"])
+@require_session()
 def generate():
     """Generate a Purchase Request PDF."""
     uk = _get_user_key()
@@ -628,6 +625,7 @@ def generate():
 
 
 @pr_bp.route("/submit_to_sheets", methods=["POST"])
+@require_session()
 def submit_to_sheets():
     """Submit current PR items to Google Sheets via Apps Script."""
     uk = _get_user_key()
