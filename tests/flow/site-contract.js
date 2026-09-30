@@ -51,7 +51,9 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'marketing-daily-report.html',
   // A295 — reports, settings, the orphans
   'all-daily-reports.html', 'ap-aging-monthly.html', 'balance-sheet.html', 'client-tracker.html', 'commission-payout-report.html', 'commission-rates.html',
-  'director-banks.html', 'director-duties.html', 'director-payables.html', 'my-reports.html', 'pf-admin.html', 'report.html', 'team-performance.html'];
+  'director-banks.html', 'director-duties.html', 'director-payables.html', 'my-reports.html', 'pf-admin.html', 'report.html', 'team-performance.html',
+  // A297 — the accounting financial reports
+  'financial-reports.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

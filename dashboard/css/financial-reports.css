@@ -1,0 +1,82 @@
+/* financial-reports.css — A297 · the accounting financial reports, on the brand system.
+ *
+ * Linked by financial-reports.html after css/styles.css (tokens, both themes, the deck, glass,
+ * the segmented tabs, bounded tables, badges). This file is only what the page adds: the year
+ * picker in the mast, the chart hosts, the side-by-side blocks, the aging tiles and the small
+ * totals under a chart. Every rule hangs off body.fr. No keyframes of its own; nothing moves
+ * except the base's panel fade, which the reduced-motion block below switches off. */
+
+/* ── 1 · the slab and the rail ───────────────────────────────────────────────────────────────── */
+body.fr .hx-facts { grid-template-columns: 1fr; gap: 7px; }
+body.fr .hx-facts > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+body.fr .hx-facts dt { white-space: nowrap; }
+body.fr .hx-facts dd { font-size: 13.5px; margin: 0; }
+body.fr .hx-facts > div.wide { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--hx-slab-line); }
+body.fr .hx-slab .tag[data-tone="ok"] { background: rgba(0,174,239,.22); border-color: rgba(0,174,239,.5); }
+body.fr .hx-slab .tag[data-tone="bad"] { background: rgba(255,255,255,.18); }
+body.fr .hx-slab .v.is-neg { color: var(--hx-red-line); }
+
+/* ── 2 · the mast: the year picker and the refresh ───────────────────────────────────────────── */
+body.fr .hx-mast .hx-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+body.fr .fr-year-label { font: 600 12px/1.2 var(--hx-text); color: var(--hx-ink-2); }
+body.fr .fr-year { padding: 7px 12px; border-radius: var(--hx-r-pill); border: 1px solid var(--hx-hair); background: var(--hx-glass-solid); color: var(--hx-ink); font: 600 12.5px/1.2 var(--hx-text); min-width: 88px; }
+body.fr .fr-year:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
+body.fr .fr-undated { display: inline-block; margin-left: 6px; color: var(--hx-warn); font-weight: 600; }
+
+/* ── 3 · the blocks: side by side on a wide screen, stacked below ────────────────────────────── */
+body.fr .fr-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+body.fr .fr-ring { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; }
+body.fr .fr-ring .fr-chart { width: 240px; flex: 0 0 240px; padding: 0; }
+body.fr .fr-pair { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; margin-top: 14px; }
+body.fr .fr-block { min-width: 0; }
+body.fr .fr-block > .hx-head { margin-bottom: 8px; }
+body.fr .fr-block > .hx-seg { margin-bottom: 10px; }
+body.fr .fr-sub { margin-top: 16px; }
+body.fr #frNoDueWrap { margin-top: 14px; }
+
+/* ── 4 · the chart hosts ─────────────────────────────────────────────────────────────────────── */
+body.fr .fr-chart { position: relative; height: 260px; padding: 8px 4px 0; }
+body.fr .fr-chart-wide { height: 280px; margin-bottom: 12px; }
+body.fr .fr-chart-ring { height: 150px; }
+body.fr .fr-chart canvas { width: 100%; height: 100%; }
+body.fr .fr-chart.is-empty::after { content: attr(data-empty); position: absolute; inset: 0; display: grid; place-items: center; font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-3); }
+body.fr .fr-total { margin: 6px 0 0; padding: 0 4px; font: 400 12px/1.5 var(--hx-text); color: var(--hx-ink-3); display: flex; justify-content: space-between; gap: 12px; }
+body.fr .fr-total b { font: 700 13px/1.4 var(--hx-text); color: var(--hx-ink); font-variant-numeric: tabular-nums; }
+body.fr .fr-note { margin: 10px 0 0; font: 400 12px/1.5 var(--hx-text); color: var(--hx-ink-3); max-width: 72ch; }
+
+/* ── 5 · tables: totals, the sign colours, the small dims ────────────────────────────────────── */
+body.fr .hx-scroll { max-height: 52vh; }
+body.fr .fr-top.hx-scroll { max-height: 320px; }
+body.fr table { width: 100%; border-collapse: collapse; }
+body.fr tfoot td { font-weight: 700; color: var(--hx-ink); background: var(--hx-inset); border-top: 1px solid var(--hx-hair); font-variant-numeric: tabular-nums; }
+body.fr tfoot td.dim { font-weight: 500; color: var(--hx-ink-3); }
+body.fr td.dim { color: var(--hx-ink-3); }
+body.fr td.desc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.fr .fr-top td.desc { max-width: 170px; }
+body.fr .fr-cats { margin-top: 10px; }
+body.fr .fr-cats .hx-chip { cursor: default; }
+body.fr .fr-cats .hx-chip:hover { border-color: var(--hx-hair); color: var(--hx-ink-2); }
+
+/* ── 6 · the aging tiles ─────────────────────────────────────────────────────────────────────── */
+body.fr .fr-aging { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 4px; }
+body.fr .fr-tile { border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); background: var(--hx-glass-solid); padding: 12px 14px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+body.fr .fr-tile span { font: 500 11.5px/1.3 var(--hx-text); color: var(--hx-ink-3); }
+body.fr .fr-tile b { font: 800 18px/1.15 var(--hx-display); color: var(--hx-ink); letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.fr .fr-tile.is-late b { color: var(--hx-red); }
+
+/* ── 7 · narrow screens ──────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1199px) {
+  body.fr .fr-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  body.fr .fr-chart { height: 220px; }
+  body.fr .fr-chart-wide { height: 240px; }
+  body.fr .fr-aging { grid-template-columns: 1fr 1fr; }
+  body.fr .hx-seg { width: 100%; overflow-x: auto; }
+  body.fr .fr-ring { flex-direction: column; align-items: flex-start; }
+}
+
+/* ── 8 · motion off ──────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.fr .hx-panel.active { animation: none; }
+}

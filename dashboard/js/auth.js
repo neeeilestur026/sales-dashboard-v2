@@ -626,7 +626,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'accounting') {
     const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders';
-    const reportsActive = ['accounting-daily-report', 'payment-requests'].includes(activePage);
+    const reportsActive = ['accounting-daily-report', 'payment-requests', 'financial-reports'].includes(activePage);
     const acctMenuActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
       <a href="accounting-home.html" class="${activePage === 'accounting-home' ? 'active' : ''}">
@@ -676,6 +676,7 @@ function renderNavbar(activePage) {
           <a href="accounting-daily-report.html" class="${activePage === 'accounting-daily-report' ? 'active' : ''}">My Daily Report</a>
           <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">All Daily Reports</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
+          <a href="financial-reports.html" class="${activePage === 'financial-reports' ? 'active' : ''}">Financial Reports</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
           <a href="ap-aging-monthly.html" class="${activePage === 'ap-aging-monthly' ? 'active' : ''}">Monthly AP Aging</a>
           <a href="payment-requests.html" class="${activePage === 'payment-requests' ? 'active' : ''}">Payment Requests</a>

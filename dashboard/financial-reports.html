@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accounting — Financial Reports</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/financial-reports.css">
+</head>
+<body class="fr">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+
+  <!-- A297: a read-only page. Every figure derives from four reads (invoices, expenses, AR aging,
+       collections); the year picker and the refresh button are the only controls. -->
+  <main class="main-content hx-main">
+    <div class="hx-deck">
+
+      <!-- ══ THE RAIL ══════════════════════════════════════════════════════════════════════════ -->
+      <aside class="hx-rail" id="rail">
+        <div class="hx-rail-date">
+          <b id="hbDay">—</b><span id="hbMon">&nbsp;</span>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Dark theme">
+            <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <span>Dark</span>
+          </button>
+        </div>
+
+        <!-- The slab: the picked year's net, and the open receivables regardless of year -->
+        <section class="hx-slab" id="spot">
+          <div class="cap"><span class="l">Net for the year</span><span class="tag" id="frSlabYear">Loading…</span></div>
+          <div class="v" id="frSlabNet">—</div>
+          <div class="sub" id="frSlabSub">Gross profit less expenses</div>
+          <dl class="hx-facts">
+            <div><dt>Invoiced sales</dt><dd id="frSlabSales">—</dd></div>
+            <div><dt>Cost of goods</dt><dd id="frSlabCogs">—</dd></div>
+            <div><dt>Gross profit</dt><dd id="frSlabGp">—</dd></div>
+            <div><dt>Expenses</dt><dd id="frSlabExp">—</dd></div>
+            <div><dt>Collected</dt><dd id="frSlabCollected">—</dd></div>
+            <div><dt>Overdue</dt><dd id="frSlabOverdue">—</dd></div>
+            <div class="wide"><dt>Open receivables</dt><dd class="accent" id="frSlabOpenAr">—</dd></div>
+          </dl>
+        </section>
+
+        <nav class="hx-rail-nav" aria-label="On this page">
+          <a href="#expenses">Expenses</a>
+          <a href="#sales">Sales</a>
+          <a href="#cogs">Cost of goods</a>
+          <a href="#collections">Collections</a>
+          <a href="#receivables">Receivables</a>
+        </nav>
+      </aside>
+
+      <!-- ══ THE COLUMN ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="hx-col">
+        <header class="hx-mast">
+          <div>
+            <h1>Financial reports</h1>
+            <p>Invoiced sales, expenses, cost of goods and collections, from the process flow. Nothing here can be edited.
+              <span class="fr-undated" id="frUndated" style="display:none;"></span></p>
+          </div>
+          <div class="hx-actions">
+            <label class="fr-year-label" for="frYear">Year</label>
+            <select id="frYear" class="fr-year" aria-label="Report year"></select>
+            <button type="button" class="btn btn-sm" id="frRefresh">Refresh</button>
+          </div>
+        </header>
+
+        <!-- 1 · Expenses: the rolling day and week views, the picked year by month, the top spend -->
+        <section class="hx-glass" id="expenses">
+          <div class="hx-head"><h2>Expenses</h2><span class="hx-meta" id="frExpMeta">Loading…</span></div>
+          <div class="fr-split">
+            <div class="fr-block">
+              <div class="hx-seg" role="tablist">
+                <button type="button" class="hx-tab active" id="frExpTabDaily" role="tab" aria-selected="true">Last 30 days</button>
+                <button type="button" class="hx-tab" id="frExpTabWeekly" role="tab" aria-selected="false">Last 12 weeks</button>
+                <button type="button" class="hx-tab" id="frExpTabMonthly" role="tab" aria-selected="false">By month</button>
+              </div>
+              <div class="hx-panel active" id="frExpDaily">
+                <div class="fr-chart"><canvas id="frExpDailyChart"></canvas></div>
+                <p class="fr-total">Last 30 days <b id="frExpDailyTotal">—</b></p>
+              </div>
+              <div class="hx-panel" id="frExpWeekly">
+                <div class="fr-chart"><canvas id="frExpWeeklyChart"></canvas></div>
+                <p class="fr-total">Last 12 weeks, Monday to Sunday, the current week to date <b id="frExpWeeklyTotal">—</b></p>
+              </div>
+              <div class="hx-panel" id="frExpMonthly">
+                <div class="fr-chart"><canvas id="frExpMonthlyChart"></canvas></div>
+                <p class="fr-total">The year <b id="frExpMonthlyTotal">—</b></p>
+              </div>
+            </div>
+            <div class="fr-block">
+              <div class="hx-head"><h3>Top expenses</h3></div>
+              <div class="hx-seg" role="tablist">
+                <button type="button" class="hx-tab active" id="frTopTabDay" role="tab" aria-selected="true">Today</button>
+                <button type="button" class="hx-tab" id="frTopTabWeek" role="tab" aria-selected="false">This week</button>
+                <button type="button" class="hx-tab" id="frTopTabMonth" role="tab" aria-selected="false">This month</button>
+                <button type="button" class="hx-tab" id="frTopTabYear" role="tab" aria-selected="false">The year</button>
+              </div>
+              <div class="hx-scroll fr-top">
+                <table id="frTopTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+              </div>
+              <div class="hx-chips fr-cats" id="frTopCats"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2 · Sales: the picked year by month against the year before, then every year -->
+        <section class="hx-glass" id="sales">
+          <div class="hx-head"><h2>Sales by month</h2><span class="hx-meta" id="frSalesMeta">Loading…</span></div>
+          <div class="fr-chart fr-chart-wide"><canvas id="frSalesChart"></canvas></div>
+          <div class="hx-scroll">
+            <table id="frSalesTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+          </div>
+          <div class="hx-head fr-sub"><h3>Every year</h3><span class="hx-meta">Invoiced sales, cost of goods and expenses by year.</span></div>
+          <div class="hx-scroll">
+            <table id="frYearlyTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+          </div>
+        </section>
+
+        <!-- 3 · Cost of goods per sale: every invoice of the year -->
+        <section class="hx-glass" id="cogs">
+          <div class="hx-head"><h2>Cost of goods per sale</h2><span class="hx-meta" id="frCogsMeta">Loading…</span></div>
+          <div class="fr-ring">
+            <div class="fr-chart fr-chart-ring"><canvas id="frCogsChart"></canvas></div>
+            <p class="fr-note">Cost of goods against gross profit for the year, then every invoice with its own margin, newest first.</p>
+          </div>
+          <div class="hx-scroll">
+            <table id="frCogsTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+          </div>
+        </section>
+
+        <!-- 4 · Collections: invoiced against received, by the month the cash came in -->
+        <section class="hx-glass" id="collections">
+          <div class="hx-head"><h2>Sales against collected</h2><span class="hx-meta" id="frCollMeta">Loading…</span></div>
+          <div class="fr-chart fr-chart-wide"><canvas id="frCollChart"></canvas></div>
+          <div class="hx-scroll">
+            <table id="frCollTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+          </div>
+          <p class="fr-note">Collections are counted in the month they were received, not against the invoice they settle.</p>
+        </section>
+
+        <!-- 5 · Receivables: what is due soon and what is late, on every open invoice -->
+        <section class="hx-glass" id="receivables">
+          <div class="hx-head"><h2>Receivables due and overdue</h2><span class="hx-meta" id="frArMeta">Loading…</span></div>
+          <div class="fr-aging" id="frAging">
+            <div class="fr-tile"><span>Not yet due</span><b id="frAgeCur">—</b></div>
+            <div class="fr-tile"><span>1 to 30 days late</span><b id="frAge30">—</b></div>
+            <div class="fr-tile"><span>31 to 60 days late</span><b id="frAge60">—</b></div>
+            <div class="fr-tile is-late"><span>Over 60 days late</span><b id="frAge60p">—</b></div>
+          </div>
+          <div class="fr-pair">
+            <div class="fr-block">
+              <div class="hx-head"><h3>Due in the next 30 days</h3><span class="hx-meta" id="frDueMeta"></span></div>
+              <div class="hx-scroll">
+                <table id="frDueTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+              </div>
+            </div>
+            <div class="fr-block">
+              <div class="hx-head"><h3>Past due, not collected</h3><span class="hx-meta" id="frOverdueMeta"></span></div>
+              <div class="hx-scroll">
+                <table id="frOverdueTable"><tbody><tr><td class="hx-empty">Loading…</td></tr></tbody></table>
+              </div>
+            </div>
+          </div>
+          <div class="fr-block" id="frNoDueWrap" style="display:none;">
+            <div class="hx-head"><h3>Open with no due date</h3><span class="hx-meta">Counted as not yet due above. Set a payment term on the client to place them.</span></div>
+            <div class="hx-scroll">
+              <table id="frNoDueTable"><tbody></tbody></table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/financial-reports.js"></script>
+</body>
+</html>
