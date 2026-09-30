@@ -39,12 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function esc(str) { return hxEscBlank(str); }
 
-function platformBadge(platform) {
-  const cls = PLATFORM_CLASS[platform] || 'platform-website';
-  return '<span class="platform-badge ' + cls + '">' + esc(platform) + '</span>';
-}
-
-
 function resetForm() {
   document.getElementById('contentForm').reset();
   document.getElementById('editRowIndex').value = '';

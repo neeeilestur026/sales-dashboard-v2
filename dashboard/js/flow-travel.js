@@ -168,8 +168,6 @@ document.addEventListener('DOMContentLoaded', async () => {
    only what the page shows. */
 function tvRole() { return String((tvSession && tvSession.role) || '').toLowerCase(); }
 function tvIsApprover() { return ['accounting', 'director'].indexOf(tvRole()) >= 0; }
-function tvIsOversight() { return ['accounting', 'director', 'management', 'admin'].indexOf(tvRole()) >= 0; }
-
 function tvWeek() {
   return (typeof flowWeekDates === 'function') ? flowWeekDates(flowToday(), tvOffset) : [];
 }

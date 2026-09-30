@@ -354,4 +354,4 @@ function llRenderDT(soNo, r) {
     <div style="margin-top:.5rem;"><a href="flow-shipments.html" class="link-btn">Open in Shipment Monitoring to update stages →</a></div></div></div>`;
 }
 
-function llToggleSection() {}   // reserved
+   // reserved

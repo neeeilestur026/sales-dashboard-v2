@@ -1284,13 +1284,6 @@ async function pfXrefSearch() {
   pfRenderLog();
 }
 
-function pfQuoteFromXref(name) {
-  const item = document.getElementById('pfItem');
-  if (item) item.value = name;
-  pfTab('rfq', document.querySelector('#pfTabs .pf-tab[data-tab="rfq"]'));
-  if (item) item.focus();
-}
-
 /* ── Feature 5: calculators ── */
 function pfCalcTonnage() {
   const load = parseFloat((document.getElementById('pfCalcLoad') || {}).value) || 0;

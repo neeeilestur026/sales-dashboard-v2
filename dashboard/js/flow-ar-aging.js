@@ -111,8 +111,6 @@ async function loadAR() {
   } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
 
-// Migrated (legacy) AR records carry a Notes value starting with "Migrated (legacy)".
-function arIsMigrated(r) { return String(r.notes || '').trim().toLowerCase().indexOf('migrated (legacy)') === 0; }
 // Newest-created first; fall back to AR No (AR-YYYYMM-NNN) when Created At is missing/equal.
 function arNewestFirst(a, b) {
   const t = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);

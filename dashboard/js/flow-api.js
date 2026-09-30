@@ -1480,7 +1480,6 @@ function flowQuotationNetForOption(q, optionNo) {
     .reduce((s, it) => s + flowLineAmount(it), 0);
 }
 
-
 /** Upload ceiling for anything filed through addDocument. Lives here rather than in flow-docs.js
  *  so pages that upload without the docs modal (the client-visit photo) can honour the same limit. */
 const FLOW_DOC_MAX_MB = 10;
@@ -1588,12 +1587,6 @@ function flowFitScroll(ids, opts) {
 }
 
 /** Re-fit on resize for every page that asked for it. Registered once. */
-function flowFitScrollOn(ids, opts) {
-  const run = () => flowFitScroll(ids, opts);
-  window.addEventListener('resize', run);
-  return run;
-}
-
 /* A268 — the collapsible "New …" form that makes a locked list possible. Without it the list starts
    below the fold (receiving measured a top of 931px in a 900px window) and there is simply no height
    to give it. Generalised from flow-sales-orders.js, which did this first.

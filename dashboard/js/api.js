@@ -410,17 +410,6 @@ async function apiGetStats(agentName, sheetIds, range) {
  * @param {number} days - Number of days to look back
  * @returns {Promise<Object>} { data: [ { date, quotations, prs, pos } ] }
  */
-async function apiGetDailyTrend(agentName, sheetIds, days = 30) {
-  return fetchFromAPI({
-    action: 'getDailyTrend',
-    agentName,
-    quotationSheetId: sheetIds.quotationSheetId,
-    prSheetId: sheetIds.prSheetId,
-    poSheetId: sheetIds.poSheetId,
-    days
-  });
-}
-
 /**
  * Get client ranking by quotation count
  * @param {string} agentName
@@ -428,15 +417,6 @@ async function apiGetDailyTrend(agentName, sheetIds, days = 30) {
  * @param {string} range - 'week' | 'month' | 'all'
  * @returns {Promise<Object>} { data: [ { client, count } ] }
  */
-async function apiGetClientRanking(agentName, quotationSheetId, range = 'month') {
-  return fetchFromAPI({
-    action: 'getClientRanking',
-    agentName,
-    quotationSheetId,
-    range
-  });
-}
-
 /**
  * Get client tracker data (PRs + Quotations sent by agent)
  * @param {string} agentName
@@ -468,26 +448,9 @@ async function apiGetTodayCounts(agentName, quotationSheetId, prSheetId) {
 }
 
 /** Submit a daily sales report */
-async function apiSubmitDailyReport(params) {
-  return fetchFromAPI({ action: 'submitDailyReport', ...params });
-}
-
 /** Submit detailed (8-section) daily report. Tries new backend action first;
  *  falls back to legacy submitDailyReport on unknown-action errors or thrown
  *  network errors so the form keeps working until Apps Script is updated. */
-async function apiSubmitDetailedDailyReport(params) {
-  try {
-    const result = await fetchFromAPI({ action: 'submitDetailedDailyReport', ...params });
-    if (result && result.success) return result;
-    if (result && result.message && /unknown action|not.*found|invalid action/i.test(result.message)) {
-      return apiSubmitDailyReport(params);
-    }
-    return result;
-  } catch (err) {
-    return apiSubmitDailyReport(params);
-  }
-}
-
 /** Get daily reports for a given date (admin) */
 async function apiGetDailyReports(date) {
   return fetchFromAPI({ action: 'getDailyReports', date });
@@ -582,16 +545,6 @@ async function apiDisconnectEmail() {
   return _flaskFetch('/api/email/disconnect', {});
 }
 
-/** Submit an admin daily report */
-async function apiSubmitAdminDailyReport(params) {
-  return fetchFromAPI({ action: 'submitAdminDailyReport', ...params });
-}
-
-/** Get admin daily reports (optionally filter by date and/or adminName) */
-async function apiGetAdminDailyReports(params = {}) {
-  return fetchFromAPI({ action: 'getAdminDailyReports', ...params });
-}
-
 /** Change user password */
 async function apiChangePassword(username, currentPassword, newPassword) {
   return fetchFromAPI({ action: 'changePassword', username, currentPassword, newPassword });
@@ -646,12 +599,6 @@ async function apiGetOrders(status, client) {
   var params = { action: 'getOrders' };
   if (status) params.status = status;
   if (client) params.client = client;
-  return fetchFromAPI(params);
-}
-
-async function apiGetClientProfitReport(month) {
-  var params = { action: 'getClientProfitReport' };
-  if (month) params.month = month;
   return fetchFromAPI(params);
 }
 
@@ -774,38 +721,10 @@ async function apiDeleteSupplierQuotation(rowIndex) {
   return fetchFromAPI({ action: 'deleteSupplierQuotation', rowIndex: String(rowIndex) });
 }
 
-// ─── Payment Request APIs ─────────────────────────
-
-async function apiGetPaymentRequests() {
-  return fetchFromAPI({ action: 'getPaymentRequests' });
-}
-
-async function apiUpdatePaymentRequestStatus(rowIndex, status) {
-  return fetchFromAPI({ action: 'updatePaymentRequestStatus', rowIndex: String(rowIndex), status });
-}
-
 // ─── User Management APIs ─────────────────────────
 
 async function apiGetUsers() {
   return fetchFromAPI({ action: 'getUsers' });
-}
-
-async function apiAddUser(data) {
-  return fetchFromAPI({ action: 'addUser', ...data });
-}
-
-async function apiUpdateUser(data) {
-  return fetchFromAPI({ action: 'updateUser', ...data });
-}
-
-async function apiDeleteUser(rowIndex) {
-  return fetchFromAPI({ action: 'deleteUser', rowIndex: String(rowIndex) });
-}
-
-// ─── Inventory API ────────────────────────────────
-
-async function apiGetInventory() {
-  return fetchFromAPI({ action: 'getInventory' });
 }
 
 // ─── Collections (AR) API ─────────────────────────
@@ -826,18 +745,6 @@ async function apiDeleteCollection(rowIndex) {
   return fetchFromAPI({ action: 'deleteCollection', rowIndex: String(rowIndex) });
 }
 
-async function apiAddInventoryItem(data) {
-  return fetchFromAPI({ action: 'addInventoryItem', ...data });
-}
-
-async function apiUpdateInventoryItem(data) {
-  return fetchFromAPI({ action: 'updateInventoryItem', ...data });
-}
-
-async function apiDeleteInventoryItem(rowIndex) {
-  return fetchFromAPI({ action: 'deleteInventoryItem', rowIndex: String(rowIndex) });
-}
-
 // ─── PR Tracker & Quotation Approval APIs ────────
 
 async function apiGetAllPRs() {
@@ -852,16 +759,8 @@ async function apiApproveQuotation(data) {
   return fetchFromAPI({ action: 'approveQuotation', ...data });
 }
 
-async function apiUpdateQuotationDriveLink(data) {
-  return fetchFromAPI({ action: 'updateQuotationDriveLink', ...data });
-}
-
 async function apiUploadQuotationPDF(pdfBase64, fileName, agentName) {
   return postToAPI({ action: 'saveQuotationPDF', pdfBase64, fileName, agentName });
-}
-
-async function apiSaveDailyReportPDF(pdfBase64, fileName, agentName, reportDate) {
-  return postToAPI({ action: 'saveDailyReportPDF', pdfBase64, fileName, agentName, reportDate });
 }
 
 async function apiReviseQuotation(data) {
@@ -872,16 +771,8 @@ async function apiGetPendingItems(params) {
   return fetchFromAPI({ action: 'getPendingItems', ...params });
 }
 
-async function apiUpdatePRPricing(params) {
-  return fetchFromAPI({ action: 'updatePRPricing', ...params });
-}
-
 async function apiGetQuotationSummary(agentName) {
   return fetchFromAPI({ action: 'getQuotationSummary', agentName: agentName || '' });
-}
-
-async function apiGetQuotationApprovalStatus(sheetId, rowIndex) {
-  return fetchFromAPI({ action: 'getQuotationApprovalStatus', sheetId, rowIndex });
 }
 
 async function apiFinalizeQuotation(sheetId, rowIndex) {
@@ -925,10 +816,6 @@ async function apiGetSODocuments(soNo) {
   return fetchFromAPI({ action: 'getSODocuments', soNo }, { noCache: true });
 }
 
-// ─── PO Records (Admin POs awaiting management approval) ─────
-async function apiSavePORecord(p) {
-  return fetchFromAPI({ action: 'savePORecord', ...p }, { noCache: true });
-}
 async function apiGetPORecords(p = {}) {
   return fetchFromAPI({ action: 'getPORecords', ...p }, { noCache: true });
 }
@@ -938,16 +825,9 @@ async function apiApprovePO(p) {
 async function apiSendPOEmail(p) {
   return fetchFromAPI({ action: 'sendPOEmail', ...p }, { noCache: true });
 }
-async function apiSendAdminEmail(p) {
-  return fetchFromAPI({ action: 'sendAdminEmail', ...p }, { noCache: true });
-}
 async function apiSendAcctEmail(p) {
   return fetchFromAPI({ action: 'sendAcctEmail', ...p }, { noCache: true });
 }
-async function apiGetPOStats() {
-  return fetchFromAPI({ action: 'getPOStats' }, { noCache: true });
-}
-
 // ─── Pricing Submissions ────────────────────────
 async function apiSavePricingSubmission(p) {
   return fetchFromAPI({ action: 'savePricingSubmission', ...p }, { noCache: true });
@@ -1444,25 +1324,12 @@ function apiDecidePayrollApproval(rowIndex, decision, approvedBy, notes, pdfBase
   }, { noCache: true });
 }
 
-// ── Phase 1 additions: leaves / memos / financial drill / autofill ──
-async function apiGetMyLeaves(employee) {
-  return fetchFromAPI({ action: 'getMyLeaves', employee: employee || '' }, { noCache: true });
-}
-
 async function apiGetActiveMemosForUser(userName, role) {
   return fetchFromAPI({ action: 'getActiveMemosForUser', userName: userName || '', role: role || '' });
 }
 
 async function apiGetFinancialBreakdown(metric, range) {
   return fetchFromAPI({ action: 'getFinancialBreakdown', metric: metric, range: range || 'month' });
-}
-
-async function apiGetAdminDailyAutofill(userName, date) {
-  return fetchFromAPI({ action: 'getAdminDailyAutofill', userName: userName || '', date: date || '' }, { noCache: true });
-}
-
-async function apiGetAccountingDailyAutofill(userName, date) {
-  return fetchFromAPI({ action: 'getAccountingDailyAutofill', userName: userName || '', date: date || '' }, { noCache: true });
 }
 
 async function apiGetHrDailyAutofill(userName, date) {

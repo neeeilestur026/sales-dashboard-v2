@@ -16,8 +16,6 @@ let _sneSoNo = null;
 let _sneOnSaved = null;
 const SNE_MAX = 2000;   // a note, not a document — keeps the report table readable
 
-function _snee(s) { return hxEsc(s); }
-
 function _sneEl() {
   let el = document.getElementById('soNoteEditorModal');
   if (el) return el;

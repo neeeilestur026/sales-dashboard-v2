@@ -161,8 +161,6 @@ async function adrLoadAllEmails(seq) {
   }
 }
 
-function _isDoc(a) { return ['Created', 'Issued', 'Received', 'Added'].includes(a); }
-
 function render() {
   if (typeof flowRenderInjectCss === 'function') flowRenderInjectCss();
   const q = (document.getElementById('userSearch').value || '').trim().toLowerCase();

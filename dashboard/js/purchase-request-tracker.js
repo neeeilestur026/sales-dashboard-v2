@@ -304,8 +304,6 @@ function prtDots(r) {
  * phone. Without this the columns run off the side of the card and the reader cannot reach them —
  * the page itself does not scroll sideways, so there is no clue that anything was cut. Measured, not
  * assumed: the items table hit 1077px in a 317px column before it got the same wrapper. */
-function prtScroll(tableHtml) { return '<div style="overflow-x:auto;">' + tableHtml + '</div>'; }
-
 /* A228 — WHO MAY SEE A BUY PRICE. Verbatim the list flow-quotations.js:14 declares for A191:
    "accounting/management/director only — never admin, never sales". The tracker's main reader is the
    rep, and a supplier price sitting beside the selling price already on screen hands them the margin —

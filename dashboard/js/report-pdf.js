@@ -97,11 +97,6 @@ function flowReportPdf(opts) {
 }
 
 /** Same pipeline, but resolves to base64 — for archiving a report to Drive instead of downloading. */
-function flowReportPdfBase64(opts) {
-  return _flowPdfRun(opts, worker => worker.outputPdf('datauristring')
-    .then(uri => String(uri).substring(String(uri).indexOf('base64,') + 7)));
-}
-
 /* ── Shared document CSS (inline: an iframe document inherits nothing) ────── */
 const FLOW_PDF_CSS = `
   *{box-sizing:border-box;}

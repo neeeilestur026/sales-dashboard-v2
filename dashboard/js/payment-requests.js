@@ -194,14 +194,12 @@ async function markPRPaid(rowIndex, payeeName) {
   if (!bankAccountCode) return;
   try {
     var paidBy = prSession ? (prSession.name || prSession.fullName || prSession.role || '') : '';
-    console.log('[markPRPaid] calling markBillPaid', { rowIndex, paidBy, bankAccountCode });
     const result = await fetchFromAPI({
       action: 'markBillPaid',
       rowIndex: String(rowIndex),
       paidBy: paidBy,
       bankAccountCode: bankAccountCode
     });
-    console.log('[markPRPaid] response', result);
     if (!result || !result.success) {
       throw new Error((result && result.message) || 'Server did not return success');
     }

@@ -89,13 +89,6 @@ async function loadInventory() {
   catch (e) { qInventory = []; }
 }
 
-// Read a discount-% input, clamped to 0–100 (blank/invalid → 0).
-function qDiscountVal(id) {
-  const el = document.getElementById(id);
-  const n = flowNum(el && el.value);
-  return Math.max(0, Math.min(100, n || 0));
-}
-
 /** Overwrite (or insert) the qList entry with the values we KNOW were just saved. The refetch after
  *  a write can serve the pre-save record (Sheets read-after-write staleness), and that stale response
  *  is cached for 60s — so the saved values are authoritative here (same class of fix as the A80
@@ -691,12 +684,6 @@ async function _qAction(action, no, extra) {
 function submitQuotationAction(no) {
   if (!confirm('Submit quotation ' + no + ' for approval?')) return;
   _qAction('submitQuotationApproval', no);
-}
-function approveQuotationAction(no) { _qAction('approveQuotation', no); }
-function rejectQuotationAction(no) {
-  const reason = prompt('Reason for rejecting ' + no + ' (optional):', '');
-  if (reason === null) return;
-  _qAction('rejectQuotation', no, { reason });
 }
 function sendQuotationAction(no) {
   if (!confirm('Mark quotation ' + no + ' as sent to the client?')) return;

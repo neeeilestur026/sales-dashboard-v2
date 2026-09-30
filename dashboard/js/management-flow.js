@@ -419,8 +419,6 @@ let mfDrEmails = {}, mfDrRosterError = '', mfDrEmailsLoading = false, mfDrEmailS
 const MF_MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 function _mfModClass(m) { return 'mod-' + String(m || '').replace(/\s+/g, ''); }
 function _mfTime(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
-function _mfIsDoc(a) { return ['Created', 'Issued', 'Received', 'Added'].includes(a); }
-
 async function mfLoadDailyReports() {
   const date = document.getElementById('mgmtDrDate').value;
   const meta = document.getElementById('mgmtDrMeta');
@@ -627,7 +625,6 @@ function mfLoadTeamWeek() {
     chartIdPrefix: 'mfTwChart_',        // unchanged canvas ids — nothing else on the page shifts
   });
 }
-
 
 /* A190 — read the plan before approving it. Approving a week of visits sight-unseen is the same
    failure the A183 pricing review was built to stop. */
