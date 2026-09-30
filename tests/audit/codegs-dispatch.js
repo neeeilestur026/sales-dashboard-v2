@@ -29,11 +29,17 @@ const cases = (src) => Array.from(new Set((src.match(/case '([A-Za-z_]\w*)':/g) 
 const GET = cases(body('doGet')), POST = cases(body('doPost'));
 const both = GET.filter(a => POST.includes(a));
 const postOnly = POST.filter(a => !GET.includes(a));
-const noCache = new Set((API.match(/const NO_CACHE_ACTIONS = (?:new Set\()?\[([\s\S]*?)\]/) || ['', ''])[1].match(/'([^']+)'/g)?.map(s => s.slice(1, -1)) || []);
+/* A308: EVALUATE the literal rather than scraping quoted names out of it — a '//' comment dropped inside the
+   line (A307) hid every name after it from the browser while the scrape still counted them. */
+const vm = require('vm');
+const noCacheSrc = (API.match(/const NO_CACHE_ACTIONS = [\s\S]*?\];/) || [''])[0].replace('const ', 'var ');
+const noCacheCtx = {}; vm.createContext(noCacheCtx); vm.runInContext(noCacheSrc, noCacheCtx);
+const noCache = new Set(noCacheCtx.NO_CACHE_ACTIONS || []);
 const MUTATING = /^(add|create|save|submit|update|set|delete|remove|mark|approve|reject|reset|change|archive|backfill|migrate|decide|link|finalize|revise|send|log|clear|disconnect|record|assign|upload|import|reopen|close|void|adjust|register|dismiss|toggle|move|cancel|issue|release|apply)/i;
 
 console.log(`doGet: ${GET.length} cases · doPost: ${POST.length} cases · in both: ${both.length} · doPost only: ${postOnly.length} · NO_CACHE_ACTIONS: ${noCache.size}`);
 ok('the two switches were found and parsed', GET.length > 50 && POST.length > 50);
+ok('NO_CACHE_ACTIONS evaluates to the full list (more than 100 names)', noCache.size > 100, noCache.size);
 /* Only what the BROWSER sends matters here: api.js chooses GET or POST by NO_CACHE_ACTIONS alone.
    Flask's own calls to Code.gs always POST (blueprints/_upstream.py). */
 const browser = new Set((API.match(/action:\s*'([A-Za-z_]\w*)'/g) || []).map(s => s.match(/'([^']+)'/)[1]));

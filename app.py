@@ -25,7 +25,7 @@ _CSP = ("default-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
         "font-src 'self' data:; "
         "img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; "
-        "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://docs.google.com; "
+        "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://docs.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "frame-src 'self' https://drive.google.com https://docs.google.com; "
         "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'")
 
