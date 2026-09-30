@@ -36,8 +36,12 @@ build/
 .claude-*-backup-*/
 .last-*-backup
 AR AGING.xlsx
-dashboard-bak-a129/
-dashboard-bak-a130/
-dashboard-bak-a131/
-dashboard-bak-a132/
+dashboard-bak-*/
 webapp/
+apps-script/Untitled-*.js
+tools_so_chain_audit.py
+
+# Scratch documents at the root (design sources, samples) — never tracked; data/*.xlsx are inputs
+*.pdf
+*.xlsx
+!data/*.xlsx

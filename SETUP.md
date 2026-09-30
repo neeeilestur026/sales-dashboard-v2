@@ -6,8 +6,8 @@ removed so this copy points at nothing until you wire up its own backend.
 
 ## What this app is
 - **Flask** (`app.py`) serves the `dashboard/` folder as static pages and
-  registers 8 blueprints (`po, pr, mro, mi, quotation, payment_request,
-  billing, email_log`) for PDF generation, email, and Apps Script proxying.
+  registers 9 blueprints (`po, pr, mro, mi, quotation, payment_request,
+  billing, email_log, flow`) for PDF generation, email, and Apps Script proxying.
 - **Frontend** lives entirely in `dashboard/` (HTML + `js/` + `css/` + `images/`).
   The real database is **Google Sheets**, reached via **Google Apps Script**.
 
