@@ -27,7 +27,7 @@ ok "  it carries an ETag" "$([ -n "$ETAG" ] && echo 1 || echo 0)"
 CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 -H "Accept-Encoding: br, gzip" -H "If-None-Match: $ETAG" "$BASE/js/api.js")
 ok "  and If-None-Match yields 304" "$([ "$CODE" = 304 ] && echo 1 || echo 0)" "$CODE"
 
-I=$(hdr images/logo-nav.png)
+I=$(hdr images/logo-nav-2x.png)
 ok "images: public, max-age=2592000" "$(echo "$I" | grep -ic '^cache-control: public, max-age=2592000')" "$(echo "$I" | grep -i '^cache-control')"
 
 echo; echo "$n checks, $fail failed"; exit $((fail > 0))

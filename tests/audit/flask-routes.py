@@ -74,7 +74,7 @@ r = c.get("/index.html")
 ok("the login page is open", r.status_code == 200, r.status_code)
 ok("  and answers HEAD (uptime probes, curl -I)", c.head("/index.html").status_code == 200)
 ok("  and carries HSTS and the report-only CSP",
-   r.headers.get("Strict-Transport-Security", "").startswith("max-age=") and "default-src 'self'" in r.headers.get("Content-Security-Policy-Report-Only", ""),
+   r.headers.get("Strict-Transport-Security", "").startswith("max-age=") and "default-src 'self'" in (r.headers.get("Content-Security-Policy") or r.headers.get("Content-Security-Policy-Report-Only") or ""),
    dict(r.headers))
 r = c.post("/api/session/logout", headers={"X-Session-Token": "good"})
 ok("logout answers 200", r.status_code == 200, r.status_code)

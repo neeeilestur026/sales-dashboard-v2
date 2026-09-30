@@ -31,7 +31,7 @@ function _flowCacheGet(key) {
     const raw = sessionStorage.getItem(_FLOW_CACHE_PREFIX + key);
     if (!raw) return null;
     const obj = JSON.parse(raw);
-    if (!obj || (Date.now() - obj.t) > _FLOW_CACHE_TTL) return null;
+    if (!obj || (Date.now() - obj.t) > _FLOW_CACHE_TTL) { sessionStorage.removeItem(_FLOW_CACHE_PREFIX + key); return null; }   // A304: expired → gone
     return obj.data;
   } catch (e) { return null; }
 }

@@ -290,7 +290,7 @@ async function voidInvoiceAction(invNo) {
 }
 
 // A268 — keep the locked list sized when the window changes.
-window.addEventListener('resize', () => flowFitScroll('listContainer'));
+window.addEventListener('resize', hxRaf(() => flowFitScroll('listContainer')));   // A304: one measure per frame
 
 /* ── A278 · repairing receivables raised before output VAT ───────────────────────────────────────
    Preview first, always. The server IMPUTES the rate — those invoices never recorded one — so the

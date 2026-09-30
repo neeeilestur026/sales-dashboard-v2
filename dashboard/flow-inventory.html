@@ -66,7 +66,7 @@
 
     <div class="chart-card">
       <div class="flow-actions" style="justify-content:space-between;">
-        <input type="text" id="search" placeholder="Search item no. or description..." oninput="render()" style="flex:1;min-width:200px;padding:0.5rem 0.7rem;border-radius: 8px;border: 1px solid var(--border);background: var(--surface-2);color: var(--text-primary);">
+        <input type="text" id="search" placeholder="Search item no. or description..." oninput="renderDebounced()" style="flex:1;min-width:200px;padding:0.5rem 0.7rem;border-radius: 8px;border: 1px solid var(--border);background: var(--surface-2);color: var(--text-primary);">
         <button class="btn btn-sm btn-secondary" id="dupBtn" onclick="findDuplicates()" style="display:none;">Find duplicates</button>
         <button class="btn btn-sm btn-secondary" onclick="loadInventory()">Refresh</button>
       </div>

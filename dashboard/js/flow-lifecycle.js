@@ -355,3 +355,6 @@ function llRenderDT(soNo, r) {
 }
 
    // reserved
+
+// A304 — the search box re-rendered the whole list on every keystroke; now once the typing pauses.
+const llApplyFiltersDebounced = (typeof hxDebounce === 'function') ? hxDebounce(llApplyFilters, 150) : llApplyFilters;

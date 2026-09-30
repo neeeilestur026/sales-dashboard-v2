@@ -250,4 +250,4 @@ async function loadReceiving() {
 }
 
 // A268 — keep the locked list sized when the window changes.
-window.addEventListener('resize', () => flowFitScroll('listContainer'));
+window.addEventListener('resize', hxRaf(() => flowFitScroll('listContainer')));   // A304: one measure per frame

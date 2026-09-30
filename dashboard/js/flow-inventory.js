@@ -61,8 +61,15 @@ async function loadInventory() {
 
 function invIsOrdered(r) { return invOrderedSet.has(String(r.itemNo).toLowerCase()); }
 
+/* A304 — the Catalog alone holds ~900 rows; painting all of them on every keystroke was the jank.
+   Each group shows 200 and offers the next 200 on request; a new search starts over. */
+const _INV_PAGE = 200;
+let invLimits = {}, invLastQ = null;
+function invMore(key) { invLimits[key] = (invLimits[key] || _INV_PAGE) + _INV_PAGE; render(); }
+
 function render() {
   const q = (document.getElementById('search').value || '').toLowerCase();
+  if (q !== invLastQ) { invLimits = {}; invLastQ = q; }
   const rows = invData.filter(r => !q || String(r.itemNo).toLowerCase().includes(q) || String(r.description).toLowerCase().includes(q));
   const c = document.getElementById('container');
   const fit = () => setTimeout(() => flowFitScroll('container'), 0);   // A273
@@ -83,7 +90,10 @@ function render() {
   const listCols = `<colgroup><col class="c-item"><col>${actCol}</colgroup>`;
   const listHead = `<th>Item No</th><th>Description</th>${actTh}`;
 
-  const group = (label, list, sub, kind) => `
+  const group = (label, list, sub, kind, key) => {
+    const lim = invLimits[key] || _INV_PAGE, shown = list.slice(0, lim);
+    const more = list.length > shown.length ? `<p class="inv-page-more"><button type="button" class="btn btn-sm" onclick="invMore('${key}')">Show ${Math.min(_INV_PAGE, list.length - shown.length)} more of ${list.length}</button></p>` : '';
+    return `
     <div style="font-size:0.9rem;font-weight:700;margin:0 0 0.5rem;display:flex;align-items:center;gap:0.5rem;">
       ${label}
       <span style="font-weight:600;font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;background:var(--hx-inset);color:var(--hx-ink-2);">${list.length}</span>
@@ -95,8 +105,9 @@ function render() {
          height limit it never scrolls, so the header stops pinning. #container already scrolls. */
       ? `<table class="flow-table inv-table">${kind === 'stock' ? stockCols : listCols}
            <thead><tr>${kind === 'stock' ? stockHead : listHead}</tr></thead>
-           <tbody>${list.map(kind === 'stock' ? invStockRow : invListRow).join('')}</tbody></table>`
+           <tbody>${shown.map(kind === 'stock' ? invStockRow : invListRow).join('')}</tbody></table>${more}`
       : '<p style="color:var(--hx-ink-3);font-size:0.85rem;margin:0 0 0.5rem;">None.</p>'}`;
+  };
   const typed = rows.some(r => r.type === 'Stock' || r.type === 'Catalog');
   if (typed) {
     // Authoritative split: Stocks (real inventory — migrated old-system stocks, received goods,
@@ -105,17 +116,17 @@ function render() {
     const catalog = rows.filter(r => r.type !== 'Stock');
     const units = stock.reduce((s, r) => s + flowNum(r.balance), 0);
     c.innerHTML =
-      group('Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`, invSlim ? 'list' : 'stock') +
+      group('Stocks — on hand / purchased', stock, `${units.toLocaleString()} unit(s) on hand`, invSlim ? 'list' : 'stock', 'stock') +
       `<div style="height:1.1rem;"></div>` +
-      group('Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order', 'list');
+      group('Quotation Catalog — not yet purchased', catalog, 'items added while quoting; moved to Stocks once they reach a purchase order', 'list', 'catalog');
   } else {
     // Pre-classification fallback (backend not yet on v79): keep the ordered/not-ordered split.
     const notOrdered = rows.filter(r => !invIsOrdered(r));
     const ordered = rows.filter(invIsOrdered);
     c.innerHTML =
-      group('Not yet ordered', notOrdered, '', 'list') +
+      group('Not yet ordered', notOrdered, '', 'list', 'notOrdered') +
       `<div style="height:1.1rem;"></div>` +
-      group('Ordered · has a purchase order', ordered, '', invSlim ? 'list' : 'stock');
+      group('Ordered · has a purchase order', ordered, '', invSlim ? 'list' : 'stock', 'ordered');
   }
   fit();          // A273 — both branches above land here
 }
@@ -304,7 +315,7 @@ async function findDuplicates() {
 }
 
 // A273 — keep the locked list sized when the window changes.
-window.addEventListener('resize', () => flowFitScroll('container'));
+window.addEventListener('resize', hxRaf(() => flowFitScroll('container')));   // A304: one measure per frame
 
 /* A274 — expand a clamped description. Delegated so the markup stays clean across ~1,000 rows. */
 document.addEventListener('click', function (e) {
@@ -316,3 +327,6 @@ document.addEventListener('click', function (e) {
   d.classList.toggle('open');
   flowFitScroll('container');        // the row just changed height
 });
+
+// A304 — the search box re-rendered the whole list on every keystroke; now once the typing pauses.
+const renderDebounced = (typeof hxDebounce === 'function') ? hxDebounce(render, 150) : render;

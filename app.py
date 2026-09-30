@@ -22,8 +22,8 @@ except Exception:                       # Pillow is a hard dependency, but never
 
 _CSP = ("default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self' data:; "
         "img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; "
         "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://docs.google.com; "
         "frame-src 'self' https://drive.google.com https://docs.google.com; "
@@ -98,12 +98,12 @@ def create_app():
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         response.headers.pop('Server', None)
-        # A299 — HSTS ramps 300 s → 1 day (A300, now) → 1 year (A304) so a misstep is cheap to undo.
-        response.headers['Strict-Transport-Security'] = 'max-age=86400'
-        # A299 — report-only for one release; the harness console must show no violations before
-        # A304 makes it enforcing. 'unsafe-inline' stays until A305 moves the inline blocks out.
+        # A299/A300/A304 — HSTS ramped 300 s → 1 day → 1 year once each step held on Render.
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # A304 — enforcing (report-only from A299 showed no violations on every home, a PDF export
+        # and a Drive preview). 'unsafe-inline' stays until A305 moves the inline blocks out.
         if (response.content_type or "").startswith("text/html"):
-            response.headers['Content-Security-Policy-Report-Only'] = _CSP
+            response.headers['Content-Security-Policy'] = _CSP
 
         # ── Cache policy (A300). Pages are hand-edited and served as they are, with no version in
         # their URLs, so scripts, sheets and pages are cached but always revalidated: the browser

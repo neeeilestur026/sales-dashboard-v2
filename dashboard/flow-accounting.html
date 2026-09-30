@@ -51,7 +51,7 @@
 
     <div class="chart-card">
       <div class="flow-actions" style="justify-content:space-between;">
-        <input type="text" id="search" placeholder="Search SO no., customer, quotation, PO..." oninput="render()" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;border-radius: 8px;border: 1px solid var(--border);background: var(--surface-2);color: var(--text-primary);">
+        <input type="text" id="search" placeholder="Search SO no., customer, quotation, PO..." oninput="renderDebounced()" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;border-radius: 8px;border: 1px solid var(--border);background: var(--surface-2);color: var(--text-primary);">
         <button class="btn btn-sm btn-secondary" onclick="loadAll()">Refresh</button>
       </div>
       <div id="container"><div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div></div>

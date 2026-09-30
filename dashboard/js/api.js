@@ -57,6 +57,16 @@ function hxSmBadge(status) {
                 booked: 'sbadge-booked', 'in transit': 'sbadge-intransit', 'customs clearance': 'sbadge-customs', arrived: 'sbadge-arrived', delivered: 'sbadge-delivered', cancelled: 'sbadge-rejected' }[k] || 'sbadge-default';
   return '<span class="sbadge ' + cls + '">' + hxEsc(status || '—') + '</span>';
 }
+/* Both read caches (api_ and flowCache: keys in sessionStorage): called on logout and on the login
+   page, so the next person to sign in on this tab never sees the last one's rows. */
+function hxClearCaches() {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && (k.startsWith('api_') || k.startsWith('flowCache:'))) sessionStorage.removeItem(k);
+    }
+  } catch (e) {}
+}
 /* ─── end hx-util ─────────────────────────────────────────────────────────────────────────── */
 
 // ─── API Cache (sessionStorage, 5-min TTL) ────────

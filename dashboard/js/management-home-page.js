@@ -315,10 +315,14 @@
     }
     function scan() { document.querySelectorAll('.kpi-card').forEach(wire); }
     scan();
-    if (typeof MutationObserver === 'function' && document.body) { var mo = new MutationObserver(scan); mo.observe(document.body, { childList: true, subtree: true }); }
+    // A304 — the whole body mutates constantly while sections fill; one scan per burst is plenty.
+    var scanSoon = (typeof hxDebounce === 'function') ? hxDebounce(scan, 100) : scan;
+    if (typeof MutationObserver === 'function' && document.body) { var mo = new MutationObserver(scanSoon); mo.observe(document.body, { childList: true, subtree: true }); }
     ready(function () {
       later(captureSnapshot, 5000);
-      if (typeof setInterval === 'function') setInterval(captureSnapshot, 60000);
+      // A304 — a hidden tab captures nothing; one capture when it comes back.
+      if (typeof setInterval === 'function') setInterval(function () { if (!document.hidden) captureSnapshot(); }, 60000);
+      on(document, 'visibilitychange', function () { if (!document.hidden) captureSnapshot(); });
     });
   })();
 

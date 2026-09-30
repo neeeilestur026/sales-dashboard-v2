@@ -68,6 +68,7 @@
          branch, so a marketing user reopening the tab landed on the sales dashboard and was
          bounced. The fresh-login path below already used the real one. */
       if (session) window.location.href = _homeForRole(session.role);
+      else if (typeof hxClearCaches === 'function') hxClearCaches();   // A304: no stale rows for the next sign-in
     })();
 
     async function handleLogin(e) {

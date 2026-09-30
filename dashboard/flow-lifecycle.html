@@ -100,7 +100,7 @@
 
     <div class="chart-card">
       <div class="ll-filters" style="margin-bottom:0.7rem;">
-        <input type="text" id="llSearch" placeholder="Search SO no., customer, quotation, PO…" oninput="llApplyFilters()" style="flex:1;min-width:200px;">
+        <input type="text" id="llSearch" placeholder="Search SO no., customer, quotation, PO…" oninput="llApplyFiltersDebounced()" style="flex:1;min-width:200px;">
         <select id="llYear" onchange="llApplyFilters()"><option value="">All years</option></select>
         <select id="llStatus" onchange="llApplyFilters()">
           <option value="">All statuses</option><option>Open</option><option>Closed</option><option>Delivered</option><option>Pending</option>

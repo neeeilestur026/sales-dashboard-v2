@@ -208,3 +208,6 @@ function toggleSO(soNo) {
   const el = document.getElementById('so-' + soNo);
   if (el) el.classList.toggle('open');
 }
+
+// A304 — the search box re-rendered the whole list on every keystroke; now once the typing pauses.
+const renderDebounced = (typeof hxDebounce === 'function') ? hxDebounce(render, 150) : render;

@@ -471,6 +471,7 @@ function logout() {
       }
     }
   } catch {}
+  if (typeof hxClearCaches === 'function') hxClearCaches();   // A304: the next sign-in on this tab starts clean
   localStorage.removeItem(SESSION_KEY);
   window.location.href = 'index.html';
 }
@@ -1524,6 +1525,16 @@ function _flowActionIconSvg(icon) {
 }
 
 // A146: the home-page "What needs you" strip. Include auth.js (already global) + call this after load.
+/* A304 — the bell and the home strip both need the action list, and on every home page both asked
+   within a second of each other: the cached reads deduplicated, the secured POSTs did not. One
+   promise per page load; a later caller with a different session (never, in practice) recomputes. */
+let _faOnce = null, _faOnceKey = '';
+function flowComputeActionsOnce(session) {
+  const key = String((session && (session.username || session.name)) || '');
+  if (!_faOnce || _faOnceKey !== key) { _faOnceKey = key; _faOnce = flowComputeActions(session).catch(() => []); }
+  return _faOnce;
+}
+
 async function flowActionsStrip(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
@@ -1531,7 +1542,7 @@ async function flowActionsStrip(containerId) {
   if (!session) { el.style.display = 'none'; return; }
   el.innerHTML = '<div class="fa-loading">Loading your action items…</div>';
   let items = [];
-  try { items = await flowComputeActions(session); } catch (e) { items = []; }
+  try { items = await flowComputeActionsOnce(session); } catch (e) { items = []; }
   if (!items.length) {
     el.innerHTML = '<div class="fa-empty">You\'re all caught up — nothing needs your action right now.</div>';
     return;
@@ -1551,7 +1562,7 @@ async function loadNotifications() {
   // Rebuilt on FlowAPI (the old production Code.gs GET bell 404'd for every role). Pages without
   // flow-api.js show "No notifications" — no failing network calls. Shared with the home strip.
   let notifications = [];
-  try { notifications = await flowComputeActions(session); } catch (e) { notifications = []; }
+  try { notifications = await flowComputeActionsOnce(session); } catch (e) { notifications = []; }
 
   // Update badge
   const badge = document.getElementById('notifBadge');

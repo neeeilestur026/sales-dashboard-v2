@@ -162,4 +162,4 @@ async function voidCollectionAction(collectionNo) {
 }
 
 // A268 — keep the locked list sized when the window changes.
-window.addEventListener('resize', () => flowFitScroll(['arContainer', 'container'], { share: 0.4 }));
+window.addEventListener('resize', hxRaf(() => flowFitScroll(['arContainer', 'container'], { share: 0.4 })));   // A304: one measure per frame
