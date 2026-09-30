@@ -42,7 +42,7 @@ Pushing `main` deploys to https://hi-escorp-portal-wufz.onrender.com automatical
 
 1. Never commit a sheet id or secret. The local `apps-script/Code.gs` line 44 carries the users
    sheet id; the committed copy has an empty string. Before every commit:
-   `git diff --cached | grep -c 1CsqW9` must print `0`.
+   `git diff --cached apps-script/Code.gs | grep -c USERS_SHEET_ID` must print `0`.
 2. Paste protocol: run the tests, paste the file into the editor, Save, then Deploy → Manage
    deployments → Edit → New version on the **existing** deployment (the `/exec` URLs in
    `js/api.js` and `js/flow-api.js` never change). Smoke: `getCodeVersion` / `getVersion`, a

@@ -11,7 +11,7 @@
   FlowAPI `HANDLERS`, and the secured list must match three ways (`blueprints/flow.py`,
   `FlowAPI.gs _SECURED`, `js/flow-api.js FLOW_SECURED_ACTIONS`).
 - Never stage `apps-script/Code.gs` line 44 (the users sheet id). Check with
-  `git diff --cached | grep -c 1CsqW9` → `0`. Never print a secret or an `/exec` URL.
+  `git diff --cached apps-script/Code.gs | grep -c USERS_SHEET_ID` → `0`. Never print a secret or an `/exec` URL.
 - Apps Script files are pasted by hand: Flask/JS first, then the `.gs` file (see README).
 - Throwaway preview harnesses are `dashboard/_c0-<page>.html`; delete them before committing.
 - Commit messages: `A<nnn>: <what changed>` with a Co-Authored-By line.
