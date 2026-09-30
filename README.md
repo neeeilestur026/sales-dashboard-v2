@@ -40,12 +40,34 @@ Pushing `main` deploys to https://hi-escorp-portal-wufz.onrender.com automatical
 
 ## Apps Script rules
 
-1. Never commit a sheet id or secret. The local `apps-script/Code.gs` line 44 carries the users
-   sheet id; the committed copy has an empty string. Before every commit:
-   `git diff --cached apps-script/Code.gs | grep -c USERS_SHEET_ID` must print `0`.
+1. Never commit a sheet id or secret. Since AS-1, `Code.gs` reads `USERS_SHEET_ID` and
+   `INTERNAL_SHARED_SECRET` from Script Properties (Project Settings → Script properties), so the
+   file carries no id at all. Before every commit: `git diff --cached | grep -cE "'[A-Za-z0-9_-]{40,}'"`
+   must print `0` (no long id literal in the staged diff).
 2. Paste protocol: run the tests, paste the file into the editor, Save, then Deploy → Manage
    deployments → Edit → New version on the **existing** deployment (the `/exec` URLs in
    `js/api.js` and `js/flow-api.js` never change). Smoke: `getCodeVersion` / `getVersion`, a
    login, one read, one secured mutation. On any failure, Manage deployments → previous version.
 3. Securing an existing FlowAPI action: ship `blueprints/flow.py` and `js/flow-api.js` to Render
    first, confirm, then paste `FlowAPI.gs`. Never the other way round.
+
+## Deploying the hardened Code.gs (AS-1)
+
+The repo's `apps-script/Code.gs` (CODE_VERSION 2) requires a session on every action, checks the
+admin-page roles on the server, refuses mutations over GET, guards sheet ids, and stores passwords
+hashed. Order matters — do it in this sequence and nobody is locked out:
+
+1. Render is already on A299+ (Flask forwards `token` and `sharedSecret` on every Code.gs call).
+2. In the Code.gs Apps Script project: Project Settings → Script properties → add
+   `USERS_SHEET_ID` (the Users spreadsheet id) and confirm `INTERNAL_SHARED_SECRET` matches the
+   server's value. **Without `USERS_SHEET_ID` every login fails** with a clear message.
+3. Paste the file, Save, Deploy → Manage deployments → Edit → New version → Deploy (same deployment).
+4. Smoke: `<exec>?action=getCodeVersion` → version 2; log in as a test user (the row is migrated:
+   `pwHash`/`pwSalt` filled, the Base64 column emptied); log in again; change the password; as
+   admin, reset that user's password and log in with the temporary one.
+5. Triggers → add trigger → `cleanupExpiredSessions`, time-driven, day timer.
+6. Then switch `linkPRToQuotation` in `blueprints/quotation.py` from `params=` to `json=` (POST),
+   because the hardened file refuses mutations over GET; the comment at the call site marks it.
+
+Rollback: Manage deployments → previous version. A user migrated in the meantime keeps working
+after the sheet owner re-enters a Base64 value in column B for them (the old file reads it).

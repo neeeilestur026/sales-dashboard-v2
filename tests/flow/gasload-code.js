@@ -30,6 +30,7 @@ function makeSheet(name, grid) {
     setFrozenRows: () => s,
     appendRow: (arr) => { grid.push(arr.slice()); return s; },
     deleteRow: (rowIndex) => { grid.splice(rowIndex - 1, 1); return s; },
+    clearContents: () => { grid.length = 0; return s; },
     getDataRange: () => ({
       getValues: () => {
         const w = s.getLastColumn();
@@ -76,8 +77,9 @@ function makeSheet(name, grid) {
   return s;
 }
 
-function makeCtx(store) {
+function makeCtx(store, props) {
   store = store || {};                               // { sheetName: [ [header...], [row...] ] }
+  props = Object.assign({ USERS_SHEET_ID: 'users-sheet' }, props || {});   // AS-1: Script Properties the file reads at load
   const sheets = {};
   Object.keys(store).forEach(n => { sheets[n] = makeSheet(n, store[n]); });
 
@@ -103,10 +105,12 @@ function makeCtx(store) {
           .replace('mm', p(d.getMinutes()))
           .replace('ss', p(d.getSeconds()));
       },
-      base64Decode: (s) => Buffer.from(s, 'base64'),
+      base64Decode: (s) => [...Buffer.from(s, 'base64')],
       base64Encode: (b) => Buffer.from(b).toString('base64'),
-      newBlob: () => ({ getBytes: () => [], setName: function () { return this; } }),
-      getUuid: () => 'uuid-' + Math.random().toString(36).slice(2)
+      /* AS-1 — real bytes: the password hash and the constant-time compare need them. */
+      newBlob: (x) => { const buf = Buffer.isBuffer(x) ? x : Array.isArray(x) ? Buffer.from(x) : Buffer.from(String(x == null ? '' : x)); return { getBytes: () => [...buf], getDataAsString: () => buf.toString(), setName: function () { return this; } }; },
+      computeHmacSha256Signature: (data, key) => { const toBuf = (v) => Buffer.isBuffer(v) ? v : Array.isArray(v) ? Buffer.from(v) : Buffer.from(String(v)); return [...require('crypto').createHmac('sha256', toBuf(key)).update(toBuf(data)).digest()]; },
+      getUuid: () => require('crypto').randomUUID()
     },
     /* A real lock, not a no-op: _sdPostForPeriod's idempotency depends on it being taken and
        released, and a stub that silently succeeded twice would hide a double-post. */
@@ -128,7 +132,7 @@ function makeCtx(store) {
       })
     },
     PropertiesService: {
-      getScriptProperties: () => ({ getProperty: () => null, setProperty: () => {}, deleteProperty: () => {} })
+      getScriptProperties: () => ({ getProperty: (k) => (props[k] === undefined ? null : props[k]), setProperty: (k, v) => { props[k] = v; }, deleteProperty: (k) => { delete props[k]; } })
     },
     Logger: { log: () => {} },
     DriveApp: { getFolderById: () => { throw new Error('DriveApp not stubbed'); } },

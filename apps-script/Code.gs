@@ -38,10 +38,10 @@
  *   Check it:  <exec url>?action=getCodeVersion
  *
  *   1 — A275 salary deductions, and the payroll-approval row-index guard that had to precede them. */
-var CODE_VERSION = 1;
+var CODE_VERSION = 2;   // AS-1 — sessions required on every action, server-side roles, hashed passwords, the sheet-id guard
 
 // ─── Configuration ───────────────────────────────────────────
-var USERS_SHEET_ID = '';
+var USERS_SHEET_ID = _prop('USERS_SHEET_ID');   // AS-1 — set once under Project Settings → Script properties; never in this file
 var LOGIN_TRACKER_SHEET_ID = ''; // Create a separate Google Sheet for login logs
 var MANAGER_EMAIL = 'manager@company.com'; // fallback admin email
 var INVENTORY_SHEET_ID_FOR_VIEWER = ''; // ← Paste your INVENTORY_SHEET_ID here (same spreadsheet MRO/MI use)
@@ -70,6 +70,141 @@ function withRetry(fn, maxAttempts, delayMs) {
       Utilities.sleep(delayMs * attempt);
     }
   }
+}
+
+// ─── AS-1 · Who is calling ───────────────────────────────────
+/* Every action now needs a session — the old "no token = grace period" branch let anyone with the
+   /exec URL run anything, including addUser with role admin. The server (Flask) calls with the
+   shared secret and forwards the user's token; the browser calls with the token alone. Roles for the
+   admin-page actions are checked here, not in the page. Sheet ids a request names must belong to the
+   caller (or to anyone, for an oversight role): a sheet id the browser typed opens nothing.
+   Passwords are stored as an iterated HMAC-SHA256 with a per-user salt; a row still holding the old
+   Base64 value is verified the old way once and re-stored hashed on that login. */
+var _SESSION = null;                                   // the caller of this execution
+var _AUTH_EXEMPT = { login: 1, validateSession: 1, getCodeVersion: 1, logout: 1 };
+var ACTION_ROLES = {                                   // the pages behind these are requireAdmin()
+  addUser: ['admin'], updateUser: ['admin'], deleteUser: ['admin'], resetUserPassword: ['admin'],
+  getLoginLog: ['admin'], setTargets: ['admin']
+};
+var _GET_MUTATIONS = {};                               // the doGet cases that change something: POST only
+'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
+var _OVERSIGHT_ROLES = { admin: 1, director: 1, management: 1, accounting: 1, hr: 1 };
+
+function _prop(name) {
+  try { return PropertiesService.getScriptProperties().getProperty(name) || ''; } catch (e) { return ''; }
+}
+function _json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+/** Constant-time equality for secrets: both sides are HMAC'd with a throwaway key and compared byte by byte. */
+function _ctEq(a, b) {
+  a = String(a == null ? '' : a); b = String(b == null ? '' : b);
+  var key = Utilities.getUuid();
+  var x = Utilities.computeHmacSha256Signature(a, key), y = Utilities.computeHmacSha256Signature(b, key);
+  var diff = a.length === b.length ? 0 : 1;
+  for (var i = 0; i < x.length; i++) diff |= (x[i] ^ y[i]);
+  return diff === 0;
+}
+/** Null when the call may proceed (and _SESSION is set); otherwise the JSON reply that refuses it. */
+function _authenticate(params, action) {
+  _SESSION = null;
+  params = params || {};
+  if (!action || _AUTH_EXEMPT[action]) return null;
+  if (!USERS_SHEET_ID) return { success: false, message: 'The USERS_SHEET_ID Script Property is not set.' };
+  var secret = String(params.sharedSecret || '');
+  if (secret) {
+    var want = _prop('INTERNAL_SHARED_SECRET');
+    if (!want || !_ctEq(secret, want)) return { success: false, message: 'Forbidden' };
+    var fwd = String(params.token || '');
+    var s = fwd ? validateSession(fwd) : null;
+    _SESSION = s || { username: String(params.actorUsername || params.username || 'backend'), fullName: '', role: 'backend', backend: true };
+  } else {
+    var token = String(params.token || '');
+    var session = token ? validateSession(token) : null;
+    if (!session) return { success: false, message: 'Session expired or invalid. Please log in again.', authError: true };
+    _SESSION = session;
+  }
+  var roles = ACTION_ROLES[action];
+  if (roles && !_SESSION.backend && roles.indexOf(String(_SESSION.role || '').toLowerCase()) === -1) {
+    return { success: false, message: 'Forbidden: this action is for ' + roles.join(', ') + ' only.' };
+  }
+  return _sheetIdGuard(params);
+}
+/** A request may only name sheets its caller is entitled to: their own roster row, or any row for an oversight role. */
+function _sheetIdGuard(params) {
+  if (!_SESSION || _SESSION.backend) return null;
+  var ids = [];
+  for (var k in params) if (/SheetId$|^sheetId$/.test(k) && params[k]) ids.push(String(params[k]).trim());
+  if (!ids.length) return null;
+  var allowed = _allowedSheetIds_(_SESSION);
+  for (var i = 0; i < ids.length; i++) if (!allowed[ids[i]]) return { success: false, message: 'Forbidden: that sheet is not yours.' };
+  return null;
+}
+function _allowedSheetIds_(session) {
+  var role = String(session.role || '').toLowerCase(), user = String(session.username || '').trim().toLowerCase();
+  var key = 'sheetIds_' + (_OVERSIGHT_ROLES[role] ? '*' : user);
+  var cache = CacheService.getScriptCache(); var hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+  var data = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0].getDataRange().getValues();
+  var out = {};
+  for (var i = 1; i < data.length; i++) {
+    if (!_OVERSIGHT_ROLES[role] && String(data[i][0]).trim().toLowerCase() !== user) continue;
+    [4, 5, 6, 10].forEach(function (c) { var v = String(data[i][c] || '').trim(); if (v) out[v] = 1; });
+  }
+  [INVENTORY_SHEET_ID_FOR_VIEWER, QUOTATION_SUMMARY_SHEET_ID, MRO_SHEET_ID, COLLECTIONS_SHEET_ID].forEach(function (v) { if (v) out[String(v)] = 1; });
+  cache.put(key, JSON.stringify(out), 600);
+  return out;
+}
+
+// ─── AS-1 · Passwords ────────────────────────────────────────
+var _PW_ITER = 1500;                                   // iterations of HMAC-SHA256; raise when the editor measures under 100 ms
+function _userCol_(sheet, name) {                      // a header-addressed column, created at the end if missing
+  var header = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
+  for (var c = 0; c < header.length; c++) if (String(header[c]).trim() === name) return c;
+  var newCol = header.length + 1;
+  sheet.getRange(1, newCol).setValue(name);
+  return newCol - 1;
+}
+function _pwCols_(sheet) { return { hash: _userCol_(sheet, 'pwHash'), salt: _userCol_(sheet, 'pwSalt') }; }
+function _pwDigest_(password, salt, iter) {
+  var key = Utilities.newBlob(String(salt)).getBytes();
+  var mac = Utilities.computeHmacSha256Signature(Utilities.newBlob(String(password)).getBytes(), key);
+  for (var i = 1; i < iter; i++) mac = Utilities.computeHmacSha256Signature(mac, key);
+  return 'h1$' + iter + '$' + Utilities.base64Encode(mac);
+}
+/** Store a password hashed and salted, and empty the legacy Base64 column. */
+function _pwStore_(sheet, rowIndex, password) {
+  var c = _pwCols_(sheet), salt = Utilities.getUuid();
+  sheet.getRange(rowIndex, c.hash + 1).setValue(_pwDigest_(password, salt, _PW_ITER));
+  sheet.getRange(rowIndex, c.salt + 1).setValue(salt);
+  sheet.getRange(rowIndex, 2).setValue('');
+}
+/** True when `candidate` is this row's password. A row still on the legacy Base64 value is
+ *  verified the old way once and re-stored hashed. */
+function _pwCheck_(sheet, rowIndex, row, candidate) {
+  var c = _pwCols_(sheet);
+  var hash = String(row[c.hash] || '').trim(), salt = String(row[c.salt] || '');
+  if (hash) {
+    var m = /^h1\$(\d+)\$(.+)$/.exec(hash);
+    if (!m || !salt) return false;
+    return _ctEq(hash, _pwDigest_(candidate, salt, parseInt(m[1], 10)));
+  }
+  var legacy = String(row[1] || '').trim();
+  if (!legacy) return false;
+  var decoded;
+  try { decoded = Utilities.newBlob(Utilities.base64Decode(legacy)).getDataAsString(); } catch (e) { return false; }
+  if (!_ctEq(decoded, candidate)) return false;
+  _pwStore_(sheet, rowIndex, candidate);
+  return true;
+}
+/** A temporary password: 12 characters from an unambiguous alphabet, drawn from UUID randomness. */
+function _pwRandom_(n) {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ' + 'abcdefghjkmnpqrstuvwxyz23456789', out = '';
+  while (out.length < n) {
+    var hex = Utilities.getUuid().replace(/-/g, '');
+    for (var i = 0; i + 1 < hex.length && out.length < n; i += 2) out += chars.charAt(parseInt(hex.substr(i, 2), 16) % chars.length);
+  }
+  return out;
 }
 
 // ─── Session Management ─────────────────────────────────────
@@ -162,14 +297,17 @@ function handleLogout(params) {
 }
 
 function cleanupExpiredSessions() {
+  // AS-1 — one read, one write. Install as a daily time-driven trigger (Triggers → add → cleanupExpiredSessions).
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
   var sheet = ss.getSheetByName('Sessions');
   if (!sheet) return;
   var data = sheet.getDataRange().getValues();
-  var now = new Date();
-  for (var i = data.length - 1; i >= 1; i--) {
-    if (now > new Date(data[i][5])) sheet.deleteRow(i + 1);
-  }
+  if (data.length < 2) return;
+  var now = new Date(), keep = [data[0]];
+  for (var i = 1; i < data.length; i++) if (!(now > new Date(data[i][5]))) keep.push(data[i]);
+  if (keep.length === data.length) return;
+  sheet.clearContents();
+  sheet.getRange(1, 1, keep.length, keep[0].length).setValues(keep);
 }
 
 // ─── Entry Point ─────────────────────────────────────────────
@@ -178,19 +316,10 @@ function doGet(e) {
   var action = params.action;
   var result;
 
-  // Session validation (skip for login)
-  if (action !== 'login') {
-    var token = params.token || '';
-    if (token) {
-      var session = validateSession(token);
-      if (!session) {
-        return ContentService.createTextOutput(
-          JSON.stringify({ success: false, message: 'Session expired or invalid. Please log in again.', authError: true })
-        ).setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-    // No token = grace period for old clients (remove after transition)
-  }
+  // AS-1 — reads only over GET; every action needs the caller's session (or the server's secret)
+  if (_GET_MUTATIONS[action]) return _json({ success: false, message: 'This action must be sent as POST.' });
+  var auth = _authenticate(params, action);
+  if (auth) return _json(auth);
 
   try {
     switch (action) {
@@ -211,9 +340,6 @@ function doGet(e) {
         break;
       case 'getHotLeads':
         result = handleGetHotLeads();
-        break;
-      case 'getDailyActivityAlert':
-        result = handleDailyActivityAlert();
         break;
       case 'getLoginLog':
         result = handleGetLoginLog(params);
@@ -557,18 +683,6 @@ function doGet(e) {
         break;
 
       // New: Quotation approval notifications for sales
-      case 'getMyQuotationNotifications':
-        result = handleGetMyQuotationNotifications(params);
-        break;
-      case 'getMyNotifications':
-        result = handleGetMyNotifications(params);
-        break;
-      case 'getEmployeeHistory':
-        result = handleGetEmployeeHistory(params);
-        break;
-      case 'getCampaignLeadsSummary':
-        result = handleGetCampaignLeadsSummary(params);
-        break;
 
       // New: Link PR to Quotation by RFQ
       case 'linkPRToQuotation':
@@ -578,9 +692,6 @@ function doGet(e) {
       // New: Accounting Daily Report
       case 'submitAccountingDailyReport':
         result = handleSubmitAccountingDailyReport(params);
-        break;
-      case 'getAccountingDailyReports':
-        result = handleGetAccountingDailyReports(params);
         break;
 
       // New: All daily reports for management
@@ -594,10 +705,6 @@ function doGet(e) {
         break;
       case 'getAllMIs':
         result = handleGetAllMIs(params);
-        break;
-
-      case 'getManagementInsights':
-        result = handleGetManagementInsights(params);
         break;
 
       // Payroll
@@ -697,18 +804,6 @@ function doGet(e) {
         result = handleGetShipmentTimeline(params);
         break;
 
-      case 'getDocsByShipment':
-        result = handleGetDocsByShipment(params);
-        break;
-      case 'getDocsByType':
-        result = handleGetDocsByType(params);
-        break;
-      case 'getDocsByClient':
-        result = handleGetDocsByClient(params);
-        break;
-      case 'getAuditTrail':
-        result = handleGetAuditTrail(params);
-        break;
       case 'getShipmentHistory':
         result = handleGetShipmentHistory(params);
         break;
@@ -805,7 +900,7 @@ function _findUserRowByUsername_(usersSheet, username) {
 
 function handleSetEmailCredentials(params) {
   var sharedSecret = PropertiesService.getScriptProperties().getProperty('INTERNAL_SHARED_SECRET');
-  if (!sharedSecret || String(params.sharedSecret || '') !== sharedSecret) {
+  if (!sharedSecret || !_ctEq(String(params.sharedSecret || ''), sharedSecret)) {
     return { success: false, message: 'Forbidden' };
   }
   var token = String(params.token || '');
@@ -823,7 +918,7 @@ function handleSetEmailCredentials(params) {
 
 function handleGetEmailCredentialsForBackend(params) {
   var sharedSecret = PropertiesService.getScriptProperties().getProperty('INTERNAL_SHARED_SECRET');
-  if (!sharedSecret || String(params.sharedSecret || '') !== sharedSecret) {
+  if (!sharedSecret || !_ctEq(String(params.sharedSecret || ''), sharedSecret)) {
     return { success: false, message: 'Forbidden' };
   }
   var usersSheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
@@ -840,7 +935,7 @@ function handleGetEmailCredentialsForBackend(params) {
 // Used by the Flask /api/email/users proxy for the oversight sent-email aggregation.
 function handleGetUsersForBackend(params) {
   var sharedSecret = PropertiesService.getScriptProperties().getProperty('INTERNAL_SHARED_SECRET');
-  if (!sharedSecret || String(params.sharedSecret || '') !== sharedSecret) {
+  if (!sharedSecret || !_ctEq(String(params.sharedSecret || ''), sharedSecret)) {
     return { success: false, message: 'Forbidden' };
   }
   var usersSheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
@@ -881,7 +976,6 @@ function handleLogin(user, pass) {
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     var username = String(row[0]).trim();
-    var password = String(row[1]).trim();
     var role = String(row[2]).trim().toLowerCase();
     var fullName = String(row[3]).trim();
     var quotationSheetId = String(row[4]).trim();
@@ -896,12 +990,7 @@ function handleLogin(user, pass) {
     var trainingMode = (trainingModeRaw === true || String(trainingModeRaw).trim().toLowerCase() === 'true' || String(trainingModeRaw).trim() === '1');
 
     if (username === user.trim()) {
-      // Decode Base64 password and compare
-      var decodedPassword = Utilities.newBlob(
-        Utilities.base64Decode(password)
-      ).getDataAsString();
-
-      if (decodedPassword === pass) {
+      if (_pwCheck_(sheet, i + 1, row, pass)) {      // AS-1 — hashed, or legacy Base64 migrated on this login
         // Reset rate limit on successful login
         cache.remove(cacheKey);
         logLogin(username, fullName, role);
@@ -2472,18 +2561,9 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     var action = body.action || '';
 
-    // Session validation (skip for login)
-    if (action !== 'login' && action !== 'validateSession' && action !== '') {
-      var token = body.token || '';
-      if (token) {
-        var session = validateSession(token);
-        if (!session) {
-          return ContentService.createTextOutput(
-            JSON.stringify({ success: false, message: 'Session expired or invalid. Please log in again.', authError: true })
-          ).setMimeType(ContentService.MimeType.JSON);
-        }
-      }
-    }
+    // AS-1 — every action needs the caller's session (or the server's secret)
+    var auth = _authenticate(body, action);
+    if (auth) return _json(auth);
 
     switch (action) {
       // Auth
@@ -2492,6 +2572,9 @@ function doPost(e) {
         break;
       case 'logout':
         result = handleLogout(body);
+        break;
+      case 'linkPRToQuotation':                      // AS-1 — a mutation; it used to exist only in doGet
+        result = handleLinkPRToQuotation(body);
         break;
 
       // Reports
@@ -2503,9 +2586,6 @@ function doPost(e) {
         break;
       case 'submitAccountingDailyReport':
         result = handleSubmitAccountingDailyReport(body);
-        break;
-      case 'markNotificationsRead':
-        result = handleMarkNotificationsRead(body);
         break;
       case 'updateTrackerRow':
         result = handleUpdateTrackerRow(body);
@@ -3711,20 +3791,10 @@ function handleChangePassword(params) {
       var rowUsername = String(data[i][0]).trim();
       if (rowUsername !== username.trim()) continue;
 
-      var storedPassword = String(data[i][1]).trim();
-      var decodedPassword = Utilities.newBlob(
-        Utilities.base64Decode(storedPassword)
-      ).getDataAsString();
-
-      if (decodedPassword !== currentPassword) {
+      if (!_pwCheck_(sheet, i + 1, data[i], currentPassword)) {
         return { success: false, message: 'Current password is incorrect.' };
       }
-
-      // Encode new password as Base64 and save
-      var newEncoded = Utilities.base64Encode(
-        Utilities.newBlob(newPassword).getBytes()
-      );
-      sheet.getRange(i + 1, 2).setValue(newEncoded);
+      _pwStore_(sheet, i + 1, newPassword);          // AS-1 — hashed and salted
 
       return { success: true, message: 'Password changed successfully.' };
     }
@@ -5329,9 +5399,9 @@ function handleAddUser(params) {
       }
     }
 
-    var encodedPassword = Utilities.base64Encode(Utilities.newBlob(password).getBytes());
     var trainingMode = (params.trainingMode === true || String(params.trainingMode).toLowerCase() === 'true');
-    sheet.appendRow([username, encodedPassword, role, fullName, '', '', '', '', '', '', '', '', trainingMode ? 'TRUE' : 'FALSE']);
+    sheet.appendRow([username, '', role, fullName, '', '', '', '', '', '', '', '', trainingMode ? 'TRUE' : 'FALSE']);
+    _pwStore_(sheet, sheet.getLastRow(), password);   // AS-1 — hashed and salted, never Base64
 
     return { success: true, message: 'User "' + username + '" added successfully.' };
   } catch (err) {
@@ -5352,10 +5422,7 @@ function handleUpdateUser(params) {
 
     if (fullName) sheet.getRange(rowIndex, 4).setValue(fullName);
     if (role) sheet.getRange(rowIndex, 3).setValue(role);
-    if (password && password.length >= 6) {
-      var encodedPassword = Utilities.base64Encode(Utilities.newBlob(password).getBytes());
-      sheet.getRange(rowIndex, 2).setValue(encodedPassword);
-    }
+    if (password && password.length >= 6) _pwStore_(sheet, rowIndex, password);   // AS-1
     if (typeof params.trainingMode !== 'undefined') {
       var tm = (params.trainingMode === true || String(params.trainingMode).toLowerCase() === 'true');
       sheet.getRange(rowIndex, 13).setValue(tm ? 'TRUE' : 'FALSE');
@@ -5389,14 +5456,9 @@ function handleResetUserPassword(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
 
     var sheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
-    // Generate random 10-char alphanumeric password
-    var chars = '';
-    var tempPassword = '';
-    for (var i = 0; i < 10; i++) {
-      tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    var encodedPassword = Utilities.base64Encode(Utilities.newBlob(tempPassword).getBytes());
-    sheet.getRange(rowIndex, 2).setValue(encodedPassword);
+    // AS-1 — the old alphabet was an empty string, so every reset produced an empty password.
+    var tempPassword = _pwRandom_(12);
+    _pwStore_(sheet, rowIndex, tempPassword);
 
     return { success: true, message: 'Password reset successfully.', tempPassword: tempPassword };
   } catch (err) {
@@ -6881,65 +6943,6 @@ function _addNotification(recipient, type, title, message, link) {
   }
 }
 
-function handleGetMyNotifications(params) {
-  try {
-    var username = (params.username || '').trim().toLowerCase();
-    var role = (params.role || '').trim().toLowerCase();
-    if (!username && !role) return { success: true, data: [] };
-
-    var sheet = _notificationsSheet();
-    var data = sheet.getDataRange().getValues();
-    var results = [];
-
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][7]).trim() === 'TRUE') continue; // already read
-      var recipient = String(data[i][2]).trim().toLowerCase();
-      if (recipient !== username && recipient !== role) continue;
-
-      results.push({
-        id: String(data[i][0]),
-        date: String(data[i][1]),
-        type: String(data[i][3]),
-        title: String(data[i][4]),
-        message: String(data[i][5]),
-        link: String(data[i][6]),
-        createdAt: String(data[i][8])
-      });
-    }
-
-    // Sort by date desc, limit 50
-    results.sort(function(a, b) { return b.createdAt.localeCompare(a.createdAt); });
-    results = results.slice(0, 50);
-
-    return { success: true, data: results };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
-function handleMarkNotificationsRead(params) {
-  try {
-    var username = (params.username || '').trim().toLowerCase();
-    if (!username) return { success: false, message: 'Missing username.' };
-
-    var sheet = _notificationsSheet();
-    var data = sheet.getDataRange().getValues();
-    var count = 0;
-
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][7]).trim() === 'TRUE') continue;
-      var recipient = String(data[i][2]).trim().toLowerCase();
-      if (recipient !== username) continue;
-      sheet.getRange(i + 1, 8).setValue('TRUE');
-      count++;
-    }
-
-    return { success: true, message: count + ' notification(s) marked as read.' };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
 // ─── ACTION: submitHRDailyReport ──────────────────────────────
 function handleSubmitHRDailyReport(params) {
   try {
@@ -7706,89 +7709,6 @@ function handleDeleteLeaveRequest(params) {
   }
 }
 
-// ─── ACTION: getEmployeeHistory ─────────────────────────────────
-function handleGetEmployeeHistory(params) {
-  try {
-    var empName = (params.employeeName || '').trim();
-    if (!empName) return { success: false, message: 'Employee name required.' };
-    var nameLower = empName.toLowerCase();
-
-    // Grievances
-    var grievances = [];
-    try {
-      var gSheet = _grievancesSheet();
-      var gData = gSheet.getDataRange().getValues();
-      for (var i = 1; i < gData.length; i++) {
-        if (String(gData[i][2]).trim().toLowerCase() !== nameLower) continue;
-        grievances.push({
-          subject: String(gData[i][0]), description: String(gData[i][1]),
-          category: String(gData[i][4]), status: String(gData[i][5]),
-          resolution: String(gData[i][7]), createdAt: String(gData[i][8])
-        });
-      }
-    } catch (e) {}
-
-    // Memos targeting this employee or 'All'
-    var memos = [];
-    try {
-      var mSheet = _memosSheet();
-      var mData = mSheet.getDataRange().getValues();
-      for (var j = 1; j < mData.length; j++) {
-        var target = String(mData[j][5]).trim().toLowerCase();
-        if (target !== nameLower && target !== 'all') continue;
-        memos.push({
-          title: String(mData[j][0]), content: String(mData[j][1]),
-          type: String(mData[j][2]), priority: String(mData[j][3]),
-          createdBy: String(mData[j][4]), createdAt: String(mData[j][7])
-        });
-      }
-    } catch (e) {}
-
-    // Leave requests
-    var leaves = [];
-    try {
-      var lSheet = _leaveRequestsSheet();
-      var lData = lSheet.getDataRange().getValues();
-      for (var k = 1; k < lData.length; k++) {
-        if (String(lData[k][0]).trim().toLowerCase() !== nameLower) continue;
-        leaves.push({
-          type: String(lData[k][1]), startDate: String(lData[k][2]),
-          endDate: String(lData[k][3]), days: Number(lData[k][4]) || 0,
-          reason: String(lData[k][5]), status: String(lData[k][6])
-        });
-      }
-    } catch (e) {}
-
-    // Training programs
-    var training = [];
-    try {
-      var tSheet = _trainingSheet();
-      var tData = tSheet.getDataRange().getValues();
-      for (var t = 1; t < tData.length; t++) {
-        var attendeesRaw = String(tData[t][6] || '');
-        var attendees = [];
-        try { attendees = JSON.parse(attendeesRaw); } catch (e) {
-          attendees = attendeesRaw.split(',').map(function(s) { return s.trim(); });
-        }
-        var found = false;
-        for (var a = 0; a < attendees.length; a++) {
-          if (String(attendees[a]).trim().toLowerCase() === nameLower) { found = true; break; }
-        }
-        if (!found) continue;
-        training.push({
-          title: String(tData[t][0]), type: String(tData[t][1]),
-          instructor: String(tData[t][2]), date: String(tData[t][3]),
-          department: String(tData[t][5]), status: String(tData[t][7])
-        });
-      }
-    } catch (e) {}
-
-    return { success: true, grievances: grievances, memos: memos, leaves: leaves, training: training };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════
 //  PERFORMANCE REVIEWS HANDLERS
 // ═══════════════════════════════════════════════════════════════
@@ -8324,66 +8244,6 @@ function handleDeleteContentItem(params) {
   }
 }
 
-// ─── ACTION: getCampaignLeadsSummary ────────────────────────────
-function handleGetCampaignLeadsSummary(params) {
-  try {
-    var campaignSheet = _campaignsSheet();
-    var cData = campaignSheet.getDataRange().getValues();
-
-    // Collect all client names from agents' quotation sheets
-    var usersSheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
-    var usersData = usersSheet.getDataRange().getValues();
-    var allClients = {};
-    for (var u = 1; u < usersData.length; u++) {
-      var role = String(usersData[u][2]).trim().toLowerCase();
-      if (role === 'admin' || role === 'management') continue;
-      var agentName = String(usersData[u][3]).trim();
-      var qSheetId = String(usersData[u][4]).trim();
-      if (!qSheetId) continue;
-      try {
-        var qSheet = SpreadsheetApp.openById(qSheetId).getSheets()[0];
-        var qData = qSheet.getDataRange().getValues();
-        for (var q = 1; q < qData.length; q++) {
-          var clientName = String(qData[q][5] || '').trim().toLowerCase();
-          if (clientName && !allClients[clientName]) {
-            allClients[clientName] = agentName;
-          }
-        }
-      } catch (e) {}
-    }
-
-    var campaigns = [];
-    for (var c = 1; c < cData.length; c++) {
-      var leadsRaw = String(cData[c][6] || '');
-      var leads = [];
-      try { leads = JSON.parse(leadsRaw); } catch (e) {
-        leads = leadsRaw ? leadsRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-      }
-
-      var matchedClients = 0;
-      var leadDetails = leads.map(function(lead) {
-        var leadLower = String(lead).toLowerCase();
-        var agent = allClients[leadLower] || '';
-        if (agent) matchedClients++;
-        return { name: lead, matched: !!agent, agent: agent };
-      });
-
-      campaigns.push({
-        name: String(cData[c][0] || ''),
-        channel: String(cData[c][1] || ''),
-        status: String(cData[c][7] || ''),
-        leadCount: leads.length,
-        matchedClients: matchedClients,
-        leads: leadDetails
-      });
-    }
-
-    return { success: true, campaigns: campaigns };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════
 //  ACCREDITATION & COMPLIANCE HANDLERS
 // ═══════════════════════════════════════════════════════════════
@@ -8657,42 +8517,6 @@ function handleGetMyDailyReports(params) {
     reports.sort(function(a, b) { return a.date > b.date ? -1 : a.date < b.date ? 1 : 0; });
 
     return { success: true, data: reports };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
-// ─── ACTION: getMyQuotationNotifications (recently approved/rejected) ──
-function handleGetMyQuotationNotifications(params) {
-  try {
-    var agentName = params.agentName || '';
-    var qSheetId = params.quotationSheetId || '';
-    if (!qSheetId) return { success: true, data: [] };
-
-    var qSheet = SpreadsheetApp.openById(qSheetId).getSheets()[0];
-    var qData = qSheet.getDataRange().getValues();
-    var notifications = [];
-    var cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
-
-    for (var j = 1; j < qData.length; j++) {
-      var overallStatus = String(qData[j][14] || '').trim();
-      if (overallStatus !== 'Approved' && overallStatus !== 'Rejected') continue;
-
-      var rowDate = parseSheetDate(qData[j][0]);
-      if (!rowDate || rowDate < cutoff) continue;
-
-      notifications.push({
-        refNo: String(qData[j][2]).trim(),
-        clientName: String(qData[j][5]).trim(),
-        status: overallStatus,
-        date: formatDate(rowDate),
-        amount: qData[j][8] || '',
-        rejectionReason: String(qData[j][16] || '').trim() || String(qData[j][17] || '').trim()
-      });
-    }
-
-    return { success: true, data: notifications };
   } catch (err) {
     return { success: false, message: err.message };
   }
@@ -9146,66 +8970,6 @@ function handleUpdateCollection(params) {
       invoiceAmt);
 
     return { success: true, message: 'Collection record updated.' };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
-// ─── ACTION: getManagementInsights (aggregated data for management dashboard) ──
-function handleGetManagementInsights(params) {
-  try {
-    var now = new Date();
-    var result = {
-      success: true,
-      activeSessions: 0,
-      rejectionAnalysis: [],
-      totalRejected: 0
-    };
-
-    // 1. Active Sessions — count non-expired sessions
-    try {
-      var sessSheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheetByName('Sessions');
-      if (sessSheet) {
-        var sessData = sessSheet.getDataRange().getValues();
-        for (var s = 1; s < sessData.length; s++) {
-          var expiresAt = new Date(sessData[s][5]);
-          if (expiresAt > now) result.activeSessions++;
-        }
-      }
-    } catch (e) { /* Sessions sheet may not exist yet */ }
-
-    // 2. Rejection Analysis — iterate all agents' quotation sheets
-    var usersSheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
-    var usersData = usersSheet.getDataRange().getValues();
-    var reasonCounts = {};
-
-    for (var i = 1; i < usersData.length; i++) {
-      var role = String(usersData[i][2]).trim().toLowerCase();
-      if (role !== 'sales' && role !== 'admin') continue;
-      var qSheetId = String(usersData[i][4]).trim();
-      if (!qSheetId || qSheetId === 'undefined') continue;
-
-      try {
-        var qSheet = SpreadsheetApp.openById(qSheetId).getSheets()[0];
-        var lastRow = qSheet.getLastRow();
-        if (lastRow < 2) continue;
-        var qData = qSheet.getRange(2, 1, lastRow - 1, 19).getValues();
-        for (var j = 0; j < qData.length; j++) {
-          var overallStatus = String(qData[j][14] || '').trim();
-          if (overallStatus !== 'Rejected') continue;
-          result.totalRejected++;
-          var reason = String(qData[j][16] || '').trim() || String(qData[j][17] || '').trim() || 'No reason given';
-          reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
-        }
-      } catch (e) { /* skip inaccessible sheets */ }
-    }
-
-    // Convert to sorted array
-    result.rejectionAnalysis = Object.keys(reasonCounts).map(function(r) {
-      return { reason: r, count: reasonCounts[r] };
-    }).sort(function(a, b) { return b.count - a.count; }).slice(0, 10);
-
-    return result;
   } catch (err) {
     return { success: false, message: err.message };
   }
@@ -10146,116 +9910,6 @@ function handleRestoreShipmentDoc(body) {
   }
 }
 
-// ─── QUERY 1: getDocsByShipment ──────────────────────────────
-function handleGetDocsByShipment(params) {
-  try {
-    var shipmentId = params.shipmentId || '';
-    if (!shipmentId) return { success: false, message: 'Missing shipmentId.' };
-    var sheet = _docIndexSheet();
-    var data  = sheet.getDataRange().getValues();
-    var hdrs  = data[0];
-    var results = [];
-    for (var i = 1; i < data.length; i++) {
-      var r = _docIndexRowToObj(data[i], hdrs);
-      if (r.shipment_id === shipmentId && !r.deleted_at) results.push(r);
-    }
-    // Group by phase → stage
-    var grouped = {};
-    results.forEach(function(r) {
-      var p = r.phase_number;
-      var s = r.stage_number;
-      if (!grouped[p]) grouped[p] = {};
-      if (!grouped[p][s]) grouped[p][s] = [];
-      grouped[p][s].push(r);
-    });
-    return { success: true, docs: results, grouped: grouped };
-  } catch(err) { return { success: false, message: err.message }; }
-}
-
-// ─── QUERY 2: getDocsByType ──────────────────────────────────
-function handleGetDocsByType(params) {
-  try {
-    var shortCode = (params.stageShortCode || '').toUpperCase();
-    var startDate = params.startDate || '';
-    var endDate   = params.endDate   || '';
-    var clientFilter = (params.clientFilter || '').toLowerCase();
-    if (!shortCode) return { success: false, message: 'Missing stageShortCode.' };
-    var sheet = _docIndexSheet();
-    var data  = sheet.getDataRange().getValues();
-    var hdrs  = data[0];
-    var results = [];
-    for (var i = 1; i < data.length; i++) {
-      var r = _docIndexRowToObj(data[i], hdrs);
-      if (r.stage_short_code !== shortCode) continue;
-      if (r.deleted_at) continue;
-      if (clientFilter && r.client_name.toLowerCase().indexOf(clientFilter) < 0) continue;
-      if (startDate && r.uploaded_at < startDate) continue;
-      if (endDate   && r.uploaded_at > endDate + 'Z') continue;
-      results.push(r);
-    }
-    return { success: true, docs: results };
-  } catch(err) { return { success: false, message: err.message }; }
-}
-
-// ─── QUERY 3: getDocsByClient ─────────────────────────────────
-function handleGetDocsByClient(params) {
-  try {
-    var clientName = (params.clientName || '').toLowerCase();
-    var startDate  = params.startDate   || '';
-    var endDate    = params.endDate     || '';
-    if (!clientName) return { success: false, message: 'Missing clientName.' };
-    var sheet = _docIndexSheet();
-    var data  = sheet.getDataRange().getValues();
-    var hdrs  = data[0];
-    var results = [];
-    for (var i = 1; i < data.length; i++) {
-      var r = _docIndexRowToObj(data[i], hdrs);
-      if (r.client_name.toLowerCase().indexOf(clientName) < 0) continue;
-      if (r.deleted_at) continue;
-      if (startDate && r.uploaded_at < startDate) continue;
-      if (endDate   && r.uploaded_at > endDate + 'Z') continue;
-      results.push(r);
-    }
-    // Group by shipment then phase
-    var grouped = {};
-    results.forEach(function(r) {
-      var sid = r.shipment_id;
-      if (!grouped[sid]) grouped[sid] = {};
-      var p = r.phase_number;
-      if (!grouped[sid][p]) grouped[sid][p] = [];
-      grouped[sid][p].push(r);
-    });
-    return { success: true, docs: results, grouped: grouped };
-  } catch(err) { return { success: false, message: err.message }; }
-}
-
-// ─── QUERY 4: getAuditTrail ───────────────────────────────────
-function handleGetAuditTrail(params) {
-  try {
-    var startDate      = params.startDate     || '';
-    var endDate        = params.endDate       || '';
-    var uploadedBy     = (params.uploadedBy   || '').toLowerCase();
-    var stageNumber    = params.stageNumber   ? Number(params.stageNumber) : 0;
-    var includeDeleted = params.includeDeleted === true || params.includeDeleted === 'true';
-    var sheet = _docIndexSheet();
-    var data  = sheet.getDataRange().getValues();
-    var hdrs  = data[0];
-    var results = [];
-    for (var i = 1; i < data.length; i++) {
-      var r = _docIndexRowToObj(data[i], hdrs);
-      if (!includeDeleted && r.deleted_at) continue;
-      if (startDate   && r.uploaded_at < startDate) continue;
-      if (endDate     && r.uploaded_at > endDate + 'Z') continue;
-      if (uploadedBy  && r.uploaded_by.toLowerCase().indexOf(uploadedBy) < 0) continue;
-      if (stageNumber && Number(r.stage_number) !== stageNumber) continue;
-      if (r.deleted_at) r._deleted = true;
-      results.push(r);
-    }
-    results.sort(function(a, b) { return (b.uploaded_at || '').localeCompare(a.uploaded_at || ''); });
-    return { success: true, docs: results };
-  } catch(err) { return { success: false, message: err.message }; }
-}
-
 // Helper: map a DocumentIndex data row to an object
 function _docIndexRowToObj(row, hdrs) {
   var obj = {};
@@ -10364,8 +10018,6 @@ function _getShipmentDocFolder(shipmentId, status) {
   var shipFolder = _getOrCreateSubFolder(root, shipmentId);
   return _getOrCreateSubFolder(shipFolder, status);
 }
-
-
 
 // ═══════════════════════════════════════════════════════════════
 // SHIPMENT TIMELINE — Stage management
