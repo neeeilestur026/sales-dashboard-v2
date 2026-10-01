@@ -604,8 +604,10 @@ function fileToDataURL(file) {
  */
 async function generateFlowPdf(route, payload, saveAction, idKey, idValue, fileName, opts) {
   opts = opts || {};
+  // A311 — every Flask route is session-gated (A299); this helper was the one PDF path still
+  // posting without the token, so Generate & Save on a purchase request answered 401 on Render.
   const res = await fetch(route, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(payload)
   });
   if (!res.ok) {
     let msg = `PDF generation failed (HTTP ${res.status})`;

@@ -599,7 +599,7 @@ async function delRecord(entity, rowIndex) {
 
 // ── PDFs — rendered by Flask/ReportLab from the same payloads the screen drew ─────────────────
 async function fetchPdf(url, payload, name) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const res = await fetch(url, { method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(payload) });
   if (!res.ok) { let m = 'HTTP ' + res.status; try { const j = await res.json(); if (j && j.message) m = j.message; } catch (e) {} throw new Error(m); }
   const blob = await res.blob();
   const u = URL.createObjectURL(blob);
