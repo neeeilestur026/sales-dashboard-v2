@@ -42,10 +42,13 @@ ok('nothing writes back into built.html', !/built\.html\s*=/.test(fn));
 ok('an empty body refuses rather than exporting a blank page', /nothing to export/.test(fn));
 
 console.log('\n3 · the renderer stayed backward compatible');
-const r = SRC.slice(SRC.indexOf('function _renderPayslipPdf('), SRC.indexOf('function downloadPayslip('));
+/* A313 — the renderer moved verbatim to js/payslip.js (hxRenderPayslipPdf); director-home.js keeps a delegation. */
+const PS = fs.readFileSync(path.join(__dirname, '../../dashboard/js/payslip.js'), 'utf8');
+const r = PS.slice(PS.indexOf('function hxRenderPayslipPdf('), PS.indexOf('function hxPayslipDownload('));
+ok('director-home.js delegates to the shared renderer', /function _renderPayslipPdf\(innerHtml, filename, singleMeasure, opts\) \{\s*return hxRenderPayslipPdf\(innerHtml, filename, singleMeasure, opts\);/.test(SRC));
 ok('opts is optional', /opts = opts \|\| \{\};/.test(r));
-ok('css defaults to the payslip stylesheet', /\(opts\.css !== undefined\) \? opts\.css : _PAYSLIP_CSS/.test(r));
-ok('width defaults to the payslip body width', /opts\.bodyPx \|\| _PS_BODY_PX/.test(r));
+ok('css defaults to the payslip stylesheet', /\(opts\.css !== undefined\) \? opts\.css : HX_PAYSLIP_CSS/.test(r));
+ok('width defaults to the payslip body width', /opts\.bodyPx \|\| HX_PS_BODY_PX/.test(r));
 ok('page height default is unchanged', /opts\.pageH \|\| 245/.test(r));
 ok('the payslip callers still pass no opts',
    /_renderPayslipPdf\(_payslipHtml\(emp, cutoff\), [^)]*\)/.test(SRC) || /downloadPayslip/.test(SRC));
@@ -102,7 +105,7 @@ ok('  nothing rounds the page DOWN any more', !/Math\.round\(wpx \* px2mm\)/.tes
    is what convinced A262 the payslip was out of range of its own change. */
 ok('nothing still claims the receipt is 296px wide', !/of a 296px receipt/.test(SRC));
 ok('  nor that 296px sits well inside the container', !/\(296px, well inside/.test(SRC));
-ok('  and the real width is stated where it matters', /_PS_BODY_PX = 400/.test(SRC));
+ok('  and the real width is stated where it matters', /HX_PS_BODY_PX = 400/.test(PS));
 
 console.log('\n7 · the button still points at it');
 const HTML = fs.readFileSync(path.join(__dirname, '../../dashboard/director-home.html'), 'utf8');

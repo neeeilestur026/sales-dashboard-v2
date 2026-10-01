@@ -780,130 +780,13 @@ function _payslipHtml(emp, cutoff) {
   return hxPayslipHtml(_computePaySlip(emp, cutoff), _payslipPeriod(cutoff));
 }
 
-// Load html2pdf on demand (same CDN as the payroll-approval PDF), then run cb.
-// Render the payslip HTML in a hidden same-origin iframe, then run html2pdf INSIDE that iframe
-// (waiting two animation frames so it's laid out/painted) and download. Mirrors the working
-// _renderPayrollSnapshotPdfBase64 pattern in management-home.js — the off-screen <div> approach
-// produced blank pages because html2canvas captured before layout/paint.
-const _HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-
-// Receipt size: 80mm wide. singleMeasure=true fits the page height to one receipt (no trailing
-// whitespace); false uses a fixed page with page-breaks (one receipt per page for "all").
-const _PS_BODY_PX = 400;   // receipt render width in px (~106mm at 96dpi — "a little wider" than 80mm)
-
-/* A261 — `opts` lets a caller supply its own stylesheet and body width so the payroll cutoff can
-   reuse this instead of owning a second, worse PDF path. Everything that makes this function worth
-   reusing stays: the page is sized from the RENDERED content so nothing is cropped, images are
-   waited for before capture, and the iframe is cleaned up on every exit including failure.
-   Omitting opts reproduces the payslip behaviour byte for byte. */
+// A313 — the PDF renderer lives in js/payslip.js (hxRenderPayslipPdf), so an employee's own
+// "Download PDF" produces the same file this page prints. The names below are kept for the callers
+// and the tests; they resolve to the shared ones when payslip.js is loaded first.
+var _HTML2PDF_CDN = (typeof HX_HTML2PDF_CDN === 'string') ? HX_HTML2PDF_CDN : '';
+var _PS_BODY_PX = (typeof HX_PS_BODY_PX === 'number') ? HX_PS_BODY_PX : 400;
 function _renderPayslipPdf(innerHtml, filename, singleMeasure, opts) {
-  opts = opts || {};
-  const css    = (opts.css !== undefined) ? opts.css : _PAYSLIP_CSS;
-  const bodyPx = opts.bodyPx || _PS_BODY_PX;
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:' + (bodyPx + 40) + 'px;height:1600px;opacity:0;border:0;z-index:-1;';
-  document.body.appendChild(iframe);
-  let done = false;
-  const cleanup = () => { if (!done) { done = true; try { document.body.removeChild(iframe); } catch (e) {} } };
-
-  const doc = iframe.contentDocument || iframe.contentWindow.document;
-  doc.open();
-  /* A261 — `fitContent` treats bodyPx as a MINIMUM and lets the body grow to whatever the content
-     actually needs, so the page derived from scrollWidth below can never be narrower than the
-     document. A payslip is a fixed-width receipt and keeps the exact width it asks for. */
-  const widthCss = opts.fitContent
-    ? 'width:max-content;min-width:' + bodyPx + 'px;'
-    : 'width:' + bodyPx + 'px;';
-  doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + css +
-    ' body{margin:0;background:#fff;' + widthCss + '}</style></head><body>' + innerHtml + '</body></html>');
-  doc.close();
-  const win = iframe.contentWindow;
-
-  const run = () => win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
-    try {
-      // Derive the PDF page from the ACTUAL rendered content size (1px = 1/96in) so the page is exactly
-      // as wide as the content — html2pdf renders unscaled, so a too-narrow page crops the right column.
-      const px2mm = 25.4 / 96, margin = 6;
-      const wpx = win.document.body.scrollWidth || bodyPx;
-      const hpx = win.document.body.scrollHeight || 1000;
-      /* A275 — CEIL, NOT ROUND, PLUS A MILLIMETRE.
-         Rounding down made the page fractionally SMALLER than the artwork it was sized for, and this
-         page has no other slack — html2pdf then paginates on the overflow. A payslip measured 687px
-         tall, the canvas came back 2061px, html2pdf's page held 2060, and every payslip carried a
-         second page containing a single row of pixels. The 1mm is for that rasterising rounding: the
-         canvas height is not exactly hpx * scale, so matching the page to the CSS height to the
-         nearest millimetre is not close enough. */
-      const pageW = Math.ceil(wpx * px2mm) + margin * 2;
-      const pageH = singleMeasure ? Math.max(120, Math.ceil(hpx * px2mm) + margin * 2 + 1) : (opts.pageH || 245);
-      /* A262 — TELL html2canvas HOW BIG THE DOCUMENT IS.
-         Left to itself it sizes the capture from html2pdf's own page-derived container, and for a
-         document wider than that container it silently captures only part of it: on the live August
-         2026 payroll the body is 1400px wide and the canvas came out 874px — 62% — which html2pdf
-         then stretched across the full page. That is the cropped export, and it is why every column
-         past the 23rd and the third signature block were missing.
-
-         The measurements above already exist to size the page; they size the capture too. Guarded on
-         non-zero because html2pdf MUTATES the body while rendering — reading scrollWidth back
-         afterwards returns 0 — and passing a zero here would be worse than passing nothing.
-
-         Payslips are unaffected either way: measured 401x619 before and 400x618 after.
-
-         A275 — that "unaffected" was wrong, and the measurement above says so: 401x619 -> 400x618 is
-         the clone being re-laid-out, not a no-op. The guard `wpx > 0 && hpx > 0` is always true, so
-         the payslip took this change too, and with x/y left to default it lost its entire 12px left
-         padding and a slice of every left-aligned glyph. The origin is now pinned below. The original
-         note here also called the receipt 296px; _PS_BODY_PX has been 400 since it was introduced,
-         so the "well inside the container" reasoning was never true of the width it describes. */
-      const canvasOpts = { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false };
-      if (wpx > 0 && hpx > 0) {
-        canvasOpts.width = wpx; canvasOpts.height = hpx;
-        canvasOpts.windowWidth = wpx; canvasOpts.windowHeight = hpx;
-        /* A275 — PIN THE CAPTURE ORIGIN. Giving html2canvas a width/height without an origin leaves
-           x/y defaulting to the element's measured bounds, which were taken in the real 440px iframe
-           while windowWidth re-lays the clone out at 400px. The two disagree, the capture window
-           lands to the right of the artwork, and the left edge is sliced off. */
-        canvasOpts.x = 0; canvasOpts.y = 0;
-        canvasOpts.scrollX = 0; canvasOpts.scrollY = 0;
-      }
-      win.html2pdf().set({
-        margin: margin, filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: canvasOpts,
-        /* A262 — jsPDF NORMALISES the format to the orientation, so a hard-coded 'portrait' swaps a
-           wide format: [382, 243] came back as a 243 x 382 page, and the payroll — which is wider
-           than it is tall — was squeezed onto a third of a tall sheet. Derive it from the shape we
-           actually measured. A payslip is taller than wide and stays portrait, unchanged. */
-        jsPDF: { unit: 'mm', format: [pageW, pageH],
-                 orientation: pageW > pageH ? 'landscape' : 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] },
-      }).from(win.document.body).save()
-        .then(() => setTimeout(cleanup, 1500))
-        .catch((err) => { cleanup(); alert('Failed to generate the ' + (opts.what || 'payslip') + ' PDF: ' + (err && err.message || err)); });
-    } catch (err) { cleanup(); alert('Failed to generate the ' + (opts.what || 'payslip') + ' PDF.'); }
-  }));
-
-  // Wait for images (the logo) to finish loading before capturing, else html2canvas paints them blank.
-  const gate = () => {
-    const imgs = Array.prototype.slice.call(win.document.images || []);
-    const pending = imgs.filter(im => !im.complete);
-    if (!pending.length) { run(); return; }
-    let left = pending.length, fired = false;
-    const go = () => { if (!fired) { fired = true; run(); } };
-    pending.forEach(im => { im.addEventListener('load', () => { if (--left <= 0) go(); });
-      im.addEventListener('error', () => { if (--left <= 0) go(); }); });
-    setTimeout(go, 3000);   // fallback so a slow/failed image never blocks the download
-  };
-
-  if (win.html2pdf) { gate(); }
-  else {
-    const sc = doc.createElement('script');
-    sc.src = _HTML2PDF_CDN;
-    sc.onload = gate;
-    sc.onerror = () => { cleanup(); alert('Could not load the PDF library — check your connection and try again.'); };
-    doc.head.appendChild(sc);
-  }
-  // Safety net if save() never resolves.
-  setTimeout(cleanup, 15000);
+  return hxRenderPayslipPdf(innerHtml, filename, singleMeasure, opts);
 }
 
 // Download one employee's payslip PDF for a cutoff.

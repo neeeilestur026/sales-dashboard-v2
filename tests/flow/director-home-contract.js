@@ -83,7 +83,7 @@ ok('#eeStatus has value="Active"', /<option value="Active">/.test(HTML));
 });
 ok('Export PDF still calls exportCutoff for both cutoffs (payroll-export-pdf.js pins this too)',
    (HTML.match(/onclick="exportCutoff\('[AB]'\)"/g) || []).length >= 2);
-ok('A301: html2pdf is loaded on demand by director-home.js, never eagerly by the page', !/html2pdf\.bundle\.min\.js/.test(HTML) && /const _HTML2PDF_CDN = 'https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/html2pdf\.js/.test(JS));
+ok('A301: html2pdf is loaded on demand by the shared renderer (js/payslip.js, A313), never eagerly by the page', !/html2pdf\.bundle\.min\.js/.test(HTML) && /const HX_HTML2PDF_CDN = 'https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/html2pdf\.js/.test(fs.readFileSync(D + 'js/payslip.js', 'utf8')) && /_HTML2PDF_CDN = \(typeof HX_HTML2PDF_CDN/.test(JS));
 ok('the scripts load in the same order as before',
    /js\/api\.js[\s\S]*salary-deduction-card\.js[\s\S]*js\/auth\.js[\s\S]*flow-api\.js[\s\S]*flow-docs\.js[\s\S]*quotation-worklist\.js[\s\S]*quotation-team-worklist\.js[\s\S]*director-home\.js[\s\S]*itinerary-week\.js[\s\S]*itinerary-week-panel\.js[\s\S]*director-approvals\.js/.test(HTML));
 

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Payslips</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/payslip-card.css">
+  <link rel="stylesheet" href="css/my-payslips.css">
+</head>
+<body class="mp">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+
+  <!-- A313: every payslip the director has released to this login, newest month first, 1st then 2nd
+       cutoff. The home page shows a payslip on the day it is released; this page keeps all of them.
+       The figures are the director's (js/payslip.js draws the same receipt and the same PDF). -->
+  <main class="main-content hx-main">
+    <div class="hx-col">
+      <header class="hx-mast">
+        <div>
+          <h1>My payslips</h1>
+          <p>Every cutoff the director has released to you, newest month first. Open one to read it or download it as PDF.</p>
+        </div>
+      </header>
+      <section class="hx-glass" id="mpList"><div class="hx-empty">Loading your payslips…</div></section>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/payslip.js"></script>
+  <script src="js/my-payslips.js"></script>
+</body>
+</html>

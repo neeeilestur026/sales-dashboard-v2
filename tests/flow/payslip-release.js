@@ -167,14 +167,15 @@ function mkEl() {
   const node = { innerHTML: '', style: {}, _cls: new Set(), children: [],
     classList: { add: (...a) => a.forEach(x => node._cls.add(x)), remove: (x) => node._cls.delete(x), contains: (x) => node._cls.has(x) },
     querySelector: (sel) => (sel === '.hx-ticket-clip' && /hx-ticket-clip/.test(node.innerHTML)) ? node._clip : null,
-    querySelectorAll: (sel) => (sel === '.hx-ticket-nav button') ? (node.innerHTML.match(/data-step="(-?1)"[^>]*>/g) || []).map(m => ({ dataset: { step: m.match(/-?1/)[0] }, addEventListener: (ev, fn) => { node._btns = node._btns || []; node._btns.push({ step: m.match(/-?1/)[0], disabled: / disabled/.test(m), fn }); } })) : [],
+    querySelectorAll: (sel) => (sel === '.hx-ticket-nav button') ? (node.innerHTML.match(/data-step="(-?1)"[^>]*>/g) || []).map(m => ({ dataset: { step: m.match(/-?1/)[0] }, addEventListener: (ev, fn) => { node._btns = node._btns || []; node._btns.push({ step: m.match(/-?1/)[0], disabled: / disabled/.test(m), fn }); } }))
+      : (sel === '[data-pdf]') ? (node.innerHTML.match(/data-pdf/g) || []).map(() => ({ addEventListener: (ev, fn) => { node._pdf = node._pdf || []; node._pdf.push(fn); } })) : [],
     appendChild() {}, _clip: null };
   node._clip = mkClip();
   return node;
 }
 function mkClip() { const c = { _cls: new Set() }; c.classList = { add: (...a) => a.forEach(x => c._cls.add(x)), remove: (x) => c._cls.delete(x), contains: (x) => c._cls.has(x) }; return c; }
 const head = { _kids: [], appendChild(n) { this._kids.push(n); } };
-const cctx = { console, HX_PAYSLIP_CSS: 'x', hxPayslipHtml: (s2, pr2, o) => `<div class="payslip">${s2.empName}|${pr2.label}|${o.footer}</div>`,
+const cctx = { console, HX_PAYSLIP_CSS: 'x', flowToday: () => '2026-10-28', hxPayslipDownload: (row) => { cctx.__pdf = row; }, hxPayslipHtml: (s2, pr2, o) => `<div class="payslip">${s2.empName}|${pr2.label}|${o.footer}</div>`,
   document: { addEventListener() {}, getElementById: (id) => (id === 'hxPayslipCss' ? head._kids.find(k => k.id === 'hxPayslipCss') || null : null),
               createElement: () => ({ id: '', textContent: '' }), head }, window: {} };
 vm.createContext(cctx); require('./hxutil').load(cctx);
@@ -184,24 +185,33 @@ cctx.window.__myPayslipRender(mount, []);
 eq('nothing released → hidden', mount.style.display, 'none');
 const list = [
   { period: '2026-10-B', employee: 'Lucena, Gerald', releasedAt: '2026-10-28 17:05:00', releasedBy: 'Neil Estur', slip: { s: { empName: 'Lucena, Gerald' }, pr: { label: '2nd Cutoff — October 2026', range: '' } } },
-  { period: '2026-10-A', employee: 'Lucena, Gerald', releasedAt: '2026-10-13 09:00:00', releasedBy: 'Neil Estur', slip: { s: { empName: 'Lucena, Gerald' }, pr: { label: '1st Cutoff — October 2026', range: '' } } },
+  { period: '2026-10-A', employee: 'Lucena, Gerald', releasedAt: '2026-10-28 09:00:00', releasedBy: 'Neil Estur', slip: { s: { empName: 'Lucena, Gerald' }, pr: { label: '1st Cutoff — October 2026', range: '' } } },
+  // A313 — released on another day: belongs to the My payslips page, not the home ticket
+  { period: '2026-09-B', employee: 'Lucena, Gerald', releasedAt: '2026-10-13 09:00:00', releasedBy: 'Neil Estur', slip: { s: { empName: 'Lucena, Gerald' }, pr: { label: '2nd Cutoff — September 2026', range: '' } } },
 ];
 cctx.window.__myPayslipRender(mount, list);
 ok('rendered and shown', mount.style.display === '' && /class="hx-ticket"/.test(mount.innerHTML));
+ok('  A313: only the cutoffs released TODAY are on the ticket (the September one is not)', /1 of 2/.test(mount.innerHTML) && !/September 2026/.test(mount.innerHTML), mount.innerHTML.slice(0, 300));
+ok('  the header links to the archive page and offers the PDF', /href="my-payslips.html"/.test(mount.innerHTML) && /data-pdf/.test(mount.innerHTML));
+ok('  the mount carries the ticket-style host class', mount._cls.has('hx-payslip-host'));
 ok('  the latest cutoff first, with the released footer', /2nd Cutoff — October 2026\|Released 28 Oct 2026, 17:05 by Neil Estur/.test(mount.innerHTML), mount.innerHTML);
 ok('  printer bar, LED, stamp and perforated paper chrome', /hx-printer/.test(mount.innerHTML) && /hx-led/.test(mount.innerHTML) && /hx-stamp">Released<small>28 Oct 2026, 17:05/.test(mount.innerHTML));
 ok('  the feed starts once, in full', mount._clip._cls.has('feed') && !mount._clip._cls.has('short'));
 ok('  earlier/later shown for two cutoffs, Later disabled on the latest', /1 of 2/.test(mount.innerHTML) && (mount._btns || []).some(b => b.step === '-1' && b.disabled) && (mount._btns || []).some(b => b.step === '1' && !b.disabled));
 ok('  the stylesheet was injected once', head._kids.length === 1 && head._kids[0].id === 'hxPayslipCss' && head._kids[0].textContent === 'x');
+(mount._pdf || []).forEach(fn => fn()); ok('  Download PDF hands the cutoff on screen to the shared renderer', cctx.__pdf && cctx.__pdf.period === '2026-10-B', cctx.__pdf);
 const earlier = (mount._btns || []).find(b => b.step === '1'); mount._clip = mkClip(); mount._btns = [];
 earlier.fn();
 ok('Earlier flips to the previous cutoff with a short feed', /1st Cutoff — October 2026/.test(mount.innerHTML) && /2 of 2/.test(mount.innerHTML) && mount._clip._cls.has('feed') && mount._clip._cls.has('short'), mount.innerHTML.slice(0, 200));
 ok('  with Earlier now disabled', (mount._btns || []).some(b => b.step === '1' && b.disabled));
 cctx.window.__myPayslipRender(mount, list);
 eq('the stylesheet is not injected twice', head._kids.length, 1);
+cctx.window.__myPayslipRender(mount, [list[2]]);
+eq('a payslip released on another day leaves the home card hidden', mount.style.display, 'none');
 const CSS = fs.readFileSync(D + 'css/payslip-card.css', 'utf8');
 ok('the ticket sheet animates transform and opacity only', !/@keyframes[^{]*\{[^}]*(width|height|top|left|margin|padding|background|box-shadow)\s*:/.test(CSS.replace(/\n/g, ' ')));
 ok('  the paper is white with black ink whatever the theme', /\.hx-ticket \{[^}]*background:#fff; color:#000/.test(CSS));
+ok('  A313: the ticket styles are scoped to the host class, not the home card id', /\.hx-payslip-host \.hx-ticket \{/.test(CSS) && !/#myPayslipCard/.test(CSS));
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);
