@@ -37,8 +37,10 @@
  * a round trip to tell apart. Bump this whenever Code.gs changes in a way anyone might ask about.
  *   Check it:  <exec url>?action=getCodeVersion
  *
- *   1 — A275 salary deductions, and the payroll-approval row-index guard that had to precede them. */
-var CODE_VERSION = 2;   // AS-1 — sessions required on every action, server-side roles, hashed passwords, the sheet-id guard
+ *   1 — A275 salary deductions, and the payroll-approval row-index guard that had to precede them.
+ *   2 — AS-1 sessions required on every action, server-side roles, hashed passwords, the sheet-id guard.
+ *   3 — A309 SSS Amount / PhilHealth Amount / Date Hired on Payroll Employees (statutory schedule by rule). */
+var CODE_VERSION = 3;
 
 // ─── Configuration ───────────────────────────────────────────
 var USERS_SHEET_ID = _prop('USERS_SHEET_ID');   // AS-1 — set once under Project Settings → Script properties; never in this file
@@ -10933,11 +10935,27 @@ function _payrollEmployeesSheet() {
      reader of this sheet indexes positionally: handleGetPayrollEmployees reads row[5] for Status
      and handleGet13thMonthPay reads er[5] for the same. Inserting a column ahead of Status would
      shift both silently, and the 13th-month report would begin reading a pay type as an employment
-     status. A blank Pay Type means Hourly, so no existing row needs migrating. */
-  return _getOrCreateSheet(ss, 'Payroll Employees', [
+     status. A blank Pay Type means Hourly, so no existing row needs migrating.
+     A309 — 'SSS Amount', 'PhilHealth Amount' and 'Date Hired' are appended after Fixed Amount for
+     the same reason. _getOrCreateSheet only writes headers on a NEW sheet, so the live sheet is
+     widened by hand below, exactly as _payrollRegisterSheet does for its columns 15 and 16. */
+  var sheet = _getOrCreateSheet(ss, 'Payroll Employees', [
     'Last Name', 'First Name', 'Daily Rate', 'Other Income', 'HDMF Amount', 'Status',
-    'Pay Type', 'Fixed Amount'
+    'Pay Type', 'Fixed Amount', 'SSS Amount', 'PhilHealth Amount', 'Date Hired'
   ]);
+  try {
+    [[9, 'SSS Amount'], [10, 'PhilHealth Amount'], [11, 'Date Hired']].forEach(function (c) {
+      if (sheet.getLastColumn() < c[0] || !String(sheet.getRange(1, c[0]).getValue()).trim()) sheet.getRange(1, c[0]).setValue(c[1]);
+    });
+  } catch (e) { /* labelling is cosmetic — a failure must not block payroll */ }
+  return sheet;
+}
+/* A309 — the Date Hired cell as YYYY-MM-DD. Sheets coerces a written date string into a Date, so a
+   Date comes back through formatDate (local getters); a string is trimmed to its date part. */
+function _payrollDateCell(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? '' : formatDate(v);
+  var s = String(v || '').trim();
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
 }
 function _payrollHoursSheet() {
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
@@ -11209,7 +11227,10 @@ function handleGetPayrollEmployees() {
         status: String(row[5]||'Active'),
         // A260 — blank is Hourly, which is what every row written before this existed carries.
         payType: (String(row[6]||'') === 'Fixed') ? 'Fixed' : 'Hourly',
-        fixedAmount: parseFloat(row[7])||0 });
+        fixedAmount: parseFloat(row[7])||0,
+        // A309 — blank/0 means the page's defaults (SSS 600, PhilHealth 200); no date = eligible now
+        sssAmount: parseFloat(row[8])||0, philhealthAmount: parseFloat(row[9])||0,
+        dateHired: _payrollDateCell(row[10]) });
     }
     return { success: true, data: results };
   } catch(e) { return { success: false, message: e.message }; }
@@ -11227,8 +11248,12 @@ function handleSavePayrollEmployee(params) {
     // onto a fixed salary by accident.
     var newType  = (String(params.payType||'') === 'Fixed') ? 'Fixed' : 'Hourly',
         newFixed = parseFloat(params.fixedAmount)||0;
+    // A309 — per-employee statutory amounts; Date Hired only in YYYY-MM-DD (anything else is dropped)
+    var newSss   = parseFloat(params.sssAmount)||0,
+        newPhic  = parseFloat(params.philhealthAmount)||0,
+        newHired = /^\d{4}-\d{2}-\d{2}$/.test(String(params.dateHired||'')) ? String(params.dateHired) : '';
     var row   = [params.lastName||'', params.firstName||'',
-      newRate, newOther, newHdmf, params.status||'Active', newType, newFixed];
+      newRate, newOther, newHdmf, params.status||'Active', newType, newFixed, newSss, newPhic, newHired];
     var empName = String(params.lastName||'') + ', ' + String(params.firstName||'');
     var isEdit = (id > 0 && id < data.length);
 
@@ -11244,6 +11269,10 @@ function handleSavePayrollEmployee(params) {
          only pay changes in the company with no audit trail. */
       var oldFixed = parseFloat(prev[7])||0;
       if (newFixed !== oldFixed) _logPayrollRateChange(empName, 'Fixed Amount', oldFixed, newFixed, params, false);
+      // A309 — SSS / PhilHealth changes are logged like HDMF; Date Hired is not a pay change
+      var oldSss = parseFloat(prev[8])||0, oldPhic = parseFloat(prev[9])||0;
+      if (newSss  !== oldSss)  _logPayrollRateChange(empName, 'SSS Amount',        oldSss,  newSss,  params, false);
+      if (newPhic !== oldPhic) _logPayrollRateChange(empName, 'PhilHealth Amount', oldPhic, newPhic, params, false);
       /* A275 — "Last, First" IS the payroll key: the register, the hours grid, the incentive ledger
          and now the salary-deduction ledger are all keyed on this string, and it is edited in place.
          A married name changed here used to orphan every one of them silently. Only the deduction

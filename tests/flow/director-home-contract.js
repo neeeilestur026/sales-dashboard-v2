@@ -45,7 +45,7 @@ ok('<body class="dh"> — the scope every rule hangs off', /<body class="dh">/.t
 const TAGS = {
   select: ['payMonth', 'thirteenthYear', 'eeStatus', 'eePayType', 'incCategory'],
   input:  ['payYear', 'employerShareA', 'employerShareB', 'eeEditId', 'eeLastName', 'eeFirstName', 'eeDailyRate',
-           'eeOtherIncome', 'eeHdmf', 'eeFixedAmount', 'eeEffectiveDate', 'eeReason', 'incAmount', 'incReason'],
+           'eeOtherIncome', 'eeHdmf', 'eeSss', 'eePhilhealth', 'eeDateHired', 'eeFixedAmount', 'eeEffectiveDate', 'eeReason', 'incAmount', 'incReason'],
   tbody:  ['eeBody', 'thirteenthBody'],
   tfoot:  ['thirteenthFoot'],
   button: ['dirApprRefresh', 'incSaveBtn', 'submitApprovalABtn', 'submitApprovalBBtn'],

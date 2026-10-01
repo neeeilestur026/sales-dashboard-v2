@@ -4,7 +4,7 @@
  *
  * WHY THIS FILE EXISTS. Three managers are paid a set amount every cutoff whatever their hours and
  * take no statutory contribution. Payroll had no way to express that: basicPay came from
- * regHrs x dailyRate/8 for everyone, and SSS / PhilHealth / Pag-IBIG were computed for everyone.
+ * regHrs x dailyRate/8 for everyone, and SSS / PhilHealth / Pag-IBIG were charged to everyone.
  *
  * The rules pinned here:
  *   1. Gross = fixed amount + other income + incentive. Hours change nothing.
@@ -114,9 +114,10 @@ T.set([HOURLY], Object.assign({}, H('Cruz, Juan', '12', 8), H('Cruz, Juan', '13'
 const eh = T.earnings(HOURLY, 'B'), dh = T.deductions(HOURLY, 'B');
 eq('  basic', eh.basicPay, 2000);
 eq('  OT at 1.25', eh.otPay, 312.5);
-eq('  Pag-IBIG still charged', dh.pagibig, 100);
-ok('  SSS still computed', dh.sss > 0, dh);
-ok('  PhilHealth still computed', dh.philhealth > 0, dh);
+eq('  Pag-IBIG is a 1st-cutoff deduction (A309)', T.deductions(HOURLY, 'A').pagibig, 100);
+eq('  and not a 2nd-cutoff one', dh.pagibig, 0);
+ok('  SSS still charged on the 2nd cutoff', dh.sss > 0, dh);
+ok('  PhilHealth still charged on the 2nd cutoff', dh.philhealth > 0, dh);
 /* A259's holiday arithmetic must survive untouched. */
 T.set([HOURLY], H('Cruz, Juan', '13', 8), { '2026-01-13': 'Regular Holiday' }, {}, 2026, '01');
 eq('  an hourly regular holiday still pays x2', T.earnings(HOURLY, 'B').holidayPay, 2000);
@@ -135,7 +136,7 @@ ok('_payDeductions exists', /function _payDeductions\(emp, cutoff\)/.test(SRC));
 const calls = (SRC.match(/[^n] _payDeductions\(emp, cutoff\)|= _payDeductions\(emp, cutoff\)/g) || []).length;
 eq('  and is called at four sites', calls, 4);
 ok('  the old duplicated default survives ONLY inside it',
-   (SRC.match(/emp\.hdmfAmount \|\| 100/g) || []).length === 1);
+   (SRC.match(/emp\.hdmfAmount \|\| 200/g) || []).length === 1);
 const slipD = T.deductions.bind(null);
 T.set([NEIL], {}, {}, { 'Estur, Neil': { advances: 300 } }, 2026, '01');
 const sl = T.slip(NEIL, 'B'), dd = T.deductions(NEIL, 'B');

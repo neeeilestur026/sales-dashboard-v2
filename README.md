@@ -53,7 +53,7 @@ Pushing `main` deploys to https://hi-escorp-portal-wufz.onrender.com automatical
 
 ## Deploying the hardened Code.gs (AS-1)
 
-The repo's `apps-script/Code.gs` (CODE_VERSION 2) requires a session on every action, checks the
+The repo's `apps-script/Code.gs` (CODE_VERSION 3) requires a session on every action, checks the
 admin-page roles on the server, refuses mutations over GET, guards sheet ids, and stores passwords
 hashed. Order matters — do it in this sequence and nobody is locked out:
 

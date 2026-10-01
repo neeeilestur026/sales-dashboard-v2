@@ -231,14 +231,14 @@ async function loadEmployees() {
     }
   } catch (err) {
     document.getElementById('eeBody').innerHTML =
-      `<tr><td colspan="10" class="dh-error">Error: ${esc(err.message)}</td></tr>`;
+      `<tr><td colspan="13" class="dh-error">Error: ${esc(err.message)}</td></tr>`;
   }
 }
 
 function renderEETable() {
   const tbody = document.getElementById('eeBody');
   if (!_employees.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="dh-empty">No employees. Add one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="dh-empty">No employees. Add one above.</td></tr>';
     _updateKpis();                                   // A285 — the Active count is data, not a scraped column
     return;
   }
@@ -253,7 +253,10 @@ function renderEETable() {
       <td class="num">${_isFixedPay(e) ? '—' : peso(e.dailyRate)}</td>
       <td class="num">${_isFixedPay(e) ? '—' : peso(e.hourlyRate)}</td>
       <td class="num">${peso(e.otherIncome)}</td>
-      <td class="num">${peso(e.hdmfAmount)}</td>
+      <td class="num">${_isFixedPay(e) ? '—' : peso(e.hdmfAmount || 200)}</td>
+      <td class="num">${_isFixedPay(e) ? '—' : peso(e.sssAmount || 600)}</td>
+      <td class="num">${_isFixedPay(e) ? '—' : peso(e.philhealthAmount || 200)}</td>
+      <td>${esc(e.dateHired || '—')}</td>
       <td>${esc(e.status)}</td>
       <td>
         <button class="btn-sm" onclick="openEEModal(${i})">Edit</button>
@@ -269,7 +272,7 @@ function renderEETable() {
 // ── EE Modal ──────────────────────────────────────────────────
 // A198 — the stored pay values when the modal opened, so we can tell whether the director actually
 // changed the rate (and only then ask for an effective date + reason).
-let _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null };
+let _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null, sss: null, phic: null };
 
 function _eeToday() { return (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10); }
 // The logged-in director's name for the audit stamp — `session` is scoped to the init handler.
@@ -296,7 +299,10 @@ function _eeCheckPayChange() {
   const oi = parseFloat(document.getElementById('eeOtherIncome').value) || 0;
   const hd = parseFloat(document.getElementById('eeHdmf').value) || 0;
   const fx = parseFloat((document.getElementById('eeFixedAmount') || {}).value) || 0;   // A260
+  const ss = parseFloat((document.getElementById('eeSss') || {}).value) || 0;           // A309
+  const ph = parseFloat((document.getElementById('eePhilhealth') || {}).value) || 0;    // A309
   const changed = dr !== _eeOrig.dailyRate || oi !== _eeOrig.otherIncome || hd !== _eeOrig.hdmf
+                  || ss !== (_eeOrig.sss || 0) || ph !== (_eeOrig.phic || 0)
                   || (_eeOrig.fixed !== null && _eeOrig.fixed !== undefined && fx !== _eeOrig.fixed);
   block.style.display = changed ? '' : 'none';
   if (changed) {
@@ -304,6 +310,8 @@ function _eeCheckPayChange() {
     if (dr !== _eeOrig.dailyRate) parts.push(`daily rate ${peso(_eeOrig.dailyRate)} → ${peso(dr)}`);
     if (oi !== _eeOrig.otherIncome) parts.push(`other income ${peso(_eeOrig.otherIncome)} → ${peso(oi)}`);
     if (hd !== _eeOrig.hdmf) parts.push(`HDMF ${peso(_eeOrig.hdmf)} → ${peso(hd)}`);
+    if (ss !== (_eeOrig.sss || 0)) parts.push(`SSS ${peso(_eeOrig.sss)} → ${peso(ss)}`);            // A309
+    if (ph !== (_eeOrig.phic || 0)) parts.push(`PhilHealth ${peso(_eeOrig.phic)} → ${peso(ph)}`);   // A309
     if (_eeOrig.fixed !== null && _eeOrig.fixed !== undefined && fx !== _eeOrig.fixed) {
       parts.push(`fixed salary ${peso(_eeOrig.fixed)} → ${peso(fx)}`);          // A260
     }
@@ -316,7 +324,7 @@ function openEEModal(idx) {
   document.getElementById('eeEffectiveDate').value = _eeToday();
   document.getElementById('eeReason').value = '';
   if (idx === null) {
-    _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null, fixed: null };   // a new employee has no prior pay
+    _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null, fixed: null, sss: null, phic: null };   // a new employee has no prior pay
     document.getElementById('eeModalTitle').textContent = 'Add Employee';
     document.getElementById('eeEditId').value     = '';
     document.getElementById('eeLastName').value   = '';
@@ -324,13 +332,17 @@ function openEEModal(idx) {
     document.getElementById('eeDailyRate').value  = '';
     document.getElementById('eeOtherIncome').value = '';
     document.getElementById('eeHdmf').value       = '';
+    document.getElementById('eeSss').value        = '';            // A309
+    document.getElementById('eePhilhealth').value = '';            // A309
+    document.getElementById('eeDateHired').value  = '';            // A309
     document.getElementById('eeStatus').value     = 'Active';
     document.getElementById('eePayType').value    = 'Hourly';        // A260
     document.getElementById('eeFixedAmount').value = '';
   } else {
     const e = _employees[idx];
     _eeOrig = { dailyRate: e.dailyRate || 0, otherIncome: e.otherIncome || 0, hdmf: e.hdmfAmount || 0,
-                fixed: e.fixedAmount || 0 };                          // A260
+                fixed: e.fixedAmount || 0,                            // A260
+                sss: e.sssAmount || 0, phic: e.philhealthAmount || 0 };   // A309
     document.getElementById('eeModalTitle').textContent = 'Edit Employee';
     document.getElementById('eeEditId').value     = e.id;
     document.getElementById('eeLastName').value   = e.lastName;
@@ -338,13 +350,16 @@ function openEEModal(idx) {
     document.getElementById('eeDailyRate').value  = e.dailyRate;
     document.getElementById('eeOtherIncome').value = e.otherIncome;
     document.getElementById('eeHdmf').value       = e.hdmfAmount;
+    document.getElementById('eeSss').value        = e.sssAmount || '';          // A309
+    document.getElementById('eePhilhealth').value = e.philhealthAmount || '';   // A309
+    document.getElementById('eeDateHired').value  = e.dateHired || '';          // A309
     document.getElementById('eeStatus').value     = e.status;
     document.getElementById('eePayType').value    = _isFixedPay(e) ? 'Fixed' : 'Hourly';   // A260
     document.getElementById('eeFixedAmount').value = e.fixedAmount || '';
   }
   _eeSyncPayType();                                                   // A260
   _eeCheckPayChange();
-  ['eeDailyRate', 'eeOtherIncome', 'eeHdmf', 'eeFixedAmount'].forEach(id => {
+  ['eeDailyRate', 'eeOtherIncome', 'eeHdmf', 'eeFixedAmount', 'eeSss', 'eePhilhealth'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.oninput = _eeCheckPayChange;
   });
@@ -363,6 +378,9 @@ async function saveEE() {
     dailyRate:   document.getElementById('eeDailyRate').value,
     otherIncome: document.getElementById('eeOtherIncome').value,
     hdmfAmount:  document.getElementById('eeHdmf').value,
+    sssAmount:        document.getElementById('eeSss').value,          // A309
+    philhealthAmount: document.getElementById('eePhilhealth').value,   // A309
+    dateHired:        document.getElementById('eeDateHired').value,    // A309
     status:      document.getElementById('eeStatus').value,
     payType:     document.getElementById('eePayType').value,             // A260
     fixedAmount: document.getElementById('eeFixedAmount').value,
@@ -1367,8 +1385,8 @@ async function saveRegister(cutoff) {
 
   const rows = _employees.map(emp => {
     /* A229 — one definition of the earnings half. The statutory defaults must match exactly what was
-       displayed, so saving never changes a number on screen — which is why both this and the grid
-       pass `statBase`, not gross. The incentive is NOT sent: the server recomputes it from the
+       displayed, so saving never changes a number on screen — both this and the grid read
+       the one _payDeductions. The incentive is NOT sent: the server recomputes it from the
        ledger and discards anything the client claims.
        A275 — the salary deduction is not sent either, and for a stronger reason: it is a function of
        the five deductions below it and of every posting ever made, so the browser has no way to know
@@ -1748,12 +1766,10 @@ function _buildCutoffHtml(cutoff) {
  * (`+(saved.advances !== undefined ? … : 0)`, a bare `saved.advances || 0`, and one with no default
  * at all). Folding those together would silently change behaviour while pretending to be a refactor.
  *
- * `statBase` IS THE POINT, not a convenience. SSS and PhilHealth are computed from it, and it EXCLUDES
- * the incentive: a one-off bonus must not drag somebody into a higher SSS bracket. Without it a
- * ₱2,000 bonus would climb four brackets and add roughly ₱230 to that employee's own deductions —
- * they would take home ₱1,770 of their ₱2,000 and nobody would be able to explain why. Confirmed with
- * the director; it is also the ordinary PH treatment, a one-off bonus sitting outside the monthly
- * salary credit. `grossPay` still carries the incentive, so pay, the payslip and the P&L are right.
+ * `statBase` is the pay before the incentive. It used to be what SSS and PhilHealth were computed
+ * from (so a one-off bonus could not climb a bracket); since A309 those are fixed per-employee
+ * amounts, and statBase stays only because `grossPay = statBase + incentive` — pay, the payslip
+ * and the P&L still carry the incentive.
  */
 function _incentiveFor(empName, cutoff) {
   const map = cutoff === 'A' ? _incentivesA : _incentivesB;
@@ -1937,7 +1953,7 @@ function _payEarnings(emp, cutoff) {
     // A259 — the breakdown behind `holidayPay`, so a payslip can name the rate it actually applied
     regHolHrs, regHolPay, speHolHrs, speHolPay, unworkedHolDays, unworkedHolPay,
     isFixed: false, fixedAmount: 0, recordedHrs: 0,                              // A260
-    statBase,                       // what SSS / PhilHealth are computed from — no incentive
+    statBase,                       // pay before the incentive (A309: no longer drives SSS / PhilHealth)
     grossPay: statBase + incentive  // what the employee is actually paid
   };
 }
@@ -1953,7 +1969,20 @@ function _payEarnings(emp, cutoff) {
  * A stored register override for those three is deliberately IGNORED rather than trusted — a figure
  * saved while the employee was still hourly would otherwise keep being deducted after the switch.
  * Withholding tax and cash advances are read exactly as before: an advance is a loan being repaid
- * and tax is a legal obligation, neither of which a pay type changes. */
+ * and tax is a legal obligation, neither of which a pay type changes.
+ *
+ * A309 — THE STATUTORY SCHEDULE IS A RULE, NOT A TABLE. The company deducts Pag-IBIG on the 1st
+ * cutoff only and SSS + PhilHealth on the 2nd only, at per-employee amounts kept on the employee
+ * record (hdmfAmount / sssAmount / philhealthAmount, blank meaning 200 / 600 / 200). The old SSS
+ * bracket table and the PhilHealth percentage were being typed over by hand every cutoff. A saved
+ * register row still wins, so nothing saved or approved moves; and a new hire takes none of the
+ * three in the month they were hired (_statutoryEligible). */
+function _statutoryEligible(emp) {
+  const hired = String((emp || {}).dateHired || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(hired)) return true;                        // no date → eligible now
+  if (!_currentYear || !_currentMonth) return true;                      // no period loaded yet
+  return (String(_currentYear) + '-' + String(_currentMonth).padStart(2, '0')) > hired;
+}
 function _payDeductions(emp, cutoff) {
   const empName = emp.lastName + ', ' + emp.firstName;
   const registerMap = cutoff === 'A' ? _registerA : _registerB;
@@ -1989,9 +2018,10 @@ function _payDeductions(emp, cutoff) {
              totalDed: advances + wtax + sdF };
   }
   const e = _payEarnings(emp, cutoff);
-  const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : (emp.hdmfAmount || 100));
-  const sss        = +(saved.sss        !== undefined ? saved.sss        : _calcSSS(e.statBase));
-  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : _calcPHIC(e.statBase));
+  const elig = _statutoryEligible(emp);                                   // A309
+  const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : ((cutoff === 'A' && elig) ? (emp.hdmfAmount || 200) : 0));
+  const sss        = +(saved.sss        !== undefined ? saved.sss        : ((cutoff === 'B' && elig) ? (emp.sssAmount || 600) : 0));
+  const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : ((cutoff === 'B' && elig) ? (emp.philhealthAmount || 200) : 0));
   const salaryDeduction = isStored ? stored
     : _sdPreview((due && due.amount) || 0, e.grossPay || 0,
                  pagibig + sss + philhealth + advances + wtax);
@@ -2009,8 +2039,8 @@ function _payDeductions(emp, cutoff) {
  * WITH ONE EXCEPTION: gross is 0 until the hours are entered, and capping against that would hide
  * the deduction completely at exactly the moment someone opens the cutoff to check it is set up.
  * So with no pay yet, the scheduled amount is shown. Nothing is lost by it — the grid already prints
- * a negative net for a zero-hour employee, because Pag-IBIG, SSS and PhilHealth all apply at their
- * floors regardless — and the save caps for real once there are hours behind it. */
+ * a negative net for a zero-hour employee, because the cutoff's statutory amounts apply regardless
+ * of hours — and the save caps for real once there are hours behind it. */
 function _sdPreview(scheduled, grossPay, otherDeductions) {
   if (!(scheduled > 0)) return 0;
   if (!(grossPay > 0)) return scheduled;
@@ -2021,56 +2051,6 @@ function _sdPreview(scheduled, grossPay, otherDeductions) {
 function _sdLinesFor(saved, due, isStored) {
   if (isStored) return saved.salaryDeductionLines || [];
   return (due && due.lines) || [];
-}
-
-/** @param monthlyBasic the STATUTORY base (_payEarnings().statBase) — deliberately not gross. */
-function _calcSSS(monthlyBasic) {
-  // Simplified SSS table (EE share), based on 2023+ table
-  const compensation = Math.max(0, monthlyBasic);
-  if (compensation < 4250)  return 180;
-  if (compensation < 4750)  return 202.50;
-  if (compensation < 5250)  return 225;
-  if (compensation < 5750)  return 247.50;
-  if (compensation < 6250)  return 270;
-  if (compensation < 6750)  return 292.50;
-  if (compensation < 7250)  return 315;
-  if (compensation < 7750)  return 337.50;
-  if (compensation < 8250)  return 360;
-  if (compensation < 8750)  return 382.50;
-  if (compensation < 9250)  return 405;
-  if (compensation < 9750)  return 427.50;
-  if (compensation < 10250) return 450;
-  if (compensation < 10750) return 472.50;
-  if (compensation < 11250) return 495;
-  if (compensation < 11750) return 517.50;
-  if (compensation < 12250) return 540;
-  if (compensation < 12750) return 562.50;
-  if (compensation < 13250) return 585;
-  if (compensation < 13750) return 607.50;
-  if (compensation < 14250) return 630;
-  if (compensation < 14750) return 652.50;
-  if (compensation < 15250) return 675;
-  if (compensation < 15750) return 697.50;
-  if (compensation < 16250) return 720;
-  if (compensation < 16750) return 742.50;
-  if (compensation < 17250) return 765;
-  if (compensation < 17750) return 787.50;
-  if (compensation < 18250) return 810;
-  if (compensation < 18750) return 832.50;
-  if (compensation < 19250) return 855;
-  if (compensation < 19750) return 877.50;
-  if (compensation < 20250) return 900;
-  return 900; // max for most cases; actual cap may differ
-}
-
-function _calcPHIC(monthlyBasic) {
-  // PhilHealth: 5% of basic salary, split 50/50 EE and ER
-  // Monthly premium = 5% * monthly basic, EE share = half
-  const rate = 0.05;
-  const monthly = monthlyBasic * rate;
-  const ee = monthly / 2;
-  // Floor ₱500, cap ₱5000 (monthly total), EE share floor ₱250
-  return Math.min(Math.max(ee, 250), 2500);
 }
 
 // ── Formatting helpers ────────────────────────────────────────

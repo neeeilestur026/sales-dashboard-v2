@@ -196,9 +196,9 @@
             <div class="dh-table-wrap">
               <table class="pay-table" id="eeTable">
                 <thead>
-                  <tr><th>#</th><th>Last name</th><th>First name</th><th>Pay</th><th class="num">Daily rate (₱)</th><th class="num">Hourly rate (₱)</th><th class="num">Other income (₱)</th><th class="num">HDMF amt</th><th>Status</th><th>Actions</th></tr>
+                  <tr><th>#</th><th>Last name</th><th>First name</th><th>Pay</th><th class="num">Daily rate (₱)</th><th class="num">Hourly rate (₱)</th><th class="num">Other income (₱)</th><th class="num">Pag-IBIG</th><th class="num">SSS</th><th class="num">PhilHealth</th><th>Hired</th><th>Status</th><th>Actions</th></tr>
                 </thead>
-                <tbody id="eeBody"><tr><td colspan="10"><div class="dh-skel"><i></i><i></i><i></i></div></td></tr></tbody>
+                <tbody id="eeBody"><tr><td colspan="13"><div class="dh-skel"><i></i><i></i><i></i></div></td></tr></tbody>
               </table>
             </div>
             <!-- A198 — recent salary changes across everyone, so a raise is visible at a glance -->
@@ -330,7 +330,12 @@
       </div>
       <div class="dh-field" id="eeDailyRow"><label for="eeDailyRate">Daily rate (₱)</label><input type="number" id="eeDailyRate" min="0" step="0.01" placeholder="0.00"></div>
       <div class="dh-field"><label for="eeOtherIncome">Other income (₱) <span class="lc">e.g. allowances, per 2nd cutoff</span></label><input type="number" id="eeOtherIncome" min="0" step="0.01" placeholder="0.00"></div>
-      <div class="dh-field"><label for="eeHdmf">HDMF / Pag-IBIG amount (₱)</label><input type="number" id="eeHdmf" min="0" step="0.01" placeholder="100.00"></div>
+      <!-- A309 — the statutory schedule: Pag-IBIG on the 1st cutoff, SSS + PhilHealth on the 2nd, at these
+           per-employee amounts. Blank or 0 means the company default; a one-off 0 is typed in the register cell. -->
+      <div class="dh-field"><label for="eeHdmf">HDMF / Pag-IBIG amount (₱) <span class="lc">1st cutoff only</span></label><input type="number" id="eeHdmf" min="0" step="0.01" placeholder="200.00"><div class="help">Blank or 0 means ₱200.</div></div>
+      <div class="dh-field"><label for="eeSss">SSS amount (₱) <span class="lc">2nd cutoff only</span></label><input type="number" id="eeSss" min="0" step="0.01" placeholder="600.00"><div class="help">Blank or 0 means ₱600.</div></div>
+      <div class="dh-field"><label for="eePhilhealth">PhilHealth amount (₱) <span class="lc">2nd cutoff only</span></label><input type="number" id="eePhilhealth" min="0" step="0.01" placeholder="200.00"><div class="help">Blank or 0 means ₱200.</div></div>
+      <div class="dh-field"><label for="eeDateHired">Date hired</label><input type="date" id="eeDateHired"><div class="help">No Pag-IBIG, SSS or PhilHealth in the month hired; they start the following month. Leave blank for existing staff.</div></div>
       <div class="dh-field"><label for="eeStatus">Status</label><select id="eeStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
       <!-- A198 — revealed only when the pay changes on an edit, so the raise is recorded with a date + reason -->
       <div class="dh-banner ok" id="eePayChange" style="display:none;">
