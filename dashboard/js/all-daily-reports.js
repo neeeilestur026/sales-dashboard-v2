@@ -14,6 +14,7 @@ let adrVisits = {};         // A189 — user -> that day's client visits
 let adrVisitPhotos = {};    // A190 — visitNo -> data: URI, filled lazily when a card is opened
 let adrPhotoLoaded = {};    // A190 — user -> true once their photos have been fetched
 let adrPlans = {};          // A190 — user -> their APPROVED itinerary for the week containing the date
+let adrRoster = [];         // A314 — every login except the director, so a quiet day still shows the person
 const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 
 function _e(s) { return hxEsc(s); }
@@ -96,6 +97,16 @@ async function load(fresh) {
     }
   } catch (e) { adrPlans = {}; }
 
+  /* A314 — THE ROSTER COMES FIRST. Until now a person appeared here only if some source had a row
+     for them that day (activity, note, submission, visit, a sent email), so a user with a quiet day
+     — or whose role never touches the flow (leadgen, a second accountant) — simply did not exist on
+     the team report, and "not submitted" could not be said of them. Every login except the director
+     now gets a card, empty or not. Best-effort: a roster failure leaves the old behaviour. */
+  try {
+    const ur = await apiGetUsers();
+    if (seq === adrLoadSeq) adrRoster = ((ur && (ur.data || ur.users)) || []).filter(u => String(u.role || '').toLowerCase() !== 'director');
+  } catch (e) { /* keep whatever was loaded last time */ }
+
   adrEmailsLoading = true;
   render();
 
@@ -129,14 +140,16 @@ async function adrLoadAllEmails(seq) {
   adrEmails = {};
   adrRosterError = '';
   if (typeof apiFetchEmailUsers !== 'function' || typeof apiFetchEmailLogToday !== 'function') return;
-  let list = [];
-  try {
-    const r = await apiFetchEmailUsers();
-    if (!r || !r.success) throw new Error((r && r.message) || 'Could not load the user list.');
-    list = r.users || [];
-  } catch (e) {
-    adrRosterError = e.message || 'Could not load the user list.';
-    return;
+  let list = adrRoster.slice();                     // A314 — the roster already loaded above
+  if (!list.length) {
+    try {
+      const r = await apiFetchEmailUsers();
+      if (!r || !r.success) throw new Error((r && r.message) || 'Could not load the user list.');
+      list = r.users || [];
+    } catch (e) {
+      adrRosterError = e.message || 'Could not load the user list.';
+      return;
+    }
   }
   const targets = list.filter(u => String(u.role || '').toLowerCase() !== 'director');
   const date = _date();
@@ -203,6 +216,12 @@ function render() {
   // A189 — a rep whose whole day was client visits has no ActivityLog rows, so without this they
   // would be missing from the team report entirely.
   Object.keys(adrVisits).forEach(u => { if (!byUser[u]) { byUser[u] = []; userTasks[u] = { tasks: [], counts: flowActivityCounts([]) }; names.push(u); } });
+  // A314 — everyone on the roster, whether or not the day left a trace (see load()).
+  adrRoster.forEach(u => {
+    const disp = String(u.fullName || u.name || u.username || '').trim();
+    if (!disp || byUser[disp]) return;
+    byUser[disp] = []; userTasks[disp] = { tasks: [], counts: flowActivityCounts([]) }; names.push(disp);
+  });
   names = Array.from(new Set(names));
   if (q) names = names.filter(n => n.toLowerCase().includes(q));
   document.getElementById('userCount').textContent = names.length;
@@ -212,6 +231,7 @@ function render() {
 
   const cont = document.getElementById('userReports');
   if (!names.length) { cont.innerHTML = '<div class="dr-empty">No activity recorded for this day.</div>'; return; }
+  names.sort((a, b) => a.localeCompare(b));
 
   cont.innerHTML = names.map((name, i) => {
     const ut = userTasks[name] || { tasks: [], counts: flowActivityCounts([]) };
