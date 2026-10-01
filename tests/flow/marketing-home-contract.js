@@ -32,12 +32,12 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
-eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,daily-reports.css,marketing-home.css');
+eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,daily-reports.css,payslip-card.css,marketing-home.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="mk"> — the scope every rule hangs off', /<body class="mk">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="mk">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,marketing-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js,marketing-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,marketing-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js,marketing-home-page.js');
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab and the nav, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && /<nav class="hx-rail-nav"/.test(HTML) && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));
@@ -50,7 +50,7 @@ const TAGS = {
   b: ['hbDay'],
   span: ['hbMon', 'roTag', 'mgmtDrMeta', 'mfTwRange', 'metMonthLabel'],
   div: ['kpis', 'tabs', 'tabsSeg', 'panels', 'msg', 'recModal', 'recForm', 'recFormMsg', 'metModal', 'metMsg', 'mgmtDrUsers', 'mgmtDrMovements', 'mgmtDrDocs', 'mgmtDrSales', 'mgmtDrPdfs', 'mgmtDrBody', 'mfTwBody'],
-  section: ['spot', 'myDeductionCard', 'trackers', 'newsec-daily-reports'],
+  section: ['spot', 'myDeductionCard', 'myPayslipCard', 'trackers', 'newsec-daily-reports'],
   button: ['themeToggle', 'metricsBtn', 'recSaveBtn', 'metSaveBtn', 'mfTwReset', 'mfTwNext', 'mfTwPdfBtn'],
   input: ['monthSel', 'recEntity', 'recRowIndex', 'metVisits', 'metFollowers', 'metNotes', 'mgmtDrDate', 'mgmtDrSearch'],
   header: ['navbar'], aside: ['rail'],
@@ -61,7 +61,7 @@ const reached = (src) => Array.from(new Set((src.match(/getElementById\('([^']+)
 reached(JS).filter(id => !['pSearch', 'pStatus', 'pAdd', 'pBody'].includes(id)).forEach(id => ok('marketing-home.js reaches #' + id + ' and it exists', !!tagOf(id)));
 ok('#kpis sits inside the slab and #monthSel in its cap', HTML.indexOf('id="kpis"') > HTML.indexOf('id="spot"') && HTML.indexOf('id="kpis"') < HTML.indexOf('</section>') && /<div class="cap"><span class="l">Scorecard<\/span><input type="month" id="monthSel"/.test(HTML));
 ok('#tabs sits inside #tabsSeg next to the indicator (the page script slides it)', /id="tabsSeg"><span class="hx-seg-ind"><\/span><div class="hx-seg-track" id="tabs"><\/div>/.test(HTML));
-ok('#roTag, #myDeductionCard, #msg, #recFormMsg, #metMsg, #mfTwReset start hidden', ['roTag', 'myDeductionCard', 'msg', 'recFormMsg', 'metMsg', 'mfTwReset'].every(id => /style="display:none;"/.test(tagAttrs(id))));
+ok('#roTag, #myDeductionCard, #msg, #recFormMsg, #metMsg, #mfTwReset start hidden', ['roTag', 'myDeductionCard', 'myPayslipCard', 'msg', 'recFormMsg', 'metMsg', 'mfTwReset'].every(id => /style="display:none;"/.test(tagAttrs(id))));
 ok('the two dialogs keep flow-modal-overlay (the script toggles .open on them)', ['recModal', 'metModal'].every(id => /class="flow-modal-overlay"/.test(tagAttrs(id))));
 ok('#recSaveBtn and #metSaveBtn read exactly "Save" (the script restores that text after saving)', /id="recSaveBtn" onclick="submitRecord\(\)">Save</.test(HTML) && /id="metSaveBtn" onclick="submitMetrics\(\)">Save</.test(HTML));
 ok('the weekly report keeps its four inline handlers', ['mfTwNav(-1)', 'mfTwNav(0)', 'mfTwNav(1)', 'mfTwPdf()'].every(h => HTML.includes('onclick="' + h + '"')));

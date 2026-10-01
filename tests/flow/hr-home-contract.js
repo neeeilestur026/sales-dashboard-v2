@@ -30,12 +30,12 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
-eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,daily-reports.css,hr-home.css');
+eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,daily-reports.css,payslip-card.css,hr-home.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="hr"> — the scope every rule hangs off', /<body class="hr">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="hr">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,hr-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js,hr-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,hr-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js,hr-home-page.js');
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab and the nav, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && /<nav class="hx-rail-nav"/.test(HTML) && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));
@@ -50,7 +50,7 @@ const TAGS = {
   span: ['hbMon', 'pipelineCount', 'empCount', 'leaveCount', 'taskCount', 'campaignCount', 'mgmtDrMeta', 'mfTwRange'],
   dd: ['statOpen', 'statTasksPending', 'statTasksDone', 'statCampaigns', 'statLeave'],
   div: ['statEmployees', 'alertBanner', 'todayOverview', 'birthdayList', 'mgmtDrUsers', 'mgmtDrMovements', 'mgmtDrDocs', 'mgmtDrSales', 'mgmtDrPdfs', 'mgmtDrBody', 'mfTwBody'],
-  section: ['spot', 'myDeductionCard', 'today', 'hrmods', 'mkmods', 'newsec-daily-reports'],
+  section: ['spot', 'myDeductionCard', 'myPayslipCard', 'today', 'hrmods', 'mkmods', 'newsec-daily-reports'],
   button: ['themeToggle', 'mfTwReset', 'mfTwNext', 'mfTwPdfBtn'],
   input: ['mgmtDrDate', 'mgmtDrSearch'],
   header: ['navbar'], aside: ['rail'],
@@ -60,7 +60,7 @@ const reached = (src) => Array.from(new Set((src.match(/getElementById\('([^']+)
 reached(JS).forEach(id => ok('hr-home.js reaches #' + id + ' and it exists', !!tagOf(id)));
 ok('#statEmployees is the slab\'s value and the five facts are in the rail', /<div class="v" id="statEmployees">/.test(HTML) && HTML.indexOf('id="statLeave"') < HTML.indexOf('<div class="hx-col">'));
 ok('#alertBanner keeps class alert-banner (hr-home.js sets alert-banner success | warning) and starts hidden', /class="alert-banner" style="display:none;"/.test(tagAttrs('alertBanner')));
-ok('#myDeductionCard and #mfTwReset start hidden', ['myDeductionCard', 'mfTwReset'].every(id => /style="display:none;"/.test(tagAttrs(id))));
+ok('#myDeductionCard and #mfTwReset start hidden', ['myDeductionCard', 'myPayslipCard', 'mfTwReset'].every(id => /style="display:none;"/.test(tagAttrs(id))));
 ok('twelve module cards keep .module-card with an iconed head and the four stat ids', (HTML.match(/class="module-card"/g) || []).length === 12 && (HTML.match(/class="module-card-icon/g) || []).length === 12 && ['pipelineCount', 'empCount', 'leaveCount', 'taskCount', 'campaignCount'].every(id => /class="module-stat"><span class="num" id="/.test(HTML) && !!tagOf(id)));
 ok('the weekly report keeps its four inline handlers', ['mfTwNav(-1)', 'mfTwNav(0)', 'mfTwNav(1)', 'mfTwPdf()'].every(h => HTML.includes('onclick="' + h + '"')));
 

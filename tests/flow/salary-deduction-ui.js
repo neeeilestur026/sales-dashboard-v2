@@ -44,7 +44,8 @@ function boot() {
   };
   ctx.window = ctx;
   vm.createContext(ctx);
-  require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
+  require('./hxutil').load(ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../../dashboard/js/payslip.js'), 'utf8'), ctx);   // A312: the payslip renderer the page delegates to   // A302: the page script delegates to api.js's helpers
   vm.runInContext(SRC + `
 this.__t = {
   el: (id) => this.document.getElementById(id),

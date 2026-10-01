@@ -173,6 +173,9 @@ body.dh .dh-btn.primary:hover, body.dh .btn-sm.primary:hover, body.dh .btn-prima
 body.dh .btn-sm.danger { color:var(--dh-red); border-color:var(--dh-red-line); }
 body.dh .btn-sm.danger:hover { background:var(--dh-red-soft); }
 body.dh .btn-sm.xs { padding:3px 8px; font-size:11px; }
+body.dh .ps-actions { white-space:nowrap; }
+body.dh .ps-actions .btn-sm.xs + .btn-sm.xs { margin-left:4px; }
+body.dh .btn-sm.xs.released { color:var(--dh-navy-text); border-color:var(--dh-navy); }   /* A312 — already on the employee's dashboard */
 body.dh .dh-btn.sm { padding:6px 12px; font-size:12px; }
 body.dh .link-btn { display:inline-flex; align-items:center; padding:5px 11px; border-radius:var(--dh-r-pill); border:1px solid var(--dh-hair); background:var(--dh-glass-solid); color:var(--dh-ink); font:600 11.5px/1.2 var(--dh-text); margin:2px 4px 2px 0; cursor:pointer; text-decoration:none; transition:background .15s, border-color .15s; }
 body.dh .link-btn:hover { border-color:var(--dh-navy-line); }

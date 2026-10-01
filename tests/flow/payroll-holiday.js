@@ -49,7 +49,8 @@ const ctx = {
   window: {},
 };
 vm.createContext(ctx);
-require('./hxutil').load(ctx);   // A302: the page script delegates to api.js's helpers
+require('./hxutil').load(ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../../dashboard/js/payslip.js'), 'utf8'), ctx);   // A312: the payslip renderer the page delegates to   // A302: the page script delegates to api.js's helpers
 /* The module's state is top-level `let`, which in a vm script lives in LEXICAL scope and never
    reaches the context object — so it cannot be set from out here. The epilogue runs INSIDE the same
    script, where those bindings are visible, and hands out a setter. */

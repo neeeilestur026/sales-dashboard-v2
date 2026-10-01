@@ -84,6 +84,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 const _TAB_MAP = { ee: 'EE', hoursA: 'HoursA', payA: 'PayA', hoursB: 'HoursB', payB: 'PayB', thirteenth: 'Thirteenth', deductions: 'Deductions' };
 // A285 — the payslip download glyph, as an icon rather than a "⬇" that fell back to whatever font had it.
 const _ICO_DL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>';
+// A312 — release to the employee's dashboard (a paper plane, same stroke as the download glyph).
+const _ICO_SEND = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>';
 
 function switchPayTab(tab) {
   Object.keys(_TAB_MAP).forEach(t => {
@@ -231,14 +233,14 @@ async function loadEmployees() {
     }
   } catch (err) {
     document.getElementById('eeBody').innerHTML =
-      `<tr><td colspan="13" class="dh-error">Error: ${esc(err.message)}</td></tr>`;
+      `<tr><td colspan="14" class="dh-error">Error: ${esc(err.message)}</td></tr>`;
   }
 }
 
 function renderEETable() {
   const tbody = document.getElementById('eeBody');
   if (!_employees.length) {
-    tbody.innerHTML = '<tr><td colspan="13" class="dh-empty">No employees. Add one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" class="dh-empty">No employees. Add one above.</td></tr>';
     _updateKpis();                                   // A285 — the Active count is data, not a scraped column
     return;
   }
@@ -257,6 +259,7 @@ function renderEETable() {
       <td class="num">${_isFixedPay(e) ? '—' : peso(e.sssAmount || 600)}</td>
       <td class="num">${_isFixedPay(e) ? '—' : peso(e.philhealthAmount || 200)}</td>
       <td>${esc(e.dateHired || '—')}</td>
+      <td>${esc(e.username || '—')}</td>
       <td>${esc(e.status)}</td>
       <td>
         <button class="btn-sm" onclick="openEEModal(${i})">Edit</button>
@@ -336,6 +339,7 @@ function openEEModal(idx) {
     document.getElementById('eePhilhealth').value = '';            // A309
     document.getElementById('eeDateHired').value  = '';            // A309
     document.getElementById('eeStatus').value     = 'Active';
+    _eeFillUsername('', '');                                        // A312
     document.getElementById('eePayType').value    = 'Hourly';        // A260
     document.getElementById('eeFixedAmount').value = '';
   } else {
@@ -354,6 +358,7 @@ function openEEModal(idx) {
     document.getElementById('eePhilhealth').value = e.philhealthAmount || '';   // A309
     document.getElementById('eeDateHired').value  = e.dateHired || '';          // A309
     document.getElementById('eeStatus').value     = e.status;
+    _eeFillUsername(e.username || '', e.lastName + ', ' + e.firstName);        // A312
     document.getElementById('eePayType').value    = _isFixedPay(e) ? 'Fixed' : 'Hourly';   // A260
     document.getElementById('eeFixedAmount').value = e.fixedAmount || '';
   }
@@ -364,6 +369,27 @@ function openEEModal(idx) {
     if (el) el.oninput = _eeCheckPayChange;
   });
   overlay.classList.add('open');
+}
+
+/* A312 — the login account that sees this employee's released payslip. Pre-selected from the name
+   the same way the salary-deduction form does, and never silently: the hint says it was guessed. */
+async function _eeFillUsername(selected, empName) {
+  const sel = document.getElementById('eeUsername');
+  const hint = document.getElementById('eeUserHint');
+  if (!sel) return;
+  sel.innerHTML = `<option value="${esc(selected || '')}">${esc(selected || '— loading the roster —')}</option>`;
+  let users = [];
+  try { const res = await apiGetUsers(); users = (res && res.data) || res.users || []; } catch (e) { users = []; }
+  if (!users.length) { if (hint) hint.textContent = 'Could not load the login roster; the stored account is kept.'; return; }
+  sel.innerHTML = '<option value="">— not linked (no payslip on a dashboard) —</option>' +
+    users.map(u => {
+      const un = u.username || '';
+      return `<option value="${esc(un)}"${un === selected ? ' selected' : ''}>${esc(u.fullName || u.name || un)} (${esc(un)})</option>`;
+    }).join('');
+  if (selected) { if (hint) hint.textContent = ''; return; }
+  const hit = empName ? users.filter(u => _nameKey(u.fullName || u.name) === _nameKey(empName))[0] : null;
+  if (hit) { sel.value = hit.username; if (hint) hint.textContent = 'Suggested from the name — check it is the right account.'; }
+  else if (hint) hint.textContent = empName ? 'No login matches that name. Pick the account deliberately.' : '';
 }
 
 function closeEEModal() {
@@ -381,6 +407,7 @@ async function saveEE() {
     sssAmount:        document.getElementById('eeSss').value,          // A309
     philhealthAmount: document.getElementById('eePhilhealth').value,   // A309
     dateHired:        document.getElementById('eeDateHired').value,    // A309
+    username:         (document.getElementById('eeUsername') || {}).value || '',   // A312
     status:      document.getElementById('eeStatus').value,
     payType:     document.getElementById('eePayType').value,             // A260
     fixedAmount: document.getElementById('eeFixedAmount').value,
@@ -710,31 +737,7 @@ function _empKey(name) {
 
 // ─── Per-employee payslip PDF (per cutoff, full breakdown, downloadable) ───────────
 // Thermal-receipt style (80mm): monospace, dashed separators, label/value rows.
-const _PAYSLIP_CSS = `
-.payslip { font-family:'Courier New', Courier, monospace; color:#000; width:100%; box-sizing:border-box; padding:8px 12px; font-size:11px; line-height:1.4; }
-.payslip .ps-head { text-align:center; margin-bottom:4px; }
-.payslip .ps-co { font-size:13px; font-weight:800; letter-spacing:0.3px; }
-.payslip .ps-logo { display:block; margin:5px auto 2px; height:48px; max-width:70%; object-fit:contain; }
-.payslip .ps-doc { font-size:11px; font-weight:700; letter-spacing:3px; margin-top:2px; }
-.payslip .ps-sep { border-top:1px dashed #000; margin:6px 0; }
-.payslip .ps-kv { font-size:10px; margin:1px 0; word-break:break-word; }
-.payslip .ps-kv b { font-weight:700; }
-.payslip .ps-sec { font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.05em; margin:2px 0; }
-.payslip .ps-t { width:100%; border-collapse:collapse; table-layout:fixed; }
-.payslip .ps-t td { padding:1px 0; font-size:11px; vertical-align:top; }
-.payslip .ps-t td.l { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px; }
-/* A275 — the deduction's sub-line. It CANNOT be a .l cell: that is nowrap + overflow:hidden inside a
-   table-layout:fixed table, so on a 400px receipt it silently cut the sentence at about 37 characters
-   — "ASUS VIVOBOOK 15 · P47,911.87 left of" and then nothing. This spans both columns and wraps. */
-.payslip .ps-t td.ps-note { white-space:normal; word-break:break-word; padding:0 0 2px 10px; font-size:9px; line-height:1.35; color:#333; }
-.payslip .ps-t td.r { width:42%; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.payslip .ps-t tr.sub td { font-weight:800; }
-.payslip .ps-net-t td { font-weight:800; font-size:14px; padding:3px 0; }
-.payslip .ps-net-t td.r { width:50%; }
-.payslip .ps-sign { margin-top:22px; font-size:9px; text-align:center; }
-.payslip .ps-sign .ln { border-top:1px solid #000; margin:0 6px; padding-top:2px; }
-.payslip .ps-foot { text-align:center; font-size:8px; color:#333; margin-top:8px; }
-`;
+var _PAYSLIP_CSS = (typeof HX_PAYSLIP_CSS === 'string') ? HX_PAYSLIP_CSS : '';   // A312 — the sheet lives in js/payslip.js, shared with the employee ticket
 
 // Period label + date range for a cutoff (reuses the existing date-range builder).
 function _payslipPeriod(cutoff) {
@@ -772,99 +775,9 @@ function _computePaySlip(emp, cutoff) {
   };
 }
 
-// One employee's payslip block, thermal-receipt style (styled by _PAYSLIP_CSS).
+// One employee's payslip block — drawn by js/payslip.js from the computed figures (A312).
 function _payslipHtml(emp, cutoff) {
-  const s = _computePaySlip(emp, cutoff);
-  const pr = _payslipPeriod(cutoff);
-  const hn = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + ' hrs';
-  const totalHrs = s.regHrs + s.otHrs + s.holidayHrs;
-  // Fixed 2-column table rows: the amount column has a set width so it can never run off the page edge.
-  const row = (label, val, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td class="l">${esc(label)}</td><td class="r">${val}</td></tr>`;
-  const money = (label, val, cls) => row(label, peso(val), cls);
-  /* A259 — the rate is no longer hard-coded into the label. This said "Holiday (Nh x2)" whatever
-     had actually been applied, which is wrong on every special non-working day. Only the lines that
-     carry money are printed; a period with no holidays shows a single zero Holiday line exactly as
-     it always did, so nothing changes on an ordinary payslip. */
-  /* The label column is nowrap with an ellipsis at 58% of the receipt — on the real 400px width that
-     is 210px, about 31 characters at 11px Courier. "Regular Holiday (8.0 hrs x2)" overflows it and
-     renders as "Regular Holiday (8.0 hr…", which hides the very rate the line exists to state. A
-     compact hour form keeps every label inside the column instead of widening a rule that ~100 filed
-     payslips lay out against.
-     (A275 — this said "296px". _PS_BODY_PX has been 400 since it was introduced; the same wrong
-     figure in the render comment below is what made A262 believe payslips were unaffected by it.) */
-  const hc = n => (Math.round((n || 0) * 10) / 10).toFixed(1) + 'h';
-  /* A275 — one line per agreement, NAMED, with what is still owed underneath.
-     A bare "Salary Deduction 2,916.25" is exactly the figure an employee cannot check, and the whole
-     reason the paper form exists is that they agreed to a specific total. Two concurrent deductions
-     therefore print as two lines rather than one sum — `money()` renders one label and one figure, so
-     the balance rides along as a sub-row of its own. */
-  const sdRows = (s.salaryDeductionLines && s.salaryDeductionLines.length)
-    ? s.salaryDeductionLines.map(l => {
-        const left = (l.remainingBefore || 0) - (l.amount || 0);
-        const sub = (l.totalAmount)
-          ? `<tr><td class="ps-note" colspan="2">${esc(l.item || 'Salary deduction')} &middot; ${
-               peso(left)} left of ${peso(l.totalAmount)}</td></tr>`
-          : '';
-        return money('Salary Deduction', l.amount) + sub;
-      }).join('')
-    : money('Salary Deduction', s.salaryDeduction || 0);
-  const holidayRows = (s.regHolPay || s.speHolPay || s.unworkedHolPay)
-    ? [
-        s.regHolPay      ? money('Reg Holiday (' + hc(s.regHolHrs) + ' x2)', s.regHolPay) : '',
-        s.speHolPay      ? money('Spcl Holiday (' + hc(s.speHolHrs) + ' x1.3)', s.speHolPay) : '',
-        s.unworkedHolPay ? money('Unworked Holiday (' + s.unworkedHolDays + ' day'
-                                 + (s.unworkedHolDays === 1 ? '' : 's') + ')', s.unworkedHolPay) : ''
-      ].filter(Boolean).join('')
-    : money('Holiday', s.holidayPay);
-  return `<div class="payslip">
-    <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
-      <img class="ps-logo" src="${location.origin}/images/logo-login-2x.png" alt="" onerror="this.style.display='none'">
-      <div class="ps-doc">PAYSLIP</div></div>
-    <div class="ps-sep"></div>
-    <div class="ps-kv"><b>Employee:</b> ${esc(s.empName)}</div>
-    <div class="ps-kv"><b>Period:</b> ${esc(pr.label)}</div>
-    <div class="ps-kv"><b>Coverage:</b> ${esc(pr.range)}</div>
-    ${s.isFixed
-      ? `<div class="ps-kv"><b>Rate:</b> ${peso(s.fixedAmount)} fixed / cutoff</div>
-         <div class="ps-kv" style="font-weight:700;">FIXED SALARY &mdash; hours not applied</div>`
-      : `<div class="ps-kv"><b>Rate:</b> ${peso(s.dailyRate)}/day &middot; ${peso(s.hourlyRate)}/hr</div>`}
-    <div class="ps-sep"></div>
-    <div class="ps-sec">Hours Worked</div>
-    <table class="ps-t"><tbody>
-      ${s.isFixed
-        ? row('Hours Recorded', hn(s.recordedHrs), 'sub')
-        : `${row('Regular', hn(s.regHrs))}
-           ${row('Overtime', hn(s.otHrs))}
-           ${row('Holiday', hn(s.holidayHrs))}
-           ${row('Total Hours', hn(totalHrs), 'sub')}`}
-    </tbody></table>
-    <div class="ps-sep"></div>
-    <div class="ps-sec">Earnings</div>
-    <table class="ps-t"><tbody>
-      ${s.isFixed ? money('Fixed Salary', s.basicPay) : money('Basic Pay (' + hn(s.regHrs) + ')', s.basicPay)}
-      ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
-      ${holidayRows}
-      ${money('Other Income', s.otherIncome)}
-      ${money('Incentive', s.incentive)}
-      ${money('GROSS PAY', s.grossPay, 'sub')}
-    </tbody></table>
-    <div class="ps-sep"></div>
-    <div class="ps-sec">Deductions</div>
-    <table class="ps-t"><tbody>
-      ${money('Pag-IBIG', s.pagibig)}
-      ${money('SSS', s.sss)}
-      ${money('PhilHealth', s.philhealth)}
-      ${money('Advances', s.advances)}
-      ${sdRows}
-      ${money('Withholding Tax', s.wtax)}
-      ${money('TOTAL DEDUCTIONS', s.totalDed, 'sub')}
-    </tbody></table>
-    <div class="ps-sep"></div>
-    <table class="ps-t ps-net-t"><tbody><tr><td class="l">NET PAY</td><td class="r">${peso(s.netPay)}</td></tr></tbody></table>
-    <div class="ps-sep"></div>
-    <div class="ps-sign"><div class="ln">Received by &mdash; ${esc(s.empName)}</div></div>
-    <div class="ps-foot">Generated ${esc(new Date().toLocaleString('en-PH'))}<br>System-generated payslip</div>
-  </div>`;
+  return hxPayslipHtml(_computePaySlip(emp, cutoff), _payslipPeriod(cutoff));
 }
 
 // Load html2pdf on demand (same CDN as the payroll-approval PDF), then run cb.
@@ -1014,6 +927,43 @@ function downloadAllPayslips(cutoff) {
   _renderPayslipPdf(html, fn, false);
 }
 
+/* ── A312 — RELEASE a payslip to the employee's own dashboard ──────────────────────────────────
+ * The button beside Download publishes EXACTLY the figures on screen — the same _computePaySlip
+ * object the PDF is printed from, plus the period labels — and the server files them under the
+ * employee's login. The employee's home page (js/my-payslip-card.js) then draws the same receipt
+ * through js/payslip.js. Hourly employees only: a fixed-salary manager has no payslip to release.
+ * Releasing again simply overwrites the cutoff's row, so a correction is one more click. */
+function _releaseBtn(empName, cutoff) {
+  const rel = (cutoff === 'A' ? _releasedA : _releasedB)[empName];
+  const title = rel ? 'Released ' + rel + ' — click to release again' : 'Release to ' + empName + "'s dashboard";
+  return `<button class="btn-sm xs${rel ? ' released' : ''}" title="${esc(title)}" onclick="releasePayslip('${esc(empName)}','${cutoff}')">${_ICO_SEND}</button>`;
+}
+function _releaseRows(list, cutoff) {
+  return list.filter(e => !_isFixedPay(e))
+    .map(e => ({ employee: e.lastName + ', ' + e.firstName, slip: { s: _computePaySlip(e, cutoff), pr: _payslipPeriod(cutoff) } }));
+}
+async function _releaseSend(rows, cutoff) {
+  if (!_currentYear || !_currentMonth) { alert('Load a period first.'); return; }
+  if (!rows.length) { alert('No hourly employee to release.'); return; }
+  const period = _currentYear + '-' + _currentMonth + '-' + cutoff;
+  let res;
+  try { res = await apiReleasePayslips(period, rows); } catch (e) { alert('Could not release: ' + (e && e.message || e)); return; }
+  if (!res || !res.success) { alert('Could not release: ' + ((res && res.message) || 'unknown error')); return; }
+  const unlinked = (res.unlinked || []);
+  if (unlinked.length) {
+    alert('Not released for ' + unlinked.join(', ') + ' — no login account is linked to that name. Open Edit Employee and pick the account they sign in with.');
+  }
+  try { await _refreshRegister(cutoff); renderPayGrid(cutoff); } catch (e) { /* the grid re-reads on the next Load */ }
+}
+function releasePayslip(empName, cutoff) {
+  const emp = _employees.find(e => (e.lastName + ', ' + e.firstName) === empName);
+  if (!emp) { alert('Employee not found.'); return; }
+  return _releaseSend(_releaseRows([emp], cutoff), cutoff);
+}
+function releaseAllPayslips(cutoff) {
+  return _releaseSend(_releaseRows(_employees || [], cutoff), cutoff);
+}
+
 function _onHoursInput(input) {
   const empName  = input.dataset.emp;
   const date     = input.dataset.date;
@@ -1140,6 +1090,7 @@ async function saveHours(cutoff) {
 let _sdDueA = {}, _sdDueB = {};
 let _sdDraftsA = [], _sdDraftsB = [];
 let _sdStaleA = false, _sdStaleB = false;
+let _releasedA = {}, _releasedB = {};   // A312 — { "Last, First": "released at" } for the loaded period
 
 /* A275 — THE ONLY PLACE A REGISTER RESPONSE IS UNPACKED.
  *
@@ -1159,8 +1110,8 @@ function _applyRegisterResponse(cutoff, res) {
      know what a deduction is", and the two look identical on screen. Recorded so the grid can say
      which it is instead of showing an empty column and letting everyone guess. */
   const stale = !res || res.salaryDeductionDue === undefined;
-  if (cutoff === 'A') { _sdDueA = due; _sdDraftsA = drafts; _sdStaleA = stale; }
-  else { _sdDueB = due; _sdDraftsB = drafts; _sdStaleB = stale; }
+  if (cutoff === 'A') { _sdDueA = due; _sdDraftsA = drafts; _sdStaleA = stale; _releasedA = (res && res.released) || {}; }
+  else { _sdDueB = due; _sdDraftsB = drafts; _sdStaleB = stale; _releasedB = (res && res.released) || {}; }
 }
 
 async function _refreshRegister(cutoff) {
@@ -1310,7 +1261,7 @@ function renderPayGrid(cutoff) {
       <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" class="dh-num-in"></td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
       <td class="num highlight" id="netPay_${cutoff}_${k}">${peso(netPay)}</td>
-      <td><button class="btn-sm xs" title="Download payslip PDF" onclick="downloadPayslip('${esc(empName)}','${cutoff}')">${_ICO_DL}</button></td>
+      <td class="ps-actions"><button class="btn-sm xs" title="Download payslip PDF" onclick="downloadPayslip('${esc(empName)}','${cutoff}')">${_ICO_DL}</button>${_isFixedPay(emp) ? '' : _releaseBtn(empName, cutoff)}</td>
     </tr>`;
   });
 
@@ -2456,14 +2407,16 @@ async function _sdFillUsernames(selected) {
 
 /* Pre-select by name similarity, and SAY that it is a suggestion. The payroll key is "Last, First"
    and the roster holds "First Last", so this compares the word sets rather than the strings. */
+/* "Last, First" and the roster's display name reduced to the same sorted word set (A312: shared by
+   the salary-deduction form and the employee form; the server ports it for the release). */
+function _nameKey(v) { return String(v || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' '); }
 function _sdSuggestUsername(users) {
   const hint = document.getElementById('sdUserHint');
   const empSel = document.getElementById('sdEmployee');
   const sel = document.getElementById('sdUsername');
   if (!empSel || !sel) return;
-  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
-  const want = norm(empSel.value);
-  const hit = users.filter(u => norm(u.fullName || u.name) === want)[0];
+  const want = _nameKey(empSel.value);
+  const hit = users.filter(u => _nameKey(u.fullName || u.name) === want)[0];
   if (hit) {
     sel.value = hit.username;
     if (hint) hint.textContent = 'Suggested from the name — check it is the right account.';

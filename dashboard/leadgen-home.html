@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/daily-reports.css">
+  <link rel="stylesheet" href="css/payslip-card.css">
   <link rel="stylesheet" href="css/leadgen.css">
 </head>
 <body class="lg">
@@ -35,6 +36,8 @@
       <div id="flowActionCenter"></div>
     </section>
     <section class="lg-panel" id="myDeductionCard" style="display:none;"></section>
+    <!-- A312: the payslips the director released to this login (js/my-payslip-card.js) -->
+    <section class="lg-panel" id="myPayslipCard" style="display:none;"></section>
 
     <!-- THE BOARD — the nine daily quotas as one slab -->
     <div id="tiles-anchor"></div>
@@ -162,6 +165,8 @@
 
   <script src="js/api.js"></script>
   <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
+  <script src="js/payslip.js"></script>                 <!-- A312 -->
+  <script src="js/my-payslip-card.js"></script>         <!-- A312 -->
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/leadgen-home.js"></script>

@@ -37,12 +37,12 @@ const TABS = ['Qt', 'So', 'Po', 'Ap', 'Rc', 'Iv', 'Pr', 'Sm'];
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
 eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','),
-   'styles.css,flow.css,pnl-report.css,shipments.css,admin-home.css');
+   'styles.css,flow.css,pnl-report.css,shipments.css,payslip-card.css,admin-home.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="ad"> — the scope every rule hangs off; no flow-screen', /<body class="ad">/.test(HTML) && !/flow-screen/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="ad">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,flow-docs.js,stage-meta.js,admin.js,so-cost-editor.js,so-note-editor.js,accounting-profit.js,admin-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,flow-docs.js,stage-meta.js,admin.js,so-cost-editor.js,so-note-editor.js,accounting-profit.js,admin-home-page.js');
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab, the nav and the eight jumps, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && (HTML.match(/class="hx-jump" data-tab="(qt|so|po|ap|rc|iv|pr|sm)"/g) || []).length === 8 && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));
@@ -61,7 +61,7 @@ const TAGS = {
         'smPaymentBlock', 'smEditMsg', 'smEditTabHistory', 'smHistoryFilters', 'smHistoryList', 'smHistoryPager',
         'smPdfOverlay', 'smPdfTitle', 'smTlOverlay', 'smTlHeader', 'smTlRibbon', 'smTlContent']
        .concat(TABS.map(t => 'taskPanel' + t)).concat(['qt', 'so', 'po', 'ap', 'rc', 'iv', 'pr', 'sm'].map(t => t + 'TableWrap')),
-  section: ['spot', 'inbox', 'myDeductionCard', 'queues', 'activity', 'inventory', 'profit'],
+  section: ['spot', 'inbox', 'myDeductionCard', 'myPayslipCard', 'queues', 'activity', 'inventory', 'profit'],
   button: ['themeToggle', 'smEditTabBtnDetails', 'smEditTabBtnPayment', 'smEditTabBtnHistory', 'smHistPrevBtn', 'smHistNextBtn'].concat(TABS.map(t => 'tabTask' + t)),
   select: ['smStatusFilter', 'pnlYear', 'smEditStatus', 'smEditMode', 'smEditPaymentStatus', 'smHistEventType'],
   input: ['smEditId', 'smEditPoNo', 'smEditClient', 'smEditForStocking', 'smSoSearch', 'smEditClientsPO', 'smEditHiPO', 'smEditPrincipal', 'smEditItem',
@@ -86,7 +86,7 @@ ok('the eight panels: Qt born shown, the seven others hidden', !/display:none/.t
 ok('  every table host is an .hx-scroll', ['qt', 'so', 'po', 'ap', 'rc', 'iv', 'pr', 'sm'].every(t => /class="hx-scroll"/.test(tagAttrs(t + 'TableWrap'))));
 ok('#smStatusFilter keeps onchange="applySmFilter()" inside the shipments panel', /onchange="applySmFilter\(\)"/.test(tagAttrs('smStatusFilter')) && HTML.indexOf('id="smStatusFilter"') > HTML.indexOf('id="taskPanelSm"') && HTML.indexOf('id="smStatusFilter"') < HTML.indexOf('id="smTableWrap"'));
 ok('the three overlays, the payment block, the history tab, the pager and the deduction card start hidden',
-   ['smEditOverlay', 'smPdfOverlay', 'smTlOverlay', 'smPaymentBlock', 'smEditTabHistory', 'smHistoryPager', 'myDeductionCard'].every(id => /style="display:none;"/.test(tagAttrs(id))));
+   ['smEditOverlay', 'smPdfOverlay', 'smTlOverlay', 'smPaymentBlock', 'smEditTabHistory', 'smHistoryPager', 'myDeductionCard', 'myPayslipCard'].every(id => /style="display:none;"/.test(tagAttrs(id))));
 ok('  the overlays carry the shared shell classes (shipments.css shows them once display clears)', /class="sm-overlay" style="display:none;"/.test(tagAttrs('smEditOverlay')) && /class="sm-overlay sm-pdf"/.test(tagAttrs('smPdfOverlay')) && /class="sm-overlay sm-tl"/.test(tagAttrs('smTlOverlay')));
 ok('the dialog keeps its inline handlers', ['closeSmModal()', "_smModalSwitchTab('details')", "_smModalSwitchTab('payment')", "_smModalSwitchTab('history')", 'smToggleStocking(this)', 'smFilterSOs()', 'openSmTimeline(_smTlShipmentIdx)', 'saveSmEdit()', 'smClosePdf()', 'closeSmTimeline()', '_smHistoryLoad(1)', '_smHistoryClearFilters()', '_smHistoryLoad(_smHistoryPage - 1)', '_smHistoryLoad(_smHistoryPage + 1)'].every(h => HTML.includes(h)));
 ok('#kpiQt is the slab\'s value and the four kpi ids are in the rail', /<div class="v" id="kpiQt">/.test(HTML) && HTML.indexOf('id="kpiPoOpen"') < HTML.indexOf('<div class="hx-col">'));

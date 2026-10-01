@@ -110,11 +110,12 @@ function clearApiCache() {
 // GET. A308: that note used to sit INSIDE this line, which commented out every name after it, so only
 // five actions POSTed and every other save went out as a GET (payroll hours: a 400 for URL length).
 const NO_CACHE_ACTIONS = ['login', 'logout', 'updateSalesOrder', 'markSentToSales', 'saveQuotationPDF', 'submitDailyReport', 'submitAdminDailyReport', 'updateTrackerRow', 'changePassword', 'setTargets', 'addOrder', 'updateOrder', 'deleteOrder', 'addExpense', 'updateExpense', 'deleteExpense', 'addSupplierQuotation', 'updateSupplierQuotation', 'deleteSupplierQuotation', 'uploadSQDocuments', 'updateSQDriveLink', 'addClient', 'updateClient', 'deleteClient', 'addUser', 'updateUser', 'deleteUser', 'resetUserPassword', 'updatePaymentRequestStatus', 'markBillPaid', 'saveCashVoucher', 'addInventoryItem', 'updateInventoryItem', 'deleteInventoryItem', 'approveQuotation', 'updateQuotationDriveLink', 'reviseQuotation', 'updatePRPricing', 'finalizeQuotation', 'getQuotationApprovalStatus', 'createSalesOrder', 'updateSOStatus', 'deleteSalesOrder', 'uploadSODocument', 'savePORecord', 'approvePO', 'sendPOEmail', 'sendAdminEmail', 'sendAcctEmail', 'savePOPDF', 'savePRPDF', 'savePricingSubmission', 'forwardPRToPricing', 'applyPricingToPR', 'submitHRDailyReport', 'addCandidate', 'updateCandidate', 'deleteCandidate', 'addHRTask', 'updateHRTask', 'deleteHRTask', 'addEmployee', 'updateEmployee', 'deleteEmployee', 'addLeaveRequest', 'updateLeaveRequest', 'deleteLeaveRequest', 'addPerformanceReview', 'updatePerformanceReview', 'deletePerformanceReview', 'addTrainingProgram', 'updateTrainingProgram', 'deleteTrainingProgram', 'addMemo', 'updateMemo', 'deleteMemo', 'addGrievance', 'updateGrievance', 'deleteGrievance', 'addCampaign', 'updateCampaign', 'deleteCampaign', 'addContentItem', 'updateContentItem', 'deleteContentItem', 'addAccreditation', 'updateAccreditation', 'deleteAccreditation', 'submitAccountingDailyReport', 'addCollection', 'deleteCollection', 'updateCollection', 'saveProfitReport', 'updateProfitReportEntry', 'saveShipment', 'uploadShipmentDoc', 'deleteShipmentDoc', 'advanceShipmentStage', 'restoreShipmentDoc', 'migrateShipmentDocs', 'exportAuditLogCsv', 'archiveHistoryNow', 'backfillHistory', 'savePayrollEmployee', 'deletePayrollEmployee', 'savePayrollHours', 'savePayrollRegister', 'submitPayrollForApproval', 'decidePayrollApproval', 'saveBankAccount', 'addBankTransaction', 'deleteBankTransaction', 'saveDirectorPayable', 'markDirectorPayablePaid', 'unmarkDirectorPayablePaid', 'deleteDirectorPayable', 'savePayrollIncentive', 'voidPayrollIncentive', 'savePayrollHolidays', 'saveSalaryDeduction', 'attachSalaryDeductionForm', 'activateSalaryDeduction', 'cancelSalaryDeduction', 'voidSalaryDeductionPosting', 'skipSalaryDeductionCutoff',
+  'releasePayslips'   // A312
 ];
 
 // Read-only actions that must always fetch fresh data (use GET, skip cache).
 // Stale cache caused approved quotations to revert to "Pending" on refresh.
-const NO_CACHE_READS = ['getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister', 'getPayrollIncentives', 'getPayrollHolidays', 'getSalaryDeductions', 'getMySalaryDeductions'];
+const NO_CACHE_READS = ['getMyPayslips', 'getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister', 'getPayrollIncentives', 'getPayrollHolidays', 'getSalaryDeductions', 'getMySalaryDeductions'];
 
 /**
  * General-purpose fetch wrapper with caching.
@@ -1173,6 +1174,15 @@ function apiGetSalaryDeductions(employee) {
 }
 
 /** Whose it is comes from the session, not from here — there is deliberately no argument. */
+/* A312 — the director files an employee's on-screen payslip under their login; the employee's home
+   reads back its own. Identity for the read is the token alone (see getMySalaryDeductions). */
+function apiReleasePayslips(period, rows) {
+  return fetchFromAPI({ action: 'releasePayslips', period, rows: JSON.stringify(rows) }, { noCache: true });
+}
+function apiGetMyPayslips() {
+  return fetchFromAPI({ action: 'getMyPayslips' }, { noCache: true });
+}
+
 function apiGetMySalaryDeductions() {
   return fetchFromAPI({ action: 'getMySalaryDeductions' }, { noCache: true });
 }

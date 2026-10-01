@@ -196,9 +196,9 @@
             <div class="dh-table-wrap">
               <table class="pay-table" id="eeTable">
                 <thead>
-                  <tr><th>#</th><th>Last name</th><th>First name</th><th>Pay</th><th class="num">Daily rate (₱)</th><th class="num">Hourly rate (₱)</th><th class="num">Other income (₱)</th><th class="num">Pag-IBIG</th><th class="num">SSS</th><th class="num">PhilHealth</th><th>Hired</th><th>Status</th><th>Actions</th></tr>
+                  <tr><th>#</th><th>Last name</th><th>First name</th><th>Pay</th><th class="num">Daily rate (₱)</th><th class="num">Hourly rate (₱)</th><th class="num">Other income (₱)</th><th class="num">Pag-IBIG</th><th class="num">SSS</th><th class="num">PhilHealth</th><th>Hired</th><th>Login</th><th>Status</th><th>Actions</th></tr>
                 </thead>
-                <tbody id="eeBody"><tr><td colspan="13"><div class="dh-skel"><i></i><i></i><i></i></div></td></tr></tbody>
+                <tbody id="eeBody"><tr><td colspan="14"><div class="dh-skel"><i></i><i></i><i></i></div></td></tr></tbody>
               </table>
             </div>
             <!-- A198 — recent salary changes across everyone, so a raise is visible at a glance -->
@@ -229,6 +229,7 @@
               <button type="button" class="btn-sm primary" onclick="saveRegister('A')">Save Pay A</button>
               <button type="button" class="btn-sm" onclick="exportCutoff('A')">Export PDF</button>
               <button type="button" class="btn-sm" onclick="downloadAllPayslips('A')">Payslips (all)</button>
+              <button type="button" class="btn-sm" onclick="releaseAllPayslips('A')" title="Put every hourly employee's payslip on their own dashboard">Release all</button>
               <button type="button" class="btn-sm" id="submitApprovalABtn" onclick="submitCutoffForApproval('A')">Submit for Approval</button>
               <span id="savePayAMsg" class="save-msg" style="display:none;">Saved</span>
             </div>
@@ -254,6 +255,7 @@
               <button type="button" class="btn-sm primary" onclick="saveRegister('B')">Save Pay B</button>
               <button type="button" class="btn-sm" onclick="exportCutoff('B')">Export PDF</button>
               <button type="button" class="btn-sm" onclick="downloadAllPayslips('B')">Payslips (all)</button>
+              <button type="button" class="btn-sm" onclick="releaseAllPayslips('B')" title="Put every hourly employee's payslip on their own dashboard">Release all</button>
               <button type="button" class="btn-sm" id="submitApprovalBBtn" onclick="submitCutoffForApproval('B')">Submit for Approval</button>
               <span id="savePayBMsg" class="save-msg" style="display:none;">Saved</span>
             </div>
@@ -337,6 +339,8 @@
       <div class="dh-field"><label for="eePhilhealth">PhilHealth amount (₱) <span class="lc">2nd cutoff only</span></label><input type="number" id="eePhilhealth" min="0" step="0.01" placeholder="200.00"><div class="help">Blank or 0 means ₱200.</div></div>
       <div class="dh-field"><label for="eeDateHired">Date hired</label><input type="date" id="eeDateHired"><div class="help">No Pag-IBIG, SSS or PhilHealth in the month hired; they start the following month. Leave blank for existing staff.</div></div>
       <div class="dh-field"><label for="eeStatus">Status</label><select id="eeStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+      <!-- A312 — the login that sees this employee's released payslip on their own dashboard -->
+      <div class="dh-field"><label for="eeUsername">Login account</label><select id="eeUsername"></select><div class="help" id="eeUserHint">Their released payslip appears on this account's dashboard. Suggested from the name; check it.</div></div>
       <!-- A198 — revealed only when the pay changes on an edit, so the raise is recorded with a date + reason -->
       <div class="dh-banner ok" id="eePayChange" style="display:none;">
         <strong id="eePayChangeMsg">Pay change, recorded in the salary history</strong>
@@ -401,6 +405,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
+  <script src="js/payslip.js"></script>                 <!-- A312: the payslip renderer shared with the employee ticket -->
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>   <!-- A275: receipts on a salary deduction -->

@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/training-mode.css">
   <!-- A290 — the brand system (tokens, both themes, the deck, glass, buttons) then this page's own look. -->
+  <link rel="stylesheet" href="css/payslip-card.css">
   <link rel="stylesheet" href="css/sales-home.css">
 </head>
 <body class="sl">
@@ -84,6 +85,8 @@
 
         <!-- A275: shown only when this rep has a salary deduction (js/salary-deduction-card.js) -->
         <section class="hx-glass" id="myDeductionCard" style="display:none;"></section>
+        <!-- A312: the payslips the director released to this login (js/my-payslip-card.js) -->
+        <section class="hx-glass" id="myPayslipCard" style="display:none;"></section>
 
         <!-- Today: the work links, then the stages a request moves through -->
         <section class="hx-glass" id="today">
@@ -178,6 +181,8 @@
 
   <script src="js/api.js"></script>
   <script src="js/salary-deduction-card.js"></script>   <!-- A275 -->
+  <script src="js/payslip.js"></script>                 <!-- A312 -->
+  <script src="js/my-payslip-card.js"></script>         <!-- A312 -->
   <script src="js/flow-api.js"></script>
   <script src="js/leads-for-you.js"></script>   <!-- A277: after flow-api.js — it reads through fetchFlow -->
   <script src="js/auth.js"></script>

@@ -39,8 +39,9 @@
  *
  *   1 — A275 salary deductions, and the payroll-approval row-index guard that had to precede them.
  *   2 — AS-1 sessions required on every action, server-side roles, hashed passwords, the sheet-id guard.
- *   3 — A309 SSS Amount / PhilHealth Amount / Date Hired on Payroll Employees (statutory schedule by rule). */
-var CODE_VERSION = 3;
+ *   3 — A309 SSS Amount / PhilHealth Amount / Date Hired on Payroll Employees (statutory schedule by rule).
+ *   4 — A312 released payslips: the Payslips sheet, releasePayslips / getMyPayslips, Username on Payroll Employees. */
+var CODE_VERSION = 4;
 
 // ─── Configuration ───────────────────────────────────────────
 var USERS_SHEET_ID = _prop('USERS_SHEET_ID');   // AS-1 — set once under Project Settings → Script properties; never in this file
@@ -86,10 +87,11 @@ var _SESSION = null;                                   // the caller of this exe
 var _AUTH_EXEMPT = { login: 1, validateSession: 1, getCodeVersion: 1, logout: 1 };
 var ACTION_ROLES = {                                   // the pages behind these are requireAdmin()
   addUser: ['admin'], updateUser: ['admin'], deleteUser: ['admin'], resetUserPassword: ['admin'],
-  getLoginLog: ['admin'], setTargets: ['admin']
+  getLoginLog: ['admin'], setTargets: ['admin'],
+  releasePayslips: ['director']                        // A312 — the director's Release button only
 };
 var _GET_MUTATIONS = {};                               // the doGet cases that change something: POST only
-'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
+'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials releasePayslips'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
 var _OVERSIGHT_ROLES = { admin: 1, director: 1, management: 1, accounting: 1, hr: 1 };
 
 function _prop(name) {
@@ -758,6 +760,9 @@ function doGet(e) {
          writes are: api.js routes a NO_CACHE_ACTION through POST, but the GET path stays reachable. */
       case 'getSalaryDeductions':
         result = handleGetSalaryDeductions(params);
+        break;
+      case 'getMyPayslips':                        // A312 — identity-scoped, like the one below
+        result = handleGetMyPayslips(params);
         break;
       case 'getMySalaryDeductions':
         result = handleGetMySalaryDeductions(params);
@@ -2968,6 +2973,9 @@ function doPost(e) {
         break;
       case 'decidePayrollApproval':
         result = handleDecidePayrollApproval(body);
+        break;
+      case 'releasePayslips':                      // A312
+        result = handleReleasePayslips(body);
         break;
       // A275 — salary deduction writes; the reads are registered on doGet.
       case 'saveSalaryDeduction':
@@ -10941,10 +10949,11 @@ function _payrollEmployeesSheet() {
      widened by hand below, exactly as _payrollRegisterSheet does for its columns 15 and 16. */
   var sheet = _getOrCreateSheet(ss, 'Payroll Employees', [
     'Last Name', 'First Name', 'Daily Rate', 'Other Income', 'HDMF Amount', 'Status',
-    'Pay Type', 'Fixed Amount', 'SSS Amount', 'PhilHealth Amount', 'Date Hired'
+    'Pay Type', 'Fixed Amount', 'SSS Amount', 'PhilHealth Amount', 'Date Hired', 'Username'
   ]);
   try {
-    [[9, 'SSS Amount'], [10, 'PhilHealth Amount'], [11, 'Date Hired']].forEach(function (c) {
+    // A312 — column 12 'Username': the login whose dashboard receives this employee's released payslip
+    [[9, 'SSS Amount'], [10, 'PhilHealth Amount'], [11, 'Date Hired'], [12, 'Username']].forEach(function (c) {
       if (sheet.getLastColumn() < c[0] || !String(sheet.getRange(1, c[0]).getValue()).trim()) sheet.getRange(1, c[0]).setValue(c[1]);
     });
   } catch (e) { /* labelling is cosmetic — a failure must not block payroll */ }
@@ -11230,7 +11239,8 @@ function handleGetPayrollEmployees() {
         fixedAmount: parseFloat(row[7])||0,
         // A309 — blank/0 means the page's defaults (SSS 600, PhilHealth 200); no date = eligible now
         sssAmount: parseFloat(row[8])||0, philhealthAmount: parseFloat(row[9])||0,
-        dateHired: _payrollDateCell(row[10]) });
+        dateHired: _payrollDateCell(row[10]),
+        username: String(row[11]||'').trim() });                      // A312
     }
     return { success: true, data: results };
   } catch(e) { return { success: false, message: e.message }; }
@@ -11253,7 +11263,8 @@ function handleSavePayrollEmployee(params) {
         newPhic  = parseFloat(params.philhealthAmount)||0,
         newHired = /^\d{4}-\d{2}-\d{2}$/.test(String(params.dateHired||'')) ? String(params.dateHired) : '';
     var row   = [params.lastName||'', params.firstName||'',
-      newRate, newOther, newHdmf, params.status||'Active', newType, newFixed, newSss, newPhic, newHired];
+      newRate, newOther, newHdmf, params.status||'Active', newType, newFixed, newSss, newPhic, newHired,
+      String(params.username||'').trim()];                             // A312 — not a pay change, no history
     var empName = String(params.lastName||'') + ', ' + String(params.firstName||'');
     var isEdit = (id > 0 && id < data.length);
 
@@ -11647,6 +11658,125 @@ function handleGetSalaryDeductions(params) {
 
 /* The employee's own record. The username comes from the SESSION and any username the client sent is
    ignored — the whole point of the card is that it shows you your own debt and nobody else's. */
+/* ─── A312 · RELEASED PAYSLIPS ─────────────────────────────────────────────────────────────────
+ * The director's Release button sends the exact figures the payslip was drawn from (the browser's
+ * _computePaySlip object plus the period labels). They are filed here under the employee's LOGIN
+ * username so the employee's own home page can read them back through the session token and
+ * draw the same receipt (js/payslip.js). The register sheet could not serve this: it stores money,
+ * not hours, rates or the holiday split.
+ *
+ * Who the login is: the Username column on Payroll Employees when the director has set it, else
+ * the ONE roster entry whose display name is the same set of words as "Last, First"; anything
+ * else is reported back as unlinked rather than guessed — a silent mis-match shows somebody
+ * else's pay. Fixed-salary managers are never released. */
+function _payslipsSheet() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  return _getOrCreateSheet(ss, 'Payslips', ['Period', 'Employee', 'Username', 'Released At', 'Released By', 'Slip JSON']);
+}
+function _psNameKey(v) {
+  return String(v || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+}
+function _psRosterByKey_() {
+  var data = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0].getDataRange().getValues();
+  var map = {};
+  for (var i = 1; i < data.length; i++) {
+    var un = String(data[i][0] || '').trim(), k = _psNameKey(data[i][3]);
+    if (!un || !k) continue;
+    (map[k] = map[k] || []).push(un);
+  }
+  return map;
+}
+function _psStamp_(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  return String(v || '');
+}
+/** { "Last, First": "released at" } for one period — a READ, so a missing sheet is simply empty. */
+function _payslipReleasedFor(period) {
+  try {
+    var sh = SpreadsheetApp.openById(USERS_SHEET_ID).getSheetByName('Payslips');
+    if (!sh) return {};
+    var data = sh.getDataRange().getValues(), out = {};
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '') === String(period || '')) out[String(data[i][1] || '')] = _psStamp_(data[i][3]);
+    }
+    return out;
+  } catch (e) { return {}; }
+}
+function handleReleasePayslips(params) {
+  var lock = LockService.getScriptLock();
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    if (String(session.role || '').toLowerCase() !== 'director') return { success: false, message: 'Not permitted.' };
+    var period = String((params && params.period) || '');
+    if (!_sdValidPeriod(period)) return { success: false, message: 'Period required (YYYY-MM-A or -B).' };
+    var rows = null;
+    try { rows = JSON.parse(String((params && params.rows) || '[]')); } catch (e) { rows = null; }
+    if (!rows || !rows.length) return { success: false, message: 'Nothing to release.' };
+
+    var emps = _payrollEmployeesSheet().getDataRange().getValues(), byName = {};
+    for (var i = 1; i < emps.length; i++) {
+      if (!emps[i][0] && !emps[i][1]) continue;
+      byName[String(emps[i][0] || '') + ', ' + String(emps[i][1] || '')] =
+        { fixed: String(emps[i][6] || '') === 'Fixed', username: String(emps[i][11] || '').trim() };
+    }
+    var roster = null, sheet = _payslipsSheet();
+    lock.waitLock(10000);
+    var data = sheet.getDataRange().getValues(), rowAt = {};
+    for (var j = 1; j < data.length; j++) rowAt[String(data[j][0]) + '|' + String(data[j][1])] = j + 1;
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    var by = String(session.fullName || session.username || '');
+    var released = [], unlinked = [], skipped = [];
+    rows.forEach(function (r) {
+      var emp = String((r && r.employee) || '').trim();
+      if (!emp) return;
+      var rec = byName[emp];
+      if (!rec) { unlinked.push(emp); return; }                       // not on the payroll roster
+      if (rec.fixed) { skipped.push(emp); return; }                   // a fixed salary has no payslip
+      var slip = (r && r.slip && typeof r.slip === 'object' && r.slip.s) ? r.slip : null;
+      if (!slip) { skipped.push(emp); return; }
+      var un = rec.username;
+      if (!un) {
+        if (!roster) roster = _psRosterByKey_();
+        var hits = roster[_psNameKey(emp)] || [];
+        if (hits.length === 1) un = hits[0];
+      }
+      if (!un) { unlinked.push(emp); return; }
+      var json = JSON.stringify(slip);
+      if (json.length > 45000) { skipped.push(emp); return; }         // a cell holds 50,000 characters
+      var line = [period, emp, un, now, by, json];
+      var ri = rowAt[period + '|' + emp];
+      if (ri) sheet.getRange(ri, 1, 1, 6).setValues([line]);
+      else { sheet.appendRow(line); rowAt[period + '|' + emp] = sheet.getLastRow(); }
+      released.push({ employee: emp, username: un, releasedAt: now });
+    });
+    return { success: true, released: released, unlinked: unlinked, skipped: skipped };
+  } catch (e) { return { success: false, message: e.message };
+  } finally { try { lock.releaseLock(); } catch (e) {} }
+}
+/** The caller's own released payslips, newest cutoff first. Identity comes from the token only. */
+function handleGetMyPayslips(params) {
+  try {
+    var session = validateSession(String((params && params.token) || ''));
+    if (!session) return { success: false, message: 'Sign in first.', authError: true };
+    var me = String(session.username || '').trim().toLowerCase();
+    if (!me) return { success: true, data: [] };
+    var sh = SpreadsheetApp.openById(USERS_SHEET_ID).getSheetByName('Payslips');
+    if (!sh) return { success: true, data: [] };
+    var data = sh.getDataRange().getValues(), out = [];
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][2] || '').trim().toLowerCase() !== me) continue;
+      var slip = null;
+      try { slip = JSON.parse(String(data[i][5] || '')); } catch (e) { slip = null; }
+      if (!slip || !slip.s) continue;
+      out.push({ period: String(data[i][0] || ''), employee: String(data[i][1] || ''),
+                 releasedAt: _psStamp_(data[i][3]), releasedBy: String(data[i][4] || ''), slip: slip });
+    }
+    out.sort(function (a, b) { return a.period < b.period ? 1 : (a.period > b.period ? -1 : 0); });
+    return { success: true, data: out };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
 function handleGetMySalaryDeductions(params) {
   try {
     var session = validateSession(String((params && params.token) || ''));
@@ -12209,7 +12339,8 @@ function handleGetPayrollRegister(params) {
        concludes the feature is broken. The pay grid cannot show what it is not told about, so the
        drafts ride along and it says so in one line. */
     return { success: true, data: results, salaryDeductionDue: due,
-             salaryDeductionDrafts: _sdDraftsFor(period) };
+             salaryDeductionDrafts: _sdDraftsFor(period),
+             released: _payslipReleasedFor(period) };                   // A312 — who already has this cutoff on their dashboard
   } catch(e) { return { success: false, message: e.message }; }
 }
 

@@ -41,7 +41,7 @@ ok('  and no shared skin', !/bento-skin|flow-screen/.test(HTML));
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="lg"> — the scope every rule hangs off', /<body class="lg">/.test(HTML));
 const SCRIPTS = (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]);
-eq('script order unchanged', SCRIPTS.join(','), 'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,leadgen-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js');
+eq('script order unchanged', SCRIPTS.join(','), 'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,leadgen-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js');
 eq('exactly one inline <script>', (HTML.match(/<script>/g) || []).length, 1);
 ok('the oversight block keeps its inline handlers (management-flow.js calls them by name)',
    /onclick="mgmtToggleNewsec\('newsec-daily-reports'\)"/.test(HTML) && /onclick="mfTwNav\(-1\)"/.test(HTML) && /onclick="mfTwNav\(0\)"/.test(HTML) && /onclick="mfTwNav\(1\)"/.test(HTML) && /onclick="mfTwPdf\(\)"/.test(HTML));
@@ -55,7 +55,7 @@ const TAGS = {
   button: ['logBtn', 'settingsBtn', 'fridayPdfBtn', 'dockClose', 'dockSave', 'recCancel', 'recSaveBtn', 'setCancel', 'setSave', 'mfTwReset', 'mfTwNext', 'mfTwPdfBtn'],
   div:    ['tiles', 'week', 'followups', 'tabs', 'panels', 'dockTabs', 'dockFields', 'recForm', 'setQuotas', 'setDays', 'flowActionCenter',
            'mgmtDrBody', 'mfTwBody', 'dock', 'recModal', 'setModal', 'msg', 'dockMsg', 'recFormMsg', 'setMsg', 'tiles-anchor', 'tabsSeg'],
-  section: ['myDeductionCard', 'followups-anchor', 'trackers', 'newsec-daily-reports', 'flowActionCenterCard'],
+  section: ['myDeductionCard', 'myPayslipCard', 'followups-anchor', 'trackers', 'newsec-daily-reports', 'flowActionCenterCard'],
   h1:     ['greeting'],
   h3:     ['recModalTitle'],
 };
@@ -63,7 +63,7 @@ Object.keys(TAGS).forEach(tag => TAGS[tag].forEach(id => eq('#' + id, tagOf(id),
 ['navbar', 'subline', 'roTag', 'dateDay', 'dateDow', 'dateMon', 'weekPill', 'weekPillText', 'tilesMeta', 'fuCount', 'weekMeta', 'dockHint', 'mgmtDrMeta',
  'mgmtDrUsers', 'mgmtDrMovements', 'mgmtDrDocs', 'mgmtDrSales', 'mgmtDrPdfs', 'mfTwRange'].forEach(id => ok('#' + id + ' exists', !!tagOf(id)));
 ok('#roTag and #settingsBtn start hidden — the JS reveals them with display=""', /style="display:none;"/.test(tagAttrs(HTML, 'roTag')) && /style="display:none;"/.test(tagAttrs(HTML, 'settingsBtn')));
-ok('#myDeductionCard, #msg, #mfTwReset start hidden', ['myDeductionCard', 'msg', 'mfTwReset'].every(id => /style="display:none;"/.test(tagAttrs(HTML, id))));
+ok('#myDeductionCard, #msg, #mfTwReset start hidden', ['myDeductionCard', 'myPayslipCard', 'msg', 'mfTwReset'].every(id => /style="display:none;"/.test(tagAttrs(HTML, id))));
 ok('the drawer and both modals keep flow-modal-overlay (the JS toggles .open on them)', ['dock', 'recModal', 'setModal'].every(id => /class="flow-modal-overlay"/.test(tagAttrs(HTML, id))));
 ok('#dockSave and #recSaveBtn read exactly "Save" (the JS restores that text after saving)', /id="dockSave">Save</.test(HTML) && /id="recSaveBtn">Save</.test(HTML));
 ok('#tiles carries the board class and #tabs sits inside #tabsSeg next to the indicator',

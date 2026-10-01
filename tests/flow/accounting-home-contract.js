@@ -37,12 +37,12 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
 eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','),
-   'styles.css,flow.css,pnl-report.css,shipments.css,accounting-home.css');
+   'styles.css,flow.css,pnl-report.css,shipments.css,payslip-card.css,accounting-home.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="ac"> — the scope every rule hangs off; no flow-screen', /<body class="ac">/.test(HTML) && !/flow-screen/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="ac">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,stage-meta.js,accounting-home.js,so-cost-editor.js,so-note-editor.js,accounting-profit.js,accounting-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,stage-meta.js,accounting-home.js,so-cost-editor.js,so-note-editor.js,accounting-profit.js,accounting-home-page.js');
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab and the nav, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && /<nav class="hx-rail-nav"/.test(HTML) && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));
@@ -59,7 +59,7 @@ const TAGS = {
   div: ['kpiGp', 'kpiGpMargin', 'flowActionCenter', 'appGrid', 'acctSmRecent', 'pnlState', 'pnlTotals', 'pnlBody', 'acctSmBody', 'acctSmContainer',
         'acctSmOverlay', 'acctSmTlHeader', 'acctSmTlRibbon', 'acctSmTlContent', 'acctDocViewerOverlay', 'acctDocViewerBody'],
   tbody: ['acctRevBody'],
-  section: ['spot', 'inbox', 'myDeductionCard', 'modules', 'revenue', 'recent', 'profit', 'shipments'],
+  section: ['spot', 'inbox', 'myDeductionCard', 'myPayslipCard', 'modules', 'revenue', 'recent', 'profit', 'shipments'],
   button: ['themeToggle', 'acctSmToggle'],
   select: ['pnlYear'],
   a: ['acctDocViewerOpenBtn'],
@@ -75,7 +75,7 @@ reached(PJS).forEach(id => ok('accounting-home-page.js reaches #' + id + ' and i
 ok('the ten module cards keep their classes', (HTML.match(/class="acard"/g) || []).length === 10 && (HTML.match(/class="acard-title"/g) || []).length === 10 && (HTML.match(/class="acard-stat"/g) || []).length === 10);
 ok('the five filter buttons keep their inline handlers and the first is active', /class="sm-filter-btn active" onclick="acctSmFilter\('All',this\)"/.test(HTML) && ['Pending', 'In Transit', 'Arrived', 'Delivered'].every(s => HTML.includes("class=\"sm-filter-btn\" onclick=\"acctSmFilter('" + s + "',this)\"")));
 ok('the dialogs keep their inline handlers', ['acctSmClose()', 'acctCloseDocViewer()', 'acctSmToggleSection(this)', 'if(event.target===this)acctSmClose()', 'if(event.target===this)acctCloseDocViewer()'].every(h => HTML.includes(h)));
-ok('the two overlays and the deduction card start hidden', ['acctSmOverlay', 'acctDocViewerOverlay', 'myDeductionCard'].every(id => /style="display:none;"/.test(tagAttrs(id))));
+ok('the two overlays and the deduction card start hidden', ['acctSmOverlay', 'acctDocViewerOverlay', 'myDeductionCard', 'myPayslipCard'].every(id => /style="display:none;"/.test(tagAttrs(id))));
 ok('  and carry the shared shell classes', /class="sm-overlay sm-tl"/.test(tagAttrs('acctSmOverlay')) && /class="sm-overlay sm-pdf"/.test(tagAttrs('acctDocViewerOverlay')));
 ok('#acctSmBody starts shown (the header button collapses it)', !/display:none/.test(tagAttrs('acctSmBody')) && /aria-expanded="true"/.test(tagAttrs('acctSmToggle')));
 ok('#kpiGp is the slab\'s value and #kpiState its tag', /<div class="v" id="kpiGp">/.test(HTML) && /<span class="tag" id="kpiState">/.test(HTML));
