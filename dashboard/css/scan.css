@@ -1,0 +1,125 @@
+/* A316 — the warehouse scanner (scan.html, body.sc). Built for a phone held in one hand at a warehouse
+   door: one column, big targets, the count and the camera always within thumb reach. Everything is
+   scoped to body.sc and drawn from the house tokens, so the dark theme follows. Motion answers the
+   person only (a scan, a press); the global reduced-motion rule switches it off. */
+
+body.sc .sc-main { max-width: 640px; margin: 0 auto; padding: 84px 14px 120px; display: flex; flex-direction: column; gap: 12px; }
+body.sc .sc-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+body.sc .sc-top h1 { margin: 0; font: 800 24px var(--hx-display); color: var(--hx-navy-text); }
+body.sc .sc-top p { margin: 2px 0 0; font-size: 13px; color: var(--hx-ink-3); }
+body.sc .sc-modes { display: inline-flex; padding: 3px; gap: 3px; border-radius: var(--hx-r-pill); background: var(--hx-inset); border: 1px solid var(--hx-hair-2); }
+body.sc .sc-mode { border: 0; background: transparent; color: var(--hx-ink-2); font: 700 14px var(--hx-text); padding: 9px 18px; border-radius: var(--hx-r-pill); cursor: pointer;
+  transition: background .15s var(--hx-ease), color .15s var(--hx-ease); }
+body.sc .sc-mode.active { background: var(--hx-navy); color: #fff; }   /* the primary-button colour: visible in both themes */
+body.sc .sc-mode:disabled { opacity: .5; cursor: not-allowed; }
+
+body.sc .sc-banner { padding: 10px 14px; border-radius: var(--hx-r-md); border: 1px solid var(--hx-warn-line); background: var(--hx-warn-soft); color: var(--hx-ink); font-size: 14px; line-height: 1.45; }
+
+body.sc .sc-input { width: 100%; box-sizing: border-box; padding: 12px 14px; font: 500 16px var(--hx-text); color: var(--hx-ink);
+  background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-md); }
+body.sc .sc-input:focus { outline: none; border-color: var(--hx-cyan); box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
+
+/* 1 · documents */
+body.sc .sc-docs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+body.sc .sc-doc-item { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; width: 100%; text-align: left; cursor: pointer; padding: 12px 14px;
+  font: inherit; color: var(--hx-ink); background: var(--hx-glass-solid); border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md);
+  transition: border-color .15s var(--hx-ease), background .15s var(--hx-ease); }
+body.sc .sc-doc-item:hover, body.sc .sc-doc-item:focus-visible { border-color: var(--hx-cyan); }
+body.sc .sc-doc-item-no { font: 800 15px var(--hx-display); color: var(--hx-navy-text); }
+body.sc .sc-doc-item-party { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.sc .sc-doc-item-meta { grid-column: 1 / -1; font-size: 12.5px; color: var(--hx-ink-3); }
+
+/* 2 · the document and the camera */
+body.sc .sc-work { display: flex; flex-direction: column; gap: 12px; }
+body.sc .sc-doc { display: flex; align-items: center; gap: 12px; }
+body.sc .sc-doc-main { flex: 1; min-width: 0; }
+body.sc .sc-doc-no { font: 800 18px var(--hx-display); color: var(--hx-navy-text); }
+body.sc .sc-doc-party { font-size: 13px; color: var(--hx-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.sc .sc-doc-tally { text-align: right; line-height: 1.1; }
+body.sc .sc-doc-tally b { display: block; font: 800 24px var(--hx-display); color: var(--hx-ink); font-variant-numeric: tabular-nums; }
+body.sc .sc-doc-tally span { font-size: 12px; color: var(--hx-ink-3); }
+
+body.sc .sc-cam-card { display: flex; flex-direction: column; gap: 10px; }
+body.sc .sc-cam { width: 100%; min-height: 240px; border-radius: var(--hx-r-md); overflow: hidden; background: var(--hx-slab); }
+body.sc .sc-cam video { width: 100% !important; height: auto !important; display: block; object-fit: cover; }
+body.sc .sc-cam-idle { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 8px; text-align: center;
+  border: 1.5px dashed var(--hx-hair); border-radius: var(--hx-r-md); }
+body.sc .sc-cam-btn { min-width: 200px; padding: 13px 22px; font-size: 16px; }
+body.sc .sc-cam-stop { align-self: center; }
+body.sc .sc-hint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hx-ink-3); }
+body.sc .sc-entry { display: flex; gap: 8px; }
+body.sc .sc-entry .sc-input { flex: 1; min-width: 0; padding: 10px 12px; }
+body.sc .sc-flash { min-height: 22px; font-weight: 700; font-size: 15px; color: var(--hx-ink-2); }
+body.sc .sc-flash.ok { color: var(--hx-ok); animation: scPop .28s var(--hx-spring); }
+body.sc .sc-flash.bad { color: var(--hx-red); animation: scShake .3s var(--hx-ease); }
+@keyframes scPop { from { transform: scale(.94); } to { transform: none; } }   /* movement only: a frozen frame is still fully visible */
+@keyframes scShake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* the lines */
+body.sc .sc-lines { display: flex; flex-direction: column; gap: 8px; }
+body.sc .sc-line { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px 14px; border-radius: var(--hx-r-md);
+  border: 1px solid var(--hx-hair-2); background: var(--hx-glass-solid); }
+body.sc .sc-line-head { grid-column: 1 / -1; display: flex; flex-direction: column; }
+body.sc .sc-line-head b { font-size: 15px; }
+body.sc .sc-line-no { font-size: 12px; color: var(--hx-ink-3); }
+body.sc .sc-line-count { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; color: var(--hx-ink-2); font-size: 13px; }
+body.sc .sc-big { font: 800 22px var(--hx-display); color: var(--hx-ink); font-variant-numeric: tabular-nums; }
+body.sc .sc-line-was { flex-basis: 100%; font-size: 12px; color: var(--hx-ink-3); }
+body.sc .sc-line-act { grid-row: 2 / 4; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+body.sc .sc-line-act .btn { min-width: 44px; min-height: 44px; font-size: 20px; line-height: 1; padding: 0; }
+body.sc .sc-meter { height: 6px; border-radius: 99px; background: var(--hx-inset); overflow: hidden; }
+body.sc .sc-meter i { display: block; height: 100%; background: var(--hx-cyan); border-radius: 99px; transition: width .2s var(--hx-ease); }
+body.sc .sc-line-full { border-color: var(--hx-ok-line); }
+body.sc .sc-line-full .sc-meter i, body.sc .sc-line-done .sc-meter i { background: var(--hx-ok); }
+body.sc .sc-line-done { opacity: .6; }
+body.sc .sc-meter-0 { width: 0; } body.sc .sc-meter-10 { width: 10%; } body.sc .sc-meter-20 { width: 20%; } body.sc .sc-meter-30 { width: 30%; }
+body.sc .sc-meter-40 { width: 40%; } body.sc .sc-meter-50 { width: 50%; } body.sc .sc-meter-60 { width: 60%; } body.sc .sc-meter-70 { width: 70%; }
+body.sc .sc-meter-80 { width: 80%; } body.sc .sc-meter-90 { width: 90%; } body.sc .sc-meter-100 { width: 100%; }
+
+/* the sticky action bar */
+body.sc .sc-bar { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  padding: 10px 2px calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--hx-page) 70%, transparent); }
+body.sc .sc-bar .btn-primary { flex: 1; max-width: 320px; padding: 13px 18px; font-size: 16px; }
+
+/* 3 · review */
+body.sc .sc-review-t { width: 100%; border-collapse: collapse; }
+body.sc .sc-review-t td { padding: 8px 4px; border-bottom: 1px solid var(--hx-hair-2); vertical-align: top; }
+body.sc .sc-review-t small { display: block; font-size: 12px; color: var(--hx-ink-3); }
+body.sc .sc-charges { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+body.sc .sc-charges .sc-hint { grid-column: 1 / -1; }
+body.sc .sc-charges label, body.sc .sc-notes { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--hx-ink-2); }
+body.sc .sc-charges input, body.sc .sc-notes textarea { padding: 10px 12px; font: 500 16px var(--hx-text); color: var(--hx-ink);
+  background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+body.sc .sc-notes { margin-top: 12px; }
+body.sc .sc-msg { min-height: 20px; margin-top: 10px; font-weight: 600; font-size: 14px; }
+body.sc .sc-msg.ok { color: var(--hx-ok); }
+body.sc .sc-msg.bad { color: var(--hx-red); }
+
+/* 4 · done */
+body.sc .sc-done { text-align: center; padding: 28px 18px; }
+body.sc .sc-done-mark { width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--hx-ok-soft); color: var(--hx-ok); animation: scPop .35s var(--hx-spring); }
+body.sc .sc-done-mark svg { width: 34px; height: 34px; }
+body.sc .sc-done h2 { margin: 0 0 6px; font: 800 20px var(--hx-display); color: var(--hx-navy-text); }
+body.sc .sc-done p { margin: 0 0 16px; color: var(--hx-ink-2); line-height: 1.5; }
+
+/* the link sheet */
+body.sc .sc-sheet { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-end; justify-content: center; background: var(--hx-scrim, rgba(15, 23, 48, .5)); }
+body.sc .sc-sheet[hidden] { display: none; }
+body.sc .sc-sheet-card { width: 100%; max-width: 560px; max-height: 80vh; overflow: auto; box-sizing: border-box; padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--hx-card); border-radius: var(--hx-r-lg) var(--hx-r-lg) 0 0; box-shadow: var(--hx-sh-3); display: flex; flex-direction: column; gap: 10px;
+  animation: scSheet .22s var(--hx-ease); }
+@keyframes scSheet { from { transform: translateY(24px); } to { transform: none; } }
+body.sc .sc-sheet-card h3 { margin: 0; font: 800 17px var(--hx-display); color: var(--hx-navy-text); }
+body.sc .sc-link-lines { display: flex; flex-direction: column; gap: 8px; }
+body.sc .sc-link-line { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 12px 14px; font: inherit; color: var(--hx-ink); cursor: pointer;
+  border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); background: var(--hx-inset); }
+body.sc button.sc-link-line:hover, body.sc button.sc-link-line:focus-visible { border-color: var(--hx-cyan); }
+body.sc .sc-link-line span { font-size: 12.5px; color: var(--hx-ink-3); }
+body.sc .sc-link-line.sc-off { opacity: .55; cursor: default; }
+
+body.sc [hidden] { display: none !important; }
+
+@media (min-width: 760px) {
+  body.sc .sc-main { padding-top: 96px; }
+}

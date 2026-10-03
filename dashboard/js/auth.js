@@ -53,6 +53,35 @@ function requireAuth() {
   return session;
 }
 
+/* A316 — the warehouse scanner. One list per permission, mirrored by FlowAPI.gs (_SCAN_COUNT_ROLES /
+   _SCAN_POST_ROLES), which is what actually enforces it; tests/flow/scan-contract.js keeps them equal.
+   A future 'warehouse' login counts and dispatches; accounting, admin and the director also post. */
+const FLOW_SCAN_ROLES = ['accounting', 'admin', 'director', 'warehouse'];
+const FLOW_SCAN_POST_ROLES = ['accounting', 'admin', 'director'];
+const _NEXT_PAGES = ['scan.html', 'labels.html'];
+function requireScanAccess() {
+  const session = getSession();
+  if (!session) {
+    try { sessionStorage.setItem('hx_next', (location.pathname.split('/').pop() || '') + (location.search || '')); } catch (e) {}
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (FLOW_SCAN_ROLES.indexOf(String(session.role || '').toLowerCase()) === -1) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+/** Where to go after signing in: back to the scanner page that sent you here, else your home. */
+function flowAfterLogin(role) {
+  let next = '';
+  try { next = sessionStorage.getItem('hx_next') || ''; sessionStorage.removeItem('hx_next'); } catch (e) {}
+  const page = next.split('?')[0];
+  if (_NEXT_PAGES.indexOf(page) !== -1 && FLOW_SCAN_ROLES.indexOf(String(role || '').toLowerCase()) !== -1 &&
+      /^[a-z-]+\.html(\?[A-Za-z0-9=&%:._,-]*)?$/.test(next)) return next;
+  return _homeForRole(role);
+}
+
 function _homeForRole(role) {
   if (role === 'admin') return 'admin.html';
   if (role === 'accounting') return 'accounting-home.html';
@@ -61,6 +90,7 @@ function _homeForRole(role) {
   if (role === 'hr') return 'hr-home.html';
   if (role === 'marketing') return 'marketing-home.html';
   if (role === 'leadgen') return 'leadgen-home.html';      // A277 — see requireLeadgenAccess
+  if (role === 'warehouse') return 'scan.html';            // A316 — the scanner is the warehouse's home
   return 'dashboard.html';
 }
 
@@ -194,7 +224,7 @@ function isFlowViewerRole(session) {
  * in the backend, not in a seventh copy of the test out here.
  */
 const FLOW_OVERSIGHT_ROLES = ['admin', 'accounting', 'management', 'director'];
-const FLOW_OWN_SCOPE_ROLES = ['sales', 'leadgen'];
+const FLOW_OWN_SCOPE_ROLES = ['sales', 'leadgen', 'warehouse'];
 
 /** Accepts a role string OR a session object — half the call sites have one, half the other. */
 function _flowRoleOf(x) {
@@ -496,7 +526,7 @@ function renderNavbar(activePage) {
 
   const initials = session.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const brandText = session.role === 'admin' ? 'Admin Dashboard' : session.role === 'accounting' ? 'Accounting Dashboard' : session.role === 'management' ? 'Management Dashboard' : session.role === 'director' ? 'Director Dashboard' : session.role === 'hr' ? 'HR-Marketing Dashboard' : session.role === 'marketing' ? 'Marketing Dashboard' : session.role === 'leadgen' ? 'Lead Generation' : 'Sales Dashboard';
+  const brandText = session.role === 'admin' ? 'Admin Dashboard' : session.role === 'accounting' ? 'Accounting Dashboard' : session.role === 'management' ? 'Management Dashboard' : session.role === 'director' ? 'Director Dashboard' : session.role === 'hr' ? 'HR-Marketing Dashboard' : session.role === 'marketing' ? 'Marketing Dashboard' : session.role === 'leadgen' ? 'Lead Generation' : session.role === 'warehouse' ? 'Warehouse' : 'Sales Dashboard';
 
   let navLinks = '';
   if (session.role === 'admin') {
@@ -576,6 +606,7 @@ function renderNavbar(activePage) {
           <div class="dd-group">
             <div class="dd-title">Receive & ship</div>
             <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Materials Receiving</a>
+            <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
             <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
             <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           </div>
@@ -652,6 +683,7 @@ function renderNavbar(activePage) {
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Receiving</a>
+          <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
           <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
@@ -885,6 +917,7 @@ function renderNavbar(activePage) {
           <a href="director-emails.html" class="${activePage === 'director-emails' ? 'active' : ''}">Email</a>
           <a href="email-setup.html" class="${activePage === 'email-setup' ? 'active' : ''}">Connect Email</a>
           <a href="pf-admin.html" class="${activePage === 'pf-admin' ? 'active' : ''}">PF Data Admin</a>
+          <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
           <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
         </div>
       </div>`;
@@ -1010,6 +1043,17 @@ function renderNavbar(activePage) {
       <a href="hr-analytics.html" class="${activePage === 'hr-analytics' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Analytics
+      </a>
+      <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Change Password
+      </a>`;
+  } else if (session.role === 'warehouse') {
+    // A316 — a warehouse login sees the scanner and its password, nothing else.
+    navLinks = `
+      <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+        Scanner
       </a>
       <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1190,6 +1234,7 @@ async function flowComputeActions(session) {
   const items = [];
   if (!session || typeof fetchFlow !== 'function') return items;
   const role = String(session.role || '').toLowerCase();
+  if (role === 'warehouse') return items;   // A316 — the scanner has no quotation or pricing nudges
   // A289 — tone, not colour: urgent | warn | info | ok. The stylesheet paints [data-tone].
   const add = (icon, tone, text, link) => items.push({ icon, tone, text, link });
   const isMgmt = role === 'management', isDir = role === 'director';

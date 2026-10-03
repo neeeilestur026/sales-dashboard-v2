@@ -155,6 +155,7 @@ function invActionsCell(r) {
   return `<td style="white-space:nowrap;">
       <button class="link-btn" onclick='editItem(${r.rowIndex})'>Edit</button>
       ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex}, ${JSON.stringify(String(r.itemNo || ''))})' style="margin-left:0.5rem;">Delete</button>` : ''}
+      ${invCanDelete && r.itemId ? `<a class="link-btn" href="labels.html?items=${encodeURIComponent(String(r.itemId))}:1" style="margin-left:0.5rem;" title="Print a QR label for the scanner">Label</a>` : ''}
     </td>`;
 }
 

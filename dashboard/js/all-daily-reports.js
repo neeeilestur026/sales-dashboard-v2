@@ -15,7 +15,7 @@ let adrVisitPhotos = {};    // A190 — visitNo -> data: URI, filled lazily when
 let adrPhotoLoaded = {};    // A190 — user -> true once their photos have been fetched
 let adrPlans = {};          // A190 — user -> their APPROVED itinerary for the week containing the date
 let adrRoster = [];         // A314 — every login except the director, so a quiet day still shows the person
-const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
+const MODULE_ORDER = ['Pricing Request', 'Quotation', 'Sales Order', 'Purchase Order', 'AP Aging', 'Receiving', 'Dispatch', 'Invoice', 'Inventory', 'Marketing', 'Call', 'Document'];
 
 function _e(s) { return hxEsc(s); }
 function _m(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }

@@ -1,0 +1,15 @@
+{
+  "name": "Hi-Escorp Scanner",
+  "short_name": "Scanner",
+  "description": "Scan goods in against purchase orders and out against sales orders.",
+  "start_url": "/scan.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1B2461",
+  "icons": [
+    { "src": "/images/scan-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/scan-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -108,3 +108,25 @@ call per sheet. Flask already sends the secret on every call (A299).
    Inventory tab moves by the quantities.
 
 Rollback: Manage deployments → previous version.
+
+## The warehouse scanner (A316, FlowAPI 158)
+
+`/scan.html` is a phone web app: open it in Safari (iPhone) or Chrome (Android), then Share → Add to
+Home Screen (iPhone) or the install prompt (Android). No app store, no fee. It receives goods against
+an open purchase order and records goods leaving against a sales order, by camera, by a Bluetooth
+keyboard-type scanner, or by typing.
+
+- **Who:** accounting, admin and director scan and post. A login with the role `warehouse` (Users page
+  → Warehouse) lands on the scanner, counts and dispatches, and its receiving counts are posted by
+  accounting (the scanner and the desktop Receiving page both prefill them).
+- **What it writes:** receiving goes through `createReceiving` (same landed cost, journal, document and
+  payment checks), but every line is checked against what is still open on the PO and priced from the
+  PO. Dispatch is a record only: stock still leaves at invoicing.
+- **Barcodes:** a supplier barcode is linked to an item once (asked on the first scan). Items with no
+  barcode get our QR label (`labels.html`, 50 × 30 mm; from the scanner or Inventory → Label).
+- **Deploy order:** Render first (this repo), then paste `apps-script/FlowAPI.gs` as a new version and
+  check `getVersion` returns 158. Until then the scanner shows "backend not updated" and does nothing.
+- **Also changed in `createReceiving`:** only accounting/admin/director may post, zero-quantity lines
+  are skipped (they used to overwrite the unit cost), and the charges typed on a receiving are spread
+  over that receiving's goods with its VAT booked in full (partial deliveries used to lose part of
+  their charges; a full delivery is unchanged).

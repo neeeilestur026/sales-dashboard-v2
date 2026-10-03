@@ -99,7 +99,9 @@ def create_app():
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+        # A316 — the camera is allowed on the warehouse scanner page only; every other page keeps it off.
+        response.headers['Permissions-Policy'] = ('camera=(self), microphone=(), geolocation=()'
+                                                  if request.path == '/scan.html' else 'camera=(), microphone=(), geolocation=()')
         response.headers.pop('Server', None)
         # A299/A300/A304 — HSTS ramped 300 s → 1 day → 1 year once each step held on Render.
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
@@ -126,6 +128,16 @@ def create_app():
     @app.route("/")
     def serve_index():
         return send_from_directory(DASHBOARD_DIR, "index.html")
+
+    # A316 — the scanner installs as a home-screen app: its manifest and service worker must be served
+    # from the site root (a worker's scope cannot reach above the folder it is served from).
+    @app.route("/manifest.webmanifest")
+    def web_manifest():
+        return send_from_directory(DASHBOARD_DIR, "manifest.webmanifest", mimetype="application/manifest+json")
+
+    @app.route("/sw.js")
+    def service_worker():
+        return send_from_directory(DASHBOARD_DIR, "sw.js", mimetype="application/javascript")
 
     @app.route("/robots.txt")
     def robots_txt():

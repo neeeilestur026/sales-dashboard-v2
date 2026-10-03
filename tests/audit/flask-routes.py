@@ -31,7 +31,7 @@ def ok(label, cond, extra=None):
         print("  FAIL " + label + ("" if extra is None else "\n     " + str(extra)[:300]))
 
 
-OPEN = {"static", "serve_index", "serve_dashboard", "robots_txt",
+OPEN = {"static", "serve_index", "serve_dashboard", "robots_txt", "web_manifest", "service_worker",   # A316: the scanner app
         "po_bp.index", "pr_bp.index", "mro_bp.index", "mi_bp.index",
         "quotation_bp.index", "payment_request_bp.index"}
 
@@ -79,6 +79,13 @@ ok("  and carries HSTS and the report-only CSP",
 csp = r.headers.get("Content-Security-Policy") or r.headers.get("Content-Security-Policy-Report-Only") or ""
 ok("  A315: frames may load a blob: URL — the quotation / travel / admin PDF previews put the generated PDF in an <iframe>",
    "frame-src 'self' blob:" in csp, csp)
+ok("  A316: the camera stays off on ordinary pages", "camera=()" in r.headers.get("Permissions-Policy", ""), r.headers.get("Permissions-Policy"))
+r = c.get("/scan.html")
+ok("A316: the scanner page allows the camera for this site only", r.status_code == 200 and "camera=(self)" in r.headers.get("Permissions-Policy", ""), (r.status_code, r.headers.get("Permissions-Policy")))
+r = c.get("/manifest.webmanifest")
+ok("  the app manifest is served as a manifest", r.status_code == 200 and r.headers.get("Content-Type", "").startswith("application/manifest+json"), (r.status_code, r.headers.get("Content-Type")))
+r = c.get("/sw.js")
+ok("  the service worker is served from the root as JavaScript", r.status_code == 200 and "javascript" in r.headers.get("Content-Type", ""), (r.status_code, r.headers.get("Content-Type")))
 r = c.post("/api/session/logout", headers={"X-Session-Token": "good"})
 ok("logout answers 200", r.status_code == 200, r.status_code)
 

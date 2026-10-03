@@ -67,7 +67,7 @@
       /* A277 — was a hand-rolled copy of _homeForRole that had drifted: it had no 'marketing'
          branch, so a marketing user reopening the tab landed on the sales dashboard and was
          bounced. The fresh-login path below already used the real one. */
-      if (session) window.location.href = _homeForRole(session.role);
+      if (session) window.location.href = flowAfterLogin(session.role);
       else if (typeof hxClearCaches === 'function') hxClearCaches();   // A304: no stale rows for the next sign-in
     })();
 
@@ -96,7 +96,7 @@
         if (result.success) {
           saveSession(result);
           // Single source of truth for role→home (covers marketing etc. — auth.js)
-          window.location.href = _homeForRole(result.role);
+          window.location.href = flowAfterLogin(result.role);
         } else {
           errorText.textContent = result.message || 'Invalid username or password';
           errorMsg.classList.add('visible');

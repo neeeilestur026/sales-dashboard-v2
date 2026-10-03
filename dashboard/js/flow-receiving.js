@@ -71,6 +71,26 @@ function loadFromPO() {
     const m = document.getElementById('formMsg'); if (m) m.style.display = 'none';
   }
   renderItems();
+  rcApplyScanCount(p.poNo);
+}
+
+/* A316 — a count saved on the warehouse scanner (saveScanCount) is waiting for this PO: fill the
+   quantities from it so accounting checks and posts what was physically counted. PO lines are
+   numbered in their sheet order, the same order getPurchaseOrders lists them in. */
+async function rcApplyScanCount(poNo) {
+  try {
+    const r = await fetchFlow('getScanContext', { mode: 'receive', docNo: poNo }, { fresh: true });
+    if (!rcCurrent || rcCurrent.poNo !== poNo || !r || !r.success || !r.pendingCount || !(r.pendingCount.lines || []).length) return;
+    const byLine = {};
+    r.pendingCount.lines.forEach(x => { byLine[x.line] = flowNum(x.qty); });
+    document.querySelectorAll('#itemRows tr').forEach(tr => {
+      const ln = parseInt(tr.dataset.i, 10) + 1;
+      tr.querySelector('.qty').value = byLine[ln] || 0;
+    });
+    recalc();
+    flowMsg('formMsg', 'Quantities filled from the warehouse count by ' + (r.pendingCount.by || 'the scanner') +
+      (r.pendingCount.at ? ' on ' + r.pendingCount.at : '') + '. Check them, add the charges, then receive.', true);
+  } catch (e) { /* an older backend has no scanner — the PO quantities stay as they are */ }
 }
 
 // A145: does this item code resolve to the shared 'N/A' inventory row? (blank / n/a / na / dash)
@@ -91,12 +111,19 @@ function renderItems() {
 
 function recalc() {
   const invShipping = flowNum(rcShip.duties) + flowNum(rcShip.delivery) + flowNum(rcShip.other); // VAT excluded
+  /* A316 — the backend now spreads the charges typed here over THIS receiving's goods (not the whole
+     PO), so the preview does the same; otherwise it would show less than what is posted. */
+  let rcFC = 0, rcQty = 0;
+  document.querySelectorAll('#itemRows tr').forEach(tr => {
+    const q = flowNum(tr.querySelector('.qty').value);
+    if (q > 0) { rcFC += flowNum(tr.querySelector('.price').value) * q; rcQty += q; }
+  });
   let grand = 0;
   document.querySelectorAll('#itemRows tr').forEach(tr => {
     const price = flowNum(tr.querySelector('.price').value);
     const qty = flowNum(tr.querySelector('.qty').value);
     const purchasePHP = rcPoTotalFC > 0 ? (rcPaidPHP * price / rcPoTotalFC) : 0;
-    const shipUnit = rcPoTotalFC > 0 ? (invShipping * price / rcPoTotalFC) : 0;
+    const shipUnit = !(qty > 0) ? 0 : rcFC > 0 ? (invShipping * price / rcFC) : (rcQty > 0 ? invShipping / rcQty : 0);
     const landed = purchasePHP + shipUnit;
     const tot = landed * qty;
     const f = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -128,7 +128,7 @@ console.log('== THE FIFTEEN SHEETS — discovered from SCHEMA, not from a list =
   /* A276 added Hires, and the count is asserted rather than derived precisely so that adding a sheet
      with an SO No makes someone come here and check the rename covers it. It does, and without being
      told: the handler discovers its sheets from SCHEMA. That is the property this number protects. */
-  eq('how many sheets carry an SO No column', carriers.length, 15);
+  eq('how many sheets carry an SO No column', carriers.length, 16);   // A316: Dispatches joined the list
   ok('SalesOrders is one of them', carriers.indexOf('SalesOrders') >= 0);
   ok('and the A276 hire register is too', carriers.indexOf('Hires') >= 0);
   /* The two that would break a hard-coded column index — the exact mistake updateQuotation's block
@@ -187,7 +187,7 @@ console.log('\n== the re-key moves everything, and only what it should ==');
     if (String(row['SO No']) === 'SO-2026-FFHC-01') n++;
     if (k === 'Documents' && row['Module'] === 'Sales Order' && row['Ref No'] === 'SO-2026-FFHC-01') n++;
   }));
-  eq('and 14 rows now carry the new one', n, 14);   // the fixture seeds 14 of the 15 carriers
+  eq('and 14 rows now carry the new one', n, 14);   // the fixture seeds 14 of the 16 carriers (A316: Dispatches is not seeded)
 
   eq('the two OTHER sales orders are untouched',
      DB.SalesOrders.filter(r2 => /^(SO-202607-001|DEMO-SO-001)$/.test(r2['SO No'])).length, 2);

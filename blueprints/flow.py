@@ -653,6 +653,8 @@ SECURED_ACTIONS = [
     "updateARAging", "updateCommissionRequest", "updateExpense", "updateInventoryItem", "updatePRSourcing",
     "updatePaymentRequest", "updatePurchaseOrder", "updateQuotation", "updateSalesOrder", "updateShipment",
     "verifyReturnToSales", "voidCollection", "voidInvoice",
+    # A316 — the warehouse scanner (dashboard/scan.html)
+    "dispatchByScan", "linkBarcode", "receiveByScan", "saveScanCount",
 ]
 
 

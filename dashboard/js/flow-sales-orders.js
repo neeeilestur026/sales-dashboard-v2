@@ -396,19 +396,29 @@ function resetForm() {
   addRow();
 }
 
+let soDispBy = {};   // A316 — { soNo: { dispatched, goods } } from the warehouse scanner
+/** A316 — "scanned out 2 of 5": goods the scanner recorded leaving. Record only; stock leaves at invoicing. */
+function soDispatchBadge(soNo) {
+  const d = soDispBy[String(soNo)];
+  if (!d || !(d.goods > 0)) return '';
+  const full = d.dispatched >= d.goods;
+  return ` <span class="flow-badge ${full ? 'b-proc-collected' : 'b-proc-invoiced'}" title="Goods recorded leaving the warehouse by the scanner (stock is deducted at invoicing)">out ${flowNum(d.dispatched)}/${flowNum(d.goods)}</span>`;
+}
 async function loadSOs() {
   const c = document.getElementById('listContainer');
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
-    const [res, cdRes, poRes, invRes, arRes, colRes] = await Promise.all([
+    const [res, cdRes, poRes, invRes, arRes, colRes, dsRes] = await Promise.all([
       fetchFlow('getSalesOrders'),
       fetchFlow('getSOCostDetails').catch(() => ({ data: [] })),
       fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),   // A145: which SOs have a PO
       fetchFlow('getInvoices').catch(() => ({ data: [] })),         // A266: the Process column
       fetchFlow('getARAging').catch(() => ({ data: [] })),
       fetchFlow('getCollections').catch(() => ({ data: [] })),
+      fetchFlow('getDispatchSummary').catch(() => ({ data: {} })),   // A316: what the scanner saw leave
     ]);
     soList = (res && res.data) || [];
+    soDispBy = (dsRes && dsRes.data && typeof dsRes.data === 'object') ? dsRes.data : {};
     soCds = {};
     ((cdRes && cdRes.data) || []).forEach(cd => { soCds[String(cd.soNo)] = cd; });
     soHasPO = {};
@@ -603,7 +613,7 @@ function renderSOs() {
   if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No sales orders match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Process</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td><button class="link-btn" style="font-weight:600;" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${flowEsc(s.soNo)}</button>${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
-    <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td><button class="link-btn" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${s.items.length}</button></td>
+    <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}${soDispatchBadge(s.soNo)}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td><button class="link-btn" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${s.items.length}</button></td>
     <td style="white-space:nowrap;">${`<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>${soViewer ? 'View costs' : 'Costs'}</button>`}
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
