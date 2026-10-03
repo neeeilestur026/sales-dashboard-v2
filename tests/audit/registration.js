@@ -81,7 +81,10 @@ const EXCEPTIONS = {
   noAuditRow: {                       // in MUTATIONS, deliberately absent from _MODULE_MAP
     saveDailyNote:      '_dispatch excludes it by name — the note IS the daily report, not an event in it',
     submitDailyReport:  'documented at FlowAPI.gs — the report is the log, logging it would be circular',
-    savePfInquiry:      'documented at FlowAPI.gs — a Product Finder inquiry is not a daily-report task'
+    savePfInquiry:      'documented at FlowAPI.gs — a Product Finder inquiry is not a daily-report task',
+    uploadScanPhoto:    'A318 — one row per photo would drown the report; the post that cites it is logged',
+    ensureItemLabels:   'A318 — making a label code is bookkeeping, not a task',
+    logLabelPrint:      'A318 — printing a label is not a task'
   },
   noLock: {                           // in _MODULE_MAP or _SECURED, deliberately absent from MUTATIONS
     previewReceivingReversal:      'a preview: reads and reports, writes nothing, so it takes no lock',
@@ -105,7 +108,12 @@ const EXCEPTIONS = {
     getCommissionPayoutReport:     'a secured READ',
     auditCommissionIntegrity:      'a read-only audit',
     getSODocCompliance:            'a read',
-    getDocComplianceReport:        'a read'
+    getDocComplianceReport:        'a read',
+    getScanContext:                'A318 — a secured READ: a code only becomes details for a signed-in scanner role',
+    getScanLookup:                 'A318 — a secured READ',
+    getLabels:                     'A318 — a secured READ (the label library)',
+    getStockInOptions:             'A318 — a secured READ',
+    getScanPhotos:                 'A318 — a secured READ'
   }
 };
 

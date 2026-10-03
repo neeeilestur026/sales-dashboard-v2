@@ -4,6 +4,7 @@ let invSession = null;
 let invCanDelete = false;   // only admin/accounting may remove items; sales can add/edit only
 let invReadOnly = false;    // management/director can view only (no add/edit/delete)
 let invOrderedSet = new Set();   // Item Nos that appear in any Purchase Order (= "ordered already")
+let invTracked = null;            // A318 — { itemId: 1 } for items tracked piece by piece; null until the 159 backend answers
 
 document.addEventListener('DOMContentLoaded', async () => {
   invSession = requireInventoryAccess();
@@ -37,7 +38,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       .catch(() => {});
   }
   await loadInventory(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  invLoadTracked();
 });
+
+/* A318 — which items the scanner tracks piece by piece. A secured read (it also carries the scanner's
+   codes), so only admin/accounting ask; until the backend is 159 the switch simply does not appear. */
+async function invLoadTracked() {
+  if (!invCanDelete || typeof flowVersionAtLeast !== 'function') return;
+  try {
+    if (!(await flowVersionAtLeast(159))) return;
+    const r = await postFlow('getScanContext', { mode: 'stockin' });
+    if (r && r.success) { invTracked = r.tracked || {}; render(); }
+  } catch (e) { /* the list works without it */ }
+}
+async function invToggleTracking(itemId) {
+  const on = !(invTracked && invTracked[itemId]);
+  const it = invData.filter(r => String(r.itemId) === itemId)[0];
+  const name = it ? (it.description || it.itemNo || itemId) : itemId;
+  if (!confirm(on
+    ? 'Track ' + name + ' piece by piece?\n\nEvery piece received from now on gets its own label, and the scanner dispatches it by each piece\'s label. Pieces already on the shelf are registered from the scanner\'s Look up.'
+    : 'Stop tracking ' + name + ' piece by piece? Pieces already registered keep their labels.')) return;
+  try {
+    const r = await postFlow('setItemTracking', { itemId: itemId, track: on });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Could not change tracking.');
+    invTracked = Object.assign({}, invTracked || {});
+    if (on) invTracked[itemId] = 1; else delete invTracked[itemId];
+    render();
+  } catch (e) { alert(e.message); }
+}
 
 async function loadInventory() {
   const c = document.getElementById('container');
@@ -155,7 +183,8 @@ function invActionsCell(r) {
   return `<td style="white-space:nowrap;">
       <button class="link-btn" onclick='editItem(${r.rowIndex})'>Edit</button>
       ${invCanDelete ? `<button class="link-btn del-btn" onclick='deleteItem(${r.rowIndex}, ${JSON.stringify(String(r.itemNo || ''))})' style="margin-left:0.5rem;">Delete</button>` : ''}
-      ${invCanDelete && r.itemId ? `<a class="link-btn" href="labels.html?items=${encodeURIComponent(String(r.itemId))}:1" style="margin-left:0.5rem;" title="Print a QR label for the scanner">Label</a>` : ''}
+      ${invCanDelete && r.itemId ? `<a class="link-btn" href="labels.html?items=${encodeURIComponent(String(r.itemId))}:1" style="margin-left:0.5rem;" title="Print the scanner label">Label</a>` : ''}
+      ${invCanDelete && r.itemId && invTracked ? `<button type="button" class="link-btn inv-track${invTracked[r.itemId] ? ' on' : ''}" data-track="${flowEsc(String(r.itemId))}" title="Give every piece its own label">${invTracked[r.itemId] ? 'Tracked by piece' : 'Track pieces'}</button>` : ''}
     </td>`;
 }
 
@@ -321,6 +350,8 @@ window.addEventListener('resize', hxRaf(() => flowFitScroll('container')));   //
 /* A274 — expand a clamped description. Delegated so the markup stays clean across ~1,000 rows. */
 document.addEventListener('click', function (e) {
   if (!e.target.closest) return;
+  const tr = e.target.closest('[data-track]');                       // A318 — the per-piece switch
+  if (tr) { invToggleTracking(tr.dataset.track); return; }
   // Either the clamped text itself or the "more" link beside it.
   const more = e.target.closest('.inv-more');
   const d = more ? more.previousElementSibling : e.target.closest('.inv-desc.clamp');

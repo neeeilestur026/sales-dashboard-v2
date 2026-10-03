@@ -79,7 +79,8 @@ function loadFromPO() {
    numbered in their sheet order, the same order getPurchaseOrders lists them in. */
 async function rcApplyScanCount(poNo) {
   try {
-    const r = await fetchFlow('getScanContext', { mode: 'receive', docNo: poNo }, { fresh: true });
+    // A318 — a secured read now (it carries label codes); the count's photos stay with the PO's documents
+    const r = await postFlow('getScanContext', { mode: 'receive', docNo: poNo });
     if (!rcCurrent || rcCurrent.poNo !== poNo || !r || !r.success || !r.pendingCount || !(r.pendingCount.lines || []).length) return;
     const byLine = {};
     r.pendingCount.lines.forEach(x => { byLine[x.line] = flowNum(x.qty); });

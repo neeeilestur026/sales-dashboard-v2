@@ -18,71 +18,91 @@
   <script src="js/theme.js"></script>
   <header class="navbar" id="navbar"></header>
 
-  <!-- A316: the warehouse scanner. Receive against a purchase order, dispatch against a sales order.
-       Every scan is checked against what is still open on the document, here and again on the server. -->
+  <!-- A316/A318: the warehouse scanner. Receive against a purchase order, stock in item by item, dispatch
+       against a sales order, bring pieces back, look any label up. Every scan is checked against what is
+       still open, here and again on the server; every post carries a photo as proof. -->
   <main class="main-content sc-main">
     <header class="sc-top">
-      <div>
-        <h1>Scanner</h1>
-        <p id="scWho">Signing in…</p>
-      </div>
-      <div class="sc-modes" role="tablist" aria-label="What are you scanning">
-        <button type="button" class="sc-mode active" id="scModeReceive" role="tab" aria-selected="true" data-mode="receive">Receive</button>
-        <button type="button" class="sc-mode" id="scModeDispatch" role="tab" aria-selected="false" data-mode="dispatch">Dispatch</button>
-      </div>
+      <h1>Scanner</h1>
+      <p id="scWho">Signing in…</p>
     </header>
+    <div class="sc-modes" role="tablist" aria-label="What are you doing">
+      <button type="button" class="sc-mode active" id="scModeReceive" role="tab" aria-selected="true" data-mode="receive">Receive</button>
+      <button type="button" class="sc-mode" id="scModeStockin" role="tab" aria-selected="false" data-mode="stockin">Stock in</button>
+      <button type="button" class="sc-mode" id="scModeDispatch" role="tab" aria-selected="false" data-mode="dispatch">Dispatch</button>
+      <button type="button" class="sc-mode" id="scModeReturn" role="tab" aria-selected="false" data-mode="return">Return</button>
+      <button type="button" class="sc-mode" id="scModeLookup" role="tab" aria-selected="false" data-mode="lookup">Look up</button>
+    </div>
 
     <div class="sc-banner" id="scBanner" hidden></div>
 
-    <!-- 1 · pick the document -->
+    <!-- 1 · pick the document (Receive, Dispatch) -->
     <section class="hx-glass sc-pick" id="scPick">
       <div class="hx-head"><h2 id="scPickTitle">Open purchase orders</h2><span class="hx-meta" id="scPickMeta">Loading…</span></div>
       <input type="search" id="scSearch" class="sc-input" placeholder="Search by number or name" autocomplete="off" aria-label="Search documents">
       <div id="scDocs" class="sc-docs"><div class="hx-empty">Loading…</div></div>
     </section>
 
-    <!-- 2 · scan against it -->
-    <section class="sc-work" id="scWork" hidden>
-      <div class="hx-glass sc-doc">
-        <button type="button" class="btn btn-sm sc-back" id="scBack">Change</button>
-        <div class="sc-doc-main">
-          <div class="sc-doc-no" id="scDocNo"></div>
-          <div class="sc-doc-party" id="scDocParty"></div>
-        </div>
-        <div class="sc-doc-tally" id="scTally"></div>
+    <!-- the document being scanned against -->
+    <div class="hx-glass sc-doc" id="scDocBar" hidden>
+      <button type="button" class="btn btn-sm sc-back" id="scBack">Change</button>
+      <div class="sc-doc-main">
+        <div class="sc-doc-no" id="scDocNo"></div>
+        <div class="sc-doc-party" id="scDocParty"></div>
       </div>
+      <div class="sc-doc-tally" id="scTally"></div>
+    </div>
 
-      <div class="hx-glass sc-cam-card">
-        <div class="sc-cam" id="scCam" hidden></div>
-        <div class="sc-cam-idle" id="scCamIdle">
-          <button type="button" class="btn btn-primary sc-cam-btn" id="scCamStart">Start camera</button>
-          <p class="sc-hint">Point the back camera at a barcode or our QR label. A Bluetooth scanner works too: scan into the box below.</p>
-        </div>
-        <button type="button" class="btn btn-sm sc-cam-stop" id="scCamStop" hidden>Stop camera</button>
-        <form class="sc-entry" id="scEntry" autocomplete="off">
-          <input type="text" id="scCode" class="sc-input" inputmode="none" placeholder="Scanner input" aria-label="Barcode">
-          <button type="button" class="btn btn-sm" id="scType">Type</button>
-          <button type="submit" class="btn btn-sm btn-primary">Add</button>
-        </form>
-        <div class="sc-flash" id="scFlash" role="status" aria-live="polite"></div>
+    <!-- 2 · the camera, shared by every tab -->
+    <section class="hx-glass sc-cam-card" id="scCamCard" hidden>
+      <div class="sc-cam" id="scCam" hidden></div>
+      <div class="sc-cam-idle" id="scCamIdle">
+        <button type="button" class="btn btn-primary sc-cam-btn" id="scCamStart">Start camera</button>
+        <p class="sc-hint" id="scCamHint">Point the back camera at a barcode or our label. A Bluetooth scanner works too: scan into the box below.</p>
       </div>
-
-      <div class="hx-glass">
-        <div class="hx-head"><h2>Items</h2><span class="hx-meta" id="scLinesMeta"></span>
-          <div class="hx-actions"><a class="btn btn-sm" id="scLabels" href="labels.html" hidden>Print labels</a></div></div>
-        <div id="scLines" class="sc-lines"></div>
-      </div>
-
-      <div class="sc-bar">
-        <button type="button" class="btn btn-sm" id="scClear">Clear count</button>
-        <button type="button" class="btn btn-primary" id="scReviewBtn" disabled>Review</button>
-      </div>
+      <button type="button" class="btn btn-sm sc-cam-stop" id="scCamStop" hidden>Stop camera</button>
+      <form class="sc-entry" id="scEntry" autocomplete="off">
+        <input type="text" id="scCode" class="sc-input" inputmode="none" placeholder="Scanner input" aria-label="Code">
+        <button type="button" class="btn btn-sm" id="scType">Type</button>
+        <button type="submit" class="btn btn-sm btn-primary">Add</button>
+      </form>
+      <div class="sc-flash" id="scFlash" role="status" aria-live="polite"></div>
     </section>
 
-    <!-- 3 · review and post -->
+    <!-- Receive / Dispatch: the document's lines -->
+    <section class="hx-glass" id="scLinesCard" hidden>
+      <div class="hx-head"><h2>Items</h2><span class="hx-meta" id="scLinesMeta"></span>
+        <div class="hx-actions"><a class="btn btn-sm" id="scLabels" href="labels.html" hidden>Print labels</a></div></div>
+      <div id="scLines" class="sc-lines"></div>
+    </section>
+
+    <!-- Stock in: the basket, grouped by purchase order -->
+    <section class="hx-glass" id="scBasketCard" hidden>
+      <div class="hx-head"><h2>Basket</h2><span class="hx-meta" id="scBasketMeta"></span></div>
+      <div id="scBasket" class="sc-basket"></div>
+    </section>
+
+    <!-- Return: the pieces coming back -->
+    <section class="hx-glass" id="scRetCard" hidden>
+      <div class="hx-head"><h2>Coming back</h2><span class="hx-meta" id="scRetMeta"></span></div>
+      <div id="scRetList" class="sc-lines"></div>
+    </section>
+
+    <!-- Look up: what a code is -->
+    <section class="hx-glass sc-look" id="scLookCard" hidden>
+      <div id="scLook"><div class="hx-empty">Scan any label or barcode to see what it is.</div></div>
+    </section>
+
+    <div class="sc-bar" id="scWorkBar" hidden>
+      <button type="button" class="btn btn-sm" id="scClear">Clear</button>
+      <button type="button" class="btn btn-primary" id="scReviewBtn" disabled>Review</button>
+    </div>
+
+    <!-- 3 · review, photos and post -->
     <section class="hx-glass sc-review" id="scReview" hidden>
       <div class="hx-head"><h2 id="scReviewTitle">Review</h2><span class="hx-meta" id="scReviewMeta"></span></div>
       <div id="scReviewLines"></div>
+      <div id="scPhotoSlot"></div>
       <div class="sc-charges" id="scCharges" hidden>
         <p class="sc-hint">Charges paid on THIS delivery, in pesos. Leave 0 if none; they are spread over the items above.</p>
         <label>Customs duties<input type="number" inputmode="decimal" min="0" step="0.01" id="scDuties" value="0"></label>
@@ -90,6 +110,11 @@
         <label>Delivery<input type="number" inputmode="decimal" min="0" step="0.01" id="scDelivery" value="0"></label>
         <label>Other<input type="number" inputmode="decimal" min="0" step="0.01" id="scOther" value="0"></label>
       </div>
+      <fieldset class="sc-cond" id="scCondWrap" hidden>
+        <legend>Condition</legend>
+        <label><input type="radio" name="scCond" value="Good" checked> Good</label>
+        <label><input type="radio" name="scCond" value="Needs repair"> Needs repair</label>
+      </fieldset>
       <label class="sc-notes" id="scNotesWrap" hidden>Notes<textarea id="scNotes" rows="2" maxlength="500" placeholder="Driver, plate number, who received it…"></textarea></label>
       <div class="sc-msg" id="scMsg" role="status" aria-live="polite"></div>
       <div class="sc-bar">
@@ -105,20 +130,26 @@
       </div>
       <h2 id="scDoneTitle">Done</h2>
       <p id="scDoneText"></p>
-      <button type="button" class="btn btn-primary" id="scAgain">Scan another</button>
+      <div class="sc-done-act">
+        <a class="btn" id="scDoneLabels" href="labels.html" hidden>Print piece labels</a>
+        <button type="button" class="btn btn-primary" id="scAgain">Scan another</button>
+      </div>
     </section>
   </main>
 
-  <!-- an unknown barcode: tie it to one of the document's items, once -->
-  <div class="sc-sheet" id="scLink" hidden role="dialog" aria-modal="true" aria-labelledby="scLinkTitle">
+  <!-- one bottom sheet for every question: link a barcode, pick the PO line, register pieces -->
+  <div class="sc-sheet" id="scSheet" hidden role="dialog" aria-modal="true" aria-labelledby="scSheetTitle">
     <div class="sc-sheet-card">
-      <h3 id="scLinkTitle">New barcode</h3>
-      <p class="sc-hint" id="scLinkText"></p>
-      <div id="scLinkLines" class="sc-link-lines"></div>
-      <div class="sc-msg" id="scLinkMsg" role="status"></div>
-      <button type="button" class="btn btn-sm" id="scLinkCancel">Cancel</button>
+      <h3 id="scSheetTitle"></h3>
+      <p class="sc-hint" id="scSheetText"></p>
+      <div id="scSheetBody" class="sc-sheet-body"></div>
+      <div class="sc-msg" id="scSheetMsg" role="status"></div>
+      <button type="button" class="btn btn-sm" id="scSheetCancel">Cancel</button>
     </div>
   </div>
+
+  <!-- the phone's camera for proof photos (iPhone and Android open the rear camera) -->
+  <input type="file" id="scPhotoIn" accept="image/*" capture="environment" hidden>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>

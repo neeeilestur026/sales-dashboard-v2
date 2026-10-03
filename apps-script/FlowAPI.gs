@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 158;   // A316 — the warehouse scanner (receive/dispatch by scan, barcodes). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 159;   // A318 — scanner photo proof, per-piece tracking, returns, opaque reprintable labels, stock in. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -503,7 +503,15 @@ var SCHEMA = {
   Dispatches:    ['Dispatch No', 'SO No', 'Customer', 'Date', 'Scanned By', 'Created At', 'Notes'],
   DispatchItems: ['Dispatch No', 'Line', 'Item ID', 'Item No', 'Item Name', 'Qty Ordered', 'Qty Scanned'],
   // One row per document line per post: Result Ref = the MR No, the DS No, or COUNT (a saved count).
-  ScanLog:       ['At', 'User', 'Mode', 'Doc No', 'Line', 'Code', 'Item ID', 'Qty', 'Result Ref']
+  ScanLog:       ['At', 'User', 'Mode', 'Doc No', 'Line', 'Code', 'Item ID', 'Qty', 'Result Ref', 'Photos'],
+  // ── A318 · photos, pieces, returns, labels ──
+  // Photos = the Documents Doc IDs that prove the post (space-separated). Labels carry an opaque code
+  // (HX + 12 Crockford base32) — nothing on the label means anything without a signed-in scanner.
+  Labels:        ['Code', 'Kind', 'Item ID', 'Asset No', 'Created By', 'Created At', 'Printed Count', 'Last Printed At'],
+  TrackedItems:  ['Item ID', 'Track Pieces', 'Set By', 'Set At'],
+  Assets:        ['Asset No', 'Item ID', 'Item No', 'Description', 'Status', 'MR No', 'Received At', 'Location',
+                  'Last Ref', 'Last Move At', 'Photos'],
+  Returns:       ['Return No', 'Date', 'Scanned By', 'Created At', 'Condition', 'Notes', 'Photos']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -720,6 +728,8 @@ var _SECURED = {
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1,
   dispatchByScan: 1, linkBarcode: 1, receiveByScan: 1, saveScanCount: 1,   // A316
+  uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
+  getScanContext: 1, getScanLookup: 1, getLabels: 1, getStockInOptions: 1, getScanPhotos: 1,   // A318 — secured READS (codes → details)
 };
 
 /* A209 — commission requests are built but NOT open to everyone yet.
@@ -4141,12 +4151,25 @@ function createReceiving(p) {
  *                    at createInvoice, so nothing is deducted twice.
  *   linkBarcode    → ties a supplier barcode to one of our items, once.
  *
+ * A318 adds, on the same lines:
+ *   PHOTO PROOF   — every receive, count, dispatch and return carries at least one photo, uploaded
+ *                   one at a time (uploadScanPhoto) into the document's own Drive folder and the
+ *                   Documents register, so the office sees it in the existing Docs window.
+ *   PIECES        — an item switched to "Track each piece" (TrackedItems) gets one Assets row per
+ *                   physical piece when it is received or registered; dispatching it needs each
+ *                   piece's own label; returnByScan brings pieces back. Still RECORD ONLY.
+ *   OPAQUE LABELS — every label we print carries a random code (HX + 12 Crockford base32 characters)
+ *                   that means nothing outside this system; the reads that turn a code into details
+ *                   are secured (signed in through Flask, scan roles only).
+ *   STOCK IN      — getStockInOptions: start from an item and pick the open PO line it came from.
+ *
  * Lines are numbered by their position among ALL of the document's item rows (1..n), so a PO that
  * lists the same item twice keeps two separate lines at their own prices. The phone echoes each
  * line's item back; if the document changed since it was loaded, the post is refused.
  * Roles come from the identity Flask stamps on every secured call (actorRole), never from the body. */
 var _SCAN_COUNT_ROLES = { accounting: 1, admin: 1, director: 1, warehouse: 1 };
 var _SCAN_POST_ROLES  = { accounting: 1, admin: 1, director: 1 };
+var _SCAN_MAX_PIECES = 50;    // per line per post: each piece is two sheet rows, and Flask gives a secured call 60 s
 function _scanRoleOk(p, set) { return !!set[String((p && p.actorRole) || '').trim().toLowerCase()]; }
 function _scanLines(v) {
   if (Array.isArray(v)) return v;
@@ -4157,6 +4180,10 @@ function _scanName(v) { return String(v == null ? '' : v).trim().toLowerCase(); 
 function _scanDate(v) {
   if (v instanceof Date) return isNaN(v.getTime()) ? '' : _dateStr(v);
   return String(v || '').slice(0, 10);
+}
+function _scanStamp(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, 'Asia/Manila', 'yyyy-MM-dd HH:mm');
+  return String(v || '').slice(0, 16);
 }
 /** The inventory Item ID behind a document line: its own, else the inventory row it names. */
 function _scanInvId(itemId, itemNo, name) {
@@ -4257,7 +4284,7 @@ function _scanDispatchedBySo() {
 /** Check the phone's lines against the document: every line exists and is the same item, qty > 0 and
  *  within what is still open. Repeated lines are summed. Returns { rows } or { error }. */
 function _scanCheck(docLines, inLines) {
-  var byLine = {}, sums = {}, order = [];
+  var byLine = {}, sums = {}, order = [], pieces = {};
   docLines.forEach(function (l) { byLine[l.line] = l; });
   for (var i = 0; i < inLines.length; i++) {
     var x = inLines[i] || {}, ln = parseInt(x.line, 10), d = byLine[ln];
@@ -4268,8 +4295,9 @@ function _scanCheck(docLines, inLines) {
     }
     var q = _num(x.qty);
     if (!(q > 0)) continue;
-    if (sums[ln] === undefined) { sums[ln] = 0; order.push(ln); }
+    if (sums[ln] === undefined) { sums[ln] = 0; order.push(ln); pieces[ln] = []; }
     sums[ln] += q;
+    [].concat(x.assets || []).forEach(function (a) { var k = _scanKey(a); if (k) pieces[ln].push(k); });
   }
   if (!order.length) return { error: 'Nothing was counted.' };
   var rows = [];
@@ -4278,15 +4306,16 @@ function _scanCheck(docLines, inLines) {
     if (qty > l.remaining + 0.0001) {
       return { error: l.name + ': ' + qty + ' counted but only ' + l.remaining + ' still open on line ' + l.line + '.' };
     }
-    rows.push({ doc: l, qty: qty });
+    rows.push({ doc: l, qty: qty, assets: pieces[order[k]] });
   }
   return { rows: rows };
 }
-function _scanLog(mode, docNo, rows, ref, user, codesByLine) {
+function _scanLog(mode, docNo, rows, ref, user, codesByLine, photos) {
   var now = _now();
   rows.forEach(function (r) {
-    _append('ScanLog', [now, user || '', mode, docNo, r.doc.line, (codesByLine && codesByLine[r.doc.line]) || '',
-                        r.doc.invId || r.doc.itemId || '', r.qty, ref]);
+    _append('ScanLog', [now, user || '', mode, docNo, r.doc.line,
+                        (codesByLine && codesByLine[r.doc.line]) || '',
+                        r.doc.invId || r.doc.itemId || '', r.qty, ref, photos || '']);
   });
 }
 function _scanCodesFrom(inLines) {
@@ -4309,6 +4338,233 @@ function _scanClearCount(poNo) {
   rows.forEach(function (ri) { sh.deleteRow(ri); });
 }
 
+/* ── A318 · photos ─────────────────────────────────────────────────────────────────────────────── */
+var _SCAN_PHOTO_KINDS = {
+  receive:  { module: 'Purchase Order', type: 'Receiving photo' },
+  dispatch: { module: 'Sales Order',    type: 'Dispatch photo' },
+  'return': { module: 'Warehouse Return', type: 'Return photo', path: ['_Warehouse', 'Returns'] },
+  register: { module: 'Warehouse Piece',  type: 'Piece photo',  path: ['_Warehouse', 'Pieces'] }
+};
+var _SCAN_PHOTO_MAX_B64 = 6000000;                // ~4.5 MB of JPEG; the phone sends ~200 KB
+function _scanPhotoIds(v) {
+  var out = [], seen = {};
+  [].concat(_scanLines(v)).forEach(function (x) { var k = _scanKey(x); if (k && !seen[k]) { seen[k] = 1; out.push(k); } });
+  return out.slice(0, 8);
+}
+/** The photos a post may cite: uploaded for THIS document in THIS mode. Returns { ids } or { error }. */
+function _scanPhotoCheck(kind, ref, v) {
+  var ids = _scanPhotoIds(v), k = _SCAN_PHOTO_KINDS[kind];
+  if (!ids.length) return { error: 'Take at least one photo first: it is the proof of what was ' +
+    (kind === 'dispatch' ? 'sent' : kind === 'return' ? 'returned' : 'received') + '.' };
+  var ok = {};
+  _rows('Documents').forEach(function (d) {
+    if (_scanKey(d['Module']) === k.module && _scanKey(d['Ref No']) === _scanKey(ref) && _scanKey(d['Doc Type']) === k.type) ok[_scanKey(d['Doc ID'])] = 1;
+  });
+  var bad = ids.filter(function (id) { return !ok[id]; });
+  if (bad.length) return { error: 'A photo does not belong to this ' + (kind === 'dispatch' ? 'sales order' : kind === 'receive' ? 'purchase order' : 'record') + '. Take it again.' };
+  return { ids: ids };
+}
+function uploadScanPhoto(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot add scan photos.' };
+  var kind = _scanKey(p.mode).toLowerCase(), k = _SCAN_PHOTO_KINDS[kind];
+  if (!k) return { success: false, message: 'Unknown photo kind.' };
+  var ref = _scanKey(p.docNo);
+  if (kind === 'receive' && !_scanPoHeader(ref)) return { success: false, message: 'Purchase order ' + (ref || '?') + ' was not found.' };
+  if (kind === 'dispatch' && !_scanSoHeader(ref)) return { success: false, message: 'Sales order ' + (ref || '?') + ' was not found.' };
+  if (kind === 'return' && !/^CR-[A-Za-z0-9_-]{4,60}$/.test(ref)) return { success: false, message: 'The return has no reference yet. Reload the scanner.' };
+  if (kind === 'register' && !_rows('Inventory').some(function (r) { return _scanKey(r['Item ID']) === ref; })) return { success: false, message: 'Item ' + (ref || '?') + ' is not in inventory.' };
+  var b64 = String(p.base64 || '').replace(/^data:[^,]*,/, '');
+  if (!b64) return { success: false, message: 'The photo is empty.' };
+  if (b64.length > _SCAN_PHOTO_MAX_B64) return { success: false, message: 'The photo is too large.' };
+  var mime = /^image\/(jpeg|png|webp)$/.test(String(p.mimeType || '')) ? String(p.mimeType) : 'image/jpeg';
+  var now = _now(), docId = 'DOC-' + Utilities.getUuid().slice(0, 8).toUpperCase();
+  var name = kind + '-' + ref + '-' + Utilities.formatDate(now, 'Asia/Manila', 'yyyyMMdd-HHmmss') + '.' + (mime === 'image/png' ? 'png' : 'jpg');
+  var folder = null;
+  try { folder = k.path ? _ensurePath(_ymSegments(now).concat(k.path)) : _docFolder(k.module, ref, k.type, now); } catch (e) { folder = null; }
+  var saved = _saveFileToDrive(b64, name, mime, folder);
+  _append('Documents', [docId, k.module, ref, k.type, name, saved.url, saved.id, p.actorName || '', now]);
+  return { success: true, docId: docId, refNo: docId, message: 'Photo saved.' };
+}
+/** Photos as base64 for an <img> (a Drive /view link renders broken). Secured; at most 6 per call. */
+function getScanPhotos(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Not permitted.' };
+  var want = _scanPhotoIds(p.docIds).slice(0, 6), byId = {};
+  _rows('Documents').forEach(function (d) { byId[_scanKey(d['Doc ID'])] = d; });
+  var out = [];
+  want.forEach(function (id) {
+    var d = byId[id];
+    if (!d || !d['File ID']) return;
+    try {
+      var blob = DriveApp.getFileById(d['File ID']).getBlob();
+      out.push({ docId: id, type: _scanKey(d['Doc Type']), at: _scanStamp(d['Uploaded At']), by: _scanKey(d['Uploaded By']),
+                 mimeType: blob.getContentType(), base64: Utilities.base64Encode(blob.getBytes()) });
+    } catch (e) { /* a trashed file is skipped, not an error */ }
+  });
+  return { success: true, data: out };
+}
+
+/* ── A318 · opaque labels ──────────────────────────────────────────────────────────────────────── */
+var _LABEL_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';   // Crockford base32: no I, L, O, U
+function _labelNewCode(taken) {
+  for (var tries = 0; tries < 20; tries++) {
+    var hex = Utilities.getUuid().replace(/[^0-9a-fA-F]/g, '') + Utilities.getUuid().replace(/[^0-9a-fA-F]/g, '');
+    var code = 'HX';
+    for (var i = 0; i < 12; i++) code += _LABEL_ALPHABET.charAt(parseInt(hex.substr(i * 2, 2), 16) & 31);
+    if (!taken[code]) { taken[code] = 1; return code; }
+  }
+  throw new Error('Could not make a unique label code.');
+}
+function _labelIndex() {
+  var byCode = {}, byItem = {}, byAsset = {};
+  _rows('Labels').forEach(function (r) {
+    var c = _scanKey(r['Code']);
+    if (!c) return;
+    byCode[c] = r;
+    if (_scanKey(r['Kind']) === 'ITEM' && _scanKey(r['Item ID'])) byItem[_scanKey(r['Item ID'])] = r;
+    if (_scanKey(r['Kind']) === 'PIECE' && _scanKey(r['Asset No'])) byAsset[_scanKey(r['Asset No'])] = r;
+  });
+  return { byCode: byCode, byItem: byItem, byAsset: byAsset };
+}
+function _labelAppend(kind, itemId, assetNo, by, taken) {
+  var code = _labelNewCode(taken);
+  _append('Labels', [code, kind, itemId || '', assetNo || '', by || '', _now(), 0, '']);
+  return code;
+}
+function ensureItemLabels(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot make labels.' };
+  var all = _scanLines(p.itemIds).map(_scanKey).filter(Boolean);
+  var ids = all.filter(function (v, i) { return all.indexOf(v) === i; }).slice(0, 100);
+  if (!ids.length) return { success: false, message: 'Pick at least one item.' };
+  var inv = {};
+  _rows('Inventory').forEach(function (r) { inv[_scanKey(r['Item ID'])] = r; });
+  var idx = _labelIndex(), out = [], made = 0;
+  ids.forEach(function (id) {
+    if (!inv[id]) return;
+    var row = idx.byItem[id];
+    var code = row ? _scanKey(row['Code']) : (made++, _labelAppend('ITEM', id, '', p.actorName, idx.byCode));
+    out.push({ itemId: id, code: code });
+  });
+  if (!out.length) return { success: false, message: 'None of those items is in inventory.' };
+  return { success: true, labels: out, made: made, refNo: made ? made + ' label(s)' : '', message: made ? made + ' new label code(s).' : 'Labels already exist.' };
+}
+function logLabelPrint(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Not permitted.' };
+  var want = {}, n = 0;
+  _scanLines(p.codes).forEach(function (x) {
+    var c = _scanKey(x && x.code), k = Math.max(0, Math.min(500, parseInt(x && x.count, 10) || 0));
+    if (c && k) { want[c] = (want[c] || 0) + k; }
+  });
+  var sh = _sheet('Labels'), now = _now(), w = SCHEMA.Labels.length;
+  _rows('Labels').forEach(function (r) {
+    var c = _scanKey(r['Code']);
+    if (!want[c]) return;
+    var line = SCHEMA.Labels.map(function (h) { return r[h]; });
+    line[6] = _num(r['Printed Count']) + want[c]; line[7] = now;
+    sh.getRange(r.rowIndex, 1, 1, w).setValues([line]);
+    n++;
+  });
+  return { success: true, updated: n, refNo: n + ' label(s)', message: n + ' label(s) marked printed.' };
+}
+/** The label library (secured). filter: all | waiting | items | pieces; q matches name, numbers, code. */
+function getLabels(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Not permitted.' };
+  var filter = _scanKey(p && p.filter).toLowerCase() || 'all', q = _scanName(p && p.q);
+  var only = {};
+  _scanLines(p && p.codes).forEach(function (c) { var k = _scanKey(c); if (k) only[k] = 1; });
+  var onlyItems = {};
+  _scanLines(p && p.itemIds).forEach(function (c) { var k = _scanKey(c); if (k) onlyItems[k] = 1; });
+  var inv = {}, assets = {};
+  _rows('Inventory').forEach(function (r) { inv[_scanKey(r['Item ID'])] = r; });
+  _rows('Assets').forEach(function (a) { assets[_scanKey(a['Asset No'])] = a; });
+  var out = [];
+  _rows('Labels').forEach(function (r) {
+    var code = _scanKey(r['Code']), kind = _scanKey(r['Kind']), itemId = _scanKey(r['Item ID']), assetNo = _scanKey(r['Asset No']);
+    var it = inv[itemId] || {}, a = assets[assetNo] || null;
+    var row = { code: code, kind: kind, itemId: itemId, assetNo: assetNo, name: _scanKey(it['Description']),
+                itemNo: _scanKey(it['Item No']), status: a ? _scanKey(a['Status']) : '', printed: _num(r['Printed Count']),
+                lastPrinted: _scanStamp(r['Last Printed At']), createdAt: _scanStamp(r['Created At']) };
+    if (Object.keys(only).length && !only[code]) return;
+    if (Object.keys(onlyItems).length && !onlyItems[itemId]) return;
+    if (filter === 'waiting' && row.printed > 0) return;
+    if (filter === 'items' && kind !== 'ITEM') return;
+    if (filter === 'pieces' && kind !== 'PIECE') return;
+    if (q && (row.name + ' ' + row.itemNo + ' ' + row.assetNo + ' ' + row.code + ' ' + row.itemId).toLowerCase().indexOf(q) === -1) return;
+    out.push(row);
+  });
+  out.sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0; });
+  return { success: true, data: out.slice(0, 500), total: out.length };
+}
+
+/* ── A318 · pieces ─────────────────────────────────────────────────────────────────────────────── */
+function _scanTracked() {
+  var out = {};
+  _rows('TrackedItems').forEach(function (r) {
+    var v = r['Track Pieces'];
+    if (v === true || String(v).toUpperCase() === 'TRUE') out[_scanKey(r['Item ID'])] = 1;
+  });
+  return out;
+}
+function setItemTracking(p) {
+  if (!_scanRoleOk(p, _SCAN_POST_ROLES)) return { success: false, message: 'Tracking is set by accounting, admin or the director.' };
+  var id = _scanKey(p.itemId), track = (p.track === true || String(p.track).toLowerCase() === 'true');
+  var inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === id; })[0];
+  if (!inv) return { success: false, message: 'Item ' + (id || '?') + ' is not in inventory.' };
+  var row = _rows('TrackedItems').filter(function (r) { return _scanKey(r['Item ID']) === id; })[0];
+  var line = [id, track, p.actorName || '', _now()];
+  if (row) _sheet('TrackedItems').getRange(row.rowIndex, 1, 1, line.length).setValues([line]);
+  else _append('TrackedItems', line);
+  return { success: true, refNo: id, track: track, message: _scanKey(inv['Description']) + (track ? ' is now tracked piece by piece.' : ' is no longer tracked piece by piece.') };
+}
+function _scanAssetRows() { return _rows('Assets'); }
+/** Create n pieces of an item, each with its own opaque label code. */
+function _scanMakeAssets(itemId, n, mrNo, photos, by, location) {
+  var inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === itemId; })[0] || {};
+  var idx = _labelIndex(), out = [], now = _now(), nos = _scanAssetNumbers(n);
+  for (var i = 0; i < n; i++) {
+    var no = nos[i];
+    _append('Assets', [no, itemId, _scanKey(inv['Item No']), _scanKey(inv['Description']), 'In warehouse', mrNo || '', now,
+                       location || 'Warehouse', mrNo || '', now, photos || '']);
+    out.push({ assetNo: no, code: _labelAppend('PIECE', itemId, no, by, idx.byCode) });
+  }
+  return out;
+}
+/** n consecutive Asset Nos for one post: one _nextNumber (sheet floor + counter), then the counter is
+ *  advanced past the block, so a block of pieces costs one sheet read, not one per piece. Past 999 in a month the
+ *  number simply grows a digit (AS-202610-1000) instead of wrapping. */
+function _scanAssetNumbers(n) {
+  var first = _nextNumber('Assets', 1, 'AS'), stem = first.replace(/\d+$/, ''), k = parseInt(first.slice(stem.length), 10);
+  var ym = stem.split('-')[1];
+  try {   // _nextNumber pads to 3 and would wrap past 999; the counter it just advanced holds the true value
+    var stored = parseInt(PropertiesService.getScriptProperties().getProperty('seq_Assets_AS_' + ym), 10);
+    if (stored > k) k = stored;
+  } catch (e) {}
+  var out = [];
+  for (var i = 0; i < n; i++) { var v = k + i; out.push(stem + (v < 1000 ? ('00' + v).slice(-3) : String(v))); }
+  if (n > 1) {
+    try {
+      PropertiesService.getScriptProperties().setProperty('seq_Assets_AS_' + ym, String(k + n - 1));
+    } catch (e) { /* the sheet floor in _nextNumber still keeps the next post clear of these */ }
+  }
+  return out;
+}
+function registerAssets(p) {
+  if (!_scanRoleOk(p, _SCAN_POST_ROLES)) return { success: false, message: 'Pieces are registered by accounting, admin or the director.' };
+  var id = _scanKey(p.itemId), n = parseInt(p.qty, 10);
+  if (!_scanTracked()[id]) return { success: false, message: 'Switch this item to "Track each piece" first.' };
+  if (!(n > 0) || String(n) !== _scanKey(p.qty)) return { success: false, message: 'Enter a whole number of pieces.' };
+  var inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === id; })[0];
+  if (!inv) return { success: false, message: 'Item ' + id + ' is not in inventory.' };
+  var inWh = _scanAssetRows().filter(function (a) { return _scanKey(a['Item ID']) === id && _scanKey(a['Status']) === 'In warehouse'; }).length;
+  var room = Math.floor(_num(inv['Available Balance'])) - inWh;
+  if (n > room) return { success: false, message: 'Only ' + Math.max(0, room) + ' piece(s) of stock have no label yet (balance ' + _num(inv['Available Balance']) + ', ' + inWh + ' already registered).' };
+  if (n > _SCAN_MAX_PIECES) return { success: false, message: 'Register at most ' + _SCAN_MAX_PIECES + ' pieces at a time.' };
+  var ph = _scanPhotoCheck('register', id, p.photoIds);
+  if (ph.error) return { success: false, message: ph.error };
+  var made = _scanMakeAssets(id, n, 'REGISTERED', ph.ids.join(' '), p.actorName, 'Warehouse');
+  return { success: true, refNo: id, assets: made, message: n + ' piece(s) registered. Print their labels.' };
+}
+
+/* ── reads ─────────────────────────────────────────────────────────────────────────────────────── */
 function getScanDocs(p) {
   var mode = String((p && p.mode) || 'receive').toLowerCase();
   if (mode === 'dispatch') {
@@ -4339,13 +4595,38 @@ function getScanDocs(p) {
   return { success: true, mode: 'receive', data: res };
 }
 
+/** Secured (A318): codes and pieces are only handed to a signed-in scanner role. */
 function getScanContext(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Not permitted.' };
   var mode = String((p && p.mode) || 'receive').toLowerCase(), docNo = _scanKey(p && p.docNo);
+  var codes = _scanCodesByItem(), labels = _labelIndex(), tracked = _scanTracked();
+  var assets = _scanAssetRows();
+  if (mode === 'return') {
+    var out = assets.filter(function (a) { return _scanKey(a['Status']) === 'Out'; }).map(function (a) {
+      var lab = labels.byAsset[_scanKey(a['Asset No'])];
+      return { assetNo: _scanKey(a['Asset No']), code: lab ? _scanKey(lab['Code']) : '', itemId: _scanKey(a['Item ID']),
+               itemNo: _scanKey(a['Item No']), name: _scanKey(a['Description']), location: _scanKey(a['Location']),
+               lastRef: _scanKey(a['Last Ref']), since: _scanStamp(a['Last Move At']) };
+    });
+    return { success: true, mode: 'return', pieces: out };
+  }
+  if (mode === 'stockin') {
+    var map = {}, names = {};
+    _rows('Inventory').forEach(function (r) { names[_scanKey(r['Item ID'])] = { itemNo: _scanKey(r['Item No']), name: _scanKey(r['Description']) }; });
+    Object.keys(codes).forEach(function (id) { codes[id].forEach(function (c) { map[c] = id; }); });
+    Object.keys(labels.byItem).forEach(function (id) { map[_scanKey(labels.byItem[id]['Code'])] = id; });
+    return { success: true, mode: 'stockin', codes: map, items: names, tracked: tracked };
+  }
   if (!docNo) return { success: false, message: 'Pick a document first.' };
-  var codes = _scanCodesByItem();
   var pub = function (l) {
-    return { line: l.line, itemId: l.invId || l.itemId, itemNo: l.itemNo, name: l.name,
-             ordered: l.ordered, done: l.done, remaining: l.remaining, codes: codes[l.invId || l.itemId] || [] };
+    var id = l.invId || l.itemId, lab = labels.byItem[id];
+    var row = { line: l.line, itemId: id, itemNo: l.itemNo, name: l.name, ordered: l.ordered, done: l.done, remaining: l.remaining,
+                codes: codes[id] || [], labels: lab ? [_scanKey(lab['Code'])] : [], tracked: !!tracked[id] };
+    if (mode === 'dispatch' && row.tracked) {
+      row.pieces = assets.filter(function (a) { return _scanKey(a['Item ID']) === id && _scanKey(a['Status']) === 'In warehouse'; })
+        .map(function (a) { var lb = labels.byAsset[_scanKey(a['Asset No'])]; return { assetNo: _scanKey(a['Asset No']), code: lb ? _scanKey(lb['Code']) : '' }; });
+    }
+    return row;
   };
   if (mode === 'dispatch') {
     var so = _scanSoHeader(docNo);
@@ -4359,8 +4640,9 @@ function getScanContext(p) {
   var a = _scanReceivedAlloc(docNo, _scanPoLines(docNo));
   var count = _scanCountRows(docNo), pending = null;
   if (count.length) {
-    pending = { at: _scanDate(count[0]['At']),
-                by: _scanKey(count[0]['User']),
+    var ph = {};
+    count.forEach(function (r) { String(r['Photos'] || '').split(/\s+/).forEach(function (x) { if (x) ph[x] = 1; }); });
+    pending = { at: _scanDate(count[0]['At']), by: _scanKey(count[0]['User']), photoIds: Object.keys(ph),
                 lines: count.map(function (r) { return { line: parseInt(r['Line'], 10) || 0, qty: _num(r['Qty']) }; }) };
   }
   return { success: true, mode: 'receive',
@@ -4369,11 +4651,82 @@ function getScanContext(p) {
            lines: a.lines.map(pub), unmatchedReceived: a.unmatched, pendingCount: pending };
 }
 
+/** Stock in (secured): every open PO line holding the item — stock POs (no SO) first, then newest. */
+function getStockInOptions(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Not permitted.' };
+  var id = _scanKey(p && p.itemId);
+  var inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === id; })[0];
+  if (!inv) return { success: false, message: 'Item ' + (id || '?') + ' is not in inventory.' };
+  var noN = _normItemNo(inv['Item No']), nameN = _scanName(inv['Description']), out = [];
+  _rows('PurchaseOrders').forEach(function (po) {
+    var no = _scanKey(po['PO No']), st = _scanKey(po['Status']).toLowerCase();
+    if (!no || st === 'draft' || st === 'rejected') return;
+    var lines = _scanPoLines(no);
+    if (!lines.some(function (l) { return l.invId === id || l.itemId === id; })) return;
+    var a = _scanReceivedAlloc(no, lines);
+    if (a.unmatched > 0) return;                    // the desktop page handles POs whose old receipts do not map
+    a.lines.forEach(function (l) {
+      if ((l.invId === id || l.itemId === id) && l.remaining > 0) {
+        out.push({ poNo: no, supplier: _scanKey(po['Supplier']), soNo: _scanKey(po['SO No']), date: _scanDate(po['Date']),
+                   line: l.line, itemId: id, itemNo: l.itemNo, ordered: l.ordered, received: l.done, remaining: l.remaining });
+      }
+    });
+  });
+  out.sort(function (x, y) {
+    if (!x.soNo !== !y.soNo) return x.soNo ? 1 : -1;
+    return x.date < y.date ? 1 : x.date > y.date ? -1 : 0;
+  });
+  return { success: true, item: { itemId: id, itemNo: _scanKey(inv['Item No']), name: _scanKey(inv['Description']),
+           tracked: !!_scanTracked()[id] }, options: out };
+}
+
+/** Look-up (secured): what a code is, without needing a document. */
+function getScanLookup(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Not permitted.' };
+  var code = _scanKey(p && p.code);
+  if (!code) return { success: false, message: 'Scan a code first.' };
+  var labels = _labelIndex(), lab = labels.byCode[code], itemId = '', assetNo = '';
+  if (lab) { itemId = _scanKey(lab['Item ID']); assetNo = _scanKey(lab['Asset No']); }
+  else if (/^HXI:/i.test(code)) itemId = code.slice(4).trim();
+  else _rows('ItemBarcodes').forEach(function (r) { if (_scanKey(r['Barcode']) === code) itemId = _scanKey(r['Item ID']); });
+  if (!itemId && !assetNo) return { success: true, kind: 'unknown', code: code };
+  var inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === itemId; })[0] || {};
+  var assets = _scanAssetRows();
+  var item = { itemId: itemId, itemNo: _scanKey(inv['Item No']), name: _scanKey(inv['Description']), balance: _num(inv['Available Balance']),
+               tracked: !!_scanTracked()[itemId], barcodes: _scanCodesByItem()[itemId] || [],
+               label: labels.byItem[itemId] ? _scanKey(labels.byItem[itemId]['Code']) : '',
+               piecesIn: 0, piecesOut: 0 };
+  assets.forEach(function (a) {
+    if (_scanKey(a['Item ID']) !== itemId) return;
+    if (_scanKey(a['Status']) === 'In warehouse') item.piecesIn++; else if (_scanKey(a['Status']) === 'Out') item.piecesOut++;
+  });
+  var log = _rows('ScanLog');
+  if (assetNo) {
+    var a = assets.filter(function (x) { return _scanKey(x['Asset No']) === assetNo; })[0];
+    if (!a) return { success: true, kind: 'unknown', code: code };
+    var photos = String(a['Photos'] || '').split(/\s+/).filter(Boolean);
+    var hist = log.filter(function (r) { return String(r['Code'] || '').split(/\s+/).indexOf(code) !== -1 || _scanKey(r['Doc No']) === assetNo; })
+      .map(function (r) {
+        String(r['Photos'] || '').split(/\s+/).forEach(function (x) { if (x && photos.indexOf(x) === -1) photos.push(x); });
+        return { at: _scanStamp(r['At']), mode: _scanKey(r['Mode']), docNo: _scanKey(r['Doc No']), ref: _scanKey(r['Result Ref']), user: _scanKey(r['User']) };
+      }).reverse().slice(0, 10);
+    return { success: true, kind: 'piece', code: code, item: item,
+             piece: { assetNo: assetNo, status: _scanKey(a['Status']), location: _scanKey(a['Location']), lastRef: _scanKey(a['Last Ref']),
+                      since: _scanStamp(a['Last Move At']), mrNo: _scanKey(a['MR No']), receivedAt: _scanStamp(a['Received At']) },
+             history: hist, photoIds: photos.slice(-6) };
+  }
+  var recent = log.filter(function (r) { return _scanKey(r['Item ID']) === itemId && _scanKey(r['Photos']); }).reverse();
+  var latest = recent.length ? String(recent[0]['Photos']).split(/\s+/).filter(Boolean).slice(0, 3) : [];
+  return { success: true, kind: 'item', code: code, item: item, photoIds: latest,
+           lastScan: recent.length ? { at: _scanStamp(recent[0]['At']), mode: _scanKey(recent[0]['Mode']), docNo: _scanKey(recent[0]['Doc No']) } : null };
+}
+
+/* ── writes ────────────────────────────────────────────────────────────────────────────────────── */
 function linkBarcode(p) {
   if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot link barcodes.' };
   var code = _scanKey(p.barcode), itemId = _scanKey(p.itemId);
   if (!code || code.length > 80) return { success: false, message: 'Scan a barcode first.' };
-  if (/^HXI:/i.test(code)) return { success: false, message: 'That is one of our own labels; it already names its item.' };
+  if (/^HXI:/i.test(code) || /^HX[0-9A-HJKMNP-TV-Z]{12}$/.test(code)) return { success: false, message: 'That is one of our own labels; it already names its item.' };
   if (!itemId) return { success: false, message: 'Pick the item this barcode belongs to.' };
   var inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === itemId; })[0];
   if (!inv) return { success: false, message: 'Item ' + itemId + ' is not in inventory.' };
@@ -4392,6 +4745,17 @@ function linkBarcode(p) {
   return { success: true, refNo: code, itemId: itemId, message: 'Barcode linked to ' + line[3] + '.' };
 }
 
+/** Pieces must be whole numbers on a tracked line, at most _SCAN_MAX_PIECES per post. */
+function _scanWholePieces(rows, tracked) {
+  for (var i = 0; i < rows.length; i++) {
+    var id = rows[i].doc.invId || rows[i].doc.itemId;
+    if (!tracked[id]) continue;
+    if (Math.floor(rows[i].qty) !== rows[i].qty) return rows[i].doc.name + ' is tracked piece by piece: count whole pieces.';
+    if (rows[i].qty > _SCAN_MAX_PIECES) return rows[i].doc.name + ': at most ' + _SCAN_MAX_PIECES + ' pieces per post.';
+  }
+  return '';
+}
+
 function saveScanCount(p) {
   if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot record a count.' };
   var poNo = _scanKey(p.poNo), po = _scanPoHeader(poNo);
@@ -4399,8 +4763,12 @@ function saveScanCount(p) {
   var inLines = _scanLines(p.lines);
   var chk = _scanCheck(_scanReceivedAlloc(poNo, _scanPoLines(poNo)).lines, inLines);
   if (chk.error) return { success: false, message: chk.error };
+  var whole = _scanWholePieces(chk.rows, _scanTracked());
+  if (whole) return { success: false, message: whole };
+  var ph = _scanPhotoCheck('receive', poNo, p.photoIds);
+  if (ph.error) return { success: false, message: ph.error };
   _scanClearCount(poNo);
-  _scanLog('RECEIVE', poNo, chk.rows, 'COUNT', p.actorName, _scanCodesFrom(inLines));
+  _scanLog('RECEIVE', poNo, chk.rows, 'COUNT', p.actorName, _scanCodesFrom(inLines), ph.ids.join(' '));
   return { success: true, refNo: poNo, counted: chk.rows.length,
            message: 'Count saved for ' + poNo + '. Accounting can post it from the scanner or the Receiving page.' };
 }
@@ -4420,6 +4788,10 @@ function receiveByScan(p) {
   }
   var inLines = _scanLines(p.lines), chk = _scanCheck(a.lines, inLines);
   if (chk.error) return { success: false, message: chk.error };
+  var tracked = _scanTracked(), whole = _scanWholePieces(chk.rows, tracked);
+  if (whole) return { success: false, message: whole };
+  var ph = _scanPhotoCheck('receive', poNo, p.photoIds);
+  if (ph.error) return { success: false, message: ph.error };
   var items = chk.rows.map(function (r) {
     return { itemId: r.doc.itemId || r.doc.invId, itemNo: r.doc.itemNo, itemName: r.doc.name, qty: r.qty, price: r.doc.price };
   });
@@ -4435,12 +4807,18 @@ function receiveByScan(p) {
   var r = createReceiving(p2);
   if (!r || !r.success) return r;                 // the document / payment gates come back unchanged
   p.items = p2.items; p.currency = p2.currency;   // the ActivityLog amount reads these
-  var logged = true;
+  var logged = true, pieces = [];
   try {
     _scanClearCount(poNo);
-    _scanLog('RECEIVE', poNo, chk.rows, r.mrNo, p.actorName, _scanCodesFrom(inLines));
+    _scanLog('RECEIVE', poNo, chk.rows, r.mrNo, p.actorName, _scanCodesFrom(inLines), ph.ids.join(' '));
   } catch (e) { logged = false; }
-  return { success: true, mrNo: r.mrNo, duplicate: !!r.duplicate, scanLogged: logged, message: r.message };
+  try {
+    chk.rows.forEach(function (row) {
+      var id = row.doc.invId || row.doc.itemId;
+      if (id && tracked[id]) pieces = pieces.concat(_scanMakeAssets(id, row.qty, r.mrNo, ph.ids.join(' '), p.actorName, 'Warehouse'));
+    });
+  } catch (e) { logged = false; }
+  return { success: true, mrNo: r.mrNo, duplicate: !!r.duplicate, scanLogged: logged, assets: pieces, message: r.message };
 }
 
 function dispatchByScan(p) {
@@ -4453,14 +4831,91 @@ function dispatchByScan(p) {
   if (!lines.length) return { success: false, message: soNo + ' has no goods lines to dispatch.' };
   var inLines = _scanLines(p.lines), chk = _scanCheck(lines, inLines);
   if (chk.error) return { success: false, message: chk.error };
-  var no = _nextNumber('Dispatches', 1, 'DS'), now = _now();
-  _append('Dispatches', [no, soNo, _scanKey(so['Customer']), _dateStr(now), p.actorName || '', now, String(p.notes || '').slice(0, 500)]);
+  // A318 — a tracked line leaves piece by piece: each one named, in the warehouse, of this item, once.
+  var tracked = _scanTracked(), assets = _scanAssetRows(), byNo = {}, used = {};
+  assets.forEach(function (a) { byNo[_scanKey(a['Asset No'])] = a; });
+  for (var i = 0; i < chk.rows.length; i++) {
+    var row = chk.rows[i], id = row.doc.invId || row.doc.itemId;
+    if (!tracked[id]) { row.assets = []; continue; }
+    if (row.assets.length !== row.qty) return { success: false, message: row.doc.name + ' is tracked piece by piece: scan each piece\'s own label (' + row.assets.length + ' of ' + row.qty + ').' };
+    for (var j = 0; j < row.assets.length; j++) {
+      var no = row.assets[j], a = byNo[no];
+      if (!a) return { success: false, message: 'Piece ' + no + ' was not found.' };
+      if (_scanKey(a['Item ID']) !== id) return { success: false, message: 'Piece ' + no + ' is not ' + row.doc.name + '.' };
+      if (_scanKey(a['Status']) !== 'In warehouse') return { success: false, message: 'Piece ' + no + ' is not in the warehouse (' + _scanKey(a['Status']) + ', ' + _scanKey(a['Location']) + ').' };
+      if (used[no]) return { success: false, message: 'Piece ' + no + ' was scanned twice.' };
+      used[no] = 1;
+    }
+  }
+  var ph = _scanPhotoCheck('dispatch', soNo, p.photoIds);
+  if (ph.error) return { success: false, message: ph.error };
+  var dno = _nextNumber('Dispatches', 1, 'DS'), now = _now(), cust = _scanKey(so['Customer']);
+  _append('Dispatches', [dno, soNo, cust, _dateStr(now), p.actorName || '', now, String(p.notes || '').slice(0, 500)]);
   chk.rows.forEach(function (r) {
-    _append('DispatchItems', [no, r.doc.line, r.doc.invId || r.doc.itemId, r.doc.itemNo, r.doc.name, r.doc.ordered, r.qty]);
+    _append('DispatchItems', [dno, r.doc.line, r.doc.invId || r.doc.itemId, r.doc.itemNo, r.doc.name, r.doc.ordered, r.qty]);
   });
-  try { _scanLog('DISPATCH', soNo, chk.rows, no, p.actorName, _scanCodesFrom(inLines)); } catch (e) {}
-  _refStore('dispatchByScan', p.clientRef, no);
-  return { success: true, dispatchNo: no, refNo: no, message: 'Dispatch ' + no + ' recorded for ' + soNo + '.' };
+  var sh = _sheet('Assets'), w = SCHEMA.Assets.length, labels = _labelIndex();
+  chk.rows.forEach(function (r) {
+    r.assets.forEach(function (no) {
+      var a = byNo[no], line = SCHEMA.Assets.map(function (h) { return a[h]; });
+      line[4] = 'Out'; line[7] = cust + ' (' + soNo + ')'; line[8] = dno; line[9] = now;
+      sh.getRange(a.rowIndex, 1, 1, w).setValues([line]);
+    });
+  });
+  var codes = _scanCodesFrom(inLines);
+  chk.rows.forEach(function (r) {
+    if (!r.assets.length) return;
+    var pc = r.assets.map(function (no) { var lb = labels.byAsset[no]; return lb ? _scanKey(lb['Code']) : no; }).join(' ');
+    codes[r.doc.line] = ((codes[r.doc.line] || '') + ' ' + pc).trim();
+  });
+  try { _scanLog('DISPATCH', soNo, chk.rows, dno, p.actorName, codes, ph.ids.join(' ')); } catch (e) {}
+  _refStore('dispatchByScan', p.clientRef, dno);
+  return { success: true, dispatchNo: dno, refNo: dno, message: 'Dispatch ' + dno + ' recorded for ' + soNo + '.' };
+}
+
+/** Pieces back from site (record only): each must be Out; a photo is required. */
+function returnByScan(p) {
+  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot record a return.' };
+  var dup = _refSeen('returnByScan', p.clientRef);
+  if (dup) return { success: true, returnNo: dup, refNo: dup, duplicate: true, message: 'Already recorded as ' + dup + '.' };
+  var want = _scanLines(p.assets).map(_scanKey).filter(Boolean);
+  if (!want.length) return { success: false, message: 'Scan at least one piece.' };
+  var byNo = {}, seen = {};
+  _scanAssetRows().forEach(function (a) { byNo[_scanKey(a['Asset No'])] = a; });
+  for (var i = 0; i < want.length; i++) {
+    var a = byNo[want[i]];
+    if (!a) return { success: false, message: 'Piece ' + want[i] + ' was not found.' };
+    if (_scanKey(a['Status']) !== 'Out') return { success: false, message: 'Piece ' + want[i] + ' is not out (' + _scanKey(a['Status']) + ').' };
+    if (seen[want[i]]) return { success: false, message: 'Piece ' + want[i] + ' was scanned twice.' };
+    seen[want[i]] = 1;
+  }
+  var ref = _scanKey(p.clientRef), ph = _scanPhotoCheck('return', ref, p.photoIds);
+  if (ph.error) return { success: false, message: ph.error };
+  var cond = /^(Good|Needs repair)$/.test(_scanKey(p.condition)) ? _scanKey(p.condition) : 'Good';
+  var rno = _nextNumber('Returns', 1, 'RT'), now = _now();
+  _append('Returns', [rno, _dateStr(now), p.actorName || '', now, cond, String(p.notes || '').slice(0, 500), ph.ids.join(' ')]);
+  var sh = _sheet('Assets'), w = SCHEMA.Assets.length, labels = _labelIndex();
+  want.forEach(function (no) {
+    var a = byNo[no], line = SCHEMA.Assets.map(function (h) { return a[h]; });
+    var from = _scanKey(a['Last Ref']);
+    line[4] = 'In warehouse'; line[7] = 'Warehouse'; line[8] = rno; line[9] = now;
+    sh.getRange(a.rowIndex, 1, 1, w).setValues([line]);
+    var lb = labels.byAsset[no];
+    try { _append('ScanLog', [now, p.actorName || '', 'RETURN', no, '', lb ? _scanKey(lb['Code']) : '', _scanKey(a['Item ID']), 1, rno, ph.ids.join(' ')]); } catch (e) {}
+  });
+  // the photos were filed under the draft's reference; give them the return's number now it exists
+  try {
+    var dsh = _sheet('Documents');
+    _rows('Documents').forEach(function (d) {
+      if (ph.ids.indexOf(_scanKey(d['Doc ID'])) !== -1) {
+        var line = SCHEMA.Documents.map(function (h) { return d[h]; });
+        line[2] = rno;
+        dsh.getRange(d.rowIndex, 1, 1, line.length).setValues([line]);
+      }
+    });
+  } catch (e) {}
+  _refStore('returnByScan', p.clientRef, rno);
+  return { success: true, returnNo: rno, refNo: rno, message: want.length + ' piece(s) back in the warehouse (' + rno + ').' };
 }
 
 /** Light read for the Sales Orders page: { soNo: { dispatched, goods } }. */
@@ -7064,7 +7519,9 @@ var _DOC_SUBFOLDER_BY_TYPE = {
   'client so': '03 Client PO', 'proof of payment': '05 Payments',
   // A195 canonical types
   'supplier sales invoice': '06 Receiving & Shipping', 'delivered': '06 Receiving & Shipping',
-  'delivered_client': '06 Receiving & Shipping', 'collected': '07 Invoices & Collections'
+  'delivered_client': '06 Receiving & Shipping', 'collected': '07 Invoices & Collections',
+  // A318 — scanner proof photos (never a gated document type: see scan-backend.js)
+  'receiving photo': '06 Receiving & Shipping', 'dispatch photo': '06 Receiving & Shipping'
 };
 function _docSubfolder(module, docType) {
   var t = String(docType || '').trim().toLowerCase().replace(/\s*\(superseded\)\s*$/, '');
@@ -13078,6 +13535,8 @@ function getTravelReceipts(p) {
 var _MODULE_MAP = {
   receiveByScan: ['Receiving', 'Received'], saveScanCount: ['Receiving', 'Counted'],     // A316
   dispatchByScan: ['Dispatch', 'Scanned Out'], linkBarcode: ['Inventory', 'Barcode Linked'],
+  returnByScan: ['Dispatch', 'Returned'], setItemTracking: ['Inventory', 'Tracking Set'],   // A318
+  registerAssets: ['Inventory', 'Pieces Registered'],
   createHire: ['Hire', 'Opened'], dispatchHireUnit: ['Hire', 'Dispatched'],
   returnHireUnit: ['Hire', 'Returned'], closeHire: ['Hire', 'Closed'],
   saveSupplier: ['Supplier', 'Saved'], deleteSupplier: ['Supplier', 'Removed'],
@@ -14854,6 +15313,9 @@ var HANDLERS = {
   // A316 — the warehouse scanner
   getScanDocs: getScanDocs, getScanContext: getScanContext, getDispatchSummary: getDispatchSummary,
   linkBarcode: linkBarcode, saveScanCount: saveScanCount, receiveByScan: receiveByScan, dispatchByScan: dispatchByScan,
+  uploadScanPhoto: uploadScanPhoto, getScanPhotos: getScanPhotos, setItemTracking: setItemTracking, registerAssets: registerAssets,   // A318
+  returnByScan: returnByScan, getScanLookup: getScanLookup, getStockInOptions: getStockInOptions,
+  ensureItemLabels: ensureItemLabels, logLabelPrint: logLabelPrint, getLabels: getLabels,
   previewReceivingReversal: previewReceivingReversal, reverseReceiving: reverseReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -14915,6 +15377,7 @@ var HANDLERS = {
 var MUTATIONS = {
   // A316 — the warehouse scanner: every write checks remaining quantity, so it must hold the lock.
   linkBarcode: 1, saveScanCount: 1, receiveByScan: 1, dispatchByScan: 1,
+  uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   // A276 — every hire write. The lock matters here for the same reason A243 gives: these read a row,
   // decide from it and write back, so two dispatches racing on one unit would both read 'not out'.
   createHire: 1, dispatchHireUnit: 1, returnHireUnit: 1, closeHire: 1,
@@ -15003,6 +15466,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A318 SCANNER PROOF, PIECES AND LABELS (159). Every receive, count, dispatch and return now needs at least one photo, uploaded one at a time by uploadScanPhoto into the document's own Drive folder and the Documents register (types Receiving photo / Dispatch photo / Return photo / Piece photo, never a gated document type); ScanLog gains Photos. New tabs Labels, TrackedItems, Assets, Returns. An item switched to Track each piece (setItemTracking) gets one Assets row and one PIECE label per piece received (receiveByScan) or registered (registerAssets, capped by the balance); a tracked SO line is dispatched piece by piece (each In warehouse, of that item, once) and returnByScan brings Out pieces back. Still record only: no stock moves at dispatch or return. Labels carry an opaque code (HX + 12 Crockford base32, one per item type via ensureItemLabels, one per piece); logLabelPrint counts prints; getLabels is the label library. getScanContext, getScanLookup, getLabels, getStockInOptions (open PO lines holding an item, stock POs first) and getScanPhotos are secured reads limited to the scanner roles, so a code means nothing without a signed-in scanner. Old HXI: labels still resolve.
 A316 THE WAREHOUSE SCANNER (158). New tabs ItemBarcodes, Dispatches, DispatchItems, ScanLog; reads getScanDocs, getScanContext, getDispatchSummary; secured writes linkBarcode, saveScanCount, receiveByScan (validated against what is still open on each PO line, priced from the PO, then posted through createReceiving) and dispatchByScan (record only; stock still leaves at createInvoice). createReceiving now refuses roles that do not post receivings, skips zero-quantity lines (they overwrote unit cost), and spreads the charges typed on a receiving over that receiving's goods, booking its VAT in full, so partial deliveries no longer lose part of their charges.
 A282 A HIRE HAS TWO MULTIPLIERS: HOW MANY TOOLS, AND FOR HOW LONG. A276 modelled a rental line as a rate over a duration and put the DURATION in the quantity column - seven days of a wrench was 'qty 7' - while 'Duration' sat beside it as a copy of qty that nothing ever multiplied by. It reads correctly for ONE tool and cannot express two at all: quoting a pair of wrenches for a week had no honest spelling, and A281 shipped the form on top of that model. Qty is now HOW MANY and Duration is FOR HOW LONG, and every total is qty x rate x duration - _lineAmount here, rate_span in the PDF builder, qcLineSpan in the quote configurator and flowLineSpan in flow-api.js, four engines carrying one vocabulary. WHICH lines span is decided by the RATE BASIS and not by the charge kind, the same rule that already decided whether a rate prints '/ DAY': a mobilization per LOT is one flat fee however long the tools are out, and a refundable DEPOSIT is per tool, not per day, so neither can be multiplied by a duration whatever a caller sends. The basis and never the UOM, because a supply line has a UOM and no basis and one reading 'DAYS' would otherwise be spanned. InvoiceItems gains Charge Kind + Rate Basis + Duration at the END (9 -> 12): 'Line Sales' alone cannot be checked, since 2 x 11,015.61 x 7 is a number no reader can arrive at from Qty and Selling Price. A supply line has no basis and no duration, so its span is 1 and every existing total is the qty x price it always was. ||   // A281 THE RENTAL QUOTATION CAN FINALLY BE WRITTEN. A276 built the whole hire engine - a quotation Type, a Charge Kind and Rate Basis per line, service invoicing that bills a rate over a duration without moving stock, and a deposit that credits 2100 instead of revenue - and NOTHING in any UI could set one field of it, so not a single hire quotation could be produced. A281 is the front of that chain: the quote configurator now offers Supply or Service, the PDF route passes doc_type at last, and a refundable deposit is kept out of the VAT base on the quotation exactly as createInvoice has kept it out since A278 - before this the client was QUOTED 12% on the deposit and BILLED without it. The only server change is here: updateQuotation now writes 'Type' and 'Service Kind' when they are sent. createQuotation has written them since A276 but the edit path never did, so a quotation's type was fixed for ever at creation and a mis-typed one could not be corrected - the lines, the charge kinds and the document would all say hire while the record said sale, and it is the record that createSalesOrder and createInvoice read. A174 rule applies: an unsent field is left alone. Everything else A281 needed was already live in 154. ||   // A279 LEAD GENERATION, RE-SPECCED TO THE JOB AS WRITTEN. The first brief counted plants, contacts, intro/follow-up emails, cold/follow-up calls, leads and meetings. The job description counts nine things a day - outbound attempts across calls, emails AND LinkedIn; real decision-maker conversations (not voicemails or gatekeepers); personalised emails; LinkedIn touches; local suppliers researched; target accounts researched; the CRM kept current; an end-of-day report submitted to the Director; and meetings or follow-up calls scheduled for the days ahead - plus weekly hand-offs of leads AND qualified local suppliers. So: a call now records WHO was reached, LinkedIn is a third logged channel, LgSuppliers is a new tracked entity whose hand-off fills the Suppliers master the way a lead fills Clients, a contact carries a next-call date that is stamped when set, and every quota is a min-max range. The daily report submits through the same submitDailyReport the reps use, so the Director reviews it in one place. Same rules as A277: every count is a server-stamped Manila date on a row, nothing counts the activity log, deletes are soft. ||   // A278 OUTPUT VAT: NET REVENUE, GROSS RECEIVABLE, GROSS LEDGER. The stored price chain is VAT-EXCLUSIVE end to end (A182) and the 12% existed only when the quotation PDF rendered - it was never persisted - so the client was billed 112,000 while the receivable said 100,000. Every full payment tripped the over-collect confirm, the collection modal pre-filled the NET outstanding, the aging buckets and the balance sheet ran 12% light, and 1200 was debited net at invoice and credited gross at collection. There was no output-VAT account in COA at all. An invoice now stores 'VAT Rate' and 'VAT'; 'Total Sales' is UNCHANGED and still NET, because ~15 P&L and KPI readers take it as revenue. The RECEIVABLE and the AR debit carry the gross, and the difference is credited to the new 2200 Output VAT Payable. previewInvoiceVatRepair/applyInvoiceVatRepair correct receivables raised before this, IMPUTING the rate because those invoices never recorded one. Also fixes two A276 leftovers found in the same lines: backfillMissingAR omitted the deposit from the receivable, and getInvoices never emitted Total Deposit at all. ||   // A277-3 SECURING AN EXISTING ACTION IS A DEPLOY-ORDERED CHANGE, AND THIS ONE BROKE THE LIVE CALL LOG. A277 put logSalesCall and deleteSalesCall into _SECURED; the moment v150 was pasted, every rep's "+ Log Call" on report.html started refusing with "This action must be performed through the app (signed in)" - because the DEPLOYED browser posts straight to /exec and only the browser's own FLOW_SECURED_ACTIONS decides whether a call is routed through Flask (the /flow/secured-actions endpoint exists but nothing fetches it). Apps Script is pasted by hand and the client ships by git push, so a NEW action may be secured freely - nothing deployed calls it - while an EXISTING one must ship client-and-Flask FIRST and be pasted second. Both are out of all three lists again. ||   // A277-2 THE DAILY REPORT VERIFIES ITSELF. getLeadgenDay returns the day's evidence - the plants, the verified contacts, every email batch with its contacts, every call with who and what, the leads and the booked presentations - so the report's checklist is derived from the records and the page checks each email against the GoDaddy Sent folder. Nothing is ticked by hand. LgLeads gains 'Attendees' for the booked presentation (inserted, not appended: the sheet was never created anywhere, v150 was never pasted). ||   // A277 LEAD GENERATION. A new role, six Lg* sheets, a store that owns every stamp and every closed list, and ONE counter (getLeadgenCounts) that the tiles, the week, the Friday report and the daily report all read. Counts come from server-stamped Manila event dates on the rows themselves - never the activity log, which records every edit and every retry. Deletes are soft. The hand-off is a merge-upsert into Clients (_upsertClientFields) rather than saveClient, which rewrites all twelve columns from p.x||'' and would blank a paying customer's payment terms; saveClient itself is widened to the new width, without which it THROWS. _logActivity now reads result.id, which also repairs the marketing daily report's per-entity counters - blank Ref No since the day it shipped. ||   // A276 SERVICE QUOTATIONS AND THE HIRE REGISTER. A quotation now has a Type: blank or 'Supply' is the sale of goods and renders exactly as it always did, 'Service' is the hire of a tool - a rate over a duration - and prints SERVICE QUOTATION with DURATION and RATE columns. The important half is in createInvoice: a hire line's quantity IS ITS DURATION, so billing a seven-day rental used to remove seven units of a tool that never left the building and books COGS against Inventory for something that is coming back. Service lines now move no stock, book no cost, skip the short-stock gate and credit 4100 Service Revenue; a refundable deposit credits the 2100 liability and stays out of Total Sales so the P&L cannot count it as income. BOTH accounts had to be added to COA, not merely posted to - getTrialBalance sums the whole Journal and then emits COA.map(...), so a code missing from that array is counted and silently dropped while the trial balance still foots. New Hires/HireUnits sheets track a tool out and back, one row per unit because it is the tool that goes overdue and not the agreement; overdue is derived on read, never stored. ||   // A271 THE DIRECTOR NO LONGER APPROVES QUOTATIONS. A267 had put a director stage between admin and management; the chain is admin -> management again, management last, and the director has no quotation approval at all. 'Pending Director' is still ACCEPTED by approveQuotation and rejectQuotation on purpose: two quotations were sitting at that status when this shipped, and simply dropping the branch would have stranded them at a stage no code path could clear - management signs those off like any other. Only the QUOTATION chain changed: payment requests, itineraries, commissions and travel all still route through Pending Director and are untouched. ||   // A270 FLOW-SHIPMENTS TIMED OUT. getShipments took 36.7 SECONDS to return 16 rows, and fetchFlow aborts a GET at 30s (flow-api.js:66) - so the page never loaded, it was killed mid-request. Cause: _rows() has no cache and re-reads an entire sheet on every call, while getShipments derives each shipment's supplier kind and full 25-stage timeline PER ROW - _soSupplierKind reads 2 sheets, _shipAutoDerive reads 6 - so 16 shipments meant about 128 full reads of Invoices, ARAging, MaterialsReceiving, SalesOrders, PurchaseOrders, PaymentRequests, APAging and SOCostDetails. New _rowsMemo collapses that to one read per sheet per call. Deliberately OPT-IN rather than caching inside _rows(): write paths append a row and then re-read to see it, so an always-on cache would feed them stale data. The memo is opened around getShipments and getShipmentTimeline only and closed in a finally, so every other caller behaves exactly as before. ||   // A267 THE DIRECTOR NOW APPROVES A QUOTATION BEFORE MANAGEMENT. The chain was admin -> management, with _isMgmtTier letting EITHER the director or management give the single final signature - so whichever opened it first closed it, and management was not necessarily the last word. It is now admin -> Pending Director -> Pending Management -> Approved, each tier able to approve or reject at its OWN stage only (_isDirectorRole / _isMgmtOnly). _isMgmtTier is untouched: purchase orders, itineraries, pricing and commissions still treat the pair as one tier, and itineraries/commissions already ran director-first, so quotations now match the house pattern rather than departing from it. Quotations created by admin enter at Pending Director; sales-created still start at Pending Admin. In flight when this shipped: 2 Pending Admin (they gain the director step) and 1 Pending Management (unaffected - management still signs it). ||   // A265 A RECORDED PAYMENT COULD NOT BE POINTED AT ITS SALES ORDER. updateARAging writes only Due Date, Notes and Status, and no code path anywhere set 'SO No' on an existing ARAging or Collections row - so 47 migrated receivables and payments that ARE in the book stayed orphaned, the order reading uncollected while its cash sat unattached. New attachOrphanToSO sets that one cell, only for a sales order that exists, and demands confirmReattach before moving a row that already carries a different SO. Second fix in the same pass: importCollections hard-coded Method, Reference No and Notes to '' / 'Migrated (legacy)', discarding how each payment actually arrived; it now passes c.method / c.ref / c.notes through, and an absent field behaves exactly as before per A174. ||   // A256 THE REQUESTED LINE ON A CLIENT'S QUOTATION COULD NOT BE CORRECTED. PricingRequestItems cols 15/16 (Orig Item No / Orig Item Name) were captured once by updatePRSourcing on a first-change-wins rule, and no code path in the system could ever change them again. That text is not internal bookkeeping: flow_quotation_pdf prints it as the bold heading above OUR OFFER, as the item the client asked for, so a wrong capture was permanent and went out on the document. PR-202608-011 is the live case - the two lines' requested descriptions were transposed, so item 01 read as a request for a 30-ton hydraulic puller answered with an 8-ton puller kit, and item 02 the reverse. updatePRSourcing now accepts an EXPLICIT origItemNo / origItemName correction, applied after the auto-capture so it wins; sent-and-non-blank overwrites, absent or blank leaves the stored value alone per A174. ||   // A255 MANAGEMENT'S RE-SPECIFICATION NEVER REACHED THE CLIENT. The model number and description are editable on the pricing engine screen, but setMgmtPricing wrote back only Final Price, Qty, Supplier Price and CBM - the edited model/name went into Priced Items JSON, a history blob nothing downstream reads. Every surface the client eventually sees (the request returned to sales, createQuotationFromPR, the quotation PDF) is rebuilt from PricingRequestItems, so a line management re-specified came back as the OLD model and description at the NEW price. Live case PR-202608-011 line 1: priced as PH82K 'PULLER KIT, 8 TON, 9-21/32in SPREAD', shown to sales as PH83C 'HYDR GEAR PULL, 8 TON, 9-13/16in SPREAD'. Item No (col 3) and Item Name (col 4) are now written when sent and non-blank - an absent or empty field leaves the stored value alone, per A174. ||   // A252 INVOICE NUMBERS ARE THE BUSINESS'S OWN. The company issues invoices on its own paper with its own numbering; the INV-YYYYMM-NNN sequence this system mints is an internal placeholder, and there was no way to put the real number on the record after the fact. renameInvoice re-keys it everywhere at once - every sheet carrying an 'INV No' found from the SCHEMA rather than a hand-kept list (Invoices, InvoiceItems, ARAging, Collections, CommissionRequestItems), the filed Documents (Module 'Invoice'), and the GL, where the entry number, the source number AND the number printed in each memo all move. Collision is case-INSENSITIVE and a commission claim in flight REFUSES the rename, both for renameSalesOrder's reasons: two numbers differing only in case are one number to a human reading a statement, and _commPriorClaimed matches by string, so a half-moved rename would let one collection be claimed twice. FOUND IN THE SAME PATH: createInvoice already accepted a caller-supplied invNo and took it on trust, with no duplicate check - and _postJournal opens with _removeJournal(source, sourceNo), so issuing an invoice on a number already in use would have DELETED the first invoice's GL entry and left two rows sharing one number. Guarded now, case-insensitively. ||   // A249 EVERY SALES ORDER TIES OUT TO AR - AND TWO LIVE BUGS IN THE SAME CALL. The 65 invoices with no receivable are not one problem: split at the baseline (2026-06-23, when 48 of the 55 AR rows were bulk-imported as a snapshot of what was still owed), 56 predate it and are excluded BY DESIGN - balance-sheet.js states the policy - while 9 are dated after and are the real defect, worth 1,983,383.04 not 37.3M. And those 9 were being MANUFACTURED: saveSOCostDetails calls _writeMigratedRecordsForSO(force) on every save from the SO cost editor, which deleted the migrated invoice, minted a brand-new number and created no AR row - orphaning any receivable pointing at the old number, changing the number a customer was given, and burning a sequence number per edit. It now UPDATES IN PLACE keeping the number (not delete-then-re-append: if PropertiesService throws, _nextNumber's floor is the sheet max alone and a row absent in that window could see its number reissued). It deliberately still creates NO AR row - four migration scripts call saveSOCostDetails in a loop over the whole legacy book, so doing it there would mass-create receivables across the 85 pre-baseline invoices; that belongs in backfillMissingAR, now scoped by invNos and _SECURED because it mints debt off a browser call. TWO LIVE BUGS found in the same path: _deleteMigratedInvoiceForSO matched on Created By ALONE while voidInvoice flags Voided and leaves Created By intact, so saving SO costs on an order with a voided invoice DELETED the void audit trail; and saveSOCostDetails never passed 'COGS Type', so intl was false on every save and an International order's regenerated receiving silently dropped duties, local charges, both bank charges and shipping while Total COGS already carried them - 46 of 107 SOs are International. ||   // A248 AR RECONCILIATION + THREE MISSING VOIDED FILTERS. Asked whether every invoice reaches AR aging. The live path is sound - every invoice created through the app has its AR row, and all 51 collections resolve to a real receivable. The gap is migration: 65 invoices worth 37.3M carry 'Migrated (legacy)' and never got one, because backfillMigratedRecords writes 'NO journals, NO inventory apply, NO AR, NO AP' by design. Nothing is backfilled - none of them has collection history, so creating receivables would take AR outstanding from 1.55M to 38.8M and assert debt the system cannot evidence; their SOs read Delivered/Open/Pending and there is no paid status anywhere. The AR page now reconciles against invoices and SHOWS the gap instead of being structurally unable to see it. THREE VOIDED FILTERS were missing and each could invent money: backfillMissingAR did not skip voided INVOICES, and voidInvoice DELETES the AR row (ARAging has no Voided column unlike Invoices and Collections), so 'Backfill missing AR rows' recreated a full-value Unpaid receivable for every invoice ever voided, with no journal - the customer owed it again; backfillMissingAR also summed voided COLLECTIONS into the backfilled Collected figure; and correctCollection's over-collect comparison counted voided siblings, refusing legitimate re-splits against money somebody had already reversed. Zero live exposure today (0 voided invoices) - these were landmines. ||   // A246 A REP CAN FIND WHAT THEY TYPED. getQuotations scoped a rep's list on the OWNER alone (A218, which fixed the mirror fault: filtering on Created By hid a rep's own deals whenever somebody else typed one). Owner alone is just as bad in the other direction - A218's own measurement says one person typed 46 of 85 quotations while owning 27, so ~19 were invisible to the only person who could correct them. It surfaced looking like a different bug: a rep could not find quotation 2026-457, retyped it, and got 'Quotation No already exists' with nothing on screen explaining why she could not see a record she had created herself. Both 2026-457 rows carried an owner of 'Neil' - a bare first name matching no account - so they belonged to nobody and appeared for nobody. Scope is now owner OR creator, which exposes nothing new (a person gains sight only of rows they typed) and makes 'I made this, so I can find it' true. Attribution is untouched: the owner still decides whose tracker, whose commission, whose number on the board. The duplicate-number refusal now also names the owner and the status and says to edit that record instead, because 'already exists' is a dead end when the reason you are retyping is that you could not see it. ||   // A243-b setQuotationSalesperson: correcting who ONE quotation belongs to. The pricing-request side has had setPricingRequestSalesperson since A226; the quotation side had nothing, and previewQuotationOwners deliberately skips any row already carrying a recorded owner ('a recorded owner is never touched' - right for a backfill, which must not overwrite a human decision). Together that left a gap with no way out: a quotation whose Salesperson was recorded WRONGLY could not be corrected in the app at all, only by editing the sheet. Live case: both rows numbered 2026-457 were typed by Kimberlyn Blones and carried the owner 'Neil', a bare first name matching no account - and getQuotations scopes a rep's list by OWNER, so they were invisible to every sales rep INCLUDING Neil Estur, visible only to oversight roles which send no filter. Nothing warned anybody. Note clearing the field does NOT fix it: '-NE-' maps to Crystal Gayle in _QUO_INITIALS, so the owner has to be set explicitly. Same role gate as its twin (oversight only, role from the session) and _SECURED for the same reason - reattribution decides whose tracker a deal appears in and whose commission it feeds. ||   // A243 SYSTEM-WIDE SCAN. Two server-side registration defects, neither caught by any test because every registration assertion before this was scoped to the two or three actions its own A-number touched - nothing walked the surface. (1) reverseReceiving was in HANDLERS, _SECURED and _MODULE_MAP but NOT in MUTATIONS, and that list is what buys BOTH the script lock and the audit row, since _logActivity is only ever reached from inside the MUTATIONS branch of _dispatch. So unwinding a receiving - rewriting Inventory valuation, deleting the journal rows, then deleteRow-ing from MaterialsReceiving and ReceivingItems - ran unserialised, and the ActivityLog row it declares could never be written. The deleteRow is what made the missing lock dangerous rather than untidy: deleting shifts every row index below it, so a concurrent writer holding an index it read a moment ago writes into the wrong record. (2) Eight writers took the lock and left nothing in ActivityLog, two of them on money (updatePaymentRequest, deletePaymentRequest); they now log, and the genuinely deliberate omissions are listed with a reason in tests/audit/registration.js rather than being indistinguishable from oversights. Also runQuotationOwnerBackfill was in _SECURED here and in neither mirror, so the browser posted it direct with no flowSecret and the server refused it - the A226 quotation-owner backfill had been unreachable from the UI since it shipped, and that was the real cause of the travel-receipts.js failure dismissed as 'pre-existing' for several sessions. ||   // A242 PARTIAL QUOTATIONS FROM ONE PRICING REQUEST: a request with 5 items where only 3 are priced can now be quoted for those 3, with the other 2 staying on the request and going out later on a second quotation. Nothing about that was a business rule before - it was three separate places each collapsing 'later' into 'never': _sourcingGaps refused to forward unless EVERY included line was sourced, removing a line from management's engine wrote Included=false and dropped it from the deal, and createQuotationFromPR carried every included line then flipped the request to Quoted, whose own comment called one-quotation-per-PR 'the real invariant'. The invariant that actually matters is that one ITEM never goes out twice, and that is now enforced per line by 'Quoted On' (PricingRequestItems col 19, appended - the two positional block writes at cols 8 and 9 forbid an insert). Quotable is DERIVED from it, never re-written: blank, or the quotation it names is gone or Cancelled. That is what makes the write safe without transactions - the stamp goes in BEFORE the status flips, so a run that dies half-way leaves lines pointing at a quotation that does not exist, which reads as quotable and heals itself, instead of the reverse where a real document exists and the rep re-quotes the same three items onto a second one the client also receives. New status 'Partly Quoted' keeps the request in the worklist naming what is outstanding; it is accepted by updatePRSourcing and submitForPricing so the remainder re-enters the ordinary cycle, and by setMgmtPricing whose Approved/Sent guard is now per line rather than against whichever single quotation _quoPickForPR happened to prefer. rejectMgmtPricing stops wiping lines that are already out on a live quotation. getPricingRequests gains quotationNos[] beside the singular quotationNo (16 surfaces read the singular, so it does not move) and per-item quotedOn/quotable. ||   // A239 WHY COMMISSION MONEY REACHES NOBODY: previewCommissionAttribution, a read-only diagnostic over the one chain that pays a rep - collection -> (AR or invoice) -> sales order -> quotation -> owner. getCommissionClaimable already walks exactly that and already builds a reason for each failure, but aggregates them across the whole book, so 'why can Gerald not claim the Mincon order' could only be answered by reading five sheets by hand; A234's live report found 8 of 107 claims attributable and nothing said why about the other 99. Asked about ONE order it walks the chain from the TOP and names the first missing link - the commonest real case is an order nobody has paid yet, where filtering collections returns an empty list that is indistinguishable from 'no such order'. Reuses _commContext/_commSoForCollection/_commSalesperson rather than re-deriving attribution, so the diagnostic and the claimable list cannot disagree. In _COMM_ACTIONS so the same hold covers it; NOT in MUTATIONS (writes nothing), NOT in _SECURED (mirror untouched), NOT in _MODULE_MAP (that map is writers only - a read must not mint an audit row). || A238 TRAVEL ALLOWANCE SCAN: saveTravelPDF files the three-page pack to Drive and writes the 'PDF Link' column that has existed since A212 and that NOTHING has ever written - quotations, pricing requests, POs and payment requests all file their document and travel did not, so the pack accounting and the director signed existed only as a blob in whichever browser rendered it and an approved week left no artefact at all. Not in _SECURED: it writes a document for a record whose own guards already decided who may act, it moves no money, and the three-list mirror is deliberately untouched. || submitTravelReplenishment gains a SECOND waivable condition beside the itinerary one: since A237 a leg carrying 'Has Receipt' = Yes with no Receipt Doc ID prints on NEITHER page - not the itinerary unless it is Transport, and never the certificate, which is reserved for expenses that cannot produce a receipt - while its money still lands in Total Spent, so an approver signs for an amount with nothing behind it. Waivable by an approver on the same Waiver By / Waiver Reason pair, never by the traveller, and NO new column, so the width trap stays shut. || _travPostExpense finally fills the `fuel` bucket, which was initialised and never once incremented: every litre of travel fuel hid inside Other while the expense report's Fuel column read zero. Bucketed on MEANS rather than a new kind, because adding 'Fuel' to _TRAV_KINDS would have to be mirrored in TV_KINDS and would drop fuel off the itinerary for every leg already saved as Transport. || A233 COMMISSIONS LAUNCHED: _COMM_ROLES goes from [] to ['director','management','sales'], the step A209 held and A212 re-held. Sales reps can now file commission requests that decide their own pay, so the rollout gate is open on BOTH halves - this one and FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. Nothing about the money maths, _SECURED, or _commMayActOn changed; the ownership and approval guards A211 added are exactly as they were, and they are what actually protects the payout. The gate was only ever deciding who could SEE the feature. || A230 THE MAILBOX ATTACH FEATURE, broken in three places. (1) DETACH COULD NEVER WORK: unlinkQuotationEmail resolves by Link ID and sales-emails.js posted {quotationNo, messageId} and no linkId, so it looked up the string 'undefined', matched nothing, and answered 'Link not found.' about a link named on screen two lines above the button - every mailbox Detach since A217 failed that way, while the quotation modal's {linkId} path always worked, which is why it looked intermittent. The id was never missing; seRenderSide already held the whole DTO. The handler now resolves by id then falls back to the (quotation, message) PAIR - never the message alone, because one email can carry two quotations as two rows and matching on the message would detach both from a button naming one - and _qeNormId is mandatory on that fallback or a bracketed id reproduces the same lie from the other direction. It does NOT recompute Sent At: detaching the last link leaves the back-dated date standing, deliberately, and the mailbox says so. (2) 'NOT THIS' DID NOTHING: getQuotationEmails returns Active only unless asked, and all six callers asked with {}, so a Dismissed row had never reached a browser, qeCtx.dismissed could never fill, and the -1000 branch in quotation-email-match.js was unreachable - the click wrote a row nothing read and the same email came back. Fixed client-side with a SECOND narrow {status:'Dismissed'} read (the param has existed since v113, so no paste was needed for it) kept in its own variable, because widening the existing call would have changed what qLinks MEANS for five consumers that all read it as 'attached'. (3) 'NOT THIS' ON AN ATTACHED MESSAGE SILENTLY DETACHED IT: dismissQuotationEmail matched across every status and flipped a live Active row to Dismissed - a detach by the wrong handler, skipping its guards, leaving Sent At behind, and writing an audit row saying 'Email Dismissed'. THE AUDIT LOG LIED, which is why the refusal is here and not only in the screen. Also: linking now clears 'Sent At Basis' when a real link supplies the date, but ONLY in that branch - when the stored date wins the caption must stay, because it is still an estimate. And tests/flow/quotation-email-match.js now EXISTS: the file had claimed since A208 to be table-tested and was not, and quotation-worklist.js cited it as precedent, so an unchecked claim was justifying other files. // A227 WHICH QUOTATION, WHEN A REQUEST HAS MORE THAN ONE. Both resolvers took [0], the first matching sheet row, with no regard for status. Fine until somebody revises: an approved quotation is found to have an error, it is retired with Close, and a corrected one is raised against the same request - the retired one is the EARLIER row, so first-wins handed the purchase request its own cancelled document, and because a closed quotation buckets as finished the request then read "done" while the replacement still needed approving and sending. _quoPickForPR now prefers a LIVE quotation and takes the LAST row among equals; the tracker's client-side fallback applies the same rule. Measured first: of the 35 requests carrying a quotation link, ZERO had more than one, so no existing answer moves. 'Rejected' is deliberately NOT retired - that is rework on the same document. The worklist gains 'quotation-void': Cancelled is a WITHDRAWAL, not an outcome, so it is the rep's own move to re-quote, while Lost and Not Pursued stay finished. // A226 THE PURCHASE REQUEST TRACKER, for the sales rep. A rep raises a request and then loses sight of it: it moves through sourcing, management pricing and verification - all in OTHER PEOPLE'S queues - and the only screen showing it was built around doing that work, not tracking it. Seven live requests sit at 'Returned to Sales' (priced, verified, waiting on the rep) and nothing said so. THE PREMISE NEEDED CORRECTING FIRST: the 2026-000-KIM format is the QUOTATION numbering (68 of 90), while all 315 purchase requests are PR-YYYYMM-NNN with no initials anywhere - so the tracker keys off the PERSON, not the number, and PR numbering does not change. PricingRequests gains 'Salesperson' 19 -> 20, APPENDED and that is not style: _setPRStatus writes hard-coded columns 8/10/12 and setMgmtPricing/rejectMgmtPricing write column 15, so an INSERT would shift all 315 rows and land those writes in the wrong cells. _prOwner reads the column and falls back to 'Requested By', and getPricingRequests' filter becomes owner-aware AND whitespace/case tolerant - a STRICT WIDENING (137/115/46/12 per rep, unchanged, union+5 blanks = 315). That tolerance is the bug fix that paid for the change: the old exact String===String stranded PR-202607-242 and PR-202607-295 permanently, and one trailing space empties a rep's whole tracker with no error. previewPricingRequestOwners/runPricingRequestOwnerBackfill copy from 'Requested By' rather than guessing from initials - 310 of 315 are populated with four unambiguous names, so NO initials table is needed here and none is added; _QUO_INITIALS serves quotations only and its own header says not to extend it. The 5 blanks are REPORTED, never defaulted. setPricingRequestSalesperson is the first correction path attribution has ever had on a request. THE QUOTATION LINK IS SURFACED: getPricingRequests now emits quotationNo + quotationNoSource, resolved column-first then from the PR's own Notes - and the Notes fallback is doing REAL work, resolving 41 of the 76 live Quoted requests, so a pure client-side join would have reported 41 live deals as unquoted. Quotations is indexed ONCE (calling _quotationNoForPR inside the 315-row map would be 315 full-sheet reads on a handler 16 surfaces depend on). MEASURED, and it corrected the plan: ZERO Quoted requests lack a number, but 13 name a quotation that no longer exists - deleted or renumbered after the link was written - so the worklist's 'quotation-gone' step fires on a DEAD reference, not a missing one. dashboard/js/pr-worklist.js is the pure engine (13 steps, table-tested against the live 315, reconciling to the status counts exactly): the rep's own move outranks chasing somebody else, and chases run LATEST STAGE FIRST because a request one step from the rep is worth more than one five steps away. No snooze - a PR sits in a colleague's queue and parking it hides a stuck request. Two date formats are live (173 ISO, 142 the JavaScript toString the import left) and both are fixture-tested, because a parser that only knew ISO would mark 142 requests undateable. The 142 Migrated are never in the worklist and never in a headline, and the exclusion is STATED on screen rather than silent. dashboard/purchase-request-tracker.html is READ-ONLY and links out - deliberately NOT named pr-tracker.html, which is the old pre-flow admin page on legacy Code.gs and is untouched. Commission and margin are never rendered and the fetch is noStore, so A191's cost boundary holds. Email linking is A227 - the picker will target the client's inbound RFQ, which makes it the first real consumer of Direction='Received' · 129: A225 ONE PAYMENT REQUEST PER PURCHASE ORDER, and two holes bigger than the one asked about. THE CARDINALITY RULE DID NOT EXIST: createPaymentRequest had eight guards and every one constrained VALUE, never COUNT - _poRemainingPayable caps what a request may ask for, not how many may exist. A158 allowed that deliberately for deposit-then-balance, but the cap has a gap the director had already felt: A 50% DP SITTING AT PENDING DIRECTOR DOES NOT STOP A SECOND REQUEST FOR THE FULL PAYABLE, because half the payable genuinely is still open. FLOW_PR_PER_PO='live': a PO may not carry a second request while one is STANDING (Draft, any Pending*, Approved); once it is Paid or Rejected the next may be raised. Paid must not block - that is what keeps 50% DP -> Balance working and what leaves the two TOOLEC balances raisable (P17,073 on 2026-41 and P69,686 on 2026-42, both half paid with the balance never requested; 'ever' would strand P86,759 and make two of the three A180 portion buttons controls the server refuses). Rejected must not block either: the money rule already treats it as reserving nothing, and under 'ever' one mistaken rejection would bar a real order for ever with no remedy, since revisePaymentRequest refuses a Rejected row. _PR_DEAD_STATUSES IS DELIBERATELY THE SAME PAIR _poRemainingPayable EXCLUDES - if cardinality and money ever disagreed about 'still standing', a PO could be blocked by a request reserving nothing, or reserved against by one that does not block, and neither message would name the other. THE GUARD'S POSITION IS THE DESIGN: after the clientRef dedupe (above it, the first honest network retry is refused as a duplicate of itself - the A145 bug), after the duplicate-AP stop, but BEFORE the money cap and before the amount auto-fill, because the cap answers with 'that exceeds what is still owed' and never names WHAT is in the way. No override flag; the refusal names the request, its status and all three remedies. THE SECOND HOLE, LARGER: _poRemainingPayable returns null when a PO has NO AP ROW, and the cap is written 'if (cap && ...)', so such a PO had NO CEILING WHATSOEVER - any amount passed, and passed again. Refused now on !rem (not !cap) in createPaymentRequest AND updatePaymentRequest, because create-only was the exact A219 mistake. THE THIRD: 'admin or accounting' was never enforced anywhere - it existed only as prCanCreate hiding a form card, while createPaymentRequest wrote actorRole into the row and never read it. _PR_PO_CREATE_ROLES gates Type 'PO' only (the travel chain's payables are Type 'Other' and are raised with the TRAVELLER's role), on create AND update, and both actions joined _SECURED in all three lists so the role comes from the session rather than the payload - which also closes submitPaymentRequest reading 'Created By Role' and skipping straight to Pending Management when it says admin. updatePaymentRequest additionally refuses to move a request to a different PO: it never wrote 'PO No', but saying so out loud is what stops the create-only rule being walked past. Measured before writing: all 7 live PO requests created by 'accounting', 0 of 10 POs without an AP row - so nothing historical is refused · 128: A224 THE PAYMENT CHAIN, HARDENED END TO END. Purchase Order -> Payment Request -> AP Aging was right in its arithmetic (A219-A223) and loose in its SHAPE: any currency on any order, a payment method that was free text against a policy everyone already followed, and Mark Paid living on a different page from the payable it settles. THE OWNERSHIP RULE WAS INVERTED AND IS A SECURITY CHANGE: A158 had director = bank transfer|online and everybody-else = accounting, which put cheque and cash with accounting and gave admin no release rights at all. The real rule is telegraphic transfer -> ACCOUNTING OR ADMIN, everything else -> THE DIRECTOR. _prPayOwner therefore returns a ROLE LIST, and FOUR call sites had to move in step, not the three the plan named - markPaymentRequestPaid here, flowPayOwner/flowPayOwns in flow-api.js, prPayActions in flow-pr-actions.js and the ACTION CENTER in auth.js, which was a fourth copy of the method list. tests/flow/pay-ownership.js lifts BOTH copies and asserts the matrix per method AND per role before anything else in this change - two lists can agree with each other and both be wrong. An unknown or blank method now falls to the DIRECTOR (the most restricted single role) where A158 silently defaulted it to accounting. CURRENCY FOLLOWS THE SUPPLIER TYPE: _poCurrencyProblem on BOTH createPurchaseOrder and updatePurchaseOrder (create-only was the exact A219 hole in _poFxProblem, and update rewrites Currency on the PO and its AP row). International -> the supplier's own currency, PHP not offered; Local -> PHP; UNCLASSIFIED AND RESTOCK KEEP THE FULL LIST, deliberately - 13 live orders have no supplier type and A220's reasons for refusing to guess have not changed. Measured against every live PO first: 4 international (USD x3, SGD x1) and 6 local (PHP x6), ZERO violations, so this hardens what people already do and nothing needs migrating. NOTE this is a NEW coupling - no money path had ever called _soSupplierKind; the PO form even received supplierType from getSalesOrders and threw it away. MARK PAID IS NOW REACHABLE FROM THE PAYABLE WITHOUT A SECOND WRITER: flow-ap-aging.html loads flow-pr-actions.js and a Pay button on the row calls the SAME prMarkPaid, opening the same dialog and posting the same payload - one action, two entry points, one guard. A native payment control there would have widened who may release money (AP Aging is requireOversight, all four roles) or duplicated the guard, and a duplicated money guard is A221. The shared file assumed page globals AP Aging does not define (prSession/prList/loadPRs), which would have been a ReferenceError rather than a graceful degrade, so each now goes through a resolver - prActor/prFindRow/prReloadHost. Docs stays Docs and Save stays Save: conflating Save with Mark Paid is precisely what let a Status dropdown move money. THE AP DOCS WINDOW OFFERED NOTHING BUT 'Other...' - _DOC_RULES had no module 'AP Aging' at all, so every document ever filed against a payable is free text; two vocabOnly rules give it a controlled vocabulary without adding an unclosable line to the per-ORDER checklist. THE BANK CHARGE IS SURFACED, NEVER AUTO-WRITTEN: getSOBankCharges is read-only and the cost editor shows what each payment recorded. Routing it into SOCostDetails['Bank Charge (COGS)'] would have been wrong four ways - two indistinguishable buckets for the same fee, a LOCAL order excludes both from Total COGS so it would store and never sum, saveSOCostDetails is a full-row overwrite, and several requests per PO must accumulate. COGS itself is untouched: landed cost still comes from _apPaidPHP. Two live bugs the same trace found: backfillMigratedRecords was missing the intl guard A220 gave its twin (a bulk run would write the local/international disagreement across the whole legacy book at once), and _soCostComputed read bankServiceCharge* while getSOCostDetails emits bankCharge*, so called with a stored record it scored both bank charges as ZERO · 127: A222 THE FOREIGN PAYABLE: obligation in the supplier currency, pesos only when the bank acts. A foreign purchase has TWO numbers and the system pretended it had one. The obligation is exact and foreign (USD 202, SGD 2493.90); the peso cost is unknowable until the bank executes. The peso was invented at PO time - a foreign PO is REFUSED without one - copied into the payable, inherited by the request, and treated everywhere as fact, while the figure itself was NEVER STORED ON THE ORDER THAT PRODUCED IT. PurchaseOrders gains Total (PHP) Est + FX Basis (15 -> 17); PaymentRequests gains Amount (PHP) Est + the three BANK FACTS - Actual Debited (PHP), Bank Charge (PHP), Value Date (37 -> 41). Both positional writers widened in step, asserted FIRST in tests/flow/fx-chain.js. A Type PO request is now raised in the SUPPLIER CURRENCY (createPaymentRequest no longer forces PHP) and _poRemainingFC caps it in foreign units, RETURNING NULL rather than guessing when a foreign order carries legacy PHP requests - which is every one of the 20 live rows, so the null path is the normal case. THE REALISED RATE WAS NOT MERELY UNCOMPUTED, IT WAS UNRECORDABLE: markPaymentRequestPaid copied the peso estimate verbatim and CAPPED IT AT THE PAYABLE, so a true outflow above the estimate was refused - which is exactly why Power Team (310,895.71) and AOLAI (46,393.80) were typed into the AP page instead and their requests still sit at Approved with Paid By blank. Mark Paid now captures what the bank did and DERIVES: settles = debited - charge; rate = settles / foreign; FX difference vs the estimate. The charge never settles the payable (A219 found 2,070.60 and 465.77 folded into paid with nowhere to go). The cap moved onto the FOREIGN amount - you cannot pay more USD than you owe - and a foreign payable now closes on the OBLIGATION, because judging by pesos strands a fully-settled order at Partial for ever when the rate moves in your favour. COGS IS UNTOUCHED AND ASSERTED SO: landed cost has always come from _apPaidPHP x unitFC / poTotalFC and never reads a payment request. Three FX bugs died with it: a JPY PO was IMPOSSIBLE TO SAVE (the 20-200 band was a second unconditional if, and since the PO screen computes peso AS rate x FC they always reconcile, so the band was the only check that ever ran - and the screen has no poAmount confirm handler, making the refusal unappealable); _poPayablePHP returned the FOREIGN amount when the peso payable was blank and every caller treated it as pesos; and PO Value (PHP) excluded every foreign PO because getPurchaseOrders never emitted the field the KPI reads · 126: A221 ONE WAY TO PAY A SUPPLIER. Marking PRF-2026-65 paid was refused - "paying 12447.24 would take the total paid to 323342.95 against a payable of 310895.71" - and the guard was RIGHT while the data was wrong. AP-202607-006 is a USD 202 order carrying 310,895.71 in BOTH Amount (PHP) and Paid (PHP), a figure byte-identical to AP-202607-005 Paid, pasted into the wrong row. ONLY ONE OF THE TWO WAS EVER TYPED: updateAPAging reconciled Amount := Paid on any row saved as Paid, so one typo became two wrong numbers - and Amount (PHP) is what drives landed cost and COGS. It reached the GENERAL LEDGER: JE-APPAY-AP-202607-006 credits Cash 310,895.71 that never left the bank, 298,448.47 of the impossible 345,248.28 CREDIT balance on Cash. ROOT CAUSE: there were TWO ways to pay and they did not know about each other. Mark Paid demands an Approved request, a payment method, method-ownership and a proof-of-payment document, and ACCUMULATES; the AP Aging Paid box demanded nothing, was open to all four oversight roles, and OVERWRITES - and both wrote the same journal key JE-APPAY-<apNo>, so the ledger silently followed whichever touched the row last. Of nine live supplier payments only TWO went through Mark Paid; five more show a payable Paid with the request still Approved and Paid By blank. A221 gives paying one door: Paid (PHP) is read-only on the AP page and writing it needs an explicit externalPayment flag PLUS a reason, stamped into Notes. THE RECONCILE IS DELETED - a payable is what is owed, the paid figure is what was paid, neither may become the other. Deleting it opened a second hole that had to close with it: the journal used to fall back to Amount (PHP) when Status was Paid with a zero paid figure, which made the Status dropdown a third way to move money. The implied rate is now ON SCREEN (Amount PHP div Amount FC) - it shows 1539.09 red on the Chicago row and 619.99 on AOLAI against a normal 61.65, which is the whole point: nobody needs to know today rate to see that is wrong, but only if it is visible. updatePurchaseOrder finally checks payment requests the way deletePurchaseOrder always has, and stops rewriting Currency/Amount (FC) on an already-Paid AP row. NOT FIXED HERE: the PO journal posts foreign POs in FC units while payments post in pesos, which is why Accounts Payable carries a DEBIT balance - see tests/flow/baseline/A221-before.txt · 125: A220 a LOCAL purchase is 13 steps, not 25 - and a sales order can be renamed. The company buys two ways: an international order goes through a proforma, a forwarder, customs and a bank debit memo; a local one is paid and then delivered to the office. _DOC_RULES has known that since A195 (applies intl/local/both, 7 documents at the receive gate vs 2), but the 25-stage shipment timeline never did, so every local shipment was asked ON SCREEN for FAN/SAD/TAN, a forwarder's final invoice and a customs clearance that will never exist, and reported progress out of 25 steps it could not finish. _SHIP_STAGE_INTL names the 12 international-only stages, mirrored by _SM_INTL_ONLY in stage-meta.js - tests/flow/ship-kind.js asserts the two agree in CONTENT, the way FlowAPI.gs:3345 already required them to agree in ORDER. NOTHING IS DELETED BY A RECLASSIFICATION: _shipTimeline still returns every stage with its stored state and marks the inapplicable ones applies:false, so switching back restores every tick and every document - which matters because SO-202607-001 is live, International, and 12 of 25 stages done. THE requires CHAIN HAD TO BE REPAIRED TOO: it is a linear spine running delivered <- local_charges <- forwarder_final_invoice <- ... <- customs_clearance, all international, so hiding them without smRequires walking back to the nearest applicable prerequisite would have made 'Delivered to Office' unreachable on a local order - the same complaint in reverse. The classification is STORED ON THE SALES ORDER (SalesOrders 'Supplier Type', SOCostDetails 'COGS Type' as fallback) and Shipments has no such column and deliberately does not gain one; setSOSupplierType writes the two cells and syncs them, and is NOT updateSalesOrder, which reads an omitted p.items as [] and DELETES EVERY LINE ON THE ORDER. Blank stays blank: _setSoSupplierType used to coerce anything not exactly 'international' to 'Local', so a partial save of the cost editor silently classified one of the 13 unclassified orders as local and halved its document contract. _writeMigratedRecordsForSO gained the cogsType guard saveSOCostDetails already had - without it a flip leaves the MaterialsReceiving row carrying the full international shipping load while Invoices gets the reduced Total COGS, and the two never reconcile again. And createReceiving's confirmNoDocs, accepted by the server since A195 and SENT BY NO CLIENT EVER, is finally wired: a Local -> International flip newly demands six documents a supplier may not be able to produce, and there was no way past · 124: A219 the peso side of a foreign payable. AP-202607-006 showed USD 202 as P310,895.71 (implied P1,539/USD) - a figure byte-identical to AP-202607-005's Paid, pasted into the wrong row. getAPAging does NO arithmetic, so it was a stored cell. All four bad rows were already NAMED in c34f99b (A171 W2, 2026-07-29 12:36); AP-006 was last written 2026-07-28 01:38, ~35h BEFORE that guard existed, and A171's checks are write-time only - nothing has ever re-read an existing row. THERE IS NO EXCHANGE RATE TO VALIDATE AGAINST: the rate is whatever the bank gives on the day, which is why three of four foreign POs store rate 0 - honest, not missing. So the primary rule uses no rate at all: A PAYABLE MARKED PAID CANNOT EXCEED WHAT WAS ACTUALLY PAID FOR IT, reconciled against the approved PaymentRequests via _poRequestedPHP (deliberately NOT _poPayablePHP/_poRemainingPayable, which derive from APAging's own Amount and would be circular). That catches both errors (10x and 25x) and clears AP-202607-007 with no special case - the VAT is on the payment request too. The 20-200 FX band survives only as a typo net for rows with no payment yet. _apAmountProblem finally USES the poNo it always took and ignored, and now receives the status. THE ORDER OF TWO STATEMENTS IN updateAPAging WAS A BUG: the Status=Paid reconcile overwrote the payable with the paid figure BEFORE validation, so the paid-exceeds-payable branch could never fire on a Paid row - validate first, reconcile second. updatePurchaseOrder gained the _poFxProblem call it never had (create was guarded, update was not, and update writes both the rate and the AP peso amount). previewAPAgingAnomalies is the sweep the guards never had - read-only, names WHICH FIELD is wrong, and refuses to erase a probable BANK CHARGE: two USD wires show paid slightly above the payable (P2,070.60 and P465.77), which is a fee with nowhere to be recorded, not a typo. It reports the residual a correction would throw away rather than dropping it silently · 123: A218 WHOSE quotation is it. 'Created By' is who TYPED it, and the system was treating it as whose deal it is - creating quotations is one person's job here, so she is Created By on 46 of 85 while owning 27. The real owner existed ONLY as initials inside the quotation number (2026-404-NEIL-ECC-GENSET is Crystal's, typed by Kimberlyn, and at P74.2M it is the largest deal in the book); flowQuotationDupPairs documents that format and deliberately throws the segment away, and nothing else ever parsed it. Quotations gains 'Salesperson' 26 -> 27, BOTH positional writers widened in step (the width trap, asserted first in tests/flow/quotation-owner.js). _quoOwner is the ONE answer to 'whose deal is this': the column, then the initials via _QUO_INITIALS, then the creator. _QUO_INITIALS IS A MIGRATION AID - after runQuotationOwnerBackfill the column is the fact, and a new hire must never need a code change. previewQuotationOwners / runQuotationOwnerBackfill are preview-then-apply and idempotent, and REPORT any number whose initials nobody recognises rather than defaulting it to the typist - silently assuming is how the wrong name got attached in the first place. updateQuotation can now correct 'Salesperson', which is the first correction path attribution has ever had ('Created By' is written once by createQuotation and no code could change it). closeQuotation/reopenQuotation guards WIDENED to owner OR creator, never moved: moving them would lock the typist out of quotations she maintains. _commSalesperson resolves through _quoOwner - that single line selects the commission RATE, decides who may file the claim at all, and is frozen onto the payable at submit, so a misattribution paid the wrong person AND refused the right one. previewCommissionOwnerShift reports what moves BEFORE the rule is trusted; on today's data it is empty - all 7 linked orders already agree, so this is protection for future claims, not a restatement of past ones · 122: A217 the quotation TRACKER: a pipeline board (dashboard/quotation-board.html), a per-client timeline (client-tracker.html), and the Sent mailbox as a SPLIT VIEW so attaching a message to a quotation is one click on a row already on screen. Zero links had ever been made - the scorer was fine, it just lived inside a dialog nobody thought to open, on the wrong page. ONE new handler: setQuotationEmailReply, which is the MISSING HALF OF A208. 'Reply At' / 'Reply From' / 'Reply Checked At' have been in the schema since 113, are read by _qeMap, and were written by NOTHING - so flowFollowUp's `replied` branch has never fired in production and the worklist's top-priority step 'They replied' was unreachable. The thread matching itself was ALSO already finished and callerless (/api/email/quotation-threads, blueprints/email_log.py:1067, real References/In-Reply-To walking with a normalised-subject fallback); this handler only writes down what it found. checkedAt is stamped EVEN WHEN NO REPLY WAS FOUND, because 'we looked and there was nothing' is a different fact from 'nobody has ever looked' and flowFollowUp already tells them apart - and Flask omits the misses, so the CLIENT sends an entry for every id it checked. A recorded reply is never erased by a later empty sweep. NOT _SECURED, matching its three A208 siblings - linkQuotationEmail is strictly more powerful (it back-dates 'Sent At') and is unsecured too, so securing one of four would add inconsistency rather than raise the floor; secure the QuotationEmails write group together, as its own change · 121: A216 the weekly itinerary reaches the people who approve it: dashboard/management-itinerary.html shows one Mon-Sun week per rep, planned stops with the visits actually logged underneath them, plus every rep who filed NOTHING - the live week has a rep with five client visits and no plan, and until now no screen anywhere said so. Backend change is ONE function: _timeOfDay now returns 24-hour 'HH:mm' instead of '3:30 PM', because the rep's planner renders it into <input type="time"> (weekly-itinerary.js:156) which accepts only that format - given anything else the browser BLANKS the control and the next Save writes the blank back, so opening a plan and saving it destroyed every planned time on it. Whatever a human reads is formatted at the point of display (iwTime12). No new handler, no new column: getWeeklyItineraries with no params already returns every rep's plan with items, getClientVisits returns the visits, and approve/rejectWeeklyItinerary already exist and are already _SECURED. The plan-vs-actual JOIN is the part that can lie, so it lives in a pure table-tested module (dashboard/js/itinerary-week.js): an EXACT link - ClientVisits '<Itinerary No>#<Seq>', which nothing in the repo had ever parsed - is the only thing counted as matched; a same-week company-NAME agreement is reported separately as 'likely' and never added to it; and a link whose Seq no longer exists (a revise re-appends every item row) degrades to 'stop deleted' rather than quietly becoming an unplanned visit. On today's data every match is 'likely' and matched is honestly ZERO, because the visit picker offers Approved plans only (report.js:359) and no plan has ever been approved · 120: A215 track quotations by WHAT IS NEXT, not by date. Quotations gains 'Sent At Basis' (blank = the date was recorded as it happened; anything else = ESTIMATED by the backfill, and every surface showing it must say so) plus 'Snooze Until' / 'Snooze Reason'. Parking is NOT the same as 'Follow Up Days': a threshold is a property of the deal ("this client always takes three weeks"), parking is a decision just made ("not now, ask me in October") - folding them together would let a rep quietly change how every future follow-up on a deal is judged. previewQuotationSentAt / runQuotationSentAtBackfill estimate the send date from 'Approved At' for the 60 quotations marked Sent before the stamp existed, because flowFollowUp returns 'unknown' for all of them and goes silent, leaving the worklist blind to nearly the whole pipeline. Preview and apply are separate handlers - nothing writes until somebody has read what would change - and the run is idempotent: a quotation that already has a real date is never touched. BOTH positional Quotations writers widened 23 -> 26 in step (the width trap). runQuotationSentAtBackfill is _SECURED because it decides who may rewrite 60 send dates off a browser-supplied actorRole; snoozeQuotation is deliberately not, matching setQuotationFollowUp beside it · 119: A212 steps 3-6 the travel allowance CHAIN and its money: submit - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, with management deliberately absent (it differs from BOTH _PR_STAGES and _ITIN_STAGES - read _TRAV_STAGES rather than assuming). Self-approval is refused BY NAME, because the workbook's own sample traveller IS the accounting staffer who signs the middle block. Submit needs an ISSUED float (an entitlement the director sets, effective-dated, a raise closing the old row the day before so no week has two) plus either an Approved weekly itinerary or a WAIVER that only a non-traveller approver can give - the waiver is load-bearing, not an escape hatch, because no rep has ever filed an itinerary. Final approval writes three facts in this order: the SIGNATURE, then the payable, then the expense. The payable is a Type 'Other' payment request minted already Approved with the travel chain's real stamps copied across, payee the TRAVELLER never the approver, amount ALWAYS 'Total Spent' - which holds through an overspend, where the rep advanced their own money and is owed all of it. The expense is one Expenses row keyed 'TRAV:<no>', without which the cash leaves and never reaches the P&L (an 'Other' PR marked Paid posts no journal at all). Both halves are idempotent, so a failed payout keeps the signature, says so, and Approve again retries only the missing part. Reopening is REFUSED while a payment request stands - that is the dead end that matters. Float cash itself goes through the ORDINARY draft chain: it is an advance, not a reimbursement · 118: A214 the travel allowance DOCUMENT, live: the three-page pack (Replenishment Report, Travel Itinerary, Certification of Expenses Not Requiring Receipts) rendered by pdf_generators/travel_allowance_pdf.py, with the rep watching it build beside the form. getTravelReceipts is the one backend piece: receipts come back as BYTES, not a Drive link, because a /view URL serves HTML and renders as a broken image - the dead end getVisitPhotos already documents. Secured, because a TRAV number is guessable and the payload is photographs of somebody's week. The leg a receipt belongs to is read off its FILE NAME (receipt-<seq>.jpg), not the Receipt Doc ID column: _travWriteItems deletes and re-appends every item row on every save, so a failed write-back would blank the column for good while the Drive file survived. Travel documents file under _Internal/Travel Allowance/<TRAV No> rather than the client tree, anchored to the WEEK START so a week straddling a month boundary keeps its receipts together - a travel receipt has no customer, and _Unknown Client is where genuinely mis-filed client documents live · 117: A212 travel allowance: a sales rep holds a 2,000 peso IMPREST FLOAT, spends it reaching client visits, and reports it weekly. THE PAYABLE IS ALWAYS 'Total Spent' - never 2,000, never 2,000 minus spent - because restoring a float to its target costs exactly what came out of it, and that identity holds through an overspend too. One item table drives TWO printed pages: 'Kind' the Travel Itinerary, 'Has Receipt' the COENRR, and THE TWO SETS OVERLAP, so their subtotals are never added together (the sample's 35 + 70 is a 105 claim on two pages that each read 105, not 210). Chain is REP - ACCOUNTING - DIRECTOR, matching the cover sheet's three signature blocks, and self-approval is refused BY NAME because the sample's traveller is the accounting staffer who signs it. Approval mints a Type='Other' payment request already Approved, Cash, stamps copied, idempotent on clientRef - plus one Expenses row, or the cash leaves the company and never appears in the P&L. Commissions are HELD CLOSED again (_COMM_ROLES = []) after the walk-through - 116: A211 commissions open to DIRECTOR + MANAGEMENT only, and the four access-control holes closed. The hold is now a ROLE LIST (_COMM_ROLES) rather than a boolean, so launching is a staged rollout rather than all-or-nothing - but it is a ROLLOUT gate, never the security boundary. That boundary moved: createCommissionRequest / updateCommissionRequest / reviseCommissionRequest joined _SECURED, and so did the two READS - getCommissionRequests with no salesperson returned every claim in the company to an unauthenticated GET, and the only honest way to scope it is to know who is asking. _commMayActOn now guards submit/update/delete/revise off a POSITIVE oversight list; the old role==='sales' test let every other role through by accident. updateCommissionRequest can no longer re-point a draft at another rep's order. _commCoverageNote compares CASH TO CASH - it measured collected cash against the ex-VAT order value, so every fully-paid VAT order printed OVER-COLLECTED. seedCommissionDemo / clearCommissionDemo write and remove a DEMO- prefixed order reproducing the real SOA, because nothing on the live sheets is claimable. To launch: add 'sales' to _COMM_ROLES here AND to FLOW_COMMISSIONS_ROLES in dashboard/js/flow-api.js. FLOW_MUTATION_SECRET must be set or the whole secured tier is inert · 115: A210 commission follows the REAL Statement of Account, not the rate alone: collected cash less 12% and 3% of the PO amount, rated at 2.5%, then 1% withheld from the commission itself. Rating the cash directly overpaid by ~19%. Net of Taxes = ex-VAT order value x 0.942, pro-rata on part payments. The 12% is taken on the VAT-INCLUSIVE amount deliberately, matching the sheet - see _COMM_VAT_ON before 'fixing' it. Every rung stored so a claim reconciles with a printed SOA · 114: A209 commission requests are HELD: built, registered, and refused at the dispatcher by _COMM_LIVE=false, with the screens showing a coming-soon panel and the menus marked SOON. A version gate could not do this — the commission pages want >=112 and the A208 email tracker wants 113, the same paste, so deploying the tracker would have unlocked commissions with it. Superseded by 116, which replaced both booleans with role lists · 113: A208 quotation ↔ email links: a rep attaches the GoDaddy message that actually carried a quotation, so the system can finally say when it went out, how long it has been quiet, and whether the client replied. The system does NOT send mail — there is no SMTP anywhere — it observes the rep's Sent folder and stores the pointer, because nothing about a fetched email persists otherwise. Quotations gains Sent At / Sent To / Follow Up Days; sendQuotation stamps the first of those, which alone powers days-since-sent, approved-but-unsent and sent-with-no-order without touching a mailbox. reviseQuotation clears the stamp so a superseded document stops being chased, and a rename re-keys the links · 112: A207 commission requests: a sales rep claims what they are owed on business they won, approved DIRECTOR FIRST then management, and approved claims group into a salary-cutoff report the director keys into payroll. A claim CONSUMES SPECIFIC COLLECTION ROWS rather than a sales order, which is what makes the money safe: nothing reads ARAging's gross 'Collected (PHP)', the negative 'outstanding' left by over-collected legacy rows, or the manual SalesOrders 'Status' — and a collection held by a live claim cannot be claimed twice. The base is cash net of withholding tax; the rate lives in a CommissionRates table and ships at 0%, so nothing can reach an approver before the company percentage is set. Payout always lands in a 2nd cutoff because payroll applies Other Income in cutoff B only · 111: A205 alternative offers: QuotationItems gains 'Option No' (blank = ordinary line; a shared non-blank value makes lines MUTUALLY EXCLUSIVE) and Quotations gains 'Recommended Option'. The stored Total is base lines + the recommended option only — never the sum of options the client can only pick one of. Both positional item mappers widened in step, and the rename read-back carries the option through · 110: A201 management can reject a forwarded pricing (clears the whole sourcing, returns the PR to admin for re-sourcing) · 109: A195 one document contract for the lifecycle: _DOC_RULES with a local/international split (the old receiving rule demanded 7 international documents a local purchase can never produce, with no override), gates on the four money steps, a controlled Doc Type, and a per-order checklist · 108: A194 year/month above the client, and buildDriveSkeleton gives every sales order a folder even when it has no documents yet · 107: A193 every lifecycle document files itself into Drive under <client>/<sales order>/<doc type>; client-name canonicaliser + reviewable ClientAliases registry; pre-SO documents adopted when the order appears; resumable migration for the existing files · 106: A191 per-sales-order notes on the Revenue & Net Profit report (own sheet, upsert by SO No) · 105: A190 client visits gain agenda + summary of agenda + a REQUIRED photo, and link to a Weekly Itinerary (plan approved director-first then management) · 104: A189 client visits: a face-to-face task on the sales daily report (time, person, company, city, topic), rolled up on the team report and team performance · 103: A186 sales orders record the client's own PO date AND the date we actually received it (they routinely differ by days); updateSalesOrder's value list widened in step with the schema · 102: A181 setMgmtPricing MERGES the engine breakdown instead of replacing it (re-pricing one line silently erased every other line's cost breakdown) · 101: A180 payment requests record which slice of the PO they are (50% DP · Balance · Full) + the payable snapshot; updatePaymentRequest finally caps the amount at what is owed · 100: A174 updateQuotation no longer wipes a quotation on a partial update (a layout-only save deleted every line) · 99: A172 Quote Configurator: item photos persist to Drive (Line Key), Layout JSON, reorderQuotationItems · 98: A171 procurement guards: the payable can no longer imply an impossible exchange rate or exceed what was paid; a PO's rate and peso total must agree; receiving demands the shipment documents before it costs inventory · 97: A169 Product Finder → Purchase Request hand-off (PFInquiries += Items JSON/PR No, merge-on-update) · 96: A167 shared inquiry logbook · 95: A159 inventory identity (Item ID — fixes the phantom-item picker + shared cost basis) · A158 lifecycle integrity: secured mutations · partial payments · pricing/quotation gates · void collection+invoice (93: A157 correctCollection · 92: A156 PR chain + Paid w/ proof · 91: A152 close/reopen quotation · 90: A151 lifecycle spine)
 */

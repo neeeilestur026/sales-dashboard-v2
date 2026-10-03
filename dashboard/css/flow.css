@@ -56,6 +56,8 @@
 .flow-hub .title { font: 700 15px/1.3 var(--hx-text); color: var(--hx-ink); margin: 4px 0; }
 .flow-hub .desc { font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-3); }
 .link-btn { background: none; border: none; color: var(--hx-navy-text); font: 600 12.5px/1.3 var(--hx-text); cursor: pointer; padding: 0; }
+.link-btn.inv-track { margin-left: 0.5rem; }                                 /* A318 — Inventory: track each piece */
+.link-btn.inv-track.on { color: var(--hx-ok); }
 .del-btn { color: var(--hx-red); }
 
 /* the modal (the same look as .modal in styles.css; the class names stay for the scripts) */

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Item Labels</title>
+  <title>Labels</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/labels.css">
 </head>
@@ -11,17 +11,36 @@
   <script src="js/theme.js"></script>
   <header class="navbar" id="navbar"></header>
 
-  <!-- A316: our own QR label (HXI:<Item ID>) for items that arrive without a barcode. Sized for a
+  <!-- A316/A318: the label library. Every label code we have made lives here and can be printed again.
+       The QR carries only an opaque code (HX + 12 characters): any other scanner sees those characters
+       and nothing else; only our scanner, signed in, turns it into the item or piece. Sized for a
        50 x 30 mm thermal label; any printer works, one label per page. -->
   <main class="main-content lb-main">
     <header class="lb-top">
       <div>
-        <h1>Item labels</h1>
-        <p>Stick one on each box. The scanner reads it as that item, on any phone.</p>
+        <h1>Labels</h1>
+        <p>Every label code we have made. Print new ones or reprint a worn one; the code never changes.</p>
       </div>
-      <button type="button" class="btn btn-primary" id="lbPrint" disabled>Print labels</button>
+      <button type="button" class="btn btn-primary" id="lbPrint" disabled>Print</button>
     </header>
-    <section class="hx-glass lb-controls" id="lbControls"><div class="hx-empty">Loading…</div></section>
+
+    <section class="hx-glass lb-controls">
+      <div class="lb-tools">
+        <input type="search" id="lbSearch" class="lb-input" placeholder="Search name, item no, piece no or code" autocomplete="off" aria-label="Search labels">
+        <div class="lb-filters" role="group" aria-label="Show">
+          <button type="button" class="lb-filter active" data-filter="all">All</button>
+          <button type="button" class="lb-filter" data-filter="waiting">Never printed</button>
+          <button type="button" class="lb-filter" data-filter="items">Items</button>
+          <button type="button" class="lb-filter" data-filter="pieces">Pieces</button>
+        </div>
+      </div>
+      <div class="lb-selbar">
+        <label class="lb-check"><input type="checkbox" id="lbAll"> Select all shown</label>
+        <span class="hx-meta" id="lbMeta">Loading…</span>
+      </div>
+      <div id="lbList" class="lb-list"><div class="hx-empty">Loading…</div></div>
+    </section>
+
     <section class="lb-sheet" id="lbSheet" aria-label="Labels to print"></section>
   </main>
 

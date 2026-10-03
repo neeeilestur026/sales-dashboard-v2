@@ -109,7 +109,7 @@ call per sheet. Flask already sends the secret on every call (A299).
 
 Rollback: Manage deployments → previous version.
 
-## The warehouse scanner (A316, FlowAPI 158)
+## The warehouse scanner (A316 + A318, FlowAPI 159)
 
 `/scan.html` is a phone web app: open it in Safari (iPhone) or Chrome (Android), then Share → Add to
 Home Screen (iPhone) or the install prompt (Android). No app store, no fee. It receives goods against
@@ -122,10 +122,31 @@ keyboard-type scanner, or by typing.
 - **What it writes:** receiving goes through `createReceiving` (same landed cost, journal, document and
   payment checks), but every line is checked against what is still open on the PO and priced from the
   PO. Dispatch is a record only: stock still leaves at invoicing.
-- **Barcodes:** a supplier barcode is linked to an item once (asked on the first scan). Items with no
-  barcode get our QR label (`labels.html`, 50 × 30 mm; from the scanner or Inventory → Label).
+- **Barcodes:** a supplier barcode is linked to an item once (asked on the first scan; an unknown one
+  can be matched by searching all inventory). Items with no barcode get our label.
+- **Tabs (A318):** Receive (by purchase order), Stock in (scan an item, pick the open PO line it came
+  from; the basket posts one receiving per PO), Dispatch (by sales order), Return (pieces back from
+  site) and Look up (what a code is, where it is, its photos).
+- **Photo proof (A318):** every receive, count, dispatch and return needs at least one photo. Each shot
+  is downscaled on the phone and uploaded on its own into the PO's or SO's Drive folder and the
+  Documents register (types Receiving photo / Dispatch photo), so it also shows in the office's Docs
+  window. Returns and piece registrations file under `_Warehouse/` in the month's folder.
+- **Track each piece (A318):** switch an item on from Inventory or the scanner's Look up. Every piece
+  received after that gets its own Asset No (AS-YYYYMM-NNN) and label; pieces already on the shelf are
+  registered from Look up. A tracked SO line is dispatched by scanning each piece's own label; a piece
+  that is out cannot leave again until it is returned. At most 50 pieces per line per post.
+- **Labels (A318):** `labels.html` is the label library: every code we have made, searchable, with how
+  often each was printed; select and print (50 × 30 mm, one per page) or reprint any time. The QR holds
+  only an opaque code (HX + 12 characters), never an item ID or a link, so another phone or scanner sees
+  nothing useful. The reads that turn a code into details are secured (signed in, scanner roles only).
+  Honest limit: a photocopied label scans as the same item or piece; a duplicated piece is caught
+  because one piece cannot be dispatched twice. Labels printed before A318 (`HXI:` codes) still scan.
+- **Still record only:** dispatch and return do not move stock; it leaves at invoicing. Moving the
+  deduction to the outgoing scan later means: `dispatchByScan` deducts, `createInvoice` skips what was
+  dispatched by scan, `voidInvoice` restores only what it deducted, and `returnByScan` adds back, all
+  behind one setting so it can be switched on when testing ends.
 - **Deploy order:** Render first (this repo), then paste `apps-script/FlowAPI.gs` as a new version and
-  check `getVersion` returns 158. Until then the scanner shows "backend not updated" and does nothing.
+  check `getVersion` returns 159. Until then the scanner shows "backend not updated" and does nothing.
 - **Also changed in `createReceiving`:** only accounting/admin/director may post, zero-quantity lines
   are skipped (they used to overwrite the unit cost), and the charges typed on a receiving are spread
   over that receiving's goods with its VAT booked in full (partial deliveries used to lose part of

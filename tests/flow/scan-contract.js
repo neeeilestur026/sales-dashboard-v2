@@ -14,6 +14,14 @@
  *      repeated item fills first; the count is saved on the phone and restored; the post sends `lines`
  *      (never `items`) and never a price.
  *   6. Labels: the item list in the URL is parsed strictly.
+ * A318:
+ *   7. Five tabs; our opaque label codes count on their line; a tracked dispatch line takes only piece
+ *      labels, each piece once, and the post names them; photo ids are kept with the count; posting
+ *      waits for an uploaded photo.
+ *   8. Stock in: the basket groups by purchase order and a second scan adds to the line it came from.
+ *   9. Return: only pieces that are out, each once.
+ *  10. The reads that turn a code into details are secured: called through postFlow, never fetchFlow.
+ *  11. Labels: the QR is the bare opaque code; ?codes= is parsed strictly.
  */
 const fs = require('fs');
 const path = require('path');
@@ -119,7 +127,7 @@ const els = {};
 const el = (id) => els[id] || (els[id] = { id, innerHTML: '', textContent: '', value: '', hidden: false, disabled: false, href: '', className: '', dataset: {},
   classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, getAttribute: () => 'none', addEventListener() {}, querySelectorAll: () => [], querySelector: () => null, focus() {}, blur() {} });
 const store = {};
-const sctx = { console, window: {}, document: { getElementById: el, addEventListener() {}, querySelectorAll: () => [] },
+const sctx = { console, window: {}, document: { getElementById: el, addEventListener() {}, querySelectorAll: () => [], querySelector: () => null },
   localStorage: { getItem: (k) => store[k] === undefined ? null : store[k], setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } },
   setTimeout: () => 0, confirm: () => true, Date };
 sctx.window = sctx;
@@ -143,7 +151,7 @@ eq('  line 3 = 1', T.S.counts[3], 1);
 eq('a fourth wrench is refused: both lines are complete', T.scan('4800000000017', false), 'complete');
 eq('an item that is not on the PO is refused', T.scan('HXI:ITM-09999', false), 'notOnDoc');
 eq('an unknown barcode asks to be linked', T.scan('0000999988887', false), 'unknown');
-ok('  and the link sheet opens', els.scLink && els.scLink.hidden === false);
+ok('  and the bottom sheet opens to link it', els.scSheet && els.scSheet.hidden === false && els.scSheetTitle.textContent === 'New barcode');
 eq('the camera reading one code twice in a second counts once', (T.S.last = { code: '', at: 0 }, T.scan('HXI:ITM-00002', true), T.scan('HXI:ITM-00002', true)), 'ignored');
 eq('  (line 2 = 2)', T.S.counts[2], 2);
 const saved = JSON.parse(store[T.draftKey()] || 'null');
@@ -167,7 +175,80 @@ vm.runInContext(read('js/labels.js'), lctx);
 const P = lctx.__labels.parse;
 eq('ids and quantities are read', JSON.stringify(P('?items=ITM-00001:3,ITM-00002')), JSON.stringify([{ id: 'ITM-00001', qty: 3 }, { id: 'ITM-00002', qty: 1 }]));
 eq('junk is dropped, repeats ignored, quantity capped', JSON.stringify(P('?items=<x>,ITM-1:9999,ITM-1:2')), JSON.stringify([{ id: 'ITM-1', qty: 200 }]));
-ok('the QR carries HXI:<Item ID>', /svg\('HXI:' \+ i\.id\)/.test(read('js/labels.js')));
+const LJS = read('js/labels.js');
+ok('the QR carries the bare label code, never an Item ID or a web address', lctx.__labels.qrPayload({ code: 'HX7K3P9QWD2M4X', itemId: 'ITM-00001' }) === 'HX7K3P9QWD2M4X' &&
+   /svg\(qrPayload\(r\)\)/.test(LJS) && !/HXI:|https?:\/\/[^'"]*\$\{/.test(LJS.replace(/QR_CDN = '[^']+'/, '')));
+eq('?codes= keeps only well-formed codes, once, upper-cased', JSON.stringify(lctx.__labels.parseCodes('?codes=hx7k3p9qwd2m4x,HX7K3P9QWD2M4X,ITM-00001,HXI:ITM-1,HX0000000000OO')),
+   JSON.stringify(['HX7K3P9QWD2M4X']));
+ok('the library is a secured read and items get their code first', /postFlow\('getLabels'/.test(LJS) && /postFlow\('ensureItemLabels'/.test(LJS) && /postFlow\('logLabelPrint'/.test(LJS) && !/fetchFlow\(/.test(LJS));
+
+console.log('\n7 · A318 scanner: tabs, our codes, pieces, photos');
+eq('five tabs, in order', (SCAN.match(/data-mode="(\w+)"/g) || []).map(m => m.slice(11, -1)).join(','), 'receive,stockin,dispatch,return,lookup');
+ok('the proof photo opens the rear camera', /<input type="file" id="scPhotoIn" accept="image\/\*" capture="environment" hidden>/.test(SCAN));
+eq('the scanner needs FlowAPI 159', (JS.match(/MIN_VERSION = (\d+)/) || [])[1], '159');
+{
+  const C = 'HX7K3P9QWD2M4X', P1 = 'HXA1B2C3D4E5F6', P2 = 'HXZZZZZZZZZZZZ';
+  T.S.mode = 'receive'; T.S.counts = {}; T.S.codes = {}; T.S.assets = {}; T.S.last = { code: '', at: 0 };
+  T.S.doc = { docNo: 'PO-2', party: 'Acme' };
+  T.S.lines = [{ line: 1, itemId: 'ITM-00001', itemNo: 'WR-10', name: 'Torque wrench', ordered: 3, done: 0, remaining: 3, codes: [], labels: [C], tracked: true }];
+  eq('our opaque item label counts on its line', T.scan(C, false), 'ok');
+  ok('  and is not recorded as a supplier barcode', !(T.S.codes[1] || []).length);
+  eq('a label for nothing on the document is refused', T.scan('HX0000000000ZZ', false), 'notOnDoc');
+  T.S.mode = 'dispatch'; T.S.counts = {}; T.S.assets = {}; T.S.doc = { docNo: 'SO-2', party: 'Client' };
+  T.S.lines = [{ line: 1, itemId: 'ITM-00001', itemNo: 'WR-10', name: 'Torque wrench', ordered: 2, done: 0, remaining: 2, codes: ['4800000000017'], labels: [C], tracked: true,
+                 pieces: [{ assetNo: 'AS-1', code: P1 }, { assetNo: 'AS-2', code: P2 }] },
+               { line: 2, itemId: 'ITM-00002', itemNo: 'N/A', name: 'Hose', ordered: 4, done: 0, remaining: 4, codes: ['111'], labels: [], tracked: false }];
+  eq('a tracked line refuses the item label', T.scan(C, false), 'piecesOnly');
+  eq('  and the supplier barcode', T.scan('4800000000017', false), 'piecesOnly');
+  eq('a piece label counts', T.scan(P1, false), 'ok');
+  eq('  the same piece twice is refused', T.scan(P1, false), 'again');
+  eq('  a second piece counts', T.scan(P2, false), 'ok');
+  eq('an untracked line still counts by barcode', T.scan('111', false), 'ok');
+  const pl = T.payloadLines();
+  ok('the dispatch names each piece and the qty is the piece count', pl[0].qty === 2 && JSON.stringify(pl[0].assets) === '["AS-1","AS-2"]' && !pl[1].assets, pl);
+  T.add(T.S.lines[0], -1);
+  ok('minus on a piece line drops the last piece', T.S.counts[1] === 1 && JSON.stringify(T.S.assets[1]) === '["AS-1"]', T.S.assets);
+  T.S.photos = { doc: [{ docId: 'DOC-AAAA1111', state: 'ok', thumb: 'data:x' }, { docId: '', state: 'up', thumb: '' }] };
+  ok('posting waits while a photo is still uploading', T.photosReady('doc') === false);
+  T.S.photos.doc.pop();
+  ok('  and opens once one is uploaded', T.photosReady('doc') === true);
+  T.saveDraft();
+  const dr = JSON.parse(store[T.draftKey()] || 'null');
+  ok('the draft keeps the photo ids and the pieces, never the photo itself', dr && JSON.stringify(dr.photos) === '{"doc":["DOC-AAAA1111"]}' && dr.assets[1][0] === 'AS-1' && !/data:x/.test(store[T.draftKey()]), dr);
+}
+ok('a post sends the photo ids', /photoIds: photoIds/.test(JS) && /postFlow\('uploadScanPhoto'/.test(JS) && /flowDownscaleImage\(file, 1280, 0\.75\)/.test(JS));
+
+console.log('\n8 · stock in');
+{
+  T.S.mode = 'stockin';
+  T.S.basket = [{ poNo: 'PO-S', line: 1, itemId: 'ITM-00001', itemNo: 'WR-10', name: 'Torque wrench', remaining: 5, qty: 1, supplier: 'Stock Co', soNo: '' },
+                { poNo: 'PO-1', line: 2, itemId: 'ITM-00002', itemNo: 'N/A', name: 'Hose', remaining: 1, qty: 1, supplier: 'Acme', soNo: 'SO-1' },
+                { poNo: 'PO-S', line: 3, itemId: 'ITM-00003', itemNo: 'PM-7', name: 'Pump', remaining: 2, qty: 2, supplier: 'Stock Co', soNo: '' }];
+  const g = T.groups();
+  eq('the basket groups by purchase order', g.map(x => x.poNo + ':' + x.entries.length).join(','), 'PO-S:2,PO-1:1');
+  eq('scanning an item again adds one to the line it came from', (T.addStockItem('ITM-00001'), T.S.basket[0].qty), 2);
+  eq('a full line opens the purchase-order choice instead of overfilling', T.addStockItem('ITM-00002'), 'pick');
+  eq('  the hose stays at its remaining 1', T.S.basket[1].qty, 1);
+  ok('each group posts through receiveByScan with its own clientRef and photos', /receiveWithChecks\(\{ poNo: g\.poNo, lines: lines, photoIds: JSON\.stringify\(okIds\(key\)\), clientRef: gref/.test(JS));
+  ok('a refused group stays in the basket with its reason', /S\.groupMsg\[g\.poNo\] = \{ kind: 'bad', text:/.test(JS) && /S\.basket = S\.basket\.filter\(e => e\.poNo !== g\.poNo\)/.test(JS));
+}
+
+console.log('\n9 · return');
+{
+  T.S.mode = 'return'; T.S.ret = []; T.S.last = { code: '', at: 0 };
+  T.S.outPieces = [{ assetNo: 'AS-1', code: 'HXA1B2C3D4E5F6', name: 'Torque wrench', location: 'Client (SO-1)' }];
+  eq('an out piece is counted by its label', T.scanReturn('HXA1B2C3D4E5F6'), 'ok');
+  eq('  once', T.scanReturn('HXA1B2C3D4E5F6'), 'again');
+  eq('a piece that is not out is refused', T.scanReturn('HXZZZZZZZZZZZZ'), 'missing');
+  ok('the return posts with its photo ids and one clientRef', /postFlow\('returnByScan', \{ assets: JSON\.stringify\(S\.ret\), photoIds: JSON\.stringify\(okIds\('doc'\)\)/.test(JS) && /clientRef: ref\(\) \}\);/.test(JS));
+}
+
+console.log('\n10 · secured reads');
+{
+  const all = fs.readdirSync(D + 'js').filter(f => f.endsWith('.js')).map(f => read('js/' + f)).join('\n');
+  ['getScanContext', 'getScanLookup', 'getLabels', 'getStockInOptions', 'getScanPhotos'].forEach(a =>
+    ok(a + ' is never a plain GET', !new RegExp("fetchFlow\\('" + a + "'").test(all) && new RegExp("postFlow\\('" + a + "'").test(all)));
+}
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);

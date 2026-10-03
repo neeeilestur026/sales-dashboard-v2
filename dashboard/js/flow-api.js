@@ -159,7 +159,7 @@ const FLOW_SECURED_ACTIONS = [
   'updatePaymentRequest', 'updatePurchaseOrder', 'updateQuotation', 'updateSalesOrder', 'updateShipment',
   'verifyReturnToSales', 'voidCollection', 'voidInvoice',
   // A316 — the warehouse scanner (scan.html)
-  'dispatchByScan', 'linkBarcode', 'receiveByScan', 'saveScanCount',
+  'dispatchByScan', 'linkBarcode', 'receiveByScan', 'saveScanCount', 'uploadScanPhoto', 'setItemTracking', 'registerAssets', 'returnByScan', 'ensureItemLabels', 'logLabelPrint', 'getScanContext', 'getScanLookup', 'getLabels', 'getStockInOptions', 'getScanPhotos',
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 
