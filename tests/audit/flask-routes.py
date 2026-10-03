@@ -76,6 +76,9 @@ ok("  and answers HEAD (uptime probes, curl -I)", c.head("/index.html").status_c
 ok("  and carries HSTS and the report-only CSP",
    r.headers.get("Strict-Transport-Security", "").startswith("max-age=") and "default-src 'self'" in (r.headers.get("Content-Security-Policy") or r.headers.get("Content-Security-Policy-Report-Only") or ""),
    dict(r.headers))
+csp = r.headers.get("Content-Security-Policy") or r.headers.get("Content-Security-Policy-Report-Only") or ""
+ok("  A315: frames may load a blob: URL — the quotation / travel / admin PDF previews put the generated PDF in an <iframe>",
+   "frame-src 'self' blob:" in csp, csp)
 r = c.post("/api/session/logout", headers={"X-Session-Token": "good"})
 ok("logout answers 200", r.status_code == 200, r.status_code)
 

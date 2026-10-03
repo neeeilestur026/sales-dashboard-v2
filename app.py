@@ -26,7 +26,10 @@ _CSP = ("default-src 'self'; "
         "font-src 'self' data:; "
         "img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; "
         "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://docs.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "frame-src 'self' https://drive.google.com https://docs.google.com; "
+        # A315: blob: — the quotation live preview (and every other in-page PDF preview) loads the
+        # generated PDF into an <iframe> from URL.createObjectURL; without it Chrome shows
+        # "This content is blocked. Contact the site owner to fix the issue." in the frame.
+        "frame-src 'self' blob: https://drive.google.com https://docs.google.com; "
         "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'")
 
 
