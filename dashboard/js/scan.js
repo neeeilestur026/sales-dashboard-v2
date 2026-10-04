@@ -14,6 +14,8 @@
  * RETURN (A318): scan pieces back from site, condition and a photo (returnByScan). Record only.
  * LOOK UP (A318): scan anything and see what it is, where it is and its photos. Accounting can switch
  * an item to "Track each piece" and register the pieces already on the shelf.
+ * NEW ITEM (A319, FlowAPI 160): from Stock in, an item inventory has never heard of. Photo first, then
+ * name, brand, model and type; it goes on hand with no cost (accounting fills it in) and gets its label.
  *
  * WHAT A SCAN MEANS. Our labels carry an opaque code (HX + 12 characters) that means nothing outside
  * this system: the details come only from the secured reads, signed in. Older labels carry HXI:<Item ID>
@@ -30,10 +32,17 @@
   const MAX_PHOTOS = 4;
   const OWN_RE = /^HX[0-9A-HJKMNP-TV-Z]{12}$/;
   const MODES = ['receive', 'stockin', 'dispatch', 'return', 'lookup'];
+  // A319 — mirror FlowAPI.gs _SCAN_BRANDS / _SCAN_CATEGORIES exactly (scan-contract.js compares them)
+  const BRANDS = ['CEJN', 'Hydraulic Technologies Powerteam', 'RAD Torque Tools', 'Snap-on / Blue-point', 'Chicago Pneumatic', 'Others'];
+  const CATEGORIES = ['Hose', 'Coupler', 'Pump', 'Cylinder', 'Jack', 'Torque wrench', 'Others'];
+  const TRACK_BY_TYPE = { Pump: 1, Cylinder: 1, Jack: 1, 'Torque wrench': 1 };   // deployable equipment: one label per piece
+  const NEW_KEY = 'hx_scan_v1_newitem';
+  const NEW_MIN_VERSION = 160;
+  const MAX_PIECES = 50;
   const S = { session: null, canPost: false, mode: 'receive', docs: [], doc: null, lines: [], counts: {}, codes: {}, assets: {},
               ref: '', pending: null, cam: null, last: { code: '', at: 0 }, ready: false, photos: {}, photoKey: '',
               stock: null, basket: [], groupRefs: {}, groupMsg: {}, inventory: null,
-              outPieces: null, ret: [], view: 'pick', sheetCancel: null, reg: null };
+              outPieces: null, ret: [], view: 'pick', sheetCancel: null, reg: null, canNew: false, newItem: null, newExisting: null };
 
   const $ = (id) => document.getElementById(id);
   const esc = (v) => hxEsc(v);
@@ -78,6 +87,7 @@
   function storeSet(key, val) { try { if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
   function storeGet(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
   function saveDraft() {
+    if (S.newItem) storeSet(NEW_KEY, Object.assign({}, S.newItem, { photos: okIds('new'), at: Date.now() }));   // A319
     if (S.mode === 'stockin') {
       storeSet('hx_scan_v1_stockin', S.basket.length ? { basket: S.basket, refs: S.groupRefs, photos: photoIdsFor('po:'), at: Date.now() } : null);
       return;
@@ -97,6 +107,7 @@
   /* ── photos: one upload per shot, kept by key ('doc', 'po:<PO No>', 'reg') ─────────────────── */
   function photoTarget(key) {
     if (key === 'reg') return { mode: 'register', docNo: S.reg ? S.reg.itemId : '' };
+    if (key === 'new') return { mode: 'newitem', docNo: S.newItem ? S.newItem.ref : '' };
     if (key.indexOf('po:') === 0) return { mode: 'receive', docNo: key.slice(3) };
     if (S.mode === 'return') return { mode: 'return', docNo: ref() };
     return { mode: S.mode === 'dispatch' ? 'dispatch' : 'receive', docNo: S.doc ? S.doc.docNo : '' };
@@ -167,6 +178,7 @@
       btn.disabled = S.mode === 'stockin' ? !groups().some(g => photosReady('po:' + g.poNo)) : !photosReady('doc');
     }
     regState();
+    if (S.view === 'newitem') newState();
   }
 
   /* ── Receive / Dispatch: what a code means on this document ───────────────────────────────── */
@@ -271,11 +283,14 @@
     sheet('New barcode', code + ' is not known yet. Which item is it? This is asked once; every phone knows it afterwards.',
       (docLines ? `<div class="sc-link-lines">${docLines}</div><p class="sc-sub">Or search all inventory</p>` : '') +
       `<input type="search" class="sc-input" id="scFind" placeholder="Name or item number" autocomplete="off" aria-label="Search inventory">
-       <div class="sc-link-lines" id="scFindList"></div>`,
+       <div class="sc-link-lines" id="scFindList"></div>` +
+      (S.mode === 'stockin' && S.canNew ? '<button type="button" class="btn btn-sm sc-link-new" id="scLinkNew">Not in inventory? Add it as a new item</button>' : ''),
       () => flash('Not linked; that scan was not counted.', 'bad'));
     $('scSheetBody').querySelectorAll('button[data-item]').forEach(b => b.addEventListener('click', () => doLink(b.dataset.item)));
     const f = $('scFind');
     if (f) f.addEventListener('input', renderFind);
+    const nb = $('scLinkNew');
+    if (nb) nb.addEventListener('click', () => { const c = linkCode; closeSheet(); openNewItem(c); });
     loadInventory().then(renderFind).catch(() => {});
   }
   async function loadInventory() {
@@ -365,6 +380,8 @@
     show('scWorkBar', name === 'work' || name === 'stockin' || name === 'return');
     show('scReview', name === 'review');
     show('scDone', name === 'done');
+    show('scNew', name === 'newitem');
+    show('scNewOpen', name === 'stockin' && S.canNew);
     if (!SCAN_VIEWS[name]) stopCam();
     if (SCAN_VIEWS[name]) setTimeout(() => { const i = $('scCode'); if (i) i.focus(); }, 50);
     try { window.scrollTo(0, 0); } catch (e) {}
@@ -386,6 +403,7 @@
     });
     $('scCamHint').textContent = HINTS[mode] || '';
     S.doc = null; S.lines = []; S.counts = {}; S.codes = {}; S.assets = {}; S.ref = ''; S.photos = {};
+    S.newItem = null; S.newExisting = null;            // A319 — the New item form reloads from its saved draft, photos included
     flash('', ''); banner('');
     if (mode === 'receive' || mode === 'dispatch') {
       $('scPickTitle').textContent = mode === 'receive' ? 'Open purchase orders' : 'Sales orders to dispatch';
@@ -616,6 +634,144 @@
     $('scReviewBtn').textContent = units > 0 ? 'Review ' + plural(units, 'unit') : 'Review';
   }
 
+  /* ── A319 · New item: an item inventory has never heard of ─────────────────────────────────── */
+  /** "Brand Type Name", leaving out a brand or type the name already says, and a blank "Others"
+   *  (the same rule as FlowAPI.gs _scanNewDescription; scan-contract.js checks the cases). */
+  function newDescription(brand, category, name) {
+    const n = String(name || '').trim().replace(/\s+/g, ' '), low = n.toLowerCase(), parts = [];
+    [brand, category].forEach(w => {
+      const t = String(w || '').trim();
+      if (!t || t === 'Others' || low.indexOf(t.toLowerCase()) !== -1) return;
+      parts.push(t);
+    });
+    parts.push(n);
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+  const blankNew = () => ({ ref: newRef(), name: '', brand: '', brandOther: '', model: '', category: '', categoryOther: '', qty: '1',
+                            track: false, trackTouched: false, barcode: '' });
+  function openNewItem(barcode) {
+    if (!S.canNew) return;
+    if (!S.newItem) {
+      const d = storeGet(NEW_KEY);
+      S.newItem = (d && d.ref) ? Object.assign(blankNew(), d) : blankNew();
+      if (!(S.photos.new || []).length) S.photos.new = ((d && d.photos) || []).map(id => ({ docId: id, state: 'ok', thumb: '' }));
+      delete S.newItem.photos; delete S.newItem.at;
+      if (d && d.ref) flash('Your new item from this phone was restored.', 'ok');
+    }
+    if (barcode) S.newItem.barcode = barcode;
+    S.newExisting = null;
+    const n = S.newItem;
+    $('scNewName').value = n.name; $('scNewBrand').value = n.brand; $('scNewBrandOther').value = n.brandOther;
+    $('scNewModel').value = n.model; $('scNewCategory').value = n.category; $('scNewCategoryOther').value = n.categoryOther;
+    $('scNewQty').value = n.qty; $('scNewTrack').checked = !!n.track;
+    $('scNewMsg').textContent = n.barcode ? 'Barcode ' + n.barcode + ' will be linked to this item.' : ''; $('scNewMsg').className = 'sc-msg';
+    $('scNewPhotoSlot').innerHTML = photoBlock('new');
+    wirePhotos($('scNewPhotoSlot'));
+    view('newitem');
+    newState();
+    loadInventory().then(newState).catch(() => {});
+  }
+  function readNew(e) {
+    const n = S.newItem;
+    if (!n) return;
+    n.name = $('scNewName').value; n.brand = $('scNewBrand').value; n.brandOther = $('scNewBrandOther').value;
+    n.model = $('scNewModel').value; n.categoryOther = $('scNewCategoryOther').value; n.qty = $('scNewQty').value;
+    const cat = $('scNewCategory').value;
+    if (e && e.target && e.target.id === 'scNewTrack') n.trackTouched = true;
+    if (cat !== n.category && !n.trackTouched) $('scNewTrack').checked = !!TRACK_BY_TYPE[cat];
+    n.category = cat;
+    n.track = $('scNewTrack').checked;
+    S.newExisting = null;
+    saveDraft();
+    newState();
+  }
+  /** Why Add is not ready yet, or '' when it is. */
+  function newProblem() {
+    const n = S.newItem;
+    if (!n) return 'no form';
+    if (!photosReady('new')) return (S.photos.new || []).some(p => p.state === 'up') ? 'Wait for the photo to upload.' : 'Take a photo of the item first.';
+    if (!String(n.name || '').trim()) return 'Type the item name.';
+    if (!n.brand) return 'Pick the brand.';
+    if (!n.category) return 'Pick the type.';
+    const q = Number(n.qty);
+    if (!(q > 0)) return 'Enter how many are here.';
+    if (n.track && Math.floor(q) !== q) return 'Tracked piece by piece: count whole pieces.';
+    if (n.track && q > MAX_PIECES) return 'Tracked piece by piece: at most ' + MAX_PIECES + ' at a time.';
+    return '';
+  }
+  function similarItems() {
+    const n = S.newItem;
+    if (!n || !S.inventory) return [];
+    const model = String(n.model || '').trim().toLowerCase(), name = String(n.name || '').trim().toLowerCase();
+    const words = name.split(/[^a-z0-9]+/).filter(w => w.length >= 3);
+    return S.inventory.filter(i => {
+      const no = i.itemNo.toLowerCase(), d = i.name.toLowerCase();
+      if (model && no !== 'n/a' && no === model) return true;
+      if (name.length >= 4 && d.indexOf(name) !== -1) return true;
+      return words.length >= 2 && words.every(w => d.indexOf(w) !== -1);
+    }).slice(0, 5);
+  }
+  function newState() {
+    const n = S.newItem;
+    if (!n || S.view !== 'newitem') return;
+    show('scNewBrandOtherWrap', n.brand === 'Others');
+    show('scNewCategoryOtherWrap', n.category === 'Others');
+    const brand = n.brand === 'Others' ? n.brandOther : n.brand, cat = n.category === 'Others' ? n.categoryOther : n.category;
+    const desc = String(n.name || '').trim() ? newDescription(brand, cat, n.name) : '';
+    const model = String(n.model || '').trim();
+    $('scNewPreview').textContent = desc ? 'Will be saved as: ' + desc + ' · Item No ' + (model || 'N/A') + (n.track ? ' · each piece labelled' : '') : '';
+    const problem = newProblem();
+    $('scNewSave').disabled = !!problem;
+    $('scNewSave').title = problem;
+    const list = S.newExisting ? [S.newExisting] : similarItems();
+    const box = $('scNewSimilar');
+    box.hidden = !list.length;
+    box.innerHTML = list.length ? `<p class="sc-sub">${S.newExisting ? 'It is already in inventory.' : 'Already in inventory?'} Tap it to use it instead.</p>` +
+      '<div class="sc-link-lines">' + list.map(i => `<button type="button" class="sc-link-line" data-use="${esc(i.itemId)}"><b>${esc(i.name)}</b><span>${esc(i.itemNo || '')} · ${esc(i.itemId)}</span></button>`).join('') + '</div>' : '';
+    box.querySelectorAll('[data-use]').forEach(b => b.addEventListener('click', () => useExisting(b.dataset.use)));
+  }
+  async function useExisting(itemId) {
+    const n = S.newItem;
+    const bc = n && n.barcode;
+    S.newItem = null; S.newExisting = null; delete S.photos.new; storeSet(NEW_KEY, null);
+    renderBasket(); view('stockin');
+    if (bc) {
+      try {
+        const r = await postFlow('linkBarcode', { barcode: bc, itemId: itemId });
+        if (r && r.success && S.stock) S.stock.codes[bc] = itemId;
+      } catch (e) { /* the item is still added; the barcode can be linked on the next scan */ }
+    }
+    addStockItem(itemId);
+  }
+  async function saveNewItem() {
+    const n = S.newItem, btn = $('scNewSave'), m = $('scNewMsg');
+    if (!n || newProblem()) return;
+    btn.disabled = true;
+    m.textContent = 'Adding…'; m.className = 'sc-msg ok';
+    try {
+      const res = await postFlow('createItemByScan', { clientRef: n.ref, name: n.name, brand: n.brand, brandOther: n.brandOther, model: n.model,
+        category: n.category, categoryOther: n.categoryOther, qty: String(n.qty), track: !!n.track, barcode: n.barcode || '',
+        photoIds: JSON.stringify(okIds('new')) });
+      if (!res || !res.success) {
+        if (res && res.existing) { S.newExisting = res.existing; S.newExisting.name = S.newExisting.name || S.newExisting.itemId; }
+        tone(false); m.textContent = (res && res.message) || 'Could not add the item.'; m.className = 'sc-msg bad';
+        newState();
+        return;
+      }
+      if (S.stock) {
+        if (res.itemCode) S.stock.codes[res.itemCode] = res.itemId;
+        if (n.barcode) S.stock.codes[n.barcode] = res.itemId;
+        S.stock.names[res.itemId] = { itemNo: res.itemNo, name: res.description };
+        if (n.track) S.stock.tracked[res.itemId] = 1;
+      }
+      if (S.inventory) S.inventory.push({ itemId: res.itemId, itemNo: res.itemNo || '', name: res.description || n.name });
+      const codes = [res.itemCode].concat((res.pieces || []).map(x => x.code)).filter(Boolean);
+      S.newItem = null; S.newExisting = null; delete S.photos.new; storeSet(NEW_KEY, null);
+      finish('Added to inventory', res.message || (res.itemId + ' added.'), codes,
+        { labelText: codes.length > 1 ? 'Print ' + codes.length + ' labels' : 'Print label', more: true, againText: 'Back to Stock in' });
+    } catch (e) { tone(false); m.textContent = e.message || 'Could not add the item. The form is kept on this phone.'; m.className = 'sc-msg bad'; newState(); }
+  }
+
   /* ── Return: pieces back from site ────────────────────────────────────────────────────────── */
   async function openReturn() {
     const d = storeGet('hx_scan_v1_return');
@@ -690,6 +846,9 @@
     } else {
       head = `<div class="sc-look-head"><span class="sc-look-kind">Item</span><h2>${esc(it.name || it.itemId)}</h2><p>${esc(it.itemNo || '')}</p></div>`;
       rows.push(['On hand', fmt(it.balance)]);
+      if (it.brand) rows.push(['Brand', it.brand]);            // A319
+      if (it.model) rows.push(['Model', it.model]);
+      if (it.category) rows.push(['Type', it.category]);
       if (it.tracked) rows.push(['Pieces', it.piecesIn + ' in the warehouse · ' + it.piecesOut + ' out']);
       if ((it.barcodes || []).length) rows.push(['Supplier barcodes', it.barcodes.join(', ')]);
       if (r.lastScan) rows.push(['Last scanned', r.lastScan.mode.toLowerCase() + ' · ' + r.lastScan.docNo + ' · ' + r.lastScan.at]);
@@ -923,7 +1082,8 @@
     if (done.length) { tone(true); msg('Done: ' + done.join(', ') + '. The rest are still here with the reason.', true); }
     else { tone(false); msg('Nothing was posted. See each purchase order below.', false); }
   }
-  function finish(title, text, pieceCodes) {
+  function finish(title, text, pieceCodes, opts) {
+    opts = opts || {};
     if (S.mode === 'stockin' || S.mode === 'return') saveDraft(); else dropDraft();
     S.counts = {}; S.codes = {}; S.assets = {}; S.ref = ''; if (S.mode !== 'stockin') S.photos = {};
     $('scDoneTitle').textContent = title;
@@ -931,6 +1091,9 @@
     const lab = $('scDoneLabels');
     if ((pieceCodes || []).length) { lab.href = 'labels.html?codes=' + encodeURIComponent(pieceCodes.join(',')); lab.hidden = false; }
     else lab.hidden = true;
+    lab.textContent = opts.labelText || 'Print piece labels';
+    $('scAgain').textContent = opts.againText || 'Scan another';
+    show('scDoneMore', !!opts.more);
     tone(true);
     view('done');
   }
@@ -971,6 +1134,15 @@
     $('scReviewBack').addEventListener('click', backToScanning);
     $('scPost').addEventListener('click', post);
     $('scAgain').addEventListener('click', again);
+    // A319 — the New item form
+    $('scNewBrand').innerHTML = '<option value="">Choose…</option>' + BRANDS.map(b => `<option>${esc(b)}</option>`).join('');
+    $('scNewCategory').innerHTML = '<option value="">Choose…</option>' + CATEGORIES.map(c => `<option>${esc(c)}</option>`).join('');
+    ['scNewName', 'scNewBrand', 'scNewBrandOther', 'scNewModel', 'scNewCategory', 'scNewCategoryOther', 'scNewQty', 'scNewTrack']
+      .forEach(id => { $(id).addEventListener('input', readNew); $(id).addEventListener('change', readNew); });
+    $('scNewOpen').addEventListener('click', () => openNewItem(''));
+    $('scNewSave').addEventListener('click', saveNewItem);
+    $('scNewCancel').addEventListener('click', () => { renderBasket(); view('stockin'); });
+    $('scDoneMore').addEventListener('click', () => openNewItem(''));
     $('scSheetCancel').addEventListener('click', () => { const f = S.sheetCancel; closeSheet(); if (f) f(); });
     $('scPhotoIn').addEventListener('change', (e) => takePhotos(e.target.files));
     document.addEventListener('visibilitychange', () => { if (document.hidden) stopCam(); });
@@ -992,11 +1164,13 @@
       $('scDocs').innerHTML = '<div class="hx-empty">Scanning is off until the backend is updated.</div>';
       return;
     }
+    try { S.canNew = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(NEW_MIN_VERSION) : false; } catch (e) { S.canNew = false; }
     S.ready = false;
     setMode('receive');
     S.ready = true;
   });
 
   window.__scan = { S, scan, candidates, add, payloadLines, saveDraft, loadDraft, draftKey, open, groups, addStockItem,
-                    scanReturn, photosReady, findItems, setMode, OWN_RE };   // tests
+                    scanReturn, photosReady, findItems, setMode, OWN_RE,
+                    BRANDS, CATEGORIES, TRACK_BY_TYPE, newDescription, openNewItem, readNew, newProblem, similarItems, NEW_KEY };   // tests
 })();

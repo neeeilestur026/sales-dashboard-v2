@@ -78,8 +78,32 @@
 
     <!-- Stock in: the basket, grouped by purchase order -->
     <section class="hx-glass" id="scBasketCard" hidden>
-      <div class="hx-head"><h2>Basket</h2><span class="hx-meta" id="scBasketMeta"></span></div>
+      <div class="hx-head"><h2>Basket</h2><span class="hx-meta" id="scBasketMeta"></span>
+        <div class="hx-actions"><button type="button" class="btn btn-sm" id="scNewOpen" hidden>New item</button></div></div>
       <div id="scBasket" class="sc-basket"></div>
+    </section>
+
+    <!-- Stock in · A319: an item inventory has never heard of. Photo first, then what it is. -->
+    <section class="hx-glass sc-new" id="scNew" hidden>
+      <div class="hx-head"><h2>New item</h2><span class="hx-meta">Added to inventory with no cost; accounting fills it in.</span></div>
+      <div id="scNewPhotoSlot"></div>
+      <div class="sc-form">
+        <label class="sc-field sc-wide">Name<input type="text" id="scNewName" class="sc-input" maxlength="120" autocomplete="off" placeholder="e.g. Quick connect 10 mm"></label>
+        <label class="sc-field">Brand<select id="scNewBrand" class="sc-input"></select></label>
+        <label class="sc-field" id="scNewBrandOtherWrap" hidden>Which brand<input type="text" id="scNewBrandOther" class="sc-input" maxlength="60" autocomplete="off" placeholder="Optional"></label>
+        <label class="sc-field">Model<input type="text" id="scNewModel" class="sc-input" maxlength="60" autocomplete="off" placeholder="Model or part no."></label>
+        <label class="sc-field">Type<select id="scNewCategory" class="sc-input"></select></label>
+        <label class="sc-field" id="scNewCategoryOtherWrap" hidden>Which type<input type="text" id="scNewCategoryOther" class="sc-input" maxlength="60" autocomplete="off" placeholder="Optional"></label>
+        <label class="sc-field">How many<input type="number" id="scNewQty" class="sc-input" inputmode="decimal" min="0" step="any" value="1"></label>
+        <label class="sc-switch sc-wide"><input type="checkbox" id="scNewTrack"><span>Track each piece<small>Every piece gets its own label. Preset by type; change it if needed.</small></span></label>
+      </div>
+      <div class="sc-similar" id="scNewSimilar" hidden></div>
+      <p class="sc-preview" id="scNewPreview"></p>
+      <div class="sc-msg" id="scNewMsg" role="status" aria-live="polite"></div>
+      <div class="sc-bar">
+        <button type="button" class="btn btn-sm" id="scNewCancel">Back to Stock in</button>
+        <button type="button" class="btn btn-primary" id="scNewSave" disabled>Add to inventory</button>
+      </div>
     </section>
 
     <!-- Return: the pieces coming back -->
@@ -132,6 +156,7 @@
       <p id="scDoneText"></p>
       <div class="sc-done-act">
         <a class="btn" id="scDoneLabels" href="labels.html" hidden>Print piece labels</a>
+        <button type="button" class="btn" id="scDoneMore" hidden>Add another new item</button>
         <button type="button" class="btn btn-primary" id="scAgain">Scan another</button>
       </div>
     </section>

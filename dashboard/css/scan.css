@@ -193,6 +193,24 @@ body.sc .sc-sheet-body { display: flex; flex-direction: column; gap: 10px; }
 body.sc .sc-sheet-body .sc-photos { margin-top: 0; }
 body.sc .sc-done-act { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 
+/* A319 · New item form (Stock in) */
+body.sc .sc-new .hx-head .hx-meta { white-space: normal; }
+body.sc .sc-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+body.sc .sc-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 13px; font-weight: 600; color: var(--hx-ink-2); }
+body.sc .sc-field .sc-input { padding: 10px 12px; min-width: 0; }
+body.sc select.sc-input { appearance: auto; }
+body.sc .sc-wide { grid-column: 1 / -1; }
+body.sc .sc-switch { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--hx-r-md); cursor: pointer;
+  border: 1px solid var(--hx-hair-2); background: var(--hx-inset); font-weight: 700; font-size: 14px; color: var(--hx-ink); }
+body.sc .sc-switch input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--hx-navy); }
+body.sc .sc-switch small { display: block; margin-top: 2px; font-weight: 500; font-size: 12px; color: var(--hx-ink-3); }
+body.sc .sc-similar { margin-top: 12px; }
+body.sc .sc-similar .sc-sub { margin-top: 0; }
+body.sc .sc-preview { margin: 12px 0 0; font-size: 13.5px; font-weight: 600; color: var(--hx-navy-text); overflow-wrap: anywhere; }
+body.sc .sc-preview:empty { display: none; }
+body.sc .sc-link-new { align-self: flex-start; }
+@media (max-width: 359px) { body.sc .sc-form { grid-template-columns: 1fr; } }
+
 body.sc [hidden] { display: none !important; }
 
 @media (min-width: 760px) {

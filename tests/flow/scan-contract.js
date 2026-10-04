@@ -22,6 +22,7 @@
  *   9. Return: only pieces that are out, each once.
  *  10. The reads that turn a code into details are secured: called through postFlow, never fetchFlow.
  *  11. Labels: the QR is the bare opaque code; ?codes= is parsed strictly.
+ * A319: the New item form (lists match FlowAPI, description rule, tracking default, photo gate, draft).
  */
 const fs = require('fs');
 const path = require('path');
@@ -248,6 +249,53 @@ console.log('\n10 · secured reads');
   const all = fs.readdirSync(D + 'js').filter(f => f.endsWith('.js')).map(f => read('js/' + f)).join('\n');
   ['getScanContext', 'getScanLookup', 'getLabels', 'getStockInOptions', 'getScanPhotos'].forEach(a =>
     ok(a + ' is never a plain GET', !new RegExp("fetchFlow\\('" + a + "'").test(all) && new RegExp("postFlow\\('" + a + "'").test(all)));
+}
+
+console.log('\n11 · A319 New item');
+{
+  const gsList = (name) => JSON.stringify(eval(GS.match(new RegExp('var ' + name + ' = (\\[[^\\]]*\\]);'))[1]));
+  eq('the brand list matches FlowAPI', JSON.stringify(T.BRANDS), gsList('_SCAN_BRANDS'));
+  eq('the type list matches FlowAPI', JSON.stringify(T.CATEGORIES), gsList('_SCAN_CATEGORIES'));
+  eq('Description = Brand Type Name', T.newDescription('CEJN', 'Coupler', 'Quick connect 10 mm'), 'CEJN Coupler Quick connect 10 mm');
+  eq('  a blank Others brand and a type the name says are left out', T.newDescription('', 'Pump', 'Hydraulic pump 700 bar'), 'Hydraulic pump 700 bar');
+  eq('  the literal "Others" never appears', T.newDescription('Others', 'Others', 'Gauge'), 'Gauge');
+  eq('  a brand the name already says is not repeated', T.newDescription('CEJN', 'Hose', 'cejn hose 2 m'), 'cejn hose 2 m');
+  ok('the New item entry needs FlowAPI 160', /NEW_MIN_VERSION = 160/.test(JS) && /flowVersionAtLeast\(NEW_MIN_VERSION\)/.test(JS) && /if \(!S\.canNew\) return;/.test(JS));
+  T.S.canNew = false; T.S.newItem = null; T.openNewItem('');
+  ok('  and stays closed on an older backend', T.S.newItem === null);
+  T.S.canNew = true; T.S.mode = 'stockin'; T.S.photos = {};
+  delete store[T.NEW_KEY];
+  T.openNewItem('7310000000012');
+  ok('the form opens with its own reference and carries the scanned barcode', T.S.newItem && /^CR-/.test(T.S.newItem.ref) && T.S.newItem.barcode === '7310000000012');
+  T.S.view = 'newitem';
+  const set = (id, v) => { els[id].value = v; };
+  set('scNewName', 'Hydraulic pump 700 bar'); set('scNewBrand', 'Hydraulic Technologies Powerteam'); set('scNewModel', 'PE55'); set('scNewQty', '2');
+  set('scNewCategory', 'Pump'); els.scNewTrack.checked = false;
+  T.readNew({ target: { id: 'scNewCategory' } });
+  ok('choosing Pump turns "Track each piece" on', els.scNewTrack.checked === true && T.S.newItem.track === true);
+  set('scNewCategory', 'Hose'); T.readNew({ target: { id: 'scNewCategory' } });
+  ok('  choosing Hose turns it off', els.scNewTrack.checked === false);
+  els.scNewTrack.checked = true; T.readNew({ target: { id: 'scNewTrack' } });
+  set('scNewCategory', 'Coupler'); T.readNew({ target: { id: 'scNewCategory' } });
+  ok('  once the person sets it, the type no longer changes it', els.scNewTrack.checked === true && T.S.newItem.trackTouched === true);
+  ok('Add waits for a photo', /photo/.test(T.newProblem()));
+  T.S.photos.new = [{ docId: 'DOC-NEW00001', state: 'up', thumb: 'data:x' }];
+  ok('  and for the upload to finish', /upload/.test(T.newProblem()));
+  T.S.photos.new[0].state = 'ok';
+  eq('  then it is ready', T.newProblem(), '');
+  set('scNewQty', '2.5'); T.readNew({ target: { id: 'scNewQty' } });
+  ok('a tracked item needs whole pieces', /whole/.test(T.newProblem()));
+  set('scNewQty', '60'); T.readNew({ target: { id: 'scNewQty' } });
+  ok('  at most 50 at a time', /at most 50/.test(T.newProblem()));
+  set('scNewQty', '2'); T.readNew({ target: { id: 'scNewQty' } });
+  const d = JSON.parse(store[T.NEW_KEY] || 'null');
+  ok('the form is kept on the phone with photo ids, never the photo', d && d.name === 'Hydraulic pump 700 bar' && JSON.stringify(d.photos) === '["DOC-NEW00001"]' && !/data:x/.test(store[T.NEW_KEY]), d);
+  T.S.inventory = [{ itemId: 'ITM-00051', itemNo: 'PE55', name: 'Powerteam electric pump' }, { itemId: 'ITM-00052', itemNo: 'N/A', name: 'Hydraulic pump 700 bar, hand' }, { itemId: 'ITM-00053', itemNo: 'N/A', name: 'Hose 6 m' }];
+  eq('"Already in inventory?" finds the same model and the same name', T.similarItems().map(i => i.itemId).join(','), 'ITM-00051,ITM-00052');
+  ok('the post goes through postFlow with the photo ids and no price', /postFlow\('createItemByScan', \{ clientRef: n\.ref,/.test(JS) && !/createItemByScan[^)]*(price|cost)/i.test(JS));
+  ok('the done screen links the new labels', /finish\('Added to inventory'/.test(JS) && /labels\.html\?codes=/.test(JS));
+  ok('the markup has the form, the Others boxes and the switch', ['scNewName', 'scNewBrand', 'scNewBrandOther', 'scNewModel', 'scNewCategory', 'scNewCategoryOther', 'scNewQty', 'scNewTrack', 'scNewSave', 'scNewOpen']
+     .every(id => SCAN.indexOf('id="' + id + '"') !== -1));
 }
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');

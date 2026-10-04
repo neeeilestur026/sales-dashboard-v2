@@ -551,5 +551,87 @@ sec('18 · stock in: pick the PO line an item came from');
   ok('  the stock PO is no longer offered; PO-1 shows 8 left', o.options.length === 1 && o.options[0].poNo === 'PO-1' && o.options[0].remaining === 8, o.options);
 }
 
+sec('19 · A319 · a brand-new item from Stock in');
+{
+  const { ctx, store } = boot();
+  const REF = 'CR-new-0001';
+  const newPhoto = (ref, who) => {
+    const r = call(ctx, 'uploadScanPhoto', Object.assign({ mode: 'newitem', docNo: ref, base64: IMG, mimeType: 'image/jpeg' }, who || WH));
+    if (!r.success) throw new Error(r.message);
+    return r.docId;
+  };
+  const base = (extra) => Object.assign({ clientRef: REF, name: 'Quick connect 10 mm', brand: 'CEJN', model: '10-560', category: 'Coupler', qty: '5' }, WH, extra);
+  let r = call(ctx, 'uploadScanPhoto', Object.assign({ mode: 'newitem', docNo: 'ITM-00001', base64: IMG }, WH));
+  ok('a new-item photo needs the form reference', !r.success, r);
+  r = call(ctx, 'createItemByScan', Object.assign(base(), SALE));
+  ok('sales cannot add items', !r.success, r);
+  r = call(ctx, 'createItemByScan', base());
+  ok('a new item needs a photo', !r.success && /photo/.test(r.message), r);
+  const pid = newPhoto(REF);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([snap(ctx, 'receive', 'PO-1')]) }));
+  ok('a photo of something else is refused', !r.success && /does not belong/.test(r.message), r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), brand: 'Acme' }));
+  ok('a brand outside the list is refused', !r.success && /brand/.test(r.message), r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), category: 'Spanner' }));
+  ok('a type outside the list is refused', !r.success && /type/.test(r.message), r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), name: '  ' }));
+  ok('a name is required', !r.success && /name/.test(r.message), r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), qty: '0' }));
+  ok('a quantity is required', !r.success && /how many/.test(r.message), r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), model: 'WR-10' }));
+  ok('a model already in inventory is refused and named', !r.success && r.existing && r.existing.itemId === 'ITM-00001', r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), track: true, qty: '2.5' }));
+  ok('a tracked item needs whole pieces', !r.success && /whole pieces/.test(r.message), r);
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), track: true, qty: '51' }));
+  ok('  and at most 50 at a time', !r.success && /at most 50/.test(r.message), r);
+  eq('nothing written by any refusal', store.Inventory.length, 3);
+
+  const before = store.Journal.length;
+  r = call(ctx, 'createItemByScan', base({ photoIds: W([pid]), barcode: '7310000000012' }));
+  ok('the item is added', r.success && /^ITM-\d{5}$/.test(r.itemId), r);
+  const inv = store.Inventory.filter(x => x['Item ID'] === r.itemId)[0];
+  eq('  Description = Brand Type Name', inv && inv['Description'], 'CEJN Coupler Quick connect 10 mm');
+  eq('  Item No = the model', inv && inv['Item No'], '10-560');
+  ok('  as Stock with the quantity on hand and no cost', inv['Type'] === 'Stock' && inv['Available Balance'] === 5 && inv['Purchase Price/Unit'] === 0 && inv['Landed Cost/Unit'] === 0, inv);
+  eq('  no journal entry', store.Journal.length, before);
+  const det = store.ItemDetails.filter(x => x['Item ID'] === r.itemId)[0];
+  ok('  the details are kept apart from Inventory', det && det['Brand'] === 'CEJN' && det['Model'] === '10-560' && det['Category'] === 'Coupler' && det['Name'] === 'Quick connect 10 mm' && det['Photos'] === pid && det['Source'] === 'scanner', det);
+  ok('  its item label is opaque', CODE_RE.test(r.itemCode) && store.Labels.some(l => l['Code'] === r.itemCode && l['Kind'] === 'ITEM' && l['Item ID'] === r.itemId), r.itemCode);
+  ok('  the scanned barcode is linked to it', store.ItemBarcodes.some(b => b['Barcode'] === '7310000000012' && b['Item ID'] === r.itemId));
+  eq('  the photo is re-filed under the Item ID', store.Documents.filter(d => d['Doc ID'] === pid)[0]['Ref No'], r.itemId);
+  ok('  a NEWITEM ScanLog row carries the photo', store.ScanLog.some(x => x['Mode'] === 'NEWITEM' && x['Doc No'] === r.itemId && x['Photos'] === pid));
+  const act = store.ActivityLog.filter(a => a['Action'] === 'Added by scan');
+  ok('  logged as Inventory / Added by scan with the Item ID', act.length === 1 && act[0]['Module'] === 'Inventory' && act[0]['Ref No'] === r.itemId, act);
+  ok('  not tracked unless asked', !(store.TrackedItems || []).some(t => t['Item ID'] === r.itemId) && !(store.Assets || []).length);
+  const again = call(ctx, 'createItemByScan', base({ photoIds: W([pid]) }));
+  ok('a retry with the same reference returns the same item', again.success && again.duplicate && again.itemId === r.itemId, again);
+  eq('  and adds nothing', store.Inventory.length, 4);
+  const R2 = 'CR-new-0002';
+  const b2 = call(ctx, 'createItemByScan', Object.assign(base({ clientRef: R2, model: '', photoIds: W([newPhoto(R2)]), barcode: '7310000000012' }), {}));
+  ok('a barcode that already belongs to an item is refused and named', !b2.success && b2.existing && b2.existing.itemId === r.itemId, b2);
+
+  const look = call(ctx, 'getScanLookup', Object.assign({ code: r.itemCode }, WH));
+  ok('look-up shows brand, model and type', look.success && look.item.brand === 'CEJN' && look.item.model === '10-560' && look.item.category === 'Coupler' && look.photoIds[0] === pid, look.item);
+  const sc = call(ctx, 'getScanContext', Object.assign({ mode: 'stockin' }, WH));
+  ok('the stock-in context knows the new code and says the cost is pending', sc.codes[r.itemCode] === r.itemId && sc.details[r.itemId] && sc.details[r.itemId].costPending === true && sc.details[r.itemId].fromScan === true, sc.details);
+
+  const R3 = 'CR-new-0003';
+  const t = call(ctx, 'createItemByScan', { clientRef: R3, name: 'Hydraulic pump 700 bar', brand: 'Others', brandOther: '', model: '', category: 'Pump', qty: '3', track: true,
+    photoIds: W([newPhoto(R3, ACC)]), actorRole: 'accounting', actorName: 'Ana Acct' });
+  ok('a tracked new item with no model is added', t.success, t);
+  const tinv = store.Inventory.filter(x => x['Item ID'] === t.itemId)[0];
+  eq('  a blank "Others" brand and a type already in the name are left out', tinv && tinv['Description'], 'Hydraulic pump 700 bar');
+  eq('  Item No is N/A', tinv && tinv['Item No'], 'N/A');
+  ok('  it is tracked with one piece and one label per unit', store.TrackedItems.some(x => x['Item ID'] === t.itemId) && t.pieces.length === 3 &&
+     t.pieces.every(x => CODE_RE.test(x.code)) && store.Assets.filter(a => a['Item ID'] === t.itemId && a['Status'] === 'In warehouse').length === 3, t.pieces);
+  const R4 = 'CR-new-0004';
+  const o = call(ctx, 'createItemByScan', base({ clientRef: R4, model: 'X-1', brand: 'Others', brandOther: 'Enerpac', category: 'Others', categoryOther: 'Gauge', name: 'Pressure gauge', photoIds: W([newPhoto(R4)]) }));
+  ok('a typed "Others" brand is used, a type the name already says is not repeated', o.success && store.Inventory.filter(x => x['Item ID'] === o.itemId)[0]['Description'] === 'Enerpac Pressure gauge' &&
+     store.ItemDetails.filter(x => x['Item ID'] === o.itemId)[0]['Brand'] === 'Enerpac', o);
+  eq('"New item photo" is never a gated document type', ctx._docTypeKey('New item photo'), 'new item photo');
+  eq('the brand list', JSON.stringify(ctx._SCAN_BRANDS), JSON.stringify(['CEJN', 'Hydraulic Technologies Powerteam', 'RAD Torque Tools', 'Snap-on / Blue-point', 'Chicago Pneumatic', 'Others']));
+  eq('the type list', JSON.stringify(ctx._SCAN_CATEGORIES), JSON.stringify(['Hose', 'Coupler', 'Pump', 'Cylinder', 'Jack', 'Torque wrench', 'Others']));
+}
+
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);

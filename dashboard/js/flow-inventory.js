@@ -4,6 +4,7 @@ let invSession = null;
 let invCanDelete = false;   // only admin/accounting may remove items; sales can add/edit only
 let invReadOnly = false;    // management/director can view only (no add/edit/delete)
 let invOrderedSet = new Set();   // Item Nos that appear in any Purchase Order (= "ordered already")
+let invDetails = {};             // A319 — { itemId: {brand, category, fromScan, costPending} } for items the scanner created
 let invTracked = null;            // A318 — { itemId: 1 } for items tracked piece by piece; null until the 159 backend answers
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -48,7 +49,7 @@ async function invLoadTracked() {
   try {
     if (!(await flowVersionAtLeast(159))) return;
     const r = await postFlow('getScanContext', { mode: 'stockin' });
-    if (r && r.success) { invTracked = r.tracked || {}; render(); }
+    if (r && r.success) { invTracked = r.tracked || {}; invDetails = r.details || {}; render(); }
   } catch (e) { /* the list works without it */ }
 }
 async function invToggleTracking(itemId) {
@@ -211,7 +212,9 @@ function invStockRow(r) {
   const cost = landed || purch || ship
     ? `<div class="inv-cost"><span class="v">${flowMoney(landed || purch, cur)}</span>${curTag}
          ${parts.length ? `<span class="b">${parts.join(' · ')}</span>` : ''}</div>`
-    : '<span class="inv-muted">—</span>';
+    : (invDetails[r.itemId] && invDetails[r.itemId].fromScan && invDetails[r.itemId].costPending
+      ? '<span class="inv-scan-tag" title="Added from the warehouse scanner with no cost. Edit the item to fill in its cost.">From scanner · cost to fill</span>'   // A319
+      : '<span class="inv-muted">—</span>');
 
   return `<tr>${invItemCell(r)}${invDescCell(r)}
     <td class="num">${bal ? bal.toLocaleString() : '<span class="inv-muted">—</span>'}</td>

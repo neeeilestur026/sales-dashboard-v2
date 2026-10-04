@@ -109,7 +109,7 @@ call per sheet. Flask already sends the secret on every call (A299).
 
 Rollback: Manage deployments → previous version.
 
-## The warehouse scanner (A316 + A318, FlowAPI 159)
+## The warehouse scanner (A316 + A318 + A319, FlowAPI 160)
 
 `/scan.html` is a phone web app: open it in Safari (iPhone) or Chrome (Android), then Share → Add to
 Home Screen (iPhone) or the install prompt (Android). No app store, no fee. It receives goods against
@@ -141,12 +141,23 @@ keyboard-type scanner, or by typing.
   nothing useful. The reads that turn a code into details are secured (signed in, scanner roles only).
   Honest limit: a photocopied label scans as the same item or piece; a duplicated piece is caught
   because one piece cannot be dispatched twice. Labels printed before A318 (`HXI:` codes) still scan.
+- **New item (A319):** in Stock in, **New item** (or "Not in inventory? Add it as a new item" after
+  scanning an unknown barcode) adds goods inventory has never seen. Photo first, then name, brand
+  (CEJN, Hydraulic Technologies Powerteam, RAD Torque Tools, Snap-on / Blue-point, Chicago Pneumatic,
+  Others), model and type (hose, coupler, pump, cylinder, jack, torque wrench, others). The item is saved
+  as Stock with the counted quantity on hand, Description "Brand Type Name", Item No = model, and gets
+  its label to print later (one per piece when "Track each piece" is on, preset for pumps, cylinders,
+  jacks and torque wrenches). A model or barcode already in inventory is refused and that item offered.
+  **No cost and no journal entry:** accounting fills in the cost from Inventory, where these items show
+  "From scanner · cost to fill". When they are invoiced, COGS is credited against 1300 at that cost, so
+  the Balance Sheet's opening inventory figure is where stock that never came through a receiving is
+  accounted for.
 - **Still record only:** dispatch and return do not move stock; it leaves at invoicing. Moving the
   deduction to the outgoing scan later means: `dispatchByScan` deducts, `createInvoice` skips what was
   dispatched by scan, `voidInvoice` restores only what it deducted, and `returnByScan` adds back, all
   behind one setting so it can be switched on when testing ends.
 - **Deploy order:** Render first (this repo), then paste `apps-script/FlowAPI.gs` as a new version and
-  check `getVersion` returns 159. Until then the scanner shows "backend not updated" and does nothing.
+  check `getVersion` returns 160. On 159 the scanner works but New item stays hidden; below 159 the scanner shows "backend not updated".
 - **Also changed in `createReceiving`:** only accounting/admin/director may post, zero-quantity lines
   are skipped (they used to overwrite the unit cost), and the charges typed on a receiving are spread
   over that receiving's goods with its VAT booked in full (partial deliveries used to lose part of
