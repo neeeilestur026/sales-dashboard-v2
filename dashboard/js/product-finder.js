@@ -1374,5 +1374,5 @@ function pfExportLog() {
   const status = (document.getElementById('pfLogStatus') || {}).value || '';
   const q = (document.getElementById('pfLogSearch') || {}).value || '';
   const rows = pfFilterInquiries(pfGetList('pf_inquiries'), status, q);
-  pfDownloadCsv(pfInquiriesCsv(rows), 'product-finder-inquiries-' + new Date().toISOString().slice(0, 10) + '.csv');
+  pfDownloadCsv(pfInquiriesCsv(rows), 'product-finder-inquiries-' + hxToday() + '.csv');
 }

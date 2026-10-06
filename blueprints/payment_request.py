@@ -186,9 +186,8 @@ def _submit_to_google_sheet(details: dict, files_info: list[dict], drive_link: s
 
 @payment_request_bp.route("/")
 def index():
-    """Render the Payment Request form."""
-    uk = _get_user_key()
-    _user_log[uk] = []
+    """Render the Payment Request form. A325 — a page load carries no session header, so this cannot
+    read g.session (it raised and every visit was a 500); the per-user log starts on the first upload."""
     return render_template("payment_request/index.html")
 
 

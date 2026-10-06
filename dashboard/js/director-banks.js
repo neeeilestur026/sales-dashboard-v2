@@ -186,7 +186,8 @@
     var direction = (type === 'Deposit' || type === 'Interest') ? 1
                   : (type === 'Withdrawal' || type === 'Fee') ? -1
                   : 1;
-    var user = (typeof getCurrentUser === 'function' ? getCurrentUser() : null) || {};
+    // A325 — getCurrentUser is defined nowhere, so this was always blank. The session's name is what every other page records.
+    var user = getSession() || {};
     apiAddBankTransaction({
       accountCode: accountCode,
       type: type,
@@ -194,7 +195,7 @@
       amount: amount,
       date: date,
       description: description,
-      createdBy: user.username || user.email || user.name || ''
+      createdBy: user.name || ''
     }).then(function (res) {
       if (res && res.success === false) throw new Error(res.message || res.error || 'Save failed');
       closeTxModal();
@@ -224,7 +225,8 @@
       alert('Choose two different accounts and enter a positive amount and date.');
       return;
     }
-    var user = (typeof getCurrentUser === 'function' ? getCurrentUser() : null) || {};
+    // A325 — the session's name, as above (getCurrentUser never existed).
+    var user = getSession() || {};
     apiAddBankTransaction({
       type: 'Transfer',
       fromAccountCode: fromCode,
@@ -232,7 +234,7 @@
       amount: amount,
       date: date,
       description: desc,
-      createdBy: user.username || user.email || user.name || ''
+      createdBy: user.name || ''
     }).then(function (res) {
       if (res && res.success === false) throw new Error(res.message || res.error || 'Transfer failed');
       closeTransferModal();

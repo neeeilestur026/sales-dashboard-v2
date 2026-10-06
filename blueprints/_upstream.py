@@ -43,6 +43,13 @@ _session.mount("http://", _adapter)
 http = _session                    # for the rare non-Apps-Script fetch (the CSV proxy)
 
 
+def safe_error(exc) -> str:
+    """An exception's text with no URL, deployment id or credential in it — safe to show a user."""
+    s = re.sub(r"(url:\s*)\S+", r"\1<redacted>", str(exc))
+    s = re.sub(r"(sharedSecret|flowSecret|token)=[^&\s'\"),]+", r"\1=<redacted>", s)
+    return re.sub(r"https?://\S+", "<the backend>", s)
+
+
 def redact(url) -> str:
     """An Apps Script URL safe for a log line: the deployment id is replaced."""
     return re.sub(r"/macros/s/[^/]+/", "/macros/s/<redacted>/", str(url or ""))
@@ -81,7 +88,12 @@ def gs_call(url: str, json: Optional[dict] = None, params: Optional[dict] = None
         if isinstance(json, dict):
             json = {**_identity(), **json}
         elif json is None and params is not None:
-            params = {**_identity(), **params}
+            # A325 — never the shared secret in a URL: a query string ends up in exception texts,
+            # proxies and logs. A GET carries only the caller's own session token; anything that has
+            # to act as the server itself must be a POST (json=).
+            ident = _identity()
+            ident.pop("sharedSecret", None)
+            params = {**ident, **params}
     if json is not None:
         resp = _session.post(url, json=json, timeout=timeout, allow_redirects=False)
     else:
@@ -101,8 +113,8 @@ def gs_json(url: str, json: Optional[dict] = None, params: Optional[dict] = None
     try:
         resp = gs_call(url, json=json, params=params, timeout=timeout, identity=identity)
     except requests.RequestException as exc:
-        logger.error("gs_json %s: %s", redact(url), exc)
-        return {"success": False, "message": str(exc)}
+        logger.error("gs_json %s: %s", redact(url), safe_error(exc))
+        return {"success": False, "message": safe_error(exc)}
     try:
         return resp.json()
     except ValueError:
@@ -120,12 +132,12 @@ def remember_user(namespace: dict, uk: str, ttl: int = 3600, max_users: int = 20
     stamps = namespace.setdefault("_user_stamps", {})
     stamps[uk] = time.time()
     cutoff = time.time() - ttl
-    stale = [k for k, t in stamps.items() if t < cutoff]
+    stale = [k for k, t in list(stamps.items()) if t < cutoff]   # A325 — a snapshot: other threads insert meanwhile
     if len(stamps) - len(stale) > max_users:
-        stale += sorted((k for k in stamps if k not in stale), key=stamps.get)[: len(stamps) - len(stale) - max_users]
+        stale += sorted((k for k in list(stamps) if k not in stale), key=lambda k: stamps.get(k, 0))[: len(stamps) - len(stale) - max_users]
     if not stale:
         return
-    stores = [v for n, v in namespace.items() if n.startswith("_user_") and n != "_user_stamps" and isinstance(v, dict)]
+    stores = [v for n, v in list(namespace.items()) if n.startswith("_user_") and n != "_user_stamps" and isinstance(v, dict)]
     for k in stale:
         stamps.pop(k, None)
         for store in stores:

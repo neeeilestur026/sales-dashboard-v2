@@ -31,7 +31,7 @@
     if (!r || !r.success) throw new Error((r && r.message) || 'Could not read the books.');
     return r;
   }
-  const today = () => (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10));
+  const today = () => (typeof flowToday === 'function' ? flowToday() : hxToday());
   const RULE_LABEL = { 'expense.category': 'Expense category', 'pr.department': 'Payment department', 'travel.item': 'Travel item',
                        'billing.department': 'Billing department', 'dp.category': 'Director payable category' };
 

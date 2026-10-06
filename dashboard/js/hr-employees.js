@@ -68,6 +68,8 @@ async function submitEmployee(e) {
     let result;
     if (editingRow !== null) {
       data.rowIndex = String(editingRow);
+      const _was = employeesData.find(e => e.rowIndex === editingRow);
+      if (_was) data.expectKey = _was.employeeName || '';   // A325 — refused if the row now holds someone else
       btn.textContent = 'Updating...';
       result = await apiUpdateEmployee(data);
     } else {
@@ -97,7 +99,8 @@ async function submitEmployee(e) {
 async function deleteEmployee(rowIndex, name) {
   if (!confirm('Delete employee "' + name + '"? This cannot be undone.')) return;
   try {
-    const result = await apiDeleteEmployee(rowIndex);
+    const _del = employeesData.find(e => e.rowIndex === rowIndex);
+    const result = await apiDeleteEmployee(rowIndex, _del ? (_del.employeeName || '') : undefined);
     if (!result.success) throw new Error(result.message);
     clearApiCache();
     await loadEmployees();
@@ -157,7 +160,7 @@ function renderTable() {
 
     if (!isAdmin) {
       html += '<button class="btn btn-sm btn-secondary" onclick="editEmployee(' + e.rowIndex + ')" style="margin-right:0.3rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteEmployee(' + e.rowIndex + ',\'' + esc(e.employeeName) + '\')" title="Delete">Delete</button>';
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteEmployee(' + e.rowIndex + ',' + hxEsc(JSON.stringify(String(e.employeeName || ''))) + ')" title="Delete">Delete</button>';
     } else {
       html += '<span style="color:var(--hx-ink-3);font-size:0.78rem;">View only</span>';
     }

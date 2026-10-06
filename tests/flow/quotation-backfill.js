@@ -11,6 +11,8 @@
  *   • the width trap: Quotations went 23 -> 26 and BOTH positional writers moved with it.
  */
 const { load } = require('./gasload');
+// a park date that is always in the future, whenever the suite runs (it was a fixed 2026-10-01)
+const FUTURE = (new Date().getFullYear() + 1) + '-03-01';
 const store = () => ({ Quotations: [], QuotationItems: [], SalesOrders: [], ActivityLog: [],
   QuotationEmails: [], FlowSettings: [] });
 const DIR = { actorName: 'Neil M. Estur', actorRole: 'director' };
@@ -87,15 +89,15 @@ console.log('\nsnooze');
   const c4 = load(null, store());
   c4.__store.Quotations.push({ 'Quotation No':'S1','Date':'2026-07-01','Status':'Sent','Sent At':'2026-07-01' });
   check('a date in the past is refused', !c4.snoozeQuotation({quotationNo:'S1',until:'2020-01-01',reason:'x'}).success);
-  check('a reason is required', !c4.snoozeQuotation({quotationNo:'S1',until:'2026-10-01'}).success);
+  check('a reason is required', !c4.snoozeQuotation({quotationNo:'S1',until:FUTURE}).success);
   check('garbage date refused', !c4.snoozeQuotation({quotationNo:'S1',until:'nope',reason:'x'}).success);
-  const s = c4.snoozeQuotation({quotationNo:'S1',until:'2026-10-01',reason:'Client said call in October'});
+  const s = c4.snoozeQuotation({quotationNo:'S1',until:FUTURE,reason:'Client said call in October'});
   check('a proper park works', s.success === true, s.message);
   const row = c4.__store.Quotations[0];
-  check('stored with its reason', String(row['Snooze Until'])==='2026-10-01' && /October/.test(String(row['Snooze Reason'])));
+  check('stored with its reason', String(row['Snooze Until'])===FUTURE && /October/.test(String(row['Snooze Reason'])));
   const u = c4.snoozeQuotation({quotationNo:'S1'});
   check('un-parking is one action', u.success === true && String(c4.__store.Quotations[0]['Snooze Until'])==='');
-  check('an unknown quotation is a message, not a crash', !c4.snoozeQuotation({quotationNo:'NOPE',until:'2026-10-01',reason:'x'}).success);
+  check('an unknown quotation is a message, not a crash', !c4.snoozeQuotation({quotationNo:'NOPE',until:FUTURE,reason:'x'}).success);
 }
 
 console.log('\nregistration');

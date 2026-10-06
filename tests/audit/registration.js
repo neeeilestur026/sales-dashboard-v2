@@ -106,6 +106,7 @@ const EXCEPTIONS = {
     getTravelReceipts:             'A214 — a secured READ, deliberately',
     getTravelFloats:               'A212 — a secured READ; travel-money.js pins it out of MUTATIONS',
     getCommissionPayoutReport:     'a secured READ',
+    getCommissionRates:            'A325 — a secured READ (the rate table)',
     auditCommissionIntegrity:      'a read-only audit',
     getSODocCompliance:            'a read',
     getDocComplianceReport:        'a read',

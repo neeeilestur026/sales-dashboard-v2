@@ -89,10 +89,13 @@ function renderReportsTable(reports) {
       ? `<button class="details-btn" style="background:rgba(245,158,11,0.18);color:#b45309;" onclick="toggleDetails('other-${idx}')">View</button>`
       : `<span class="badge-muted">None</span>`;
 
+    // A325 — a JSON string, then HTML-escaped: the browser decodes &#39; back to ' before the handler
+    // runs, so an agent named O'Brien used to end the '…' string and the count buttons did nothing.
+    const agentArg = escapeHtml(JSON.stringify(String(r.agentName || '')));
     rows += `<tr>
       <td><strong>${escapeHtml(r.agentName)}</strong></td>
-      <td style="text-align:center;">${r.quotationsSent > 0 ? `<button class="details-btn" onclick="openAgentDayActivity('${escapeHtml(r.agentName)}','quotations')">${r.quotationsSent}</button>` : `<span class="badge-muted">0</span>`}</td>
-      <td style="text-align:center;">${r.prsSent > 0 ? `<button class="details-btn" onclick="openAgentDayActivity('${escapeHtml(r.agentName)}','prs')">${r.prsSent}</button>` : `<span class="badge-muted">0</span>`}</td>
+      <td style="text-align:center;">${r.quotationsSent > 0 ? `<button class="details-btn" onclick="openAgentDayActivity(${agentArg},'quotations')">${r.quotationsSent}</button>` : `<span class="badge-muted">0</span>`}</td>
+      <td style="text-align:center;">${r.prsSent > 0 ? `<button class="details-btn" onclick="openAgentDayActivity(${agentArg},'prs')">${r.prsSent}</button>` : `<span class="badge-muted">0</span>`}</td>
       <td style="text-align:center;">${leadsBtn}</td>
       <td style="text-align:center;">${followUpBtn}</td>
       <td style="text-align:center;font-weight:600;">${r.totalCalls}</td>

@@ -4,12 +4,15 @@ let sqRecords = [];
 let lineItems = []; // {itemDescription, prItemDescription, qty, pricePerUnit, totalAmount}
 let uploadFiles = []; // File objects
 let editingRowIndex = null;
+// A325 — the edited row's Drive link. updateSupplierQuotation rewrites the whole row with
+// `params.driveFolderLink || ''`, so an edit that didn't send it unlinked the row's documents.
+let editingDriveLink = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const session = requireAdmin();
   if (!session) return;
   renderNavbar('supplier-quotation');
-  document.getElementById('sqDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('sqDate').value = hxToday();
 
   // Drag-and-drop
   var dropArea = document.getElementById('fileDropArea');
@@ -269,6 +272,7 @@ async function submitQuotation(e) {
       data.qty = String(lineItems[0].qty || 1);
       data.pricePerUnit = String(lineItems[0].pricePerUnit || 0);
       data.totalAmount = String(lineItems[0].totalAmount || 0);
+      data.driveFolderLink = editingDriveLink;   // A325
       delete data.itemsJson;
       result = await apiUpdateSupplierQuotation(data);
     } else {
@@ -277,7 +281,9 @@ async function submitQuotation(e) {
 
     if (!result.success) throw new Error(result.message || 'Failed to save');
 
-    var rowIndices = result.rowIndices || [];
+    // A325 — an update returns no rowIndices, so files attached during an edit were silently dropped.
+    var rowIndices = editingRowIndex ? [editingRowIndex] : (result.rowIndices || []);
+    var uploadNote = '';   // A325 — what actually happened to the files, never assumed
 
     // Step 2: Upload files if any
     if (uploadFiles.length > 0 && rowIndices.length > 0) {
@@ -313,10 +319,14 @@ async function submitQuotation(e) {
       if (uploadResult.success && uploadResult.folderUrl) {
         // Step 3: Update SQ rows with drive folder link
         document.getElementById('uploadStatus').textContent = 'Linking to records...';
-        await apiUpdateSQDriveLink({
+        var linkResult = await apiUpdateSQDriveLink({
           rowIndices: JSON.stringify(rowIndices),
           driveFolderLink: uploadResult.folderUrl
         });
+        uploadNote = linkResult.success ? ' Files uploaded to Drive.'
+          : ' Files uploaded to Drive, but linking them to the record failed: ' + (linkResult.message || 'unknown error') + '.';
+      } else {
+        uploadNote = ' Files were NOT uploaded: ' + (uploadResult.message || 'unknown error') + '.';
       }
 
       document.getElementById('uploadFill').style.width = '100%';
@@ -324,11 +334,12 @@ async function submitQuotation(e) {
       setTimeout(function() { progress.style.display = 'none'; }, 1500);
     }
 
+    // A325 — reset first: resetForm() hides #formMsg, so the message set before it never showed.
+    resetForm();
     msg.style.display = 'block';
     msg.style.background = 'rgba(34,197,94,0.12)';
     msg.style.color = '#22c55e';
-    msg.textContent = 'Supplier quotation saved successfully!' + (uploadFiles.length > 0 ? ' Files uploaded to Drive.' : '');
-    resetForm();
+    msg.textContent = 'Supplier quotation saved successfully!' + uploadNote;
     await loadRecords();
   } catch (err) {
     msg.style.display = 'block';
@@ -343,9 +354,10 @@ async function submitQuotation(e) {
 
 function resetForm() {
   document.getElementById('sqForm').reset();
-  document.getElementById('sqDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('sqDate').value = hxToday();
   document.getElementById('formMsg').style.display = 'none';
   editingRowIndex = null;
+  editingDriveLink = '';   // A325
   document.getElementById('submitBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Submit to Sheet';
   document.getElementById('sqPRNumber').value = '';
   document.getElementById('sqPRAgentName').value = '';
@@ -401,7 +413,7 @@ async function loadRecords() {
 
     sqRecords.forEach(function(r) {
       var docsCell = r.driveFolderLink
-        ? '<a href="' + esc(r.driveFolderLink) + '" target="_blank" style="color: var(--hx-cyan-ink);font-size:0.78rem;text-decoration:none;" title="View supporting documents"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> View</a>'
+        ? '<a href="' + esc(/^https?:\/\//i.test(String(r.driveFolderLink)) ? r.driveFolderLink : '#') + '" target="_blank" rel="noopener" style="color: var(--hx-cyan-ink);font-size:0.78rem;text-decoration:none;" title="View supporting documents"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> View</a>'
         : '<span style="color: var(--text-muted);font-size:0.72rem;">--</span>';
       html += '<tr>' +
         '<td style="white-space:nowrap;">' + esc(r.date) + '</td>' +
@@ -437,6 +449,7 @@ function editQuotation(rowIndex) {
   var r = sqRecords.find(function(q) { return q.rowIndex === rowIndex; });
   if (!r) return;
   editingRowIndex = rowIndex;
+  editingDriveLink = r.driveFolderLink || '';   // A325 — sent back on save so the link survives the edit
   document.getElementById('sqDate').value = r.date;
   document.getElementById('sqRefNo').value = r.referenceNo;
   document.getElementById('sqSupplier').value = r.supplierCompany;

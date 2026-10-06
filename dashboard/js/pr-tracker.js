@@ -4,6 +4,9 @@
 
 let session = null;
 let allPRs = [];
+// A325 — the exact list the table was last rendered from. Row controls carry data-idx into THIS
+// list; re-filtering without the date-range / Active-Archive filters pointed them at the wrong PR.
+let shownPRs = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
   session = requireAdmin();
@@ -72,6 +75,7 @@ function applyFilters() {
     return true;
   });
 
+  shownPRs = filtered;
   renderTable(filtered);
 }
 
@@ -159,26 +163,9 @@ function renderTable(records) {
     </table>`;
 }
 
-function getFilteredRecords() {
-  const search = document.getElementById('searchInput').value.trim().toLowerCase();
-  const agentVal = document.getElementById('agentFilter').value;
-  const statusVal = document.getElementById('statusFilter').value;
-
-  return allPRs.filter(r => {
-    if (agentVal && r.agentName !== agentVal) return false;
-    if (statusVal && r.status.toLowerCase() !== statusVal.toLowerCase()) return false;
-    if (search) {
-      const hay = [r.agentName, r.clientName, r.prNumber, r.itemDescription].join(' ').toLowerCase();
-      if (!hay.includes(search)) return false;
-    }
-    return true;
-  });
-}
-
 async function updatePRStatus(el) {
   const idx = parseInt(el.dataset.idx);
-  const filtered = getFilteredRecords();
-  const record = filtered[idx];
+  const record = shownPRs[idx];
   if (!record) return;
 
   const newStatus = el.value;
@@ -207,8 +194,7 @@ async function updatePRStatus(el) {
 
 async function updatePRFollowUp(el) {
   const idx = parseInt(el.dataset.idx);
-  const filtered = getFilteredRecords();
-  const record = filtered[idx];
+  const record = shownPRs[idx];
   if (!record) return;
 
   const newDate = el.value;
@@ -261,5 +247,5 @@ async function exportPRsExcel() {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'PR Tracker');
-  XLSX.writeFile(wb, `pr-tracker-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `pr-tracker-${hxToday()}.xlsx`);
 }

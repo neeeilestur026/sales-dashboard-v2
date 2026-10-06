@@ -226,11 +226,12 @@
       amountPHP = parseFloat(document.getElementById('payAmountPHP').value) || 0;
       if (!(amountPHP > 0)) { alert('Enter the pesos the bank debited — the books need what actually left the account.'); return; }
     }
-    var user = (typeof getCurrentUser === 'function' ? getCurrentUser() : null) || {};
+    // A325 — getCurrentUser is defined nowhere, so this was always blank. The session's name is what every other page records.
+    var user = getSession() || {};
     apiMarkDirectorPayablePaid({
       id: id,
       bankAccountCode: bankAccountCode,
-      paidBy: user.username || user.email || user.name || '',
+      paidBy: user.name || '',
       valueDate: valueDate,                           // A321
       amountPHP: amountPHP ? String(amountPHP) : ''
     }).then(function (res) {

@@ -79,7 +79,7 @@ function switchAcctTab(tab) {
   if (tab === 'expenses' && !expensesLoaded) {
     expensesLoaded = true;
     var mf = document.getElementById('expMonthFilter');
-    if (!mf.value) mf.value = new Date().toISOString().slice(0, 7);
+    if (!mf.value) mf.value = hxToday().slice(0, 7);
     loadExpenses();
   }
   if (tab === 'sales-orders' && !salesOrdersLoaded) { salesOrdersLoaded = true; loadSalesOrders(); }
@@ -324,7 +324,7 @@ function toggleOrderForm() {
   panel.classList.toggle('hidden');
   if (!panel.classList.contains('hidden')) {
     // Set default date to today
-    var today = new Date().toISOString().slice(0, 10);
+    var today = hxToday();
     document.querySelector('#orderForm [name="orderDate"]').value = today;
   }
 }
@@ -499,9 +499,17 @@ async function submitOrder(e) {
   }
 }
 
+// A325 — the key of the record a row button stands for, sent so a stale row number cannot hit the neighbour
+function _acctRowKey(list, rowIndex, keyOf) {
+  var r = (list || []).find(function (x) { return String(x.rowIndex) === String(rowIndex); });
+  return r ? keyOf(r) : undefined;
+}
+var _orderKey = function (o) { return o.orderNumber || ''; };
+var _expenseKey = function (e) { return (e.category || '') + '|' + (e.description || ''); };
+
 async function updateOrderField(rowIndex, field, value) {
   try {
-    var result = await apiUpdateOrder(rowIndex, field, value);
+    var result = await apiUpdateOrder(rowIndex, field, value, _acctRowKey(ordersData, rowIndex, _orderKey));
     if (!result.success) throw new Error(result.message);
     clearApiCache();
   } catch (err) {
@@ -512,7 +520,7 @@ async function updateOrderField(rowIndex, field, value) {
 async function deleteOrder(rowIndex) {
   if (!confirm('Delete this order? This cannot be undone.')) return;
   try {
-    var result = await apiDeleteOrder(rowIndex);
+    var result = await apiDeleteOrder(rowIndex, _acctRowKey(ordersData, rowIndex, _orderKey));
     if (!result.success) throw new Error(result.message);
     clearApiCache();
     await loadOrders();
@@ -532,7 +540,7 @@ async function exportOrdersExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, 'orders-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'orders-' + hxToday() + '.xlsx');
 }
 
 // ═══════════════════════════════════════════════════
@@ -543,7 +551,7 @@ function toggleExpenseForm() {
   var panel = document.getElementById('expenseFormPanel');
   panel.classList.toggle('hidden');
   if (!panel.classList.contains('hidden')) {
-    document.querySelector('#expenseForm [name="date"]').value = new Date().toISOString().slice(0, 10);
+    document.querySelector('#expenseForm [name="date"]').value = hxToday();
   }
 }
 
@@ -623,7 +631,7 @@ function applyExpenseFilters() {
 function renderExpensesSummary(data, month) {
   var summaryEl    = document.getElementById('expenseSummary');
   var breakdownEl  = document.getElementById('expenseCategoryBreakdown');
-  var currentYM    = new Date().toISOString().slice(0, 7); // YYYY-MM
+  var currentYM    = hxToday().slice(0, 7); // YYYY-MM
   var currentY     = new Date().getFullYear().toString();
 
   // KPI totals
@@ -747,6 +755,8 @@ async function submitExpense(e) {
     var result;
     if (editRowIndex) {
       data.rowIndex = editRowIndex;
+      var _ek = _acctRowKey(expensesData, editRowIndex, _expenseKey);
+      if (_ek !== undefined) data.expectKey = _ek;
       result = await apiUpdateExpense(data);
     } else {
       var _ses = (typeof getSession === 'function') ? getSession() : null;
@@ -775,13 +785,13 @@ async function exportExpensesExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
-  XLSX.writeFile(wb, 'expenses-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'expenses-' + hxToday() + '.xlsx');
 }
 
 async function deleteExpense(rowIndex) {
   if (!confirm('Delete this expense? This cannot be undone.')) return;
   try {
-    var result = await apiDeleteExpense(rowIndex);
+    var result = await apiDeleteExpense(rowIndex, _acctRowKey(expensesData, rowIndex, _expenseKey));
     if (!result.success) throw new Error(result.message);
     clearApiCache();
     await loadExpenses();
@@ -917,7 +927,7 @@ async function exportSOExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Sales Orders');
-  XLSX.writeFile(wb, 'sales-orders-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'sales-orders-' + hxToday() + '.xlsx');
 }
 
 // ═══════════════════════════════════════════════════
@@ -968,7 +978,7 @@ function toggleCollectionForm(record) {
       btn.textContent = 'Save Record';
       form.reset();
       document.getElementById('collectionRowIndex').value = '';
-      var today = new Date().toISOString().slice(0, 10);
+      var today = hxToday();
       form.querySelector('[name="date"]').value = today;
       form.querySelector('[name="dateReceived"]').value = today;
     }
@@ -1117,7 +1127,7 @@ function renderCollectionsTable(data) {
     html += '<td>' + peso(r.vat) + '</td>';
     html += '<td>' + peso(r.ewt) + '</td>';
     html += '<td style="font-weight:700;">' + peso(r.totalAmountDue) + '</td>';
-    html += '<td style="white-space:nowrap;' + (balance > 0 && r.dueDate && r.dueDate < new Date().toISOString().slice(0,10) ? 'color:var(--hx-red);' : '') + '">' + esc(r.dueDate || '—') + '</td>';
+    html += '<td style="white-space:nowrap;' + (balance > 0 && r.dueDate && r.dueDate < hxToday() ? 'color:var(--hx-red);' : '') + '">' + esc(r.dueDate || '—') + '</td>';
     html += '<td style="white-space:nowrap;">' + esc(r.dateCollected || '—') + '</td>';
     html += '<td style="font-weight:700;color:var(--hx-ok);">' + peso(r.amountReceived) + '</td>';
     html += '<td>' + statusHtml + (balance > 0 && !isCollected ? '<div style="font-size:0.68rem;color:var(--hx-red);margin-top:2px;">Bal: ' + peso(balance) + '</div>' : '') + '</td>';
@@ -1149,6 +1159,10 @@ async function submitCollection(e) {
       var _ses = (typeof getSession === 'function') ? getSession() : null;
       if (_ses && _ses.name) data.createdBy = _ses.name;
     }
+    if (isEdit) {
+      var _ck = _acctRowKey(collectionsData, data.rowIndex, function (r) { return r.invoiceNo || ''; });
+      if (_ck !== undefined) data.expectKey = _ck;
+    }
     var result = isEdit ? await apiUpdateCollection(data) : await apiAddCollection(data);
     if (!result.success) throw new Error(result.message);
     form.reset();
@@ -1165,7 +1179,7 @@ async function submitCollection(e) {
 async function deleteCollection(rowIndex) {
   if (!confirm('Delete this collection record? This cannot be undone.')) return;
   try {
-    var result = await apiDeleteCollection(rowIndex);
+    var result = await apiDeleteCollection(rowIndex, _acctRowKey(collectionsData, rowIndex, function (r) { return r.invoiceNo || ''; }));
     if (!result.success) throw new Error(result.message);
     collectionsLoaded = false;
     await loadCollections();
@@ -1195,7 +1209,7 @@ async function exportCollectionsExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Collections');
-  XLSX.writeFile(wb, 'collections-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'collections-' + hxToday() + '.xlsx');
 }
 
 // ═══════════════════════════════════════════════════
@@ -1258,7 +1272,7 @@ function prAddSO() {
 
   _prEntries.push({
     soNo:                     soNo,
-    soDate:                   soData.date || new Date().toISOString().slice(0, 10),
+    soDate:                   soData.date || hxToday(),
     customerName:             soData.customerName || soData.customerId || '',
     sales:                    parseFloat(soData.grandTotal) || parseFloat(soData.totalAmount) || parseFloat(soData.sales) || 0,
     cogsType:                 'local',
@@ -1538,7 +1552,7 @@ async function exportProfitReportExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(dataRows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Profit Report');
-  XLSX.writeFile(wb, 'profit-report-' + new Date().toISOString().slice(0,7) + '.xlsx');
+  XLSX.writeFile(wb, 'profit-report-' + hxToday().slice(0, 7) + '.xlsx');
 }
 
 // ── Save current report ──────────────────────────────────────────
@@ -1565,7 +1579,7 @@ async function saveProfitReport() {
   var now = new Date();
   var reportId   = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) +
                    '-' + ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2);
-  var reportDate = now.toISOString().slice(0, 10);
+  var reportDate = hxToday();   // A325 — Manila's date: before 8 a.m. the UTC one was yesterday
 
   try {
     var result = await apiSaveProfitReport(reportId, reportDate, entries);
@@ -1977,7 +1991,7 @@ async function exportArAgingExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'FOR COLLECTION');
-  XLSX.writeFile(wb, 'ar-aging-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  XLSX.writeFile(wb, 'ar-aging-' + hxToday() + '.xlsx');
 }
 
 // ─── Accounting Email Modal (Follow Up / Collection) ─────────────
@@ -2044,7 +2058,7 @@ async function sendAcctEmail() {
     if (!res.success) throw new Error(res.message);
     if (sentType === 'followup' && sentRef) {
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = hxToday();
         await apiUpdateCollection({ rowIndex: sentRef, lastFollowUpDate: today });
         if (arAgingLoaded) await loadArAging(true);
         if (typeof loadCollections === 'function' && document.getElementById('panel-collections')?.classList.contains('active')) {

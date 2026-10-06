@@ -21,8 +21,16 @@ from pdf_generators.po_pdf import PODocTemplate
 from pdf_generators.utils import sanitize_filename
 
 from flask import g
-from blueprints.session_auth import require_session
-from blueprints._upstream import gs_call, remember_user
+from blueprints.session_auth import require_session, display_name_for
+from blueprints._upstream import gs_call, remember_user, safe_error
+
+
+def _who():
+    """A325 — the creator's name and role from the validated session, never from the form: a
+    creator_role of "admin" sent by a sales login made Code.gs write Admin Approval "Approved"."""
+    sess = getattr(g, "session", None) or {}
+    name = display_name_for(sess.get("username", "")) or sess.get("username", "")
+    return name, str(sess.get("role") or "").strip().lower(), getattr(g, "session_token", "") or ""
 
 logger = logging.getLogger(__name__)
 
@@ -275,8 +283,8 @@ def generate():
         }
 
         # ── Auto-submit: upload PDF to Drive + save PO record ──
-        created_by = request.form.get("created_by", "").strip()
-        creator_role = request.form.get("creator_role", "").strip()
+        created_by, creator_role, _user_token = _who()
+        created_by = created_by or request.form.get("created_by", "").strip()
         vendor_email_val = vendor_email
         total_amount = sum(i["quantity"] * i["unit_price"] for i in items)
         items_descs = [i["item_description"] for i in items if i.get("item_description")]
@@ -327,6 +335,7 @@ def generate():
                             "createdBy": created_by,
                             "driveLink": drive_link,
                             "creatorRole": creator_role,
+                            "token": _user_token,          # the thread acts as this user, not as the server
                         }
                         rec_resp = None
                         last_err = None
@@ -417,8 +426,8 @@ def submit_to_sheets():
         currency     = data.get("currency", "PHP")
         total_amount = data.get("total_amount", 0)
         items_summary = data.get("items_summary", "")
-        created_by   = data.get("created_by", "")
-        creator_role = data.get("creator_role", "")
+        created_by, creator_role, _user_token = _who()
+        created_by = created_by or data.get("created_by", "")
 
         if not items:
             return jsonify({"status": "error", "message": "No items to submit."}), 400
@@ -460,18 +469,24 @@ def submit_to_sheets():
                 "driveLink": drive_link,
                 "creatorRole": creator_role,
             }
+            # A325 — the answer is read: this button is the retry after a failed save, and it used to
+            # report "Submitted successfully" even when Code.gs refused (e.g. the PO No already exists).
             try:
-                resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=dashboard_payload, timeout=30)
+                resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, json=dashboard_payload, timeout=60)
+                saved = resp.json() if resp.status_code == 200 else {"success": False, "message": f"HTTP {resp.status_code}"}
             except Exception as e:
-                logger.warning("Dashboard PO record save failed: %s", e)
+                logger.warning("Dashboard PO record save failed: %s", safe_error(e))
+                saved = {"success": False, "message": "The dashboard did not answer — try again in a moment."}
+            if not saved.get("success"):
+                return jsonify({"status": "error", "message": "Not saved: " + str(saved.get("message") or "unknown error"), "log": log}), 502
 
         log_entry = f"[{datetime.now().strftime('%H:%M:%S')}] Submitted to Google Sheets"
         log.append(log_entry)
         return jsonify({"status": "ok", "message": "Submitted successfully.", "log": log})
 
     except Exception as exc:
-        logger.error("PO submit_to_sheets error: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        logger.error("PO submit_to_sheets error: %s", safe_error(exc))
+        return jsonify({"status": "error", "message": safe_error(exc)}), 500
 
 
 @po_bp.route("/upload_brochure", methods=["POST"])

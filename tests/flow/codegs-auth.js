@@ -47,7 +47,7 @@ ok('a POST with no token is refused with authError', r.success === false && r.au
 r = get(ctx, { action: 'getStats', token: 'nope' });
 ok('an unknown token is refused', r.success === false && r.authError === true, r);
 r = get(ctx, { action: 'getCodeVersion' });
-ok('getCodeVersion stays open (the smoke probe)', r.success === true && r.version === 5, r);
+ok('getCodeVersion stays open (the smoke probe)', r.success === true && r.version === 6, r);
 r = get(ctx, { action: 'addUser', token: 'anything' });
 ok('a mutation over GET is refused before anything else', /POST/.test(r.message || ''), r);
 r = get(ctx, { action: 'login', user: 'neil', pass: 'secret1' });

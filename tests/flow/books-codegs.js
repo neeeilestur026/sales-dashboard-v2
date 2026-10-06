@@ -177,7 +177,7 @@ sec('4 · Billing and Director Payables in pesos');
   post(c, { action: 'markPayrollPaid', token: 'T-acc', period: '2026-05-A', paidDate: '2026-05-11', bankAccountCode: 'AUB' });
   ok('HR may not read it', !post(c, { action: 'getBooksFeed', token: 'T-hr' }).success);
   const f = post(c, { action: 'getBooksFeed', token: 'T-acc' });
-  ok('accounting reads it', f.success && f.complete === true && f.codeVersion === 5, f);
+  ok('accounting reads it', f.success && f.complete === true && f.codeVersion >= 5, f);
   eq('approved cutoffs only (B: rejected then approved → in; June A pending → out)', f.payroll.map(p => p.period).join(','), '2026-05-A,2026-05-B');
   const A = f.payroll[0], B = f.payroll[1];
   ok('  cutoff A carries its paid mark', A.paidDate === '2026-05-11' && A.paidBank === 'AUB', A);

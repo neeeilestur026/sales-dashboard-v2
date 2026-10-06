@@ -294,7 +294,7 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
     </style>
     <script>
     (function(){
-      var SCRIPT_URL='REPLACE_WITH_YOUR_APPS_SCRIPT_EXEC_URL';
+      var SCRIPT_URL={{ apps_script_url|tojson }};   // A325 — set by the server (was a placeholder)
       var clients=[];
       var loaded=false;
 
@@ -305,7 +305,8 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
           var s=JSON.parse(localStorage.getItem('session')||'{}');
           var name=s.name||'';
           if(!name)return;
-          fetch(SCRIPT_URL+'?action=getClients&agentName='+encodeURIComponent(name))
+          if(!SCRIPT_URL)return;
+          fetch(SCRIPT_URL+'?action=getClients&agentName='+encodeURIComponent(name)+'&token='+encodeURIComponent(s.token||''))
             .then(function(r){return r.json();})
             .then(function(d){if(d.success)clients=d.data||[];})
             .catch(function(){});

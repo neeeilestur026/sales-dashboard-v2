@@ -276,8 +276,9 @@ function renderEETable() {
 // A198 — the stored pay values when the modal opened, so we can tell whether the director actually
 // changed the rate (and only then ask for an effective date + reason).
 let _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null, sss: null, phic: null };
+let _eeExpectName = '';   // A325 — "Last, First" of the employee the modal opened, sent so a stale row cannot be overwritten
 
-function _eeToday() { return (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10); }
+function _eeToday() { return (typeof flowToday === 'function') ? flowToday() : hxToday(); }
 // The logged-in director's name for the audit stamp — `session` is scoped to the init handler.
 function _eeActor() { try { return (JSON.parse(localStorage.getItem('session') || '{}').name) || ''; } catch (e) { return ''; } }
 
@@ -328,6 +329,7 @@ function openEEModal(idx) {
   document.getElementById('eeReason').value = '';
   if (idx === null) {
     _eeOrig = { dailyRate: null, otherIncome: null, hdmf: null, fixed: null, sss: null, phic: null };   // a new employee has no prior pay
+    _eeExpectName = '';
     document.getElementById('eeModalTitle').textContent = 'Add Employee';
     document.getElementById('eeEditId').value     = '';
     document.getElementById('eeLastName').value   = '';
@@ -345,6 +347,7 @@ function openEEModal(idx) {
     document.getElementById('eeFixedAmount').value = '';
   } else {
     const e = _employees[idx];
+    _eeExpectName = e.lastName + ', ' + e.firstName;
     _eeOrig = { dailyRate: e.dailyRate || 0, otherIncome: e.otherIncome || 0, hdmf: e.hdmfAmount || 0,
                 fixed: e.fixedAmount || 0,                            // A260
                 sss: e.sssAmount || 0, phic: e.philhealthAmount || 0 };   // A309
@@ -413,6 +416,7 @@ function closeEEModal() {
 async function saveEE() {
   const data = {
     id:          document.getElementById('eeEditId').value,
+    expectName:  _eeExpectName,                                       // A325
     lastName:    document.getElementById('eeLastName').value.trim(),
     firstName:   document.getElementById('eeFirstName').value.trim(),
     dailyRate:   document.getElementById('eeDailyRate').value,
@@ -581,8 +585,10 @@ async function loadRateChanges() {
 }
 
 async function deleteEE(id) {
-  if (!confirm('Delete this employee?')) return;
-  const res = await apiDeletePayrollEmployee(id);
+  const e = _employees.find(x => String(x.id) === String(id));
+  const name = e ? e.lastName + ', ' + e.firstName : '';
+  if (!confirm('Delete ' + (name || 'this employee') + '?')) return;
+  const res = await apiDeletePayrollEmployee(id, name);   // A325 — the server checks the row is still this person
   if (!res.success) { alert('Error: ' + res.message); return; }
   await loadEmployees();
 }
@@ -740,7 +746,7 @@ function renderHoursGrid(cutoff) {
       <td class="num computed highlight" id="basicPay_${cutoff}_${k}">${peso(e.basicPay)}</td>
       <td class="num computed highlight" id="holPay_${cutoff}_${k}" title="Regular 200% + Special 130% + unworked regular holidays">${e.holidayPay > 0 ? peso(e.holidayPay) : '—'}</td>
       <td class="num computed highlight" id="otPay_${cutoff}_${k}">${e.otHrs > 0 ? peso(e.otPay) : '—'}</td>
-      <td><button class="btn-sm xs" onclick="fillRowHours('${cutoff}','${esc(empName)}',8)">8h</button></td>
+      <td><button class="btn-sm xs" onclick="fillRowHours('${cutoff}',${_jsArg(empName)},8)">8h</button></td>
     </tr>`;
   });
 
@@ -836,7 +842,7 @@ function downloadAllPayslips(cutoff) {
 function _releaseBtn(empName, cutoff) {
   const rel = (cutoff === 'A' ? _releasedA : _releasedB)[empName];
   const title = rel ? 'Released ' + rel + ' — click to release again' : 'Release to ' + empName + "'s dashboard";
-  return `<button class="btn-sm xs${rel ? ' released' : ''}" title="${esc(title)}" onclick="releasePayslip('${esc(empName)}','${cutoff}')">${_ICO_SEND}</button>`;
+  return `<button class="btn-sm xs${rel ? ' released' : ''}" title="${esc(title)}" onclick="releasePayslip(${_jsArg(empName)},'${cutoff}')">${_ICO_SEND}</button>`;
 }
 function _releaseRows(list, cutoff) {
   return list.filter(e => !_isFixedPay(e))
@@ -1135,7 +1141,7 @@ function renderPayGrid(cutoff) {
     const incCell = `<td class="num computed">
         ${incentive > 0 ? `<strong>${peso(incentive)}</strong>` : '<span class="dh-dim">—</span>'}
         <button class="btn-sm xs" title="Add an incentive for this cutoff"
-          onclick="openIncentiveAdd('${esc(empName)}','${cutoff}')">+</button>
+          onclick="openIncentiveAdd(${_jsArg(empName)},'${cutoff}')">+</button>
       </td>`;
 
     html += `<tr data-emp="${esc(empName)}">
@@ -1161,7 +1167,7 @@ function renderPayGrid(cutoff) {
       <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" class="dh-num-in"></td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
       <td class="num highlight" id="netPay_${cutoff}_${k}">${peso(netPay)}</td>
-      <td class="ps-actions"><button class="btn-sm xs" title="Download payslip PDF" onclick="downloadPayslip('${esc(empName)}','${cutoff}')">${_ICO_DL}</button>${_isFixedPay(emp) ? '' : _releaseBtn(empName, cutoff)}</td>
+      <td class="ps-actions"><button class="btn-sm xs" title="Download payslip PDF" onclick="downloadPayslip(${_jsArg(empName)},'${cutoff}')">${_ICO_DL}</button>${_isFixedPay(emp) ? '' : _releaseBtn(empName, cutoff)}</td>
     </tr>`;
   });
 
@@ -1906,6 +1912,9 @@ function _sdLinesFor(saved, due, isStored) {
 
 // ── Formatting helpers ────────────────────────────────────────
 function esc(value) { return hxEscBlank(value); }
+/* A325 — a value as a quoted JS argument inside a double-quoted onclick. esc() alone inside '…' broke on
+   an apostrophe: the browser decodes &#39; back to ' before the handler runs ("O'Neil" did nothing). */
+function _jsArg(value) { return hxEsc(JSON.stringify(String(value == null ? '' : value))); }
 
 function peso(value) {
   return '₱' + (Number(value) || 0).toLocaleString(undefined, {

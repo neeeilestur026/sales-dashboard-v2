@@ -121,7 +121,9 @@ function getSelectedDestination() {
 }
 
 function getRate(id, fallback) {
-  return parseFloat(document.getElementById(id).value) || fallback;
+  // A325 — only a blank / non-numeric box falls back; `|| fallback` turned a typed 0% into 5% / 30%.
+  const v = parseFloat(document.getElementById(id).value);
+  return isNaN(v) ? fallback : v;
 }
 
 function getForexRate(principal) {

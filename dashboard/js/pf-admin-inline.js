@@ -129,5 +129,5 @@ function pfaClearOverride(file) {
 function pfaClearMisses() { pfSetList('pf_misses', []); pfaRender(); }
 
 function pfaExportMisses() {
-  pfDownloadCsv(pfMissesCsv(pfGetList('pf_misses')), 'product-finder-misses-' + new Date().toISOString().slice(0, 10) + '.csv');
+  pfDownloadCsv(pfMissesCsv(pfGetList('pf_misses')), 'product-finder-misses-' + hxToday() + '.csv');
 }

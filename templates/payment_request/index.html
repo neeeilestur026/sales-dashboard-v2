@@ -39,6 +39,12 @@
 </head>
 <body>
 <script>
+    // A325 — every /payment-request/ route needs the login session (they all answered 401 without it)
+    function _hdrs(extra) {
+        let token = '';
+        try { token = JSON.parse(localStorage.getItem('session') || '{}').token || ''; } catch (e) {}
+        return Object.assign({ 'X-Session-Token': token }, extra || {});
+    }
 (function(){var s;try{s=JSON.parse(localStorage.getItem('session'));}catch(e){}
 if(!s||!s.token){window.location.href='/index.html';return;}
 var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorage.removeItem('session');window.location.href='/index.html';}
@@ -286,7 +292,7 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
             const fd = new FormData();
             fd.append('file', file);
             try {
-                const res = await fetch('/payment-request/upload_file', { method: 'POST', body: fd });
+                const res = await fetch('/payment-request/upload_file', { method: 'POST', headers: _hdrs(), body: fd });
                 const json = await res.json();
                 if (json.success) {
                     renderFileList(json.files);
@@ -302,7 +308,7 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
 
     async function removeFile(index) {
         try {
-            const res = await fetch(`/payment-request/remove_file/${index}`, { method: 'POST' });
+            const res = await fetch(`/payment-request/remove_file/${index}`, { method: 'POST', headers: _hdrs() });
             const json = await res.json();
             if (json.success) {
                 renderFileList(json.files);
@@ -341,7 +347,7 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
 
         try {
             const fd = new FormData(form);
-            const res = await fetch('/payment-request/generate', { method: 'POST', body: fd });
+            const res = await fetch('/payment-request/generate', { method: 'POST', headers: _hdrs(), body: fd });
 
             if (res.ok && res.headers.get('content-type')?.includes('application/pdf')) {
                 _lastDriveLink = res.headers.get('X-Drive-Link') || '';
@@ -384,7 +390,7 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
 
             const res = await fetch('/payment-request/submit_to_sheets', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: _hdrs({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify(data),
             });
             const json = await res.json();
@@ -417,7 +423,7 @@ var exp=s.loginTime?Date.now()-s.loginTime:Infinity;if(exp>28800000){localStorag
         } catch(e) {}
 
         // Clear server-side files
-        fetch('/payment-request/upload_file', { method: 'POST', body: new FormData() }).catch(() => {});
+        fetch('/payment-request/upload_file', { method: 'POST', headers: _hdrs(), body: new FormData() }).catch(() => {});
     }
 
     // ── Log helper ──────────────────────────────────────────

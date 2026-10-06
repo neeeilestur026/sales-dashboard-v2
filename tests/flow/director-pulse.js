@@ -117,7 +117,9 @@ const ROW = (period, status, share, gross, at) => ({ period, cutoffLabel: period
     b.ctx.document.dispatchEvent(new b.ctx.CustomEvent('dh:theme', { detail: { theme: 'dark' } }));
     ok('dh:theme re-reads the tokens and updates without animation', c.data.datasets[0].backgroundColor[0] === 'rgb(1,2,3)' && c.updates[c.updates.length - 1] === 'none', c.updates);
     ok('the ring, the dots and the deductions bar rendered', /of 12 months/.test(b.els.pulseAccrual.innerHTML) && /1<\/b> active/.test(b.els.pulseHeads.innerHTML) && /collected/.test(b.els.pulseDed.innerHTML));
-    ok('  the ring is 9 of 12 for 2026 today', /<b>9<\/b>/.test(b.els.pulseAccrual.innerHTML) || new Date().getFullYear() !== 2026, b.els.pulseAccrual.innerHTML);
+    // months of 2026 elapsed today, the way the page counts them (it was pinned to 9, true only in September)
+    const now = new Date(), elapsed = now.getFullYear() > 2026 ? 12 : now.getFullYear() < 2026 ? 0 : now.getMonth() + 1;
+    ok('  the ring is ' + elapsed + ' of 12 for 2026 today', new RegExp('<b>' + elapsed + '<\\/b>').test(b.els.pulseAccrual.innerHTML), b.els.pulseAccrual.innerHTML);
     ok('  #kpi13 gets filled through _updateKpis when the tab has not loaded yet', b.ctx.__kpiCalls >= 1 && Array.isArray(b.ctx._thirteenthData) && b.ctx._thirteenthData.length === 1);
   }
   {

@@ -203,7 +203,8 @@ def _format_description(description: str, description_style):
 @pr_bp.route("/")
 def index():
     """Render the PR generator page."""
-    return render_template("pr/index.html")
+    # A325 — the client autocomplete needs the main backend's address (it held a placeholder and 404'd)
+    return render_template("pr/index.html", apps_script_url=DASHBOARD_APPS_SCRIPT_URL)
 
 
 @pr_bp.route("/add_item", methods=["POST"])

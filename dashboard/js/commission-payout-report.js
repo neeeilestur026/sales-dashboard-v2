@@ -161,9 +161,12 @@ function cpPersonRow(g) {
     (r.integrityFlag ? `<br><span class="cp-flag">⚠ ${flowEsc(r.integrityFlag)}</span>` : '')
   ).join('<br>');
   const name = flowEsc(g.salesperson);
+  // A325 — a JSON string, then HTML-escaped. The browser decodes &#39; back to ' before the handler
+  // runs, so the old '…'-quoted name broke on an apostrophe (O'Brien) and the button did nothing.
+  const nameArg = flowEsc(JSON.stringify(String(g.salesperson || '')));
   return `<tr>
     <td><span class="cp-name">${name}</span>
-        <button class="cp-copy cp-noprint" onclick="cpCopy('${name.replace(/'/g, "\\'")}')">copy</button>
+        <button class="cp-copy cp-noprint" onclick="cpCopy(${nameArg})">copy</button>
         <div class="cp-detail">${detail}</div></td>
     <td class="num">${claims.length}</td>
     <td class="num">${flowMoney(base, 'PHP')}</td>
@@ -171,7 +174,7 @@ function cpPersonRow(g) {
     <td class="num">${g.adjustments ? flowMoney(g.adjustments, 'PHP') : '—'}</td>
     <td class="num cp-key">${flowMoney(g.payable, 'PHP')}</td>
     <td class="num cp-noprint">${cpCanRelease()
-      ? `<button class="btn btn-sm" onclick="cpRelease('${name.replace(/'/g, "\\'")}')">Mark entered</button>` : ''}</td>
+      ? `<button class="btn btn-sm" onclick="cpRelease(${nameArg})">Mark entered</button>` : ''}</td>
   </tr>`;
 }
 

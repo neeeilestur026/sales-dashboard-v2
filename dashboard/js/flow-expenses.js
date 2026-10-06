@@ -271,7 +271,12 @@ async function submitExpense() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     let res;
-    if (ri) { payload.rowIndex = ri; res = await postFlow('updateExpense', payload); }
+    if (ri) {
+      payload.rowIndex = ri;
+      const was = allExp.find(r => String(r.rowIndex) === String(ri));
+      if (was && was.expNo) payload.expNo = was.expNo;   // A325 — refused if that row now holds another expense
+      res = await postFlow('updateExpense', payload);
+    }
     else res = await postFlow('addExpense', payload);
     if (!res || !res.success) throw new Error((res && res.message) || 'Save failed.');
     closeExpModal();
@@ -306,7 +311,7 @@ async function delExpense(rowIndex) {
   if (!rec) return;
   if (!confirm(`Delete expense ${rec.expNo} (${rec.category} · ${flowMoney(rec.amount, 'PHP')})?`)) return;
   try {
-    const res = await postFlow('deleteExpense', { rowIndex });
+    const res = await postFlow('deleteExpense', { rowIndex, expNo: rec.expNo });   // A325 — the row must still be this one
     if (!res || !res.success) throw new Error((res && res.message) || 'Delete failed.');
     flash('Expense deleted.', true);
     await loadExpenses(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();

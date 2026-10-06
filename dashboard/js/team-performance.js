@@ -353,7 +353,7 @@ function tpRenderCompact() {
         }).join('')}</div></details>` : '';
     }
     const pdfBtn = (full && _tpOpts.withPersonPdf !== false)
-      ? `<button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;" onclick="tpPersonPdf('${_tpe(name).replace(/'/g, '&#39;')}')">PDF</button>` : '';
+      ? `<button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;" onclick="tpPersonPdf(${_tpe(JSON.stringify(String(name)))})">PDF</button>` : '';   // A325 — a JSON string survives the attribute decode
 
     return `<div class="mfTw-card" style="border:1px solid var(--hx-hair);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.9rem;background:#fff;">
       <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
@@ -485,9 +485,12 @@ function tpRenderFull() {
       const done = !!recs[d];
       return `<div class="pday"><div class="box" style="background:${future ? 'var(--hx-inset)' : done ? 'var(--hx-ok-soft)' : 'var(--hx-red-soft)'};color:${future ? 'var(--hx-ink-3)' : done ? 'var(--hx-ok)' : 'var(--hx-red)'};">${future ? '·' : done ? '✓' : '—'}</div><div class="lab">${_TP_DAYS[j]}</div></div>`;
     }).join('');
-    const safe = _tpe(name).replace(/'/g, '&#39;');
+    /* A325 — an onclick argument is a JSON string, then HTML-escaped. The browser decodes
+       &#39; back to ' before the handler runs, so the old '…'-quoted name broke on an apostrophe
+       (O'Brien) and the card / PDF button did nothing. */
+    const safe = _tpe(JSON.stringify(String(name)));
     return `<div class="pcard" role="button" tabindex="0" title="Open ${_tpe(name)}'s full week"
-        onclick="tpOpenPerson('${safe}')" onkeypress="if(event.key==='Enter')tpOpenPerson('${safe}')">
+        onclick="tpOpenPerson(${safe})" onkeypress="if(event.key==='Enter')tpOpenPerson(${safe})">
       <div class="pcard-head"><span class="pav">${_tpe(_tpInitials(name))}</span>
         <div style="flex:1;min-width:0;"><div class="pname">${_tpe(name)}</div>
           <div class="prole">${_tpe(_TP_ROLE_LABEL[_tpRoleOf(name)] || _tpRoleOf(name) || '—')}</div></div>
@@ -564,7 +567,7 @@ function tpOpenPerson(name) {
       </div>`).join('')
     : '<div class="mf-empty">No daily reports submitted this week.</div>';
 
-  const safe = _tpe(name).replace(/'/g, '&#39;');
+  const safe = _tpe(JSON.stringify(String(name)));   // A325 — a JSON string survives the attribute decode
   const ov = document.getElementById('tpPersonOverlay');
   const bd = document.getElementById('tpPersonBody');
   const ti = document.getElementById('tpPersonTitle');
@@ -583,7 +586,7 @@ function tpOpenPerson(name) {
     <h4 class="tp-detail-h">What they reported</h4>
     ${subs}
     <div style="margin-top:1rem;display:flex;gap:0.5rem;">
-      <button class="btn btn-sm btn-secondary no-print" onclick="tpPersonPdf('${safe}')">Weekly PDF</button>
+      <button class="btn btn-sm btn-secondary no-print" onclick="tpPersonPdf(${safe})">Weekly PDF</button>
       <button class="btn btn-sm btn-secondary no-print" onclick="tpClosePerson()">Close</button>
     </div>`;
   ov.classList.add('open');

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   aiqSession = requireAdmin();
   if (!aiqSession) return;
   renderNavbar('admin-import-quotation');
-  document.getElementById('date').value = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+  document.getElementById('date').value = (typeof flowToday === 'function') ? flowToday() : hxToday();
 });
 
 function _esc(s) { return hxEsc(s); }
@@ -59,7 +59,7 @@ function fillForm(d) {
   document.getElementById('customer').value = d.customer || '';
   document.getElementById('quotationNo').value = d.quotationNo || '';
   document.getElementById('date').value = d.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date) ? d.date
-    : (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10));
+    : (typeof flowToday === 'function' ? flowToday() : hxToday());
   document.getElementById('vatOption').value = d.vatOption || 'inclusive';
   const doc = d.doc || {};
   document.getElementById('docSubject').value = doc.subject || '';

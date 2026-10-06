@@ -134,9 +134,16 @@ def _merge_brochures(pdf_bytes, brochures):
 
 
 def _pdf_response(pdf_bytes, filename):
+    """A325 — a header must be Latin-1: a supplier or customer named "Łódź Supply" or in Japanese made
+    gunicorn refuse the header and the download a 500. ASCII name for old clients, the real one as
+    RFC 5987 filename*; quotes and control characters never reach the header."""
+    import unicodedata
+    from urllib.parse import quote
+    name = str(filename or "document.pdf").replace('"', "'").replace("\r", " ").replace("\n", " ")
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii") or "document.pdf"
     resp = make_response(pdf_bytes)
     resp.headers["Content-Type"] = "application/pdf"
-    resp.headers["Content-Disposition"] = f'inline; filename="{filename}"'
+    resp.headers["Content-Disposition"] = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
     return resp
 
 
@@ -657,6 +664,8 @@ SECURED_ACTIONS = [
     "verifyReturnToSales", "voidCollection", "voidInvoice",
     # A316 — the warehouse scanner (dashboard/scan.html)
     "dispatchByScan", "linkBarcode", "receiveByScan", "saveScanCount", "uploadScanPhoto", "setItemTracking", "registerAssets", "returnByScan", "ensureItemLabels", "logLabelPrint", "getScanContext", "getScanLookup", "getLabels", "getStockInOptions", "getScanPhotos", "createItemByScan", "saveAccount", "saveAccountRule", "resolveBooksInboxItem", "getBooksCoverage", "syncBooks", "ingestBookEvents", "getBooksStatus", "getAccounts", "getAccountRules", "getTaxCodes", "getGLEntries", "getGLTrialBalance", "getBooksInbox", "recordFieldCollection", "recordNotCollected", "acknowledgeFieldCollection", "undoFieldCollection", "uploadCollectionPhoto", "getCollectorQueue", "getFieldCollectionNotices",
+    # A325 — the commission reads that carried every rep's pay to an unsigned GET
+    "getCommissionPayoutReport", "getCommissionPreview", "auditCommissionIntegrity", "getCommissionRates", "previewCommissionAttribution",
 ]
 
 
@@ -797,7 +806,7 @@ def import_quotation_pdf():
                     "confidence": confidence, **data})
 
 
-@flow_bp.errorhandler(413)
+@flow_bp.app_errorhandler(413)   # A325 — app-wide, as the comment says: a blueprint errorhandler only covered /flow/*
 def _upload_too_large(_e):
     """A186 — an oversized upload must answer in JSON, not Flask's HTML error page.
 

@@ -282,7 +282,10 @@ function submitToGoogleSheet() {
         console.log('Submit to sheets response:', data);
         updateOutputLog(data.output_log);
         if (data.success) {
-            alert('Successfully submitted to Google Sheet!\n\nSales Invoice: ' + supplierPoNo + '\nVendor: ' + vendorName + '\nItems: ' + itemCount);
+            _waitForSheetSave('/mro').then(info => {
+                if (info.status === 'success') alert('Successfully submitted to Google Sheet!\n\nSales Invoice: ' + supplierPoNo + '\nVendor: ' + vendorName + '\nItems: ' + itemCount);
+                else alert((info.status === 'error' ? 'Failed to submit: ' : '') + (info.message || 'Unknown error'));
+            });
         } else {
             alert('Failed to submit: ' + (data.message || 'Unknown error'));
         }
@@ -300,3 +303,15 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Page loaded, initializing...');
     resetForm();
 });
+
+/* A325 — the sheet write runs in the background, so "started" is not "saved": wait for the outcome
+   before saying anything (failures, even "URL not configured", used to be invisible). */
+async function _waitForSheetSave(base) {
+    for (let i = 0; i < 30; i++) {
+        let info = null;
+        try { info = await fetch(base + '/last_submission_info', { headers: _hdrs() }).then(r => r.json()); } catch (e) { info = null; }
+        if (info && info.status && info.status !== 'pending') return info;
+        await new Promise(r => setTimeout(r, 2000));
+    }
+    return { status: 'unknown', message: 'The sheet is taking longer than usual — check it in a minute before submitting again.' };
+}

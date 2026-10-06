@@ -698,7 +698,10 @@ function _mgmtSmTlStageDetail(def, apiStage, apiMap) {
   const docs   = apiStage.docs   || [];
   const isAuto = apiStage.autoderived || false;
   const meta   = (_SM_STAGE_META && _SM_STAGE_META[def.key]) || {};
-  const ship   = (_mgmtSmTlData && _mgmtSmTlData.shipment) || {};
+  // A325 — the timeline's shipment is a dozen header fields; the getShipments row underneath supplies
+  // the payment / logistics / cost fields the stages list (the timeline's fresher values win).
+  const tlShip = (_mgmtSmTlData && _mgmtSmTlData.shipment) || {};
+  const ship   = Object.assign({}, _mgmtSmAll.find(r => r.shipmentId === tlShip.shipmentId) || {}, tlShip);
   let html = '';
 
   // ── A: Description ───────────────────────────────────
@@ -785,15 +788,18 @@ function _mgmtSmTlStageDetail(def, apiStage, apiMap) {
     docs.forEach(f => {
       const viewUrl    = f.url || f.driveUrl || '';
       const thumbUrl   = f.thumbnailUrl || f.previewUrl || '';
+      // A325 — JSON strings, then HTML-escaped: the browser decodes &#39; back to ' before the handler
+      // runs, so a file named "Client's PO.pdf" used to end the '…' string and the click did nothing.
+      const viewArgs   = esc(JSON.stringify(String(f.name || ''))) + ',' + esc(JSON.stringify(String(viewUrl)));
       const thumbImg   = thumbUrl
-        ? `<img src="${esc(thumbUrl)}" class="sm-mgmt-doc-thumb" onclick="openDocViewer('${esc(f.name)}','${esc(viewUrl)}')" alt="Preview" title="Click to expand">`
-        : `<div class="sm-mgmt-doc-thumb" onclick="openDocViewer('${esc(f.name)}','${esc(viewUrl)}')" style="display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Click to view">
+        ? `<img src="${esc(thumbUrl)}" class="sm-mgmt-doc-thumb" onclick="openDocViewer(${viewArgs})" alt="Preview" title="Click to expand">`
+        : `<div class="sm-mgmt-doc-thumb" onclick="openDocViewer(${viewArgs})" style="display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Click to view">
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
            </div>`;
       html += `<div class="sm-mgmt-doc-file">
         ${thumbImg}
         <span class="sm-mgmt-doc-name" title="${esc(f.name)}">${esc(f.name)}</span>
-        <button class="sm-mgmt-doc-btn" onclick="openDocViewer('${esc(f.name)}','${esc(viewUrl)}')">View ↗</button>
+        <button class="sm-mgmt-doc-btn" onclick="openDocViewer(${viewArgs})">View ↗</button>
       </div>`;
     });
     html += '</div>';
@@ -1131,7 +1137,8 @@ async function decidePayrollApproval(decision) {
   if (rec.status !== 'For Approval') { alert('This submission has already been decided.'); return; }
   var notes = '';
   if (decision === 'Rejected') {
-    notes = prompt('Reason for rejection (optional):', '') || '';
+    notes = prompt('Reason for rejection (optional):', '');
+    if (notes === null) return;   // A325 — Cancel backs out; `|| ''` rejected the payroll anyway
   } else if (!confirm('Approve ' + (rec.cutoffLabel || '') + ' ' + rec.period + '?')) {
     return;
   }
@@ -1182,7 +1189,7 @@ async function decidePayrollApproval(decision) {
 // Pick a representative expense date for a cutoff: 1st cutoff → mid-month, 2nd cutoff → month end.
 function _payrollExpenseDate(period, cutoff) {
   var m = String(period || '').match(/(\d{4})-(\d{2})/);
-  if (!m) return new Date().toISOString().slice(0, 10);
+  if (!m) return hxToday();
   var y = +m[1], mo = +m[2];
   if (cutoff === 'B') { var last = new Date(y, mo, 0).getDate(); return m[1] + '-' + m[2] + '-' + String(last).padStart(2, '0'); }
   return m[1] + '-' + m[2] + '-15';

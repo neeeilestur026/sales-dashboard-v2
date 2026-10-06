@@ -251,7 +251,7 @@
   // ── KPI cards: a detail card with a sparkline of the daily snapshots (Mgmt item 5) ──
   (function () {
     var HISTORY_KEY = 'mgmt_kpi_history_v1', MAX_DAYS = 60;
-    var today = function () { return new Date().toISOString().slice(0, 10); };
+    var today = function () { return hxToday(); };
     var loadHistory = function () { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}') || {}; } catch (e) { return {}; } };
     var saveHistory = function (h) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (e) {} };
     var kpiId = function (card) {

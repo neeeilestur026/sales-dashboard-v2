@@ -160,6 +160,8 @@ const FLOW_SECURED_ACTIONS = [
   'verifyReturnToSales', 'voidCollection', 'voidInvoice',
   // A316 — the warehouse scanner (scan.html)
   'dispatchByScan', 'linkBarcode', 'receiveByScan', 'saveScanCount', 'uploadScanPhoto', 'setItemTracking', 'registerAssets', 'returnByScan', 'ensureItemLabels', 'logLabelPrint', 'getScanContext', 'getScanLookup', 'getLabels', 'getStockInOptions', 'getScanPhotos', 'createItemByScan', 'saveAccount', 'saveAccountRule', 'resolveBooksInboxItem', 'getBooksCoverage', 'syncBooks', 'ingestBookEvents', 'getBooksStatus', 'getAccounts', 'getAccountRules', 'getTaxCodes', 'getGLEntries', 'getGLTrialBalance', 'getBooksInbox', 'recordFieldCollection', 'recordNotCollected', 'acknowledgeFieldCollection', 'undoFieldCollection', 'uploadCollectionPhoto', 'getCollectorQueue', 'getFieldCollectionNotices',
+  // A325 — the commission reads that carried every rep's pay to an unsigned GET
+  'getCommissionPayoutReport', 'getCommissionPreview', 'auditCommissionIntegrity', 'getCommissionRates', 'previewCommissionAttribution',
 ];
 function _flowIsSecured(action) { return FLOW_SECURED_ACTIONS.indexOf(action) !== -1; }
 

@@ -578,8 +578,18 @@ function psSummaryText(a, r) {
 }
 
 /** The blank hard copy — the same generator, so it can never drift from the filled output. */
-function psPrintBlank() {
-  window.open('/flow/puller-survey-pdf?blank=1', '_blank');
+/* A325 — fetched with the session header: a bare window.open carried none, so the route (which needs
+   the login) answered 401 and the new tab showed "Your session has expired". */
+async function psPrintBlank() {
+  try {
+    const res = await fetch('/flow/puller-survey-pdf?blank=1', { headers: hxAuthHeaders() });
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); if (j && j.message) msg = j.message; } catch (e) {}
+      throw new Error(msg);
+    }
+    window.open(URL.createObjectURL(await res.blob()), '_blank');
+  } catch (e) { alert('The blank form could not be opened — ' + (e.message || 'unknown error')); }
 }
 
 async function psExportPdf() {

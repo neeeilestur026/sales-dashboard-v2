@@ -40,13 +40,23 @@
  *   1 — A275 salary deductions, and the payroll-approval row-index guard that had to precede them.
  *   2 — AS-1 sessions required on every action, server-side roles, hashed passwords, the sheet-id guard.
  *   3 — A309 SSS Amount / PhilHealth Amount / Date Hired on Payroll Employees (statutory schedule by rule).
- *   4 — A312 released payslips: the Payslips sheet, releasePayslips / getMyPayslips, Username on Payroll Employees. */
-var CODE_VERSION = 5;
+ *   4 — A312 released payslips: the Payslips sheet, releasePayslips / getMyPayslips, Username on Payroll Employees.
+ *   5 — A321 payroll and payments for the books: contribution tables, Mark payroll paid, getBooksFeed.
+ *   6 — A325 the system scan: server-side roles on payroll/bank/billing/mail, the caller's own role on
+ *       approvals, locks on the racing writes, stale-row checks, POST-only mutations, alert e-mail from
+ *       the ADMIN_ALERT_EMAIL Script Property only, and the date / column fixes. */
+var CODE_VERSION = 6;
 
 // ─── Configuration ───────────────────────────────────────────
 var USERS_SHEET_ID = _prop('USERS_SHEET_ID');   // AS-1 — set once under Project Settings → Script properties; never in this file
 var LOGIN_TRACKER_SHEET_ID = ''; // Create a separate Google Sheet for login logs
-var MANAGER_EMAIL = 'manager@company.com'; // fallback admin email
+var MANAGER_EMAIL = 'manager@company.com'; // a placeholder — never mailed (A325); set the ADMIN_ALERT_EMAIL Script Property
+/* A325 — company.com is someone else's domain: the daily team summary and urgent alerts went to a
+   stranger. The address now comes only from the ADMIN_ALERT_EMAIL Script Property; unset = no mail. */
+function _alertEmail() {
+  var v = _prop('ADMIN_ALERT_EMAIL').trim();
+  return v.indexOf('@') > 0 ? v : '';
+}
 var INVENTORY_SHEET_ID_FOR_VIEWER = ''; // ← Paste your INVENTORY_SHEET_ID here (same spreadsheet MRO/MI use)
 var QUOTATION_SUMMARY_SHEET_ID = ''; // ← Paste the shared Quotation Summary Sheet ID here
 var MRO_SHEET_ID = ''; // Central Materials Receiving sheet
@@ -92,11 +102,59 @@ var ACTION_ROLES = {                                   // the pages behind these
   // A321 — the books bridge and payroll's books facts
   getBooksFeed: ['accounting', 'admin', 'director'], markPayrollPaid: ['director', 'accounting'],
   savePayrollContributionTables: ['director', 'accounting', 'admin', 'hr'],
-  getPayrollEmployerShares: ['director', 'accounting', 'admin', 'hr', 'management']   // per-employee pay: not for every login
+  getPayrollEmployerShares: ['director', 'accounting', 'admin', 'hr', 'management'],   // per-employee pay: not for every login
+  /* A325 — the system scan. These were open to ANY signed-in login (the browser calls this script
+     directly with its own token): a sales login could rewrite payroll, add itself an incentive,
+     approve the cutoff, read every salary and bank balance, or mark a bill paid. Each list is exactly
+     the roles whose pages call the action (the page guards in auth.js); Flask's backend calls are
+     unaffected (they carry the shared secret). */
+  // payroll — director-home.html (requireDirector) writes and reads it; management approves it
+  savePayrollEmployee: ['director'], deletePayrollEmployee: ['director'], savePayrollHours: ['director'],
+  savePayrollHolidays: ['director'], savePayrollRegister: ['director'], savePayrollIncentive: ['director'],
+  voidPayrollIncentive: ['director'], submitPayrollForApproval: ['director'],
+  // salary deductions: the handlers' own lists (attach had none at all)
+  saveSalaryDeduction: ['director', 'management', 'admin', 'hr'], cancelSalaryDeduction: ['director', 'management', 'admin', 'hr'],
+  activateSalaryDeduction: ['director', 'management', 'admin', 'hr'], attachSalaryDeductionForm: ['director', 'management', 'admin', 'hr'],
+  skipSalaryDeductionCutoff: ['director', 'management', 'admin', 'hr'], voidSalaryDeductionPosting: ['director', 'management', 'admin'],
+  getPayrollEmployees: ['director'], getPayrollRegister: ['director'], get13thMonthPay: ['director'],
+  getPayrollRateHistory: ['director'], getPayrollIncentives: ['director'], getPayrollHours: ['director'],
+  getSalaryDeductions: ['director', 'management', 'admin', 'hr'],
+  decidePayrollApproval: ['management'], getPayrollApprovalSnapshot: ['management', 'director'],
+  getPayrollApprovals: ['director', 'management', 'accounting', 'admin', 'hr'],
+  // the bank page and Director Payables — director-banks.html / director-payables.html (requireDirector)
+  saveBankAccount: ['director'], addBankTransaction: ['director'], deleteBankTransaction: ['director'],
+  getBankTransactions: ['director'],
+  saveDirectorPayable: ['director'], markDirectorPayablePaid: ['director'], unmarkDirectorPayablePaid: ['director'],
+  deleteDirectorPayable: ['director'], getDirectorPayables: ['director'],
+  getBankAccounts: ['director', 'accounting', 'admin', 'management'],
+  // billing — payment-requests.html (admin, accounting, management, director) and accounting-billing.html
+  getBillingRecords: ['accounting', 'admin', 'director'], markBillPaid: ['director', 'accounting', 'admin'],
+  updatePaymentRequestStatus: ['admin', 'accounting', 'management', 'director'],
+  // outbound mail sent as the company — po-approvals (admin, management), accounting (accounting, admin)
+  sendPOEmail: ['admin', 'management'], sendAcctEmail: ['accounting', 'admin'], sendAdminEmail: ['admin']
 };
 var _GET_MUTATIONS = {};                               // the doGet cases that change something: POST only
-'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials releasePayslips markPayrollPaid savePayrollContributionTables'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
+'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials releasePayslips markPayrollPaid savePayrollContributionTables forwardPRToPricing attachSalaryDeductionForm activateSalaryDeduction skipSalaryDeductionCutoff getNextQuotationNumber'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
 var _OVERSIGHT_ROLES = { admin: 1, director: 1, management: 1, accounting: 1, hr: 1 };
+/* A325 — the role an approval acts with is the SIGNED-IN user's, never one the request names: a sales
+   login sending approverRole 'admin' then 'management' approved its own quotation. The browser pages
+   already send their own role, so nothing changes for them. A backend call (Flask with the shared
+   secret and no user token) is trusted to name the role it acts for. */
+/* A325 — one script lock, re-entrant within an execution (a nested call just runs), for the writes
+   the scan found racing: two "mark paid" clicks both saw no bank transaction and both debited the
+   bank; two payroll saves deleted rows by stale index; two sales orders got the same number. */
+var _LOCK_DEPTH = 0;
+function _withLock(fn) {
+  if (_LOCK_DEPTH > 0) return fn();
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, message: 'The system is busy — try again in a moment.' }; }
+  _LOCK_DEPTH++;
+  try { return fn(); } finally { _LOCK_DEPTH--; try { lock.releaseLock(); } catch (e) {} }
+}
+function _callerRole(claimed) {
+  if (_SESSION && !_SESSION.backend) return String(_SESSION.role || '').toLowerCase();
+  return String(claimed || '').toLowerCase();
+}
 
 function _prop(name) {
   try { return PropertiesService.getScriptProperties().getProperty(name) || ''; } catch (e) { return ''; }
@@ -280,6 +338,39 @@ function validateSession(token) {
     }
   }
   return null;
+}
+
+/* A325 — a deleted, demoted or reset user kept a working session for up to 8 hours (cached 6): end
+   every session of that username, in the cache and in the Sessions sheet. */
+function _invalidateUserSessions(username) {
+  var u = String(username || '').trim().toLowerCase();
+  if (!u) return;
+  var sheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheetByName('Sessions');
+  if (!sheet) return;
+  var cache = CacheService.getScriptCache(), data = sheet.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][1] || '').trim().toLowerCase() !== u) continue;
+    try { cache.remove('session_' + String(data[i][0])); } catch (e) {}
+    sheet.deleteRow(i + 1);
+  }
+  try { cache.remove('sheetIds_' + u); } catch (e) {}
+}
+/* A325 — a row number from the browser names whatever is in that row NOW; after someone else's
+   delete it is the neighbour. The page sends the key it showed (`expectKey`; several columns joined
+   with '|'), and a mismatch is refused. Absent = the old behaviour, so an older page still works. */
+function _staleRow(sheet, rowIndex, cols, expected) {
+  if (expected === undefined || expected === null) return '';
+  if (rowIndex > sheet.getLastRow()) return 'That record is no longer there — reload the list.';
+  var tz = Session.getScriptTimeZone();
+  var norm = function (v) { return (v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v == null ? '' : v)).trim().toLowerCase(); };
+  var got = cols.map(function (c) { return norm(sheet.getRange(rowIndex, c).getValue()); }).join('|');
+  return got === String(expected).trim().toLowerCase() ? '' : 'The list has changed since it was loaded — reload it and try again.';
+}
+/** A325 — the row a user action names must still hold that user (a stale list hit the neighbour). */
+function _userRowMismatch(sheet, rowIndex, expected) {
+  if (!expected) return '';
+  var at = String(sheet.getRange(rowIndex, 1).getValue() || '').trim().toLowerCase();
+  return at === String(expected).trim().toLowerCase() ? '' : 'The user list has changed since it was loaded — reload it and try again.';
 }
 
 function invalidateSession(token) {
@@ -1131,7 +1222,7 @@ function handleGetClientRanking(params) {
   for (var i = 1; i < data.length; i++) {
     var rowDate = parseSheetDate(data[i][0]);
     var rowAgent = String(data[i][1]).trim();
-    var clientName = String(data[i][2]).trim();
+    var clientName = String(data[i][5]).trim();   // A325 — column F is the client; C is the (unique) reference no
 
     if (!rowDate || !clientName) continue;
     if (agentName && rowAgent.toLowerCase() !== agentName.toLowerCase()) continue;
@@ -1256,7 +1347,7 @@ function handleGetHotLeads() {
 
     for (var j = 1; j < data.length; j++) {
       var rowDate = parseSheetDate(data[j][0]);
-      var clientName = String(data[j][2]).trim();
+      var clientName = String(data[j][5]).trim();   // A325 — column F is the client; C is the (unique) reference no
 
       if (!rowDate || !clientName) continue;
       if (rowDate < dateRange.start || rowDate > dateRange.end) continue;
@@ -1344,7 +1435,7 @@ function handleDailyActivityAlert() {
       }
     }
 
-    if (managerRow) {
+    if (managerRow && _alertEmail()) {
       var subject = 'Daily Sales Team Summary — ' + formatDate(new Date());
       var body = 'Team Totals Today:\n' +
         '- Quotations: ' + teamTotals.quotations + '\n' +
@@ -1354,7 +1445,7 @@ function handleDailyActivityAlert() {
           ? inactiveAgents.map(function(a) { return a.name; }).join(', ')
           : 'None — all agents were active today!');
 
-      MailApp.sendEmail(MANAGER_EMAIL, subject, body);
+      MailApp.sendEmail(_alertEmail(), subject, body);
     }
   } catch (err) {
     Logger.log('Manager email error: ' + err.message);
@@ -1799,7 +1890,7 @@ function handleApproveQuotation(params) {
   try {
     var sheetId = params.sheetId;
     var rowIndex = parseInt(params.rowIndex);
-    var approverRole = (params.approverRole || '').toLowerCase();
+    var approverRole = _callerRole(params.approverRole);   // A325
     var decision = params.decision; // 'Approved' or 'Rejected'
 
     if (!sheetId || !rowIndex || !approverRole || !decision) {
@@ -1874,7 +1965,7 @@ function handleUpdateQuotationDriveLink(params) {
     var sheetId = params.sheetId;
     var rowIndex = parseInt(params.rowIndex) || 0;
     var driveLink = params.driveLink || '';
-    var creatorRole = (params.creatorRole || '').toLowerCase();
+    var creatorRole = _callerRole(params.creatorRole);   // A325
     var refNo = (params.refNo || '').trim();
 
     if (!sheetId) {
@@ -1883,6 +1974,8 @@ function handleUpdateQuotationDriveLink(params) {
 
     var sheet = SpreadsheetApp.openById(sheetId).getSheets()[0];
 
+    // A325 — a row that no longer holds this reference (rows moved) is looked up again by the number
+    if (rowIndex >= 2 && refNo && String(sheet.getRange(rowIndex, 3).getValue()).trim() !== refNo) rowIndex = 0;
     // If rowIndex is 0 or missing, try to find the row by refNo (col C = index 2)
     if (!rowIndex || rowIndex < 2) {
       if (refNo) {
@@ -1894,9 +1987,9 @@ function handleUpdateQuotationDriveLink(params) {
           }
         }
       }
-      // Final fallback: use the last row
+      // A325 — no "last row" fallback: it stamped this link and approval state onto another quotation
       if (!rowIndex || rowIndex < 2) {
-        rowIndex = sheet.getLastRow();
+        return { success: false, message: 'Quotation ' + (refNo || '(no reference)') + ' was not found in the sheet — the Drive link was not saved.' };
       }
     }
 
@@ -1964,7 +2057,7 @@ function handleReviseQuotation(params) {
 
     // Force-reset all approval columns
     // Admin-created quotations re-auto-approve the admin side on revision
-    var creatorRole = (params.creatorRole || '').toLowerCase();
+    var creatorRole = _callerRole(params.creatorRole);   // A325
     sheet.getRange(rowIndex, 13).setValue(creatorRole === 'admin' ? 'Approved' : 'Pending'); // Admin Approval
     sheet.getRange(rowIndex, 14).setValue('Pending');                                         // Mgmt Approval
     sheet.getRange(rowIndex, 15).setValue(creatorRole === 'admin' ? 'Partially Approved' : 'Pending Approval'); // Overall
@@ -2026,7 +2119,7 @@ function handleGetMyRejectedQuotations(params) {
 // ─── ACTION: getPendingItems (PRs needing pricing + quotations pending approval) ──
 function handleGetPendingItems(params) {
   try {
-    var role = (params.role || 'sales').toLowerCase();
+    var role = _callerRole(params.role) || 'sales';   // A325 — role=admin returned every agent's items
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     var prs = [];
@@ -2592,6 +2685,12 @@ function doPost(e) {
         break;
       case 'linkPRToQuotation':                      // AS-1 — a mutation; it used to exist only in doGet
         result = handleLinkPRToQuotation(body);
+        break;
+      case 'getNextQuotationNumber':                 // A325 — it advances the counter: POST only now
+        result = handleGetNextQuotationNumber(body);
+        break;
+      case 'checkSheetAccess':                       // A325 — _authenticate's sheet guard has already said yes
+        result = { success: true, allowed: true };
         break;
 
       // Reports
@@ -3773,11 +3872,10 @@ function handleSubmitDailyReport(params) {
         var usersData = usersSheet.getDataRange().getValues();
         for (var ai = 1; ai < usersData.length; ai++) {
           if (String(usersData[ai][2]).trim().toLowerCase() === 'admin') {
-            // Try to get admin email from column index 12 (if exists), otherwise use MANAGER_EMAIL
-            var adminEmail = MANAGER_EMAIL;
-            if (usersData[ai].length > 12 && String(usersData[ai][12]).trim()) {
-              adminEmail = String(usersData[ai][12]).trim();
-            }
+            // A325 — index 12 is the Training Mode flag (MailApp.sendEmail('FALSE', …) threw and no alert
+            // ever left), and the old fallback was a placeholder on someone else's domain
+            var adminEmail = _alertEmail();
+            if (!adminEmail) break;
             var issueList = parsedUrgent.map(function(u) {
               return '- [' + u.category + '] ' + u.description;
             }).join('\n');
@@ -3802,7 +3900,9 @@ function handleSubmitDailyReport(params) {
 // ─── ACTION: changePassword ─────────────────────────────────
 function handleChangePassword(params) {
   try {
-    var username = params.username || '';
+    /* A325 — your own password only: the username came from the request, with no limit on guesses, so
+       a signed-in user could try passwords against anyone and take the account on a hit. */
+    var username = (_SESSION && !_SESSION.backend) ? String(_SESSION.username || '') : String(params.username || '');
     var currentPassword = params.currentPassword || '';
     var newPassword = params.newPassword || '';
 
@@ -3813,6 +3913,9 @@ function handleChangePassword(params) {
     if (newPassword.length < 6) {
       return { success: false, message: 'New password must be at least 6 characters.' };
     }
+    var cache = CacheService.getScriptCache(), attemptKey = 'pwchange_attempts_' + username.trim().toLowerCase();
+    var attempts = parseInt(cache.get(attemptKey) || '0', 10) || 0;
+    if (attempts >= 5) return { success: false, message: 'Too many attempts. Please wait 15 minutes and try again.' };
 
     var sheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
     var data = sheet.getDataRange().getValues();
@@ -3822,9 +3925,11 @@ function handleChangePassword(params) {
       if (rowUsername !== username.trim()) continue;
 
       if (!_pwCheck_(sheet, i + 1, data[i], currentPassword)) {
+        cache.put(attemptKey, String(attempts + 1), 900);
         return { success: false, message: 'Current password is incorrect.' };
       }
       _pwStore_(sheet, i + 1, newPassword);          // AS-1 — hashed and salted
+      cache.remove(attemptKey);
 
       return { success: true, message: 'Password changed successfully.' };
     }
@@ -4539,6 +4644,7 @@ function handleUpdateOrder(params) {
     if (!rowIndex) return { success: false, message: 'Missing rowIndex' };
 
     var sheet = _ordersSheet();
+    var stale = _staleRow(sheet, rowIndex, [2], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     var field = params.field || '';
     var value = params.value || '';
 
@@ -4871,24 +4977,28 @@ function handleUpdateClient(params) {
     var rowIndex = parseInt(params.rowIndex);
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
 
+    var stale = _staleRow(sheet, rowIndex, [2], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     var existingRow = sheet.getRange(rowIndex, 1, 1, 14).getValues()[0];
     var dateAdded = existingRow[12] || formatDate(new Date());
+    // A325 — a field the form SENT blank is a clear; only a field it left out keeps the old value
+    // (`params.x || old` brought a deleted email straight back). Name and type stay required.
+    var pick = function (k, i) { return (params[k] !== undefined && params[k] !== null) ? String(params[k]).trim() : existingRow[i]; };
 
     sheet.getRange(rowIndex, 1, 1, 14).setValues([[
       params.agentName || existingRow[0],
       params.companyName || existingRow[1],
-      params.industry || existingRow[2],
-      params.siteAddress || existingRow[3],
-      params.tel || existingRow[4],
-      params.headOffice || existingRow[5],
-      params.headOfficeTel || existingRow[6],
-      params.contactPerson || existingRow[7],
-      params.position || existingRow[8],
-      params.mobile || existingRow[9],
-      params.email || existingRow[10],
+      pick('industry', 2),
+      pick('siteAddress', 3),
+      pick('tel', 4),
+      pick('headOffice', 5),
+      pick('headOfficeTel', 6),
+      pick('contactPerson', 7),
+      pick('position', 8),
+      pick('mobile', 9),
+      pick('email', 10),
       params.clientType || existingRow[11] || 'Active',
       dateAdded,
-      params.notes || existingRow[13]
+      pick('notes', 13)
     ]]);
 
     return { success: true, message: 'Client updated successfully.' };
@@ -4902,6 +5012,7 @@ function handleDeleteClient(params) {
     var sheet = _clientsSheet();
     var rowIndex = parseInt(params.rowIndex);
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
+    var stale = _staleRow(sheet, rowIndex, [2], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     sheet.deleteRow(rowIndex);
     return { success: true, message: 'Client deleted.' };
   } catch (err) {
@@ -5098,17 +5209,21 @@ function handleUpdatePaymentRequestStatus(params) {
     if (!headers[21] || String(headers[21]).trim() !== 'AdminApproval') sheet.getRange(1, 22).setValue('AdminApproval');
     if (!headers[22] || String(headers[22]).trim() !== 'MgmtApproval') sheet.getRange(1, 23).setValue('MgmtApproval');
 
-    var approverRole = (params.approverRole || '').toLowerCase();
+    var approverRole = _callerRole(params.approverRole);   // A325
     var decision = params.decision || params.status || 'Pending';
+    // A325 — a decision is one of three words; the legacy branch wrote any string (e.g. "Paid") into Status
+    if (['Approved', 'Rejected', 'Pending'].indexOf(String(decision)) === -1) return { success: false, message: 'A decision is Approved, Rejected or Pending.' };
 
     if (approverRole === 'admin' || approverRole === 'accounting') {
       sheet.getRange(rowIndex, 22).setValue(decision); // AdminApproval col
     } else if (approverRole === 'management') {
       sheet.getRange(rowIndex, 23).setValue(decision); // MgmtApproval col
-    } else {
-      // Legacy: direct status set
+    } else if (_SESSION && _SESSION.backend) {
+      // Legacy: direct status set — server calls only now; a signed-in role must be an approver
       sheet.getRange(rowIndex, 21).setValue(decision);
       return { success: true, message: 'Status updated to ' + decision };
+    } else {
+      return { success: false, message: 'Only admin, accounting or management approve payment requests.' };
     }
 
     // Recalculate overall status
@@ -5199,7 +5314,8 @@ function handleGetBillingRecords(params) {
   }
 }
 
-function handleMarkBillPaid(params) {
+function handleMarkBillPaid(params) { return _withLock(function () { return _markBillPaidLocked(params); }); }   // A325
+function _markBillPaidLocked(params) {
   try {
     var sheet = _paymentRequestsSheet();
     var rowIndex = parseInt(params.rowIndex);
@@ -5211,7 +5327,7 @@ function handleMarkBillPaid(params) {
     var paidBy = params.paidBy || '';
     var paymentSlipLink = params.paymentSlipLink || '';
     // A321 — the books need the bank's date and, for a foreign request, the pesos the bank took
-    var valueDate = /^\d{4}-\d{2}-\d{2}$/.test(String(params.valueDate || '')) ? String(params.valueDate) : now.slice(0, 10);
+    var valueDate = /^\d{4}-\d{2}-\d{2}$/.test(String(params.valueDate || '')) ? String(params.valueDate) : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');   // A325 — Manila, not UTC
     var amountPHP = parseFloat(params.amountPHP) || 0;
 
     // Ensure columns 31 (Bank Account Code) and 32 (Bank Tx ID) exist
@@ -5460,10 +5576,15 @@ function handleUpdateUser(params) {
     var password = params.password || '';
 
     var sheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
+    var bad = _userRowMismatch(sheet, rowIndex, params.username);   // A325
+    if (bad) return { success: false, message: bad };
+    var who = String(sheet.getRange(rowIndex, 1).getValue() || '').trim();
+    var oldRole = String(sheet.getRange(rowIndex, 3).getValue() || '').trim().toLowerCase();
 
     if (fullName) sheet.getRange(rowIndex, 4).setValue(fullName);
     if (role) sheet.getRange(rowIndex, 3).setValue(role);
     if (password && password.length >= 6) _pwStore_(sheet, rowIndex, password);   // AS-1
+    if ((role && role !== oldRole) || (password && password.length >= 6)) _invalidateUserSessions(who);   // A325
     if (typeof params.trainingMode !== 'undefined') {
       var tm = (params.trainingMode === true || String(params.trainingMode).toLowerCase() === 'true');
       sheet.getRange(rowIndex, 13).setValue(tm ? 'TRUE' : 'FALSE');
@@ -5481,10 +5602,14 @@ function handleDeleteUser(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
 
     var sheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
+    var bad = _userRowMismatch(sheet, rowIndex, params.username);   // A325
+    if (bad) return { success: false, message: bad };
     var role = String(sheet.getRange(rowIndex, 3).getValue()).trim().toLowerCase();
     if (role === 'admin') return { success: false, message: 'Cannot delete admin users.' };
+    var who = String(sheet.getRange(rowIndex, 1).getValue() || '').trim();
 
     sheet.deleteRow(rowIndex);
+    _invalidateUserSessions(who);   // A325
     return { success: true, message: 'User deleted.' };
   } catch (err) {
     return { success: false, message: err.message };
@@ -5497,9 +5622,12 @@ function handleResetUserPassword(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
 
     var sheet = SpreadsheetApp.openById(USERS_SHEET_ID).getSheets()[0];
+    var bad = _userRowMismatch(sheet, rowIndex, params.username);   // A325
+    if (bad) return { success: false, message: bad };
     // AS-1 — the old alphabet was an empty string, so every reset produced an empty password.
     var tempPassword = _pwRandom_(12);
     _pwStore_(sheet, rowIndex, tempPassword);
+    _invalidateUserSessions(sheet.getRange(rowIndex, 1).getValue());   // A325
 
     return { success: true, message: 'Password reset successfully.', tempPassword: tempPassword };
   } catch (err) {
@@ -5514,6 +5642,7 @@ function handleDeleteOrder(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row.' };
     var sheet = _ordersSheet();
     if (rowIndex > sheet.getLastRow()) return { success: false, message: 'Row does not exist.' };
+    var stale = _staleRow(sheet, rowIndex, [2], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     var orderNo = ''; var client = ''; var amt = 0;
     try {
       var r = sheet.getRange(rowIndex, 1, 1, 7).getValues()[0];
@@ -5534,6 +5663,7 @@ function handleDeleteExpense(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row.' };
     var sheet = _expensesSheet();
     if (rowIndex > sheet.getLastRow()) return { success: false, message: 'Row does not exist.' };
+    var stale = _staleRow(sheet, rowIndex, [2, 5], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     var cat = ''; var amt = 0; var desc = '';
     try {
       var r = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
@@ -5553,6 +5683,7 @@ function handleUpdateExpense(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row.' };
     var sheet = _expensesSheet();
     if (rowIndex > sheet.getLastRow()) return { success: false, message: 'Row does not exist.' };
+    var stale = _staleRow(sheet, rowIndex, [2, 5], params.expectKey); if (stale) return { success: false, message: stale };   // A325
 
     var toll = parseFloat(params.toll) || 0;
     var fuel = parseFloat(params.fuel) || 0;
@@ -5841,7 +5972,7 @@ function handleSavePORecord(params) {
     var itemsSummary = params.itemsSummary || '';
     var createdBy   = params.createdBy   || '';
     var driveLink   = params.driveLink   || '';
-    var creatorRole = (params.creatorRole || '').toLowerCase();
+    var creatorRole = _callerRole(params.creatorRole);   // A325
 
     if (!poNo)       return { success: false, message: 'PO No is required.' };
     if (!vendorName) return { success: false, message: 'Vendor Name is required.' };
@@ -5929,14 +6060,13 @@ function handleGetPORecords(params) {
 function handleApprovePO(params) {
   try {
     var poNo = params.poNo || '';
-    var role = (params.approverRole || '').toLowerCase();
+    var role = _callerRole(params.approverRole);   // A325 — the signed-in role, never a default
     var decision = params.decision || params.approval || '';
     var notes = params.notes || '';
 
     if (!poNo)     return { success: false, message: 'Missing PO No.' };
     if (!decision) return { success: false, message: 'Missing approval decision.' };
-    // Default to management if no role specified (backward compat)
-    if (!role) role = 'management';
+    if (!role) return { success: false, message: 'Who is approving is not known.' };
 
     var sheet = _poRecordsSheet();
     var data = sheet.getDataRange().getValues();
@@ -6102,9 +6232,7 @@ function _salesOrdersSheet() {
 }
 
 function _nextSONumber() {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
+  return _withLock(function () {   // A325 — re-entrant: createSalesOrder holds it through the append
     var sheet = _salesOrdersSheet();
     var now = new Date();
     var mm = ('0' + (now.getMonth() + 1)).slice(-2);
@@ -6120,9 +6248,7 @@ function _nextSONumber() {
       }
     }
     return prefix + ('00' + (max + 1)).slice(-3);
-  } finally {
-    lock.releaseLock();
-  }
+  });
 }
 
 // ─── ACTION: getSalesOrders ──────────────────────────────────
@@ -6183,9 +6309,14 @@ function handleGetSalesOrders(params) {
 }
 
 // ─── ACTION: createSalesOrder ────────────────────────────────
-function handleCreateSalesOrder(params) {
+function handleCreateSalesOrder(params) { return _withLock(function () { return _createSalesOrderLocked(params); }); }   // A325
+function _createSalesOrderLocked(params) {
   try {
     var sheet = _salesOrdersSheet();
+    if (params.soNo) {                       // A325 — a typed SO number must be new (items of two orders merged)
+      var _ex = sheet.getDataRange().getValues();
+      for (var _i = 1; _i < _ex.length; _i++) if (String(_ex[_i][0]).trim() === String(params.soNo).trim()) return { success: false, message: 'Sales order ' + params.soNo + ' already exists.' };
+    }
     var soNo = params.soNo || _nextSONumber();
     var date = params.date || formatDate(new Date());
     var customerId = params.customerId || '';
@@ -6709,8 +6840,9 @@ function handleGetPricingSubmissions(params) {
         prRefsJson: String(row[7] || ''),
         forwardedBy: String(row[8] || ''),
         updatedDate: String(row[9] || ''),
-        commissionPct: String(row[10] || ''),
-        marginPct: String(row[11] || ''),
+        // A325 — a saved 0 is a value: `|| ''` sent it back blank and the page kept the previous rate
+        commissionPct: (row[10] === '' || row[10] == null) ? '' : String(row[10]),
+        marginPct: (row[11] === '' || row[11] == null) ? '' : String(row[11]),
         rowIndex: i + 1
       });
     }
@@ -6735,6 +6867,12 @@ function handleForwardPRToPricing(params) {
     var refs = JSON.parse(prRefsJson);
     if (!refs.length) return { success: false, message: 'No PR items to forward' };
     if (refs.length > 20) return { success: false, message: 'Maximum 20 items per submission' };
+    // A325 — the sheet ids sit inside JSON, out of _sheetIdGuard's reach: check them here, before any write
+    var allowedIds = (_SESSION && !_SESSION.backend) ? _allowedSheetIds_(_SESSION) : null;
+    for (var v = 0; v < refs.length; v++) {
+      if (!refs[v] || parseInt(refs[v].rowIndex) < 2) return { success: false, message: 'A PR item has no row — reload and try again.' };
+      if (allowedIds && !allowedIds[String(refs[v].sheetId || '').trim()]) return { success: false, message: 'Forbidden: that sheet is not yours.' };
+    }
 
     // Update each PR item's status to "For Pricing" in their respective sheets
     for (var r = 0; r < refs.length; r++) {
@@ -7443,6 +7581,7 @@ function handleUpdateEmployee(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
 
     var sheet = _employeesSheet();
+    var stale = _staleRow(sheet, rowIndex, [1], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 
     if (params.employeeName !== undefined) sheet.getRange(rowIndex, 1).setValue(params.employeeName);
@@ -7475,6 +7614,7 @@ function handleDeleteEmployee(params) {
     if (!rowIndex || rowIndex < 2) return { success: false, message: 'Invalid row index.' };
 
     var sheet = _employeesSheet();
+    var stale = _staleRow(sheet, rowIndex, [1], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     sheet.deleteRow(rowIndex);
 
     return { success: true, message: 'Employee deleted successfully.' };
@@ -7683,8 +7823,9 @@ function handleUpdateLeaveRequest(params) {
     // Role-gated approval: only HR or Management can approve sales;
     // only Management can approve non-sales requests.
     if (params.status === 'Approved' || params.status === 'Rejected') {
-      var approverRole = String(params.approverRole || '').toLowerCase();
-      if (approverRole) {
+      var approverRole = _callerRole(params.approverRole);   // A325 — an omitted role used to skip the gate
+      if (!approverRole) return { success: false, message: 'Not authorized to approve this request.' };
+      {
         var existingEmp = String(sheet.getRange(row, 1).getValue() || '').trim();
         var empName = params.employee || existingEmp;
         var requesterRole = _lookupUserRole(empName);
@@ -7700,6 +7841,11 @@ function handleUpdateLeaveRequest(params) {
       }
     }
 
+    // A325 — the balance moves only when the status CHANGES: approving twice took the days twice
+    var before = sheet.getRange(row, 1, 1, 7).getValues()[0];
+    var prevStatus = String(before[6] || '').trim(), prevDays = Number(before[4]) || 0;
+    var prevEmp = String(before[0] || '').trim();
+
     if (params.employee) sheet.getRange(row, 1).setValue(params.employee);
     if (params.type) sheet.getRange(row, 2).setValue(params.type);
     if (params.startDate) sheet.getRange(row, 3).setValue(params.startDate);
@@ -7710,26 +7856,16 @@ function handleUpdateLeaveRequest(params) {
     if (params.approvedBy) sheet.getRange(row, 8).setValue(params.approvedBy);
     if (params.notes !== undefined) sheet.getRange(row, 9).setValue(params.notes);
 
+    if (params.status && params.status !== 'Approved' && prevStatus === 'Approved' && prevEmp && prevDays > 0) _adjustLeaveBalance(prevEmp, prevDays);   // un-approved: the days come back
+
     // Leave balance decrement on approval + notification
     if (params.status === 'Approved' || params.status === 'Rejected') {
       var empName = params.employee || String(sheet.getRange(row, 1).getValue()).trim();
       var days = Number(params.days || sheet.getRange(row, 5).getValue()) || 0;
 
-      if (params.status === 'Approved' && empName && days > 0) {
-        try {
-          var empSheet = _employeesSheet();
-          var empData = empSheet.getDataRange().getValues();
-          for (var e = 1; e < empData.length; e++) {
-            if (String(empData[e][0]).trim().toLowerCase() === empName.toLowerCase()) {
-              var currentBalance = Number(empData[e][10]) || 0;
-              empSheet.getRange(e + 1, 11).setValue(currentBalance - days);
-              break;
-            }
-          }
-        } catch (balErr) { Logger.log('Leave balance error: ' + balErr.message); }
-      }
+      if (params.status === 'Approved' && prevStatus !== 'Approved' && empName && days > 0) _adjustLeaveBalance(empName, -days);
 
-      _addNotification(empName, 'leave_' + params.status.toLowerCase(),
+      if (params.status !== prevStatus) _addNotification(empName, 'leave_' + params.status.toLowerCase(),
         'Leave ' + params.status,
         'Your leave request (' + days + ' day(s)) has been ' + params.status.toLowerCase() + '.', '');
     }
@@ -7737,6 +7873,19 @@ function handleUpdateLeaveRequest(params) {
   } catch (err) {
     return { success: false, message: err.message };
   }
+}
+
+function _adjustLeaveBalance(empName, delta) {
+  try {
+    var empSheet = _employeesSheet();
+    var empData = empSheet.getDataRange().getValues();
+    for (var e = 1; e < empData.length; e++) {
+      if (String(empData[e][0]).trim().toLowerCase() === String(empName).toLowerCase()) {
+        empSheet.getRange(e + 1, 11).setValue((Number(empData[e][10]) || 0) + delta);
+        return;
+      }
+    }
+  } catch (balErr) { Logger.log('Leave balance error: ' + balErr.message); }
 }
 
 function handleDeleteLeaveRequest(params) {
@@ -8162,7 +8311,7 @@ function handleAddCampaign(params) {
     sheet.appendRow([
       params.name, params.channel, params.startDate || '', params.endDate || '',
       Number(params.budget) || 0, Number(params.spend) || 0, Number(params.leads) || 0,
-      params.status || 'Planning', params.notes || '', params.createdBy || '', now, now
+      params.status || 'Planning', params.notes || '', _resolveActor(params), now, now   // A325 — the page never sent createdBy
     ]);
     return { success: true, message: 'Campaign added.' };
   } catch (err) {
@@ -8449,13 +8598,20 @@ function handleGetHRAnalytics(params) {
   }
 }
 
+/* A325 — real days to the next occurrence of a month/day, this year or next. "(month − this month) × 30"
+   went negative across December→January, so early-January birthdays never showed in late December. */
+function _daysUntilNext(month, day, now) {
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var next = new Date(now.getFullYear(), month, day);
+  if (next < today) next = new Date(now.getFullYear() + 1, month, day);
+  return { days: Math.round((next - today) / 86400000), year: next.getFullYear() };
+}
+
 function handleGetBirthdayAnniversary(params) {
   try {
     var sheet = _employeesSheet();
     var data = sheet.getDataRange().getValues();
     var now = new Date();
-    var currentMonth = now.getMonth();
-    var currentDay = now.getDate();
     var upcoming = [];
 
     for (var i = 1; i < data.length; i++) {
@@ -8472,9 +8628,9 @@ function handleGetBirthdayAnniversary(params) {
         if (!isNaN(hd.getTime())) {
           var hMonth = hd.getMonth();
           var hDay = hd.getDate();
-          var daysDiff = ((hMonth - currentMonth) * 30) + (hDay - currentDay);
-          if (daysDiff >= 0 && daysDiff <= 30) {
-            var years = now.getFullYear() - hd.getFullYear();
+          var hNext = _daysUntilNext(hMonth, hDay, now), daysDiff = hNext.days;
+          var years = hNext.year - hd.getFullYear();
+          if (daysDiff >= 0 && daysDiff <= 30 && years >= 1) {
             upcoming.push({ name: name, type: 'Anniversary', date: (hMonth + 1) + '/' + hDay, detail: years + ' year(s)', daysAway: daysDiff });
           }
         }
@@ -8486,7 +8642,7 @@ function handleGetBirthdayAnniversary(params) {
         if (!isNaN(bd.getTime())) {
           var bMonth = bd.getMonth();
           var bDay = bd.getDate();
-          var bDiff = ((bMonth - currentMonth) * 30) + (bDay - currentDay);
+          var bDiff = _daysUntilNext(bMonth, bDay, now).days;
           if (bDiff >= 0 && bDiff <= 30) {
             upcoming.push({ name: name, type: 'Birthday', date: (bMonth + 1) + '/' + bDay, detail: '', daysAway: bDiff });
           }
@@ -8935,6 +9091,7 @@ function handleDeleteCollection(params) {
     var sheet = _getCollectionsSheet();
     var rowIndex = parseInt(params.rowIndex);
     if (!rowIndex || rowIndex < 2) throw new Error('Invalid row index.');
+    var stale = _staleRow(sheet, rowIndex, [1], params.expectKey); if (stale) return { success: false, message: stale };   // A325
     var inv = ''; var co = ''; var amt = 0;
     try {
       var r = sheet.getRange(rowIndex, 1, 1, 16).getValues()[0];
@@ -8953,6 +9110,7 @@ function handleUpdateCollection(params) {
     var sheet = _getCollectionsSheet();
     var rowIndex = parseInt(params.rowIndex);
     if (!rowIndex || rowIndex < 2) throw new Error('Invalid row index.');
+    var stale = _staleRow(sheet, rowIndex, [1], params.expectKey); if (stale) return { success: false, message: stale };   // A325
 
     var COLS = 22; // A..V
     var existing = sheet.getRange(rowIndex, 1, 1, COLS).getValues()[0];
@@ -9388,6 +9546,36 @@ function handleSaveShipment(params) {
       'Item':              params.item            || '',
       'Linked SOs':        params.linkedSOs       || ''
     };
+    // A325 — the request key behind each column: an update writes only the fields it was sent
+    var FIELD_KEYS = {
+      'Mode': 'mode',
+      'Shipment Date': 'shipmentDate',
+      'ETD': 'etd',
+      'ETA': 'eta',
+      'AWB': 'awb',
+      'Logistics': 'logistics',
+      'Freight-In': 'freightIn',
+      'Import Duties': 'importDuties',
+      'Customs/Brokerage': 'brokerage',
+      'Handling': 'handling',
+      'Delivery Expense': 'deliveryExpense',
+      'Date Arrived': 'dateArrived',
+      'Total Amount': 'totalAmount',
+      'Amount Paid': 'amountPaid',
+      'Balance': 'balance',
+      'Date of Payment': 'dateOfPayment',
+      'Payment Status': 'paymentStatus',
+      'Payment Method': 'paymentMethod',
+      'Sales Invoice': 'salesInvoice',
+      'Delivery Receipt': 'deliveryReceipt',
+      'Status': 'status',
+      'Remarks': 'remarks',
+      'Clients PO': 'clientsPO',
+      'HI-ESCORP PO': 'hiescorpPO',
+      'Principal': 'principal',
+      'Item': 'item',
+      'Linked SOs': 'linkedSOs'
+    };
 
     if (shipmentId) {
       // Update existing record — diff fields first
@@ -9402,6 +9590,10 @@ function handleSaveShipment(params) {
           Object.keys(fields).forEach(function(name) {
             var c = colIdx(name);
             if (c < 0) return;
+            // A325 — a field the request did not carry keeps its value: the admin Edit modal has no cost
+            // inputs, and saving it blanked Freight-In, Duties, Brokerage, Handling, Delivery and Balance
+            // (and reset an unsent Status to Pending)
+            if (params[FIELD_KEYS[name]] === undefined || params[FIELD_KEYS[name]] === null) return;
             var oldVal = String(data[i][c]).trim();
             var newVal = String(fields[name]).trim();
             if (oldVal !== newVal) {
@@ -9622,7 +9814,9 @@ function _buildStoredFilename(shipmentId, stageKey, originalName) {
 // ─── DocumentIndex helpers ───────────────────────────────────
 
 function _docIndexSheet() {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  // A325 — a standalone web app has no active spreadsheet (null): every index write failed silently.
+  // A bound copy keeps using its own file, so an index that already lives there is not orphaned.
+  var ss    = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(USERS_SHEET_ID);
   var sheet = ss.getSheetByName(DOC_INDEX_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(DOC_INDEX_SHEET_NAME);
@@ -10711,6 +10905,12 @@ function _queryHistorySheets(shipmentIdFilter, dateFrom, dateTo, settings) {
     if (dfMs < cutoffMs) sheets.push(_historyArchiveSheet());
   }
 
+  // A325 — the stamps are UTC ISO strings and the range is Manila days: compare UTC to UTC, or a
+  // 7 a.m. event on dateFrom fell out and the next morning's crept in on dateTo
+  var _utc = function (d, hms) { var t = new Date(d + 'T' + hms + '+08:00'); return isNaN(t.getTime()) ? d : t.toISOString(); };
+  var fromUTC = dateFrom ? _utc(dateFrom, '00:00:00.000') : '';
+  var toUTC   = dateTo ? _utc(dateTo, '23:59:59.999') : '';
+
   sheets.forEach(function(sh) {
     var data = sh.getDataRange().getValues();
     if (data.length < 2) return;
@@ -10728,8 +10928,8 @@ function _queryHistorySheets(shipmentIdFilter, dateFrom, dateTo, settings) {
       // date filter
       if (dateFrom || dateTo) {
         var ts = String(row[tsIdx] || '');
-        if (dateFrom && ts < dateFrom) continue;
-        if (dateTo   && ts > dateTo + 'T23:59:59Z') continue;
+        if (dateFrom && ts < fromUTC) continue;
+        if (dateTo   && ts > toUTC) continue;
       }
 
       var obj = {};
@@ -10834,8 +11034,11 @@ function archiveOldHistoryEvents() {
   if (!toMove.length) return;
 
   var BATCH = 200;
-  var processed = parseInt(props.getProperty('archive_progress') || '0');
-  var batch     = toMove.slice(processed, processed + BATCH);
+  /* A325 — toMove is recomputed on every run AFTER the previous batch was deleted, so it always starts
+     at the first row still to move. The old saved offset skipped past it: with 201-399 old rows the
+     second run sliced nothing, getRange(…, 0 rows) threw, and the offset was never cleared again. */
+  if (props.getProperty('archive_progress') !== null) props.deleteProperty('archive_progress');
+  var batch     = toMove.slice(0, BATCH);
 
   // Write to archive
   var archSh    = _historyArchiveSheet();
@@ -10849,11 +11052,7 @@ function archiveOldHistoryEvents() {
   // Check if archive needs year-bucketing
   _historyMaybeRotateArchive(archSh, settings);
 
-  var newProgress = processed + batch.length;
-  if (newProgress >= toMove.length) {
-    props.deleteProperty('archive_progress');
-  } else {
-    props.setProperty('archive_progress', String(newProgress));
+  if (toMove.length > batch.length) {
     // Re-trigger for next batch
     ScriptApp.newTrigger('archiveOldHistoryEvents').timeBased().after(1000).create();
   }
@@ -11191,6 +11390,8 @@ function handleSavePayrollIncentive(params) {
     /* Cutoff is DERIVED from the period, never taken from the client — two fields that can disagree
        will eventually disagree, and this one decides which payslip the money lands on. */
     var cutoff = period.slice(-1);
+    // A325 — an approved cutoff is the page Management signed: an incentive added after would change it unseen
+    if (_sdPeriodApproved(period)) return { success: false, message: 'Cutoff ' + period + ' is already approved — reopen it before adding an incentive.' };
     var category = String((params && params.category) || '').trim() || 'Other';
     if (_PAYROLL_INCENTIVE_CATEGORIES.indexOf(category) === -1) category = 'Other';
 
@@ -11217,6 +11418,7 @@ function handleVoidPayrollIncentive(params) {
       if (String(data[i][9] || '') === 'Voided') {
         return { success: true, alreadyVoided: true, message: 'Already voided.' };
       }
+      if (_sdPeriodApproved(String(data[i][1] || ''))) return { success: false, message: 'Cutoff ' + data[i][1] + ' is already approved — reopen it before voiding its incentive.' };   // A325
       sheet.getRange(i + 1, 10, 1, 3).setValues([['Voided', _resolveActor(params), new Date().toISOString()]]);
       return { success: true, message: 'Incentive voided — the record stays in the history.' };
     }
@@ -11304,6 +11506,10 @@ function handleSavePayrollEmployee(params) {
       String(params.username||'').trim(), newTin];                     // A312 — not a pay change, no history
     var empName = String(params.lastName||'') + ', ' + String(params.firstName||'');
     var isEdit = (id > 0 && id < data.length);
+    // A325 — the id is a row number: refuse when that row is no longer the person the page opened
+    if (id > 0 && params.expectName && (!isEdit || String(data[id][0]||'') + ', ' + String(data[id][1]||'') !== String(params.expectName))) {
+      return { success: false, message: 'The employee list has changed since it was loaded — reload it and try again.' };
+    }
 
     // A198 — capture the change BEFORE the in-place overwrite loses the old value.
     if (isEdit) {
@@ -11344,7 +11550,16 @@ function handleDeletePayrollEmployee(params) {
   try {
     var id = parseInt(params.id)||0;
     if (id < 1) return { success: false, message: 'Invalid ID.' };
-    _payrollEmployeesSheet().deleteRow(id+1);
+    var sheet = _payrollEmployeesSheet();
+    if (id + 1 > sheet.getLastRow()) return { success: false, message: 'That employee is no longer on the list — reload it.' };
+    // A325 — the id is a row number: after another delete it names the next person down
+    if (params.expectName) {
+      var at = sheet.getRange(id + 1, 1, 1, 2).getValues()[0];
+      if (String(at[0] || '') + ', ' + String(at[1] || '') !== String(params.expectName)) {
+        return { success: false, message: 'The employee list has changed since it was loaded — reload it and try again.' };
+      }
+    }
+    sheet.deleteRow(id+1);
     return { success: true };
   } catch(e) { return { success: false, message: e.message }; }
 }
@@ -11505,6 +11720,18 @@ function _sdIsSkipped(d, period) {
  * moved, and handleSkipSalaryDeductionCutoff refuses before we get here.
  *
  * Returns true when a row was rewritten, so the caller can say so. */
+/* A325 — a deduction cancelled or edited after Save Pay but before approval left the old figure in the
+   saved register: net pay still reduced, and at approval nothing was posted against the agreement,
+   so the employee's balance stayed too high. Recompute every saved, unapproved cutoff of that
+   employee. Returns the periods rewritten, joined, or ''. */
+function _sdRefreshOpenPeriods(employee) {
+  if (!employee) return '';
+  var data;
+  try { data = _payrollRegisterSheet().getDataRange().getValues(); } catch (e) { return ''; }
+  var periods = {};
+  for (var i = 1; i < data.length; i++) if (String(data[i][1] || '') === String(employee)) periods[String(data[i][0] || '')] = 1;
+  return Object.keys(periods).filter(function (p) { return _sdRefreshRegisterRow(p, employee); }).join(', ');
+}
 function _sdRefreshRegisterRow(period, employee) {
   if (!_sdValidPeriod(period) || !employee || _sdPeriodApproved(period)) return false;
   var sheet, data;
@@ -11967,7 +12194,9 @@ function handleSaveSalaryDeduction(params) {
       sheet.getRange(found.rowIndex, 2, 1, 8).setValues([[employee, username, item,
         String((params && params.purpose) || ''), total, per, cadence, start]]);
       if (params && params.notes !== undefined) sheet.getRange(found.rowIndex, 18).setValue(String(params.notes));
-      return { success: true, deductionNo: dedNo, message: 'Salary deduction updated.' };
+      // A325 — the saved, unapproved pay follows the new terms (the old employee too, if it moved)
+      var redone = [_sdRefreshOpenPeriods(employee), found.obj.employee !== employee ? _sdRefreshOpenPeriods(found.obj.employee) : ''].filter(Boolean).join(', ');
+      return { success: true, deductionNo: dedNo, message: 'Salary deduction updated.' + (redone ? ' The saved pay for ' + redone + ' was updated.' : '') };
     }
 
     var newNo = _newDeductionNo(sheet);
@@ -12056,7 +12285,8 @@ function handleCancelSalaryDeduction(params) {
       sheet.getRange(found.rowIndex, 18).setValue(
         (prior ? prior + ' | ' : '') + 'Cancelled: ' + String(params.reason));
     }
-    return { success: true, message: 'Deduction cancelled.' };
+    var redone = _sdRefreshOpenPeriods(found.obj && found.obj.employee);   // A325
+    return { success: true, message: 'Deduction cancelled.' + (redone ? ' The saved pay for ' + redone + ' was updated.' : '') };
   } catch (e) { return { success: false, message: e.message }; }
 }
 
@@ -12232,7 +12462,8 @@ function handleGetPayrollHours(params) {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-function handleSavePayrollHours(params) {
+function handleSavePayrollHours(params) { return _withLock(function () { return _savePayrollHoursLocked(params); }); }   // A325
+function _savePayrollHoursLocked(params) {
   try {
     var period = String(params.period||'');
     var rows   = JSON.parse(params.rows||'[]');
@@ -12283,7 +12514,8 @@ function handleGetPayrollHolidays(params) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function handleSavePayrollHolidays(params) {
+function handleSavePayrollHolidays(params) { return _withLock(function () { return _savePayrollHolidaysLocked(params); }); }   // A325
+function _savePayrollHolidaysLocked(params) {
   try {
     var period = String(params.period || '');
     var rows   = JSON.parse(params.rows || '[]');
@@ -12381,7 +12613,8 @@ function handleGetPayrollRegister(params) {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-function handleSavePayrollRegister(params) {
+function handleSavePayrollRegister(params) { return _withLock(function () { return _savePayrollRegisterLocked(params); }); }   // A325
+function _savePayrollRegisterLocked(params) {
   try {
     var period = String(params.period||'');
     var rows   = JSON.parse(params.rows||'[]');
@@ -12461,6 +12694,15 @@ function _bankTransactionsSheet() {
 }
 
 // Internal — append a single transaction. Returns the new ID.
+/* A325 — the Manila calendar day of a bank-page row. The cell is a Date (typed 'YYYY-MM-DD' becomes
+   Manila midnight) or an ISO timestamp string; toISOString()/slice(0,10) gave the UTC day, so a
+   1 October entry filed under September and the books got "Thu Oct 01" as a date. */
+function _bankTxDay(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var str = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) { var d = new Date(str); if (!isNaN(d.getTime())) return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+  return /^\d{4}-\d{2}-\d{2}/.test(str) ? str.slice(0, 10) : '';
+}
 function _appendBankTransaction(t) {
   var sheet = _bankTransactionsSheet();
   var id = Utilities.getUuid();
@@ -12544,7 +12786,7 @@ function handleGetBankTransactions(params) {
       if (accountCode && code !== accountCode) continue;
       var dateRaw = row[1];
       var dateStr = (dateRaw instanceof Date) ? dateRaw.toISOString() : String(dateRaw || '');
-      if (month && dateStr.indexOf(month) !== 0) continue;
+      if (month && _bankTxDay(dateRaw).indexOf(month) !== 0) continue;   // A325 — the Manila month, not UTC
       out.push({
         id: String(row[0] || ''),
         date: dateStr,
@@ -12661,7 +12903,14 @@ function handleDeleteBankTransaction(params) {
     // Also delete paired leg of any Transfer
     var pairedId = '';
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === id) { pairedId = String(data[i][10] || ''); break; }
+      if (String(data[i][0]) === id) {
+        // A325 — a bill's or payable's bank leg goes with its source: deleting it here left the source
+        // Paid with a dangling Bank Tx ID (balance and books disagreed; re-marking it paid was refused)
+        var rt = String(data[i][8] || '');
+        if (rt === 'PaymentRequest') return { success: false, message: 'This is a paid bill\'s bank entry — it stays while the bill is marked Paid; record a correcting entry instead.' };
+        if (rt === 'DirectorPayable') return { success: false, message: 'This is a Director Payable\'s bank entry — un-mark it paid on Director Payables instead.' };
+        pairedId = String(data[i][10] || ''); break;
+      }
     }
     // Delete bottom-up to keep indices valid
     for (var j = data.length; j >= 2; j--) {
@@ -12907,7 +13156,7 @@ function handleGetBooksFeed() {
     for (var t = 1; t < tx.length; t++) {
       var x = tx[t], refType = String(x[8] || '');
       if (refType === 'PaymentRequest' || refType === 'DirectorPayable') continue;   // their bank legs come in with Billing / Payables
-      txs.push({ id: String(x[0]), date: x[1] ? String(x[1]).slice(0, 10) : '', accountCode: String(x[2] || ''), type: String(x[3] || ''),
+      txs.push({ id: String(x[0]), date: _bankTxDay(x[1]), accountCode: String(x[2] || ''), type: String(x[3] || ''),   // A325
                  direction: parseInt(x[4], 10) || 0, amount: _r2(x[5]), currency: String(x[6] || 'PHP'), description: String(x[7] || ''),
                  refType: refType, refId: String(x[9] || ''), pairedId: String(x[10] || '') });
     }
@@ -13016,7 +13265,8 @@ function handleSaveDirectorPayable(params) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function handleMarkDirectorPayablePaid(params) {
+function handleMarkDirectorPayablePaid(params) { return _withLock(function () { return _markDirectorPayablePaidLocked(params); }); }   // A325
+function _markDirectorPayablePaidLocked(params) {
   try {
     var id = String((params && params.id) || '').trim();
     var bankAccountCode = String((params && params.bankAccountCode) || '').trim();
@@ -13039,7 +13289,7 @@ function handleMarkDirectorPayablePaid(params) {
     var paidBy = String((params && params.paidBy) || '');
     var paidAt = new Date().toISOString();
     // A321 — the bank's date and, for a foreign payable, the pesos the bank took
-    var dpValueDate = /^\d{4}-\d{2}-\d{2}$/.test(String((params && params.valueDate) || '')) ? String(params.valueDate) : paidAt.slice(0, 10);
+    var dpValueDate = /^\d{4}-\d{2}-\d{2}$/.test(String((params && params.valueDate) || '')) ? String(params.valueDate) : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');   // A325 — Manila, not UTC
     var dpPHP = parseFloat(params && params.amountPHP) || 0;
     if (String(currency).toUpperCase() !== 'PHP' && !(dpPHP > 0)) return { success: false, message: 'This payable is in ' + currency + ': enter the pesos the bank actually debited.' };
     if (!(dpPHP > 0)) dpPHP = amount;
@@ -13577,7 +13827,7 @@ function handleGetMyLeaves(params) {
 // ─── getActiveMemosForUser ───────────────────────────────────
 function handleGetActiveMemosForUser(params) {
   try {
-    var role = String(params.role || '').toLowerCase();
+    var role = _callerRole(params.role);   // A325
     var sheet = _memosSheet();
     var data = sheet.getDataRange().getValues();
     var results = [];
@@ -13796,7 +14046,7 @@ function handleGetAdminDailyAutofill(params) {
       var act = actSheet.getDataRange().getValues();
       var seenShipAct = false;
       for (var a = 1; a < act.length; a++) {
-        if (String(act[a][1] || '') !== dateISO) continue;
+        if (!_rowDateMatches(act[a][1], dateISO)) continue;   // A325 — Sheets stores the 'YYYY-MM-DD' as a Date
         if (String(act[a][4] || '').toLowerCase() !== 'shipment') continue;
         if (userLC && String(act[a][2] || '').trim().toLowerCase() !== userLC) continue;
         seenShipAct = true;
@@ -13920,10 +14170,13 @@ function _logActivity(user, action, entityType, entityId, summary, amount) {
 // Resolve the acting user's name from request params, falling back to other
 // known user fields used by various handlers.
 function _resolveActor(params) {
-  if (!params) return '';
+  // A325 — last, the signed-in caller: pages that call this script directly send no actor, so the
+  // "By" columns came out blank (campaigns, bank movements, paid payables)
+  var me = (_SESSION && !_SESSION.backend) ? String(_SESSION.fullName || _SESSION.username || '') : '';
+  if (!params) return me.trim();
   return String(
     params.actorName || params.createdBy || params.paidBy || params.userName ||
-    params.creatorName || params.user || ''
+    params.creatorName || params.user || me
   ).trim();
 }
 
@@ -13951,7 +14204,7 @@ function handleGetAccountingDailyAutofill(params) {
         var rId    = String(act[a][5] || '');
         var rSum   = String(act[a][6] || '');
         var rAmt   = parseFloat(act[a][7]) || 0;
-        if (rDate !== dateISO) continue;
+        if (!_rowDateMatches(act[a][1], dateISO)) continue;   // A325 — a Date cell never equalled the ISO string
         if (userLC && rUser !== userLC) continue;
         var entry = { action: rAct, id: rId, summary: rSum, amount: rAmt };
         switch (rType) {

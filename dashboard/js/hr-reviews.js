@@ -30,13 +30,15 @@ function editReview(rowIndex) {
 
   editingRow = rowIndex;
   document.getElementById('editRowIndex').value = rowIndex;
-  document.getElementById('revEmployee').value = rev.employeeName;
+  // A325 — Code.gs names these employee / rating / areasForImprovement; the old employeeName /
+  // overallRating / improvements keys never existed on the server, so Edit opened blank.
+  document.getElementById('revEmployee').value = rev.employee;
   document.getElementById('revReviewer').value = rev.reviewer;
   document.getElementById('revPeriod').value = rev.period;
-  document.getElementById('revRating').value = rev.overallRating || '';
+  document.getElementById('revRating').value = rev.rating || '';   // 0 = never rated (the field is 1-5)
   document.getElementById('revCategories').value = rev.categoryScores || '';
   document.getElementById('revStrengths').value = rev.strengths || '';
-  document.getElementById('revImprovements').value = rev.improvements || '';
+  document.getElementById('revImprovements').value = rev.areasForImprovement || '';
   document.getElementById('revStatus').value = rev.status || 'Draft';
   document.getElementById('formTitle').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit Review';
   document.getElementById('submitBtn').textContent = 'Update Review';
@@ -53,14 +55,16 @@ async function submitReview(e) {
   btn.disabled = true;
   msg.style.display = 'none';
 
+  // A325 — the keys Code.gs reads. employeeName failed Add's "Employee is required" check, and
+  // updates silently dropped the rating and improvements.
   const data = {
-    employeeName: document.getElementById('revEmployee').value.trim(),
+    employee: document.getElementById('revEmployee').value.trim(),
     reviewer: document.getElementById('revReviewer').value.trim(),
     period: document.getElementById('revPeriod').value.trim(),
-    overallRating: document.getElementById('revRating').value,
+    rating: document.getElementById('revRating').value,
     categoryScores: document.getElementById('revCategories').value.trim(),
     strengths: document.getElementById('revStrengths').value.trim(),
-    improvements: document.getElementById('revImprovements').value.trim(),
+    areasForImprovement: document.getElementById('revImprovements').value.trim(),
     status: document.getElementById('revStatus').value
   };
 
@@ -112,9 +116,8 @@ async function loadReviews() {
 
   const params = {};
   const statusFilter = document.getElementById('filterStatus').value;
-  const periodFilter = (document.getElementById('filterPeriod').value || '').trim();
   if (statusFilter) params.status = statusFilter;
-  if (periodFilter) params.period = periodFilter;
+  // A325 — Code.gs filters on employee and status only; the period filter is applied in renderTable.
 
   try {
     const result = await apiGetPerformanceReviews(params);
@@ -143,9 +146,11 @@ function ratingDisplay(rating) {
 function renderTable() {
   const container = document.getElementById('reviewContainer');
   const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  const period = (document.getElementById('filterPeriod').value || '').trim().toLowerCase();
 
   const filtered = reviewsData.filter(r => {
-    if (search && !(r.employeeName || '').toLowerCase().includes(search) && !(r.reviewer || '').toLowerCase().includes(search)) return false;
+    if (search && !(r.employee || '').toLowerCase().includes(search) && !(r.reviewer || '').toLowerCase().includes(search)) return false;
+    if (period && !(r.period || '').toLowerCase().includes(period)) return false;   // A325 — server ignores period
     return true;
   });
 
@@ -162,14 +167,14 @@ function renderTable() {
     const statusCls = r.status === 'Completed' ? 'status-completed' : r.status === 'In Progress' ? 'status-progress' : 'status-draft';
 
     html += '<tr>' +
-      '<td><strong>' + esc(r.employeeName) + '</strong></td>' +
+      '<td><strong>' + esc(r.employee) + '</strong></td>' +
       '<td>' + esc(r.reviewer) + '</td>' +
       '<td>' + esc(r.period) + '</td>' +
-      '<td>' + ratingDisplay(r.overallRating) + '</td>' +
+      '<td>' + ratingDisplay(r.rating || '') + '</td>' +
       '<td><span class="status-badge ' + statusCls + '">' + esc(r.status || 'Draft') + '</span></td>' +
       '<td style="white-space:nowrap;">' +
       '<button class="btn btn-sm btn-secondary" onclick="editReview(' + r.rowIndex + ')" style="margin-right:0.3rem;" title="Edit">Edit</button>' +
-      '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteReview(' + r.rowIndex + ',\'' + esc(r.employeeName).replace(/'/g, "\\'") + '\')" title="Delete">Delete</button>' +
+      '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteReview(' + r.rowIndex + ',' + esc(JSON.stringify(String(r.employee || ''))) + ')" title="Delete">Delete</button>' +   // A325 — an escaped ' decodes back before the handler runs; a JSON string survives it
       '</td></tr>';
   });
 

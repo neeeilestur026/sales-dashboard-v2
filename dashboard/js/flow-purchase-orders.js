@@ -297,7 +297,16 @@ async function savePO() {
   if (!editingNo) payload.clientRef = flowClientRef();     // idempotent create (safe retry)
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
-    const res = await postFlow(editingNo ? 'updatePurchaseOrder' : 'createPurchaseOrder', payload);
+    const action = editingNo ? 'updatePurchaseOrder' : 'createPurchaseOrder';
+    let res = await postFlow(action, payload);
+    // A325 — the server asks before re-pricing a PO that payment requests stand on, or saving an odd
+    // implied rate; the page used to show the question as an error with no way to say yes
+    const CONFIRM = { poHasRequests: 'confirmRepricePaid', poAmount: 'confirmAmount' };
+    for (let n = 0; !res.success && CONFIRM[res.needsConfirm] && n < 2; n++) {
+      if (!confirm(res.message + '\n\nSave anyway?')) { flowMsg('formMsg', 'Not saved.', false); return; }
+      payload[CONFIRM[res.needsConfirm]] = true;
+      res = await postFlow(action, payload);
+    }
     if (!res.success) throw new Error(res.message);
     let msg = `${res.message} (${res.poNo || poNo})`;
     if (res.apNo) msg += ` · AP entry ${res.apNo} created`;

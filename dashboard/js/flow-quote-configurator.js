@@ -114,7 +114,7 @@ function qcInit(opts) {
   qcRole = qcSession.role || '';
 
   const d = document.getElementById('qcDate');
-  if (d) d.value = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+  if (d) d.value = (typeof flowToday === 'function') ? flowToday() : hxToday();
 
   qcPrefillDoc();
   qcBindInputs();
@@ -163,7 +163,7 @@ function qcResetForm() {
   qcPhotoDocs = {}; qcPhotoDirty = {}; qcPhotoLoad = null; qcPhotoFailed = false; qcPreviewPhotos = false;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
   set('qcNo', ''); set('qcCustomer', ''); set('qcSubject', ''); set('qcDiscount', 0);
-  set('qcDate', (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
+  set('qcDate', (typeof flowToday === 'function') ? flowToday() : hxToday());
   set('qcNote', ''); set('qcPlantSite', '');
   qcFillSalespeople();
   /* A178 — these three selects are RESTORED by qcLoadExisting but were never reset, so they leaked
@@ -371,7 +371,7 @@ function qcLoadExisting(q) {
   const esc = hxEsc;
   const title = document.getElementById('formTitle');
   const savedDate = dt(q.date);
-  const today = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+  const today = (typeof flowToday === 'function') ? flowToday() : hxToday();
   if (qcMode === 'document') {
     if (title) title.textContent = 'Document — ' + qcQuotationNo;
     /* A179 — document mode CANNOT move the date: it never calls updateQuotation (that is what lets an

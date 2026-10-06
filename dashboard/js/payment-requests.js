@@ -173,12 +173,13 @@ async function _pickBankAccountForPR(payeeName, defaultMatch, row) {
     const optsHtml = accounts.map(a => {
       const bal = (a.currentBalance != null ? a.currentBalance : a.balance) || 0;
       const sel = a.code === defaultCode ? ' selected' : '';
-      return `<option value="${a.code}"${sel}>${a.name || a.code} (bal: ${peso(bal)})</option>`;
+      return `<option value="${esc(a.code)}"${sel}>${esc(a.name || a.code)} (bal: ${peso(bal)})</option>`;   // A325 — escaped
     }).join('');
+    // A325 — the payee name is escaped: it is a typed value (read from data-payee) going into innerHTML.
     overlay.innerHTML = `
       <div style="background:#fff;color:var(--hx-ink);border-radius:12px;padding:1.25rem 1.4rem;min-width:340px;max-width:92vw;box-shadow:var(--hx-sh-2);">
         <div style="font-weight:700;font-size:1.05rem;margin-bottom:0.5rem;">Mark PR as Paid</div>
-        <div style="color:var(--hx-ink-2);font-size:0.88rem;margin-bottom:0.9rem;">Choose the bank account to debit for ${payeeName ? '<b>' + payeeName + '</b>' : 'this payee'}.</div>
+        <div style="color:var(--hx-ink-2);font-size:0.88rem;margin-bottom:0.9rem;">Choose the bank account to debit for ${payeeName ? '<b>' + esc(payeeName) + '</b>' : 'this payee'}.</div>
         <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--hx-ink-2);margin-bottom:0.3rem;">Bank Account</label>
         <select id="_prBankSel" style="width:100%;padding:0.45rem 0.55rem;border:1px solid var(--hx-hair);border-radius:6px;font-size:0.9rem;margin-bottom:0.8rem;">${optsHtml}</select>
         <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--hx-ink-2);margin-bottom:0.3rem;">Date the bank paid it</label>
@@ -467,5 +468,5 @@ async function exportPRExcel() {
   const ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Payment Requests');
-  XLSX.writeFile(wb, 'payment-requests-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'payment-requests-' + hxToday() + '.xlsx');
 }

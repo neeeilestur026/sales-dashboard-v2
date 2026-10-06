@@ -6,7 +6,7 @@ import logging
 from io import BytesIO
 from datetime import datetime, timezone
 
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, g
 
 from pdf_generators.payment_slip_pdf import build_payment_slip_pdf
 from pdf_generators.cash_voucher_pdf import build_cash_voucher_pdf
@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 billing_bp = Blueprint("billing_bp", __name__)
 
 from blueprints import _config
-from blueprints.session_auth import require_session
+from blueprints.session_auth import require_session, display_name_for
+
+# A325 — marking a bill paid debits a bank account and feeds the books: accounting, admin and the
+# director only (it was any signed-in login). Who paid it comes from the session, not the page.
+BILLING_ROLES = ["accounting", "admin", "director"]
 from blueprints._upstream import gs_json
 
 DASHBOARD_APPS_SCRIPT_URL = _config.DASHBOARD_APPS_SCRIPT_URL
@@ -35,13 +39,13 @@ def _gs_post(payload: dict) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @billing_bp.route("/mark-paid", methods=["POST"])
-@require_session()
+@require_session(roles=BILLING_ROLES)
 def mark_paid():
     """Mark a PR as Paid, generate a Payment Slip PDF, upload to Drive, save link."""
     body = request.get_json(silent=True) or {}
     row_index   = body.get("rowIndex")
     pr_number   = body.get("prNumber", "")
-    paid_by     = body.get("paidBy", "")
+    paid_by     = display_name_for((getattr(g, "session", None) or {}).get("username", "")) or body.get("paidBy", "")
     details     = body.get("details", {})   # full billing record passed from frontend
 
     if not row_index or not pr_number:
@@ -113,7 +117,7 @@ def download_payment_slip():
 
 
 @billing_bp.route("/generate-cash-voucher", methods=["POST"])
-@require_session()
+@require_session(roles=BILLING_ROLES)
 def generate_cash_voucher():
     """Generate Cash Voucher PDF, upload to Drive, save link + CV number in sheet."""
     body        = request.get_json(silent=True) or {}

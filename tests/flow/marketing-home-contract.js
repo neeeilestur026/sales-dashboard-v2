@@ -129,7 +129,7 @@ async function boot6() {
   const p = page(['js/marketing-home.js'], 'marketing-home.html', { role: 'marketing', name: 'Ana Reyes', username: 'ana' }, {
     data: { getMarketing: { leads: [{ rowIndex: 2, date: '2026-09-10', company: 'Holcim', contact: 'R. Santos', industry: 'Cement', source: 'LinkedIn', status: 'MQL' }], campaigns: [], content: [], enablement: [{ name: 'Deck', status: 'Current' }], events: [], principal: [], metrics: [] } }
   });
-  p.run(`requireMarketingAccess = function(){ return __session; }; flowNum = v => Number(v) || 0; flowMoney = (v) => 'PHP ' + v; flowEsc = s => String(s == null ? '' : s); flowDate = d => String(d || '').slice(0, 10); flowToday = () => '2026-09-28';
+  p.run(`requireMarketingAccess = function(){ return __session; }; flowNum = v => Number(v) || 0; flowMoney = (v) => 'PHP ' + v; flowEsc = s => String(s == null ? '' : s); flowDate = d => String(d || '').slice(0, 10); flowToday = () => '2026-09-28'; hxToday = () => '2026-09-28';
          document.getElementById('monthSel').value = '2026-09';`);
   // renderPanel builds pSearch/pStatus/pAdd/pBody at runtime; the stub DOM needs them by id
   ['pSearch', 'pStatus', 'pAdd', 'pBody'].forEach(id => { p.els[id] = { id, value: '', innerHTML: '', textContent: '', style: {}, addEventListener() {}, querySelectorAll: () => [], classList: { add() {}, remove() {}, toggle() {}, contains: () => false } }; });

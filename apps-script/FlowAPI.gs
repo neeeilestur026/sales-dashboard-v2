@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 165;   // A324 — the books jobs finish inside Flask's minute and continue in rounds. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 166;   // A325 — the system scan: refusals before writes, roles and owners checked, numbers kept as text. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -589,6 +589,28 @@ function _ss() {
   return _SS;
 }
 
+/* A325 — identifiers Sheets would otherwise parse as numbers: an account number lost its leading
+   zeros (and every digit past the 15th), a cheque '000123' became 123, a fingerprint became a float.
+   The columns are set to plain text once per sheet (a Script Property remembers it); values already
+   parsed stay as they are, so readers compare through _idNorm / _fpSame. */
+var _TEXT_COLS = { EventIndex: ['Fingerprint'], PaymentRequests: ['Account Number'], Suppliers: ['Account Number'],
+                   FieldCollections: ['Cheque No', 'Reference No'] };
+var _TEXT_DONE = {};
+function _textColumns(name, sh) {
+  if (!_TEXT_COLS[name] || _TEXT_DONE[name]) return;
+  _TEXT_DONE[name] = true;
+  try {
+    var props = PropertiesService.getScriptProperties(), key = 'textfmt_v1_' + name;
+    if (props.getProperty(key)) return;
+    _TEXT_COLS[name].forEach(function (h) {
+      var c = SCHEMA[name].indexOf(h) + 1;
+      if (c > 0) sh.getRange(2, c, Math.max(1, sh.getMaxRows() - 1), 1).setNumberFormat('@');
+    });
+    props.setProperty(key, '1');
+  } catch (e) { /* formatting is a safeguard, never a reason to fail the write */ }
+}
+function _idNorm(v) { return String(v == null ? '' : v).trim().toLowerCase().replace(/^0+(?=.)/, ''); }
+
 function _sheet(name) {
   var ss = _ss();
   var sh = ss.getSheetByName(name);
@@ -608,6 +630,7 @@ function _sheet(name) {
     sh.getRange(1, sh.getLastColumn() + 1, 1, headers.length - sh.getLastColumn())
       .setValues([headers.slice(sh.getLastColumn())]).setFontWeight('bold');
   }
+  _textColumns(name, sh);
   return sh;
 }
 
@@ -689,7 +712,7 @@ function _nextNumber(name, col, prefix) {
     n = Math.max(stored, max) + 1;
     props.setProperty(key, String(n));
   } catch (e) { /* Properties unavailable → fall back to the sheet max (previous behavior) */ }
-  return stem + ('00' + n).slice(-3);
+  return stem + (n < 1000 ? ('00' + n).slice(-3) : String(n));   // A325 — 1001 used to wrap to '001', a duplicate
 }
 
 function _num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
@@ -768,6 +791,8 @@ var _SECURED = {
   getScanContext: 1, getScanLookup: 1, getLabels: 1, getStockInOptions: 1, getScanPhotos: 1,   // A318 — secured READS (codes → details)
   recordFieldCollection: 1, recordNotCollected: 1, acknowledgeFieldCollection: 1, undoFieldCollection: 1, uploadCollectionPhoto: 1,   // A323
   getCollectorQueue: 1, getFieldCollectionNotices: 1,   // A323 — secured READS (role-gated)
+  getCommissionPayoutReport: 1, getCommissionPreview: 1, auditCommissionIntegrity: 1, getCommissionRates: 1,   // A325 — secured READS:
+  previewCommissionAttribution: 1,                                    // pay data went to an unsigned GET
 };
 
 /* A209 — commission requests are built but NOT open to everyone yet.
@@ -1575,7 +1600,9 @@ function createQuotation(p) {
   // Auto-send for approval on create (no separate Submit step). Route by the creator's role:
   //   management/director → Approved (top tier); admin → Pending Management; else (sales/accounting) → Pending Admin.
   var creatorRole = p.actorRole || p.createdByRole || '';
-  var initialStatus = p.status ||
+  /* A325 — the browser may ask for Draft (the admin import, a PR's draft) and nothing else: a sales
+     login posting status 'Approved' skipped admin and management and could send the quotation. */
+  var initialStatus = String(p.status || '') === 'Draft' ? 'Draft' :
     (_isMgmtTier(creatorRole) ? 'Approved' : (_isAdminTier(creatorRole) ? 'Pending Management' : 'Pending Admin'));
   _append('Quotations', [no, p.date || _now(), p.customer, initialStatus, total, p.createdBy || '', _now(), '',
     creatorRole, '', '', '', p.subject || '', _num(p.discountPct) || 0,
@@ -1810,6 +1837,14 @@ function updateQuotation(p) {
       if (String(r['Quotation No']) === String(no)) {
         qeSh.getRange(r.rowIndex, qeCol, 1, 1).setValues([[newNo]]);
       }
+    });
+    /* A325 — and the pricing-request lines it quoted. 'Quoted On' still named the old number, which no
+       longer exists, so _prLineQuotable read those lines as free: they could be quoted a second time,
+       rejectMgmtPricing zeroed their price, and setMgmtPricing's frozen check let them be re-priced. */
+    var priSh = _sheet('PricingRequestItems');
+    var priCol = SCHEMA.PricingRequestItems.indexOf('Quoted On') + 1;
+    if (priCol > 0) _rows('PricingRequestItems').forEach(function (r) {
+      if (String(r['Quoted On'] || '') === String(no)) priSh.getRange(r.rowIndex, priCol, 1, 1).setValues([[newNo]]);
     });
   }
   return { success: true, quotationNo: newNo, renamed: newNo !== String(no),
@@ -2432,7 +2467,7 @@ function createPurchaseOrder(p) {
     return { success: false, needsConfirm: 'poAmount', impliedFx: _poFx.impliedFx, message: _poFx.message };
   }
   _append('PurchaseOrders', [no, p.soNo || '', p.date || _now(), p.supplier, currency, total,
-    p.status || 'Draft', p.createdBy || '', _now(), '',
+    'Draft', p.createdBy || '', _now(), '',   // A325 — never p.status: a browser-sent 'Approved' skipped the document gate and management
     p.actorRole || p.createdByRole || '', '', '', '',
     _num(p.exchangeRate) > 0 ? _num(p.exchangeRate) : (currency === 'PHP' ? 1 : ''),   // A145: Exchange Rate
     /* A222 (17 values). The peso total finally STAYS. It was always typed, always validated, and
@@ -2473,6 +2508,7 @@ function updatePurchaseOrder(p) {
      new total. Because the PO total is the denominator for receiving's landed cost, editing after the
      AP was seeded also silently re-scaled every future cost. */
   var poRow = _poRow(no);
+  var reopen = false;
   if (poRow) {
     var poSt = String(poRow['Status'] || 'Draft');
     var editableSt = (poSt === 'Draft' || poSt === 'Rejected' || poSt === 'Open' || poSt === '');
@@ -2491,8 +2527,7 @@ function updatePurchaseOrder(p) {
         return { success: false, message: 'PO ' + no + ' was already received on ' +
           String(received[0]['MR No']) + ' — revising it now would re-scale the landed cost of stock already on hand.' };
       }
-      _setPOCells(no, { 'Status': 'Draft', 'Approved By': '', 'Approved At': '',
-                        'Approval Note': 'Reopened for revision by ' + (p.actorName || 'someone') });
+      var reopen = true;   // A325 — written below, AFTER every refusal: a refused revise used to wipe the approval
     }
   }
   var items = JSON.parse(p.items || '[]');
@@ -2517,12 +2552,39 @@ function updatePurchaseOrder(p) {
              message: _poFx.message };
   }
 
+  /* A221 — deletePurchaseOrder has always refused while a payment, a receiving or a non-Rejected
+   * payment request stands. updatePurchaseOrder checked NONE of that: its paid/received guards live
+   * inside the `p.revise` branch only, so a PO still sitting at Draft or Open sailed past all of
+   * them — and nothing anywhere looked at PaymentRequests. A Draft PO can carry an Approved, even
+   * Paid, request (createPaymentRequest never requires the PO to be approved), and this function
+   * would still rewrite its items, its Amount (FC) and its journal underneath that request.
+   * Rewriting the amount a request was approved against is exactly the class of silent change the
+   * whole payable guard exists to prevent. */
+  var liveReqs = _rows('PaymentRequests').filter(function (r) {
+    return String(r['PO No'] || '').trim() === String(no) && String(r['Status']) !== 'Rejected'
+        && String(r['Status']) !== 'Draft';
+  });
+  if (liveReqs.length && !p.confirmRepricePaid) {
+    return { success: false, needsConfirm: 'poHasRequests', poNo: no,
+      requests: liveReqs.map(function (r) { return String(r['PR No']) + ' (' + r['Status'] + ')'; }),
+      message: 'PO ' + no + ' has ' + liveReqs.length + ' payment request(s) in flight or settled — '
+        + liveReqs.map(function (r) { return String(r['PR No']) + ' ' + r['Status']; }).join(', ')
+        + '. Editing the PO changes the amount they were approved against. Confirm to proceed.' };
+  }
+
+  /* A325 — the check above used to sit AFTER the PO, its items and the stock had been rewritten, so
+     "refused" reached the page while the edit had in fact landed (AP and journal kept the old total). */
+  if (reopen) {
+    _setPOCells(no, { 'Status': 'Draft', 'Approved By': '', 'Approved At': '',
+                      'Approval Note': 'Reopened for revision by ' + (p.actorName || 'someone') });
+  }
+
   var sh = _sheet('PurchaseOrders');
   var poRateCol = SCHEMA.PurchaseOrders.indexOf('Exchange Rate') + 1;
   _rows('PurchaseOrders').forEach(function (r) {
     if (String(r['PO No']) === String(no)) {
       sh.getRange(r.rowIndex, 1, 1, 9).setValues([[no, p.soNo || r['SO No'],
-        p.date || r['Date'], p.supplier, currency, total, p.status || r['Status'], r['Created By'], r['Created At']]]);
+        p.date || r['Date'], p.supplier, currency, total, reopen ? 'Draft' : r['Status'], r['Created By'], r['Created At']]]);   // A325 — never p.status: approval is submitPOApproval's
       if (p.exchangeRate !== undefined && _num(p.exchangeRate) > 0) {   // A145: persist the FX rate (col appended at END)
         sh.getRange(r.rowIndex, poRateCol, 1, 1).setValues([[_num(p.exchangeRate)]]);
       }
@@ -2547,26 +2609,6 @@ function updatePurchaseOrder(p) {
   // Keep the linked AP entry's FC amount + currency in sync. Refresh the PHP estimate too when a new
   // one is supplied and the AP is still untouched (Unpaid, nothing paid) — don't clobber manual edits.
   var apSh = _sheet('APAging');
-  /* A221 — deletePurchaseOrder has always refused while a payment, a receiving or a non-Rejected
-   * payment request stands. updatePurchaseOrder checked NONE of that: its paid/received guards live
-   * inside the `p.revise` branch only, so a PO still sitting at Draft or Open sailed past all of
-   * them — and nothing anywhere looked at PaymentRequests. A Draft PO can carry an Approved, even
-   * Paid, request (createPaymentRequest never requires the PO to be approved), and this function
-   * would still rewrite its items, its Amount (FC) and its journal underneath that request.
-   * Rewriting the amount a request was approved against is exactly the class of silent change the
-   * whole payable guard exists to prevent. */
-  var liveReqs = _rows('PaymentRequests').filter(function (r) {
-    return String(r['PO No'] || '').trim() === String(no) && String(r['Status']) !== 'Rejected'
-        && String(r['Status']) !== 'Draft';
-  });
-  if (liveReqs.length && !p.confirmRepricePaid) {
-    return { success: false, needsConfirm: 'poHasRequests', poNo: no,
-      requests: liveReqs.map(function (r) { return String(r['PR No']) + ' (' + r['Status'] + ')'; }),
-      message: 'PO ' + no + ' has ' + liveReqs.length + ' payment request(s) in flight or settled — '
-        + liveReqs.map(function (r) { return String(r['PR No']) + ' ' + r['Status']; }).join(', ')
-        + '. Editing the PO changes the amount they were approved against. Confirm to proceed.' };
-  }
-
   var newPHP = _num(p.totalPHP);
   _rows('APAging').forEach(function (r) {
     if (String(r['PO No']) === String(no)) {
@@ -2670,7 +2712,14 @@ function _poRequestedPHP(poNo) {
   return _rows('PaymentRequests').reduce(function (s, r) {
     if (String(r['PO No'] || '').trim() !== po) return s;
     var st = String(r['Status'] || '');
-    return (st === 'Approved' || st === 'Paid') ? s + _num(r['Amount']) : s;
+    if (st !== 'Approved' && st !== 'Paid') return s;
+    /* A325 — since A222 a PO request's Amount is in the SUPPLIER's currency: summing it as pesos
+       made a paid USD 2,000 request read as ₱2,000 against a ₱116,000 payable, blocked every AP save
+       and suggested "fixing" the payable to 2,000. A foreign request counts in pesos: what the bank
+       took less its charge once paid, else the stored estimate. */
+    if (String(r['Currency'] || 'PHP').toUpperCase() === 'PHP') return s + _num(r['Amount']);
+    var debited = _num(r['Actual Debited (PHP)']) - _num(r['Bank Charge (PHP)']);
+    return s + (debited > 0 ? debited : _num(r['Amount (PHP) Est']));
   }, 0);
 }
 
@@ -3292,7 +3341,7 @@ function voidCollection(p) {
   if (claim) {
     var h = _commRow(claim.commNo);
     var loss = _commValueOfCollection(claim);
-    _setCellByKey('CommissionRequestItems', 'Collection No', p.collectionNo, 'Voided At Claim', 'true');
+    _commMarkVoidedAtClaim(claim.commNo, p.collectionNo);
     if (claim.status === 'Released') {
       _commSet(claim.commNo, { 'Integrity Flag': 'Collection ' + p.collectionNo + ' voided AFTER release on ' +
         _dateStr(_now()) + ' — recover ' + _commMoney(loss) + ' in a later cutoff.' });
@@ -3338,8 +3387,13 @@ function voidInvoice(p) {
   }
 
   // Put the stock back exactly as it was taken out.
+  /* A325 — and ONLY what was taken out: createInvoice moves stock for goods lines alone (A276), so
+     returning every line gave a voided rental +qty phantom tools and a "Mobilization" line a new
+     Stock row. The line's kind is judged exactly as createInvoice judged it. */
+  var voidSvc = _soIsService(inv['SO No']);
   _rows('InvoiceItems').filter(function (it) { return String(it['INV No']) === String(p.invNo); })
     .forEach(function (it) {
+      if (_invLineKind({ chargeKind: it['Charge Kind'] }, voidSvc) !== 'goods') return;
       _applyInventory(_normItemNo(it['Item No']), it['Item Name'], _num(it['Qty']), null, null, null,
         it['Item ID']);
     });
@@ -3635,10 +3689,12 @@ function _fieldFollowUps() {
       if (String(r['Outcome']) !== 'Not collected') return;
       var k = String(r['AR No']), d = _dateStr(r['Date']);
       if (lastCol[k] && lastCol[k] > d) return;
-      if (out[k] && out[k].at > String(r['At'])) return;
+      // A325 — by time: 'At' reads back as a Date, and String() compared weekday names ("Tue" > "Mon")
+      var atMs = new Date(r['At']).getTime() || 0;
+      if (out[k] && out[k].at > atMs) return;
       var pd = _dateStr(r['Promise Date']);
       out[k] = { date: d, reason: String(r['Reason'] || ''), promiseDate: pd, notes: String(r['Notes'] || ''),
-                 by: String(r['By'] || ''), missed: !!(pd && pd < today), at: String(r['At']) };
+                 by: String(r['By'] || ''), missed: !!(pd && pd < today), at: atMs };
     });
   } catch (e) { return {}; }
   Object.keys(out).forEach(function (k) { delete out[k].at; });
@@ -3788,7 +3844,7 @@ function recordFieldCollection(p) {
   if (method === 'Cheque' && !_fieldBool(p.confirmDupCheque)) {
     var used = _rows('FieldCollections').filter(function (r) {
       return String(r['Outcome']) === 'Collected' && String(r['Status']) !== 'Undone' && String(r['Customer']) === cust &&
-             String(r['Cheque No']).trim().toLowerCase() === chequeNo.toLowerCase() && !arSeen[String(r['AR No'])];
+             _idNorm(r['Cheque No']) === _idNorm(chequeNo) && !arSeen[String(r['AR No'])];   // A325 — '000123' is stored as 123
     });
     if (used.length) {
       return { success: false, needsConfirm: 'duplicateCheque', usedOn: used.map(function (r) { return String(r['INV No']); }),
@@ -4007,6 +4063,8 @@ function updateExpense(p) {
   var sh = _sheet('Expenses');
   var existing = _rows('Expenses').filter(function (r) { return r.rowIndex === ri; })[0];
   if (!existing) return { success: false, message: 'Expense not found.' };
+  // A325 — a row number from a list up to a minute old names whatever is there NOW: check it is this one
+  if (p.expNo && String(existing['Exp No']) !== String(p.expNo)) return { success: false, message: 'The expense list has changed since it was loaded — reload it and try again.' };
   if (!_periodOpen(existing['Date'])) return _periodRefusal(existing['Date']);                 // A320
   if (p.date && !_periodOpen(p.date)) return _periodRefusal(p.date);
   var category = String(p.category != null ? p.category : existing['Category']).trim() || 'Uncategorized';
@@ -4030,6 +4088,8 @@ function deleteExpense(p) {
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
   var gone = _rows('Expenses').filter(function (r) { return r.rowIndex === ri; })[0];   // A320
+  // A325 — see updateExpense: the row must still be the expense the page showed
+  if (p.expNo && (!gone || String(gone['Exp No']) !== String(p.expNo))) return { success: false, message: 'The expense list has changed since it was loaded — reload it and try again.' };
   if (gone && !_periodOpen(gone['Date'])) return _periodRefusal(gone['Date']);
   _sheet('Expenses').deleteRow(ri);
   if (gone) _booksSyncExpense(String(gone['Exp No']), p.actorName, _dateStr(_now()));   // withdrawn, dated today
@@ -6759,19 +6819,37 @@ function updatePaymentRequest(p) {
         ', so this request\'s amount cannot be checked against anything. Restore the AP entry for ' +
         'that purchase order, or delete this request.' };
     }
-    if (rem && amt > rem.remaining + 0.005) {
+    /* A325 — the cap in the currency the request is IN, as create does (A222). `rem` is pesos, so a USD
+       request edited from 1,000 to 5,000 passed against a ₱116,000 payable and Mark Paid (which caps
+       pesos only) paid it. The currency itself is the order's: an edit may not switch it. */
+    var upPo = _poRow(r['PO No']);
+    var upPoCur = String((upPo && upPo['Currency']) || 'PHP').toUpperCase();
+    var upCur = String(p.currency !== undefined && p.currency !== '' ? p.currency : (r['Currency'] || 'PHP')).toUpperCase();
+    var wasCur = String(r['Currency'] || 'PHP').toUpperCase();
+    if (upCur !== upPoCur && !(upCur === 'PHP' && wasCur === 'PHP')) {
+      return { success: false, message: 'This request says ' + upCur + ' but ' + r['PO No'] + ' is a ' + upPoCur +
+        ' order. Reload the page and edit it again.' };
+    }
+    var upFC = upCur !== 'PHP' ? _poRemainingFC(r['PO No'], p.prNo) : null;
+    var upCap = upFC || rem, upCapCur = upFC ? upCur : 'PHP';
+    // a foreign request the FC cap cannot judge (mixed currencies) is judged by its peso estimate
+    var upAmtCap = (upCur !== 'PHP' && !upFC) ? _num(_poEstPHPFor(r['PO No'], amt, upCur)) : amt;
+    if (upCap && upAmtCap > upCap.remaining + 0.005) {
       return { success: false, message: 'That exceeds what is still owed on ' + r['PO No'] + ': payable ' +
-        rem.amount.toFixed(2) + ' less paid ' + rem.paid.toFixed(2) +
-        (rem.openRequests > 0 ? ' less other open requests ' + rem.openRequests.toFixed(2) : '') +
-        ' = ' + rem.remaining.toFixed(2) + ' remaining.' };
+        upCap.amount.toFixed(2) + ' less paid ' + upCap.paid.toFixed(2) +
+        (upCap.openRequests > 0 ? ' less other open requests ' + upCap.openRequests.toFixed(2) : '') +
+        ' = ' + upCap.remaining.toFixed(2) + ' ' + upCapCur + ' remaining.' };
     }
     set['Amount'] = amt;
+    set['Currency'] = upCur;
+    set['Amount (PHP) Est'] = _poEstPHPFor(r['PO No'], amt, upCur);   // A325 — it went stale on every edit
     set['Payment Portion'] = _prCoherentPortion(p.paymentPortion, amt, rem);
     set['PO Total (PHP)'] = rem ? rem.amount : _poPayablePHP(r['PO No']);
     set['PO Paid Before (PHP)'] = rem ? rem.paid : 0;
   } else if (p.amount !== undefined) {
     set['Amount'] = _num(p.amount);
   }
+  if (String(r['Type']) === 'PO' && p.amount === undefined) delete set['Currency'];   // A325 — only beside a checked amount
   _prSet(p.prNo, set);
   return { success: true, prNo: p.prNo, message: 'Payment Request updated.' };
 }
@@ -7462,7 +7540,10 @@ function _deleteMigratedInvoiceForSO(soNo) {
  * ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** The arithmetic for one line, shared by the preview and the apply so they cannot disagree. */
-function _rcvReversalLine(it) {
+/* A325 — `after` carries each inventory row's state from the lines before it. A PO can list one item
+   twice (the scanner allows it): both lines were backed out of the SAME current balance and written
+   one after the other, so 10 − 5 − 3 ended at 7, not 2, with the cost wrong to match. */
+function _rcvReversalLine(it, after) {
   var itemNo = _normItemNo(it['Item No']);
   // Column names read from SCHEMA.ReceivingItems, not from memory: 'Qty Received' and
   // 'Purchase Price/Unit (PHP)' — a near-miss here would silently reverse zero and report success.
@@ -7472,7 +7553,9 @@ function _rcvReversalLine(it) {
   var out = { itemNo: itemNo, itemName: it['Item Name'], qty: q, purchasePerUnit: c, shippingPerUnit: s,
               found: !!inv, exact: false, reason: '' };
   if (!inv) { out.reason = 'no inventory row — nothing to reverse'; return out; }
-  var Qn = _num(inv['Available Balance']), Cn = _num(inv['Purchase Price/Unit']), Sn = _num(inv['Shipping Cost/Unit']);
+  var prev = after && after[inv.rowIndex];
+  var Qn = prev ? prev.Q : _num(inv['Available Balance']), Cn = prev ? prev.C : _num(inv['Purchase Price/Unit']),
+      Sn = prev ? prev.S : _num(inv['Shipping Cost/Unit']);
   out.balanceNow = Qn; out.purchaseNow = Cn; out.shippingNow = Sn;
   out.rowIndex = inv.rowIndex;
   if (q <= 0) { out.reason = 'zero quantity — nothing to reverse'; return out; }
@@ -7484,6 +7567,7 @@ function _rcvReversalLine(it) {
   out.balanceAfter = Qb; out.purchaseAfter = Math.max(0, Cb); out.shippingAfter = Math.max(0, Sb);
   out.valueRemoved = Math.round((q * (c + s)) * 100) / 100;
   out.exact = true;
+  if (after) after[inv.rowIndex] = { Q: Qb, C: out.purchaseAfter, S: out.shippingAfter };
   return out;
 }
 
@@ -7493,7 +7577,8 @@ function previewReceivingReversal(p) {
   var mr = _rows('MaterialsReceiving').filter(function (m) { return String(m['MR No']) === String(p.mrNo); })[0];
   if (!mr) return { success: false, message: 'Receiving ' + p.mrNo + ' not found.' };
   var its = _rows('ReceivingItems').filter(function (r) { return String(r['MR No']) === String(p.mrNo); });
-  var lines = its.map(_rcvReversalLine);
+  var after = {};                                                   // A325 — lines on one item chain
+  var lines = its.map(function (it) { return _rcvReversalLine(it, after); });
   var blocked = lines.filter(function (l) { return !l.exact; });
   var jrn = _rows('Journal').filter(function (j) { return String(j['Source']) === 'MR' && String(j['Source No']) === String(p.mrNo); });
   return { success: true, mrNo: String(p.mrNo), poNo: mr['PO No'] || '', soNo: mr['SO No'] || '',
@@ -7773,12 +7858,16 @@ function saveSOCostDetails(p) {
  * Optional p.prefix (e.g. 'PR') limits the reset to that document type.
  */
 function resetSequenceCounters(p) {
+  // A325 — maintenance, not a sales action: the button is the admin's (it had no role check at all)
+  var rr = String((p && p.actorRole) || '').toLowerCase();
+  if (['admin', 'management', 'director'].indexOf(rr) === -1) return { success: false, message: 'Only an admin can resync numbering.' };
   var props = PropertiesService.getScriptProperties();
   var all = props.getProperties();
   var pref = String((p && p.prefix) || '').trim();
   var cleared = [];
   Object.keys(all).forEach(function (k) {
     if (k.indexOf('seq_') !== 0) return;
+    if (k.indexOf('seq_GL_') === 0) return;                   // A325 — journal numbers are never re-issued
     if (pref && k.indexOf('_' + pref + '_') === -1) return;   // e.g. seq_PricingRequests_PR_202607
     props.deleteProperty(k);
     cleared.push(k);
@@ -8939,8 +9028,26 @@ function getDocuments(p) {
   }) };
 }
 
+/* A325 — any signed-in login could delete (and trash in Drive) the proof of payment or supplier
+   quotation the payment and PO gates rest on, after the money had moved. Oversight roles may remove
+   any document; anyone else only what they uploaded themselves, or a generated PDF being replaced. */
+var _DOC_DELETE_ALL = { admin: 1, accounting: 1, management: 1, director: 1 };
 function deleteDocument(p) {
   if (!p.docId) return { success: false, message: 'docId is required.' };
+  if (!_DOC_DELETE_ALL[String(p.actorRole || '').toLowerCase()]) {
+    var d = _rows('Documents').filter(function (r) { return String(r['Doc ID']) === String(p.docId); })[0];
+    if (!d) return { success: false, message: 'Document not found.' };
+    var by = String(d['Uploaded By'] || '').trim().toLowerCase(), me = String(p.actorName || '').trim().toLowerCase();
+    var generated = String(d['Doc Type'] || '').indexOf(_GENERATED_DOC_TYPE) === 0 && (!by || by === 'system');
+    if (!(me && by === me) && !generated) {
+      return { success: false, message: 'Only the person who uploaded this document, or accounting / admin, can remove it.' };
+    }
+  }
+  return _deleteDocumentRow(p.docId);
+}
+/** The delete itself, for callers that have already decided (a travel report taking its receipts with it). */
+function _deleteDocumentRow(docId) {
+  var p = { docId: docId };
   var sh = _sheet('Documents');
   var rows = _rows('Documents');
   for (var i = 0; i < rows.length; i++) {
@@ -9386,6 +9493,12 @@ function saveMarketingRecord(p) {
     var ri = parseInt(rec.rowIndex, 10);
     var ex = rows.filter(function (r) { return r.rowIndex === ri; })[0];
     if (!ex) return { success: false, message: 'Record not found.' };
+    /* A325 — a row number from the page names whatever is there NOW; when the record carries its id,
+       the row must still hold it (a stale update wrote this record's id over the neighbour) */
+    var sentId = rec[_camel(idHeader)];
+    if (sentId != null && sentId !== '' && String(ex[idHeader]) !== String(sentId)) {
+      return { success: false, message: 'The list has changed since it was loaded — reload it and try again.' };
+    }
     sh.getRange(ri, 1, 1, fields.length).setValues([valuesFrom(ex)]);
     return { success: true, entity: entity, id: ex[idHeader], rowIndex: ri, message: msg };
   }
@@ -9414,6 +9527,11 @@ function deleteMarketingRecord(p) {
   if (!cfg) return { success: false, message: 'Unknown marketing entity: ' + p.entity };
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
+  if (p.id) {                                                    // A325 — see saveMarketingRecord
+    var idHeader = SCHEMA[cfg.sheet][0];
+    var at = _rows(cfg.sheet).filter(function (r) { return r.rowIndex === ri; })[0];
+    if (!at || String(at[idHeader]) !== String(p.id)) return { success: false, message: 'The list has changed since it was loaded — reload it and try again.' };
+  }
   _sheet(cfg.sheet).deleteRow(ri);
   return { success: true, entity: p.entity, message: 'Record deleted.' };
 }
@@ -10648,9 +10766,21 @@ function saveWeeklyItinerary(p) {
   return { success: true, itineraryNo: no, refNo: no, message: 'Itinerary saved.' };
 }
 
+/* A325 — submit, revise and delete checked neither owner nor role: any login could reopen another
+   rep's Approved week (clearing both approvals, so that rep's travel claim then needed a waiver) or
+   delete their draft. The owner, or an approver, may act. */
+function _itinMayActOn(r, p) {
+  var me = String((p && p.actorName) || '').trim().toLowerCase();
+  if (me && String(r['User'] || '').trim().toLowerCase() === me) return null;
+  if (['management', 'director', 'admin'].indexOf(String((p && p.actorRole) || '').toLowerCase()) >= 0) return null;
+  return { success: false, message: 'Itinerary ' + String(r['Itinerary No']) + ' belongs to ' + String(r['User'] || 'another rep') +
+           ' — you can only act on your own.' };
+}
+
 function submitWeeklyItinerary(p) {
   var r = _itinRow(p.itineraryNo);
   if (!r) return { success: false, message: 'Itinerary not found.' };
+  var notMine = _itinMayActOn(r, p); if (notMine) return notMine;
   var st = String(r['Status'] || 'Draft');
   if (st !== 'Draft' && st !== 'Rejected') return { success: false, message: 'Already submitted (' + st + ').' };
   var items = _rows('ItineraryItems').filter(function (i) {
@@ -10698,6 +10828,7 @@ function reviseWeeklyItinerary(p) {
   var r = _itinRow(p.itineraryNo);
   if (!r) return { success: false, message: 'Itinerary not found.' };
   if (_itinEditable(r['Status'])) return { success: false, message: 'Already editable.' };
+  var notMine = _itinMayActOn(r, p); if (notMine) return notMine;     // A325
   var note = 'Reopened for revision by ' + String(p.actorName || '') +
              (p.reason ? ' — ' + p.reason : '');
   _itinSet(p.itineraryNo, {
@@ -10714,6 +10845,7 @@ function deleteWeeklyItinerary(p) {
     return { success: false, message: 'Only a draft or rejected itinerary can be deleted (this one is ' +
              r['Status'] + ').' };
   }
+  var notMine = _itinMayActOn(r, p); if (notMine) return notMine;     // A325
   _writeItems('ItineraryItems', 'Itinerary No', p.itineraryNo, [], function (x) { return x; });
   _sheet('WeeklyItineraries').deleteRow(r.rowIndex);
   return { success: true, refNo: p.itineraryNo, message: 'Itinerary deleted.' };
@@ -11606,6 +11738,18 @@ function _commMayActForAll(role) { return !!_COMM_OVERSIGHT_ACT[String(role || '
 /** Whose claims is this caller allowed to read? Oversight may name anyone (or nobody, for all of
  *  them); everybody else is pinned to their own session name — never to a name the browser sent.
  *  Returns '' for "no restriction", or a refusal object when the caller cannot be identified. */
+/* A325 — 'Voided At Claim' on the item row of THIS claim. _setCellByKey on Collection No alone marked
+   the first row holding that collection — after a rejection and a re-claim, the rejected claim's row —
+   so the live claim stayed 'false' and the integrity audit re-flagged it forever. */
+function _commMarkVoidedAtClaim(commNo, colNo) {
+  var sh = _sheet('CommissionRequestItems');
+  var col = SCHEMA.CommissionRequestItems.indexOf('Voided At Claim') + 1;
+  if (col < 1) return;
+  _rows('CommissionRequestItems').forEach(function (i) {
+    if (String(i['Comm No']) === String(commNo) && String(i['Collection No']) === String(colNo)) sh.getRange(i.rowIndex, col, 1, 1).setValues([['true']]);
+  });
+}
+
 function _commReadScope(p) {
   var role = String((p && p.actorRole) || '');
   if (_commMaySeeAll(role)) return { scope: String((p && p.salesperson) || '') };
@@ -12790,9 +12934,13 @@ function deleteCommissionRate(p) {
  *  payroll register is a human job, deliberately (three unlinked name namespaces, and a silent
  *  mis-match pays the wrong person). */
 function getCommissionPayoutReport(p) {
+  /* A325 — every rep's net payable went to an unsigned GET naming any actorRole. Secured now, and a
+     caller who may not see everyone sees only their own claims (the A211 rule getCommissionRequests has). */
+  var sc = _commReadScope(p);
+  if (sc.blocked) return sc.blocked;
   var period = String((p && p.payoutPeriod) || '').trim();
   var rows = _rows('CommissionRequests').map(_commMap).filter(function (r) {
-    return r.status === 'Approved' || r.status === 'Released';
+    return (r.status === 'Approved' || r.status === 'Released') && (!sc.scope || _commMaySeeAll(p && p.actorRole) || String(r.salesperson) === String(sc.scope));
   });
   var periods = {};
   rows.forEach(function (r) { if (r.payoutPeriod) periods[r.payoutPeriod] = 1; });
@@ -12826,7 +12974,9 @@ function getCommissionPayoutReport(p) {
 
 /** Read-only reconciliation. Run it before every cutoff — it answers "is anything about to pay the
  *  wrong number", which no individual screen can. */
-function auditCommissionIntegrity() {
+function auditCommissionIntegrity(p) {
+  // A325 — every rep's claims and amounts: oversight only (it was open to an unsigned GET)
+  if (!_commMaySeeAll(p && p.actorRole)) return { success: false, message: 'The commission audit is for accounting and management.' };
   var findings = [];
   var seen = {};
   var headers = {};
@@ -12850,7 +13000,9 @@ function auditCommissionIntegrity() {
     if (String(c['Voided'] || '') === 'true' && String(i['Voided At Claim'] || '') !== 'true') {
       findings.push({ level: 'warn', commNo: commNo,
         message: 'Collection ' + colNo + ' has been voided since it was claimed (' + _commMoney(i['Net Cash (PHP)']) + ').' });
-      _setCellByKey('CommissionRequestItems', 'Collection No', colNo, 'Voided At Claim', 'true');
+      /* A325 — this audit is dispatched as a read (no lock), so its one write takes the lock itself */
+      var lk = LockService.getScriptLock();
+      if (lk.tryLock(5000)) { try { _commMarkVoidedAtClaim(commNo, colNo); } finally { lk.releaseLock(); } }
     }
     var liveNet = _num(c['Amount (PHP)']) - _num(c['EWT (PHP)']);
     if (Math.abs(liveNet - _num(i['Net Cash (PHP)'])) > 0.01) {
@@ -13449,6 +13601,9 @@ function deleteTravelReplenishment(p) {
   }
   var owns = _travMayActOn(r, p.actorName, p.actorRole);
   if (owns) return owns;
+  var oldExp = _travExpenseRow(p.travNo);                                              // A325 — see revise
+  if (oldExp && !_periodOpen(oldExp['Date'])) return _periodRefusal(oldExp['Date']);
+  if (oldExp) deleteExpense({ rowIndex: oldExp.rowIndex, expNo: oldExp['Exp No'], actorName: p.actorName });
   _writeItems('TravelReplenishmentItems', 'Trav No', p.travNo, [], function (x) { return x; });
   /* A214 — the photographs go with it. Nothing else can reach them once the report is gone: they are
      keyed on the Trav No, and the next TRAV number is minted from a counter that never reuses one. */
@@ -13458,7 +13613,7 @@ function deleteTravelReplenishment(p) {
            message: 'Travel report ' + p.travNo + ' deleted.' };
 }
 
-/** Trash every receipt filed against a Trav No. deleteDocument is called rather than reimplemented,
+/** Trash every receipt filed against a Trav No. deleteDocument's own delete is called rather than reimplemented,
  *  so the Drive file and the registry row can never fall out of step; it re-reads the sheet on each
  *  call, which is what makes deleting by rowIndex in a loop safe. */
 function _travTrashReceipts(travNo) {
@@ -13467,7 +13622,7 @@ function _travTrashReceipts(travNo) {
   }).map(function (d) { return String(d['Doc ID']); });
   var n = 0;
   ids.forEach(function (id) {
-    try { if (deleteDocument({ docId: id }).success) n++; } catch (e) { /* one bad file, not a failed delete */ }
+    try { if (_deleteDocumentRow(id).success) n++; } catch (e) { /* one bad file, not a failed delete */ }
   });
   return n;
 }
@@ -13748,7 +13903,11 @@ function _travMintPayable(row, p) {
      deleted, obeying that memory would hand back a dead number and leave the rep unpaid — so on a
      duplicate that resolves to nothing, mint properly. The record's own Payment Request No column,
      checked under the script lock before we get here, is what stops this double-paying. */
-  if (made && made.success && made.duplicate && !_prRow(made.prNo)) {
+  /* A325 — nor one that no longer fits: after a rejection and a revise the remembered PR is Rejected
+     and carries the OLD amount, and re-approving flipped it to Approved and paid the old figure. */
+  var prior = (made && made.success && made.duplicate) ? _prRow(made.prNo) : null;
+  if (made && made.success && made.duplicate && (!prior || String(prior['Status']) === 'Rejected' ||
+      String(prior['Status']) === 'Cancelled' || Math.abs(_num(prior['Amount']) - amount) > 0.005)) {
     delete spec.clientRef;
     made = createPaymentRequest(spec);
   }
@@ -13881,11 +14040,16 @@ function reviseTravelReplenishment(p) {
   if (!_travMayActForAll(p.actorRole) && st !== _TRAV_STAGES[0].status) {
     return { success: false, message: 'Accounting has already signed this week — ask them to reopen it.' };
   }
+  /* A325 — the week's Expenses row goes with the approval: re-approval found the old row and kept its
+     OLD figure, so the P&L showed the claim as first approved, not as finally paid. */
+  var oldExp = _travExpenseRow(p.travNo);
+  if (oldExp && !_periodOpen(oldExp['Date'])) return _periodRefusal(oldExp['Date']);
   _travSet(p.travNo, {
     'Status': 'Draft', 'Acct Approved By': '', 'Acct Approved At': '',
     'Dir Approved By': '', 'Dir Approved At': '', 'Approval Note': '', 'Submitted At': '',
     'Waiver By': '', 'Waiver Reason': '', 'Payment Request No': '', 'Updated At': _now()
   });
+  if (oldExp) deleteExpense({ rowIndex: oldExp.rowIndex, expNo: oldExp['Exp No'], actorName: p.actorName });
   return { success: true, travNo: p.travNo, refNo: p.travNo, status: 'Draft',
     message: 'Reopened as a draft — every signature on it has been cleared.' };
 }
@@ -14393,10 +14557,23 @@ function getDailyNote(p) {
   return { success: true, notes: '' };
 }
 
+/* A325 — whose report or notes a write may touch: the signed-in person's own (Flask stamps actorName
+   from the session), or anyone's for an oversight role. `user` came straight from the browser, so one
+   login could overwrite another's report. A matching name is kept exactly as sent, so no stored key moves. */
+var _DAILY_ACT_FOR_ALL = { admin: 1, management: 1, director: 1 };
+function _dailyOwnUser(p) {
+  var me = String((p && p.actorName) || '').trim(), asked = String((p && p.user) || '').trim();
+  if (!asked) return { user: me };
+  if (!me || asked.toLowerCase() === me.toLowerCase() || _DAILY_ACT_FOR_ALL[String((p && p.actorRole) || '').toLowerCase()]) return { user: asked };
+  return { refused: { success: false, message: 'You can only save your own daily report and notes.' } };
+}
+
 function saveDailyNote(p) {
+  var own = _dailyOwnUser(p);
+  if (own.refused) return own.refused;
   var sh = _sheet('DailyNotes');
   var rows = _rows('DailyNotes');
-  var scope = String((p && p.user) || '');
+  var scope = own.user;
   for (var i = 0; i < rows.length; i++) {
     if (_dateStr(rows[i]['Date']) === String(p.date) && String(rows[i]['Updated By'] || '') === scope) {
       sh.getRange(rows[i].rowIndex, 1, 1, 4).setValues([[p.date, p.notes || '', scope, _now()]]);
@@ -14548,7 +14725,9 @@ function _dailyReportOut(r) {
 }
 
 function submitDailyReport(p) {
-  var user = String(p.user || p.actorName || '').trim();
+  var own = _dailyOwnUser(p);                                         // A325
+  if (own.refused) return own.refused;
+  var user = own.user;
   if (!user) return { success: false, message: 'User is required.' };
   var date = p.date ? _dateStr(p.date) : _dateStr(_now());
   // postFlow retries any action matching /^submit/ — without this a retry double-counts the revision.
@@ -15919,6 +16098,13 @@ function _fnv(s) {
   for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
   return ('0000000' + h.toString(16)).slice(-8);
 }
+/* A325 — Sheets parses a stored fingerprint that LOOKS numeric: '00123456' comes back 123456 and
+   '12345e67' as 1.2345e+71 (about 1 in 150 of them). String-comparing those said "changed" forever —
+   coverage never completed and every sync reversed and re-posted them. Equal as numbers is equal. */
+function _fpSame(stored, fp) {
+  if (String(stored == null ? '' : stored) === String(fp)) return true;
+  return typeof stored === 'number' && /^[0-9]+(e[0-9]+)?$/.test(String(fp)) && Number(fp) === stored;
+}
 
 /* ── chart of accounts (data, seeded once) ─────────────────────────────────────────────────────── */
 /* [code, name, type, subtype, normal, system, bankCode]. Types drive the statements:
@@ -16174,9 +16360,20 @@ function _booksIndexSet(key, rowArr) {
 function _glEntryNo(date) {
   var ym = _periodOf(date).replace('-', '');
   var props = PropertiesService.getScriptProperties(), key = 'seq_GL_' + ym;
-  var n = (parseInt(props.getProperty(key), 10) || 0) + 1;
+  var stored = parseInt(props.getProperty(key), 10) || 0;
+  /* A325 — a missing counter (cleared, or a lost property) restarted at 00001 and re-issued a number
+     already in GL — and _glReverseEntry, which finds lines by Entry No, then reversed both entries.
+     Without a counter the sheet is the floor. */
+  if (!stored) {
+    var stem = 'JE-' + ym + '-';
+    _rows('GL').forEach(function (r) {
+      var e = String(r['Entry No'] || '');
+      if (e.indexOf(stem) === 0) stored = Math.max(stored, parseInt(e.substring(stem.length), 10) || 0);
+    });
+  }
+  var n = stored + 1;
   props.setProperty(key, String(n));
-  return 'JE-' + ym + '-' + ('0000' + n).slice(-5);
+  return 'JE-' + ym + '-' + (n < 100000 ? ('0000' + n).slice(-5) : String(n));
 }
 
 /* ── the Inbox ─────────────────────────────────────────────────────────────────────────────────── */
@@ -16339,13 +16536,13 @@ function _glPost(evt) {
   }
   var fp = _glFingerprint(evt, n.lines), prev = _booksIndex()[evt.key], reversed = '';
   var posted = prev && String(prev['Status']) === 'Posted';
-  if ((posted && String(prev['Fingerprint']) !== fp) || (!posted && _periodStatus(_periodOf(d)) === 'Closed')) {
+  if ((posted && !_fpSame(prev['Fingerprint'], fp)) || (!posted && _periodStatus(_periodOf(d)) === 'Closed')) {
     // about to re-post or refuse: a person may have moved this event out of a closed month in the Inbox
     _glApplyDecision(evt, _BOOKS_IBX, true);
     if (_dateStr(evt.date) !== d) { d = _dateStr(evt.date); n = _glLines(evt); fp = _glFingerprint(evt, n.lines); }
   }
   if (posted) {
-    if (String(prev['Fingerprint']) === fp) return { noop: true, entryNo: String(prev['Entry No']) };
+    if (_fpSame(prev['Fingerprint'], fp)) return { noop: true, entryNo: String(prev['Entry No']) };
     // the source changed: reverse the old entry and post the new one — but never inside a closed month
     if (_periodStatus(_periodOf(prev['Date'])) === 'Closed' || _periodStatus(_periodOf(d)) === 'Closed') {
       return _glInbox(evt, 'source changed after close', { previous: String(prev['Entry No']) });
@@ -16807,8 +17004,8 @@ function _booksCheck(src) {
   var n = _glLines(ev);
   if (n.problem) return { state: open ? 'inbox' : 'changed', key: ev.key, why: 'would not post now: ' + n.problem };
   var fp = _glFingerprint(ev, n.lines), d0 = _dateStr(ev.date);
-  if (String(ix['Fingerprint']) !== fp && _glApplyDecision(ev, _BOOKS_IBX, true) !== 'ignored' && _dateStr(ev.date) !== d0) fp = _glFingerprint(ev, _glLines(ev).lines);   // moved by a person
-  return String(ix['Fingerprint']) === fp ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'changed since it was posted' };
+  if (!_fpSame(ix['Fingerprint'], fp) && _glApplyDecision(ev, _BOOKS_IBX, true) !== 'ignored' && _dateStr(ev.date) !== d0) fp = _glFingerprint(ev, _glLines(ev).lines);   // moved by a person
+  return _fpSame(ix['Fingerprint'], fp) ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'changed since it was posted' };
 }
 function getBooksCoverage(p) {
   if (!_booksMayView(p)) return { success: false, message: 'Not permitted.' };
@@ -17245,8 +17442,8 @@ var HANDLERS = {
   previewQuotationSentAt: previewQuotationSentAt,
   runQuotationSentAtBackfill: runQuotationSentAtBackfill,
   getFlowSettings: getFlowSettings, setFlowSettings: setFlowSettings,
-  // A207 commission requests. The five getters are read-only: HANDLERS only, no MUTATIONS,
-  // no _SECURED. auditCommissionIntegrity writes only the 'Voided At Claim' marker it discovers.
+  // A207 commission requests. The getters are read-only: HANDLERS only, no MUTATIONS. A325 — all of
+  // them are _SECURED now. auditCommissionIntegrity writes only the 'Voided At Claim' marker it discovers.
   getCommissionRequests: getCommissionRequests, getCommissionClaimable: getCommissionClaimable,
   previewCommissionAttribution: previewCommissionAttribution,                                       // A239
   getCommissionPreview: getCommissionPreview, getCommissionRates: getCommissionRates,
@@ -17439,6 +17636,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A325 THE SYSTEM SCAN (166). updatePurchaseOrder runs every refusal (payment requests standing on the PO, currency, FX) BEFORE the first write — "refused" used to arrive after the PO, its items and the stock had changed — and a refused revise no longer wipes the approval; neither PO nor quotation takes a status from the browser (Draft only). voidInvoice returns stock for goods lines only (a voided rental gained phantom tools). A revised travel week drops its Expenses row and never re-uses a rejected or differently-sized payment request. updatePaymentRequest caps a foreign request in its own currency, keeps the order's currency and refreshes the peso estimate; _poRequestedPHP counts foreign requests in pesos. Expenses and marketing records check the row still holds the record the page showed. reverseReceiving chains two lines on one item. Renaming a quotation re-keys its pricing-request lines. Fingerprints and cheque numbers that Sheets parsed as numbers compare equal (_fpSame / _idNorm) and the id columns are set to plain text once. The commission reads are secured and scoped; 'Voided At Claim' marks the claim's own row. Field follow-ups order by time. _nextNumber no longer wraps after 999; GL entry numbers never restart below the sheet and resetSequenceCounters is admin-only and skips them. Daily reports and notes, weekly itineraries and document deletes check who is acting.
 A324 NO MORE "READ TIMED OUT" ON THE BOOKS PAGE (165). Flask stops waiting for Apps Script after a minute while the script runs on, so a long books job showed the raw "HTTPSConnectionPool … Read timed out (read timeout=60)". syncBooks ("Post what is missing") checked EVERY record before looking at its budget, and as a write call it read every sheet afresh for each one — minutes on a real year. Now every long job counts its budget from the start of the execution (_EXEC_T0, the lock wait included) and stops starting new work at 35 s (writes) / 40 s (reads), always doing at least one item: syncBooks checks under the read memo, posts what that slice found missing or changed, and returns a `next` cursor and `done`, so books.js presses again until done; ingestBookEvents says what is left and the page repeats the sync; getBooksCoverage checks oldest first and, if it runs out, says how far it got (partial, checkedThrough). A sync no longer re-reads the Inbox after every post when nothing can be waiting for that event.
 A323 COLLECT — THE DIRECTOR'S PHONE (164). New FieldCollections tab (one row per invoice line, a Batch No per payment). getCollectorQueue (director): open receivables most overdue first, our banks from the chart, his recent payments. recordFieldCollection (director): cheque (number required; post-dated allowed) / cash / bank transfer, the deposit place checked against the method (cheque → 1100 or a bank, cash → 1010 or a bank, transfer → a bank), one payment over several of ONE customer's invoices, every line validated (over-collection, proof of collection, closed month, a cheque number already used) before the first write, each line recorded through recordCollection so AR, DocMeta, journal and books behave as on the desktop. recordNotCollected: reason, promised date, note; getARAging rows carry the latest as followUp (missed when the promise has passed). getFieldCollectionNotices / acknowledgeFieldCollection (accounting, admin) are the notification; undoFieldCollection voids a payment the same day before it is acknowledged; uploadCollectionPhoto files a Proof of collection per receivable. Also: recordCollection recognises a retried clientRef before its over-collection guard, and the activity log records a collection's amount (it logged 0).
 A322 A SALES-ORDER EDIT SAVES AGAIN (163). A276 appended Type and Service Kind to SalesOrders (14 columns) but updateSalesOrder kept rewriting the row with 12 values, and Sheets refuses a value list narrower than its range ("data has 12 columns but the range has 14"), so EVERY sales-order edit failed. It now writes all 14: Type and Service Kind are kept (the form never sends them, and they decide hire vs sale at invoicing), re-derived from the new quotation only when the order is moved to another quotation (_orderTypeFrom, as createSalesOrder does), and an explicit type / serviceKind still wins. tests/audit/schema-width.js now counts literal row rewrites as well as appends, and the test harness's setValues refuses a mismatched shape as Sheets does.

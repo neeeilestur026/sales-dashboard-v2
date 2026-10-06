@@ -16,10 +16,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ─── Helpers ───────────────────────────────────────── */
-function today() { return new Date().toISOString().slice(0, 10); }
+function today() { return hxToday(); }
 function esc(s) { return hxEsc(s); }
 // For values embedded inside single-quoted onclick="fn('...')" attributes
-function escQ(s) { return esc(s).replace(/'/g, '&#39;'); }
+// A325 — JS-escape FIRST, then HTML-escape. The browser decodes &#39; back to ' before the handler
+// runs, so an HTML-escaped apostrophe still ended the string: a customer named "D'Angelo" broke Edit.
+function escQ(s) { return esc(JSON.stringify(String(s == null ? '' : s)).slice(1, -1).replace(/'/g, "\\'")); }
 function php(n) {
   return '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -619,7 +621,7 @@ async function exportExcel() {
     ];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Sales Orders');
-    const fileName = 'SalesOrders_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    const fileName = 'SalesOrders_' + hxToday() + '.xlsx';
     XLSX.writeFile(wb, fileName);
   } catch (err) {
     alert('Export error: ' + err.message);

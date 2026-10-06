@@ -233,7 +233,7 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `team-leaderboard-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `team-leaderboard-${hxToday()}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -384,7 +384,7 @@ async function exportActivityPDF() {
   rows.push(['TOTAL', ...t]);
 
   doc.autoTable({ head: headers, body: rows, startY: 28, theme: 'grid', headStyles: { fillColor: [249, 115, 22] } });
-  doc.save(`report-summary-${activityRange}-${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`report-summary-${activityRange}-${hxToday()}.pdf`);
 }
 
 async function exportActivityExcel() {
@@ -400,7 +400,7 @@ async function exportActivityExcel() {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Report Summary');
-  XLSX.writeFile(wb, `report-summary-${activityRange}-${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `report-summary-${activityRange}-${hxToday()}.xlsx`);
 }
 
 // ─── Utility ──────────────────────────────────────

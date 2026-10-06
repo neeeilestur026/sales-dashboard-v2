@@ -288,7 +288,7 @@ async function exportTrackerExcel() {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Client Tracker');
-  XLSX.writeFile(wb, `client-tracker-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `client-tracker-${hxToday()}.xlsx`);
 }
 
 /* ═══════════════════════════════════════════════

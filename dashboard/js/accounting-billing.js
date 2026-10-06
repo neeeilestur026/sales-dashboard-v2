@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!_session) return;
   renderNavbar('accounting-billing');
   // Pre-fill today's date in CV date field
-  const today = new Date().toISOString().slice(0, 10);
+  const today = hxToday();
   const cvDateEl = document.getElementById('cvDate');
   if (cvDateEl) cvDateEl.value = today;
   loadBillingRecords();

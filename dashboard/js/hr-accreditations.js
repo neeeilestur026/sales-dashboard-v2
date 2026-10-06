@@ -39,7 +39,7 @@ function editAccreditation(rowIndex) {
   document.getElementById('accDateIssued').value = acc.dateIssued || '';
   document.getElementById('accExpiryDate').value = acc.expiryDate || '';
   document.getElementById('accStatus').value = acc.status || 'Active';
-  document.getElementById('accDocLink').value = acc.docLink || '';
+  document.getElementById('accDocLink').value = acc.documentLink || '';   // A325 — Code.gs reads and writes documentLink, never docLink
   document.getElementById('accNotes').value = acc.notes || '';
   document.getElementById('formTitle').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit Accreditation';
   document.getElementById('submitBtn').textContent = 'Update Accreditation';
@@ -64,7 +64,7 @@ async function submitAccreditation(e) {
     dateIssued: document.getElementById('accDateIssued').value,
     expiryDate: document.getElementById('accExpiryDate').value,
     status: document.getElementById('accStatus').value,
-    docLink: document.getElementById('accDocLink').value.trim(),
+    documentLink: document.getElementById('accDocLink').value.trim(),   // A325 — sent as docLink, the link was never saved
     notes: document.getElementById('accNotes').value.trim()
   };
 
@@ -218,8 +218,8 @@ function renderTable() {
 
     const rowCls = computed === 'Expiring Soon' ? ' class="row-expiring"' : computed === 'Expired' ? ' class="row-expired"' : '';
 
-    const docCell = a.docLink
-      ? '<a class="doc-link" href="' + esc(a.docLink) + '" target="_blank" rel="noopener noreferrer">View</a>'
+    const docCell = /^https?:\/\//i.test(String(a.documentLink || ''))   // A325 — a web link only: a typed javascript: URL ran on click
+      ? '<a class="doc-link" href="' + esc(a.documentLink) + '" target="_blank" rel="noopener noreferrer">View</a>'
       : '<span style="color:var(--hx-ink-3);font-size:0.78rem;">--</span>';
 
     html += '<tr' + rowCls + '>' +
@@ -231,7 +231,7 @@ function renderTable() {
       '<td>' + docCell + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-sm btn-secondary" onclick="editAccreditation(' + a.rowIndex + ')" style="margin-right:0.3rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteAccreditation(' + a.rowIndex + ',\'' + esc(a.name).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>' +
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteAccreditation(' + a.rowIndex + ',' + esc(JSON.stringify(String(a.name || ''))) + ')" title="Delete">Del</button>' +   // A325 — an escaped ' decodes back before the handler runs; a JSON string survives it
       '</td></tr>';
   });
 

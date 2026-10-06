@@ -45,7 +45,7 @@
   /* Today in Manila, the clock releasedAt was stamped with. flowToday() is on every home page. */
   function today() {
     if (typeof flowToday === 'function') return flowToday();
-    try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); } catch (e) { return new Date().toISOString().slice(0, 10); }
+    try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); } catch (e) { return hxToday(); }
   }
 
   function render(el, first) {

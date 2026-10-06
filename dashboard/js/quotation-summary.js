@@ -180,7 +180,7 @@ async function exportSummaryExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Quotation Summary');
-  XLSX.writeFile(wb, 'quotation-summary-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  XLSX.writeFile(wb, 'quotation-summary-' + hxToday() + '.xlsx');
 }
 
 // ─── Helpers ───────────────────────

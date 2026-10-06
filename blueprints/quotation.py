@@ -27,7 +27,7 @@ from pdf_generators.utils import sanitize_filename
 
 from flask import g
 from blueprints.session_auth import require_session
-from blueprints._upstream import gs_call, remember_user
+from blueprints._upstream import gs_call, gs_json, remember_user, safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -286,6 +286,7 @@ def index():
     return render_template(
         "quotation/index.html",
         principals=principals_df["Principal"].tolist(),
+        apps_script_url=DASHBOARD_APPS_SCRIPT_URL,      # A325 — the client autocomplete (was a placeholder)
     )
 
 
@@ -648,11 +649,14 @@ def _get_next_quotation_number() -> tuple[int, int]:
 
     for attempt in range(2):
         try:
+            # A325 — the counter moves, so it is a POST; a Code.gs from before v6 only knows the GET
             resp = gs_call(
                 DASHBOARD_APPS_SCRIPT_URL,
-                params={"action": "getNextQuotationNumber"},
+                json={"action": "getNextQuotationNumber"},
                 timeout=30,
             )
+            if resp.status_code == 200 and "Unknown POST action" in resp.text[:300]:
+                resp = gs_call(DASHBOARD_APPS_SCRIPT_URL, params={"action": "getNextQuotationNumber"}, timeout=30)
             logger.info("_get_next_quotation_number: attempt=%d status=%d", attempt + 1, resp.status_code)
             if resp.status_code == 200:
                 result = resp.json()
@@ -1210,7 +1214,12 @@ def generate():
         _user_submission[uk] = {"status": "pending"}
         agent_name = data.get("agent_name", "").strip()
         quotation_sheet_id = data.get("quotation_sheet_id", "").strip()
-        creator_role = data.get("creator_role", "").strip()
+        # A325 — who is asking comes from the validated session, never from the form: a creator_role of
+        # "admin" sent by a sales login used to make Code.gs write Admin Approval "Approved".
+        creator_role = str((getattr(g, "session", None) or {}).get("role") or "").strip().lower()
+        # The thread has no request context, so it would call Code.gs as the trusted server and skip the
+        # sheet-ownership guard. It carries the user's own token instead, captured here.
+        _user_token = getattr(g, "session_token", "") or ""
         revision_ctx = data.get("revision_context") or {}
 
         logger.info("Auto-submit: agent=%s, sheetId=%s, hasQURL=%s, hasDURL=%s",
@@ -1310,7 +1319,7 @@ def generate():
                             "creatorRole": creator_role,
                         }
                         resp = gs_call(
-                            DASHBOARD_APPS_SCRIPT_URL, json=revise_payload,
+                            DASHBOARD_APPS_SCRIPT_URL, json={**revise_payload, "token": _user_token},
                             timeout=15,
                         )
                         if resp.status_code == 200:
@@ -1325,6 +1334,7 @@ def generate():
                                 logger.info("Async revision submit succeeded")
                             else:
                                 logger.warning("Async revision failed: %s", rev_result.get("message", ""))
+                                _user_submission[uk].update({"status": "error", "message": rev_result.get("message") or "The revision was not saved."})
                         else:
                             logger.warning("Async revision returned status %d", resp.status_code)
                 else:
@@ -1380,7 +1390,7 @@ def generate():
                             }
                             link_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
-                                json=link_payload,
+                                json={**link_payload, "token": _user_token},
                                 timeout=15,
                             )
                             if link_resp.status_code == 200:
@@ -1405,7 +1415,7 @@ def generate():
                             }
                             link_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
-                                json=link_payload,
+                                json={**link_payload, "token": _user_token},
                                 timeout=15,
                             )
                         except Exception as link_err:
@@ -1424,11 +1434,13 @@ def generate():
                     pr_sid = _submit_data.get("pr_sheet_id", "").strip()
                     if rfq_no and pr_sid and DASHBOARD_APPS_SCRIPT_URL:
                         try:
-                            # linkPRToQuotation exists only in doGet until the hardened Code.gs (AS-1)
-                            # adds its doPost case; switch this to json= (POST) right after that paste.
+                            # A325 — POST: the hardened Code.gs refuses this mutation over GET ("must be
+                            # sent as POST"), so the PR was never linked; and a GET would need the
+                            # shared secret in its URL (this runs in a thread, with no user token).
                             link_pr_resp = gs_call(
                                 DASHBOARD_APPS_SCRIPT_URL,
-                                params={
+                                json={
+                                    "token": _user_token,
                                     "action": "linkPRToQuotation",
                                     "rfqNo": rfq_no,
                                     "prSheetId": pr_sid,
@@ -1445,7 +1457,21 @@ def generate():
                 logger.warning("Async auto-submit failed: %s\n%s", auto_err, traceback.format_exc())
                 _user_submission[uk]["status"] = "error"
 
-        if quotation_sheet_id and QUOTATION_GOOGLE_APPS_SCRIPT_URL:
+        # A325 — the sheets this save writes must be the user's own (any, for an oversight role). Code.gs
+        # answers from its own allow-list, under the user's token; an older Code.gs without the check
+        # answers "Unknown action" and the save goes ahead as before.
+        _denied = ""
+        _rc_sid = str(revision_ctx.get("sheetId", "")) if isinstance(revision_ctx, dict) else ""
+        for _sid in [x for x in (quotation_sheet_id, _rc_sid) if x]:
+            _chk = gs_json(DASHBOARD_APPS_SCRIPT_URL, json={"action": "checkSheetAccess", "sheetId": _sid}, timeout=20)
+            if not _chk.get("success") and not re.search(r"Unknown (POST )?action", str(_chk.get("message", ""))):
+                _denied = str(_chk.get("message") or "That quotation sheet is not yours.")
+                break
+        if _denied:
+            logger.warning("quotation generate: sheet refused for %s: %s", agent_name, _denied)
+            _user_submission[uk] = {"status": "error", "message": _denied}
+            output_log.append("Not saved to the Google Sheet: " + _denied)
+        elif quotation_sheet_id and QUOTATION_GOOGLE_APPS_SCRIPT_URL:
             import threading as _threading
             _threading.Thread(target=_async_sheet_submit, daemon=True).start()
             output_log.append("Sheet submission started (async).")
@@ -1469,7 +1495,13 @@ def get_last_submission_info():
     """Return the sheetId/rowIndex/refNo from the most recent auto-submit during generate."""
     uk = _get_user_key()
     info = _user_submission.get(uk, {})
-    if info:
+    # A325 — the save runs in a background thread; "pending" used to answer success with no sheetId or
+    # rowIndex, so the page stored an empty approval context and Check status / Finalize then failed.
+    if info.get("status") == "pending":
+        return jsonify({"success": False, "pending": True, "message": "Still saving to the sheet…"})
+    if info.get("status") == "error":
+        return jsonify({"success": False, "message": info.get("message") or "The sheet save failed."})
+    if info and info.get("sheetId") and info.get("rowIndex"):
         return jsonify({"success": True, **info})
     return jsonify({"success": False, "message": "No recent submission"})
 
@@ -1490,15 +1522,15 @@ def check_approval_status():
     try:
         resp = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
-            params={"action": "getQuotationApprovalStatus", "sheetId": sheet_id, "rowIndex": row_index},
-            timeout=15,
+            json={"action": "getQuotationApprovalStatus", "sheetId": sheet_id, "rowIndex": row_index},   # A325 — POST
+            timeout=30,
         )
         if resp.status_code == 200:
             return jsonify(resp.json())
         return jsonify({"success": False, "message": f"Status {resp.status_code}"}), 500
     except Exception as e:
-        logger.error("check_approval_status error: %s", e)
-        return jsonify({"success": False, "message": str(e)}), 500
+        logger.error("check_approval_status error: %s", safe_error(e))
+        return jsonify({"success": False, "message": "Could not reach the approvals sheet — try again in a moment."}), 502
 
 
 # ---------------------------------------------------------------------------
@@ -1556,8 +1588,8 @@ def get_rejected():
     try:
         response = gs_call(
             DASHBOARD_APPS_SCRIPT_URL,
-            params={"action": "getMyRejectedQuotations", "sheetId": sheet_id},
-            timeout=15,
+            params={"action": "getMyRejectedQuotations", "sheetId": sheet_id},   # GET: the user's token only (A325)
+            timeout=30,
         )
 
         if response.status_code == 200:
@@ -1565,8 +1597,8 @@ def get_rejected():
         else:
             return jsonify({"success": False, "message": f"Status {response.status_code}"}), 500
     except Exception as e:
-        logger.error("get_rejected error: %s", e)
-        return jsonify({"success": False, "message": str(e)}), 500
+        logger.error("get_rejected error: %s", safe_error(e))
+        return jsonify({"success": False, "message": "Could not load your rejected quotations — try again in a moment."}), 502
 
 
 # ---------------------------------------------------------------------------

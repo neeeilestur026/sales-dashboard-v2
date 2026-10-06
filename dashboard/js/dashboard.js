@@ -130,11 +130,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (overdue.length > 0) {
         document.getElementById('overdueCount').textContent = overdue.length;
         // Classed rows; css/sales-home.css paints them.
+        // A325 — escaped: these are typed sheet values going into innerHTML.
         const listHtml = overdue.slice(0, 5).map(r =>
           `<div class="overdue-item">
-            <span class="name">${r.clientName}</span>
-            <span class="meta">${r.type} — ${r.documentNumber}</span>
-            <span class="due">Due ${r.followUpDate}</span>
+            <span class="name">${hxEsc(r.clientName)}</span>
+            <span class="meta">${hxEsc(r.type)} — ${hxEsc(r.documentNumber)}</span>
+            <span class="due">Due ${hxEsc(r.followUpDate)}</span>
           </div>`
         ).join('') + (overdue.length > 5 ? `<div class="overdue-more">and ${overdue.length - 5} more</div>` : '');
         document.getElementById('overdueList').innerHTML = listHtml;

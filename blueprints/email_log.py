@@ -651,6 +651,16 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
 EMAIL_OVERSIGHT_ROLES = ("admin", "accounting", "management", "director", "hr")
 
 
+def _director_usernames() -> set:
+    """A325 — the director's mailbox is the director's: the exclusion used to live only in the dashboard,
+    so an HR or accounting login could ask /api/email/today for it by name."""
+    try:
+        return {str(u.get("username", "")).strip().lower() for u in get_roster()
+                if str(u.get("role", "")).strip().lower() == "director"}
+    except Exception:
+        return set()
+
+
 @email_log_bp.route("/api/email/setup", methods=["POST"])
 @require_session()
 def email_setup():
@@ -736,6 +746,10 @@ def email_today():
     target_date = req_date if re.fullmatch(r"\d{4}-\d{2}-\d{2}", req_date) else None
     oversight = str(session.get("role", "")).lower() in EMAIL_OVERSIGHT_ROLES
     lookup_user = target_user if (target_user and oversight) else session["username"]
+    if (lookup_user.strip().lower() != str(session["username"]).strip().lower()
+            and str(session.get("role", "")).lower() != "director"
+            and lookup_user.strip().lower() in _director_usernames()):
+        return jsonify({"success": False, "message": "Not permitted."}), 403
     enc_blob = _get_enc_creds(lookup_user)
     if not enc_blob:
         return jsonify({"success": True, "needsSetup": True, "emails": [], "user": lookup_user})
@@ -769,7 +783,7 @@ def email_today():
     try:
         emails = fetch_sent_today(addr, pwd, target_date=target_date, debug=meta)
         if len(_sent_mail_cache) >= _SENT_CACHE_MAX:
-            _sent_mail_cache.pop(next(iter(_sent_mail_cache)))
+            _sent_mail_cache.pop(next(iter(_sent_mail_cache), None), None)   # A325 — two threads evicting at once
         _sent_mail_cache[cache_key] = {"emails": emails, "meta": meta, "addr": addr, "_ts": time.time()}
         resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user,
                 "date": eff_date, "meta": meta}

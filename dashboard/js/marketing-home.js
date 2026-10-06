@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   mCanEdit = mSession.role === 'marketing' || mSession.role === 'admin';
   renderNavbar('marketing-home');
   const ms = document.getElementById('monthSel');
-  ms.value = new Date().toISOString().slice(0, 7);
+  ms.value = hxToday().slice(0, 7);
   ms.addEventListener('change', render);
   if (!mCanEdit) {
     document.getElementById('roTag').style.display = '';
@@ -302,7 +302,12 @@ async function submitRecord() {
     if (!rec[r]) { formErr(MKTG_UI[entity].fields.find(f => f[0] === r)[1].replace(' *', '') + ' is required.'); return; }
   }
   const ri = document.getElementById('recRowIndex').value;
-  if (ri) rec.rowIndex = ri;
+  if (ri) {
+    rec.rowIndex = ri;
+    // A325 — the record's own number travels with its row: the server refuses if the row now holds another
+    const was = (mData[entity] || []).find(r => String(r.rowIndex) === String(ri));
+    if (was && MKTG_ID[entity] && was[MKTG_ID[entity]]) rec[MKTG_ID[entity]] = was[MKTG_ID[entity]];
+  }
   const btn = document.getElementById('recSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -315,10 +320,15 @@ async function submitRecord() {
   finally { btn.disabled = false; btn.textContent = 'Save'; }
 }
 
+// A325 — each entity's id field (the first column, camelised as FlowAPI's _camel does)
+const MKTG_ID = { leads: 'leadNo', campaigns: 'campaignNo', content: 'contentNo', enablement: 'assetNo', events: 'eventNo', principal: 'activityNo' };
+
 async function delRecord(entity, rowIndex) {
   if (!confirm('Delete this record?')) return;
   try {
-    const res = await postFlow('deleteMarketingRecord', { entity, rowIndex });
+    const was = (mData[entity] || []).find(r => String(r.rowIndex) === String(rowIndex));
+    const id = was && MKTG_ID[entity] ? was[MKTG_ID[entity]] : '';
+    const res = await postFlow('deleteMarketingRecord', id ? { entity, rowIndex, id } : { entity, rowIndex });
     if (!res || !res.success) throw new Error((res && res.message) || 'Delete failed.');
     flash('Deleted.', true);
     await loadAll();
@@ -359,8 +369,9 @@ async function submitMetrics() {
 // ── Task rhythm (personal checklist, localStorage per ISO period) ──
 function _periodKey(cad) {
   const d = new Date();
-  if (cad === 'Daily') return d.toISOString().slice(0, 10);
-  if (cad === 'Monthly') return d.toISOString().slice(0, 7);
+  // A325 — Manila's date, not UTC's: the UTC key rolled the daily/monthly checklist over at 8 a.m.
+  if (cad === 'Daily') return hxToday();
+  if (cad === 'Monthly') return hxToday().slice(0, 7);
   if (cad === 'Quarterly') return d.getFullYear() + '-Q' + (Math.floor(d.getMonth() / 3) + 1);
   const onejan = new Date(d.getFullYear(), 0, 1);
   const week = Math.ceil(((d - onejan) / 86400000 + onejan.getDay() + 1) / 7);

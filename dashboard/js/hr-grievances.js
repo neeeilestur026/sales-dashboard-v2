@@ -219,7 +219,7 @@ function renderTable() {
       '<td>' + displayName + '</td>' +
       '<td><span class="status-badge ' + statusCls + '">' + esc(g.status) + '</span></td>' +
       '<td>' + esc(g.assignedTo) + '</td>' +
-      '<td>' + esc(g.createdDate) + '</td>' +
+      '<td>' + esc(g.createdAt) + '</td>' +   // A325 — Code.gs returns createdAt; createdDate was always blank
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-sm btn-secondary" onclick="editGrievance(' + g.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
         '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteGrievance(' + g.rowIndex + ')" title="Delete">Del</button>' +

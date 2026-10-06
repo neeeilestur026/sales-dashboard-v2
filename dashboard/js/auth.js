@@ -1269,7 +1269,7 @@ async function flowComputeActions(session) {
   const _pastDue = (d) => {
     if (!d) return false;
     try { const s = (typeof flowDate === 'function') ? flowDate(d) : String(d).slice(0, 10);
-      const t = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+      const t = (typeof flowToday === 'function') ? flowToday() : hxToday();
       return s && s < t; } catch (e) { return false; }
   };
   /* A171 — a nudge is only a nudge if someone can still act on it. A delivered or closed record has
@@ -1280,7 +1280,7 @@ async function flowComputeActions(session) {
     if (!d) return false;
     try {
       const then = new Date((typeof flowDate === 'function') ? flowDate(d) : String(d).slice(0, 10));
-      const now = new Date((typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10));
+      const now = new Date((typeof flowToday === 'function') ? flowToday() : hxToday());
       return !isNaN(then) && (now - then) / 86400000 > days;
     } catch (e) { return false; }
   };
@@ -1546,7 +1546,8 @@ async function flowComputeActions(session) {
     ]).then(([q, so, le, cf]) => {
       const mine = (q && q.data) || [];
       const rejected = mine.filter(x => x.status === 'Rejected');
-      if (rejected.length) add('urgent', 'urgent', rejected.length + ' quotation(s) rejected — fix & resubmit' + (rejected[0].approvalNote ? ' (' + rejected[0].approvalNote + ')' : ''), 'flow-quotations.html');
+      // A325 — the approver's note is typed text, and item text is rendered as innerHTML: escape it.
+      if (rejected.length) add('urgent', 'urgent', rejected.length + ' quotation(s) rejected — fix & resubmit' + (rejected[0].approvalNote ? ' (' + hxEsc(rejected[0].approvalNote) + ')' : ''), 'flow-quotations.html');
       const hasSO = {}; ((so && so.data) || []).forEach(s => { if (s.quotationNo) hasSO[String(s.quotationNo)] = true; });
       const cfg = (cf && cf.data) || null;
       const links = {};
@@ -1586,7 +1587,7 @@ async function flowComputeActions(session) {
     }).catch(() => {}));
     jobs.push(fetchFlow('getLeadgen').then(r => {
       const d = (r && r.data) || {};
-      const today = (typeof flowToday === 'function') ? flowToday() : new Date().toISOString().slice(0, 10);
+      const today = (typeof flowToday === 'function') ? flowToday() : hxToday();
       const soon = (d.accred || []).filter(a => a.expiry && a.status === 'Approved' && !_stale(a.expiry, 0) && (new Date(a.expiry) - new Date(today)) / 86400000 <= 30).length;
       if (soon) add('urgent', 'warn', soon + ' accreditation' + (soon === 1 ? '' : 's') + ' expiring within 30 days', 'leadgen-home.html#accred');
       const stuck = (d.leads || []).filter(l => l.status === 'Handed Off' && _stale(l.handedOffOn, 7)).length;
@@ -1698,7 +1699,7 @@ async function _showMemoModalsIfNeeded() {
   try {
     const session = getSession();
     if (!session || !session.name) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = hxToday();
     const checkKey = 'lastMemoCheckDate_' + session.name;
     if (localStorage.getItem(checkKey) === today) return;
     if (typeof apiGetActiveMemosForUser !== 'function') return;

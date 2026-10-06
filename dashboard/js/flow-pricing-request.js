@@ -266,10 +266,12 @@ async function loadInventory() {
 
 // A145: client master → prefill the PR contact block when the customer is chosen (blank fields only).
 let prClients = {};
+let prClientsLoaded = false;   // A325 — the mirror save below rewrites the whole row; never from an unknown "before"
 async function loadClients() {
-  prClients = {};
+  prClients = {}; prClientsLoaded = false;
   try {
     const r = await fetchFlow('getClients');
+    if (r && r.success !== false) prClientsLoaded = true;
     ((r && r.data) || []).forEach(c => { prClients[String(c.customer).toLowerCase()] = c; });
   } catch (e) { /* prefill is best-effort */ }
 }
@@ -437,7 +439,7 @@ async function saveRequest() {
       } catch (e) { /* the PR is already saved — a logbook stamp must never undo that */ }
     }
     // A145: self-populate the client master with any newly-typed contact details (best-effort).
-    if (customer && (doc.companyAddress || doc.contactPerson || doc.contactEmail || doc.contactPhone)) {
+    if (prClientsLoaded && customer && (doc.companyAddress || doc.contactPerson || doc.contactEmail || doc.contactPhone)) {
       const prev = prClients[String(customer).toLowerCase()] || {};
       postFlow('saveClient', {
         customer, address: doc.companyAddress || prev.address || '',
@@ -445,7 +447,11 @@ async function saveRequest() {
         designation: doc.designation || prev.designation || '',
         email: doc.contactEmail || prev.email || '',
         phone: doc.contactPhone || prev.phone || '',
-        rfqRef: doc.prNumberClient || prev.rfqRef || ''
+        rfqRef: doc.prNumberClient || prev.rfqRef || '',
+        // A325 — saveClient rewrites the WHOLE row, so anything omitted is blanked. This form doesn't
+        // own Payment Terms (it drives invoice due dates) or Notes: carry them over untouched.
+        paymentTerms: prev.paymentTerms || '',
+        notes: prev.notes || ''
       }).catch(() => {});
     }
     // A146: free-typed items not yet in inventory → add them as Catalog products (balance 0), so the
@@ -931,6 +937,14 @@ function peRowHtml(i, idx, pf) {
     </tr>`;
 }
 
+/* A325 — the rate a request was priced at, or the 5% / 30% default if it never was. FlowAPI reads a
+   blank Commission % / Margin % as 0, so `r.commission || 5` could not tell "never priced" from
+   "priced at 0%" and put the default back over a saved 0. A priced (or migrated) request carries its
+   breakdown — that is the tell. */
+function prSavedRate(r, key, dflt) {
+  return (r.pricedItemsJson || r.legacyItemsJson) ? flowNum(r[key]) : (flowNum(r[key]) || dflt);
+}
+
 function pricingPanel(r) {
   const inc = (r.items || []).filter(i => i.included);
   const gPrin = r._principal || (inc.find(i => i.principal) || {}).principal || '';
@@ -943,8 +957,8 @@ function pricingPanel(r) {
     <div class="pe-config-grid">
       <div><label>Principal / Supplier</label><select id="mPrincipal" onchange="mUpdateReadouts(true);recalcPricing();">${prinOpts}</select></div>
       <div><label>Delivery Destination</label><select id="mDest" onchange="mUpdateReadouts();recalcPricing();">${destOpts}</select></div>
-      <div><label>Commission Rate (%)</label><input type="number" step="0.1" min="0" max="99" id="mComm" value="${r.commission || 5}" oninput="recalcPricing()"></div>
-      <div><label>Profit Margin Rate (%)</label><input type="number" step="0.1" min="0" max="99" id="mMarg" value="${r.margin || 30}" oninput="recalcPricing()"></div>
+      <div><label>Commission Rate (%)</label><input type="number" step="0.1" min="0" max="99" id="mComm" value="${prSavedRate(r, 'commission', 5)}" oninput="recalcPricing()"></div>
+      <div><label>Profit Margin Rate (%)</label><input type="number" step="0.1" min="0" max="99" id="mMarg" value="${prSavedRate(r, 'margin', 30)}" oninput="recalcPricing()"></div>
     </div>
     <div class="pe-readout">
       <div class="pe-ro-item"><span class="pe-ro-label">Currency</span><span class="pe-ro-value" id="mCurrency">—</span></div>
@@ -1092,8 +1106,8 @@ function loadFlowPricing(prNo) {
   const gPrin = (inc.find(i => i.principal) || {}).principal || '';
   set('mPrincipal', gPrin);
   set('mDest', r.destination || '');
-  set('mComm', r.commission || 5);
-  set('mMarg', r.margin || 30);
+  set('mComm', prSavedRate(r, 'commission', 5));   // A325 — a saved 0% stays 0%
+  set('mMarg', prSavedRate(r, 'margin', 30));
   // Prefill rows from the saved breakdown when re-pricing (buy/discount/qty/cbm).
   let bd = [];
   try { bd = JSON.parse(r.pricedItemsJson || r.legacyItemsJson || '[]'); } catch (e) { bd = []; }

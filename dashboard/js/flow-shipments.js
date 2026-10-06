@@ -192,7 +192,8 @@ function shRenderTimeline() {
 async function shStage(stageKey, stageStatus) {
   let skippedReason = '';
   if (stageStatus === 'skipped') {
-    skippedReason = prompt('Reason for skipping this stage (optional):', '') || '';
+    skippedReason = prompt('Reason for skipping this stage (optional):', '');
+    if (skippedReason === null) return;   // A325 — Cancel backs out; `|| ''` skipped the stage anyway
   }
   try {
     const r = await postFlow('advanceShipmentStage', { shipmentId: shCurrent.shipment.shipmentId, stageKey, stageStatus, skippedReason });

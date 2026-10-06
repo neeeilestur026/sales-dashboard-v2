@@ -186,7 +186,7 @@ const _SM_STAGE_META = {
     description: 'A Purchase Order has been raised and linked to this shipment, authorising the procurement.',
     fields: [
       { label: 'PO No.',          field: 'poNo'   },
-      { label: 'HI-ESCORP PO #',  field: 'hiPO'   },
+      { label: 'HI-ESCORP PO #',  field: 'hiescorpPO' },   // A325 — getShipments' key; 'hiPO' was never sent
       { label: 'Principal',       field: 'principal' },
     ],
     requires: ['so_received'],
@@ -324,7 +324,7 @@ const _SM_STAGE_META = {
     description: 'The shipment has arrived and is being processed through customs. Duties and fees may apply.',
     fields: [
       { label: 'Import Duties',       field: 'importDuties',     format: 'currency' },
-      { label: 'Customs/Brokerage',   field: 'customsBrokerage', format: 'currency' },
+      { label: 'Customs/Brokerage',   field: 'brokerage',        format: 'currency' },   // A325 — getShipments' key
     ],
     requires: ['in_transit'],
     unlocks:  ['fan_sad_tan'],

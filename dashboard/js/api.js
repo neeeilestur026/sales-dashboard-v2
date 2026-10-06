@@ -17,6 +17,12 @@ function hxEsc(v) {
    caller keeps the exact output it had. */
 function hxEscBlank(v) { return hxEsc(v || ''); }
 function hxNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+/* Today in the Philippines as 'yyyy-MM-dd'. new Date().toISOString() is UTC, so before 8am Manila it
+   was still yesterday — the wrong default date, "due today" and, on the 1st, last month's report. */
+function hxToday() {
+  try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }
+  catch (e) { const d = new Date(Date.now() + 8 * 3600000); return d.toISOString().slice(0, 10); }
+}
 /* A CSS token at draw time — Chart.js paints on a canvas and needs a real colour, not var(). */
 function hxToken(name, fallback) {
   try { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
@@ -645,8 +651,10 @@ async function apiAddOrder(data) {
   return fetchFromAPI({ action: 'addOrder', ...data });
 }
 
-async function apiUpdateOrder(rowIndex, field, value) {
-  return fetchFromAPI({ action: 'updateOrder', rowIndex: String(rowIndex), field, value: String(value) });
+// A325 — expectKey: the record's key as the page showed it; the server refuses if the row now holds another
+const _xk = (k) => (k === undefined || k === null) ? {} : { expectKey: String(k) };
+async function apiUpdateOrder(rowIndex, field, value, expectKey) {
+  return fetchFromAPI({ action: 'updateOrder', rowIndex: String(rowIndex), field, value: String(value), ..._xk(expectKey) });
 }
 
 async function apiGetExpenses(category) {
@@ -699,8 +707,8 @@ async function apiUpdateClient(data) {
   return fetchFromAPI({ action: 'updateClient', ...data });
 }
 
-async function apiDeleteClient(rowIndex) {
-  return fetchFromAPI({ action: 'deleteClient', rowIndex: String(rowIndex) });
+async function apiDeleteClient(rowIndex, expectKey) {
+  return fetchFromAPI({ action: 'deleteClient', rowIndex: String(rowIndex), ..._xk(expectKey) });
 }
 
 async function apiGetClientCount(agentName) {
@@ -718,12 +726,12 @@ async function apiGetLoginLog(limit = 100) {
 
 // ─── Delete/Edit Order & Expense APIs ─────────────
 
-async function apiDeleteOrder(rowIndex) {
-  return fetchFromAPI({ action: 'deleteOrder', rowIndex: String(rowIndex) });
+async function apiDeleteOrder(rowIndex, expectKey) {
+  return fetchFromAPI({ action: 'deleteOrder', rowIndex: String(rowIndex), ..._xk(expectKey) });
 }
 
-async function apiDeleteExpense(rowIndex) {
-  return fetchFromAPI({ action: 'deleteExpense', rowIndex: String(rowIndex) });
+async function apiDeleteExpense(rowIndex, expectKey) {
+  return fetchFromAPI({ action: 'deleteExpense', rowIndex: String(rowIndex), ..._xk(expectKey) });
 }
 
 async function apiUpdateExpense(data) {
@@ -758,8 +766,8 @@ async function apiUpdateCollection(data) {
   return fetchFromAPI({ action: 'updateCollection', ...data });
 }
 
-async function apiDeleteCollection(rowIndex) {
-  return fetchFromAPI({ action: 'deleteCollection', rowIndex: String(rowIndex) });
+async function apiDeleteCollection(rowIndex, expectKey) {
+  return fetchFromAPI({ action: 'deleteCollection', rowIndex: String(rowIndex), ..._xk(expectKey) });
 }
 
 // ─── PR Tracker & Quotation Approval APIs ────────
@@ -946,8 +954,8 @@ async function apiUpdateEmployee(data) {
   return fetchFromAPI({ action: 'updateEmployee', ...data });
 }
 
-async function apiDeleteEmployee(rowIndex) {
-  return fetchFromAPI({ action: 'deleteEmployee', rowIndex: String(rowIndex) });
+async function apiDeleteEmployee(rowIndex, expectKey) {
+  return fetchFromAPI({ action: 'deleteEmployee', rowIndex: String(rowIndex), ..._xk(expectKey) });
 }
 
 async function apiGetHRSummary() {
@@ -1161,8 +1169,8 @@ function apiSavePayrollEmployee(data) {
   return fetchFromAPI({ action: 'savePayrollEmployee', ...data }, { noCache: true });
 }
 
-function apiDeletePayrollEmployee(id) {
-  return fetchFromAPI({ action: 'deletePayrollEmployee', id }, { noCache: true });
+function apiDeletePayrollEmployee(id, expectName) {
+  return fetchFromAPI({ action: 'deletePayrollEmployee', id, expectName: expectName || '' }, { noCache: true });   // A325
 }
 
 // A198 — read-only salary-change audit; optional employee filter ("Last, First").

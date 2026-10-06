@@ -32,7 +32,7 @@
   if (typeof requireAccounting === 'function' && !requireAccounting()) return;
 
   // ── Small helpers ──
-  var today = function () { return typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10); };
+  var today = function () { return typeof flowToday === 'function' ? flowToday() : hxToday(); };
   var pad = function (n) { return String(n).padStart(2, '0'); };
   var fmtLocal = function (dt) { return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()); };
   var shiftDays = function (s, n) { var dt = new Date(s + 'T00:00:00'); dt.setDate(dt.getDate() + n); return fmtLocal(dt); };

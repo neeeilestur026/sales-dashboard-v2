@@ -149,7 +149,7 @@ async function exportPDF() {
   rows.push(['TOTAL', ...t]);
 
   doc.autoTable({ head: headers, body: rows, startY: 28, theme: 'grid', headStyles: { fillColor: [249, 115, 22] } });
-  doc.save(`report-summary-${currentRange}-${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`report-summary-${currentRange}-${hxToday()}.pdf`);
 }
 
 async function exportExcel() {
@@ -165,7 +165,7 @@ async function exportExcel() {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Report Summary');
-  XLSX.writeFile(wb, `report-summary-${currentRange}-${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `report-summary-${currentRange}-${hxToday()}.xlsx`);
 }
 
 function esc(str) { return hxEscBlank(str); }

@@ -210,7 +210,7 @@ function renderTable() {
         html += '<button class="btn btn-sm" style="background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);border:1px solid var(--hx-cyan-ring);margin-right:0.2rem;" onclick="advanceStage(' + c.rowIndex + ',\'' + esc(c.stage) + '\')" title="Advance to next stage">Next</button>';
       }
       html += '<button class="btn btn-sm btn-secondary" onclick="editCandidate(' + c.rowIndex + ')" style="margin-right:0.2rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteCandidate(' + c.rowIndex + ',\'' + esc(c.candidateName).replace(/'/g, "\\'") + '\')" title="Delete">Del</button>';
+        '<button class="btn btn-sm" style="background:var(--hx-red-soft);color:var(--hx-red);border:1px solid var(--hx-red-line);" onclick="deleteCandidate(' + c.rowIndex + ',' + esc(JSON.stringify(String(c.candidateName || ''))) + ')" title="Delete">Del</button>';   // A325 — an escaped ' decodes back before the handler runs; a JSON string survives it
     } else {
       html += '<span style="color:var(--hx-ink-3);font-size:0.78rem;">View only</span>';
     }

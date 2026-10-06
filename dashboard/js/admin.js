@@ -880,7 +880,11 @@ function _smTlStageDetail(def, apiStage, apiMap) {
   const docs   = apiStage.docs   || [];
   const isAuto = apiStage.autoderived || false;
   const meta   = (typeof _SM_STAGE_META !== 'undefined' && _SM_STAGE_META[def.key]) || {};
-  const ship   = (_smTlData && _smTlData.shipment) || {};
+  /* A325 — getShipmentTimeline's shipment carries only a dozen header fields; the payment, logistics
+     and cost fields the stages list live on the getShipments row. Lay that row underneath (the
+     timeline's own, fresher values win) or they all read "— not yet set —". */
+  const tlShip = (_smTlData && _smTlData.shipment) || {};
+  const ship   = Object.assign({}, _smAllRows.find(r => r.shipmentId === tlShip.shipmentId) || {}, tlShip);
   let html = '';
 
   // ── A: Description ─────────────────────────────────────
@@ -990,13 +994,15 @@ function _smTlStageDetail(def, apiStage, apiMap) {
 
   if (docs.length) {
     html += '<div>';
+    // A325 — onclick args are JSON strings, then HTML-escaped. The browser decodes &#39; back to '
+    // before the handler runs, so a file named "Client's PO.pdf" used to end the string: dead button.
     docs.forEach(f => {
       html += `<div class="sm-doc-file">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         <span class="sm-doc-name" title="${esc(f.name)}">${esc(f.name)}</span>
-        <button class="sm-tl-btn" onclick="smViewDoc('${esc(f.previewUrl)}','${esc(f.url)}','${esc(f.name)}')"
+        <button class="sm-tl-btn" onclick="smViewDoc(${esc(JSON.stringify(String(f.previewUrl || '')))},${esc(JSON.stringify(String(f.url || '')))},${esc(JSON.stringify(String(f.name || '')))})"
           style="background:var(--hx-navy-soft);border-color:var(--hx-navy-line);color:var(--hx-navy-text);font-weight:400;" aria-label="View ${esc(f.name)}">View</button>
-        <button class="sm-tl-btn" onclick="smTlDeleteDoc('${esc(f.fileId)}','${def.key}','${esc(f.name)}')"
+        <button class="sm-tl-btn" onclick="smTlDeleteDoc(${esc(JSON.stringify(String(f.fileId || '')))},'${def.key}',${esc(JSON.stringify(String(f.name || '')))})"
           style="background:var(--hx-red-soft);border-color:var(--hx-red-line);color:var(--hx-red);font-weight:400;" aria-label="Remove ${esc(f.name)}">×</button>
       </div>`;
     });

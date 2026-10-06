@@ -644,8 +644,9 @@ function generateQuotation() {
         URL.revokeObjectURL(url);
         appendLog("Success: Quotation PDF downloaded — " + filename);
 
-        // Fetch submission info (sheetId, rowIndex) from server
-        return fetch('/quotation/last_submission_info', { headers: _hdrs() }).then(r => r.json());
+        // Fetch submission info (sheetId, rowIndex) from server — A325: the save runs in the background,
+        // so ask again every 3 s (up to ~90 s) until it says it is done instead of storing an empty context
+        return _waitForSubmission();
     })
     .then(info => {
         if (info && info.success) {
@@ -1071,3 +1072,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+/* A325 — poll /quotation/last_submission_info while the background sheet save is still running. */
+async function _waitForSubmission() {
+    for (let i = 0; i < 30; i++) {
+        let info = null;
+        try { info = await fetch('/quotation/last_submission_info', { headers: _hdrs() }).then(r => r.json()); } catch (e) { info = null; }
+        if (info && info.pending) { await new Promise(r => setTimeout(r, 3000)); continue; }
+        if (info && !info.success && info.message && info.message !== 'No recent submission') appendLog('Warning: ' + info.message);
+        return info;
+    }
+    appendLog('Warning: the sheet save is taking longer than usual — use Check status in a minute.');
+    return null;
+}

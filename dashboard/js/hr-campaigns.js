@@ -42,7 +42,7 @@ function editCampaign(rowIndex) {
 
   editingRow = rowIndex;
   document.getElementById('editRowIndex').value = rowIndex;
-  document.getElementById('campName').value = c.campaignName || '';
+  document.getElementById('campName').value = c.name || '';   // A325 — Code.gs calls it `name`; campaignName never existed
   document.getElementById('campChannel').value = c.channel || '';
   document.getElementById('campStartDate').value = c.startDate || '';
   document.getElementById('campEndDate').value = c.endDate || '';
@@ -67,7 +67,7 @@ async function submitCampaign(e) {
   msg.style.display = 'none';
 
   const data = {
-    campaignName: document.getElementById('campName').value.trim(),
+    name: document.getElementById('campName').value.trim(),   // A325 — sent as campaignName, Add failed "Name is required" and edits never renamed
     channel: document.getElementById('campChannel').value,
     startDate: document.getElementById('campStartDate').value,
     endDate: document.getElementById('campEndDate').value,
@@ -185,7 +185,7 @@ function renderTable() {
     }
 
     html += '<tr>' +
-      '<td><strong>' + esc(c.campaignName) + '</strong>' +
+      '<td><strong>' + esc(c.name) + '</strong>' +   // A325
         (c.notes ? '<br><span style="font-size:0.75rem;color:var(--hx-ink-3);">' + esc(c.notes).substring(0, 60) + (c.notes.length > 60 ? '...' : '') + '</span>' : '') +
       '</td>' +
       '<td><span class="channel-badge">' + esc(c.channel) + '</span></td>' +

@@ -36,10 +36,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // A145: supplier master → auto-fill bank details on the payment request.
+let prSuppliersLoaded = false;   // A325 — the mirror save rewrites the whole row; never from an unknown "before"
 async function loadSuppliers() {
-  prSuppliers = {};
+  prSuppliers = {}; prSuppliersLoaded = false;
   try {
     const r = await fetchFlow('getSuppliers');
+    if (r && r.success !== false) prSuppliersLoaded = true;
     ((r && r.data) || []).forEach(s => { prSuppliers[String(s.supplier).toLowerCase()] = s; });
   } catch (e) { /* prefill is best-effort */ }
 }
@@ -485,7 +487,7 @@ async function savePR() {
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message}`, true);
     // A145: self-populate the supplier master with any newly-typed bank details (best-effort, non-blocking).
-    if (payload.payee && (payload.bankName || payload.accountNumber || payload.accountName || payload.paymentMethod)) {
+    if (prSuppliersLoaded && payload.payee && (payload.bankName || payload.accountNumber || payload.accountName || payload.paymentMethod)) {
       const prev = prSuppliers[String(payload.payee).toLowerCase()] || {};
       postFlow('saveSupplier', {
         supplier: payload.payee,
@@ -493,7 +495,12 @@ async function savePR() {
         accountName: payload.accountName || prev.accountName || '',
         accountNumber: payload.accountNumber || prev.accountNumber || '',
         paymentMethod: payload.paymentMethod || prev.paymentMethod || '',
-        currency: payload.currency || prev.currency || ''
+        currency: payload.currency || prev.currency || '',
+        // A325 — saveSupplier rewrites the WHOLE row, so anything omitted is blanked. This form doesn't
+        // own the TIN, Address or Notes: carry them over untouched.
+        tin: prev.tin || '',
+        address: prev.address || '',
+        notes: prev.notes || ''
       }).catch(() => {});
     }
     resetForm();

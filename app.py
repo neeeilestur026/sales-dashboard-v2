@@ -22,8 +22,11 @@ except Exception:                       # Pillow is a hard dependency, but never
 
 _CSP = ("default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline'; "
-        "font-src 'self' data:; "
+        # A325 — the six tool pages (/po/, /pr/, /mro/, /mi/, /quotation/, /payment-request/) load Bootstrap's
+        # stylesheet from jsDelivr and tool-shared.css imports Inter from Google Fonts; both were blocked,
+        # so their modals and hidden banners rendered inline and unstyled.
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
         "img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; "
         "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://docs.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         # A315: blob: — the quotation live preview (and every other in-page PDF preview) loads the
@@ -31,6 +34,30 @@ _CSP = ("default-src 'self'; "
         # "This content is blocked. Contact the site owner to fix the issue." in the frame.
         "frame-src 'self' blob: https://drive.google.com https://docs.google.com; "
         "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'")
+
+
+# A325 — the last line of defence for credentials. An upstream exception's text can carry the URL it was
+# calling (requests puts it in "Max retries exceeded with url: …"), and with it a query string; dozens of
+# routes return str(exc) to the page. Every JSON reply is scrubbed of the shared secret, of any
+# sharedSecret= / flowSecret= / token= value and of an Apps Script deployment id before it leaves.
+# Runs before Flask-Compress (after_request handlers run in reverse order), so the body is still text.
+_SCRUB_KV = re.compile(r"(sharedSecret|flowSecret|token)=[^&\s'\"),]+")
+_SCRUB_DEPLOY = re.compile(r"/macros/s/[A-Za-z0-9_-]{10,}/")
+
+
+def _scrub_json(response):
+    try:
+        if response.mimetype != "application/json" or response.direct_passthrough or response.headers.get("Content-Encoding"):
+            return
+        body = response.get_data(as_text=True)
+        clean = _SCRUB_DEPLOY.sub("/macros/s/<redacted>/", _SCRUB_KV.sub(r"\1=<redacted>", body))
+        secret = os.environ.get("INTERNAL_SHARED_SECRET", "")
+        if secret and len(secret) >= 8 and secret in clean:
+            clean = clean.replace(secret, "<redacted>")
+        if clean != body:
+            response.set_data(clean)
+    except Exception:                                            # never let the scrub break a reply
+        logging.getLogger(__name__).exception("scrub failed")
 
 
 def create_app():
@@ -97,6 +124,7 @@ def create_app():
     # ── Security + cache headers ────────────────────────────────────
     @app.after_request
     def add_security_headers(response):
+        _scrub_json(response)
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'

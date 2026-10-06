@@ -379,7 +379,10 @@ function _acctSmTlStageDetail(def, apiStage, apiMap) {
   const docs   = apiStage.docs   || [];
   const isAuto = apiStage.autoderived || false;
   const meta   = (_SM_STAGE_META && _SM_STAGE_META[def.key]) || {};
-  const ship   = (_acctSmTlData && _acctSmTlData.shipment) || {};
+  // A325 — the timeline's shipment is a dozen header fields; the getShipments row underneath supplies
+  // the payment / logistics / cost fields the stages list (the timeline's fresher values win).
+  const tlShip = (_acctSmTlData && _acctSmTlData.shipment) || {};
+  const ship   = Object.assign({}, _acctSmAll.find(r => r.shipmentId === tlShip.shipmentId) || {}, tlShip);
   let html = '';
 
   if (meta.description) {
@@ -444,10 +447,13 @@ function _acctSmTlStageDetail(def, apiStage, apiMap) {
     docs.forEach(f => {
       const viewUrl  = f.url || f.driveUrl || '';
       const thumbUrl = f.thumbnailUrl || f.previewUrl || '';
+      // A325 — JSON strings, then HTML-escaped: the browser decodes &#39; back to ' before the handler
+      // runs, so a file named "Client's PO.pdf" used to end the '…' string and the click did nothing.
+      const viewArgs = _acctEsc(JSON.stringify(String(f.name || ''))) + ',' + _acctEsc(JSON.stringify(String(viewUrl)));
       const thumbImg = thumbUrl
-        ? `<img src="${_acctEsc(thumbUrl)}" class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')" alt="Preview">`
-        : `<div class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>`;
-      html += `<div class="sm-mgmt-doc-file">${thumbImg}<span class="sm-mgmt-doc-name" title="${_acctEsc(f.name)}">${_acctEsc(f.name)}</span><button class="sm-mgmt-doc-btn" onclick="acctOpenDocViewer('${_acctEsc(f.name)}','${_acctEsc(viewUrl)}')">View ↗</button></div>`;
+        ? `<img src="${_acctEsc(thumbUrl)}" class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer(${viewArgs})" alt="Preview">`
+        : `<div class="sm-mgmt-doc-thumb" onclick="acctOpenDocViewer(${viewArgs})"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>`;
+      html += `<div class="sm-mgmt-doc-file">${thumbImg}<span class="sm-mgmt-doc-name" title="${_acctEsc(f.name)}">${_acctEsc(f.name)}</span><button class="sm-mgmt-doc-btn" onclick="acctOpenDocViewer(${viewArgs})">View ↗</button></div>`;
     });
     html += '</div>';
   } else {

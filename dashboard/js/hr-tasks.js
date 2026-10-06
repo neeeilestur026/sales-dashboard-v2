@@ -160,7 +160,7 @@ function renderTable() {
     return;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = hxToday();
 
   let html = '<table class="task-table"><thead><tr>' +
     '<th>Title</th><th>Type</th><th>Assigned To</th><th>Status</th><th>Due Date</th><th>Actions</th>' +

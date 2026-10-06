@@ -141,6 +141,8 @@ async function submitClient(e) {
     var result;
     if (editingRowIndex !== null) {
       data.rowIndex = editingRowIndex;
+      var _was = allClients.find(function (c) { return String(c.rowIndex) === String(editingRowIndex); });
+      if (_was) data.expectKey = _was.companyName || '';   // A325 — refused if the row now holds another client
       result = await apiUpdateClient(data);
     } else {
       result = await apiAddClient(data);
@@ -193,14 +195,18 @@ async function _mirrorClientToFlow(data) {
     })[0] || {};
   } catch (_) { /* no flow record yet, or backend unset — treat as a new client */ }
 
+  // A325 — a field the form sent (even blank) is the new value; only one it did not send falls back.
+  // `data.x || prev.x` brought a cleared email straight back in the flow copy.
+  var sent = function (k) { return data[k] !== undefined && data[k] !== null; };
+  var pick = function (keys, old) { return keys.some(sent) ? keys.map(function (k) { return data[k] || ''; }).filter(Boolean)[0] || '' : (old || ''); };
   await postFlow('saveClient', {
     customer: name,
-    address: data.siteAddress || data.headOffice || prev.address || '',
-    contactPerson: data.contactPerson || prev.contactPerson || '',
-    designation: data.position || prev.designation || '',
-    email: data.email || prev.email || '',
-    phone: data.mobile || data.tel || prev.phone || '',
-    notes: data.notes || prev.notes || '',
+    address: pick(['siteAddress', 'headOffice'], prev.address),
+    contactPerson: pick(['contactPerson'], prev.contactPerson),
+    designation: pick(['position'], prev.designation),
+    email: pick(['email'], prev.email),
+    phone: pick(['mobile', 'tel'], prev.phone),
+    notes: pick(['notes'], prev.notes),
     // Preserved, not owned by this form — omitting them would blank them (see note above).
     rfqRef: prev.rfqRef || '',
     paymentTerms: prev.paymentTerms || ''
@@ -255,7 +261,8 @@ async function deleteClient(rowIndex) {
   if (!confirm('Are you sure you want to delete this client?')) return;
 
   try {
-    var result = await apiDeleteClient(rowIndex);
+    var _del = allClients.find(function (c) { return String(c.rowIndex) === String(rowIndex); });
+    var result = await apiDeleteClient(rowIndex, _del ? (_del.companyName || '') : undefined);
     if (!result.success) throw new Error(result.message || 'Failed');
     clearApiCache();
     await loadClients();
@@ -283,5 +290,5 @@ async function exportClientsExcel() {
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Clients');
-  XLSX.writeFile(wb, 'clients-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'clients-' + hxToday() + '.xlsx');
 }

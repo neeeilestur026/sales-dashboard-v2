@@ -106,7 +106,7 @@ async function submitUser(e) {
 async function resetPassword(rowIndex, username) {
   if (!confirm('Reset password for ' + username + '? A temporary password will be generated.')) return;
   try {
-    const result = await fetchFromAPI({ action: 'resetUserPassword', rowIndex: String(rowIndex) });
+    const result = await fetchFromAPI({ action: 'resetUserPassword', rowIndex: String(rowIndex), username });   // A325 — the server checks the row still holds this user
     if (!result.success) throw new Error(result.message);
     var tempPw = result.tempPassword || '(check with admin)';
     alert('Password reset successfully.\n\nTemporary password: ' + tempPw + '\n\nPlease share this with the user securely.');
@@ -119,7 +119,7 @@ async function resetPassword(rowIndex, username) {
 async function deleteUser(rowIndex, username) {
   if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
   try {
-    const result = await fetchFromAPI({ action: 'deleteUser', rowIndex: String(rowIndex) });
+    const result = await fetchFromAPI({ action: 'deleteUser', rowIndex: String(rowIndex), username });   // A325
     if (!result.success) throw new Error(result.message);
     clearApiCache();
     await loadUsers();
@@ -163,6 +163,9 @@ function renderUsersTable() {
       ? ' <span style="display:inline-block;margin-left:0.4rem;padding:0.1rem 0.45rem;border-radius:999px;font-size:0.65rem;font-weight:700;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;vertical-align:middle;">TRAINING</span>'
       : '';
     const rowStyle = u.trainingMode ? ' style="background:rgba(254,243,199,0.35);"' : '';
+    // A325 — a JSON string, then HTML-escaped: the browser decodes &#39; back to ' before the handler
+    // runs, so a username with an apostrophe ended the '…' string and Reset PW / Delete did nothing.
+    const userArg = esc(JSON.stringify(String(u.username || '')));
     html += '<tr' + rowStyle + '>' +
       '<td><strong>' + esc(u.username) + '</strong>' + inlineTag + '</td>' +
       '<td>' + esc(u.fullName) + '</td>' +
@@ -170,8 +173,8 @@ function renderUsersTable() {
       '<td>' + trainBadge + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-sm btn-secondary" onclick="editUser(' + u.rowIndex + ')" style="margin-right:0.3rem;" title="Edit">Edit</button>' +
-        '<button class="btn btn-sm btn-secondary" onclick="resetPassword(' + u.rowIndex + ',\'' + esc(u.username) + '\')" style="margin-right:0.3rem;" title="Reset Password">Reset PW</button>' +
-        (u.role !== 'admin' ? '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteUser(' + u.rowIndex + ',\'' + esc(u.username) + '\')" title="Delete">Delete</button>' : '') +
+        '<button class="btn btn-sm btn-secondary" onclick="resetPassword(' + u.rowIndex + ',' + userArg + ')" style="margin-right:0.3rem;" title="Reset Password">Reset PW</button>' +
+        (u.role !== 'admin' ? '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" onclick="deleteUser(' + u.rowIndex + ',' + userArg + ')" title="Delete">Delete</button>' : '') +
       '</td>' +
       '</tr>';
   });
