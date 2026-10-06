@@ -65,14 +65,27 @@
   async function syncPayroll() {
     const btn = $('bkSyncBtn'), hint = $('bkSyncHint');
     btn.disabled = true; btn.textContent = 'Syncing…';
+    const sum = { posted: 0, unchanged: 0, inbox: 0, withdrawn: 0 };
     try {
-      const res = await fetch('/books/sync', { method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: '{}' });
-      let r = null;
-      try { r = await res.json(); } catch (e) { r = null; }
-      if (r && /Unknown action: ingestBookEvents/.test(r.message || '')) throw new Error('Paste the latest FlowAPI.gs (162) to sync payroll and payments.');
-      if (!res.ok || !r || !r.success) throw new Error((r && r.message) || 'The sync did not finish (' + res.status + '). Press it again; nothing posts twice.');
-      await loadStatus();
-      hint.className = 'bk-hint bk-ok'; hint.textContent = r.message;
+      // A324 — a first sync can be more than one minute's work: each round posts what fits and says what is left
+      for (let round = 1; ; round++) {
+        const res = await fetch('/books/sync', { method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: '{}' });
+        let r = null;
+        try { r = await res.json(); } catch (e) { r = null; }
+        if (r && /Unknown action: ingestBookEvents/.test(r.message || '')) throw new Error('Paste the latest FlowAPI.gs to sync payroll and payments.');
+        if (!res.ok || !r || !r.success) throw new Error((r && r.message) || 'The sync did not finish (' + res.status + '). Press it again; nothing posts twice.');
+        const c = r.counts || {};
+        ['posted', 'inbox', 'withdrawn'].forEach(k => { sum[k] += c[k] || 0; });
+        sum.unchanged = c.unchanged || 0;
+        if (!(c.left > 0) || round >= 20) {
+          r.message = sum.posted + ' posted, ' + sum.unchanged + ' unchanged' + (sum.inbox ? ', ' + sum.inbox + ' waiting in the Inbox' : '') +
+                      (sum.withdrawn ? ', ' + sum.withdrawn + ' withdrawn' : '') + (c.left > 0 ? ', ' + c.left + ' left — press again.' : '.');
+          await loadStatus();
+          hint.className = 'bk-hint bk-ok'; hint.textContent = r.message;
+          break;
+        }
+        hint.className = 'bk-hint'; hint.textContent = sum.posted + ' posted so far — ' + c.left + ' still to go…';
+      }
       B.loaded = { [currentTab()]: true };
       const t = currentTab(); if (LOADERS[t]) LOADERS[t]();
     } catch (e) { hint.className = 'bk-hint bk-bad'; hint.textContent = e.message; }
@@ -176,7 +189,8 @@
           <th class="num">In the Inbox</th><th class="num">Missing</th><th class="num">Changed</th></tr></thead><tbody>${types.map(k => { const c = r.counts[k]; return `<tr>
           <td>${esc(k)}</td><td class="num">${c.total}</td><td class="num">${c.ok}</td><td class="num">${c.inbox || ''}</td>
           <td class="num ${c.missing ? 'bk-bad' : ''}">${c.missing || ''}</td><td class="num ${c.changed ? 'bk-bad' : ''}">${c.changed || ''}</td></tr>`; }).join('')}</tbody></table>
-          <p class="bk-verdict ${r.complete ? 'ok' : 'bad'}">${r.complete ? 'Complete: every record in this range is in the books (or waiting in the Inbox for a decision).' : r.problemCount + ' record(s) are missing from the books or changed since they were posted.'}</p>`
+          <p class="bk-verdict ${r.complete ? 'ok' : 'bad'}">${r.complete ? 'Complete: every record in this range is in the books (or waiting in the Inbox for a decision).' : r.problemCount + ' record(s) are missing from the books or changed since they were posted.'}</p>
+          ${r.partial ? `<p class="bk-verdict bad">Checked up to ${esc(r.checkedThrough)} only — the whole range did not fit in one look. Set "From" to ${esc(r.checkedThrough)} and check again for the rest.</p>` : ''}`
         : '<div class="hx-empty">No money records in this range.</div>';
       const bad = r.problems.filter(x => x.state !== 'inbox');
       $('covProblems').innerHTML = bad.length ? `<table class="flow-table bk-table"><thead><tr><th>Date</th><th>Source</th><th class="num">Amount</th><th>State</th></tr></thead><tbody>${bad.map(x => `<tr>
@@ -185,15 +199,28 @@
       show('covSync', B.canAct && bad.length > 0 && B.status && B.status.mode !== 'off');
     } catch (e) { $('covCounts').innerHTML = `<div class="hx-empty">${esc(e.message)}</div>`; }
   }
+  /* A324 — the books post in slices that each fit well inside a minute (Flask stops waiting on Google
+     after that); each answer says where the next slice starts, so this keeps pressing until it is done. */
   async function syncNow() {
-    const btn = $('covSync');
+    const btn = $('covSync'), from = $('covFrom').value, to = $('covTo').value;
+    let posted = 0, inbox = 0, next = '', rounds = 0;
     btn.disabled = true; btn.textContent = 'Posting…';
     try {
-      const r = await postFlow('syncBooks', { from: $('covFrom').value, to: $('covTo').value });
-      if (!r || !r.success) throw new Error((r && r.message) || 'Could not post.');
-      msg('covMsg', r.message, true);
+      for (;;) {
+        const r = await postFlow('syncBooks', { from, to, after: next });
+        if (!r || !r.success) throw new Error((r && r.message) || 'Could not post.');
+        posted += r.posted || 0; inbox += r.inbox || 0; rounds++;
+        const tally = posted + ' posted' + (inbox ? ', ' + inbox + ' sent to the Inbox' : '');
+        if (r.done || !r.next || r.next === next || rounds >= 60) {
+          msg('covMsg', r.done === false ? tally + '. ' + r.left + ' still to check — press again.' : tally + '. Done.', true);
+          break;
+        }
+        next = r.next;
+        msg('covMsg', tally + ' so far — still working (' + r.left + ' to check)…', true);
+        btn.textContent = 'Posting… ' + posted;
+      }
       await loadCoverage(); await loadStatus();
-    } catch (e) { msg('covMsg', e.message, false); }
+    } catch (e) { msg('covMsg', (posted ? posted + ' posted before this. ' : '') + e.message, false); }
     finally { btn.disabled = false; btn.textContent = 'Post what is missing'; }
   }
 

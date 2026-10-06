@@ -19,6 +19,8 @@ import json
 import logging
 import os
 
+import requests
+
 from flask import Blueprint, jsonify, g
 
 from blueprints import _config
@@ -29,6 +31,12 @@ logger = logging.getLogger(__name__)
 books_bp = Blueprint("books_bp", __name__)
 FLOW_APPS_SCRIPT_URL = os.environ.get("FLOW_APPS_SCRIPT_URL", "")
 SYNC_ROLES = ["accounting", "admin", "director"]
+# A324 — gunicorn kills a worker at 120 s (render.yaml). Code.gs only reads here (30 s is ample); FlowAPI
+# stops starting new work 35 s into its own run and says how much is left, so 85 s covers its lock wait,
+# a cold start and the last item. The two together stay under the 120.
+FEED_TIMEOUT, INGEST_TIMEOUT = 30, 85
+STILL_RUNNING = ("Google took longer than expected to answer, so the books may still be finishing this in the "
+                 "background. Wait a minute, then press Sync again — nothing is posted twice.")
 
 
 @books_bp.route("/books/sync", methods=["POST"])
@@ -38,9 +46,12 @@ def books_sync():
         return jsonify({"success": False, "message": "The books bridge is not configured on the server "
                         "(FLOW_APPS_SCRIPT_URL / INTERNAL_SHARED_SECRET)."}), 503
 
-    feed = gs_json(_config.DASHBOARD_APPS_SCRIPT_URL, json={"action": "getBooksFeed"}, timeout=60)
+    feed = gs_json(_config.DASHBOARD_APPS_SCRIPT_URL, json={"action": "getBooksFeed"}, timeout=FEED_TIMEOUT)
     if not isinstance(feed, dict) or not feed.get("success"):
-        msg = (feed or {}).get("message") if isinstance(feed, dict) else None
+        msg = str((feed or {}).get("message") or "") if isinstance(feed, dict) else ""
+        if "timed out" in msg.lower():
+            return jsonify({"success": False, "timedOut": True, "message": "The main backend (Code.gs) took too long to "
+                            "send payroll and payments. Press Sync again in a moment — nothing was posted."}), 504
         return jsonify({"success": False, "message": "Could not read payroll and payments from the main backend: "
                         + (msg or "no answer") + ". Paste the latest Code.gs (v5) if this says Unknown action."}), 502
 
@@ -55,13 +66,16 @@ def books_sync():
         "flowSecret": INTERNAL_SHARED_SECRET,
     }
     try:
-        resp = gs_call(FLOW_APPS_SCRIPT_URL, json=payload, timeout=60)
+        resp = gs_call(FLOW_APPS_SCRIPT_URL, json=payload, timeout=INGEST_TIMEOUT)
         text = resp.text or ""
         if text.lstrip().startswith("<"):
             logger.warning("books_sync: HTML response from FlowAPI")
             return jsonify({"success": False, "message": "The books backend returned an error page. "
                             "Sync again in a minute — anything already posted is not posted twice."}), 502
         return jsonify(json.loads(text))
+    except requests.exceptions.Timeout:                                # the script carries on; say so plainly
+        logger.warning("books_sync: FlowAPI did not answer within %ss", INGEST_TIMEOUT)
+        return jsonify({"success": False, "timedOut": True, "message": STILL_RUNNING}), 504
     except Exception as exc:                                           # transport or JSON failure
         logger.exception("books_sync failed")
         return jsonify({"success": False, "message": str(exc)}), 502

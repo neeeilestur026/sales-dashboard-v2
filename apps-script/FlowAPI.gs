@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 164;   // A323 — Collect: the director's phone records collections; accounting and admin acknowledge. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 165;   // A324 — the books jobs finish inside Flask's minute and continue in rounds. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -843,7 +843,9 @@ function _fctEq(a, b) {
   return diff === 0;
 }
 
+var _EXEC_T0 = 0;                                     // A324 — when this execution started (before the lock wait)
 function _dispatch(params) {
+  _EXEC_T0 = Date.now();
   var action = params.action || '';
   _SS = null;
   _ROWS_MEMO = MUTATIONS[action] ? null : {};      // AS-2 — reads memoise each tab for this execution
@@ -15886,6 +15888,11 @@ function _booksMayView(p) { return !!_BOOKS_VIEW_ROLES[_booksRole(p)]; }
 
 /** The settings the Books read, once per execution. */
 var _BOOKS_CFG = null;
+/* A324 — Flask gives up on Apps Script after a minute ("Read timed out") while the script carries on,
+   so every long books job stops starting new work well before that, counted from the moment this
+   execution began — the wait for the script lock included — and the page presses again for the rest. */
+var _BOOKS_WRITE_MS = 35000, _BOOKS_READ_MS = 40000;
+function _booksElapsed() { return Date.now() - (_EXEC_T0 || Date.now()); }
 function _booksCfg() {
   if (_BOOKS_CFG) return _BOOKS_CFG;
   var all = {};
@@ -16349,7 +16356,7 @@ function _glPost(evt) {
   }
   var entryNo = _glEntryNo(d), first = _glWrite(evt, n.lines, entryNo);
   _booksIndexSet(evt.key, [evt.key, entryNo, fp, first, n.lines.length, 'Posted', d, evt.sourceType || '', evt.sourceNo || '', _now(), '']);
-  _glInboxSettle(evt.key, 'Posted ' + entryNo);
+  if (evt.settle !== false) _glInboxSettle(evt.key, 'Posted ' + entryNo);   // A324 — a sync says when nothing can be waiting
   return { posted: true, entryNo: entryNo, reversed: reversed };
 }
 
@@ -16805,8 +16812,12 @@ function _booksCheck(src) {
 }
 function getBooksCoverage(p) {
   if (!_booksMayView(p)) return { success: false, message: 'Not permitted.' };
-  var counts = {}, problems = [];
-  _booksSources(p.from, p.to).forEach(function (src) {
+  var counts = {}, problems = [], through = '', cut = false;
+  /* A324 — oldest first, and stop before Flask's minute runs out: a partial answer that says how far it
+     got beats "Read timed out". */
+  _booksSources(p.from, p.to).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).forEach(function (src) {
+    if (cut || (through && _booksElapsed() > _BOOKS_READ_MS)) { cut = true; return; }
+    through = src.date;
     var c = _booksCheck(src), k = src.type;
     counts[k] = counts[k] || { total: 0, ok: 0, missing: 0, inbox: 0, changed: 0, skipped: 0 };
     counts[k].total++; counts[k][c.state]++;
@@ -16816,26 +16827,47 @@ function getBooksCoverage(p) {
   });
   problems.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
   return { success: true, mode: _booksMode(), counts: counts, problems: problems.slice(0, 500), problemCount: problems.length,
-           complete: !problems.some(function (x) { return x.state !== 'inbox'; }) };
+           partial: cut, checkedThrough: cut ? through : '',
+           complete: !cut && !problems.some(function (x) { return x.state !== 'inbox'; }) };
 }
 /** Re-post what coverage found missing or changed, oldest first, within a time budget (one call is a
  *  few hundred at most; press again for the rest). Voided records are withdrawn. */
 function syncBooks(p) {
   if (!_booksMayAct(p)) return { success: false, message: 'Only accounting, admin or the director can sync the books.' };
   if (!_booksOn()) return { success: false, message: 'The books are switched off.' };
-  var t0 = Date.now(), done = 0, inbox = 0, left = 0, only = String(p.sourceNo || '');
+  /* A324 — in slices, with a cursor. Checking a record means building its entry, and a write call reads
+     every sheet afresh: checking a whole year that way ran for minutes and Flask gave up after one. Now
+     (1) the checking is done under the read memo, until a share of the budget is used; (2) what is
+     missing or changed in that slice is posted with fresh reads; (3) `next` says where the next press
+     carries on, so every press makes progress and books.js keeps pressing until `done`. */
+  var only = String(p.sourceNo || ''), after = String(p.after || ''), done = 0, inbox = 0;
+  var keyOf = function (src) { return src.date + '|' + src.type + '|' + src.no; };
   var srcs = _booksSources(p.from, p.to).filter(function (s) { return !only || s.no === only; })
-    .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
-  srcs.forEach(function (src) {
-    var c = _booksCheck(src);
-    if (c.state !== 'missing' && c.state !== 'changed') return;
-    if (Date.now() - t0 > 25000) { left++; return; }
-    var r = _booksSafe(src.type + ':' + src.no, function () { return _booksApply(src.build(src.no), _dateStr(_now()), p.actorName); });
-    if (r && r.inbox) inbox++; else done++;
-  });
-  _booksAudit(p, 'syncBooks', only || ((p.from || '') + '..' + (p.to || '')), null, { posted: done, inbox: inbox, left: left });
-  return { success: true, posted: done, inbox: inbox, left: left, refNo: only || 'range',
-           message: done + ' posted' + (inbox ? ', ' + inbox + ' sent to the Inbox' : '') + (left ? ', ' + left + ' left — press again' : '') + '.' };
+    .sort(function (a, b) { var x = keyOf(a), y = keyOf(b); return x < y ? -1 : x > y ? 1 : 0; })
+    .filter(function (s) { return !after || keyOf(s) > after; });
+  var checked = [], memo = _ROWS_MEMO;
+  _ROWS_MEMO = {};
+  try {
+    for (var i = 0; i < srcs.length; i++) {
+      if (checked.length && _booksElapsed() > _BOOKS_WRITE_MS * 0.5) break;
+      checked.push({ src: srcs[i], c: _booksCheck(srcs[i]) });
+    }
+  } finally { _ROWS_MEMO = memo; }
+  var cursor = after, stopped = false;
+  for (var j = 0; j < checked.length; j++) {
+    var it = checked[j];
+    if (it.c.state === 'missing' || it.c.state === 'changed') {
+      if (done + inbox > 0 && _booksElapsed() > _BOOKS_WRITE_MS) { stopped = true; break; }
+      var r = _booksSafe(it.src.type + ':' + it.src.no, function () { return _booksApply(it.src.build(it.src.no), _dateStr(_now()), p.actorName); });
+      if (r && r.inbox) inbox++; else done++;
+    }
+    cursor = keyOf(it.src);
+  }
+  var finished = !stopped && checked.length === srcs.length;
+  var left = srcs.length - (stopped ? j : checked.length);
+  _booksAudit(p, 'syncBooks', only || ((p.from || '') + '..' + (p.to || '')), null, { posted: done, inbox: inbox, left: left, after: after, next: cursor });
+  return { success: true, posted: done, inbox: inbox, left: finished ? 0 : left, done: finished, next: finished ? '' : cursor, refNo: only || 'range',
+           message: done + ' posted' + (inbox ? ', ' + inbox + ' sent to the Inbox' : '') + (finished ? '.' : '; ' + left + ' still to check.') };
 }
 
 /* ── A321 · money that lives in Code.gs (payroll, Billing, Director Payables, the bank page) ─────── */
@@ -16934,11 +16966,13 @@ function ingestBookEvents(p) {
   (feed.billing || []).forEach(function (b) { evs.push(_cgPaymentEvent('CG:BILL:' + (b.bankTxId || 'PR:' + b.prNumber), 'Billing', 'billing.department', b.department, b)); });
   (feed.directorPayables || []).forEach(function (d) { evs.push(_cgPaymentEvent('CG:DP:' + d.id, 'Director payable', 'dp.category', d.category, d)); });
   _cgBankEvents(feed.bankTransactions).forEach(function (e) { evs.push(e); });
-  var t0 = Date.now(), seen = {}, c = { posted: 0, unchanged: 0, inbox: 0, skipped: 0, withdrawn: 0, left: 0 };
+  var seen = {}, c = { posted: 0, unchanged: 0, inbox: 0, skipped: 0, withdrawn: 0, left: 0 };
   _BOOKS_IBX = _glInboxState();                                     // decisions do not change during a sync
   evs.forEach(function (e) {
     seen[e.key] = 1;
-    if (Date.now() - t0 > 25000) { c.left++; return; }
+    // A324 — counted from the start of the call; and every call posts at least one thing, so it always progresses
+    if (c.posted + c.inbox > 0 && _booksElapsed() > _BOOKS_WRITE_MS) { c.left++; return; }
+    e.settle = !!(_BOOKS_IBX[e.key] && _BOOKS_IBX[e.key].open.length);   // nothing waiting → no Inbox re-read per post
     e.by = p.actorName || '';
     var st = _BOOKS_IBX[e.key];
     if (st && st.open.length && !_glApplyDecision(e, _BOOKS_IBX) && (e.lines || []).some(function (l) { return !String(l.account || '').trim(); }) &&
@@ -17124,6 +17158,7 @@ function resolveBooksInboxItem(p) {
   var det = {};
   try { det = JSON.parse(row['Detail JSON'] || '{}'); } catch (e) {}
   var evt = det.evt || null, act = String(p.resolution || p.action || '').toLowerCase(), result = '';
+  if (evt) delete evt.settle;                                        // A324 — a sync's hint, never a resolution's
   var orig = evt ? JSON.parse(JSON.stringify(evt)) : null;           // what the source said, before the person's choice
   if (act === 'ignore') {
     var why = String(p.reason || '').trim();
@@ -17404,6 +17439,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A324 NO MORE "READ TIMED OUT" ON THE BOOKS PAGE (165). Flask stops waiting for Apps Script after a minute while the script runs on, so a long books job showed the raw "HTTPSConnectionPool … Read timed out (read timeout=60)". syncBooks ("Post what is missing") checked EVERY record before looking at its budget, and as a write call it read every sheet afresh for each one — minutes on a real year. Now every long job counts its budget from the start of the execution (_EXEC_T0, the lock wait included) and stops starting new work at 35 s (writes) / 40 s (reads), always doing at least one item: syncBooks checks under the read memo, posts what that slice found missing or changed, and returns a `next` cursor and `done`, so books.js presses again until done; ingestBookEvents says what is left and the page repeats the sync; getBooksCoverage checks oldest first and, if it runs out, says how far it got (partial, checkedThrough). A sync no longer re-reads the Inbox after every post when nothing can be waiting for that event.
 A323 COLLECT — THE DIRECTOR'S PHONE (164). New FieldCollections tab (one row per invoice line, a Batch No per payment). getCollectorQueue (director): open receivables most overdue first, our banks from the chart, his recent payments. recordFieldCollection (director): cheque (number required; post-dated allowed) / cash / bank transfer, the deposit place checked against the method (cheque → 1100 or a bank, cash → 1010 or a bank, transfer → a bank), one payment over several of ONE customer's invoices, every line validated (over-collection, proof of collection, closed month, a cheque number already used) before the first write, each line recorded through recordCollection so AR, DocMeta, journal and books behave as on the desktop. recordNotCollected: reason, promised date, note; getARAging rows carry the latest as followUp (missed when the promise has passed). getFieldCollectionNotices / acknowledgeFieldCollection (accounting, admin) are the notification; undoFieldCollection voids a payment the same day before it is acknowledged; uploadCollectionPhoto files a Proof of collection per receivable. Also: recordCollection recognises a retried clientRef before its over-collection guard, and the activity log records a collection's amount (it logged 0).
 A322 A SALES-ORDER EDIT SAVES AGAIN (163). A276 appended Type and Service Kind to SalesOrders (14 columns) but updateSalesOrder kept rewriting the row with 12 values, and Sheets refuses a value list narrower than its range ("data has 12 columns but the range has 14"), so EVERY sales-order edit failed. It now writes all 14: Type and Service Kind are kept (the form never sends them, and they decide hire vs sale at invoicing), re-derived from the new quotation only when the order is moved to another quotation (_orderTypeFrom, as createSalesOrder does), and an explicit type / serviceKind still wins. tests/audit/schema-width.js now counts literal row rewrites as well as appends, and the test harness's setValues refuses a mismatched shape as Sheets does.
 A321 PAYROLL AND THE CODE.GS PAYMENTS REACH THE BOOKS (162). ingestBookEvents takes a full snapshot from Code.gs v5 (getBooksFeed, carried by Flask /books/sync with the shared secret and the caller's real role): each approved cutoff posts once (CG:PAY:<period>, dated the 10th or the 25th) — gross to 6010 with commission incentives clearing 2040, every deduction to its payable, net to 2030, the 13th month accrued at basic ÷ 12 exact per month, and on cutoff B the month's employer shares from the contribution tables (a missing table → Inbox, never a guess); Mark payroll paid clears 2030 from the bank (CG:PAYPAID); a paid Billing request (CG:BILL:<Bank Tx ID>) or Director Payable (CG:DP:<id>) posts by its rule (billing.department / dp.category; seeds utilities 6210, rent 6200, personal 1230) in the pesos the bank took, else the Inbox; own-bank transfers post themselves (a difference asks about the fee); every other bank-page movement waits for a person. A key gone from a COMPLETE snapshot is withdrawn by reversal; a partial one withdraws nothing. A person's Inbox decision now outlives the item (_glApplyDecision): a rebuilt event takes the same account (and the same moved date) and is a no-op, an ignored one stays out until its amount or date changes, and a waiting item is not rewritten on every sync. Event lines name the rule "remember this" saves (A320 always saved an expense category); saveAccountRule accepts only the five rule kinds. getBooksStatus says when payroll and payments were last synced.

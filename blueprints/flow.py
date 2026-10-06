@@ -9,6 +9,8 @@ the flow already holds final prices; Drive-save is handled separately by FlowAPI
 import base64
 import json
 import logging
+
+import requests
 import os
 import re
 from io import BytesIO
@@ -658,6 +660,11 @@ SECURED_ACTIONS = [
 ]
 
 
+# A324 — the books jobs that walk a whole year. FlowAPI stops starting new work 35-40 s into its own run and
+# says what is left; the longer wait covers the script lock and a cold start. Under gunicorn's 120 s.
+LONG_ACTIONS = {"syncBooks": 90, "getBooksCoverage": 90}
+
+
 @flow_bp.route("/flow/secure", methods=["POST"])
 @require_session()
 def secure_mutation():
@@ -693,7 +700,7 @@ def secure_mutation():
     params["flowSecret"] = INTERNAL_SHARED_SECRET
 
     try:
-        resp = gs_call(FLOW_APPS_SCRIPT_URL, json=params, timeout=60)
+        resp = gs_call(FLOW_APPS_SCRIPT_URL, json=params, timeout=LONG_ACTIONS.get(action, 60))
         text = resp.text or ""
         if text.lstrip().startswith("<"):
             # The known Apps Script flake: an HTML error page returned with HTTP 200. Mutations
@@ -703,6 +710,12 @@ def secure_mutation():
                             "The backend returned an error page. Refresh and check the record "
                             "before retrying — the action may have gone through."}), 502
         return jsonify(json.loads(text))
+    except requests.exceptions.Timeout:
+        # A324 — Apps Script carries on after we stop waiting, so this is "not answered yet", not "failed".
+        logger.warning("secure_mutation: %s did not answer within %ss", action, LONG_ACTIONS.get(action, 60))
+        return jsonify({"success": False, "timedOut": True, "message":
+                        "Google took longer than expected to answer, so this may still be finishing in the background. "
+                        "Wait a minute and check before trying again."}), 504
     except Exception as exc:
         logger.exception("secure_mutation failed for %s", action)
         return jsonify({"success": False, "message": str(exc)}), 502

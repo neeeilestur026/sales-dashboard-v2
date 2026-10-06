@@ -81,6 +81,16 @@ ok('receiving: rate and VAT evidence only when filled', /payload\.receiptRate = 
   ok('  the Voucher column comes first', /<th class="c-vou">Voucher<\/th><th class="c-date">Date<\/th>/.test(EX));
 }
 
+console.log('\n5b · A324 — the long jobs continue in rounds');
+ok('"Post what is missing" passes the cursor back and stops when done', /postFlow\('syncBooks', \{ from, to, after: next \}\)/.test(JS) && /if \(r\.done \|\| !r\.next \|\| r\.next === next \|\| rounds >= 60\)/.test(JS));
+ok('the payroll sync repeats while something is left', /if \(!\(c\.left > 0\) \|\| round >= 20\)/.test(JS));
+ok('coverage says when it only checked part of the range', /r\.partial \? `<p class="bk-verdict bad">Checked up to/.test(JS));
+const FPY = fs.readFileSync(path.join(__dirname, '../../blueprints/flow.py'), 'utf8');
+ok('Flask waits longer for the two books jobs, under gunicorn\'s 120 s', /LONG_ACTIONS = \{"syncBooks": 90, "getBooksCoverage": 90\}/.test(FPY) &&
+   /--timeout 120/.test(fs.readFileSync(path.join(__dirname, '../../render.yaml'), 'utf8')));
+ok('  and a timeout is said in plain words, not the raw exception', /except requests\.exceptions\.Timeout:[\s\S]{0,400}"timedOut": True/.test(FPY));
+ok('FlowAPI counts its budget from the start of the call', /_EXEC_T0 = Date\.now\(\);/.test(GS) && /var _BOOKS_WRITE_MS = 35000, _BOOKS_READ_MS = 40000;/.test(GS));
+
 console.log('\n6 · A321 — payroll and Code.gs payments');
 {
   const PH = read('payroll-books.html'), PJ = read('js/payroll-books.js'), CG = fs.readFileSync(path.join(__dirname, '../../apps-script/Code.gs'), 'utf8');

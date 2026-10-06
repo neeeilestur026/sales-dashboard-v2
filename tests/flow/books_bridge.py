@@ -14,6 +14,8 @@ import json
 import os
 import sys
 
+import requests
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 os.environ.setdefault("FLASK_SECRET_KEY", "test")
 os.environ.setdefault("DASHBOARD_APPS_SCRIPT_URL", "https://example.test/code")
@@ -57,7 +59,9 @@ def fake_gs_json(url, json=None, **kw):
 
 
 def fake_gs_call(url, json=None, **kw):
-    calls["flow"].append((url, json))
+    calls["flow"].append((url, json, kw.get("timeout")))
+    if FLOW_REPLY["raise"] == "timeout":
+        raise requests.exceptions.ReadTimeout("HTTPSConnectionPool(host='script.google.com', port=443): Read timed out. (read timeout=85)")
     if FLOW_REPLY["raise"]:
         raise RuntimeError("timeout")
     return Resp(FLOW_REPLY["text"])
@@ -84,11 +88,12 @@ ROLE["value"] = "accounting"
 r = c.post("/books/sync", headers=H)
 ok("accounting syncs", r.status_code == 200 and r.get_json().get("message") == "3 posted", r.get_json())
 ok("  Code.gs is asked for the feed", calls["code"] and calls["code"][-1][1] == {"action": "getBooksFeed"}, calls["code"])
-url, body = calls["flow"][-1]
+url, body, wait = calls["flow"][-1]
 ok("  FlowAPI gets ingestBookEvents", body["action"] == "ingestBookEvents" and url.endswith("/flow"))
 ok("  stamped with the real role and name and the secret", body["actorRole"] == "accounting" and body["actorName"] == "Ana Acct" and body["flowSecret"] == "s3cret", body)
 fed = json.loads(body["feed"])
 ok("  only the snapshot keys travel", sorted(fed.keys()) == ["bankTransactions", "billing", "complete", "directorPayables", "payroll"], fed.keys())
+ok("  FlowAPI is given 85 s and Code.gs 30 s — together under gunicorn's 120", wait == 85 and bk.FEED_TIMEOUT == 30, (wait, bk.FEED_TIMEOUT))
 ROLE["value"] = "director"
 ok("the director may sync", c.post("/books/sync", headers=H).status_code == 200)
 ROLE["value"] = "admin"
@@ -106,6 +111,16 @@ ok("an HTML error page from FlowAPI → 502", r.status_code == 502 and "error pa
 FLOW_REPLY["raise"] = True
 r = c.post("/books/sync", headers=H)
 ok("a transport error → 502", r.status_code == 502, r.status_code)
+FLOW_REPLY["raise"] = "timeout"
+r = c.post("/books/sync", headers=H)
+ok("A324: Google too slow → 504 in plain words, never the raw HTTPSConnectionPool text",
+   r.status_code == 504 and r.get_json().get("timedOut") is True and "press Sync again" in r.get_json()["message"]
+   and "HTTPSConnectionPool" not in r.get_json()["message"], r.get_json())
+FEED_REPLY["value"] = {"success": False, "message": "HTTPSConnectionPool(host='script.google.com', port=443): Read timed out. (read timeout=30)"}
+FLOW_REPLY["raise"] = False
+r = c.post("/books/sync", headers=H)
+ok("  and Code.gs too slow → 504 that says nothing was posted", r.status_code == 504 and "nothing was posted" in r.get_json()["message"], r.get_json())
+FEED_REPLY["value"] = FEED
 FLOW_REPLY["raise"] = False
 bk.FLOW_APPS_SCRIPT_URL = ""
 r = c.post("/books/sync", headers=H)
