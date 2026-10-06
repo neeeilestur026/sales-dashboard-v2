@@ -42,7 +42,7 @@ ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="ad"> — the scope every rule hangs off; no flow-screen', /<body class="ad">/.test(HTML) && !/flow-screen/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="ad">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,flow-docs.js,stage-meta.js,admin.js,so-cost-editor.js,so-note-editor.js,accounting-profit.js,admin-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,flow-api.js,flow-docs.js,stage-meta.js,admin.js,so-cost-editor.js,so-note-editor.js,accounting-profit.js,admin-home-page.js,collect-alert.js');   // A323: the live alert, last
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab, the nav and the eight jumps, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && (HTML.match(/class="hx-jump" data-tab="(qt|so|po|ap|rc|iv|pr|sm)"/g) || []).length === 8 && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));

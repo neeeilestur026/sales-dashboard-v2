@@ -128,7 +128,7 @@ console.log('== THE FIFTEEN SHEETS — discovered from SCHEMA, not from a list =
   /* A276 added Hires, and the count is asserted rather than derived precisely so that adding a sheet
      with an SO No makes someone come here and check the rename covers it. It does, and without being
      told: the handler discovers its sheets from SCHEMA. That is the property this number protects. */
-  eq('how many sheets carry an SO No column', carriers.length, 18);   // A316: Dispatches joined the list; A320: GL + DocMeta (labels move with the SO; amounts never change)
+  eq('how many sheets carry an SO No column', carriers.length, 19);   // A316: Dispatches joined the list; A320: GL + DocMeta (labels move with the SO; amounts never change); A323: FieldCollections
   ok('SalesOrders is one of them', carriers.indexOf('SalesOrders') >= 0);
   ok('and the A276 hire register is too', carriers.indexOf('Hires') >= 0);
   /* The two that would break a hard-coded column index — the exact mistake updateQuotation's block

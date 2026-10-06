@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Collect</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/collect.css">
+  <!-- A323: installs as its own home-screen app on iPhone and Android -->
+  <link rel="manifest" href="/collect.webmanifest">
+  <link rel="apple-touch-icon" href="images/scan-icon-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Collect">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body class="cl">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+
+  <!-- A323: the director's phone. Who owes, tap Collected or Not collected; a collection is recorded at
+       once (AR Aging, Collections, the books) and waits for accounting or admin to acknowledge it. -->
+  <main class="main-content cl-main">
+    <header class="cl-top">
+      <h1>Collect</h1>
+      <p id="clWho">Loading…</p>
+      <button type="button" class="btn btn-sm cl-refresh" id="clRefresh">Refresh</button>
+    </header>
+
+    <div class="cl-banner" id="clBanner" role="alert" hidden></div>
+
+    <div class="cl-tabs" role="tablist" aria-label="Collect">
+      <button type="button" class="cl-tab active" data-tab="list" role="tab" aria-selected="true">To collect</button>
+      <button type="button" class="cl-tab" data-tab="recent" role="tab" aria-selected="false">Recent</button>
+    </div>
+
+    <!-- 1 · who owes -->
+    <section class="cl-pane" id="clList">
+      <input type="search" class="cl-input" id="clSearch" placeholder="Customer, invoice or SO" autocomplete="off" aria-label="Search">
+      <div class="cl-chips" role="group" aria-label="Show">
+        <button type="button" class="cl-chip active" data-filter="overdue">Overdue</button>
+        <button type="button" class="cl-chip" data-filter="week">Due this week</button>
+        <button type="button" class="cl-chip" data-filter="all">All</button>
+      </div>
+      <p class="cl-sum" id="clSum"></p>
+      <div class="cl-cards" id="clCards"></div>
+    </section>
+
+    <!-- recent payments, with Undo while accounting has not acknowledged them -->
+    <section class="cl-pane" id="clRecent" hidden>
+      <div class="cl-msg" id="clRecentMsg" role="status"></div>
+      <div class="cl-cards" id="clRecentList"></div>
+    </section>
+
+    <!-- 2 · one invoice: collected or not -->
+    <section class="cl-pane" id="clInvoice" hidden>
+      <div class="cl-card cl-head" id="clInvHead"></div>
+      <div class="cl-choice">
+        <button type="button" class="cl-big cl-yes" id="clYes">Collected</button>
+        <button type="button" class="cl-big cl-no" id="clNo">Not collected</button>
+      </div>
+      <button type="button" class="btn btn-sm cl-back" data-back="list">Back to the list</button>
+    </section>
+
+    <!-- 3 · collected: how, where, how much -->
+    <section class="cl-pane" id="clPay" hidden>
+      <div class="cl-card cl-head" id="clPayHead"></div>
+
+      <fieldset class="cl-group">
+        <legend>How was it paid?</legend>
+        <div class="cl-methods">
+          <button type="button" class="cl-method" data-method="Cheque" aria-pressed="false">Cheque</button>
+          <button type="button" class="cl-method" data-method="Cash" aria-pressed="false">Cash</button>
+          <button type="button" class="cl-method" data-method="Bank Transfer" aria-pressed="false">Bank transfer</button>
+        </div>
+      </fieldset>
+
+      <div class="cl-stack" id="clPayRest" hidden>
+        <div class="cl-group" id="clChequeBox" hidden>
+          <label class="cl-label" for="clChequeNo">Cheque number</label>
+          <input type="text" class="cl-input" id="clChequeNo" inputmode="numeric" maxlength="40" autocomplete="off">
+          <div class="cl-two">
+            <div>
+              <label class="cl-label" for="clChequeDate">Cheque date</label>
+              <input type="date" class="cl-input" id="clChequeDate">
+            </div>
+            <div>
+              <label class="cl-label" for="clChequeBank">Bank on the cheque</label>
+              <input type="text" class="cl-input" id="clChequeBank" maxlength="60" placeholder="e.g. BDO" autocomplete="off">
+            </div>
+          </div>
+          <p class="cl-note" id="clPdcNote" hidden>Post-dated. It is recorded as received today and held until it is deposited.</p>
+        </div>
+
+        <fieldset class="cl-group">
+          <legend id="clPlaceLegend">Where is it now?</legend>
+          <div class="cl-places" id="clPlaces"></div>
+        </fieldset>
+
+        <div class="cl-group" id="clRefBox" hidden>
+          <label class="cl-label" for="clRef">Transfer reference (optional)</label>
+          <input type="text" class="cl-input" id="clRef" maxlength="60" autocomplete="off">
+        </div>
+
+        <fieldset class="cl-group">
+          <legend>Invoices this payment covers</legend>
+          <div class="cl-lines" id="clLines"></div>
+          <p class="cl-total" id="clTotal"></p>
+          <p class="cl-note" id="clTotalHint"></p>
+        </fieldset>
+
+        <div class="cl-group">
+          <label class="cl-label" for="clDate" id="clDateLabel">Date received</label>
+          <input type="date" class="cl-input" id="clDate">
+        </div>
+
+        <div class="cl-group">
+          <label class="cl-label" for="clNotes">Note (optional)</label>
+          <input type="text" class="cl-input" id="clNotes" maxlength="300" autocomplete="off">
+        </div>
+
+        <div class="cl-group">
+          <button type="button" class="btn cl-photo-btn" id="clPhotoBtn">Add a photo of the cheque, slip or receipt</button>
+          <p class="cl-note" id="clPhotoNote"></p>
+        </div>
+      </div>
+
+      <div class="cl-msg" id="clPayMsg" role="status"></div>
+      <div class="cl-bar">
+        <button type="button" class="btn" data-back="invoice">Back</button>
+        <button type="button" class="btn btn-primary primary" id="clReview" disabled>Review</button>
+      </div>
+    </section>
+
+    <!-- 4 · review before it is recorded -->
+    <section class="cl-pane" id="clConfirm" hidden>
+      <div class="cl-card">
+        <h2 class="cl-h2">Record this payment?</h2>
+        <dl class="cl-review" id="clReviewList"></dl>
+      </div>
+      <div class="cl-msg" id="clConfirmMsg" role="status"></div>
+      <div class="cl-bar">
+        <button type="button" class="btn" data-back="pay">Edit</button>
+        <button type="button" class="btn btn-primary primary" id="clRecord">Record</button>
+      </div>
+    </section>
+
+    <!-- 5 · not collected -->
+    <section class="cl-pane" id="clNot" hidden>
+      <div class="cl-card cl-head" id="clNotHead"></div>
+      <fieldset class="cl-group">
+        <legend>Why not?</legend>
+        <div class="cl-reasons" id="clReasons"></div>
+      </fieldset>
+      <div class="cl-group">
+        <label class="cl-label" for="clPromise">Promised to pay on (optional)</label>
+        <input type="date" class="cl-input" id="clPromise">
+      </div>
+      <div class="cl-group">
+        <label class="cl-label" for="clNotNote">Note</label>
+        <input type="text" class="cl-input" id="clNotNote" maxlength="300" autocomplete="off" placeholder="What did they say?">
+      </div>
+      <div class="cl-msg" id="clNotMsg" role="status"></div>
+      <div class="cl-bar">
+        <button type="button" class="btn" data-back="invoice">Back</button>
+        <button type="button" class="btn btn-primary primary" id="clNotSave">Save</button>
+      </div>
+    </section>
+
+    <!-- 6 · done -->
+    <section class="cl-pane" id="clDone" hidden>
+      <div class="cl-card cl-done">
+        <h2 class="cl-h2" id="clDoneTitle"></h2>
+        <p id="clDoneText"></p>
+      </div>
+      <div class="cl-msg" id="clDoneMsg" role="status"></div>
+      <div class="cl-bar">
+        <button type="button" class="btn" id="clUndo" hidden>Undo</button>
+        <button type="button" class="btn btn-primary primary" data-back="list">Back to the list</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- one sheet for every question the server may ask: over the balance, a cheque already used, proof -->
+  <div class="cl-sheet" id="clSheet" hidden role="dialog" aria-modal="true" aria-labelledby="clSheetTitle">
+    <div class="cl-sheet-card">
+      <h3 id="clSheetTitle"></h3>
+      <p id="clSheetText"></p>
+      <div class="cl-sheet-acts" id="clSheetActs"></div>
+    </div>
+  </div>
+
+  <!-- the phone's camera for the proof photo (iPhone and Android open the rear camera) -->
+  <input type="file" id="clPhotoIn" accept="image/*" capture="environment" hidden>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/collect.js"></script>
+</body>
+</html>

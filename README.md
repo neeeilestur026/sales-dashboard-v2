@@ -235,3 +235,28 @@ Inbox saved an expense-category rule even for a payment department or a travel i
 
 **Deploy:** Render first, then paste **`apps-script/Code.gs` (v5)** and **`apps-script/FlowAPI.gs`
 (162)**. Restart any local Flask server after pulling (it registers the new `/books/sync` route).
+
+## Collect — the director's phone (A323, FlowAPI 164)
+
+`collect.html` (director only; Account menu → Collect, or **Add to Home Screen** for its own app icon)
+lists the open receivables, most overdue first.
+
+- **Collected:** cheque (number, date, bank on the cheque), cash, or bank transfer.
+  - **Where the money is now:**
+    - a cheque or cash defaults to "not yet deposited" (1100 / 1010) unless a bank is chosen;
+    - a transfer must name the account that received it.
+  - **One payment can cover several of the same customer's invoices.** Tax withheld (2307) can be entered per invoice.
+  - **Recording:** it is recorded at once through the same `recordCollection` as the desktop, so AR Aging, Collections and the books update together.
+  - **Questions it asks before recording:**
+    - over the balance;
+    - a cheque number already used;
+    - an order from 1 Aug 2026 with no proof of collection, which asks for a photo of the official receipt, the cheque or the deposit slip.
+- **Not collected:** a reason, an optional promised date and a note. AR Aging shows it on the row, in red once the promise has passed.
+- **Accounting and admin are told:**
+  - a bell / "Needs you" item;
+  - a live pop-up on their home pages, checked every minute while open;
+  - the **From the field** panel on the Collections page, where they **Acknowledge** it.
+- **Undo** on the phone works the same day until it is acknowledged; after that accounting voids it as usual.
+
+**Deploy:** Render first, then paste **`apps-script/FlowAPI.gs` (164)** — it also carries 162 and 163.
+Restart any local Flask server after pulling (it serves the new `/collect.webmanifest`).

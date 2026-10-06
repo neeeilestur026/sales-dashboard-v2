@@ -31,7 +31,7 @@ def ok(label, cond, extra=None):
         print("  FAIL " + label + ("" if extra is None else "\n     " + str(extra)[:300]))
 
 
-OPEN = {"static", "serve_index", "serve_dashboard", "robots_txt", "web_manifest", "service_worker",   # A316: the scanner app
+OPEN = {"static", "serve_index", "serve_dashboard", "robots_txt", "web_manifest", "service_worker", "collect_manifest",   # A316: the scanner app
         "po_bp.index", "pr_bp.index", "mro_bp.index", "mi_bp.index",
         "quotation_bp.index", "payment_request_bp.index"}
 

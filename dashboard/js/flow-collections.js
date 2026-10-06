@@ -20,8 +20,64 @@ document.addEventListener('DOMContentLoaded', async () => {
      whether the button exists; two would eventually disagree. */
   if (colViewer) colCanVoid = false;
   ['fSO', 'fClient', 'fYear', 'fMonth'].forEach(id => document.getElementById(id).addEventListener('change', render));
+  document.getElementById('fcList').addEventListener('click', (e) => { const b = e.target.closest('[data-ack]'); if (b) ackField(b); });
+  loadField();
   await loadCollections();
 });
+
+/* ── A323 · From the field ─────────────────────────────────────────────────────────────────────
+   Payments the director recorded on his phone. They are already in the ledger below (and in AR
+   Aging and the books); this is where accounting or admin say "we have it" — the cheque or cash is
+   in the office, or the transfer is in the bank. Management sees them, read-only. The panel stays
+   hidden until FlowAPI 164 answers. */
+const FC_ACK_ROLES = ['accounting', 'admin'];
+async function loadField() {
+  const box = document.getElementById('field');
+  let r;
+  try { r = await postFlow('getFieldCollectionNotices', { includeRecent: true }); } catch (e) { return; }
+  if (!r || !r.success) return;
+  box.hidden = false;
+  const canAck = FC_ACK_ROLES.indexOf(String(colSession.role || '').toLowerCase()) !== -1 && !colViewer;
+  document.getElementById('fcMeta').textContent = r.items.length ? r.items.length + ' to acknowledge' : 'Nothing waiting';
+  document.getElementById('fcList').innerHTML = r.items.length ? r.items.map(b => _fcCard(b, canAck)).join('')
+    : '<div class="fc-empty">Every collection from the field has been acknowledged.</div>';
+  const recent = r.recent || [];
+  document.getElementById('fcRecentBox').hidden = !recent.length;
+  document.getElementById('fcRecent').innerHTML = recent.map(b => _fcCard(b, false)).join('');
+  if (location.hash === '#field') box.scrollIntoView({ block: 'start' });
+}
+function _fcCard(b, canAck) {
+  const when = new Date(b.at), time = isNaN(when) ? flowDate(b.date) : when.toLocaleString('en-PH', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  const pdc = b.method === 'Cheque' && b.chequeDate && b.chequeDate > b.date;
+  const how = b.method === 'Cheque'
+    ? 'Cheque #' + flowEsc(b.chequeNo) + (b.chequeBank ? ' · ' + flowEsc(b.chequeBank) : '') + (b.chequeDate ? ' · dated ' + flowEsc(flowDate(b.chequeDate)) : '') + (pdc ? ' · <b>post-dated</b>' : '')
+    : flowEsc(b.method) + (b.reference ? ' · ref ' + flowEsc(b.reference) : '');
+  const lines = b.lines.map(l => `${flowEsc(l.invNo)} ${flowMoney(l.received, 'PHP')}${l.ewt ? ' + ' + flowMoney(l.ewt, 'PHP') + ' withheld' : ''}`).join(' · ');
+  const state = b.status === 'New' ? '' : `<div class="fc-state">${b.status === 'Acknowledged' ? 'Acknowledged by ' + flowEsc(b.acknowledgedBy) + (b.acknowledgeNote ? ' — ' + flowEsc(b.acknowledgeNote) : '') : 'Undone'}</div>`;
+  return `<div class="fc-card" data-batch="${flowEsc(b.batchNo)}">
+    <div class="fc-top"><b>${flowEsc(b.customer)}</b><span class="fc-amt">${flowMoney(b.received, 'PHP')}</span></div>
+    <div class="fc-line">${how}</div>
+    <div class="fc-line">${b.method === 'Bank Transfer' ? 'Received in' : 'Where it is'}: <b>${flowEsc(b.depositedToName)}</b> · received ${flowEsc(flowDate(b.date))}</div>
+    <div class="fc-line fc-dim">${lines}</div>
+    <div class="fc-line fc-dim">${flowEsc(b.by)} · ${flowEsc(time)} · ${flowEsc(b.batchNo)}${b.photoIds.length ? ' · ' + b.photoIds.length + ' photo' + (b.photoIds.length === 1 ? '' : 's') + ' on the invoice' : ''}</div>
+    ${b.noProof ? '<div class="fc-warn">No proof of collection on file yet — ask for the official receipt or a photo.</div>' : ''}
+    ${b.notes ? `<div class="fc-line">Note: ${flowEsc(b.notes)}</div>` : ''}
+    ${state}
+    ${canAck && b.status === 'New' ? `<div class="fc-act"><input type="text" class="fc-note" maxlength="200" placeholder="Note (optional), e.g. cheque in the office" aria-label="Note for ${flowEsc(b.batchNo)}">
+      <button type="button" class="btn btn-sm btn-primary" data-ack="${flowEsc(b.batchNo)}">Acknowledge</button></div>` : ''}
+  </div>`;
+}
+async function ackField(btn) {
+  const card = btn.closest('.fc-card'), note = (card.querySelector('.fc-note') || {}).value || '';
+  btn.disabled = true;
+  try {
+    const r = await postFlow('acknowledgeFieldCollection', { batchNo: btn.dataset.ack, note: note.trim() });
+    if (!r || !r.success) throw new Error((r && r.message) || 'Not acknowledged.');
+    flowMsg('fcMsg', r.message, true);
+    await loadField();
+    if (typeof flowRefreshActions === 'function') flowRefreshActions();
+  } catch (e) { flowMsg('fcMsg', e.message, false); btn.disabled = false; }
+}
 
 async function loadCollections() {
   document.getElementById('container').innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';

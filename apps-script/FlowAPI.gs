@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 163;   // A322 — a sales-order edit saves again (updateSalesOrder writes all 14 columns). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 164;   // A323 — Collect: the director's phone records collections; accounting and admin acknowledge. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -186,6 +186,12 @@ var SCHEMA = {
   // reverse one entered against the wrong receivable. Voided rows drop out of the AR recompute.
   Collections: ['Collection No', 'AR No', 'INV No', 'SO No', 'Customer', 'Date', 'Amount (PHP)',
                 'Method', 'Reference No', 'Notes', 'Created At', 'EWT (PHP)', 'Voided', 'Void Reason'],
+  // A323 — the director's phone log (collect.html): one row per invoice line; one payment shares a Batch No.
+  // 'Collected' lines point at the Collections row they made; 'Not collected' lines are follow-ups.
+  FieldCollections: ['Line No', 'Batch No', 'At', 'Date', 'Outcome', 'AR No', 'INV No', 'SO No', 'Customer',
+                     'Amount (PHP)', 'EWT (PHP)', 'Method', 'Cheque No', 'Cheque Date', 'Cheque Bank', 'Deposited To',
+                     'Reference No', 'Reason', 'Promise Date', 'Notes', 'Photo Doc IDs', 'Collection No', 'No Proof',
+                     'Status', 'By', 'Client Ref', 'Acknowledged By', 'Acknowledged At', 'Acknowledge Note'],
 
   // ── Expenses ledger (OpEx / G&A / Other) — pure record, no GL journals ──
   Expenses: ['Exp No', 'Date', 'Type', 'Category', 'Voucher No', 'Client', 'Description', 'Toll',
@@ -760,6 +766,8 @@ var _SECURED = {
   getBooksCoverage: 1,
   getBooksStatus: 1, getAccounts: 1, getAccountRules: 1, getTaxCodes: 1, getGLEntries: 1, getGLTrialBalance: 1, getBooksInbox: 1,   // A320 — secured READS
   getScanContext: 1, getScanLookup: 1, getLabels: 1, getStockInOptions: 1, getScanPhotos: 1,   // A318 — secured READS (codes → details)
+  recordFieldCollection: 1, recordNotCollected: 1, acknowledgeFieldCollection: 1, undoFieldCollection: 1, uploadCollectionPhoto: 1,   // A323
+  getCollectorQueue: 1, getFieldCollectionNotices: 1,   // A323 — secured READS (role-gated)
 };
 
 /* A209 — commission requests are built but NOT open to everyone yet.
@@ -3072,12 +3080,14 @@ function getARAging(p) {
   var rows = _rows('ARAging');
   if (p && p.customer) rows = rows.filter(function (r) { return String(r['Customer']) === String(p.customer); });
   if (p && p.soNo) rows = rows.filter(function (r) { return String(r['SO No']) === String(p.soNo); });
+  var follow = _fieldFollowUps();                         // A323 — the latest "not collected" per receivable
   return { success: true, data: rows.map(function (r) {
     var amt = _num(r['Amount (PHP)']), col = _num(r['Collected (PHP)']);
     return {
       arNo: r['AR No'], invNo: String(r['INV No']), soNo: String(r['SO No']), customer: r['Customer'],
       amountPHP: amt, collectedPHP: col, outstanding: amt - col, status: r['Status'],
       dueDate: r['Due Date'], notes: r['Notes'], createdAt: r['Created At'], updatedAt: r['Updated At'],
+      followUp: (amt - col > 0.005) ? (follow[String(r['AR No'])] || null) : null,
       rowIndex: r.rowIndex
     };
   }) };
@@ -3109,6 +3119,12 @@ function recordCollection(p) {
   if (!p.arNo) return { success: false, message: 'arNo required.' };
   var ar = _arRow(p.arNo);
   if (!ar) return { success: false, message: 'AR entry not found.' };
+  /* A323 — a retry is recognised BEFORE anything else. It used to be checked last, so a retried full
+     payment met the over-collection guard first (its own first write already counted) and asked
+     "record it anyway?" instead of saying it was already recorded. */
+  var dup = _refSeen('recordCollection', p.clientRef);
+  if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
+    status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
   var amount = _num(p.amount);
   if (amount <= 0) return { success: false, message: 'Collection amount must be greater than zero.' };
   var ewt = _num(p.ewt);                                  // creditable withholding tax (2307) on this collection
@@ -3143,9 +3159,6 @@ function recordCollection(p) {
      matches against. */
   if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
   if (_booksOn() && !_booksBankAccount(p.depositedTo)) return { success: false, message: 'Choose where this money was deposited.' };
-  var dup = _refSeen('recordCollection', p.clientRef);
-  if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
-    status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
   var colNo = _nextNumber('Collections', 1, 'COL');
   _append('Collections', [colNo, p.arNo, ar['INV No'], ar['SO No'], ar['Customer'], p.date || _dateStr(_now()),
     amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt,
@@ -3155,6 +3168,7 @@ function recordCollection(p) {
   if (p.depositedTo || p.chequeNo) _docMetaSet('Collection', colNo, { depositedTo: p.depositedTo, chequeNo: p.chequeNo }, p.actorName);
   _booksSyncCollection(colNo, null, p.actorName);   // A320
   return { success: true, collectionNo: colNo, arNo: p.arNo, collected: rec.collected, status: rec.status,
+    logAmount: amount,                                    // A323 — the activity log showed every collection as 0
     message: 'Collection ' + colNo + ' recorded.' };
 }
 
@@ -3541,6 +3555,348 @@ function updateARAging(p) {
   }
   _setCellByKey('ARAging', 'AR No', p.arNo, 'Updated At', _now());
   return { success: true, arNo: p.arNo, message: 'AR entry updated.' };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   A323 — FIELD COLLECTIONS: the director's phone (collect.html)
+
+   Neil collects in person. He taps Collected (cheque / cash / bank transfer) or Not collected on a
+   receivable, and accounting and admin are told. Decisions behind the shape:
+     · Collected records AT ONCE through recordCollection — the same AR recompute, DocMeta, legacy
+       journal and books posting as a desktop collection — and stays "New" until accounting or admin
+       ACKNOWLEDGES it (that is the notification: the bell, "Needs you", a live alert, and the
+       "From the field" panel on the Collections page).
+     · One cheque often pays several invoices of one customer: a payment is a BATCH of lines, fully
+       validated before the first write, so it is never half-recorded.
+     · The deposit account follows the method. A cheque or cash is honestly "not yet deposited"
+       (1100 / 1010) unless he says which bank; a transfer must name the bank that received it.
+     · Undo is narrow: the recorder, the same day, before it is acknowledged. After that it is
+       accounting's void / correct, which keep the audit trail.
+   Every rule is enforced here; the phone only makes them easy to follow.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+var _FIELD_COLLECT_ROLES = { director: 1 };                       // just Neil (mirrored in auth.js FLOW_COLLECT_ROLES)
+var _FIELD_ACK_ROLES = { accounting: 1, admin: 1 };
+var _FIELD_VIEW_ROLES = { accounting: 1, admin: 1, management: 1, director: 1 };
+var _FIELD_METHODS = { 'Cheque': 1, 'Cash': 1, 'Bank Transfer': 1 };
+var _FIELD_REASONS = ['Not ready', 'Contact away', 'Counter schedule', 'Disputed', 'Other'];
+function _fieldRole(p) { return String((p && p.actorRole) || '').trim().toLowerCase(); }
+function _fieldToday() { return _dateStr(_now()); }
+function _fieldIsDate(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) && !isNaN(new Date(String(v) + 'T00:00:00').getTime()); }
+function _fieldBool(v) { return v === true || String(v) === 'true'; }
+
+/** Our banks and the two "not yet deposited" places, from the chart (no write: a read must not seed). */
+function _fieldPlaces() {
+  var accts = [];
+  try {
+    if (_sheet('Accounts').getLastRow() >= 2) {
+      accts = _rows('Accounts').map(function (r) {
+        return { code: String(r['Code'] || '').trim(), name: String(r['Name'] || ''), subtype: String(r['Subtype'] || ''),
+                 bankCode: String(r['Bank Code'] || ''), active: _bool(r['Active']) };
+      });
+    }
+  } catch (e) { accts = []; }
+  if (!accts.length) accts = _BOOKS_COA.map(function (a) { return { code: a[0], name: a[1], subtype: a[3], bankCode: a[6], active: true }; });
+  var banks = accts.filter(function (a) { return a.active && a.subtype === 'Bank' && a.bankCode; })
+                   .map(function (a) { return { code: a.bankCode, gl: a.code, name: a.name }; });
+  var name = function (c) { var a = accts.filter(function (x) { return x.code === c; })[0]; return a ? a.name : c; };
+  return { banks: banks, cashOnHand: { code: '1010', name: name('1010') }, undeposited: { code: '1100', name: name('1100') } };
+}
+/** Is `place` allowed for `method`? Returns the GL code, or '' when it is not. */
+function _fieldPlaceOk(method, place) {
+  var gl = _booksBankAccount(place);
+  if (!gl) return '';
+  var a = _booksAccounts()[gl] || {};
+  var isBank = a.subtype === 'Bank';
+  if (method === 'Bank Transfer') return isBank ? gl : '';
+  if (method === 'Cheque') return (isBank || gl === '1100') ? gl : '';
+  if (method === 'Cash') return (isBank || gl === '1010') ? gl : '';
+  return '';
+}
+function _fieldPlaceName(place) {
+  var P = _fieldPlaces(), k = String(place || '');
+  if (k === P.undeposited.code) return 'Not yet deposited';
+  if (k === P.cashOnHand.code) return 'Cash on hand';
+  var b = P.banks.filter(function (x) { return x.code === k || x.gl === k; })[0];
+  return b ? b.name : k;
+}
+/** AR No → the latest Not-collected line newer than its last collection: { date, reason, promiseDate, notes, by, missed }. */
+function _fieldFollowUps() {
+  var out = {}, lastCol = {};
+  try {
+    _rows('Collections').forEach(function (c) {
+      if (String(c['Voided'] || '') === 'true') return;
+      var k = String(c['AR No']), d = _dateStr(c['Date']);
+      if (!lastCol[k] || d > lastCol[k]) lastCol[k] = d;
+    });
+    var today = _fieldToday();
+    _rows('FieldCollections').forEach(function (r) {
+      if (String(r['Outcome']) !== 'Not collected') return;
+      var k = String(r['AR No']), d = _dateStr(r['Date']);
+      if (lastCol[k] && lastCol[k] > d) return;
+      if (out[k] && out[k].at > String(r['At'])) return;
+      var pd = _dateStr(r['Promise Date']);
+      out[k] = { date: d, reason: String(r['Reason'] || ''), promiseDate: pd, notes: String(r['Notes'] || ''),
+                 by: String(r['By'] || ''), missed: !!(pd && pd < today), at: String(r['At']) };
+    });
+  } catch (e) { return {}; }
+  Object.keys(out).forEach(function (k) { delete out[k].at; });
+  return out;
+}
+/** Group FieldCollections lines into batches, newest first. */
+function _fieldBatches(filter) {
+  var by = {}, order = [];
+  _rows('FieldCollections').forEach(function (r) {
+    if (String(r['Outcome']) !== 'Collected') return;
+    var b = String(r['Batch No']);
+    if (!by[b]) { by[b] = { rows: [] }; order.push(b); }
+    by[b].rows.push(r);
+  });
+  var out = order.map(function (b) {
+    var rows = by[b].rows, r0 = rows[0], recv = 0, ewt = 0, photos = {};
+    rows.forEach(function (r) { recv += _num(r['Amount (PHP)']); ewt += _num(r['EWT (PHP)']);
+      String(r['Photo Doc IDs'] || '').split(',').forEach(function (x) { x = x.trim(); if (x) photos[x] = 1; }); });
+    var at = r0['At'] instanceof Date ? r0['At'].toISOString() : String(r0['At'] || '');
+    var ackAt = r0['Acknowledged At'] instanceof Date ? r0['Acknowledged At'].toISOString() : String(r0['Acknowledged At'] || '');
+    return { batchNo: b, at: at, date: _dateStr(r0['Date']), customer: String(r0['Customer']), method: String(r0['Method']),
+             chequeNo: String(r0['Cheque No'] || ''), chequeDate: _dateStr(r0['Cheque Date']), chequeBank: String(r0['Cheque Bank'] || ''),
+             depositedTo: String(r0['Deposited To'] || ''), depositedToName: _fieldPlaceName(r0['Deposited To']),
+             reference: String(r0['Reference No'] || ''), notes: String(r0['Notes'] || ''),
+             received: Math.round(recv * 100) / 100, ewt: Math.round(ewt * 100) / 100, photoIds: Object.keys(photos),
+             noProof: _fieldBool(r0['No Proof']), status: String(r0['Status']), by: String(r0['By'] || ''),
+             acknowledgedBy: String(r0['Acknowledged By'] || ''), acknowledgedAt: ackAt, acknowledgeNote: String(r0['Acknowledge Note'] || ''),
+             lines: rows.map(function (r) { return { arNo: String(r['AR No']), invNo: String(r['INV No']), soNo: String(r['SO No']),
+               received: _num(r['Amount (PHP)']), ewt: _num(r['EWT (PHP)']), collectionNo: String(r['Collection No'] || '') }; }) };
+  });
+  out.sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
+  return filter ? out.filter(filter) : out;
+}
+function _fieldSetBatch(batchNo, patch) {
+  var idx = SCHEMA.FieldCollections;
+  _rows('FieldCollections').forEach(function (r) {
+    if (String(r['Batch No']) !== String(batchNo)) return;
+    var line = idx.map(function (h) { return patch.hasOwnProperty(h) ? patch[h] : r[h]; });
+    _sheet('FieldCollections').getRange(r.rowIndex, 1, 1, line.length).setValues([line]);
+  });
+}
+
+/** The phone's list: open receivables (most overdue first), our banks, his recent payments. Director only. */
+function getCollectorQueue(p) {
+  if (!_FIELD_COLLECT_ROLES[_fieldRole(p)]) return { success: false, message: 'Collect is for the director.' };
+  var today = _fieldToday(), t0 = new Date(today + 'T00:00:00').getTime(), follow = _fieldFollowUps();
+  var rows = _rows('ARAging').map(function (r) {
+    var amt = _num(r['Amount (PHP)']), col = _num(r['Collected (PHP)']), due = _dateStr(r['Due Date']);
+    var days = _fieldIsDate(due) ? Math.round((t0 - new Date(due + 'T00:00:00').getTime()) / 86400000) : null;
+    return { arNo: String(r['AR No']), invNo: String(r['INV No']), soNo: String(r['SO No']), customer: String(r['Customer']),
+             amount: amt, collected: col, balance: Math.round((amt - col) * 100) / 100, status: String(r['Status'] || ''),
+             dueDate: due, daysOverdue: days, followUp: follow[String(r['AR No'])] || null };
+  }).filter(function (r) { return r.balance > 0.005; });
+  rows.sort(function (a, b) {
+    var da = a.daysOverdue == null ? -1e9 : a.daysOverdue, db = b.daysOverdue == null ? -1e9 : b.daysOverdue;
+    return db - da || (a.customer < b.customer ? -1 : a.customer > b.customer ? 1 : 0);
+  });
+  var me = String(p.actorName || '');
+  var recent = _fieldBatches(function (b) { return !me || b.by === me; }).slice(0, 20);
+  var places = _fieldPlaces();
+  return { success: true, today: today, serverNow: _now().toISOString(), receivables: rows, recent: recent,
+           banks: places.banks, cashOnHand: places.cashOnHand, undeposited: places.undeposited, reasons: _FIELD_REASONS };
+}
+
+/** What accounting / admin still have to acknowledge. `since` (ISO) narrows it for the live alert. */
+function getFieldCollectionNotices(p) {
+  if (!_FIELD_VIEW_ROLES[_fieldRole(p)]) return { success: false, message: 'Not permitted.' };
+  var since = String(p.since || '');
+  var all = _fieldBatches();
+  var fresh = all.filter(function (b) { return b.status === 'New'; });
+  var out = { success: true, serverNow: _now().toISOString(), count: fresh.length,
+              items: since ? fresh.filter(function (b) { return b.at > since; }) : fresh };
+  if (_fieldBool(p.includeRecent)) {
+    var week = new Date(_now().getTime() - 7 * 86400000).toISOString();
+    out.recent = all.filter(function (b) { return b.status !== 'New' && b.at >= week; }).slice(0, 50);
+  }
+  return out;
+}
+
+/** Collected: one payment (cheque / cash / transfer) against one or more of a customer's receivables. */
+function recordFieldCollection(p) {
+  if (!_FIELD_COLLECT_ROLES[_fieldRole(p)]) return { success: false, message: 'Only the director records collections from Collect.' };
+  var seen = _refSeen('recordFieldCollection', p.clientRef);
+  if (seen) {
+    var prev = _fieldBatches(function (b) { return b.batchNo === seen; })[0];
+    return { success: true, duplicate: true, batchNo: seen, refNo: seen, batch: prev || null, message: 'Already recorded (' + seen + ').' };
+  }
+  var method = String(p.method || '').trim();
+  if (!_FIELD_METHODS[method]) return { success: false, message: 'Choose cheque, cash or bank transfer.' };
+  var date = String(p.date || '').trim() || _fieldToday();
+  if (!_fieldIsDate(date)) return { success: false, message: 'The date received is not a valid date.' };
+  if (date > _fieldToday()) return { success: false, message: 'The date received cannot be in the future.' };
+  var chequeNo = String(p.chequeNo || '').trim(), chequeDate = String(p.chequeDate || '').trim(), chequeBank = String(p.chequeBank || '').trim().slice(0, 60);
+  if (method === 'Cheque') {
+    if (!chequeNo) return { success: false, message: 'Enter the cheque number.' };
+    if (!/^[A-Za-z0-9][A-Za-z0-9 \/-]{0,39}$/.test(chequeNo)) return { success: false, message: 'The cheque number has characters a cheque number does not.' };
+    if (chequeDate && !_fieldIsDate(chequeDate)) return { success: false, message: 'The cheque date is not a valid date.' };
+  } else { chequeNo = ''; chequeDate = ''; chequeBank = ''; }
+  var place = String(p.depositedTo || '').trim();
+  if (!place) return { success: false, message: method === 'Bank Transfer' ? 'Choose which of our accounts received the transfer.' : 'Say where the money is now.' };
+  if (!_fieldPlaceOk(method, place)) return { success: false, message: 'That account does not fit a ' + method.toLowerCase() + ' payment.' };
+  var lines = [];
+  try { lines = JSON.parse(p.lines || '[]'); } catch (e) { return { success: false, message: 'The invoices could not be read.' }; }
+  if (!Array.isArray(lines) || !lines.length) return { success: false, message: 'Choose at least one invoice.' };
+  /* A retry after a failure part-way (a Sheets error on the second invoice) resumes the SAME batch:
+     lines this clientRef already wrote are skipped, never re-validated against their own write. */
+  var cref = String(p.clientRef || ''), written = {}, priorBatch = '';
+  if (cref) _rows('FieldCollections').forEach(function (r) {
+    if (String(r['Client Ref']) === cref && String(r['Outcome']) === 'Collected') { written[String(r['AR No'])] = String(r['Collection No']); priorBatch = String(r['Batch No']); }
+  });
+  var arSeen = {}, cust = null, checked = [];
+  for (var i = 0; i < lines.length; i++) {
+    var L = lines[i] || {}, arNo = String(L.arNo || '').trim();
+    if (!arNo) return { success: false, message: 'An invoice line has no receivable.' };
+    if (arSeen[arNo]) return { success: false, message: arNo + ' appears twice in this payment.' };
+    arSeen[arNo] = 1;
+    var ar = _arRow(arNo);
+    if (!ar) return { success: false, message: 'Receivable ' + arNo + ' was not found.' };
+    if (cust === null) cust = String(ar['Customer']);
+    else if (String(ar['Customer']) !== cust) return { success: false, message: 'One payment can only cover one customer\'s invoices.' };
+    var recv = Math.round(_num(L.amount) * 100) / 100, ewt = Math.round(_num(L.ewt) * 100) / 100;
+    if (!(recv > 0)) return { success: false, message: 'Enter the amount received for ' + (ar['INV No'] || arNo) + '.' };
+    if (ewt < 0) return { success: false, message: 'Tax withheld cannot be negative.' };
+    var already = _rows('Collections').filter(function (r) { return String(r['AR No']) === arNo && String(r['Voided'] || '') !== 'true'; })
+                    .reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
+    var due = _num(ar['Amount (PHP)']);
+    if (!written[arNo] && due - already <= 0.005) return { success: false, message: (ar['INV No'] || arNo) + ' is already fully collected.' };
+    checked.push({ arNo: arNo, ar: ar, received: recv, ewt: ewt, applied: Math.round((recv + ewt) * 100) / 100,
+                   balance: Math.round((due - already) * 100) / 100, done: written[arNo] || '' });
+  }
+  // validate EVERY line before the first write, so a payment is never half-recorded
+  if (!_periodOpen(date)) return _periodRefusal(date);
+  var over = checked.filter(function (c) { return !c.done && c.applied > c.balance + 0.005; });
+  if (over.length && !_fieldBool(p.confirmOver)) {
+    return { success: false, needsConfirm: 'overCollect', lines: over.map(function (c) { return { arNo: c.arNo, invNo: String(c.ar['INV No']), applied: c.applied, balance: c.balance }; }),
+             message: over.map(function (c) { return (c.ar['INV No'] || c.arNo) + ': ' + c.applied.toFixed(2) + ' against a balance of ' + c.balance.toFixed(2); }).join('; ') + '. Record it anyway?' };
+  }
+  var gaps = [];
+  checked.forEach(function (c) {
+    if (c.done) return;
+    var g = _docGaps(String(c.ar['SO No'] || ''), 'collect');
+    if (g.length) gaps.push({ arNo: c.arNo, invNo: String(c.ar['INV No']), soNo: String(c.ar['SO No']), missing: g });
+  });
+  if (gaps.length && !_fieldBool(p.confirmNoDocs)) {
+    return { success: false, missingDocs: gaps, message: 'This order needs a photo of the official receipt, cheque or deposit slip first.' };
+  }
+  if (method === 'Cheque' && !_fieldBool(p.confirmDupCheque)) {
+    var used = _rows('FieldCollections').filter(function (r) {
+      return String(r['Outcome']) === 'Collected' && String(r['Status']) !== 'Undone' && String(r['Customer']) === cust &&
+             String(r['Cheque No']).trim().toLowerCase() === chequeNo.toLowerCase() && !arSeen[String(r['AR No'])];
+    });
+    if (used.length) {
+      return { success: false, needsConfirm: 'duplicateCheque', usedOn: used.map(function (r) { return String(r['INV No']); }),
+               message: 'Cheque #' + chequeNo + ' was already recorded for ' + cust + ' on ' + used.map(function (r) { return r['INV No']; }).join(', ') +
+                        '. If the same cheque pays these invoices too, record it anyway.' };
+    }
+  }
+  var noProof = gaps.length > 0;
+  var photoIds = String(p.photoIds || '').split(',').map(function (x) { return x.trim(); }).filter(function (x) { return /^DOC-[A-Z0-9]{4,12}$/.test(x); }).join(',');
+  var ref = method === 'Cheque' ? chequeNo : String(p.ref || '').trim().slice(0, 60);
+  var noteBits = [];
+  if (method === 'Cheque') noteBits.push('Cheque ' + chequeNo + (chequeBank ? ' · ' + chequeBank : '') + (chequeDate ? ' · dated ' + chequeDate : ''));
+  if (String(p.notes || '').trim()) noteBits.push(String(p.notes).trim().slice(0, 300));
+  noteBits.push('via phone');
+  var batchNo = priorBatch || _nextNumber('FieldCollections', 2, 'FC'), at = _now(), made = [];
+  for (var j = 0; j < checked.length; j++) {
+    var c = checked[j];
+    if (c.done) { made.push(c.done); continue; }
+    var r = recordCollection({ arNo: c.arNo, amount: c.applied, ewt: c.ewt, date: date, method: method, ref: ref,
+      notes: noteBits.join(' · '), depositedTo: place, chequeNo: chequeNo, clientRef: String(p.clientRef || batchNo) + ':' + c.arNo,
+      confirmOver: true, confirmNoDocs: true, actorName: p.actorName, actorRole: p.actorRole });   // both were decided above, for the whole batch
+    if (!r || !r.success) {
+      return { success: false, partial: made, message: 'Stopped at ' + (c.ar['INV No'] || c.arNo) + ': ' + ((r && r.message) || 'not recorded') +
+               (made.length ? '. Already recorded: ' + made.join(', ') + ' — tell accounting.' : '.') };
+    }
+    made.push(r.collectionNo);
+    _append('FieldCollections', [batchNo + '-' + (j + 1), batchNo, at, date, 'Collected', c.arNo, String(c.ar['INV No']), String(c.ar['SO No']), cust,
+      c.received, c.ewt, method, chequeNo, chequeDate, chequeBank, place, ref, '', '', String(p.notes || '').trim().slice(0, 300), photoIds,
+      r.collectionNo, noProof, 'New', p.actorName || '', String(p.clientRef || ''), '', '', '']);
+  }
+  _refStore('recordFieldCollection', p.clientRef, batchNo);
+  var total = checked.reduce(function (s, c) { return s + c.received; }, 0);
+  var pdc = method === 'Cheque' && chequeDate && chequeDate > date;
+  return { success: true, batchNo: batchNo, refNo: batchNo, collectionNos: made, logAmount: Math.round(total * 100) / 100, noProof: noProof, postDated: !!pdc,
+           batch: _fieldBatches(function (b) { return b.batchNo === batchNo; })[0] || null,
+           message: 'Recorded ' + made.join(', ') + '. Accounting and admin have been told.' };
+}
+
+/** Not collected: a reason, an optional promised date and a note against one receivable. */
+function recordNotCollected(p) {
+  if (!_FIELD_COLLECT_ROLES[_fieldRole(p)]) return { success: false, message: 'Only the director records follow-ups from Collect.' };
+  var seen = _refSeen('recordNotCollected', p.clientRef);
+  if (seen) return { success: true, duplicate: true, lineNo: seen, refNo: seen, arNo: String(p.arNo || ''), message: 'Already saved.' };
+  var arNo = String(p.arNo || '').trim(), ar = _arRow(arNo);
+  if (!ar) return { success: false, message: 'Receivable ' + (arNo || '?') + ' was not found.' };
+  var reason = String(p.reason || '').trim();
+  if (_FIELD_REASONS.indexOf(reason) === -1) return { success: false, message: 'Choose a reason.' };
+  var promise = String(p.promiseDate || '').trim();
+  if (promise && !_fieldIsDate(promise)) return { success: false, message: 'The promised date is not a valid date.' };
+  if (promise && promise < _fieldToday()) return { success: false, message: 'The promised date has already passed.' };
+  var notes = String(p.notes || '').trim().slice(0, 300);
+  if (reason === 'Other' && !notes) return { success: false, message: 'Say what happened in the note.' };
+  var lineNo = _nextNumber('FieldCollections', 1, 'FN');
+  _append('FieldCollections', [lineNo, '', _now(), _fieldToday(), 'Not collected', arNo, String(ar['INV No']), String(ar['SO No']), String(ar['Customer']),
+    0, 0, '', '', '', '', '', '', reason, promise, notes, '', '', false, 'Logged', p.actorName || '', String(p.clientRef || ''), '', '', '']);
+  _refStore('recordNotCollected', p.clientRef, lineNo);
+  return { success: true, lineNo: lineNo, refNo: lineNo, arNo: arNo, message: 'Saved: ' + reason + (promise ? ', promised ' + promise : '') + '.' };
+}
+
+/** Accounting / admin: "we have it" (the cheque or cash is in the office, or the transfer is in the bank). */
+function acknowledgeFieldCollection(p) {
+  if (!_FIELD_ACK_ROLES[_fieldRole(p)]) return { success: false, message: 'Accounting or admin acknowledges collections.' };
+  var b = _fieldBatches(function (x) { return x.batchNo === String(p.batchNo || ''); })[0];
+  if (!b) return { success: false, message: 'Payment ' + (p.batchNo || '?') + ' was not found.' };
+  if (b.status !== 'New') return { success: false, message: b.batchNo + ' is already ' + b.status.toLowerCase() + '.' };
+  _fieldSetBatch(b.batchNo, { 'Status': 'Acknowledged', 'Acknowledged By': p.actorName || '', 'Acknowledged At': _now(),
+                              'Acknowledge Note': String(p.note || '').trim().slice(0, 200) });
+  return { success: true, batchNo: b.batchNo, refNo: b.batchNo, logAmount: b.received, message: b.batchNo + ' acknowledged.' };
+}
+
+/** The recorder takes it back: the same day, before accounting acknowledged it. Voids its collections. */
+function undoFieldCollection(p) {
+  if (!_FIELD_COLLECT_ROLES[_fieldRole(p)]) return { success: false, message: 'Only the director can undo from Collect.' };
+  var b = _fieldBatches(function (x) { return x.batchNo === String(p.batchNo || ''); })[0];
+  if (!b) return { success: false, message: 'Payment ' + (p.batchNo || '?') + ' was not found.' };
+  if (b.status !== 'New') return { success: false, message: b.status === 'Undone' ? 'This was already undone.' : 'Accounting has acknowledged it, so ask them to void it.' };
+  if (b.by !== String(p.actorName || '')) return { success: false, message: 'Only the person who recorded it can undo it.' };
+  if (_dateStr(new Date(b.at)) !== _fieldToday()) return { success: false, message: 'Undo is for the same day. Ask accounting to void it.' };
+  var why = String(p.reason || '').trim() || 'recorded by mistake';
+  var done = [], fail = '';
+  b.lines.forEach(function (l) {
+    if (fail || !l.collectionNo) return;
+    var r = voidCollection({ collectionNo: l.collectionNo, reason: 'Undone on the phone by ' + (p.actorName || 'the director') + ': ' + why,
+                             actorName: p.actorName, actorRole: p.actorRole });
+    if (r && r.success) done.push(l.collectionNo);
+    else fail = (r && r.message) || 'could not void ' + l.collectionNo;
+  });
+  if (fail) return { success: false, voided: done, message: fail + (done.length ? ' (already voided: ' + done.join(', ') + ' — tell accounting)' : '') };
+  _fieldSetBatch(b.batchNo, { 'Status': 'Undone', 'Acknowledge Note': 'Undone: ' + why.slice(0, 180) });
+  return { success: true, batchNo: b.batchNo, refNo: b.batchNo, voided: done, message: 'Undone. ' + done.join(', ') + ' voided.' };
+}
+
+/** A photo of the cheque, deposit slip or official receipt, filed as "Proof of collection" on each receivable. */
+function uploadCollectionPhoto(p) {
+  if (!_FIELD_COLLECT_ROLES[_fieldRole(p)]) return { success: false, message: 'Only the director adds photos from Collect.' };
+  var arNos = String(p.arNos || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  if (!arNos.length) return { success: false, message: 'Choose the invoice first.' };
+  var ars = arNos.map(function (n) { return _arRow(n); });
+  if (ars.some(function (a) { return !a; })) return { success: false, message: 'A receivable was not found.' };
+  var b64 = String(p.base64 || '').replace(/^data:[^,]*,/, '');
+  if (!b64) return { success: false, message: 'The photo is empty.' };
+  if (b64.length > _SCAN_PHOTO_MAX_B64) return { success: false, message: 'The photo is too large.' };
+  var mime = /^image\/(jpeg|png|webp)$/.test(String(p.mimeType || '')) ? String(p.mimeType) : 'image/jpeg';
+  var now = _now(), docId = 'DOC-' + Utilities.getUuid().slice(0, 8).toUpperCase(), so = String(ars[0]['SO No'] || '');
+  var name = 'collection-' + arNos[0] + '-' + Utilities.formatDate(now, 'Asia/Manila', 'yyyyMMdd-HHmmss') + '.' + (mime === 'image/png' ? 'png' : 'jpg');
+  var folder = null;
+  try { folder = so ? _docFolder('Sales Order', so, 'Proof of collection', now) : _ensurePath(_ymSegments(now).concat(['_Collections'])); } catch (e) { folder = null; }
+  var saved = _saveFileToDrive(b64, name, mime, folder);
+  arNos.forEach(function (n) { _append('Documents', [docId, 'AR Aging', n, 'Proof of collection', name, saved.url, saved.id, p.actorName || '', now]); });
+  return { success: true, docId: docId, refNo: docId, message: 'Photo saved.' };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -13802,6 +14158,9 @@ var _MODULE_MAP = {
   createPurchaseOrder: ['Purchase Order', 'Created'], updatePurchaseOrder: ['Purchase Order', 'Updated'], deletePurchaseOrder: ['Purchase Order', 'Deleted'],
   updateAPAging: ['AP Aging', 'Updated'], deleteAPEntry: ['AP Aging', 'Deleted'],
   updateARAging: ['AR Aging', 'Updated'], recordCollection: ['Collection', 'Recorded'],
+  recordFieldCollection: ['Collection', 'Recorded from the field'], recordNotCollected: ['Collection', 'Not collected'],   // A323
+  acknowledgeFieldCollection: ['Collection', 'Acknowledged'], undoFieldCollection: ['Collection', 'Undone'],
+  uploadCollectionPhoto: ['Document', 'Uploaded'],
   attachOrphanToSO: ['AR Aging', 'Attached to SO'],
   setCollectionMeta: ['Collection', 'Updated'],   // A265
   correctCollection: ['Collection', 'Corrected'],
@@ -13986,6 +14345,8 @@ function _logActivity(action, params, result) {
       ? (result.apNo || params.apNo || result.poNo || '')
       : (action === 'recordCollection' || action === 'updateARAging')
       ? (result.arNo || params.arNo || result.collectionNo || '')
+      : (action === 'recordNotCollected')
+      ? (result.arNo || params.arNo || '')
       : (result.quotationNo || result.soNo || result.poNo || result.mrNo || result.invNo
          || result.prNo || result.apNo || result.expNo || result.refNo
          /* A277 — the generic stores (marketing, lead-gen) return `id`, not `refNo`. Without this
@@ -13999,7 +14360,7 @@ function _logActivity(action, params, result) {
     var user = params.actorName || params.createdBy || params.receivedBy || '';
     var now = _now();
     _sheet('ActivityLog').appendRow([now, _dateStr(now), user, map[0], map[1], refNo,
-      result.message || '', _logAmount(params), params.currency || 'PHP']);
+      result.message || '', (result && result.logAmount != null) ? _num(result.logAmount) : _logAmount(params), params.currency || 'PHP']);
   } catch (e) { /* logging is best-effort */ }
 }
 
@@ -16812,6 +17173,9 @@ var HANDLERS = {
   updatePurchaseOrder: updatePurchaseOrder, deletePurchaseOrder: deletePurchaseOrder,
   getAPAging: getAPAging, previewAPAgingAnomalies: previewAPAgingAnomalies, updateAPAging: updateAPAging, deleteAPEntry: deleteAPEntry,
   getARAging: getARAging, getCollections: getCollections, recordCollection: recordCollection, updateARAging: updateARAging,
+  getCollectorQueue: getCollectorQueue, getFieldCollectionNotices: getFieldCollectionNotices,   // A323
+  recordFieldCollection: recordFieldCollection, recordNotCollected: recordNotCollected,
+  acknowledgeFieldCollection: acknowledgeFieldCollection, undoFieldCollection: undoFieldCollection, uploadCollectionPhoto: uploadCollectionPhoto,
   attachOrphanToSO: attachOrphanToSO, setCollectionMeta: setCollectionMeta,   // A265
   voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
   correctCollection: correctCollection,
@@ -16961,6 +17325,7 @@ var MUTATIONS = {
   renameSalesOrder: 1, renameInvoice: 1,
   createPurchaseOrder: 1, updatePurchaseOrder: 1, deletePurchaseOrder: 1,
   updateAPAging: 1, deleteAPEntry: 1, recordCollection: 1, correctCollection: 1, updateARAging: 1, importCollections: 1, attachOrphanToSO: 1, setCollectionMeta: 1, createReceiving: 1, createInvoice: 1,
+  recordFieldCollection: 1, recordNotCollected: 1, acknowledgeFieldCollection: 1, undoFieldCollection: 1, uploadCollectionPhoto: 1,   // A323
   /* A243 — reverseReceiving was in HANDLERS, _SECURED and _MODULE_MAP but NOT here, and this list
      buys BOTH the script lock and the audit row: _logActivity is only ever reached from inside the
      MUTATIONS branch of _dispatch. So a reversal — which rewrites Inventory valuation, deletes the
@@ -17039,6 +17404,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A323 COLLECT — THE DIRECTOR'S PHONE (164). New FieldCollections tab (one row per invoice line, a Batch No per payment). getCollectorQueue (director): open receivables most overdue first, our banks from the chart, his recent payments. recordFieldCollection (director): cheque (number required; post-dated allowed) / cash / bank transfer, the deposit place checked against the method (cheque → 1100 or a bank, cash → 1010 or a bank, transfer → a bank), one payment over several of ONE customer's invoices, every line validated (over-collection, proof of collection, closed month, a cheque number already used) before the first write, each line recorded through recordCollection so AR, DocMeta, journal and books behave as on the desktop. recordNotCollected: reason, promised date, note; getARAging rows carry the latest as followUp (missed when the promise has passed). getFieldCollectionNotices / acknowledgeFieldCollection (accounting, admin) are the notification; undoFieldCollection voids a payment the same day before it is acknowledged; uploadCollectionPhoto files a Proof of collection per receivable. Also: recordCollection recognises a retried clientRef before its over-collection guard, and the activity log records a collection's amount (it logged 0).
 A322 A SALES-ORDER EDIT SAVES AGAIN (163). A276 appended Type and Service Kind to SalesOrders (14 columns) but updateSalesOrder kept rewriting the row with 12 values, and Sheets refuses a value list narrower than its range ("data has 12 columns but the range has 14"), so EVERY sales-order edit failed. It now writes all 14: Type and Service Kind are kept (the form never sends them, and they decide hire vs sale at invoicing), re-derived from the new quotation only when the order is moved to another quotation (_orderTypeFrom, as createSalesOrder does), and an explicit type / serviceKind still wins. tests/audit/schema-width.js now counts literal row rewrites as well as appends, and the test harness's setValues refuses a mismatched shape as Sheets does.
 A321 PAYROLL AND THE CODE.GS PAYMENTS REACH THE BOOKS (162). ingestBookEvents takes a full snapshot from Code.gs v5 (getBooksFeed, carried by Flask /books/sync with the shared secret and the caller's real role): each approved cutoff posts once (CG:PAY:<period>, dated the 10th or the 25th) — gross to 6010 with commission incentives clearing 2040, every deduction to its payable, net to 2030, the 13th month accrued at basic ÷ 12 exact per month, and on cutoff B the month's employer shares from the contribution tables (a missing table → Inbox, never a guess); Mark payroll paid clears 2030 from the bank (CG:PAYPAID); a paid Billing request (CG:BILL:<Bank Tx ID>) or Director Payable (CG:DP:<id>) posts by its rule (billing.department / dp.category; seeds utilities 6210, rent 6200, personal 1230) in the pesos the bank took, else the Inbox; own-bank transfers post themselves (a difference asks about the fee); every other bank-page movement waits for a person. A key gone from a COMPLETE snapshot is withdrawn by reversal; a partial one withdraws nothing. A person's Inbox decision now outlives the item (_glApplyDecision): a rebuilt event takes the same account (and the same moved date) and is a no-op, an ignored one stays out until its amount or date changes, and a waiting item is not rewritten on every sync. Event lines name the rule "remember this" saves (A320 always saved an expense category); saveAccountRule accepts only the five rule kinds. getBooksStatus says when payroll and payments were last synced.
 A320 THE BOOKS (161). A complete double-entry general ledger behind the booksEngine setting (off / shadow / on; OFF by default, and while off nothing is written and nothing is refused). One writer (_glPost): integer centavos, balanced or refused, one block write per entry, indexed by an immutable event key in EventIndex; the same event is a no-op, a changed one is reversed and re-posted, nothing is ever deleted. Anything uncertain waits in the Books Inbox (GLInbox) with the whole event; nothing posts on a guess. New tabs Accounts (chart as data), AccountRules, TaxCodes, GL, EventIndex, GLInbox, Periods, BooksAudit, DocMeta (accounting fields kept off the positional sheets, with a permanent Doc ID per document) and DocAliases. Posting: invoices (by VAT type 12% / zero-rated / exempt, rental, deposits, per-item COGS), collections (to the bank deposited, 2307 EWT), purchases by the advances model (payments before receipt to 1460, receiving at advances' historical pesos + unadvanced FC at the receipt-date rate to 2010, realised FX on later payments, import VAT with its import entry, local VAT only with TIN + SI), other payments, manual expenses, travel weeks (2025) and float advances (1210), commission accruals (2040). With the books on: closed months refuse documents, 0% invoices say zero-rated or exempt, collections say where the money went, payments say which company account and the bank value date, AP Aging is no second door to pay. Coverage (getBooksCoverage) proves every money record is posted, waiting or flagged; syncBooks posts what is missing or changed. LIVE FIXES regardless of the switch: an approved travel week is no longer expensed twice when its payout is paid, and a travel float advance is no longer booked as an expense.

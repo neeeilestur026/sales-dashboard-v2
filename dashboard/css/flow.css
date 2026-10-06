@@ -135,3 +135,34 @@
   .flow-modal-overlay.open .flow-modal { animation: none !important; }
 }
 .ivx-hint { font-weight: 400; color: var(--text-muted); }   /* A320 — a quiet hint inside a form label */
+
+/* A323 — the live "collected in the field" toasts on the accounting and admin homes (collect-alert.js) */
+.fc-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 1200; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 32px)); }
+.fc-toast { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 14px; border-radius: var(--hx-r-md); background: var(--hx-card); color: var(--hx-ink);
+  border: 1px solid var(--hx-ok-line, var(--hx-hair)); border-left: 4px solid var(--hx-ok); box-shadow: var(--hx-sh-2); font-size: 13.5px; line-height: 1.4; animation: fcIn .25s var(--hx-ease); }
+.fc-toast .fc-t { flex: 1; min-width: 0; }
+.fc-toast .fc-go { font-weight: 700; color: var(--hx-navy-text); white-space: nowrap; }
+.fc-toast .fc-x { border: 0; background: transparent; color: var(--hx-ink-3); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+@keyframes fcIn { from { transform: translateY(10px); } to { transform: none; } }   /* movement only: a frozen frame is still fully visible */
+
+/* A323 — "From the field" on the Collections page */
+.fc-panel { margin-bottom: 1.25rem; }
+.fc-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.fc-head h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
+.fc-meta { font-size: 0.8rem; color: var(--hx-ink-3); }
+.fc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.fc-card { padding: 12px 14px; border: 1px solid var(--hx-hair-2); border-left: 4px solid var(--hx-ok); border-radius: var(--hx-r-md); background: var(--hx-glass-solid);
+  display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.fc-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.fc-amt { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fc-dim { color: var(--hx-ink-3); }
+.fc-warn { padding: 6px 8px; border-radius: var(--hx-r-sm); background: var(--hx-warn-soft); color: var(--hx-ink); font-weight: 600; }
+.fc-state { font-weight: 600; color: var(--hx-ok); }
+.fc-act { display: flex; gap: 6px; margin-top: 6px; }
+.fc-note { flex: 1; min-width: 0; padding: 6px 8px; font: inherit; color: var(--hx-ink); background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.fc-empty { color: var(--hx-ink-3); font-size: 13px; padding: 4px 0; }
+.fc-recent { margin-top: 10px; }
+.fc-recent summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--hx-ink-2); margin-bottom: 8px; }
+/* A323 — the follow-up chip on an AR Aging row */
+.ar-follow { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--hx-r-pill); font-size: 11.5px; font-weight: 700; background: var(--hx-inset); color: var(--hx-ink-2); white-space: nowrap; }
+.ar-follow.missed { background: var(--hx-red-soft); color: var(--hx-red); }

@@ -58,26 +58,35 @@ function requireAuth() {
    A future 'warehouse' login counts and dispatches; accounting, admin and the director also post. */
 const FLOW_SCAN_ROLES = ['accounting', 'admin', 'director', 'warehouse'];
 const FLOW_SCAN_POST_ROLES = ['accounting', 'admin', 'director'];
-const _NEXT_PAGES = ['scan.html', 'labels.html'];
-function requireScanAccess() {
+/* A323 — Collect (collect.html), the director's phone. Mirrors FlowAPI.gs _FIELD_COLLECT_ROLES, which
+   is what enforces it; tests/flow/collect-contract.js keeps them equal. */
+const FLOW_COLLECT_ROLES = ['director'];
+/* The phone pages a sign-in may return to, each with the roles that may land there (A323: per page;
+   it was one list tied to the scanner's roles). */
+const _NEXT_PAGE_ROLES = { 'scan.html': FLOW_SCAN_ROLES, 'labels.html': FLOW_SCAN_ROLES, 'collect.html': FLOW_COLLECT_ROLES };
+const _NEXT_PAGES = Object.keys(_NEXT_PAGE_ROLES);
+function _requirePhonePage(roles) {
   const session = getSession();
   if (!session) {
     try { sessionStorage.setItem('hx_next', (location.pathname.split('/').pop() || '') + (location.search || '')); } catch (e) {}
     window.location.href = 'index.html';
     return null;
   }
-  if (FLOW_SCAN_ROLES.indexOf(String(session.role || '').toLowerCase()) === -1) {
+  if (roles.indexOf(String(session.role || '').toLowerCase()) === -1) {
     window.location.href = _homeForRole(session.role);
     return null;
   }
   return session;
 }
-/** Where to go after signing in: back to the scanner page that sent you here, else your home. */
+function requireScanAccess() { return _requirePhonePage(FLOW_SCAN_ROLES); }
+function requireCollectAccess() { return _requirePhonePage(FLOW_COLLECT_ROLES); }   // A323
+/** Where to go after signing in: back to the phone page that sent you here, else your home. */
 function flowAfterLogin(role) {
   let next = '';
   try { next = sessionStorage.getItem('hx_next') || ''; sessionStorage.removeItem('hx_next'); } catch (e) {}
   const page = next.split('?')[0];
-  if (_NEXT_PAGES.indexOf(page) !== -1 && FLOW_SCAN_ROLES.indexOf(String(role || '').toLowerCase()) !== -1 &&
+  const roles = Object.prototype.hasOwnProperty.call(_NEXT_PAGE_ROLES, page) ? _NEXT_PAGE_ROLES[page] : null;
+  if (roles && roles.indexOf(String(role || '').toLowerCase()) !== -1 &&
       /^[a-z-]+\.html(\?[A-Za-z0-9=&%:._,-]*)?$/.test(next)) return next;
   return _homeForRole(role);
 }
@@ -926,6 +935,7 @@ function renderNavbar(activePage) {
           <a href="email-setup.html" class="${activePage === 'email-setup' ? 'active' : ''}">Connect Email</a>
           <a href="pf-admin.html" class="${activePage === 'pf-admin' ? 'active' : ''}">PF Data Admin</a>
           <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
+          <a href="collect.html" class="${activePage === 'collect' ? 'active' : ''}">Collect</a>
           <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
         </div>
       </div>`;
@@ -1481,6 +1491,15 @@ async function flowComputeActions(session) {
       const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
       if (n) add('urgent', 'urgent', n + ' receivable(s) past due — collect', 'flow-ar-aging.html');
     }).catch(() => {}));
+    /* A323 — money the director collected on his phone, waiting for accounting or admin to say they
+       have it. A secured read; it simply fails (and adds nothing) until FlowAPI 164 is pasted. */
+    if (typeof postFlow === 'function') jobs.push(postFlow('getFieldCollectionNotices', {}).then(r => {
+      const it = (r && r.success && r.items) || [];
+      if (!it.length) return;
+      const who = Array.from(new Set(it.map(x => String(x.by || '').split(' ')[0]).filter(Boolean)));
+      const by = who.length === 1 ? (typeof hxEsc === 'function' ? hxEsc(who[0]) : '') : 'the field';
+      add('report', 'ok', it.length + ' collection' + (it.length === 1 ? '' : 's') + ' recorded by ' + by + ' — acknowledge', 'flow-collections.html#field');
+    }).catch(() => {}));
   }
   // Admin/Accounting procurement follow-ups: sales orders with no PO, POs not yet received.
   if (isAdmin || isAcct) {
@@ -1614,6 +1633,12 @@ function flowComputeActionsOnce(session) {
   const key = String((session && (session.username || session.name)) || '');
   if (!_faOnce || _faOnceKey !== key) { _faOnceKey = key; _faOnce = flowComputeActions(session).catch(() => []); }
   return _faOnce;
+}
+/** A323 — something changed (a collection arrived): recompute the list, then the bell and any strip. */
+function flowRefreshActions(stripId) {
+  _faOnce = null;
+  loadNotifications();
+  if (stripId && document.getElementById(stripId)) flowActionsStrip(stripId);
 }
 
 async function flowActionsStrip(containerId) {

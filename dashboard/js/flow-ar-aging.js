@@ -287,6 +287,16 @@ function arFoot(open) {
   ], 11);
 }
 
+/* A323 — the director's latest "not collected" from his phone (collect.html): the reason, when, and
+   the date they promised to pay — red once that date has passed with the invoice still open. */
+function arFollowUpChip(f) {
+  if (!f) return '';
+  const d = (v) => flowDate(v);
+  const promise = f.promiseDate ? (f.missed ? ' · promise missed ' + d(f.promiseDate) : ' · promised ' + d(f.promiseDate)) : '';
+  const title = 'Not collected on ' + d(f.date) + ' by ' + (f.by || '') + (f.notes ? ': ' + f.notes : '');
+  return ` <span class="ar-follow${f.missed ? ' missed' : ''}" title="${flowEsc(title)}">${flowEsc(f.reason)}${flowEsc(promise)}</span>`;
+}
+
 function rowHtml(r) {
   const done = r.status === 'Paid';
   // A157: an over-collected row is why a total can stop matching its column — say so on the row.
@@ -298,7 +308,7 @@ function rowHtml(r) {
         over-collected by 12%. On a receivable raised before A278, the fix is the VAT repair. */
     ? ` <span class="lv-warn" title="Collected ${flowMoney(over, 'PHP')} more than the amount due. If this receivable was raised before VAT was recorded on invoices, its amount is net of VAT — run the invoice VAT repair. Otherwise it is a genuine overpayment or a mis-split collection.">⚠ over ${flowMoney(over, 'PHP')}</span>` : '';
   return `<tr data-ar="${flowEsc(r.arNo)}">
-    <td>${flowEsc(r.arNo)}</td><td>${flowEsc(r.invNo)}</td><td>${flowEsc(r.soNo)}</td><td>${flowEsc(r.customer)}</td>
+    <td>${flowEsc(r.arNo)}</td><td>${flowEsc(r.invNo)}</td><td>${flowEsc(r.soNo)}</td><td>${flowEsc(r.customer)}${arFollowUpChip(r.followUp)}</td>
     <td class="num">${flowMoney(r.amountPHP, 'PHP')}</td>
     <td class="num">${flowMoney(r.collectedPHP, 'PHP')}${warn}</td>
     <td class="num">${flowMoney(r.outstanding, 'PHP')}</td>

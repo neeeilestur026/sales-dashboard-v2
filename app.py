@@ -137,6 +137,11 @@ def create_app():
     def web_manifest():
         return send_from_directory(DASHBOARD_DIR, "manifest.webmanifest", mimetype="application/manifest+json")
 
+    # A323 — Collect, the director's phone, installs as its own home-screen app.
+    @app.route("/collect.webmanifest")
+    def collect_manifest():
+        return send_from_directory(DASHBOARD_DIR, "collect.webmanifest", mimetype="application/manifest+json")
+
     @app.route("/sw.js")
     def service_worker():
         return send_from_directory(DASHBOARD_DIR, "sw.js", mimetype="application/javascript")
