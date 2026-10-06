@@ -523,7 +523,7 @@ var SCHEMA = {
   TaxCodes:      ['Code', 'Name', 'Kind', 'Rate', 'Account', 'Effective From', 'Effective To', 'Active', 'Notes'],
   // One row per posted line. Written ONLY by _glPost (one setValues per entry). Never deleted.
   GL:            ['Entry No', 'Line', 'Date', 'Period', 'Event Key', 'Source Type', 'Source No', 'Doc ID', 'Account', 'Debit',
-                  'Credit', 'Memo', 'Party', 'SO No', 'Item ID', 'Tax Code', 'Tax Base', 'FC Currency', 'FC Amount', 'Rate',
+                  'Credit', 'Memo', 'Party', 'SO No', 'PO No', 'Item ID', 'Tax Code', 'Tax Base', 'FC Currency', 'FC Amount', 'Rate',
                   'Reverses', 'Batch', 'Created By', 'Created At'],
   // One row per business event: the idempotency and fingerprint index.
   EventIndex:    ['Event Key', 'Entry No', 'Fingerprint', 'First Row', 'Row Count', 'Status', 'Date', 'Source Type', 'Source No',
@@ -2962,6 +2962,9 @@ function updateAPAging(p) {
    * Payments genuinely are made outside the system, so this is not sealed shut — but it becomes the
    * documented exception rather than the silent default: it needs an explicit flag AND a reason,
    * and the reason is stamped into Notes where it stays visible. */
+  if (p.paidPHP !== undefined && _num(p.paidPHP) !== _num(cur[8]) && _booksOn()) {
+    return { success: false, message: 'With the books on, a supplier payment is recorded through a payment request (it needs the bank, the value date and the proof).' };   // A320
+  }
   if (p.paidPHP !== undefined && _num(p.paidPHP) !== _num(cur[8])) {
     var _why = String(p.externalPaymentReason || '').trim();
     if (!p.externalPayment || !_why) {
@@ -4080,6 +4083,22 @@ function createReceiving(p) {
   var duties = _num(p.duties), vat = _num(p.vat), delivery = _num(p.delivery), other = _num(p.other);
   var totalShipping = duties + vat + delivery + other;
   var invShipping = duties + delivery + other;            // VAT excluded from inventory cost
+  /* A320 — with the books on, a receipt is costed by the advances model (see _booksReceiptBasis) and
+     its VAT must be supported: an import's VAT needs its import entry (IEIRD); a local supplier's VAT
+     is claimed only with their TIN and sales invoice no. — leave it at 0 to keep VAT in the cost. */
+  var _bk = _booksOn(), _bkPO = _bk ? _booksPOHeader(p.poNo) : null, _bkRate = 1, _bkFromPO = false;
+  if (_bk) {
+    if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
+    var _bkCur = String((_bkPO && _bkPO['Currency']) || currency || 'PHP').toUpperCase();
+    if (_bkCur !== 'PHP') {
+      _bkRate = _num(p.receiptRate);
+      if (!(_bkRate > 0)) { _bkRate = _num(_bkPO && _bkPO['Exchange Rate']); _bkFromPO = true; }
+      if (!(_bkRate > 0)) return { success: false, message: 'Enter the exchange rate on the day the goods were received.' };
+      if (vat > 0 && !String(p.importEntryNo || '').trim()) return { success: false, message: 'Enter the import entry no. (IEIRD) for the import VAT, or leave VAT at 0.' };
+    } else if (vat > 0 && !(String(p.supplierTin || '').trim() && String(p.siNo || '').trim())) {
+      return { success: false, message: "To claim the VAT enter the supplier's TIN and sales invoice no.; otherwise leave VAT at 0 to keep it in the cost." };
+    }
+  }
 
   // Authoritative bases: PO total (FC) and AP paid (PHP) for this PO.
   var poTotalFC = _poTotalFC(p.poNo) || (function () {
@@ -4101,14 +4120,14 @@ function createReceiving(p) {
 
   // A145: receiving costs inventory from AP Paid (PHP). If nothing is paid yet, every unit lands at ₱0 —
   // a silent zero cost basis that then books COGS 0 on the invoice. Refuse unless explicitly confirmed.
-  if (p.poNo && !(paidPHP > 0) && !p.confirmUnpaid) {
+  if (p.poNo && !(paidPHP > 0) && !p.confirmUnpaid && !_bk) {   // A320: with the books on, unpaid goods are a payable
     return { success: false, unpaid: true,
       message: 'No AP payment recorded for ' + p.poNo + ' yet — receiving now would set a ₱0 landed cost. Record the payment in AP Aging first, or confirm to proceed with a ₱0 cost basis.' };
   }
   /* A158 — the same trap one step along: a PARTIAL payment costs every unit at that fraction. A 30%
      deposit books the goods at 30% of their true cost, the invoice then books COGS at 30%, and the
      gross margin reads ~70 points too high. Only the exactly-zero case warned before. */
-  if (p.poNo && paidPHP > 0 && !p.confirmPartialPay) {
+  if (p.poNo && paidPHP > 0 && !p.confirmPartialPay && !_bk) {
     var apAmt = _rows('APAging').filter(function (a) { return String(a['PO No'] || '') === String(p.poNo); })
       .reduce(function (s, a) { return s + _num(a['Amount (PHP)']); }, 0);
     if (apAmt > 0 && paidPHP < apAmt - 0.005) {
@@ -4149,11 +4168,20 @@ function createReceiving(p) {
      share of the charges actually paid on it and the rest vanished. A full delivery is unchanged. */
   var rcFC = 0, rcQty = 0;
   items.forEach(function (it) { rcFC += _num(it.price) * _num(it.qty); rcQty += _num(it.qty); });
+  /* A320 — the books' cost basis: advances applied at their historical pesos + the rest at the receipt
+     rate, less a supported local VAT. ONE computation shared by the inventory sheet and the GL. */
+  var _bkTotal = null;
+  if (_bk) {
+    var _bkBasis = _booksReceiptBasis(p.poNo, Math.round(rcFC * 100) / 100, p.date || _now(), _bkRate, 'MR:' + no);
+    var _bkLocalVat = (_bkCur === 'PHP' && vat > 0) ? _cents(vat) : 0;
+    _bkTotal = _pesos(_bkBasis.totalC - _bkLocalVat);
+  }
   items.forEach(function (it) {
     var unitPriceFC = _num(it.price);
     var qty = _num(it.qty);
     // Purchase/Unit (PHP) = Paid (PHP) × Unit Price (FC) / PO Total (FC)
     var purchasePHP = (poTotalFC > 0) ? (paidPHP * unitPriceFC / poTotalFC) : 0;
+    if (_bkTotal !== null) purchasePHP = rcFC > 0 ? _bkTotal * unitPriceFC / rcFC : 0;   // A320 — per unit
     // Shipping/Unit (PHP) = inventoriable shipping (excl VAT) × Unit Price (FC) / this receiving's FC total (A316)
     var shipPerUnit = (rcFC > 0) ? (invShipping * unitPriceFC / rcFC) : (rcQty > 0 ? invShipping / rcQty : 0);   // A316
     var landed = purchasePHP + shipPerUnit;
@@ -4179,6 +4207,13 @@ function createReceiving(p) {
   ]);
   _refStore('createReceiving', p.clientRef, no);
   if (p.poNo) { try { _scanClearCount(p.poNo); } catch (e) {} }   // A316 — a warehouse count is used up once received
+  if (_bk) {   // A320 — the books
+    _docMetaSet('Receiving', no, { receiptRate: _bkCur !== 'PHP' ? _bkRate : undefined, importEntryNo: p.importEntryNo, importReleaseDate: p.importReleaseDate,
+      dutiableValue: p.dutiableValue, supplierTin: p.supplierTin, siNo: p.siNo, notes: _bkFromPO ? 'receipt rate taken from the PO' : undefined }, p.actorName);
+    _booksSyncReceiving(no, null, p.actorName);
+    if (_bkFromPO) _booksSafe('MRRATE:' + no, function () { return _glInbox({ key: 'MRRATE:' + no, date: p.date || _now(), sourceType: 'Receiving', sourceNo: no,
+      memo: 'Receipt rate for ' + no + ' was taken from ' + p.poNo + ' (' + _bkRate + '). Confirm it, or reverse and receive again at the right rate.', lines: [] }, 'receipt rate to confirm', { suggested: _bkRate }); });
+  }
   return { success: true, mrNo: no, message: 'Materials received; inventory, landed cost and journal updated.' };
 }
 
@@ -6657,6 +6692,14 @@ function markPaymentRequestPaid(p) {
         '. Enter the pesos the bank actually debited (and any charge) so the real rate is recorded — '
         + 'the peso figure on the request is only an estimate.' };
   }
+  /* A320 — with the books on, a payment says which company account it left from and on what date the
+     bank took it, and a foreign payment says what the bank actually debited (no estimate). */
+  if (_booksOn()) {
+    if (!_booksBankAccount(p.paidFrom)) return { success: false, message: 'Choose the company account this was paid from.' };
+    if (!_dateStr(p.valueDate)) return { success: false, message: "Enter the bank's value date of the payment." };
+    if (!_periodOpen(p.valueDate)) return _periodRefusal(p.valueDate);
+    if (isFC && !(debited > 0)) return { success: false, message: 'Enter the pesos the bank actually debited for this foreign payment.' };
+  }
   var settles = debited > 0 ? (debited - charge) : _num(r['Amount']);
   var amt = settles;
   var apUpdated = '', apStatus = '', realisedRate = null;
@@ -6773,6 +6816,8 @@ function markPaymentRequestPaid(p) {
   if (charge > 0) prPatch['Bank Charge (PHP)'] = charge;
   if (p.valueDate) prPatch['Value Date'] = p.valueDate;
   _prSet(p.prNo, prPatch);
+  if (p.paidFrom) _docMetaSet('PaymentRequest', p.prNo, { paidFrom: p.paidFrom }, p.actorName);   // A320
+  if (String(r['Type']) === 'PO') _booksSyncPOPayment(p.prNo, p.actorName);
 
   /* The FX difference is DERIVED, never stored: settled pesos less the estimate the request carried.
      Storing it would be a fourth number that could drift from the three it is computed from. */
@@ -7079,6 +7124,7 @@ function reverseReceiving(p) {
     .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (r) { itSh.deleteRow(r.rowIndex); });
   _rows('MaterialsReceiving').filter(function (m) { return String(m['MR No']) === String(p.mrNo); })
     .sort(function (a, b) { return b.rowIndex - a.rowIndex; }).forEach(function (m) { mrSh.deleteRow(m.rowIndex); });
+  _booksSafe('MR:' + p.mrNo, function () { return _glWithdraw('MR:' + p.mrNo, _dateStr(_now()), 'receiving reversed', p.actorName); });   // A320
   return { success: true, mrNo: String(p.mrNo), reversed: pre.lines.length,
     valueRemoved: pre.valueRemoved, poNo: pre.poNo,
     message: 'Receiving ' + p.mrNo + ' reversed — ₱' + pre.valueRemoved.toFixed(2) +
@@ -15756,8 +15802,8 @@ function _glLines(evt) {
     else if (!accts[acct]) { problem = problem || 'unknown-account:' + acct; }
     else if (!accts[acct].active || !accts[acct].postable) { problem = problem || 'inactive-account:' + acct; }
     out.push({ account: acct, d: net > 0 ? net : 0, c: net < 0 ? -net : 0, memo: l.memo || '', party: l.party || evt.party || '',
-               soNo: l.soNo || evt.soNo || '', itemId: l.itemId || '', taxCode: l.taxCode || '', taxBase: _cents(l.taxBase),
-               fcCur: l.fcCurrency || '', fcAmt: Number(l.fcAmount) || 0, rate: Number(l.rate) || 0 });
+               soNo: l.soNo || evt.soNo || '', poNo: l.poNo || evt.poNo || '', itemId: l.itemId || '', taxCode: l.taxCode || '',
+               taxBase: _cents(l.taxBase), fcCur: l.fcCurrency || '', fcAmt: Math.abs(Number(l.fcAmount) || 0), rate: Number(l.rate) || 0 });
     if (net > 0) dr += net; else cr += -net;
   });
   if (!problem && out.length < 2) problem = 'too-few-lines';
@@ -15775,7 +15821,7 @@ function _glWrite(evt, lines, entryNo, extra) {
   var sh = _sheet('GL'), now = _now(), d = _dateStr(evt.date), per = _periodOf(d);
   var rows = lines.map(function (l, i) {
     return [entryNo, i + 1, d, per, evt.key, evt.sourceType || '', evt.sourceNo || '', evt.docId || '', l.account,
-            _pesos(l.d), _pesos(l.c), String(l.memo || evt.memo || '').slice(0, 300), l.party, l.soNo, l.itemId,
+            _pesos(l.d), _pesos(l.c), String(l.memo || evt.memo || '').slice(0, 300), l.party, l.soNo, l.poNo || '', l.itemId,
             l.taxCode, _pesos(l.taxBase), l.fcCur, l.fcAmt || '', l.rate || '', (extra && extra.reverses) || '',
             evt.batch || '', evt.by || '', now];
   });
@@ -15792,9 +15838,9 @@ function _glReverseEntry(entryNo, date, reason, by) {
               memo: 'Reversal of ' + entryNo + (reason ? ' — ' + reason : ''), batch: 'reversal', by: by || '' };
   var rev = lines.map(function (r) {
     return { account: String(r['Account']), d: _cents(r['Credit']), c: _cents(r['Debit']), memo: 'Reversal of ' + entryNo,
-             party: String(r['Party'] || ''), soNo: String(r['SO No'] || ''), itemId: String(r['Item ID'] || ''),
+             party: String(r['Party'] || ''), soNo: String(r['SO No'] || ''), poNo: String(r['PO No'] || ''), itemId: String(r['Item ID'] || ''),
              taxCode: String(r['Tax Code'] || ''), taxBase: -_cents(r['Tax Base']), fcCur: String(r['FC Currency'] || ''),
-             fcAmt: -(Number(r['FC Amount']) || 0), rate: Number(r['Rate']) || 0 };
+             fcAmt: Math.abs(Number(r['FC Amount']) || 0), rate: Number(r['Rate']) || 0 };   // FC follows the side, like the pesos
   });
   var first = _glWrite(evt, rev, revNo, { reverses: entryNo });
   _booksIndexSet(key, [key, revNo, _glFingerprint(evt, rev), first, rev.length, 'Posted', _dateStr(date), 'Reversal', entryNo, _now(), '']);
@@ -15995,6 +16041,121 @@ function _booksSyncCollection(colNo, voidDate, by) {
   return _booksSafe('COL:' + colNo, function () { return _booksApply(_booksCollectionEvent(colNo), voidDate, by); });
 }
 
+/* ── A320 · purchases: the advances model (IFRIC 22 / PAS 21) ───────────────────────────────────── */
+/* A purchase order posts nothing — it is a commitment. Money paid BEFORE the goods arrive is an advance
+   (1460), kept at the pesos actually paid. Receiving books the stock at the advances it uses (their
+   historical pesos) plus whatever was not advanced at the receipt-date rate, which becomes the payable
+   (2010, carried in both FC and pesos). Paying after receipt clears 2010 at its carrying pesos and the
+   difference to the pesos the bank took is realised FX (4520 gain / 7010 loss). Charges typed on a
+   receiving (duties, freight, other) go to 2050 until the broker or freight payment clears them. */
+
+/** What we hold against a PO in the books as at `asOf`: advances (1460) and received-but-unpaid
+ *  payables (2010), each in FC and pesos. `excludeKey` leaves out an event's own posting (and its
+ *  reversals), so re-posting an event sees the position it was first posted against. */
+function _booksPOPosition(poNo, asOf, excludeKey) {
+  var po = String(poNo || ''), until = _dateStr(asOf), mine = {};
+  var gl = _rows('GL');
+  if (excludeKey) gl.forEach(function (r) { if (String(r['Event Key']) === excludeKey) mine[String(r['Entry No'])] = 1; });
+  var pos = { advFC: 0, advC: 0, apFC: 0, apC: 0 };
+  gl.forEach(function (r) {
+    if (String(r['PO No'] || '') !== po) return;
+    if (until && _dateStr(r['Date']) > until) return;
+    if (excludeKey && (String(r['Event Key']) === excludeKey || mine[String(r['Reverses'] || '')])) return;
+    var d = _cents(r['Debit']), c = _cents(r['Credit']), fc = Math.abs(_num(r['FC Amount'])), side = d > 0 ? 1 : -1;
+    if (String(r['Account']) === '1460') { pos.advC += d - c; pos.advFC += side * fc; }
+    if (String(r['Account']) === '2010') { pos.apC += c - d; pos.apFC -= side * fc; }
+  });
+  pos.advFC = Math.round(pos.advFC * 100) / 100; pos.apFC = Math.round(pos.apFC * 100) / 100;
+  return pos;
+}
+function _booksPOHeader(poNo) {
+  return _rows('PurchaseOrders').filter(function (r) { return String(r['PO No']) === String(poNo); })[0] || null;
+}
+
+/** The books event of a PO payment request that has been paid. */
+function _booksPOPaymentEvent(prNo) {
+  var r = _prRow(prNo);
+  if (!r || String(r['Type']) !== 'PO' || String(r['Status']) !== 'Paid') return null;
+  var key = 'PRPAY:' + prNo, poNo = String(r['PO No'] || ''), meta = _docMeta('PaymentRequest', prNo) || {};
+  var cur = String(r['Currency'] || 'PHP').toUpperCase(), isFC = cur !== 'PHP';
+  var date = _dateStr(r['Value Date']) || _dateStr(r['Paid At']);
+  var debited = _cents(r['Actual Debited (PHP)']), charge = _cents(r['Bank Charge (PHP)']);
+  var fc = Math.abs(_num(r['Amount']));
+  var settledC = debited > 0 ? debited - charge : (isFC ? _cents(r['Amount (PHP) Est']) : _cents(r['Amount']));
+  if (!isFC) fc = _pesos(settledC);
+  var bank = _booksBankAccount(meta['Paid From']), sup = String(r['Supplier'] || r['Payee'] || '');
+  var evt = { key: key, date: date, sourceType: 'PO payment', sourceNo: String(prNo), party: sup, soNo: String(r['SO No'] || ''), poNo: poNo,
+              memo: 'Payment ' + prNo + ' on ' + poNo + ' — ' + sup, lines: [] };
+  var pos = _booksPOPosition(poNo, date, key), toAPfc = 0, apCarryC = 0, apActualC = 0;
+  if (pos.apFC > 0.004 && fc > 0) {
+    toAPfc = Math.min(fc, pos.apFC);
+    apCarryC = Math.round(pos.apC * toAPfc / pos.apFC);
+    apActualC = Math.round(settledC * toAPfc / fc);
+  }
+  var advFC = Math.round((fc - toAPfc) * 100) / 100, advC = settledC - apActualC;
+  if (apCarryC) evt.lines.push({ account: '2010', debit: _pesos(apCarryC), fcCurrency: cur, fcAmount: toAPfc, memo: 'Settles payable on ' + poNo });
+  var fxC = apActualC - apCarryC;
+  if (fxC > 0) evt.lines.push({ account: '7010', debit: _pesos(fxC), memo: 'Realised FX loss — ' + poNo });
+  if (fxC < 0) evt.lines.push({ account: '4520', credit: _pesos(-fxC), memo: 'Realised FX gain — ' + poNo });
+  if (advC) evt.lines.push({ account: '1460', debit: _pesos(advC), fcCurrency: cur, fcAmount: advFC, rate: advFC ? Math.round(advC / advFC) / 100 : 0, memo: 'Advance to ' + sup + ' on ' + poNo });
+  if (charge) evt.lines.push({ account: '6330', debit: _pesos(charge), memo: 'Bank charge — ' + prNo });
+  evt.lines.push({ account: bank, need: 'bank', credit: _pesos(settledC + charge), memo: 'Paid — ' + prNo });
+  return evt;
+}
+function _booksSyncPOPayment(prNo, by) {
+  return _booksSafe('PRPAY:' + prNo, function () { return _booksApply(_booksPOPaymentEvent(prNo), null, by); });
+}
+
+/** The cost basis of a receipt under the advances model. rcFC = this receipt's FC value. */
+function _booksReceiptBasis(poNo, rcFC, date, rate, excludeKey) {
+  var pos = _booksPOPosition(poNo, date, excludeKey);
+  var applyFC = Math.max(0, Math.min(pos.advFC, rcFC));
+  var applyC = pos.advFC > 0 ? Math.round(pos.advC * applyFC / pos.advFC) : 0;
+  var unadvFC = Math.round((rcFC - applyFC) * 100) / 100;
+  var unadvC = Math.round(unadvFC * rate * 100);
+  return { applyFC: applyFC, applyC: applyC, unadvFC: unadvFC, unadvC: unadvC, totalC: applyC + unadvC };
+}
+
+/** The books event of a receiving, from its stored rows and fields. */
+function _booksReceivingEvent(mrNo) {
+  var mr = _rows('MaterialsReceiving').filter(function (r) { return String(r['MR No']) === String(mrNo); })[0];
+  if (!mr) return null;
+  if (String(mr['Received By'] || '').indexOf('Migrated') === 0) return { skip: 'migrated' };
+  var key = 'MR:' + mrNo, meta = _docMeta('Receiving', mrNo) || {}, poNo = String(mr['PO No'] || '');
+  var po = _booksPOHeader(poNo), cur = String((po && po['Currency']) || mr['Currency'] || 'PHP').toUpperCase(), isFC = cur !== 'PHP';
+  var rate = isFC ? _num(meta['Receipt Rate']) : 1;
+  var items = _rows('ReceivingItems').filter(function (r) { return String(r['MR No']) === String(mrNo); });
+  var rcFC = 0;
+  items.forEach(function (it) { rcFC += _num(it['Qty Received']) * _num(it['Purchase Price/Unit (FC)']); });
+  rcFC = Math.round(rcFC * 100) / 100;
+  var basis = _booksReceiptBasis(poNo, rcFC, mr['Date'], rate, key);
+  var vatC = _cents(mr['VAT (PHP)']), chargesC = _cents(mr['Customs Duties (PHP)']) + _cents(mr['Delivery Charges (PHP)']) + _cents(mr['Other Charges (PHP)']);
+  var localVatC = (!isFC && vatC && meta['Supplier TIN'] && meta['SI/OR No']) ? vatC : 0;   // carved out of the price paid
+  var importVatC = isFC ? vatC : 0;                                                            // paid to customs, cleared via 2050
+  var sup = String(mr['Supplier'] || '');
+  var evt = { key: key, date: mr['Date'], sourceType: 'Receiving', sourceNo: String(mrNo), party: sup, soNo: String(mr['SO No'] || ''), poNo: poNo,
+              memo: 'Receiving ' + mrNo + ' on ' + poNo + ' — ' + sup, lines: [] };
+  // Dr inventory per item, centavo-exact: the last line takes the rounding.
+  var invTotalC = basis.totalC - localVatC + chargesC, weights = items.map(function (it) {
+    return _num(it['Qty Received']) * _num(it['Purchase Price/Unit (FC)']);
+  }), wSum = weights.reduce(function (a, b) { return a + b; }, 0), used = 0;
+  items.forEach(function (it, i) {
+    var c = i === items.length - 1 ? invTotalC - used : Math.round(invTotalC * (wSum > 0 ? weights[i] / wSum : 1 / items.length));
+    used += c;
+    evt.lines.push({ account: '1300', debit: _pesos(c), itemId: String(it['Item ID'] || ''), memo: 'Received — ' + String(it['Item Name'] || '') });
+  });
+  if (localVatC) evt.lines.push({ account: '1500', debit: _pesos(localVatC), taxCode: 'VAT-IN-G', taxBase: _pesos(basis.totalC - localVatC), memo: 'Input VAT ' + meta['SI/OR No'] });
+  if (importVatC) evt.lines.push({ account: '1500', debit: _pesos(importVatC), taxCode: 'VAT-IMP', taxBase: _num(meta['Dutiable Value']) || 0, memo: 'Import VAT — entry ' + (meta['Import Entry No'] || '?') });
+  if (basis.applyC) evt.lines.push({ account: '1460', credit: _pesos(basis.applyC), fcCurrency: cur, fcAmount: basis.applyFC, memo: 'Advances applied — ' + poNo });
+  if (basis.unadvC) evt.lines.push({ account: isFC && !rate ? '' : '2010', need: 'receipt-date rate', credit: _pesos(basis.unadvC), fcCurrency: cur, fcAmount: basis.unadvFC, rate: rate, memo: 'Payable — ' + poNo });
+  if (isFC && !rate && basis.unadvFC > 0) evt.lines.push({ account: '', need: 'receipt-date rate', credit: 0.01 });
+  if (chargesC + importVatC) evt.lines.push({ account: '2050', credit: _pesos(chargesC + importVatC), memo: 'Charges to be paid — ' + mrNo });
+  return evt;
+}
+function _booksSyncReceiving(mrNo, voidDate, by) {
+  return _booksSafe('MR:' + mrNo, function () { return _booksApply(_booksReceivingEvent(mrNo), voidDate, by); });
+}
+
 /* ── reads ─────────────────────────────────────────────────────────────────────────────────────── */
 function getBooksStatus(p) {
   if (!_booksMayView(p)) return { success: false, message: 'The books are for accounting, admin, management and the director.' };
@@ -16049,7 +16210,8 @@ function getGLEntries(p) {
              key: String(r['Event Key']), sourceType: String(r['Source Type']), sourceNo: String(r['Source No']),
              account: String(r['Account']), accountName: a[String(r['Account'])] ? a[String(r['Account'])].name : '',
              debit: _num(r['Debit']), credit: _num(r['Credit']), memo: String(r['Memo'] || ''), party: String(r['Party'] || ''),
-             soNo: String(r['SO No'] || ''), taxCode: String(r['Tax Code'] || ''), reverses: String(r['Reverses'] || '') };
+             soNo: String(r['SO No'] || ''), poNo: String(r['PO No'] || ''), taxCode: String(r['Tax Code'] || ''),
+             fcCurrency: String(r['FC Currency'] || ''), fcAmount: _num(r['FC Amount']), reverses: String(r['Reverses'] || '') };
   }) };
 }
 /** Trial balance from the GL for a date range (an opening column = everything before `from`). */

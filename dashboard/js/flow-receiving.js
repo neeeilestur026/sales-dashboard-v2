@@ -64,6 +64,13 @@ function loadFromPO() {
   rcPaidPHP = _paidForPO(p.poNo);
   document.getElementById('supplier').value = p.supplier;
   document.getElementById('currency').value = p.currency || 'PHP';
+  // A320 — the receipt-date rate (prefilled from the PO; confirm or correct it) and the VAT evidence fields
+  const _fc = String(p.currency || 'PHP').toUpperCase() !== 'PHP';
+  document.getElementById('rcRateBlock').hidden = !_fc;
+  document.getElementById('rcReceiptRate').value = _fc && flowNum(p.exchangeRate) > 0 ? flowNum(p.exchangeRate) : '';
+  document.getElementById('shipImportBlock').hidden = !_fc;
+  document.getElementById('shipLocalBlock').hidden = _fc;
+  ['shipImportEntry', 'shipDutiable', 'shipRelease', 'shipTin', 'shipSi'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   // A145: landed cost comes from the AP Paid (PHP). Warn up front if nothing is paid yet (→ ₱0 cost).
   if (!(rcPaidPHP > 0)) {
     flowMsg('formMsg', `⚠ No AP payment recorded for ${p.poNo} yet — receiving now would set a ₱0 landed cost. Record the payment in AP Aging first.`, false);
@@ -190,6 +197,14 @@ async function saveReceiving() {
     items: JSON.stringify(items),
     clientRef: flowClientRef()                              // idempotent create (safe retry)
   };
+  // A320 — the books' fields (an older backend ignores them)
+  const _v = (id) => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+  if (flowNum(_v('rcReceiptRate')) > 0) payload.receiptRate = flowNum(_v('rcReceiptRate'));
+  if (_v('shipImportEntry')) payload.importEntryNo = _v('shipImportEntry');
+  if (flowNum(_v('shipDutiable')) > 0) payload.dutiableValue = flowNum(_v('shipDutiable'));
+  if (_v('shipRelease')) payload.importReleaseDate = _v('shipRelease');
+  if (_v('shipTin')) payload.supplierTin = _v('shipTin');
+  if (_v('shipSi')) payload.siNo = _v('shipSi');
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     let res = await postFlow('createReceiving', payload);

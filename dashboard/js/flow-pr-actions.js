@@ -147,9 +147,18 @@ function _pmpEl() {
         <div class="flow-form">
           <div><label>Actual debited (PHP) *</label><input type="number" step="0.01" min="0" id="pmpDebited" oninput="_pmpRecalc()"></div>
           <div><label>Bank charge (PHP)</label><input type="number" step="0.01" min="0" id="pmpCharge" placeholder="0.00" oninput="_pmpRecalc()"></div>
-          <div><label>Value date <span style="font-weight:400;color:var(--hx-ink-3);">(the bank's date)</span></label><input type="date" id="pmpValueDate"></div>
         </div>
         <div class="sub" id="pmpDerived" style="margin-top:0.5rem;"></div>
+      </div>
+
+      <!-- A320 — which company account the money left from, and when the bank took it: the two facts the
+           bank reconciliation matches on. Required by the server once the books are switched on. -->
+      <div class="group-title">Paid from</div>
+      <div class="flow-form">
+        <div><label>Company account</label><select id="pmpPaidFrom">
+          <option value="">Choose…</option><option value="AUB">AUB</option><option value="METRO_ZAB">Metrobank Zabarte</option>
+          <option value="METRO_SJDM">Metrobank SJDM</option><option value="1010">Cash on hand</option></select></div>
+        <div><label>Value date <span style="font-weight:400;color:var(--hx-ink-3);">(the bank's date)</span></label><input type="date" id="pmpValueDate"></div>
       </div>
 
       <div class="group-title">Reference</div>
@@ -253,6 +262,7 @@ async function prMarkPaid(no) {
   document.getElementById('pmpDebited').value = isFx && flowNum(r.amountPHPEst) > 0 ? flowNum(r.amountPHPEst).toFixed(2) : '';
   document.getElementById('pmpCharge').value = '';
   document.getElementById('pmpValueDate').value = flowToday();
+  document.getElementById('pmpPaidFrom').value = '';            // A320 — chosen each time, never assumed
   document.getElementById('pmpRef').value = '';
   document.getElementById('pmpMsg').style.display = 'none';
   _pmpRecalc();
@@ -274,8 +284,10 @@ async function _pmpSubmit() {
     if (charge > debited) { flowMsg('pmpMsg', 'The bank charge cannot exceed what was debited.', false); return; }
     payload.actualDebitedPHP = debited;
     payload.bankChargePHP = charge;
-    payload.valueDate = document.getElementById('pmpValueDate').value;
   }
+  payload.valueDate = document.getElementById('pmpValueDate').value;     // A320 — every payment has a bank date
+  const paidFrom = document.getElementById('pmpPaidFrom').value;
+  if (paidFrom) payload.paidFrom = paidFrom;
 
   btn.disabled = true; btn.textContent = 'Marking paid…';
   try {
