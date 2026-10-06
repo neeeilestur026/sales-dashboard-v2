@@ -654,7 +654,7 @@ SECURED_ACTIONS = [
     "updatePaymentRequest", "updatePurchaseOrder", "updateQuotation", "updateSalesOrder", "updateShipment",
     "verifyReturnToSales", "voidCollection", "voidInvoice",
     # A316 — the warehouse scanner (dashboard/scan.html)
-    "dispatchByScan", "linkBarcode", "receiveByScan", "saveScanCount", "uploadScanPhoto", "setItemTracking", "registerAssets", "returnByScan", "ensureItemLabels", "logLabelPrint", "getScanContext", "getScanLookup", "getLabels", "getStockInOptions", "getScanPhotos", "createItemByScan", "saveAccount", "saveAccountRule", "resolveBooksInboxItem", "getBooksStatus", "getAccounts", "getAccountRules", "getTaxCodes", "getGLEntries", "getGLTrialBalance", "getBooksInbox",
+    "dispatchByScan", "linkBarcode", "receiveByScan", "saveScanCount", "uploadScanPhoto", "setItemTracking", "registerAssets", "returnByScan", "ensureItemLabels", "logLabelPrint", "getScanContext", "getScanLookup", "getLabels", "getStockInOptions", "getScanPhotos", "createItemByScan", "saveAccount", "saveAccountRule", "resolveBooksInboxItem", "getBooksCoverage", "syncBooks", "getBooksStatus", "getAccounts", "getAccountRules", "getTaxCodes", "getGLEntries", "getGLTrialBalance", "getBooksInbox",
 ]
 
 

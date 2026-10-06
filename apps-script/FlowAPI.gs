@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 160;   // A319 — Stock in adds a brand-new item (photo, brand, model, type, qty at no cost, label). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 161;   // A320 — the books: a complete double-entry general ledger behind the booksEngine switch (off by default). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -756,7 +756,8 @@ var _SECURED = {
   dispatchByScan: 1, linkBarcode: 1, receiveByScan: 1, saveScanCount: 1,   // A316
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
-  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1,   // A320 — the books
+  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1, syncBooks: 1,   // A320 — the books
+  getBooksCoverage: 1,
   getBooksStatus: 1, getAccounts: 1, getAccountRules: 1, getTaxCodes: 1, getGLEntries: 1, getGLTrialBalance: 1, getBooksInbox: 1,   // A320 — secured READS
   getScanContext: 1, getScanLookup: 1, getLabels: 1, getStockInOptions: 1, getScanPhotos: 1,   // A318 — secured READS (codes → details)
 };
@@ -13775,7 +13776,7 @@ var _MODULE_MAP = {
   dispatchByScan: ['Dispatch', 'Scanned Out'], linkBarcode: ['Inventory', 'Barcode Linked'],
   returnByScan: ['Dispatch', 'Returned'], setItemTracking: ['Inventory', 'Tracking Set'],   // A318
   registerAssets: ['Inventory', 'Pieces Registered'], createItemByScan: ['Inventory', 'Added by scan'],   // A319
-  saveAccount: ['Books', 'Account Saved'], saveAccountRule: ['Books', 'Rule Saved'], resolveBooksInboxItem: ['Books', 'Inbox Resolved'],   // A320
+  saveAccount: ['Books', 'Account Saved'], saveAccountRule: ['Books', 'Rule Saved'], resolveBooksInboxItem: ['Books', 'Inbox Resolved'], syncBooks: ['Books', 'Synced'],   // A320
   createHire: ['Hire', 'Opened'], dispatchHireUnit: ['Hire', 'Dispatched'],
   returnHireUnit: ['Hire', 'Returned'], closeHire: ['Hire', 'Closed'],
   saveSupplier: ['Supplier', 'Saved'], deleteSupplier: ['Supplier', 'Removed'],
@@ -16310,6 +16311,102 @@ function _booksSyncCommission(commNo, by) {
   return _booksSafe('COMM:' + commNo, function () { return _booksApply(_booksCommissionEvent(commNo), null, by); });
 }
 
+/* ── A320 · coverage: proof that nothing was missed ────────────────────────────────────────────── */
+/* For every source record that belongs in the books between `from` and `to`, is its event posted,
+   waiting in the Inbox, or missing — and has the record changed since it was posted? The event
+   builders are the same ones that post, so "changed" means exactly "would post differently now". */
+function _booksSources(from, to) {
+  var start = _booksCfg().booksStartDate, lo = _dateStr(from) || start, hi = _dateStr(to) || '9999-12-31';
+  if (lo < start) lo = start;
+  var inRange = function (d) { d = _dateStr(d); return d && d >= lo && d <= hi; };
+  var out = [];
+  _rows('Invoices').forEach(function (r) {
+    if (String(r['Created By'] || '').indexOf('Migrated') === 0 || !inRange(r['Date'])) return;
+    out.push({ type: 'Invoice', no: String(r['INV No']), date: _dateStr(r['Date']), amount: _num(r['Total Sales']) + _num(r['VAT']) + _num(r['Total Deposit']),
+               voided: String(r['Voided'] || '') === 'true', build: _booksInvoiceEvent });
+  });
+  _rows('Collections').forEach(function (r) {
+    if (!inRange(r['Date'])) return;
+    out.push({ type: 'Collection', no: String(r['Collection No']), date: _dateStr(r['Date']), amount: _num(r['Amount (PHP)']), voided: String(r['Voided'] || '') === 'true', build: _booksCollectionEvent });
+  });
+  _rows('MaterialsReceiving').forEach(function (r) {
+    if (String(r['Received By'] || '').indexOf('Migrated') === 0 || !inRange(r['Date'])) return;
+    out.push({ type: 'Receiving', no: String(r['MR No']), date: _dateStr(r['Date']), amount: _num(r['Total Shipping Cost (PHP)']), build: _booksReceivingEvent });
+  });
+  _rows('PaymentRequests').forEach(function (r) {
+    if (String(r['Status']) !== 'Paid') return;
+    var d = _dateStr(r['Value Date']) || _dateStr(r['Paid At']);
+    if (!inRange(d)) return;
+    out.push({ type: 'Payment', no: String(r['PR No']), date: d, amount: _num(r['Actual Debited (PHP)']) || _num(r['Amount']),
+               build: String(r['Type']) === 'PO' ? _booksPOPaymentEvent : _booksOtherPaymentEvent });
+  });
+  _rows('Expenses').forEach(function (r) {
+    if (_booksExpenseIsView(r) || !inRange(r['Date'])) return;
+    out.push({ type: 'Expense', no: String(r['Exp No']), date: _dateStr(r['Date']), amount: _num(r['Amount']), build: _booksExpenseEvent });
+  });
+  _rows('TravelReplenishments').forEach(function (r) {
+    if (String(r['Status']) !== 'Approved') return;
+    var d = _dateStr(r['Week End']) || _dateStr(r['Date']);
+    if (!inRange(d)) return;
+    out.push({ type: 'Travel', no: String(r['Trav No']), date: d, amount: _num(r['Total Spent']), build: _booksTravelEvent });
+  });
+  _rows('CommissionRequests').forEach(function (r) {
+    var st = String(r['Status'] || '');
+    if (st !== 'Approved' && st !== 'Released') return;
+    var d = _dateStr(r['Mgmt Approved At']) || _dateStr(r['Dir Approved At']) || _dateStr(r['Updated At']);
+    if (!inRange(d)) return;
+    out.push({ type: 'Commission', no: String(r['Comm No']), date: d, amount: _num(r['Amount (PHP)']) + _num(r['Adjustment (PHP)']), build: _booksCommissionEvent });
+  });
+  return out;
+}
+/** Check each source: 'ok' | 'missing' | 'inbox' | 'changed' | 'skipped'. Never writes. */
+function _booksCheck(src) {
+  var ev = src.build(src.no);
+  if (!ev) return { state: 'skipped', why: 'nothing to post yet' };
+  if (ev.skip) return { state: 'skipped', why: ev.skip };
+  var ix = _booksIndex()[ev.key];
+  if (ev.voided) return (!ix || String(ix['Status']) !== 'Posted') ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'voided but still posted' };
+  var open = _rows('GLInbox').some(function (i) { return String(i['Event Key']) === ev.key && String(i['Status']) === 'Open'; });
+  if (!ix || String(ix['Status']) !== 'Posted') return { state: open ? 'inbox' : 'missing', key: ev.key };
+  var n = _glLines(ev);
+  if (n.problem) return { state: open ? 'inbox' : 'changed', key: ev.key, why: 'would not post now: ' + n.problem };
+  return String(ix['Fingerprint']) === _glFingerprint(ev, n.lines) ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'changed since it was posted' };
+}
+function getBooksCoverage(p) {
+  if (!_booksMayView(p)) return { success: false, message: 'Not permitted.' };
+  var counts = {}, problems = [];
+  _booksSources(p.from, p.to).forEach(function (src) {
+    var c = _booksCheck(src), k = src.type;
+    counts[k] = counts[k] || { total: 0, ok: 0, missing: 0, inbox: 0, changed: 0, skipped: 0 };
+    counts[k].total++; counts[k][c.state]++;
+    if (c.state === 'missing' || c.state === 'changed' || c.state === 'inbox') {
+      problems.push({ sourceType: src.type, sourceNo: src.no, date: src.date, amount: src.amount, state: c.state, why: c.why || '', key: c.key || '' });
+    }
+  });
+  problems.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return { success: true, mode: _booksMode(), counts: counts, problems: problems.slice(0, 500), problemCount: problems.length,
+           complete: !problems.some(function (x) { return x.state !== 'inbox'; }) };
+}
+/** Re-post what coverage found missing or changed, oldest first, within a time budget (one call is a
+ *  few hundred at most; press again for the rest). Voided records are withdrawn. */
+function syncBooks(p) {
+  if (!_booksMayAct(p)) return { success: false, message: 'Only accounting, admin or the director can sync the books.' };
+  if (!_booksOn()) return { success: false, message: 'The books are switched off.' };
+  var t0 = Date.now(), done = 0, inbox = 0, left = 0, only = String(p.sourceNo || '');
+  var srcs = _booksSources(p.from, p.to).filter(function (s) { return !only || s.no === only; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  srcs.forEach(function (src) {
+    var c = _booksCheck(src);
+    if (c.state !== 'missing' && c.state !== 'changed') return;
+    if (Date.now() - t0 > 25000) { left++; return; }
+    var r = _booksSafe(src.type + ':' + src.no, function () { return _booksApply(src.build(src.no), _dateStr(_now()), p.actorName); });
+    if (r && r.inbox) inbox++; else done++;
+  });
+  _booksAudit(p, 'syncBooks', only || ((p.from || '') + '..' + (p.to || '')), null, { posted: done, inbox: inbox, left: left });
+  return { success: true, posted: done, inbox: inbox, left: left, refNo: only || 'range',
+           message: done + ' posted' + (inbox ? ', ' + inbox + ' sent to the Inbox' : '') + (left ? ', ' + left + ' left — press again' : '') + '.' };
+}
+
 /* ── reads ─────────────────────────────────────────────────────────────────────────────────────── */
 function getBooksStatus(p) {
   if (!_booksMayView(p)) return { success: false, message: 'The books are for accounting, admin, management and the director.' };
@@ -16586,6 +16683,7 @@ var HANDLERS = {
   getBooksStatus: getBooksStatus, getAccounts: getAccounts, getAccountRules: getAccountRules, getTaxCodes: getTaxCodes,
   getGLEntries: getGLEntries, getGLTrialBalance: getGLTrialBalance, getBooksInbox: getBooksInbox,
   saveAccount: saveAccount, saveAccountRule: saveAccountRule, resolveBooksInboxItem: resolveBooksInboxItem,
+  getBooksCoverage: getBooksCoverage, syncBooks: syncBooks,
   previewReceivingReversal: previewReceivingReversal, reverseReceiving: reverseReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -16649,7 +16747,7 @@ var MUTATIONS = {
   linkBarcode: 1, saveScanCount: 1, receiveByScan: 1, dispatchByScan: 1,
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
-  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1,   // A320
+  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1, syncBooks: 1,   // A320
   // A276 — every hire write. The lock matters here for the same reason A243 gives: these read a row,
   // decide from it and write back, so two dispatches racing on one unit would both read 'not out'.
   createHire: 1, dispatchHireUnit: 1, returnHireUnit: 1, closeHire: 1,
@@ -16738,6 +16836,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A320 THE BOOKS (161). A complete double-entry general ledger behind the booksEngine setting (off / shadow / on; OFF by default, and while off nothing is written and nothing is refused). One writer (_glPost): integer centavos, balanced or refused, one block write per entry, indexed by an immutable event key in EventIndex; the same event is a no-op, a changed one is reversed and re-posted, nothing is ever deleted. Anything uncertain waits in the Books Inbox (GLInbox) with the whole event; nothing posts on a guess. New tabs Accounts (chart as data), AccountRules, TaxCodes, GL, EventIndex, GLInbox, Periods, BooksAudit, DocMeta (accounting fields kept off the positional sheets, with a permanent Doc ID per document) and DocAliases. Posting: invoices (by VAT type 12% / zero-rated / exempt, rental, deposits, per-item COGS), collections (to the bank deposited, 2307 EWT), purchases by the advances model (payments before receipt to 1460, receiving at advances' historical pesos + unadvanced FC at the receipt-date rate to 2010, realised FX on later payments, import VAT with its import entry, local VAT only with TIN + SI), other payments, manual expenses, travel weeks (2025) and float advances (1210), commission accruals (2040). With the books on: closed months refuse documents, 0% invoices say zero-rated or exempt, collections say where the money went, payments say which company account and the bank value date, AP Aging is no second door to pay. Coverage (getBooksCoverage) proves every money record is posted, waiting or flagged; syncBooks posts what is missing or changed. LIVE FIXES regardless of the switch: an approved travel week is no longer expensed twice when its payout is paid, and a travel float advance is no longer booked as an expense.
 A319 STOCK IN ADDS A NEW ITEM (160). createItemByScan (every scanner role): photo first (New item photo, filed under _Warehouse/New items, then re-filed to the Item ID), name, brand (_SCAN_BRANDS), model, type (_SCAN_CATEGORIES), quantity. The item is created through addInventoryItem as Stock with the quantity on hand and no cost (no journal; accounting fills the cost); Description = Brand Type Name, Item No = model; refused when the model or the scanned barcode already belongs to an item (the reply names it). It gets its ITEM label, and with Track each piece a TrackedItems row and one PIECE label per piece. New tab ItemDetails keeps brand, model, type and photos; getScanLookup shows them and getScanContext(stockin) returns details incl. costPending.
 A318 SCANNER PROOF, PIECES AND LABELS (159). Every receive, count, dispatch and return now needs at least one photo, uploaded one at a time by uploadScanPhoto into the document's own Drive folder and the Documents register (types Receiving photo / Dispatch photo / Return photo / Piece photo, never a gated document type); ScanLog gains Photos. New tabs Labels, TrackedItems, Assets, Returns. An item switched to Track each piece (setItemTracking) gets one Assets row and one PIECE label per piece received (receiveByScan) or registered (registerAssets, capped by the balance); a tracked SO line is dispatched piece by piece (each In warehouse, of that item, once) and returnByScan brings Out pieces back. Still record only: no stock moves at dispatch or return. Labels carry an opaque code (HX + 12 Crockford base32, one per item type via ensureItemLabels, one per piece); logLabelPrint counts prints; getLabels is the label library. getScanContext, getScanLookup, getLabels, getStockInOptions (open PO lines holding an item, stock POs first) and getScanPhotos are secured reads limited to the scanner roles, so a code means nothing without a signed-in scanner. Old HXI: labels still resolve.
 A316 THE WAREHOUSE SCANNER (158). New tabs ItemBarcodes, Dispatches, DispatchItems, ScanLog; reads getScanDocs, getScanContext, getDispatchSummary; secured writes linkBarcode, saveScanCount, receiveByScan (validated against what is still open on each PO line, priced from the PO, then posted through createReceiving) and dispatchByScan (record only; stock still leaves at createInvoice). createReceiving now refuses roles that do not post receivings, skips zero-quantity lines (they overwrote unit cost), and spreads the charges typed on a receiving over that receiving's goods, booking its VAT in full, so partial deliveries no longer lose part of their charges.

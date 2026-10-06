@@ -162,3 +162,44 @@ keyboard-type scanner, or by typing.
   are skipped (they used to overwrite the unit cost), and the charges typed on a receiving are spread
   over that receiving's goods with its VAT booked in full (partial deliveries used to lose part of
   their charges; a full delivery is unchanged).
+
+## The books (A320, FlowAPI 161)
+
+`books.html` (accounting, admin, management, director) is the double-entry general ledger. It is built
+behind one setting, **`booksEngine`**, which the director or management flips on that page:
+
+- **Off** (the default): nothing is posted and nothing is refused; every page works exactly as before.
+- **Shadow**: every money event posts to the `GL` tab alongside the old `Journal`, for checking.
+- **On**: the books are the accounts (from A325, once the shadow months agree with the bank statements,
+  the agings and the filed returns).
+
+The books start on **1 Jan 2026** (`booksStartDate`); anything earlier is covered by the CPA's opening
+balances (A322) and is never posted.
+
+**How it posts.** One writer (`_glPost`), in centavos, balanced or refused, written as one block and
+indexed by a permanent event key. The same event again does nothing; a changed one is reversed and
+re-posted; nothing is deleted. What cannot post with certainty waits in the **Inbox** on the Books page
+with the whole entry — pick the account (optionally "remember" it as a rule) or ignore it with a reason.
+**Coverage** proves every invoice, collection, receiving, payment, expense, travel week and commission
+is posted, waiting, or flagged as changed; "Post what is missing" fixes the rest.
+
+**What switching to shadow asks of people** (the server refuses without it):
+- a 0% invoice says **zero-rated** or **VAT-exempt** (the invoice form's VAT type);
+- a collection says **where the money was deposited**;
+- marking a payment paid says **which company account** and the bank's **value date** (foreign: the
+  pesos actually debited); AP Aging can no longer record a payment by hand;
+- a manual expense says **how it was paid** (a bank, cash on hand, not yet paid, a stockholder);
+- receiving a foreign PO takes the **rate on the day received**; VAT on it needs the **import entry no.**
+  (local VAT needs the supplier's **TIN and sales invoice no.**, or leave it at 0 to keep it in the cost);
+- nothing is dated into a closed month.
+
+**Purchases use the advances model.** A PO posts nothing. Paying before the goods arrive is an advance
+(1460) at the pesos the bank took; receiving books stock at those pesos plus the unpaid part at the
+receipt-date rate (a payable, 2010); paying after receipt realises the FX difference (4520/7010).
+With the books on, the inventory sheet is costed the same way (no more partial-payment costing).
+
+**Live fixes in A320** (regardless of the switch): an approved travel week is no longer expensed twice
+when its payout is paid, and a travel float advance is no longer booked as an expense.
+
+**Deploy:** Render first, then paste `apps-script/FlowAPI.gs` (161). Restart any local Flask server
+after pulling (it keeps the old secured-action list in memory).

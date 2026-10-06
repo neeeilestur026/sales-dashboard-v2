@@ -120,7 +120,8 @@ const EXCEPTIONS = {
     getTaxCodes:                   'A320 — a secured READ of the books',
     getGLEntries:                  'A320 — a secured READ of the books',
     getGLTrialBalance:             'A320 — a secured READ of the books',
-    getBooksInbox:                 'A320 — a secured READ of the books'
+    getBooksInbox:                 'A320 — a secured READ of the books',
+    getBooksCoverage:              'A320 — a secured READ of the books'
   }
 };
 

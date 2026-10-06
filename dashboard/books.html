@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Books</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/books.css">
+</head>
+<body class="bk">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+
+  <!-- A320: the books — the double-entry general ledger, its Inbox, coverage, chart of accounts and rules.
+       Everything here reads the GL; nothing is added up from the operational sheets. -->
+  <main class="main-content bk-main">
+    <header class="bk-top">
+      <div>
+        <h1>Books</h1>
+        <p>The general ledger. Every money event posts here as a balanced entry; what cannot post with certainty waits in the Inbox for you.</p>
+      </div>
+    </header>
+
+    <div class="bk-banner" id="bkBanner" hidden></div>
+
+    <section class="hx-glass bk-band" id="bkBand">
+      <div class="bk-mode">
+        <span class="bk-label">Books engine</span>
+        <div class="bk-switch" role="radiogroup" aria-label="Books engine">
+          <button type="button" class="bk-pos" data-mode="off" role="radio">Off</button>
+          <button type="button" class="bk-pos" data-mode="shadow" role="radio">Shadow</button>
+          <button type="button" class="bk-pos" data-mode="on" role="radio">On</button>
+        </div>
+        <span class="bk-hint" id="bkModeHint"></span>
+      </div>
+      <div class="bk-facts">
+        <div class="bk-fact"><span>Books start</span><b id="bkStart">—</b></div>
+        <div class="bk-fact"><span>Inbox</span><b id="bkInboxN">—</b></div>
+        <div class="bk-fact"><span>Ledger lines</span><b id="bkLines">—</b></div>
+        <div class="bk-fact bk-check" id="bkCheck"><span>Debits = credits</span><b>—</b></div>
+      </div>
+    </section>
+
+    <nav class="bk-tabs" role="tablist" aria-label="Books">
+      <button type="button" class="bk-tab active" data-tab="inbox" role="tab" aria-selected="true">Inbox</button>
+      <button type="button" class="bk-tab" data-tab="coverage" role="tab" aria-selected="false">Coverage</button>
+      <button type="button" class="bk-tab" data-tab="ledger" role="tab" aria-selected="false">General ledger</button>
+      <button type="button" class="bk-tab" data-tab="tb" role="tab" aria-selected="false">Trial balance</button>
+      <button type="button" class="bk-tab" data-tab="accounts" role="tab" aria-selected="false">Chart of accounts</button>
+      <button type="button" class="bk-tab" data-tab="rules" role="tab" aria-selected="false">Rules</button>
+    </nav>
+
+    <section class="hx-glass bk-pane" id="pane-inbox">
+      <div class="hx-head"><h2>Waiting for you</h2><span class="hx-meta" id="inboxMeta"></span></div>
+      <div id="inboxList" class="bk-inbox"><div class="hx-empty">Loading…</div></div>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-coverage" hidden>
+      <div class="hx-head"><h2>Coverage</h2><span class="hx-meta">Is every money record in the books?</span>
+        <div class="hx-actions"><button type="button" class="btn btn-sm btn-primary" id="covSync" hidden>Post what is missing</button></div></div>
+      <div class="bk-filters">
+        <label>From<input type="date" id="covFrom"></label>
+        <label>To<input type="date" id="covTo"></label>
+        <button type="button" class="btn btn-sm" id="covRun">Check</button>
+      </div>
+      <div id="covCounts" class="bk-scroll"></div>
+      <div id="covProblems" class="bk-scroll"></div>
+      <div class="flow-msg" id="covMsg" hidden></div>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-ledger" hidden>
+      <div class="hx-head"><h2>General ledger</h2><span class="hx-meta" id="glMeta"></span></div>
+      <div class="bk-filters">
+        <label>From<input type="date" id="glFrom"></label>
+        <label>To<input type="date" id="glTo"></label>
+        <label>Account<select id="glAccount"><option value="">All accounts</option></select></label>
+        <label>Source<select id="glSource"><option value="">All</option><option>Invoice</option><option>Collection</option><option>Receiving</option>
+          <option>PO payment</option><option>Payment</option><option>Expense</option><option>Travel</option><option>Commission</option><option>Reversal</option></select></label>
+        <button type="button" class="btn btn-sm" id="glRun">Show</button>
+      </div>
+      <div id="glTable" class="bk-scroll"></div>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-tb" hidden>
+      <div class="hx-head"><h2>Trial balance</h2><span class="hx-meta" id="tbMeta"></span>
+        <div class="hx-actions"><button type="button" class="btn btn-sm" id="tbCsv">Download CSV</button></div></div>
+      <div class="bk-filters">
+        <label>From<input type="date" id="tbFrom"></label>
+        <label>To<input type="date" id="tbTo"></label>
+        <button type="button" class="btn btn-sm" id="tbRun">Show</button>
+      </div>
+      <div id="tbTable" class="bk-scroll"></div>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-accounts" hidden>
+      <div class="hx-head"><h2>Chart of accounts</h2><span class="hx-meta" id="acMeta"></span></div>
+      <form class="bk-form" id="acForm" hidden>
+        <label>Code<input type="text" id="acCode" maxlength="4" inputmode="numeric" placeholder="6510"></label>
+        <label class="bk-wide">Name<input type="text" id="acName" maxlength="80"></label>
+        <label>Type<select id="acType"></select></label>
+        <label>Subtype<input type="text" id="acSubtype" maxlength="30" placeholder="optional"></label>
+        <label class="bk-check-l"><input type="checkbox" id="acActive" checked> Active</label>
+        <button type="submit" class="btn btn-sm btn-primary">Save account</button>
+      </form>
+      <div class="flow-msg" id="acMsg" hidden></div>
+      <div id="acTable" class="bk-scroll"></div>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-rules" hidden>
+      <div class="hx-head"><h2>Rules</h2><span class="hx-meta">Which account a category, department or travel item posts to</span></div>
+      <form class="bk-form" id="ruForm" hidden>
+        <label>When<select id="ruSource"><option value="expense.category">Expense category is</option><option value="pr.department">Payment department is</option><option value="travel.item">Travel item is</option></select></label>
+        <label class="bk-wide">Value<input type="text" id="ruValue" maxlength="80" placeholder="e.g. Utilities"></label>
+        <label class="bk-wide">Post to<select id="ruAccount"></select></label>
+        <button type="submit" class="btn btn-sm btn-primary">Save rule</button>
+      </form>
+      <div class="flow-msg" id="ruMsg" hidden></div>
+      <div id="ruTable" class="bk-scroll"></div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/books.js"></script>
+</body>
+</html>
