@@ -44,9 +44,17 @@ function makeCtx(store) {
           setValues: function (vals) {
             if (row === 1) return rng;                   // header write — ignore
             const headers = ctx.SCHEMA[name];
-            const rec = (store[name] || [])[row - 2];
-            if (!rec) return rng;
-            for (let c = 0; c < (nCols || vals[0].length); c++) rec[headers[col - 1 + c]] = vals[0][c];
+            const rows = store[name] = store[name] || [];
+            /* A320 — a block write may cover several rows, and may start at the first empty row (the
+               books write a whole entry with ONE setValues). Rows past the end are appended in order;
+               a gap would be a bug in the caller, so it throws rather than inventing blank rows. */
+            for (let r = 0; r < vals.length; r++) {
+              const idx = row - 2 + r;
+              if (idx > rows.length) throw new Error('setValues past the end of ' + name + ' (row ' + (idx + 2) + ')');
+              if (idx === rows.length) { const o = {}; headers.forEach(h => { o[h] = ''; }); rows.push(o); }
+              const rec = rows[idx];
+              for (let c = 0; c < (nCols || vals[r].length); c++) rec[headers[col - 1 + c]] = vals[r][c];
+            }
             return rng;
           },
           setFontWeight: function () { return rng; },    // must CHAIN — .setValues(...).setFontWeight()

@@ -113,7 +113,14 @@ const EXCEPTIONS = {
     getScanLookup:                 'A318 — a secured READ',
     getLabels:                     'A318 — a secured READ (the label library)',
     getStockInOptions:             'A318 — a secured READ',
-    getScanPhotos:                 'A318 — a secured READ'
+    getScanPhotos:                 'A318 — a secured READ',
+    getBooksStatus:                'A320 — a secured READ of the books',
+    getAccounts:                   'A320 — a secured READ of the books',
+    getAccountRules:               'A320 — a secured READ of the books',
+    getTaxCodes:                   'A320 — a secured READ of the books',
+    getGLEntries:                  'A320 — a secured READ of the books',
+    getGLTrialBalance:             'A320 — a secured READ of the books',
+    getBooksInbox:                 'A320 — a secured READ of the books'
   }
 };
 
