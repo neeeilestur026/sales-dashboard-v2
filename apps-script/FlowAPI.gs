@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 162;   // A321 — payroll, Billing, Director Payables and bank transfers reach the books (Flask /books/sync). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 163;   // A322 — a sales-order edit saves again (updateSalesOrder writes all 14 columns). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2144,10 +2144,20 @@ function updateSalesOrder(p) {
   var sh = _sheet('SalesOrders');
   _rows('SalesOrders').forEach(function (r) {
     if (String(r['SO No']) === String(no)) {
-      // This value list is written into a SCHEMA.SalesOrders.length-wide range, so it must carry
-      // exactly as many entries as SCHEMA.SalesOrders has columns. Adding a column there without
-      // adding a value here throws on EVERY sales-order save (create would only leave it blank,
-      // so the breakage shows up on edit).
+      /* A322 — the order's Type and Service Kind (A276) decide whether invoicing treats it as a hire
+         or a sale. The edit form never sends them, so they are KEPT; only a change of quotation
+         re-derives them, from the new quotation, by the same rule createSalesOrder uses. An explicit
+         type / serviceKind still wins. */
+      var qChanged = p.quotationNo != null && String(p.quotationNo).trim() !== '' &&
+                     String(p.quotationNo).trim() !== String(r['Quotation No'] || '').trim();
+      var derived = qChanged ? _orderTypeFrom({ quotationNo: p.quotationNo }) : null;
+      var soType = (p.quoteType || p.type) ? String(p.quoteType || p.type).trim() : (derived ? derived.type : String(r['Type'] || ''));
+      var soKind = p.serviceKind != null ? String(p.serviceKind).trim() : (derived ? derived.kind : String(r['Service Kind'] || ''));
+      /* This value list is written into a SCHEMA.SalesOrders.length-wide range, so it must carry all
+         14: SO No, Quotation No, Date, Customer, Status, Total, Created By, Created At, Supplier Type,
+         Client PO Date, PO Received Date, Client PO No, Type, Service Kind. One short and Sheets
+         refuses EVERY edit ("data has 12 columns but the range has 14" — A276 → A322);
+         tests/audit/schema-width.js now counts these rewrites too. */
       sh.getRange(r.rowIndex, 1, 1, SCHEMA.SalesOrders.length).setValues([[no, p.quotationNo || r['Quotation No'],
         p.date || r['Date'], p.customer, p.status || r['Status'], total, r['Created By'], r['Created At'],
         (p.supplierType != null ? p.supplierType : (r['Supplier Type'] || '')),
@@ -2155,7 +2165,8 @@ function updateSalesOrder(p) {
         (p.clientPoDate != null ? p.clientPoDate : (r['Client PO Date'] || '')),
         (p.poReceivedDate != null ? p.poReceivedDate : (r['PO Received Date'] || '')),
         // A193 — same null-means-not-sent rule, so an edit that omits it keeps what is stored.
-        (p.clientPoNo != null ? p.clientPoNo : (r['Client PO No'] || ''))]]);
+        (p.clientPoNo != null ? p.clientPoNo : (r['Client PO No'] || '')),
+        soType, soKind]]);
     }
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
@@ -17028,6 +17039,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A322 A SALES-ORDER EDIT SAVES AGAIN (163). A276 appended Type and Service Kind to SalesOrders (14 columns) but updateSalesOrder kept rewriting the row with 12 values, and Sheets refuses a value list narrower than its range ("data has 12 columns but the range has 14"), so EVERY sales-order edit failed. It now writes all 14: Type and Service Kind are kept (the form never sends them, and they decide hire vs sale at invoicing), re-derived from the new quotation only when the order is moved to another quotation (_orderTypeFrom, as createSalesOrder does), and an explicit type / serviceKind still wins. tests/audit/schema-width.js now counts literal row rewrites as well as appends, and the test harness's setValues refuses a mismatched shape as Sheets does.
 A321 PAYROLL AND THE CODE.GS PAYMENTS REACH THE BOOKS (162). ingestBookEvents takes a full snapshot from Code.gs v5 (getBooksFeed, carried by Flask /books/sync with the shared secret and the caller's real role): each approved cutoff posts once (CG:PAY:<period>, dated the 10th or the 25th) — gross to 6010 with commission incentives clearing 2040, every deduction to its payable, net to 2030, the 13th month accrued at basic ÷ 12 exact per month, and on cutoff B the month's employer shares from the contribution tables (a missing table → Inbox, never a guess); Mark payroll paid clears 2030 from the bank (CG:PAYPAID); a paid Billing request (CG:BILL:<Bank Tx ID>) or Director Payable (CG:DP:<id>) posts by its rule (billing.department / dp.category; seeds utilities 6210, rent 6200, personal 1230) in the pesos the bank took, else the Inbox; own-bank transfers post themselves (a difference asks about the fee); every other bank-page movement waits for a person. A key gone from a COMPLETE snapshot is withdrawn by reversal; a partial one withdraws nothing. A person's Inbox decision now outlives the item (_glApplyDecision): a rebuilt event takes the same account (and the same moved date) and is a no-op, an ignored one stays out until its amount or date changes, and a waiting item is not rewritten on every sync. Event lines name the rule "remember this" saves (A320 always saved an expense category); saveAccountRule accepts only the five rule kinds. getBooksStatus says when payroll and payments were last synced.
 A320 THE BOOKS (161). A complete double-entry general ledger behind the booksEngine setting (off / shadow / on; OFF by default, and while off nothing is written and nothing is refused). One writer (_glPost): integer centavos, balanced or refused, one block write per entry, indexed by an immutable event key in EventIndex; the same event is a no-op, a changed one is reversed and re-posted, nothing is ever deleted. Anything uncertain waits in the Books Inbox (GLInbox) with the whole event; nothing posts on a guess. New tabs Accounts (chart as data), AccountRules, TaxCodes, GL, EventIndex, GLInbox, Periods, BooksAudit, DocMeta (accounting fields kept off the positional sheets, with a permanent Doc ID per document) and DocAliases. Posting: invoices (by VAT type 12% / zero-rated / exempt, rental, deposits, per-item COGS), collections (to the bank deposited, 2307 EWT), purchases by the advances model (payments before receipt to 1460, receiving at advances' historical pesos + unadvanced FC at the receipt-date rate to 2010, realised FX on later payments, import VAT with its import entry, local VAT only with TIN + SI), other payments, manual expenses, travel weeks (2025) and float advances (1210), commission accruals (2040). With the books on: closed months refuse documents, 0% invoices say zero-rated or exempt, collections say where the money went, payments say which company account and the bank value date, AP Aging is no second door to pay. Coverage (getBooksCoverage) proves every money record is posted, waiting or flagged; syncBooks posts what is missing or changed. LIVE FIXES regardless of the switch: an approved travel week is no longer expensed twice when its payout is paid, and a travel float advance is no longer booked as an expense.
 A319 STOCK IN ADDS A NEW ITEM (160). createItemByScan (every scanner role): photo first (New item photo, filed under _Warehouse/New items, then re-filed to the Item ID), name, brand (_SCAN_BRANDS), model, type (_SCAN_CATEGORIES), quantity. The item is created through addInventoryItem as Stock with the quantity on hand and no cost (no journal; accounting fills the cost); Description = Brand Type Name, Item No = model; refused when the model or the scanned barcode already belongs to an item (the reply names it). It gets its ITEM label, and with Track each piece a TrackedItems row and one PIECE label per piece. New tab ItemDetails keeps brand, model, type and photos; getScanLookup shows them and getScanContext(stockin) returns details incl. costPending.

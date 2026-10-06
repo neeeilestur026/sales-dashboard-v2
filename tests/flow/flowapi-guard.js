@@ -27,7 +27,7 @@ sec('1 · the secret check fails closed');
   r = call(c, 'saveDailyNote', { note: 'x', flowSecret: 'wrong' });
   ok('  and a wrong secret is refused', !r.success && /through the app/.test(r.message), r);
   r = call(c, 'getVersion', { flowSecret: '' });
-  ok('a plain read needs no secret', r.success === true && r.version === 162, r);
+  ok('a plain read needs no secret', r.success === true && r.version === 163, r);
   ok('_fctEq compares in constant time and correctly', c._fctEq('abc', 'abc') === true && c._fctEq('abc', 'abd') === false && c._fctEq('', '') === true && c._fctEq('a', 'ab') === false);
 }
 
@@ -104,7 +104,7 @@ sec('6 · the ids come from Script Properties with the literal as fallback, and 
 {
   const src = fs.readFileSync(GS, 'utf8');
   ok("SHEET_ID is overridden by the FLOW_SHEET_ID Script Property", /SHEET_ID = _fprop\('FLOW_SHEET_ID'\) \|\| SHEET_ID;/.test(src));
-  ok('FLOW_VERSION is 162 on a line under 200 characters', /^var FLOW_VERSION = 162;.{0,180}$/m.test(src));
+  ok('FLOW_VERSION is 163 on a line under 200 characters', /^var FLOW_VERSION = 163;.{0,180}$/m.test(src));
   ok('the changelog block lives at the end of the file', /\/\* ─── CHANGELOG/.test(src));
 }
 

@@ -1,6 +1,6 @@
 /* flow-expenses.js — redesigned Expenses ledger on the FlowAPI.
-   Records grouped into Operating / General & Administrative / Other with per-type subtotals,
-   per-category breakdowns, and an overall total. Add/edit/delete + per-record Docs. */
+   One Operating Expenses list, newest voucher first (A322; it was category, then date), with the
+   per-category totals above it and an overall total. Add/edit/delete + per-record Docs. */
 
 let expSession = null;
 let expViewer = false;           // A231: management looks, does not touch
@@ -118,6 +118,16 @@ function filtered() {
   });
 }
 
+/* A322 — the list reads newest voucher first. Numbers compare as numbers inside the text, so
+   PR-202610-014 comes above PR-202610-009 and PR-202609-120, and 1050 above 998. The same voucher
+   (or a tie) falls back to the newest date; rows with no voucher go last, newest date first. */
+const _VOUCHER_ORDER = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function byVoucherDesc(a, b) {
+  const va = String(a.voucherNo || '').trim(), vb = String(b.voucherNo || '').trim();
+  if (!va !== !vb) return va ? -1 : 1;
+  return (va && _VOUCHER_ORDER.compare(vb, va)) || flowDate(b.date).localeCompare(flowDate(a.date));
+}
+
 function render() {
   const rows = filtered();
 
@@ -136,14 +146,12 @@ function render() {
   const m = document.getElementById('monthSel').value;
   const mLabel = m ? new Date(2000, parseInt(m, 10) - 1, 1).toLocaleString('en-US', { month: 'long' }) + ' ' : '';
   document.getElementById('metaLine').textContent =
-    `Period: ${mLabel}${y || 'All years'} · ${rows.length} record(s) · Operating Expenses by category.`;
+    `Period: ${mLabel}${y || 'All years'} · ${rows.length} record(s) · newest voucher first.`;
 
   const c = document.getElementById('container');
   if (!rows.length) { c.innerHTML = '<div class="dr-empty">No expenses match the current filters.</div>'; return; }
 
-  // Sort all rows by category then date (newest first within a category).
-  const list = rows.slice().sort((a, b) =>
-    (a.category || '').localeCompare(b.category || '') || flowDate(b.date).localeCompare(flowDate(a.date)));
+  const list = rows.slice().sort(byVoucherDesc);   // A322 — newest voucher first, not grouped by category
   const catBar = cats.sort((a, b) => catMap[b] - catMap[a])
     .map(cat => `<span>${flowEsc(cat)} <b>${flowMoney(catMap[cat], 'PHP')}</b></span>`).join('');
 
@@ -156,7 +164,7 @@ function render() {
       <div class="ex-group-body">
         <div class="ex-catbar">${catBar}</div>
         <div class="ex-scroll"><table class="ex-table"><thead><tr>
-          <th class="c-date">Date</th><th class="c-cat">Category</th><th class="c-vou">Voucher</th>
+          <th class="c-vou">Voucher</th><th class="c-date">Date</th><th class="c-cat">Category</th>
           <th class="c-client">Client</th><th class="c-desc">Description</th>
           <th class="c-break">Breakdown</th>
           <th class="num c-amt">Amount</th><th class="c-act"></th></tr></thead><tbody>
@@ -195,9 +203,9 @@ function rowHtml(r) {
     return `<span class="ex-cell-clip" title="${flowEsc(s)}">${flowEsc(s)}</span>`;
   };
   return `<tr>
+    <td class="c-vou">${flowEsc(r.voucherNo || '—')}</td>
     <td class="c-date">${flowEsc(flowDate(r.date) || r.date || '—')}</td>
     <td class="c-cat">${clip(r.category)}</td>
-    <td class="c-vou">${flowEsc(r.voucherNo || '—')}</td>
     <td class="c-client">${clip(r.client)}</td>
     <td class="c-desc">${clip(r.description)}</td>
     <td class="c-break">${exBreakdownCell(r)}</td>

@@ -66,6 +66,21 @@ ok('mark-paid: value date always, paid-from when chosen, books fields for Other 
 ok('expense: paid-from / TIN / OR / VAT only when filled', /if \(pf\) payload\.paidFrom = pf/.test(EX) && /if \(num\('fVat'\) > 0\) payload\.vatAmount/.test(EX));
 ok('receiving: rate and VAT evidence only when filled', /payload\.receiptRate = flowNum/.test(RC) && /if \(_v\('shipImportEntry'\)\) payload\.importEntryNo/.test(RC) && /if \(_v\('shipTin'\)\) payload\.supplierTin/.test(RC));
 
+{
+  /* A322 — Operating expenses read newest voucher first, not grouped by category. */
+  const sx = { flowDate: (d) => String(d || '').slice(0, 10), Intl };
+  vm.createContext(sx);
+  vm.runInContext(EX.match(/const _VOUCHER_ORDER = [^\n]*\n/)[0] + EX.match(/function byVoucherDesc\(a, b\) \{[\s\S]*?\n\}/)[0] + '; this.f = byVoucherDesc;', sx);
+  const rows = [{ voucherNo: 'PR-202609-120', date: '2026-09-30' }, { voucherNo: '', date: '2026-10-05' }, { voucherNo: 'PR-202610-009', date: '2026-10-02' },
+                { voucherNo: '998', date: '2026-01-02' }, { voucherNo: 'PR-202610-014', date: '2026-10-03' }, { voucherNo: '1050', date: '2026-01-03' },
+                { voucherNo: '', date: '2026-10-06' }, { voucherNo: 'pr-202610-014', date: '2026-10-04' }];
+  eq('expenses: newest voucher first, numbers as numbers, ties by newest date, blanks last',
+     rows.slice().sort(sx.f).map(r => (r.voucherNo || '·') + '@' + r.date.slice(5)).join(' '),
+     'pr-202610-014@10-04 PR-202610-014@10-03 PR-202610-009@10-02 PR-202609-120@09-30 1050@01-03 998@01-02 ·@10-06 ·@10-05');
+  ok('  the list uses it, and no longer sorts by category', /rows\.slice\(\)\.sort\(byVoucherDesc\)/.test(EX) && !/localeCompare\(b\.category/.test(EX));
+  ok('  the Voucher column comes first', /<th class="c-vou">Voucher<\/th><th class="c-date">Date<\/th>/.test(EX));
+}
+
 console.log('\n6 · A321 — payroll and Code.gs payments');
 {
   const PH = read('payroll-books.html'), PJ = read('js/payroll-books.js'), CG = fs.readFileSync(path.join(__dirname, '../../apps-script/Code.gs'), 'utf8');

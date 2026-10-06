@@ -73,6 +73,29 @@ console.log('\n== every _append writes exactly SCHEMA-many values ==');
   ok('every _append matches its sheet width', bad.length === 0, bad.join('\n         '));
 }
 
+/* ── every literal row REWRITE: getRange(row, 1, 1, SCHEMA.X.length).setValues([[ ... ]]) ────────
+ *
+ * A322 — the third shape, and the one that broke every sales-order edit. A rewrite is not a silent
+ * shift like a short append: Sheets refuses a value list narrower than its range, so the user gets
+ * "data has 12 columns but the range has 14" on every save. updateSalesOrder had been one behind
+ * since A276 appended Type and Service Kind; nothing here looked at setValues literals. */
+console.log('\n== every literal row rewrite writes exactly SCHEMA-many values ==');
+{
+  const re = /getRange\([^;]*?SCHEMA\.([A-Za-z]+)\.length\s*\)\s*\.setValues\(\s*\[\s*\[/g;
+  let m, checked = 0, bad = [];
+  while ((m = re.exec(clean))) {
+    const sheet = m[1];
+    if (!SCHEMA[sheet]) { bad.push(sheet + ' @line ' + lineOf(m.index) + ' — not a SCHEMA sheet'); continue; }
+    const n = arity(clean, re.lastIndex - 1);
+    checked++;
+    if (n !== SCHEMA[sheet].length)
+      bad.push(sheet + ' @line ' + lineOf(m.index) + ': writes ' + n + ', SCHEMA is ' + SCHEMA[sheet].length);
+  }
+  console.log('     literal row rewrites checked: ' + checked);
+  ok('found the rewrites (updateSalesOrder, updateExpense)', checked >= 2, 'only ' + checked);
+  ok('every literal row rewrite matches its sheet width', bad.length === 0, bad.join('\n         '));
+}
+
 /* ── every BARE appendRow, resolved to its sheet ───────────────────────────────────────────────
  *
  * A248 — THE HOLE THIS FILE HAD. The scan above only sees `_append('Sheet', [...])`, where the sheet

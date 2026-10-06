@@ -42,6 +42,13 @@ function makeCtx(store) {
       getRange: function (row, col, nRows, nCols) {
         const rng = {
           setValues: function (vals) {
+            /* A322 — refuse a value block whose shape differs from the range, as Sheets does. Without
+               this the stub quietly wrote a 12-value row into updateSalesOrder's 14-wide range, so the
+               harness passed an edit that failed for every user. */
+            if (nRows && vals.length !== nRows)
+              throw new Error('The number of rows in the data does not match the number of rows in the range. The data has ' + vals.length + ' but the range has ' + nRows + '.');
+            if (nCols) vals.forEach(v => { if (v.length !== nCols)
+              throw new Error('The number of columns in the data does not match the number of columns in the range. The data has ' + v.length + ' but the range has ' + nCols + '.'); });
             if (row === 1) return rng;                   // header write — ignore
             const headers = ctx.SCHEMA[name];
             const rows = store[name] = store[name] || [];
