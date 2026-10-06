@@ -58,6 +58,11 @@
         <div><label>Date</label><input type="date" id="collectDate"></div>
         <div><label>Method</label><select id="collectMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option><option>Other</option></select></div>
         <div><label>Reference No.</label><input type="text" id="collectRef" placeholder="OR / deposit slip #"></div>
+        <!-- A320: where the money went is what the bank reconciliation matches against -->
+        <div><label>Deposited to</label><select id="collectDepositedTo">
+          <option value="">Choose…</option><option value="METRO_ZAB">Metrobank Zabarte</option><option value="METRO_SJDM">Metrobank SJDM</option>
+          <option value="AUB">AUB</option><option value="1010">Cash on hand</option><option value="1100">Cheque not yet deposited</option></select></div>
+        <div><label>Cheque No.</label><input type="text" id="collectCheque" maxlength="40" placeholder="if paid by cheque"></div>
         <div class="full"><label>Notes</label><input type="text" id="collectNotes"></div>
       </div>
       <div class="sub" id="collectNet" style="margin-top:0.4rem;">Net cash = Amount − EWT</div>

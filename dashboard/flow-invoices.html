@@ -48,7 +48,14 @@
              field must not appear at all, or it would promise a VAT the server will not record. -->
         <div id="vatBlock" style="display:none;"><label>VAT Rate %
           <span style="font-weight:400;color: var(--text-muted);">(0 for exempt / zero-rated)</span></label>
-          <input type="number" step="any" min="0" max="100" id="vatRate" value="12" oninput="recalc()"></div>
+          <input type="number" step="any" min="0" max="100" id="vatRate" value="12" oninput="ivVatRateTyped()"></div>
+        <!-- A320: zero-rated and exempt are different lines on the VAT return, so a 0% invoice says which. -->
+        <div id="vatTypeBlock" hidden><label>VAT type</label>
+          <select id="vatType" onchange="ivVatTypeChanged()">
+            <option value="VAT-12">12% VAT</option><option value="VAT-0">Zero-rated</option><option value="VAT-EX">VAT-exempt</option>
+          </select></div>
+        <div id="zeroRefBlock" hidden><label>Zero-rating support <span class="ivx-hint">(certificate or reference)</span></label>
+          <input type="text" id="zeroRatingRef" maxlength="120" placeholder="e.g. PEZA certificate no."></div>
       </div>
 
       <table class="flow-table flow-items" style="margin-top:0.5rem;">

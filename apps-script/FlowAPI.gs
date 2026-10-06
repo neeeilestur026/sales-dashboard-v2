@@ -531,7 +531,13 @@ var SCHEMA = {
   GLInbox:       ['Item ID', 'Event Key', 'Source Type', 'Source No', 'Date', 'Amount', 'Description', 'Party', 'Reason',
                   'Detail JSON', 'Suggested', 'Status', 'Created At', 'Resolved By', 'Resolved At', 'Resolution'],
   Periods:       ['Period', 'Status', 'Checklist JSON', 'Closed By', 'Closed At', 'Reopened By', 'Reopened At', 'Reason'],
-  BooksAudit:    ['At', 'Actor', 'Role', 'Action', 'Ref', 'Before JSON', 'After JSON']
+  BooksAudit:    ['At', 'Actor', 'Role', 'Action', 'Ref', 'Before JSON', 'After JSON'],
+  // The accounting fields of a document, kept OFF its positional sheet (no writer widens). One row per
+  // (Source Type, Source No); Doc ID is the document's permanent identity — renames move Source No only.
+  DocMeta:       ['Source Type', 'Source No', 'Doc ID', 'VAT Type', 'Zero Rating Ref', 'Deposited To', 'Cheque No', 'Paid From',
+                  'Account', 'Supplier TIN', 'SI/OR No', 'VAT Amount', 'EWT ATC', 'EWT Base', 'EWT Amount', 'Expense Period',
+                  'Receipt Rate', 'Import Entry No', 'Import Release Date', 'Dutiable Value', 'SO No', 'Notes', 'Updated By', 'Updated At'],
+  DocAliases:    ['Doc ID', 'Source Type', 'Old No', 'New No', 'At', 'By']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -3117,6 +3123,11 @@ function recordCollection(p) {
                '. (Docs → the matching type on the shipment.)' };
   }
 
+  /* A320 — the books: a closed month takes no collection, and with the books on the money has to say
+     where it went (a bank, cash on hand, or undeposited cheques) — that is what bank reconciliation
+     matches against. */
+  if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
+  if (_booksOn() && !_booksBankAccount(p.depositedTo)) return { success: false, message: 'Choose where this money was deposited.' };
   var dup = _refSeen('recordCollection', p.clientRef);
   if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
     status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
@@ -3126,6 +3137,8 @@ function recordCollection(p) {
     '', '']);   // A158 trailing: Voided / Void Reason
   var rec = _arRecomputeFromCollections(p.arNo, ar);
   _refStore('recordCollection', p.clientRef, colNo);
+  if (p.depositedTo || p.chequeNo) _docMetaSet('Collection', colNo, { depositedTo: p.depositedTo, chequeNo: p.chequeNo }, p.actorName);
+  _booksSyncCollection(colNo, null, p.actorName);   // A320
   return { success: true, collectionNo: colNo, arNo: p.arNo, collected: rec.collected, status: rec.status,
     message: 'Collection ' + colNo + ' recorded.' };
 }
@@ -3192,11 +3205,14 @@ function correctCollection(p) {
       ' against an amount due of ' + amt.toFixed(2) + ' — check the split before applying.' };
   }
 
+  if (!_periodOpen(col['Date'])) return _periodRefusal(col['Date']);   // A320
   _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Amount (PHP)', amount);
   _setCellByKey('Collections', 'Collection No', p.collectionNo, 'EWT (PHP)', ewt);
   if (p.notes !== undefined) _setCellByKey('Collections', 'Collection No', p.collectionNo, 'Notes', p.notes);
 
   var rec = _arRecomputeFromCollections(arNo, ar);
+  if (p.depositedTo !== undefined || p.chequeNo !== undefined) _docMetaSet('Collection', p.collectionNo, { depositedTo: p.depositedTo, chequeNo: p.chequeNo }, p.actorName);
+  _booksSyncCollection(p.collectionNo, null, p.actorName);   // A320 — reversal + new entry by fingerprint
   return { success: true, collectionNo: p.collectionNo, arNo: arNo, amount: amount, ewt: ewt,
     collected: rec.collected, outstanding: amt - rec.collected, status: rec.status,
     message: 'Collection ' + p.collectionNo + ' corrected — cash ' + amount.toFixed(2) +
@@ -3235,6 +3251,7 @@ function voidCollection(p) {
 
   var arNo = String(col['AR No'] || '');
   var rec = arNo ? _arRecomputeFromCollections(arNo, null) : { collected: 0, status: '' };
+  _booksSyncCollection(p.collectionNo, _dateStr(_now()), p.actorName);   // A320 — reversed, dated today
 
   /* A207 — the claim's approved Amount is NEVER rewritten; the loss goes into Adjustment so the
      record keeps saying what the director actually signed. If it has already been released, the
@@ -3306,6 +3323,7 @@ function voidInvoice(p) {
   _setCellByKey('Invoices', 'INV No', p.invNo, 'Void Reason',
     String(p.reason) + ' — voided by ' + (p.actorName || 'unknown') + ' on ' + _dateStr(_now()));
 
+  _booksSyncInvoice(p.invNo, _dateStr(_now()), p.actorName);   // A320 — a reversal dated today, at the original COGS
   return { success: true, invNo: p.invNo, arRemoved: ars.length,
     message: 'Invoice ' + p.invNo + ' voided — stock restored, receivable removed and the journal cleared.' };
 }
@@ -3407,6 +3425,7 @@ function renameInvoice(p) {
     jMoved++;
   });
   if (jMoved) moved.Journal = jMoved;
+  _docMetaRename('Invoice', oldNo, newNo, p.actorName);   // A320 — the books key on the Doc ID, which does not move
 
   return { success: true, invNo: newNo, previousInvNo: oldNo, renamed: true, moved: moved,
     message: 'Invoice ' + oldNo + ' is now ' + newNo + '. '
@@ -5224,6 +5243,16 @@ function createInvoice(p) {
     if (taken) return { success: false, message: 'Invoice No "' + String(p.invNo).trim()
       + '" already exists. Use a different number, or rename the existing invoice first.' };
   }
+  /* A320 — the books: a closed month takes no new invoice, and with the books on a 0% invoice must say
+     whether it is zero-rated or exempt (they are different lines on the VAT return). */
+  if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
+  var _vatType = String(p.vatType || '').trim();
+  if (_vatType && !_BOOKS_SALES_ACCT[_vatType]) return { success: false, message: 'Unknown VAT type ' + _vatType + '.' };
+  if (_booksOn()) {
+    var _rateIn = (p.vatRate === undefined || p.vatRate === null || String(p.vatRate).trim() === '') ? 12 : _num(p.vatRate);
+    if (_rateIn === 0 && _vatType !== 'VAT-0' && _vatType !== 'VAT-EX') return { success: false, message: 'A 0% invoice must say whether it is zero-rated or VAT-exempt.' };
+    if (_rateIn > 0 && _vatType && _vatType !== 'VAT-12') return { success: false, message: 'A zero-rated or exempt invoice carries 0% VAT.' };
+  }
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
   var totalCOGS = 0, zeroCogsLines = 0, ambiguousLines = 0;
   /* A278 — the rate CHARGED on this invoice, stored so an exempt or zero-rated sale is a recorded
@@ -5321,6 +5350,8 @@ function createInvoice(p) {
   // A278 — the same expression as the AR debit above, so the receivable and the ledger cannot drift.
   _append('ARAging', [arNo, no, p.soNo || '', p.customer, goodsSales + serviceSales + vat + depositTotal, 0, 'Unpaid', arDue, '', _now(), _now()]);
   _refStore('createInvoice', p.clientRef, no);
+  if (_vatType || p.zeroRatingRef) _docMetaSet('Invoice', no, { vatType: _vatType || undefined, zeroRatingRef: p.zeroRatingRef }, p.actorName);
+  _booksSyncInvoice(no, null, p.actorName);   // A320
   return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines,
     ambiguousLines: ambiguousLines, vatRate: vatRate, vat: vat, totalSales: totalSales,
     totalDeposit: depositTotal, totalDue: totalDue,
@@ -5569,6 +5600,7 @@ function applyInvoiceVatRepair(p) {
     }
     _setCellByKey('Invoices', 'INV No', invNo, 'VAT Rate', rate);
     _setCellByKey('Invoices', 'INV No', invNo, 'VAT', r.imputedVat);
+    _booksSyncInvoice(invNo, null, p.actorName);   // A320 — re-posted by fingerprint (reversal + new entry)
     _setCellByKey('ARAging', 'AR No', r.arNo, 'Amount (PHP)', r.amountAfter);
     _setCellByKey('ARAging', 'AR No', r.arNo, 'Updated At', _now());
     vatStamped += r.imputedVat;
@@ -15604,7 +15636,7 @@ function _bool(v) { return v === true || String(v).toLowerCase() === 'true' || S
 function _booksBankAccount(bankCode) {
   var a = _booksAccounts(), k = String(bankCode || '').trim();
   if (!k) return '';
-  if (a[k] && a[k].subtype === 'Bank') return k;           // already a GL code
+  if (a[k] && (a[k].subtype === 'Bank' || a[k].subtype === 'Cash')) return k;   // already a GL code (bank, cash on hand, undeposited)
   for (var c in a) if (a[c].bankCode === k) return c;
   return '';
 }
@@ -15699,6 +15731,16 @@ function _glInbox(evt, reason, detail) {
   return { inbox: true, itemId: id, reason: reason };
 }
 
+/** The event was posted or withdrawn after all: close whatever was waiting for it in the Inbox. */
+function _glInboxSettle(key, note) {
+  _rows('GLInbox').forEach(function (r) {
+    if (String(r['Event Key']) !== String(key) || String(r['Status']) !== 'Open') return;
+    var line = SCHEMA.GLInbox.map(function (h) { return r[h]; });
+    line[11] = 'Resolved'; line[13] = 'system'; line[14] = _now(); line[15] = note;
+    _sheet('GLInbox').getRange(r.rowIndex, 1, 1, line.length).setValues([line]);
+  });
+}
+
 /* ── the one writer ────────────────────────────────────────────────────────────────────────────── */
 /** Normalise an event's lines to centavos; returns { lines, dr, cr, problem }. */
 function _glLines(evt) {
@@ -15710,7 +15752,7 @@ function _glLines(evt) {
     var net = d - c;
     if (net === 0) return;                                   // a zero line is dropped, never written
     var acct = String(l.account || '').trim();
-    if (!acct) { problem = problem || 'needs-account'; }
+    if (!acct) { problem = problem || ('needs-account' + (l.need ? ':' + l.need : '')); }
     else if (!accts[acct]) { problem = problem || 'unknown-account:' + acct; }
     else if (!accts[acct].active || !accts[acct].postable) { problem = problem || 'inactive-account:' + acct; }
     out.push({ account: acct, d: net > 0 ? net : 0, c: net < 0 ? -net : 0, memo: l.memo || '', party: l.party || evt.party || '',
@@ -15773,7 +15815,8 @@ function _glPost(evt) {
   if (d < _booksCfg().booksStartDate) return { skipped: 'before books start' };
   var n = _glLines(evt);
   if (n.problem) {
-    var reason = n.problem === 'needs-account' ? 'no account rule'
+    var reason = n.problem.indexOf('needs-account:') === 0 ? 'no ' + n.problem.slice('needs-account:'.length)
+               : n.problem === 'needs-account' ? 'no account rule'
                : n.problem.indexOf('unknown-account') === 0 || n.problem.indexOf('inactive-account') === 0 ? 'account not usable'
                : n.problem === 'unbalanced' ? 'does not balance' : 'incomplete entry';
     return _glInbox(evt, reason, { problem: n.problem, dr: _pesos(n.dr), cr: _pesos(n.cr) });
@@ -15791,6 +15834,7 @@ function _glPost(evt) {
   }
   var entryNo = _glEntryNo(d), first = _glWrite(evt, n.lines, entryNo);
   _booksIndexSet(evt.key, [evt.key, entryNo, fp, first, n.lines.length, 'Posted', d, evt.sourceType || '', evt.sourceNo || '', _now(), '']);
+  _glInboxSettle(evt.key, 'Posted ' + entryNo);
   return { posted: true, entryNo: entryNo, reversed: reversed };
 }
 
@@ -15805,6 +15849,7 @@ function _glWithdraw(key, date, reason, by) {
   var line = SCHEMA.EventIndex.map(function (h) { return prev[h]; });
   line[5] = 'Reversed'; line[10] = revNo;
   _booksIndexSet(key, line);
+  _glInboxSettle(key, 'Withdrawn by ' + revNo);
   return { reversed: revNo };
 }
 
@@ -15823,6 +15868,131 @@ function _booksApprove(kind, amount, p) {
     return { approved: true, approver: p.actorName || '' };
   }
   return { pending: true, needs: mode };
+}
+
+/* ── A320 · document fields for the books (DocMeta) ────────────────────────────────────────────── */
+var _DOCMETA_FIELDS = { vatType: 'VAT Type', zeroRatingRef: 'Zero Rating Ref', depositedTo: 'Deposited To', chequeNo: 'Cheque No',
+  paidFrom: 'Paid From', account: 'Account', supplierTin: 'Supplier TIN', siNo: 'SI/OR No', vatAmount: 'VAT Amount',
+  ewtAtc: 'EWT ATC', ewtBase: 'EWT Base', ewtAmount: 'EWT Amount', expensePeriod: 'Expense Period', receiptRate: 'Receipt Rate',
+  importEntryNo: 'Import Entry No', importReleaseDate: 'Import Release Date', dutiableValue: 'Dutiable Value', soNo: 'SO No', notes: 'Notes' };
+function _docMeta(type, no) {
+  var t = String(type), n = String(no);
+  return _rows('DocMeta').filter(function (r) { return String(r['Source Type']) === t && String(r['Source No']) === n; })[0] || null;
+}
+/** Upsert a document's books fields; assigns its permanent Doc ID on first sight. Only keys present in
+ *  `patch` (and not undefined) are written. Returns the row as an object. */
+function _docMetaSet(type, no, patch, by) {
+  var row = _docMeta(type, no), line;
+  if (row) line = SCHEMA.DocMeta.map(function (h) { return row[h]; });
+  else { line = SCHEMA.DocMeta.map(function () { return ''; }); line[0] = String(type); line[1] = String(no); line[2] = Utilities.getUuid(); }
+  var changed = !row;
+  Object.keys(patch || {}).forEach(function (k) {
+    var h = _DOCMETA_FIELDS[k];
+    if (!h || patch[k] === undefined || patch[k] === null) return;
+    var i = SCHEMA.DocMeta.indexOf(h), v = typeof patch[k] === 'string' ? patch[k].trim() : patch[k];
+    if (line[i] !== v) { line[i] = v; changed = true; }
+  });
+  if (changed) {
+    line[SCHEMA.DocMeta.length - 2] = by || ''; line[SCHEMA.DocMeta.length - 1] = _now();
+    if (row) _sheet('DocMeta').getRange(row.rowIndex, 1, 1, line.length).setValues([line]);
+    else _append('DocMeta', line);
+  }
+  var o = {};
+  SCHEMA.DocMeta.forEach(function (h, i) { o[h] = line[i]; });
+  return o;
+}
+/** A document was renumbered: move its books fields and keep the alias. */
+function _docMetaRename(type, oldNo, newNo, by) {
+  var row = _docMeta(type, oldNo);
+  if (!row) return;
+  _setDocMetaCell(row.rowIndex, 'Source No', String(newNo));
+  _append('DocAliases', [String(row['Doc ID']), String(type), String(oldNo), String(newNo), _now(), by || '']);
+}
+function _setDocMetaCell(rowIndex, header, value) { _sheet('DocMeta').getRange(rowIndex, SCHEMA.DocMeta.indexOf(header) + 1, 1, 1).setValues([[value]]); }
+
+/** Run a books step after a business action. The action has already succeeded and must stay so: an
+ *  unexpected engine error is parked in the Inbox (with the message) instead of failing the user. */
+function _booksSafe(label, fn) {
+  if (!_booksOn()) return null;
+  try { return fn(); }
+  catch (e) {
+    try { return _glInbox({ key: 'ERR:' + label, date: _dateStr(_now()), sourceType: 'Engine', sourceNo: label,
+                            memo: String((e && e.message) || e).slice(0, 280), lines: [] }, 'engine error', { message: String((e && e.message) || e) }); }
+    catch (e2) { return null; }
+  }
+}
+/** Post (or withdraw) what an event builder returned. */
+function _booksApply(ev, voidDate, by) {
+  if (!ev || ev.skip) return ev;
+  if (ev.voided) return _glWithdraw(ev.key, voidDate || _dateStr(_now()), 'voided', by || '');
+  ev.by = by || '';
+  return _glPost(ev);
+}
+
+/* ── A320 · sales: invoices and collections ────────────────────────────────────────────────────── */
+var _BOOKS_SALES_ACCT = { 'VAT-12': '4000', 'VAT-0': '4010', 'VAT-EX': '4020' };
+/** The books event of an invoice, built from the stored records (never from what the browser sent),
+ *  so a re-post after a VAT repair or a correction is a plain fingerprint comparison. */
+function _booksInvoiceEvent(invNo) {
+  var inv = _rows('Invoices').filter(function (r) { return String(r['INV No']) === String(invNo); })[0];
+  if (!inv) return null;
+  if (String(inv['Created By'] || '').indexOf('Migrated') === 0) return { skip: 'migrated' };
+  var meta = _docMetaSet('Invoice', invNo, {}, '');
+  var key = 'INV:' + meta['Doc ID'];
+  if (String(inv['Voided'] || '') === 'true') return { key: key, voided: true };
+  var soNo = String(inv['SO No'] || ''), svc = _soIsService(soNo), cust = String(inv['Customer'] || '');
+  var goods = 0, service = 0, deposit = 0, cogs = 0, cogsLines = [];
+  _rows('InvoiceItems').filter(function (r) { return String(r['INV No']) === String(invNo); }).forEach(function (r) {
+    var kind = _invLineKind({ chargeKind: r['Charge Kind'] }, svc), ls = _cents(r['Line Sales']);
+    if (kind === 'deposit') deposit += ls;
+    else if (kind === 'service') service += ls;
+    else {
+      goods += ls;
+      var c = _cents(r['Line COGS']);
+      if (c) { cogs += c; cogsLines.push({ account: '5000', debit: _pesos(c), itemId: String(r['Item ID'] || ''), memo: 'COGS — ' + String(r['Item Name'] || '') }); }
+    }
+  });
+  var vat = _cents(inv['VAT']), rate = _num(inv['VAT Rate']);
+  var vatType = String(meta['VAT Type'] || '') || (rate === 12 ? 'VAT-12' : '');
+  var revAcct = _BOOKS_SALES_ACCT[vatType] || '';
+  var evt = { key: key, date: inv['Date'], sourceType: 'Invoice', sourceNo: String(invNo), docId: meta['Doc ID'], party: cust, soNo: soNo,
+              memo: 'Invoice ' + invNo + ' — ' + cust, lines: [] };
+  if (vatType && ((vatType === 'VAT-12') !== (vat > 0))) revAcct = '';        // the VAT charged disagrees with the type: a person decides
+  evt.lines.push({ account: '1200', debit: _pesos(goods + service + vat + deposit), memo: 'Invoice ' + invNo });
+  evt.lines.push({ account: revAcct, need: 'VAT type', credit: _pesos(goods), taxCode: vatType, taxBase: _pesos(goods), memo: 'Sales ' + invNo });
+  if (service) evt.lines.push({ account: revAcct ? '4100' : '', need: 'VAT type', credit: _pesos(service), taxCode: vatType, taxBase: _pesos(service), memo: 'Service revenue ' + invNo });
+  if (vat) evt.lines.push({ account: '2200', credit: _pesos(vat), taxCode: 'VAT-12', taxBase: _pesos(goods + service), memo: 'Output VAT ' + invNo });
+  if (deposit) evt.lines.push({ account: '2100', credit: _pesos(deposit), memo: 'Refundable deposit — ' + invNo });
+  if (cogs) { cogsLines.forEach(function (l) { evt.lines.push(l); }); evt.lines.push({ account: '1300', credit: _pesos(cogs), memo: 'Inventory issued ' + invNo }); }
+  // the stored net total must agree with its lines, or something edited one without the other
+  if (Math.abs(_cents(inv['Total Sales']) - (goods + service)) > 1) evt.lines.push({ account: '', need: 'invoice lines that agree with its total', debit: 0.01 });
+  return evt;
+}
+function _booksSyncInvoice(invNo, voidDate, by) {
+  return _booksSafe('INV:' + invNo, function () { return _booksApply(_booksInvoiceEvent(invNo), voidDate, by); });
+}
+
+function _booksCollectionEvent(colNo) {
+  var col = _rows('Collections').filter(function (r) { return String(r['Collection No']) === String(colNo); })[0];
+  if (!col) return null;
+  var key = 'COL:' + colNo;
+  if (String(col['Voided'] || '') === 'true') return { key: key, voided: true };
+  var meta = _docMeta('Collection', colNo) || {};
+  var amt = _cents(col['Amount (PHP)']), ewt = _cents(col['EWT (PHP)']), cust = String(col['Customer'] || '');
+  var bank = _booksBankAccount(meta['Deposited To']);
+  var evt = { key: key, date: col['Date'], sourceType: 'Collection', sourceNo: String(colNo), party: cust, soNo: String(col['SO No'] || ''),
+              memo: 'Collection ' + colNo + ' — ' + cust + (col['INV No'] ? ' (' + col['INV No'] + ')' : ''), lines: [] };
+  // a collection of an invoice that is not in the books (migrated after the start date) needs a person
+  var inv = col['INV No'] ? _rows('Invoices').filter(function (r) { return String(r['INV No']) === String(col['INV No']); })[0] : null;
+  var arAcct = '1200';
+  if (inv && String(inv['Created By'] || '').indexOf('Migrated') === 0 && _dateStr(inv['Date']) >= _booksCfg().booksStartDate) arAcct = '';
+  evt.lines.push({ account: bank, need: 'bank', debit: _pesos(amt - ewt), memo: 'Deposited — ' + colNo });
+  if (ewt) evt.lines.push({ account: '1600', debit: _pesos(ewt), taxCode: 'CWT', taxBase: _pesos(amt), memo: 'EWT (2307) — ' + colNo });
+  evt.lines.push({ account: arAcct, need: 'invoice in the books', credit: _pesos(amt), memo: 'Collection ' + colNo });
+  return evt;
+}
+function _booksSyncCollection(colNo, voidDate, by) {
+  return _booksSafe('COL:' + colNo, function () { return _booksApply(_booksCollectionEvent(colNo), voidDate, by); });
 }
 
 /* ── reads ─────────────────────────────────────────────────────────────────────────────────────── */

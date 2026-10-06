@@ -134,3 +134,4 @@
 @media (prefers-reduced-motion: reduce) {
   .flow-modal-overlay.open .flow-modal { animation: none !important; }
 }
+.ivx-hint { font-weight: 400; color: var(--text-muted); }   /* A320 — a quiet hint inside a form label */

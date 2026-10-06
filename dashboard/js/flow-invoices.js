@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (ivCanVat) ['vatBlock', 'vatRow', 'dueRow'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = '';
   });
+  if (ivCanVat) { const vtb = document.getElementById('vatTypeBlock'); if (vtb) vtb.hidden = false; }   // A320
   vatRepairVisible();
   if (ivViewer) ivCanVoid = false;   // A231 — one flag decides the button, as on flow-collections
   if (ivViewer) ivCanRename = false;
@@ -114,6 +115,19 @@ function renderItems() {
   recalc();
 }
 
+/* A320 — the VAT type and the rate move together: 12% VAT ⇄ 12, zero-rated / exempt ⇄ 0. */
+function ivVatTypeChanged() {
+  const t = document.getElementById('vatType').value;
+  document.getElementById('vatRate').value = t === 'VAT-12' ? '12' : '0';
+  document.getElementById('zeroRefBlock').hidden = t !== 'VAT-0';
+  recalc();
+}
+function ivVatRateTyped() {
+  const rate = flowNum(document.getElementById('vatRate').value), sel = document.getElementById('vatType');
+  if (sel && rate > 0 && sel.value !== 'VAT-12') { sel.value = 'VAT-12'; document.getElementById('zeroRefBlock').hidden = true; }
+  recalc();
+}
+
 /** A278 — the same rounding rule as createInvoice: once, on the total, to the centavo. */
 function ivVatOf(net) {
   if (!ivCanVat) return 0;
@@ -183,6 +197,11 @@ async function saveInvoice() {
   };
   // A278 — omitted entirely against an older backend, where it would be an unread parameter.
   if (ivCanVat) payload.vatRate = flowNum(document.getElementById('vatRate').value);
+  if (ivCanVat) {                                          // A320 — the books need the kind of 0%
+    payload.vatType = document.getElementById('vatType').value;
+    const zr = document.getElementById('zeroRatingRef').value.trim();
+    if (payload.vatType === 'VAT-0' && zr) payload.zeroRatingRef = zr;
+  }
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     let res = await postFlow('createInvoice', payload);
@@ -217,6 +236,9 @@ function resetForm() {
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
   const vr = document.getElementById('vatRate'); if (vr) vr.value = '12';   // A278
+  const vt = document.getElementById('vatType'); if (vt) vt.value = 'VAT-12';   // A320
+  const zr = document.getElementById('zeroRatingRef'); if (zr) zr.value = '';
+  const zb = document.getElementById('zeroRefBlock'); if (zb) zb.hidden = true;
   ['totalSales', 'totalCOGS', 'grossProfit', 'totalVat', 'totalDue']
     .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0.00'; });
   document.getElementById('formMsg').style.display = 'none';

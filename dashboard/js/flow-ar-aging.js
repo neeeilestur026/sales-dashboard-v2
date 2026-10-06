@@ -374,6 +374,8 @@ function openCollect(arNo) {
   document.getElementById('collectDate').value = flowToday();
   document.getElementById('collectRef').value = '';
   document.getElementById('collectNotes').value = '';
+  const dep = document.getElementById('collectDepositedTo'); if (dep) dep.value = '';   // A320
+  const chq = document.getElementById('collectCheque'); if (chq) chq.value = '';
   document.getElementById('collectMsg').style.display = 'none';
   collectRecalcNet();
   document.getElementById('collectModal').classList.add('open');
@@ -403,6 +405,10 @@ async function submitCollection() {
       notes: document.getElementById('collectNotes').value.trim(),
       clientRef: flowClientRef()                            // idempotent create (safe retry)
     };
+    // A320 — the books: where it was deposited, and the cheque number (an older backend ignores both)
+    const dep = document.getElementById('collectDepositedTo'), chq = document.getElementById('collectCheque');
+    if (dep && dep.value) payload.depositedTo = dep.value;
+    if (chq && chq.value.trim()) payload.chequeNo = chq.value.trim();
     let res = await postFlow('recordCollection', payload);
     // A158: this would collect more than the receivable is due — a real overpayment happens, but it
     // should be a decision rather than a silent entry that only gets flagged afterwards.
