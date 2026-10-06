@@ -190,6 +190,15 @@
           </div>
         </div>
         <div class="full"><label>Notes</label><input type="text" id="fNotes"></div>
+        <!-- A320 — the books: how it was paid (required once the books are on) and the VAT evidence -->
+        <div><label>Paid from</label><select id="fPaidFrom">
+          <option value="">Choose…</option><option value="AUB">AUB</option><option value="METRO_ZAB">Metrobank Zabarte</option>
+          <option value="METRO_SJDM">Metrobank SJDM</option><option value="1010">Cash on hand / petty cash</option>
+          <option value="2020">Not paid yet (accrued)</option><option value="2900">Paid personally by a stockholder</option>
+          <option value="1230">From an officer's cash advance</option></select></div>
+        <div><label>Supplier TIN <span class="ivx-hint">(to claim VAT)</span></label><input type="text" id="fTin" maxlength="20" placeholder="000-000-000-00000"></div>
+        <div><label>OR / SI no.</label><input type="text" id="fSi" maxlength="40"></div>
+        <div><label>VAT included (PHP)</label><input type="number" step="any" min="0" id="fVat" placeholder="0.00"></div>
       </div>
       <div id="expFormMsg" class="flow-msg" style="display:none;"></div>
       <div class="flow-modal-foot">

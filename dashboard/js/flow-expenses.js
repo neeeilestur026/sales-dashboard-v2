@@ -227,6 +227,11 @@ function openExpModal(rowIndex) {
   document.getElementById('fLoad').value = rec && rec.loadBalance ? rec.loadBalance : '';
   document.getElementById('fOther').value = rec && rec.other ? rec.other : '';
   document.getElementById('fNotes').value = rec ? (rec.notes || '') : '';
+  // A320 — the books fields
+  document.getElementById('fPaidFrom').value = rec ? (rec.paidFrom || '') : '';
+  document.getElementById('fTin').value = rec ? (rec.supplierTin || '') : '';
+  document.getElementById('fSi').value = rec ? (rec.siNo || '') : '';
+  document.getElementById('fVat').value = rec && rec.vatAmount ? rec.vatAmount : '';
   document.getElementById('expFormMsg').style.display = 'none';
   document.getElementById('expModal').classList.add('open');
 }
@@ -248,6 +253,12 @@ async function submitExpense() {
     notes: document.getElementById('fNotes').value.trim(),
   };
   if (amtRaw !== '') payload.amount = parseFloat(amtRaw);
+  // A320 — sent only when filled, so an edit never blanks what the books already know
+  const pf = document.getElementById('fPaidFrom').value, tin = document.getElementById('fTin').value.trim(), si = document.getElementById('fSi').value.trim();
+  if (pf) payload.paidFrom = pf;
+  if (tin) payload.supplierTin = tin;
+  if (si) payload.siNo = si;
+  if (num('fVat') > 0) payload.vatAmount = num('fVat');
   const btn = document.getElementById('expSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {

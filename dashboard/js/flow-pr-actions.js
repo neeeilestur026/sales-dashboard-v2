@@ -161,6 +161,18 @@ function _pmpEl() {
         <div><label>Value date <span style="font-weight:400;color:var(--hx-ink-3);">(the bank's date)</span></label><input type="date" id="pmpValueDate"></div>
       </div>
 
+      <!-- A320 — a Type 'Other' payment: which account it is booked to, and its VAT evidence. Left blank, the
+           books park it in the Inbox for accounting to decide; nothing is guessed. -->
+      <div id="pmpBooks" hidden>
+        <div class="group-title">Books</div>
+        <div class="flow-form">
+          <div class="full"><label>Book to account</label><select id="pmpAccount"><option value="">Decide later (books Inbox)</option></select></div>
+          <div><label>Supplier TIN <span style="font-weight:400;color:var(--hx-ink-3);">(to claim VAT)</span></label><input type="text" id="pmpTin" maxlength="20" placeholder="000-000-000-00000"></div>
+          <div><label>OR / SI no.</label><input type="text" id="pmpSi" maxlength="40"></div>
+          <div><label>VAT included (PHP)</label><input type="number" step="0.01" min="0" id="pmpVat" placeholder="0.00"></div>
+        </div>
+      </div>
+
       <div class="group-title">Reference</div>
       <div class="flow-form">
         <div class="full"><label>Payment reference <span style="font-weight:400;color:var(--hx-ink-3);">(transfer / cheque no)</span></label><input type="text" id="pmpRef" placeholder="optional"></div>
@@ -263,11 +275,32 @@ async function prMarkPaid(no) {
   document.getElementById('pmpCharge').value = '';
   document.getElementById('pmpValueDate').value = flowToday();
   document.getElementById('pmpPaidFrom').value = '';            // A320 — chosen each time, never assumed
+  ['pmpTin', 'pmpSi', 'pmpVat'].forEach(id => { document.getElementById(id).value = ''; });
+  _pmpBooksAccounts(String(r.type || '') !== 'PO');
   document.getElementById('pmpRef').value = '';
   document.getElementById('pmpMsg').style.display = 'none';
   _pmpRecalc();
   el.classList.add('open');
   _pmpProofCheck(no);
+}
+
+/* A320 — the chart of accounts for an 'Other' payment, read once. An older backend without the books
+   simply keeps the block hidden. */
+let _pmpAccts = null;
+async function _pmpBooksAccounts(show) {
+  const box = document.getElementById('pmpBooks');
+  if (!show) { box.hidden = true; return; }
+  try {
+    if (!_pmpAccts) {
+      const res = await postFlow('getAccounts', {});
+      if (!res || !res.success) throw new Error('no books');
+      const keep = { Expense: 1, 'Cost of sales': 1, 'Other expense': 1 }, keepSub = { Prepaid: 1, FixedAsset: 1, Receivable: 1, Clearing: 1, TaxPayable: 1, Payroll: 1, Accrual: 1 };
+      _pmpAccts = res.data.filter(a => a.active && a.postable && (keep[a.type] || keepSub[a.subtype]));
+    }
+    document.getElementById('pmpAccount').innerHTML = '<option value="">Decide later (books Inbox)</option>' +
+      _pmpAccts.map(a => `<option value="${flowEsc(a.code)}">${flowEsc(a.code)} · ${flowEsc(a.name)}</option>`).join('');
+    box.hidden = false;
+  } catch (e) { box.hidden = true; }
 }
 
 async function _pmpSubmit() {
@@ -286,6 +319,14 @@ async function _pmpSubmit() {
     payload.bankChargePHP = charge;
   }
   payload.valueDate = document.getElementById('pmpValueDate').value;     // A320 — every payment has a bank date
+  if (!document.getElementById('pmpBooks').hidden) {
+    const acct = document.getElementById('pmpAccount').value, tin = document.getElementById('pmpTin').value.trim(),
+          si = document.getElementById('pmpSi').value.trim(), vat = flowNum(document.getElementById('pmpVat').value);
+    if (acct) payload.account = acct;
+    if (tin) payload.supplierTin = tin;
+    if (si) payload.siNo = si;
+    if (vat > 0) payload.vatAmount = vat;
+  }
   const paidFrom = document.getElementById('pmpPaidFrom').value;
   if (paidFrom) payload.paidFrom = paidFrom;
 

@@ -3585,8 +3585,13 @@ function getExpenses(p) {
   if (p && p.year) rows = rows.filter(function (r) { return _dateStr(r['Date']).slice(0, 4) === String(p.year); });
   if (p && p.month) rows = rows.filter(function (r) { return _dateStr(r['Date']).slice(5, 7) === String(p.month); });
   rows.sort(function (a, b) { return new Date(b['Created At']) - new Date(a['Created At']); });
+  var meta = {};   // A320 — the books fields (one read of the side table)
+  _rows('DocMeta').forEach(function (m) { if (String(m['Source Type']) === 'Expense') meta[String(m['Source No'])] = m; });
   return { success: true, data: rows.map(function (r) {
+    var m = meta[String(r['Exp No'])] || {};
     return {
+      paidFrom: String(m['Paid From'] || ''), account: String(m['Account'] || ''), supplierTin: String(m['Supplier TIN'] || ''),
+      siNo: String(m['SI/OR No'] || ''), vatAmount: _num(m['VAT Amount']),
       expNo: r['Exp No'], date: r['Date'], type: r['Type'] || EXP_TYPE.OPEX, category: r['Category'],
       voucherNo: r['Voucher No'], client: r['Client'], description: r['Description'],
       toll: _num(r['Toll']), fuel: _num(r['Fuel']), meals: _num(r['Meals']),
@@ -3603,6 +3608,14 @@ function _expAmount(p) {
 }
 
 function addExpense(p) {
+  /* A320 — a manual expense (not a view of a payment, travel or payroll) says where it was paid from
+     once the books are on, and never lands in a closed month. */
+  var _internal = /^(PRF:|TRAV:)/.test(String(p.legacyKey || '')) || /^PAYROLL-/.test(String(p.voucherNo || ''));
+  if (!_internal && _booksOn()) {
+    if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
+    var _pf = String(p.paidFrom || '').trim();
+    if (!_booksBankAccount(_pf) && !{ '2020': 1, '2900': 1, '1230': 1 }[_pf]) return { success: false, message: 'Say how this was paid: a bank, cash on hand, still unpaid (accrued), or paid personally by a stockholder or officer.' };
+  }
   var category = String(p.category || '').trim() || 'Uncategorized';
   var type = p.type || _expType(category);
   var amount = _expAmount(p);
@@ -3611,6 +3624,10 @@ function addExpense(p) {
     p.client || '', p.description || '', _num(p.toll), _num(p.fuel), _num(p.meals), _num(p.loadBalance),
     _num(p.other != null ? p.other : p.otherAmount), amount, p.notes || '', p.createdBy || p.actorName || '',
     p.legacyKey || '', _now()]);
+  if (!_internal && (p.paidFrom || p.account || p.supplierTin || p.siNo || p.vatAmount !== undefined)) {   // A320
+    _docMetaSet('Expense', no, { paidFrom: p.paidFrom, account: p.account, supplierTin: p.supplierTin, siNo: p.siNo, vatAmount: p.vatAmount }, p.actorName);
+  }
+  if (!_internal) _booksSyncExpense(no, p.actorName);
   return { success: true, expNo: no, message: 'Expense ' + no + ' recorded.' };
 }
 
@@ -3620,6 +3637,8 @@ function updateExpense(p) {
   var sh = _sheet('Expenses');
   var existing = _rows('Expenses').filter(function (r) { return r.rowIndex === ri; })[0];
   if (!existing) return { success: false, message: 'Expense not found.' };
+  if (!_periodOpen(existing['Date'])) return _periodRefusal(existing['Date']);                 // A320
+  if (p.date && !_periodOpen(p.date)) return _periodRefusal(p.date);
   var category = String(p.category != null ? p.category : existing['Category']).trim() || 'Uncategorized';
   var type = p.type || existing['Type'] || _expType(category);
   var amount = (p.amount != null && p.amount !== '') ? _num(p.amount)
@@ -3630,13 +3649,20 @@ function updateExpense(p) {
     _num(p.toll), _num(p.fuel), _num(p.meals), _num(p.loadBalance),
     _num(p.other != null ? p.other : p.otherAmount), amount, p.notes != null ? p.notes : existing['Notes'],
     existing['Created By'], existing['Legacy Key'] || '', existing['Created At'] || _now()]]);
+  if (p.paidFrom !== undefined || p.account !== undefined || p.supplierTin !== undefined || p.siNo !== undefined || p.vatAmount !== undefined) {   // A320
+    _docMetaSet('Expense', existing['Exp No'], { paidFrom: p.paidFrom, account: p.account, supplierTin: p.supplierTin, siNo: p.siNo, vatAmount: p.vatAmount }, p.actorName);
+  }
+  _booksSyncExpense(existing['Exp No'], p.actorName);
   return { success: true, expNo: existing['Exp No'], message: 'Expense updated.' };
 }
 
 function deleteExpense(p) {
   var ri = parseInt(p.rowIndex, 10);
   if (!ri) return { success: false, message: 'rowIndex required.' };
+  var gone = _rows('Expenses').filter(function (r) { return r.rowIndex === ri; })[0];   // A320
+  if (gone && !_periodOpen(gone['Date'])) return _periodRefusal(gone['Date']);
   _sheet('Expenses').deleteRow(ri);
+  if (gone) _booksSyncExpense(String(gone['Exp No']), p.actorName, _dateStr(_now()));   // withdrawn, dated today
   return { success: true, message: 'Expense deleted.' };
 }
 
@@ -6788,8 +6814,15 @@ function markPaymentRequestPaid(p) {
       var travLk = _rows('Expenses').filter(function (e) {
         return String(e['Voucher No']) === String(p.prNo) && String(e['Legacy Key']).indexOf('TRAV:') === 0;
       })[0];
+      /* A320 — two live defects. (1) A week expensed before A320 carries its TRAV number as voucher, so
+         the voucher test above misses it: look it up through the travel record that names this request.
+         (2) A float cash advance is money the rep still owes back, not spending — it is never expensed. */
+      var travOf = _rows('TravelReplenishments').filter(function (t) { return String(t['Payment Request No']) === String(p.prNo); })[0];
+      if (!travLk && travOf) travLk = _travExpenseRow(String(travOf['Trav No']));
+      var floatOf = _rows('TravelFloats').filter(function (f) { return String(f['Issue PR No']) === String(p.prNo); })[0];
       if (dup) { expNo = String(dup['Exp No']); }
       else if (travLk) { expNo = String(travLk['Exp No']); expNote = ' (already on the travel expense row)'; }
+      else if (floatOf) { expNote = ' (a travel float advance — owed back by the rep, not an expense)'; }
       else {
         var made = addExpense({
           date: _dateStr(p.valueDate || _now()),
@@ -6816,8 +6849,11 @@ function markPaymentRequestPaid(p) {
   if (charge > 0) prPatch['Bank Charge (PHP)'] = charge;
   if (p.valueDate) prPatch['Value Date'] = p.valueDate;
   _prSet(p.prNo, prPatch);
-  if (p.paidFrom) _docMetaSet('PaymentRequest', p.prNo, { paidFrom: p.paidFrom }, p.actorName);   // A320
-  if (String(r['Type']) === 'PO') _booksSyncPOPayment(p.prNo, p.actorName);
+  if (p.paidFrom || p.account || p.supplierTin || p.siNo || p.vatAmount !== undefined || p.ewtAmount !== undefined) {   // A320
+    _docMetaSet('PaymentRequest', p.prNo, { paidFrom: p.paidFrom, account: p.account, supplierTin: p.supplierTin, siNo: p.siNo,
+      vatAmount: p.vatAmount, ewtAtc: p.ewtAtc, ewtBase: p.ewtBase, ewtAmount: p.ewtAmount }, p.actorName);
+  }
+  _booksSyncPayment(p.prNo, p.actorName);
 
   /* The FX difference is DERIVED, never stored: settled pesos less the estimate the request carried.
      Storing it would be a fourth number that could drift from the three it is computed from. */
@@ -12218,6 +12254,7 @@ function approveCommissionRequest(p) {
     msg = 'Commission approved — it falls in ' + rng.label + ' (' + rng.from + ' to ' + rng.to + ').';
   }
   _commSet(p.commNo, patch);
+  if (stage.next === 'Approved') _booksSyncCommission(p.commNo, p.actorName);   // A320 — accrued in the month approved
   return { success: true, commNo: p.commNo, refNo: p.commNo, status: stage.next,
     payoutPeriod: patch['Payout Period'] || '', message: msg };
 }
@@ -12332,6 +12369,7 @@ function adjustCommissionRequest(p) {
     'Net Payable (PHP)': _commPeso(_num(r['Amount (PHP)']) - _num(r['Commission EWT (PHP)']) + adj),
     'Approval Note': (note ? note + ' | ' : '') + 'Adjustment ' + _commMoney(adj) + ': ' + String(p.reason)
   });
+  _booksSyncCommission(p.commNo, p.actorName);   // A320 — an approved commission's accrual follows its adjustment
   return { success: true, commNo: p.commNo, refNo: p.commNo,
     netPayable: _num(r['Amount (PHP)']) + adj,
     message: 'Adjustment recorded — net payable is now ' + _commMoney(_num(r['Amount (PHP)']) + adj) + '.' };
@@ -13269,6 +13307,7 @@ function approveTravelReplenishment(p) {
   }
 
   var money = _travRaiseMoney(_travRow(p.travNo), p);
+  _booksSyncTravel(p.travNo, p.actorName);   // A320 — the week's spending, dated the week it happened
   return { success: true, travNo: p.travNo, refNo: p.travNo, status: 'Approved',
     prNo: money.prNo, expNo: money.expNo, payableFailed: money.failed,
     amount: _num(r['Total Spent']),
@@ -13297,7 +13336,10 @@ function _travRaiseMoney(row, p) {
     return out;
   }
   try {
-    out.expNo = _travPostExpense(row, p);
+    /* A320 — re-read the row: _travMintPayable has just stamped 'Payment Request No' on it. Posting from
+       the stale copy wrote the TRAV number as the voucher, so markPaymentRequestPaid could not see the
+       week was already expensed and booked it a SECOND time when the payout was paid (reproduced). */
+    out.expNo = _travPostExpense(_travRow(String(row['Trav No'])) || row, p);
   } catch (e) {
     out.failed = e.message || 'the expense could not be posted';
   }
@@ -16154,6 +16196,118 @@ function _booksReceivingEvent(mrNo) {
 }
 function _booksSyncReceiving(mrNo, voidDate, by) {
   return _booksSafe('MR:' + mrNo, function () { return _booksApply(_booksReceivingEvent(mrNo), voidDate, by); });
+}
+
+/* ── A320 · other payments, expenses, travel and commissions ─────────────────────────────────────── */
+/** The books event of a paid Type 'Other' payment request. What it pays decides the debit:
+ *  a travel payout clears 2025 (the expense was booked at approval), a float issue is an advance to
+ *  the rep (1210), a request carrying a PO No pays landed costs (2050); otherwise the account chosen on
+ *  the request, else a rule on its department, else the Inbox. VAT is claimed only with its evidence. */
+function _booksOtherPaymentEvent(prNo) {
+  var r = _prRow(prNo);
+  if (!r || String(r['Type']) === 'PO' || String(r['Status']) !== 'Paid') return null;
+  var key = 'PRPAY:' + prNo, meta = _docMeta('PaymentRequest', prNo) || {};
+  var debited = _cents(r['Actual Debited (PHP)']), charge = _cents(r['Bank Charge (PHP)']);
+  var settledC = debited > 0 ? debited - charge : _cents(r['Amount']);
+  var date = _dateStr(r['Value Date']) || _dateStr(r['Paid At']), payee = String(r['Payee'] || r['Supplier'] || '');
+  var bank = _booksBankAccount(meta['Paid From']);
+  var evt = { key: key, date: date, sourceType: 'Payment', sourceNo: String(prNo), party: payee, soNo: String(r['SO No'] || ''), poNo: String(r['PO No'] || ''),
+              memo: 'Payment ' + prNo + ' — ' + payee + (r['Purpose'] ? ' · ' + String(r['Purpose']).slice(0, 80) : ''), lines: [] };
+  var trav = _rows('TravelReplenishments').filter(function (t) { return String(t['Payment Request No']) === String(prNo); })[0];
+  var flt = _rows('TravelFloats').filter(function (f) { return String(f['Issue PR No']) === String(prNo); })[0];
+  var acct = '', need = 'account';
+  if (trav) acct = '2025';
+  else if (flt) acct = '1210';
+  else if (String(r['PO No'] || '').trim()) acct = '2050';
+  else {
+    acct = String(meta['Account'] || '').trim();
+    if (!acct) { var rule = _booksRule('pr.department', r['Department']); acct = rule ? rule.account : ''; }
+  }
+  var vatC = (meta['Supplier TIN'] && meta['SI/OR No']) ? _cents(meta['VAT Amount']) : 0;
+  var ewtC = String(_booksCfg().ewtMode) === 'on' ? _cents(meta['EWT Amount']) : 0;
+  var grossC = settledC + ewtC;                                  // what we owed: cash paid + tax withheld for BIR
+  evt.lines.push({ account: acct, need: need, debit: _pesos(grossC - vatC), memo: String(r['Purpose'] || 'Payment ' + prNo).slice(0, 120) });
+  if (vatC) evt.lines.push({ account: '1500', debit: _pesos(vatC), taxCode: 'VAT-IN-S', taxBase: _pesos(grossC - vatC), memo: 'Input VAT ' + meta['SI/OR No'] });
+  if (charge) evt.lines.push({ account: '6330', debit: _pesos(charge), memo: 'Bank charge — ' + prNo });
+  if (ewtC) evt.lines.push({ account: '2310', credit: _pesos(ewtC), taxCode: String(meta['EWT ATC'] || ''), taxBase: _num(meta['EWT Base']), memo: 'EWT withheld — ' + prNo });
+  evt.lines.push({ account: bank, need: 'bank', credit: _pesos(settledC + charge), memo: 'Paid — ' + prNo });
+  return evt;
+}
+function _booksSyncPayment(prNo, by) {
+  var r = _prRow(prNo);
+  if (r && String(r['Type']) === 'PO') return _booksSyncPOPayment(prNo, by);
+  return _booksSafe('PRPAY:' + prNo, function () { return _booksApply(_booksOtherPaymentEvent(prNo), null, by); });
+}
+
+/** Expense rows that are views of another posting are never posted themselves. */
+function _booksExpenseIsView(e) {
+  var lk = String(e['Legacy Key'] || '');
+  return lk.indexOf('PRF:') === 0 || lk.indexOf('TRAV:') === 0 || String(e['Voucher No'] || '').indexOf('PAYROLL-') === 0
+      || String(e['Created By'] || '').indexOf('Migrated') === 0;
+}
+/** A manual expense: Dr the account (chosen, else a rule on the category, else the Inbox) / Cr where it
+ *  was paid from. Categories that need judgement have no rule on purpose. */
+function _booksExpenseEvent(expNo) {
+  var e = _rows('Expenses').filter(function (r) { return String(r['Exp No']) === String(expNo); })[0];
+  var key = 'EXP:' + expNo;
+  if (!e) return { key: key, voided: true };                    // deleted → withdrawn
+  if (_booksExpenseIsView(e)) return { skip: 'view of another posting' };
+  var meta = _docMeta('Expense', expNo) || {};
+  var acct = String(meta['Account'] || '').trim();
+  if (!acct) { var rule = _booksRule('expense.category', e['Category']); acct = rule ? rule.account : ''; }
+  var paid = String(meta['Paid From'] || '').trim(), paidAcct = _booksBankAccount(paid) || ({ '2020': 1, '2900': 1, '1230': 1 }[paid] ? paid : '');
+  var amtC = _cents(e['Amount']), vatC = (meta['Supplier TIN'] && meta['SI/OR No']) ? _cents(meta['VAT Amount']) : 0;
+  var evt = { key: key, date: e['Date'], sourceType: 'Expense', sourceNo: String(expNo), party: String(e['Client'] || ''),
+              memo: 'Expense ' + expNo + ' — ' + String(e['Category'] || '') + (e['Description'] ? ' · ' + String(e['Description']).slice(0, 80) : ''), lines: [] };
+  evt.lines.push({ account: acct, need: 'account for ' + String(e['Category'] || 'this category'), debit: _pesos(amtC - vatC), memo: String(e['Description'] || e['Category'] || '').slice(0, 120) });
+  if (vatC) evt.lines.push({ account: '1500', debit: _pesos(vatC), taxCode: 'VAT-IN-S', taxBase: _pesos(amtC - vatC), memo: 'Input VAT ' + meta['SI/OR No'] });
+  evt.lines.push({ account: paidAcct, need: 'paid from', credit: _pesos(amtC), memo: 'Paid — ' + expNo });
+  return evt;
+}
+function _booksSyncExpense(expNo, by, voidDate) {
+  return _booksSafe('EXP:' + expNo, function () { return _booksApply(_booksExpenseEvent(expNo), voidDate, by); });
+}
+
+/** A travel week approved: the spending is an expense of the week it happened (Dr by item / Cr 2025);
+ *  the payout later clears 2025. */
+function _booksTravelEvent(travNo) {
+  var t = _travRow(travNo);
+  if (!t || String(t['Status']) !== 'Approved') return null;
+  var key = 'TRAV:' + travNo, totals = {};
+  _travItems(travNo).forEach(function (i) {
+    var kind = String(i['Kind'] || 'Transport'), means = String(i['Means'] || '').trim().toLowerCase();
+    var b = kind === 'Parking/Toll' ? 'toll' : kind === 'Meals' ? 'meals' : kind === 'Load' ? 'load' : (kind === 'Transport' && means === 'fuel') ? 'fuel' : 'other';
+    totals[b] = (totals[b] || 0) + _cents(i['Amount']);
+  });
+  var who = String(t['User'] || ''), evt = { key: key, date: _dateStr(t['Week End']) || _dateStr(t['Date']), sourceType: 'Travel', sourceNo: String(travNo),
+    party: who, memo: 'Travel ' + travNo + ' — ' + who, lines: [] }, sum = 0;
+  ['toll', 'fuel', 'meals', 'load', 'other'].forEach(function (b) {
+    if (!totals[b]) return;
+    var rule = _booksRule('travel.item', b);
+    evt.lines.push({ account: rule ? rule.account : '', need: 'travel account for ' + b, debit: _pesos(totals[b]), memo: 'Travel ' + b + ' — ' + who });
+    sum += totals[b];
+  });
+  evt.lines.push({ account: '2025', credit: _pesos(sum), memo: 'Owed to ' + who + ' — ' + travNo });
+  return evt;
+}
+function _booksSyncTravel(travNo, by) {
+  return _booksSafe('TRAV:' + travNo, function () { return _booksApply(_booksTravelEvent(travNo), null, by); });
+}
+
+/** A commission approved: the expense belongs to the month it was approved (Dr 6040 / Cr 2040); payroll
+ *  pays it out of 2040 once (A321). */
+function _booksCommissionEvent(commNo) {
+  var c = _commRow(commNo);
+  if (!c) return null;
+  var key = 'COMM:' + commNo, st = String(c['Status'] || '');
+  if (st === 'Rejected' || st === 'Draft' || st.indexOf('Pending') === 0) return { key: key, voided: true };
+  var amtC = _cents(c['Amount (PHP)']) + _cents(c['Adjustment (PHP)']);
+  return { key: key, date: _dateStr(c['Mgmt Approved At']) || _dateStr(c['Dir Approved At']) || _dateStr(c['Updated At']), sourceType: 'Commission',
+           sourceNo: String(commNo), party: String(c['Salesperson'] || ''), soNo: String(c['SO No'] || ''), memo: 'Commission ' + commNo + ' — ' + String(c['Salesperson'] || ''),
+           lines: [{ account: '6040', debit: _pesos(amtC), memo: 'Commission ' + commNo }, { account: '2040', credit: _pesos(amtC), memo: 'Owed to ' + String(c['Salesperson'] || '') }] };
+}
+function _booksSyncCommission(commNo, by) {
+  return _booksSafe('COMM:' + commNo, function () { return _booksApply(_booksCommissionEvent(commNo), null, by); });
 }
 
 /* ── reads ─────────────────────────────────────────────────────────────────────────────────────── */
