@@ -150,7 +150,7 @@ eq('  the live header was widened on first touch', store['Payroll Employees'][0]
 const base = { id: 1, lastName: 'Lucena', firstName: 'Gerald', dailyRate: 1000, otherIncome: 0, hdmfAmount: 100, status: 'Active', payType: 'Hourly' };
 r = gs.handleSavePayrollEmployee(Object.assign({}, base, { sssAmount: 825, philhealthAmount: 200, dateHired: '2026-09-14', actorName: 'Neil' }));
 ok('a save with the three fields succeeds', r.success === true, r);
-eq('  the row now has 12 cells (A312 added Username)', store['Payroll Employees'][1].length, 12);
+eq('  the row now has 13 cells (A312 added Username, A321 TIN)', store['Payroll Employees'][1].length, 13);
 eq('  stored at indexes 8–10', store['Payroll Employees'][1].slice(8, 11).join('|'), '825|200|2026-09-14');
 r = gs.handleGetPayrollEmployees();
 eq('  and read back', [r.data[0].sssAmount, r.data[0].philhealthAmount, r.data[0].dateHired].join('|'), '825|200|2026-09-14');
@@ -164,7 +164,7 @@ eq('a date in another format is dropped rather than stored', store['Payroll Empl
 r = gs.handleSavePayrollEmployee(base);
 ok('a save with none of the new params (older callers) still succeeds', r.success === true, r);
 r = gs.handleSavePayrollEmployee({ lastName: 'New', firstName: 'Hire', dailyRate: 600, otherIncome: 0, hdmfAmount: 0, status: 'Active', payType: 'Hourly', dateHired: '2026-10-05' });
-eq('a new employee appends 12 cells', store['Payroll Employees'][2].length, 12);
+eq('a new employee appends 13 cells', store['Payroll Employees'][2].length, 13);
 eq('  with the hire date', store['Payroll Employees'][2][10], '2026-10-05');
 ok('handleGet13thMonthPay still reads Status at index 5', /status: String\(er\[5\]\|\|'Active'\)/.test(GS));
 

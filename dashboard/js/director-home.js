@@ -340,6 +340,7 @@ function openEEModal(idx) {
     document.getElementById('eeDateHired').value  = '';            // A309
     document.getElementById('eeStatus').value     = 'Active';
     _eeFillUsername('', '');                                        // A312
+    if (document.getElementById('eeTin')) document.getElementById('eeTin').value = '';   // A321
     document.getElementById('eePayType').value    = 'Hourly';        // A260
     document.getElementById('eeFixedAmount').value = '';
   } else {
@@ -359,6 +360,7 @@ function openEEModal(idx) {
     document.getElementById('eeDateHired').value  = e.dateHired || '';          // A309
     document.getElementById('eeStatus').value     = e.status;
     _eeFillUsername(e.username || '', e.lastName + ', ' + e.firstName);        // A312
+    if (document.getElementById('eeTin')) document.getElementById('eeTin').value = e.tin || '';   // A321
     document.getElementById('eePayType').value    = _isFixedPay(e) ? 'Fixed' : 'Hourly';   // A260
     document.getElementById('eeFixedAmount').value = e.fixedAmount || '';
   }
@@ -392,6 +394,18 @@ async function _eeFillUsername(selected, empName) {
   else if (hint) hint.textContent = empName ? 'No login matches that name. Pick the account deliberately.' : '';
 }
 
+/* A321 — the TIN as BIR writes it (123-456-789 or 123-456-789-00000), whatever separators were typed.
+   '' when blank, null when it is not a TIN, undefined when the page has no TIN field. */
+function _eeTin() {
+  const el = document.getElementById('eeTin');
+  if (!el) return undefined;
+  const raw = String(el.value || '').trim();
+  if (!raw) return '';
+  const d = raw.replace(/[\s-]/g, '');
+  if (!/^\d{9}(\d{3,5})?$/.test(d)) return null;
+  return [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].concat(d.length > 9 ? [d.slice(9)] : []).join('-');
+}
+
 function closeEEModal() {
   document.getElementById('eeOverlay').classList.remove('open');
 }
@@ -408,6 +422,7 @@ async function saveEE() {
     philhealthAmount: document.getElementById('eePhilhealth').value,   // A309
     dateHired:        document.getElementById('eeDateHired').value,    // A309
     username:         (document.getElementById('eeUsername') || {}).value || '',   // A312
+    tin:              _eeTin(),                                           // A321 — null when malformed (refused below)
     status:      document.getElementById('eeStatus').value,
     payType:     document.getElementById('eePayType').value,             // A260
     fixedAmount: document.getElementById('eeFixedAmount').value,
@@ -417,6 +432,8 @@ async function saveEE() {
     actorName:     _eeActor()   // `session` is scoped to init; read the actor from localStorage instead
   };
   if (!data.lastName || !data.firstName) { alert('Last name and first name are required.'); return; }
+  if (data.tin === null) { alert('A TIN is 9 digits, with a 3- to 5-digit branch code if there is one (123-456-789-00000).'); return; }
+  if (data.tin === undefined) delete data.tin;                        // no field on the page: Code.gs keeps the stored TIN
   const res = await apiSavePayrollEmployee(data);
   if (!res.success) { alert('Error: ' + res.message); return; }
   closeEEModal();

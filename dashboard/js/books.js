@@ -8,6 +8,8 @@
  *   Ledger    GL lines by date, account and source. Trial balance by date range, with an opening column.
  *   Accounts  the chart, editable by accounting/admin/director (system accounts keep code and type).
  *   Rules     which account a category / department / travel item posts to.
+ *   Sync      (A321) payroll, Billing, Director Payables and the bank page live in Code.gs; the band's
+ *             button asks Flask /books/sync to carry them over. Pressing it twice posts nothing twice.
  *
  * Every read is a secured read (postFlow): the books are for accounting, admin, management and the
  * director. Management sees everything and changes nothing except the engine switch.
@@ -30,6 +32,8 @@
     return r;
   }
   const today = () => (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10));
+  const RULE_LABEL = { 'expense.category': 'Expense category', 'pr.department': 'Payment department', 'travel.item': 'Travel item',
+                       'billing.department': 'Billing department', 'dp.category': 'Director payable category' };
 
   /* ── the band ─────────────────────────────────────────────────────────────────────────────── */
   const MODE_HINT = {
@@ -53,7 +57,28 @@
     chk.querySelector('b').textContent = s.totals.balanced ? 'Balanced' : 'Out by ' + money(Math.abs(s.totals.debit - s.totals.credit));
     const tabIn = document.querySelector('.bk-tab[data-tab="inbox"]');
     if (tabIn) tabIn.textContent = s.inboxOpen ? 'Inbox · ' + s.inboxOpen : 'Inbox';
+    show('bkSync', B.canAct && s.mode !== 'off');
+    const ls = s.lastSync;
+    $('bkSyncHint').className = 'bk-hint';
+    $('bkSyncHint').textContent = ls ? 'Last synced ' + ls.at + (ls.by ? ' by ' + ls.by : '') : 'Not synced yet.';
   }
+  async function syncPayroll() {
+    const btn = $('bkSyncBtn'), hint = $('bkSyncHint');
+    btn.disabled = true; btn.textContent = 'Syncing…';
+    try {
+      const res = await fetch('/books/sync', { method: 'POST', headers: hxAuthHeaders({ 'Content-Type': 'application/json' }), body: '{}' });
+      let r = null;
+      try { r = await res.json(); } catch (e) { r = null; }
+      if (r && /Unknown action: ingestBookEvents/.test(r.message || '')) throw new Error('Paste the latest FlowAPI.gs (162) to sync payroll and payments.');
+      if (!res.ok || !r || !r.success) throw new Error((r && r.message) || 'The sync did not finish (' + res.status + '). Press it again; nothing posts twice.');
+      await loadStatus();
+      hint.className = 'bk-hint bk-ok'; hint.textContent = r.message;
+      B.loaded = { [currentTab()]: true };
+      const t = currentTab(); if (LOADERS[t]) LOADERS[t]();
+    } catch (e) { hint.className = 'bk-hint bk-bad'; hint.textContent = e.message; }
+    finally { btn.disabled = false; btn.textContent = 'Sync payroll & payments'; }
+  }
+  const currentTab = () => ((document.querySelector('.bk-tab.active') || {}).dataset || {}).tab || 'inbox';
   async function setMode(mode) {
     if (!B.canSwitch || !B.status || mode === B.status.mode) return;
     const warn = mode === 'on' ? '\n\nOnly switch on once the shadow months agree with the bank statements, the agings and the filed returns.' :
@@ -87,17 +112,21 @@
       if (!r.data.length) { box.innerHTML = '<div class="hx-empty">Nothing is waiting. Every event that reached the books posted.</div>'; return; }
       box.innerHTML = r.data.map(i => {
         const blank = (i.lines || []).some(l => !String(l.account || '').trim());
-        const cat = (i.reason.match(/^no account for (.+)$/) || [])[1];
+        // A321 — the line says which rule "remember" saves; an Inbox item from before that knew only expense categories
+        const rl = (i.lines || []).find(l => !String(l.account || '').trim() && l.rule && l.rule.value);
+        const legacy = (i.reason.match(/^no account for (.+)$/) || [])[1];
+        const rule = rl ? rl.rule : (i.sourceType === 'Expense' && legacy ? { source: 'expense.category', value: legacy } : null);
+        const cat = rule ? rule.value : '';
         const lines = (i.lines || []).length ? `<table class="bk-mini"><tbody>${i.lines.map(l => `<tr>
             <td>${l.account ? esc(l.account) + ' <span class="bk-dim">' + esc(acctName(l.account)) + '</span>' : '<span class="bk-need">' + esc(l.need ? 'needs ' + l.need : 'needs an account') + '</span>'}</td>
             <td class="num">${num(l.debit) ? money(l.debit) : ''}</td><td class="num">${num(l.credit) ? money(l.credit) : ''}</td></tr>`).join('')}</tbody></table>` : '';
         const actions = B.canAct ? `<div class="bk-act">
             ${blank ? `<select data-acct>${acctOptions('Choose the account…')}</select>` : ''}
-            ${blank && cat ? `<label class="bk-remember"><input type="checkbox" data-remember checked> Remember for "${esc(cat)}"</label>` : ''}
+            ${blank && rule ? `<label class="bk-remember"><input type="checkbox" data-remember checked> Remember for ${esc((RULE_LABEL[rule.source] || rule.source).toLowerCase())} "${esc(cat)}"</label>` : ''}
             ${(i.lines || []).length ? `<button type="button" class="btn btn-sm btn-primary" data-post>${blank ? 'Post' : 'Try again'}</button>` : ''}
             <button type="button" class="btn btn-sm" data-ignore>${(i.lines || []).length ? 'Ignore…' : 'Confirm…'}</button>
           </div>` : '';
-        return `<article class="bk-item" data-id="${esc(i.itemId)}" data-cat="${esc(cat || '')}">
+        return `<article class="bk-item" data-id="${esc(i.itemId)}" data-cat="${esc(cat || '')}" data-rule-source="${esc(rule ? rule.source : '')}">
           <div class="bk-item-head">
             <div><b>${esc(i.sourceType)} ${esc(i.sourceNo)}</b><span class="bk-dim"> · ${esc(i.date)}${i.party ? ' · ' + esc(i.party) : ''}</span></div>
             <div class="bk-amt">${i.amount ? money(i.amount) : ''}</div>
@@ -126,7 +155,7 @@
         if (!sel.value) { say('Choose the account first.', false); return; }
         p.account = sel.value;
         const rem = card.querySelector('[data-remember]');
-        if (rem && rem.checked && card.dataset.cat) { p.remember = true; p.ruleSource = 'expense.category'; p.ruleValue = card.dataset.cat; }
+        if (rem && rem.checked && card.dataset.cat && card.dataset.ruleSource) { p.remember = true; p.ruleSource = card.dataset.ruleSource; p.ruleValue = card.dataset.cat; }
       }
     }
     try {
@@ -252,7 +281,7 @@
       if (!B.accounts.length) await loadAccounts();
       $('ruAccount').innerHTML = acctOptions('Choose…');
       const r = await read('getAccountRules');
-      const label = { 'expense.category': 'Expense category', 'pr.department': 'Payment department', 'travel.item': 'Travel item' };
+      const label = RULE_LABEL;
       box.innerHTML = r.data.length ? `<table class="flow-table bk-table"><thead><tr><th>When</th><th>Is</th><th>Posts to</th><th>Added by</th></tr></thead><tbody>${
         r.data.map(x => `<tr class="${x.active ? '' : 'bk-off'}"><td>${esc(label[x.source] || x.source)}</td><td>${esc(x.value)}</td>
           <td>${esc(x.account)} <span class="bk-dim">${esc(acctName(x.account))}</span></td><td class="bk-dim">${esc(x.by)}</td></tr>`).join('')
@@ -298,6 +327,7 @@
     $('covRun').addEventListener('click', loadCoverage); $('covSync').addEventListener('click', syncNow);
     $('glRun').addEventListener('click', loadLedger); $('tbRun').addEventListener('click', loadTB); $('tbCsv').addEventListener('click', tbCsv);
     $('acForm').addEventListener('submit', saveAccount); $('ruForm').addEventListener('submit', saveRule);
+    $('bkSyncBtn').addEventListener('click', syncPayroll);
     show('acForm', B.canAct); show('ruForm', B.canAct);
     try { await loadStatus(); } catch (e) { banner(e.message); return; }
     const start = B.status.startDate;

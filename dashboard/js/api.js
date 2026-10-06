@@ -110,12 +110,13 @@ function clearApiCache() {
 // GET. A308: that note used to sit INSIDE this line, which commented out every name after it, so only
 // five actions POSTed and every other save went out as a GET (payroll hours: a 400 for URL length).
 const NO_CACHE_ACTIONS = ['login', 'logout', 'updateSalesOrder', 'markSentToSales', 'saveQuotationPDF', 'submitDailyReport', 'submitAdminDailyReport', 'updateTrackerRow', 'changePassword', 'setTargets', 'addOrder', 'updateOrder', 'deleteOrder', 'addExpense', 'updateExpense', 'deleteExpense', 'addSupplierQuotation', 'updateSupplierQuotation', 'deleteSupplierQuotation', 'uploadSQDocuments', 'updateSQDriveLink', 'addClient', 'updateClient', 'deleteClient', 'addUser', 'updateUser', 'deleteUser', 'resetUserPassword', 'updatePaymentRequestStatus', 'markBillPaid', 'saveCashVoucher', 'addInventoryItem', 'updateInventoryItem', 'deleteInventoryItem', 'approveQuotation', 'updateQuotationDriveLink', 'reviseQuotation', 'updatePRPricing', 'finalizeQuotation', 'getQuotationApprovalStatus', 'createSalesOrder', 'updateSOStatus', 'deleteSalesOrder', 'uploadSODocument', 'savePORecord', 'approvePO', 'sendPOEmail', 'sendAdminEmail', 'sendAcctEmail', 'savePOPDF', 'savePRPDF', 'savePricingSubmission', 'forwardPRToPricing', 'applyPricingToPR', 'submitHRDailyReport', 'addCandidate', 'updateCandidate', 'deleteCandidate', 'addHRTask', 'updateHRTask', 'deleteHRTask', 'addEmployee', 'updateEmployee', 'deleteEmployee', 'addLeaveRequest', 'updateLeaveRequest', 'deleteLeaveRequest', 'addPerformanceReview', 'updatePerformanceReview', 'deletePerformanceReview', 'addTrainingProgram', 'updateTrainingProgram', 'deleteTrainingProgram', 'addMemo', 'updateMemo', 'deleteMemo', 'addGrievance', 'updateGrievance', 'deleteGrievance', 'addCampaign', 'updateCampaign', 'deleteCampaign', 'addContentItem', 'updateContentItem', 'deleteContentItem', 'addAccreditation', 'updateAccreditation', 'deleteAccreditation', 'submitAccountingDailyReport', 'addCollection', 'deleteCollection', 'updateCollection', 'saveProfitReport', 'updateProfitReportEntry', 'saveShipment', 'uploadShipmentDoc', 'deleteShipmentDoc', 'advanceShipmentStage', 'restoreShipmentDoc', 'migrateShipmentDocs', 'exportAuditLogCsv', 'archiveHistoryNow', 'backfillHistory', 'savePayrollEmployee', 'deletePayrollEmployee', 'savePayrollHours', 'savePayrollRegister', 'submitPayrollForApproval', 'decidePayrollApproval', 'saveBankAccount', 'addBankTransaction', 'deleteBankTransaction', 'saveDirectorPayable', 'markDirectorPayablePaid', 'unmarkDirectorPayablePaid', 'deleteDirectorPayable', 'savePayrollIncentive', 'voidPayrollIncentive', 'savePayrollHolidays', 'saveSalaryDeduction', 'attachSalaryDeductionForm', 'activateSalaryDeduction', 'cancelSalaryDeduction', 'voidSalaryDeductionPosting', 'skipSalaryDeductionCutoff',
-  'releasePayslips'   // A312
+  'releasePayslips',   // A312
+  'markPayrollPaid', 'savePayrollContributionTables'   // A321
 ];
 
 // Read-only actions that must always fetch fresh data (use GET, skip cache).
 // Stale cache caused approved quotations to revert to "Pending" on refresh.
-const NO_CACHE_READS = ['getMyPayslips', 'getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister', 'getPayrollIncentives', 'getPayrollHolidays', 'getSalaryDeductions', 'getMySalaryDeductions'];
+const NO_CACHE_READS = ['getMyPayslips', 'getPendingQuotations', 'getAllPRs', 'getPaymentRequests', 'getBillingRecords', 'getBillingDetail', 'getPendingPOs', 'getShipmentTimeline', 'getShipmentHistory', 'getGlobalAuditLog', 'getAuditLogFilterValues', 'getProfitReports', 'getPayrollHours', 'getPayrollRegister', 'getPayrollIncentives', 'getPayrollHolidays', 'getSalaryDeductions', 'getMySalaryDeductions', 'getPayrollContributionTables', 'getPayrollEmployerShares'];
 
 /**
  * General-purpose fetch wrapper with caching.
@@ -1181,6 +1182,22 @@ function apiReleasePayslips(period, rows) {
 }
 function apiGetMyPayslips() {
   return fetchFromAPI({ action: 'getMyPayslips' }, { noCache: true });
+}
+
+/* A321 — what the books need from payroll. The contribution tables are typed from the agencies'
+   circulars (nothing is seeded); the employer shares are computed from them per employee per month;
+   "paid" records the bank's date and the account the net pay left. */
+function apiGetPayrollContributionTables() {
+  return fetchFromAPI({ action: 'getPayrollContributionTables' }, { noCache: true });
+}
+function apiSavePayrollContributionTables(agency, effectiveFrom, rows) {
+  return fetchFromAPI({ action: 'savePayrollContributionTables', agency, effectiveFrom, rows: JSON.stringify(rows || []) }, { noCache: true });
+}
+function apiGetPayrollEmployerShares(month) {
+  return fetchFromAPI({ action: 'getPayrollEmployerShares', month }, { noCache: true });
+}
+function apiMarkPayrollPaid(period, paidDate, bankAccountCode, undo) {
+  return fetchFromAPI(undo ? { action: 'markPayrollPaid', period, undo: true } : { action: 'markPayrollPaid', period, paidDate, bankAccountCode }, { noCache: true });
 }
 
 function apiGetMySalaryDeductions() {

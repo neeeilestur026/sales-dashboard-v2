@@ -41,7 +41,7 @@
  *   2 — AS-1 sessions required on every action, server-side roles, hashed passwords, the sheet-id guard.
  *   3 — A309 SSS Amount / PhilHealth Amount / Date Hired on Payroll Employees (statutory schedule by rule).
  *   4 — A312 released payslips: the Payslips sheet, releasePayslips / getMyPayslips, Username on Payroll Employees. */
-var CODE_VERSION = 4;
+var CODE_VERSION = 5;
 
 // ─── Configuration ───────────────────────────────────────────
 var USERS_SHEET_ID = _prop('USERS_SHEET_ID');   // AS-1 — set once under Project Settings → Script properties; never in this file
@@ -88,10 +88,14 @@ var _AUTH_EXEMPT = { login: 1, validateSession: 1, getCodeVersion: 1, logout: 1 
 var ACTION_ROLES = {                                   // the pages behind these are requireAdmin()
   addUser: ['admin'], updateUser: ['admin'], deleteUser: ['admin'], resetUserPassword: ['admin'],
   getLoginLog: ['admin'], setTargets: ['admin'],
-  releasePayslips: ['director']                        // A312 — the director's Release button only
+  releasePayslips: ['director'],                       // A312 — the director's Release button only
+  // A321 — the books bridge and payroll's books facts
+  getBooksFeed: ['accounting', 'admin', 'director'], markPayrollPaid: ['director', 'accounting'],
+  savePayrollContributionTables: ['director', 'accounting', 'admin', 'hr'],
+  getPayrollEmployerShares: ['director', 'accounting', 'admin', 'hr', 'management']   // per-employee pay: not for every login
 };
 var _GET_MUTATIONS = {};                               // the doGet cases that change something: POST only
-'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials releasePayslips'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
+'login updateTrackerRow submitDailyReport changePassword setTargets addOrder updateOrder addExpense saveProfitReport addSupplierQuotation addClient updateClient deleteClient addPaymentRequest updatePaymentRequestStatus addUser updateUser deleteUser resetUserPassword deleteOrder deleteExpense updateExpense updateSupplierQuotation deleteSupplierQuotation addInventoryItem updateInventoryItem deleteInventoryItem approveQuotation updateQuotationDriveLink reviseQuotation updatePRPricing finalizeQuotation submitAdminDailyReport createSalesOrder updateSOStatus updateSalesOrder deleteSalesOrder savePORecord approvePO sendPOEmail sendAdminEmail sendAcctEmail savePricingSubmission saveShipment uploadShipmentDoc deleteShipmentDoc applyPricingToPR markSentToSales linkPRToQuotation submitAccountingDailyReport savePayrollEmployee deletePayrollEmployee savePayrollHours savePayrollHolidays savePayrollRegister savePayrollIncentive voidPayrollIncentive saveSalaryDeduction cancelSalaryDeduction voidSalaryDeductionPosting submitPayrollForApproval decidePayrollApproval setEmailCredentials releasePayslips markPayrollPaid savePayrollContributionTables'.split(' ').forEach(function (a) { _GET_MUTATIONS[a] = 1; });
 var _OVERSIGHT_ROLES = { admin: 1, director: 1, management: 1, accounting: 1, hr: 1 };
 
 function _prop(name) {
@@ -793,6 +797,12 @@ function doGet(e) {
         break;
       case 'getDirectorPayables':
         result = handleGetDirectorPayables(params);
+        break;
+      case 'getPayrollContributionTables':                  // A321
+        result = handleGetPayrollContributionTables(params);
+        break;
+      case 'getPayrollEmployerShares':                      // A321
+        result = handleGetPayrollEmployerShares(params);
         break;
       case 'getPayrollApprovals':
         result = handleGetPayrollApprovals(params);
@@ -2677,6 +2687,16 @@ function doPost(e) {
         break;
       case 'markBillPaid':
         result = handleMarkBillPaid(body);
+        break;
+      // A321 — the books
+      case 'getBooksFeed':
+        result = handleGetBooksFeed(body);
+        break;
+      case 'markPayrollPaid':
+        result = handleMarkPayrollPaid(body);
+        break;
+      case 'savePayrollContributionTables':
+        result = handleSavePayrollContributionTables(body);
         break;
       case 'saveCashVoucher':
         result = handleSaveCashVoucher(body);
@@ -5190,6 +5210,9 @@ function handleMarkBillPaid(params) {
     var now = new Date().toISOString();
     var paidBy = params.paidBy || '';
     var paymentSlipLink = params.paymentSlipLink || '';
+    // A321 — the books need the bank's date and, for a foreign request, the pesos the bank took
+    var valueDate = /^\d{4}-\d{2}-\d{2}$/.test(String(params.valueDate || '')) ? String(params.valueDate) : now.slice(0, 10);
+    var amountPHP = parseFloat(params.amountPHP) || 0;
 
     // Ensure columns 31 (Bank Account Code) and 32 (Bank Tx ID) exist
     if (sheet.getLastColumn() < 31 || !String(sheet.getRange(1, 31).getValue()).trim()) {
@@ -5213,13 +5236,20 @@ function handleMarkBillPaid(params) {
     if (amount <= 0) {
       return { success: false, message: 'PR amount is zero — refusing to post bank transaction.' };
     }
+    if (String(currency).toUpperCase() !== 'PHP' && !(amountPHP > 0)) {
+      return { success: false, message: 'This request is in ' + currency + ': enter the pesos the bank actually debited.' };
+    }
+    if (!(amountPHP > 0)) amountPHP = amount;   // a peso request: the amount IS the pesos
+    for (var hc = 33; hc <= 34; hc++) {
+      if (sheet.getLastColumn() < hc || !String(sheet.getRange(1, hc).getValue()).trim()) sheet.getRange(1, hc).setValue(hc === 33 ? 'Value Date' : 'Amount PHP').setFontWeight('bold');
+    }
 
     var bankTxId = _appendBankTransaction({
       accountCode: bankAccountCode,
       type: 'Payment Request Paid',
       direction: -1,
-      amount: amount,
-      currency: currency,
+      amount: amountPHP,                       // A321 — the peso account is debited in pesos
+      currency: 'PHP',
       description: 'PR ' + prNumber + ' — ' + payee,
       refType: 'PaymentRequest',
       refId: prNumber || ('row:' + rowIndex),
@@ -5234,6 +5264,7 @@ function handleMarkBillPaid(params) {
     if (paymentSlipLink) sheet.getRange(rowIndex, 28).setValue(paymentSlipLink);
     sheet.getRange(rowIndex, 31).setValue(bankAccountCode);
     sheet.getRange(rowIndex, 32).setValue(bankTxId);
+    sheet.getRange(rowIndex, 33, 1, 2).setValues([[valueDate, amountPHP]]);   // A321
 
     return { success: true, message: 'Marked as paid.', bankTxId: bankTxId };
   } catch (err) {
@@ -10949,11 +10980,12 @@ function _payrollEmployeesSheet() {
      widened by hand below, exactly as _payrollRegisterSheet does for its columns 15 and 16. */
   var sheet = _getOrCreateSheet(ss, 'Payroll Employees', [
     'Last Name', 'First Name', 'Daily Rate', 'Other Income', 'HDMF Amount', 'Status',
-    'Pay Type', 'Fixed Amount', 'SSS Amount', 'PhilHealth Amount', 'Date Hired', 'Username'
+    'Pay Type', 'Fixed Amount', 'SSS Amount', 'PhilHealth Amount', 'Date Hired', 'Username', 'TIN'
   ]);
   try {
     // A312 — column 12 'Username': the login whose dashboard receives this employee's released payslip
-    [[9, 'SSS Amount'], [10, 'PhilHealth Amount'], [11, 'Date Hired'], [12, 'Username']].forEach(function (c) {
+    // A321 — column 13 'TIN': the 1604-C alphalist and the 2316 need it
+    [[9, 'SSS Amount'], [10, 'PhilHealth Amount'], [11, 'Date Hired'], [12, 'Username'], [13, 'TIN']].forEach(function (c) {
       if (sheet.getLastColumn() < c[0] || !String(sheet.getRange(1, c[0]).getValue()).trim()) sheet.getRange(1, c[0]).setValue(c[1]);
     });
   } catch (e) { /* labelling is cosmetic — a failure must not block payroll */ }
@@ -11240,7 +11272,8 @@ function handleGetPayrollEmployees() {
         // A309 — blank/0 means the page's defaults (SSS 600, PhilHealth 200); no date = eligible now
         sssAmount: parseFloat(row[8])||0, philhealthAmount: parseFloat(row[9])||0,
         dateHired: _payrollDateCell(row[10]),
-        username: String(row[11]||'').trim() });                      // A312
+        username: String(row[11]||'').trim(),                         // A312
+        tin: String(row[12]||'').trim() });                           // A321
     }
     return { success: true, data: results };
   } catch(e) { return { success: false, message: e.message }; }
@@ -11262,9 +11295,13 @@ function handleSavePayrollEmployee(params) {
     var newSss   = parseFloat(params.sssAmount)||0,
         newPhic  = parseFloat(params.philhealthAmount)||0,
         newHired = /^\d{4}-\d{2}-\d{2}$/.test(String(params.dateHired||'')) ? String(params.dateHired) : '';
+    // A321 — TIN is kept when the form does not send it (an older page), never blanked by omission
+    var oldTin = (id > 0 && id < data.length) ? String(data[id][12] || '') : '';
+    var newTin = params.tin === undefined ? oldTin : String(params.tin || '').trim();
+    if (newTin && !/^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/.test(newTin)) return { success: false, message: 'A TIN is written 123-456-789 or 123-456-789-00000.' };
     var row   = [params.lastName||'', params.firstName||'',
       newRate, newOther, newHdmf, params.status||'Active', newType, newFixed, newSss, newPhic, newHired,
-      String(params.username||'').trim()];                             // A312 — not a pay change, no history
+      String(params.username||'').trim(), newTin];                     // A312 — not a pay change, no history
     var empName = String(params.lastName||'') + ', ' + String(params.firstName||'');
     var isEdit = (id > 0 && id < data.length);
 
@@ -12643,12 +12680,253 @@ function handleDeleteBankTransaction(params) {
 // formal Payment Request system. When marked Paid, the chosen
 // bank account is auto-debited via _appendBankTransaction.
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// A321 · PAYROLL AND PAYMENTS FOR THE BOOKS
+// ═══════════════════════════════════════════════════════════════
+/* The general ledger lives in FlowAPI.gs. What it needs from this file reaches it through the Flask
+   bridge (/books/sync → getBooksFeed here → ingestBookEvents there): approved payroll cutoffs with the
+   employer shares, paid Billing requests, paid Director Payables and the bank-page movements.
+
+   CONTRIBUTION TABLES. SSS, PhilHealth and Pag-IBIG are monthly contributions, so the employer share
+   is computed per employee per CALENDAR MONTH from the month's total pay (both cutoffs), from tables
+   HR or the CPA enter from the current circulars — nothing here is seeded from memory. One sheet,
+   effective-dated; each agency uses the columns that fit it:
+     SSS        one row per bracket: Range From / Range To (monthly pay), EE, ER, EC in pesos
+     PhilHealth one row: Rate %, EE Share %, Floor, Ceiling (monthly pay)
+     Pag-IBIG   one row per bracket: Range From / Range To, EE = employee rate %, ER = employer rate %,
+                Ceiling = the maximum monthly pay the rates apply to
+   An employee is charged an employer share for an agency only in a month their own share for it was
+   deducted (the company's statutory eligibility rules already live in the payroll grid). */
+var _CONTRIB_HEADERS = ['Agency', 'Effective From', 'Range From', 'Range To', 'EE', 'ER', 'EC', 'Rate %', 'EE Share %',
+                        'Floor', 'Ceiling', 'Basis', 'Notes', 'Updated By', 'Updated At'];
+var _CONTRIB_AGENCIES = ['SSS', 'PhilHealth', 'Pag-IBIG'];
+/* Which pay the brackets are read against: 'gross' (everything earned in the month) or 'basic' (the Basic
+   Pay column). A default only — the agency's circular decides, so HR or the CPA sets it with the table. */
+var _CONTRIB_BASIS_DEFAULT = { 'SSS': 'gross', 'PhilHealth': 'basic', 'Pag-IBIG': 'basic' };
+function _contribSheet() { return _getOrCreateSheet(SpreadsheetApp.openById(USERS_SHEET_ID), 'Payroll Contribution Tables', _CONTRIB_HEADERS); }
+function _contribRows() {
+  var data = _contribSheet().getDataRange().getValues(), out = [];
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i];
+    if (!String(r[0] || '').trim()) continue;
+    out.push({ agency: String(r[0]).trim(), effectiveFrom: _payrollDateCell(r[1]), from: parseFloat(r[2]) || 0, to: parseFloat(r[3]) || 0,
+               ee: parseFloat(r[4]) || 0, er: parseFloat(r[5]) || 0, ec: parseFloat(r[6]) || 0, rate: parseFloat(r[7]) || 0,
+               eeShare: parseFloat(r[8]) || 0, floor: parseFloat(r[9]) || 0, ceiling: parseFloat(r[10]) || 0,
+               basis: String(r[11] || '') || _CONTRIB_BASIS_DEFAULT[String(r[0]).trim()] || 'gross', notes: String(r[12] || ''),
+               updatedBy: String(r[13] || ''), updatedAt: r[14] ? String(r[14]) : '' });
+  }
+  return out;
+}
+/** The rows in force for an agency in month YYYY-MM: the latest Effective From on or before day 1. */
+function _contribFor(rows, agency, month) {
+  var day1 = month + '-01', best = '';
+  rows.forEach(function (r) { if (r.agency === agency && r.effectiveFrom && r.effectiveFrom <= day1 && r.effectiveFrom > best) best = r.effectiveFrom; });
+  return best ? rows.filter(function (r) { return r.agency === agency && r.effectiveFrom === best; }).sort(function (a, b) { return a.from - b.from; }) : [];
+}
+function _contribValidate(agency, rows) {
+  if (_CONTRIB_AGENCIES.indexOf(agency) === -1) return 'Unknown agency ' + agency + '.';
+  if (!rows.length) return 'Enter at least one row.';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    ['from', 'to', 'ee', 'er', 'ec', 'rate', 'eeShare', 'floor', 'ceiling'].forEach(function (k) { r[k] = parseFloat(r[k]) || 0; });
+    if (['from', 'to', 'ee', 'er', 'ec', 'rate', 'eeShare', 'floor', 'ceiling'].some(function (k) { return r[k] < 0; })) return 'No figure may be negative (row ' + (i + 1) + ').';
+    if (r.rate > 100 || r.eeShare > 100) return 'A rate is between 0 and 100% (row ' + (i + 1) + ').';
+    r.basis = String(r.basis || '').toLowerCase() || _CONTRIB_BASIS_DEFAULT[agency];
+    if (r.basis !== 'gross' && r.basis !== 'basic') return 'The basis is gross or basic pay (row ' + (i + 1) + ').';
+    if (i && r.basis !== rows[0].basis) return 'One table reads one basis: every row says ' + rows[0].basis + ' or none does.';
+  }
+  if (agency === 'PhilHealth') {
+    if (rows.length !== 1) return 'PhilHealth takes one row: rate, employee share, floor and ceiling.';
+    if (!(rows[0].rate > 0)) return 'Enter the PhilHealth premium rate.';
+    if (rows[0].ceiling && rows[0].floor > rows[0].ceiling) return 'The PhilHealth floor is above its ceiling.';
+    return '';
+  }
+  var sorted = rows.slice().sort(function (a, b) { return a.from - b.from; });
+  for (var j = 0; j < sorted.length; j++) {
+    if (sorted[j].to && sorted[j].to < sorted[j].from) return 'A bracket ends before it starts (' + sorted[j].from + ').';
+    if (j > 0) {
+      var gap = Math.round((sorted[j].from - sorted[j - 1].to) * 100) / 100;
+      if (gap <= 0) return 'Brackets overlap at ' + sorted[j].from + '.';
+      if (gap > 1) return 'Brackets leave a gap between ' + sorted[j - 1].to + ' and ' + sorted[j].from + '.';
+    }
+    if (j < sorted.length - 1 && !sorted[j].to) return 'Only the last bracket may be open-ended.';
+  }
+  if (agency === 'Pag-IBIG' && rows.some(function (r) { return !(r.ee > 0) || !(r.er > 0); })) return 'Pag-IBIG brackets need the employee and employer rates (%).';
+  if (agency === 'SSS' && rows.some(function (r) { return !(r.er > 0); })) return 'SSS brackets need the employer amount.';
+  return '';
+}
+function handleGetPayrollContributionTables() {
+  try { return { success: true, data: _contribRows(), agencies: _CONTRIB_AGENCIES }; }
+  catch (e) { return { success: false, message: e.message }; }
+}
+/** Replace one agency's table for one effective date: { agency, effectiveFrom, rows: JSON } */
+function handleSavePayrollContributionTables(params) {
+  try {
+    var agency = String(params.agency || '').trim(), eff = String(params.effectiveFrom || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eff)) return { success: false, message: 'Enter the date the table takes effect.' };
+    var rows = [];
+    try { rows = JSON.parse(params.rows || '[]'); } catch (e) { return { success: false, message: 'The table could not be read.' }; }
+    var bad = _contribValidate(agency, rows);
+    if (bad) return { success: false, message: bad };
+    var sheet = _contribSheet(), data = sheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][0]).trim() === agency && _payrollDateCell(data[i][1]) === eff) sheet.deleteRow(i + 1);
+    }
+    var by = (_SESSION && (_SESSION.fullName || _SESSION.username)) || '', now = new Date().toISOString();
+    var out = rows.map(function (r) { return [agency, eff, r.from, r.to, r.ee, r.er, r.ec, r.rate, r.eeShare, r.floor, r.ceiling, r.basis, String(r.notes || '').slice(0, 200), by, now]; });
+    sheet.getRange(sheet.getLastRow() + 1, 1, out.length, _CONTRIB_HEADERS.length).setValues(out);
+    return { success: true, message: agency + ' table from ' + eff + ' saved (' + out.length + ' row' + (out.length === 1 ? '' : 's') + ').' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+function _r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+/** Employer shares for calendar month YYYY-MM from the register (both cutoffs) and the tables. */
+function _payrollEmployerShares(month, registerData, tables) {
+  var per = {};
+  for (var i = 1; i < registerData.length; i++) {
+    var r = registerData[i], period = String(r[0] || '');
+    if (period.slice(0, 7) !== month) continue;
+    var emp = String(r[1] || ''), e = per[emp] = per[emp] || { employee: emp, gross: 0, basic: 0, sssEE: 0, phEE: 0, hdmfEE: 0 };
+    e.gross += parseFloat(r[6]) || 0; e.basic += parseFloat(r[2]) || 0;
+    e.hdmfEE += parseFloat(r[7]) || 0; e.sssEE += parseFloat(r[8]) || 0; e.phEE += parseFloat(r[9]) || 0;
+  }
+  var sss = _contribFor(tables, 'SSS', month), ph = _contribFor(tables, 'PhilHealth', month), hd = _contribFor(tables, 'Pag-IBIG', month);
+  var missing = {}, list = [], tot = { sssER: 0, sssEC: 0, phER: 0, hdmfER: 0 };
+  // the bracket is the last one whose lower bound the pay reaches (below the first: the first), so a pay
+  // falling between one bracket's "to" and the next one's "from" (4,249.995) still lands where it belongs
+  var bracket = function (rows, comp) {
+    if (!rows.length) return null;
+    var hit = rows[0];
+    for (var k = 0; k < rows.length; k++) if (comp >= rows[k].from) hit = rows[k];
+    return hit;
+  };
+  var pay = function (e, rows) { return rows.length && rows[0].basis === 'basic' ? e.basic : e.gross; };
+  Object.keys(per).sort().forEach(function (k) {
+    var e = per[k], o = { employee: e.employee, gross: _r2(e.gross), basic: _r2(e.basic), sssER: 0, sssEC: 0, phER: 0, hdmfER: 0 };
+    // a share is owed only where the employee's own deduction was taken that month (a fixed-salary manager has none)
+    if (e.sssEE > 0) { var b = bracket(sss, pay(e, sss)); if (b) { o.sssER = b.er; o.sssEC = b.ec; } else missing.SSS = 1; }
+    if (e.phEE > 0) {
+      if (ph.length) { var t = ph[0], base = Math.max(pay(e, ph), t.floor || 0); if (t.ceiling) base = Math.min(base, t.ceiling); o.phER = _r2(base * t.rate / 100 * (1 - t.eeShare / 100)); }
+      else missing.PhilHealth = 1;
+    }
+    if (e.hdmfEE > 0) {
+      var hc = pay(e, hd), h = bracket(hd, hc);
+      if (h) { var hb = h.ceiling ? Math.min(hc, h.ceiling) : hc; o.hdmfER = _r2(hb * h.er / 100); } else missing['Pag-IBIG'] = 1;
+    }
+    ['sssER', 'sssEC', 'phER', 'hdmfER'].forEach(function (x) { tot[x] = _r2(tot[x] + o[x]); });
+    list.push(o);
+  });
+  return { month: month, perEmployee: list, totals: tot, missing: Object.keys(missing) };
+}
+function handleGetPayrollEmployerShares(params) {
+  try {
+    var month = String(params.month || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) return { success: false, message: 'month is YYYY-MM.' };
+    return { success: true, data: _payrollEmployerShares(month, _payrollRegisterSheet().getDataRange().getValues(), _contribRows()) };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/* Payroll Approvals carry when and from which account the net pay left (columns 11-14, appended). */
+function _payrollPaidCols(sheet) {
+  [[11, 'Paid Date'], [12, 'Paid Bank'], [13, 'Paid By'], [14, 'Paid At']].forEach(function (c) {
+    if (sheet.getLastColumn() < c[0] || !String(sheet.getRange(1, c[0]).getValue()).trim()) sheet.getRange(1, c[0]).setValue(c[1]);
+  });
+}
+/** { period, paidDate, bankAccountCode } — or { period, undo: true } to clear a mistaken mark. */
+function handleMarkPayrollPaid(params) {
+  try {
+    var period = String(params.period || '').trim();
+    var sheet = _payrollApprovalsSheet(), data = sheet.getDataRange().getValues(), idx = -1;
+    for (var i = data.length - 1; i >= 1; i--) if (String(data[i][0]) === period) { idx = i; break; }
+    if (idx < 0) return { success: false, message: 'No approval found for ' + period + '.' };
+    if (String(data[idx][4]) !== 'Approved') return { success: false, message: period + ' is not approved yet.' };
+    _payrollPaidCols(sheet);
+    var by = (_SESSION && (_SESSION.fullName || _SESSION.username)) || '';
+    if (params.undo === true || String(params.undo) === 'true') {
+      sheet.getRange(idx + 1, 11, 1, 4).setValues([['', '', '', '']]);
+      return { success: true, message: 'The paid mark on ' + period + ' was cleared.' };
+    }
+    var d = String(params.paidDate || '').trim(), bank = String(params.bankAccountCode || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { success: false, message: "Enter the bank's date of the payroll transfer." };
+    if (!bank) return { success: false, message: 'Choose the account the payroll was paid from.' };
+    if (String(data[idx][10] || '').trim()) return { success: false, message: period + ' is already marked paid on ' + _payrollDateCell(data[idx][10]) + '.' };
+    sheet.getRange(idx + 1, 11, 1, 4).setValues([[d, bank, by, new Date().toISOString()]]);
+    return { success: true, message: period + ' marked paid from ' + bank + ' on ' + d + '.' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/** Everything the books need from this spreadsheet, as of now (a full snapshot each time, so the
+ *  books can tell a new item from a changed or deleted one). Accounting, admin, director, or the
+ *  server itself (the shared secret). */
+function handleGetBooksFeed() {
+  try {
+    var reg = _payrollRegisterSheet().getDataRange().getValues();
+    var tables = _contribRows();
+    var appr = _payrollApprovalsSheet().getDataRange().getValues();
+    var inc = _payrollIncentivesSheet().getDataRange().getValues();
+    var commByPeriod = {};
+    for (var n = 1; n < inc.length; n++) {
+      if (String(inc[n][9] || '') === 'Voided' || String(inc[n][5] || '') !== 'Commission') continue;
+      var pk = String(inc[n][1] || '');
+      commByPeriod[pk] = _r2((commByPeriod[pk] || 0) + (parseFloat(inc[n][4]) || 0));
+    }
+    var payroll = [], latest = {};
+    for (var i = 1; i < appr.length; i++) latest[String(appr[i][0])] = appr[i];      // the last decision per period
+    Object.keys(latest).sort().forEach(function (period) {
+      var a = latest[period];
+      if (String(a[4]) !== 'Approved' || !/^\d{4}-\d{2}-[AB]$/.test(period)) return;
+      var rows = [];
+      for (var j = 1; j < reg.length; j++) {
+        var r = reg[j];
+        if (String(r[0]) !== period) continue;
+        rows.push({ employee: String(r[1]), basic: _r2(r[2]), holiday: _r2(r[3]), ot: _r2(r[4]), otherIncome: _r2(r[5]), gross: _r2(r[6]),
+                    pagibig: _r2(r[7]), sss: _r2(r[8]), philhealth: _r2(r[9]), advances: _r2(r[10]), wtax: _r2(r[11]),
+                    totalDeductions: _r2(r[12]), net: _r2(r[13]), incentive: _r2(r[14]), salaryDeduction: _r2(r[15]) });
+      }
+      payroll.push({ period: period, label: String(a[1] || ''), approvedAt: a[6] ? String(a[6]) : '', approvedBy: String(a[5] || ''),
+                     paidDate: _payrollDateCell(a[10]), paidBank: String(a[11] || ''), paidBy: String(a[12] || ''),
+                     commissionIncentives: commByPeriod[period] || 0, rows: rows,
+                     employerShares: period.slice(-1) === 'B' ? _payrollEmployerShares(period.slice(0, 7), reg, tables) : null });
+    });
+    var billing = [], prs = _paymentRequestsSheet().getDataRange().getValues();
+    for (var b = 1; b < prs.length; b++) {
+      var p = prs[b];
+      if (String(p[24] || '') !== 'Paid') continue;
+      billing.push({ prNumber: String(p[1] || ''), payee: String(p[6] || ''), department: String(p[3] || ''), purpose: String(p[4] || ''),
+                     currency: String(p[13] || 'PHP'), amount: _r2(p[14]), paidAt: p[25] ? String(p[25]) : '', bankAccountCode: String(p[30] || ''),
+                     bankTxId: String(p[31] || ''), valueDate: _payrollDateCell(p[32]), amountPHP: _r2(p[33]) });
+    }
+    var dps = [], dpData = _directorPayablesSheet().getDataRange().getValues();
+    for (var d = 1; d < dpData.length; d++) {
+      var q = dpData[d];
+      if (String(q[8] || '') !== 'Paid') continue;
+      dps.push({ id: String(q[0]), payee: String(q[3] || ''), category: String(q[4] || ''), description: String(q[5] || ''), amount: _r2(q[6]),
+                 currency: String(q[7] || 'PHP'), paidAt: q[9] ? String(q[9]) : '', bankAccount: String(q[11] || ''), bankTxId: String(q[12] || ''),
+                 valueDate: _payrollDateCell(q[14]), amountPHP: _r2(q[15]) });
+    }
+    var txs = [], tx = _bankTransactionsSheet().getDataRange().getValues();
+    for (var t = 1; t < tx.length; t++) {
+      var x = tx[t], refType = String(x[8] || '');
+      if (refType === 'PaymentRequest' || refType === 'DirectorPayable') continue;   // their bank legs come in with Billing / Payables
+      txs.push({ id: String(x[0]), date: x[1] ? String(x[1]).slice(0, 10) : '', accountCode: String(x[2] || ''), type: String(x[3] || ''),
+                 direction: parseInt(x[4], 10) || 0, amount: _r2(x[5]), currency: String(x[6] || 'PHP'), description: String(x[7] || ''),
+                 refType: refType, refId: String(x[9] || ''), pairedId: String(x[10] || '') });
+    }
+    return { success: true, codeVersion: CODE_VERSION, complete: true, payroll: payroll, billing: billing, directorPayables: dps, bankTransactions: txs };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
 function _directorPayablesSheet() {
   var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
   return _getOrCreateSheet(ss, 'Director Payables', [
     'ID', 'Created At', 'Due Date', 'Payee', 'Category', 'Description',
-    'Amount', 'Currency', 'Status', 'Paid At', 'Paid By', 'Bank Account', 'Bank Tx ID', 'Notes'
+    'Amount', 'Currency', 'Status', 'Paid At', 'Paid By', 'Bank Account', 'Bank Tx ID', 'Notes',
+    'Value Date', 'Amount PHP'                                    // A321 — appended
   ]);
+}
+function _dpEnsureBooksCols(sheet) {
+  [[15, 'Value Date'], [16, 'Amount PHP']].forEach(function (c) {
+    if (sheet.getLastColumn() < c[0] || !String(sheet.getRange(1, c[0]).getValue()).trim()) sheet.getRange(1, c[0]).setValue(c[1]);
+  });
 }
 
 function handleGetDirectorPayables(params) {
@@ -12760,13 +13038,18 @@ function handleMarkDirectorPayablePaid(params) {
     var description = String(row[5] || '');
     var paidBy = String((params && params.paidBy) || '');
     var paidAt = new Date().toISOString();
+    // A321 — the bank's date and, for a foreign payable, the pesos the bank took
+    var dpValueDate = /^\d{4}-\d{2}-\d{2}$/.test(String((params && params.valueDate) || '')) ? String(params.valueDate) : paidAt.slice(0, 10);
+    var dpPHP = parseFloat(params && params.amountPHP) || 0;
+    if (String(currency).toUpperCase() !== 'PHP' && !(dpPHP > 0)) return { success: false, message: 'This payable is in ' + currency + ': enter the pesos the bank actually debited.' };
+    if (!(dpPHP > 0)) dpPHP = amount;
 
     var bankTxId = _appendBankTransaction({
       accountCode: bankAccountCode,
       type: 'Payable Paid',
       direction: -1,
-      amount: amount,
-      currency: currency,
+      amount: dpPHP,                           // A321 — the peso account is debited in pesos
+      currency: 'PHP',
       description: 'Payable: ' + payee + (description ? ' — ' + description : ''),
       refType: 'DirectorPayable',
       refId: id,
@@ -12777,6 +13060,8 @@ function handleMarkDirectorPayablePaid(params) {
     sheet.getRange(rowIdx, 9, 1, 5).setValues([[
       'Paid', paidAt, paidBy, bankAccountCode, bankTxId
     ]]);
+    _dpEnsureBooksCols(sheet);
+    sheet.getRange(rowIdx, 15, 1, 2).setValues([[dpValueDate, dpPHP]]);   // A321
     return { success: true, bankTxId: bankTxId };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -12984,7 +13269,9 @@ function handleGetPayrollApprovals(params) {
         approvedBy: String(row[5] || ''),
         decidedAt: String(row[6] || ''),
         notes: String(row[7] || ''),
-        totals: totals
+        totals: totals,
+        // A321 — when and from which account the net pay left (blank until Mark paid)
+        paidDate: _payrollDateCell(row[10]), paidBank: String(row[11] || ''), paidBy: String(row[12] || '')
       };
       if (includeSnapshot) rec.snapshotHtml = String(row[9] || '');
       out.push(rec);

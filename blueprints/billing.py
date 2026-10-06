@@ -68,8 +68,10 @@ def mark_paid():
         "paidBy":           paid_by,
         "paymentSlipLink":  drive_link,
     }
-    if body.get("bankAccountCode"):
-        gs_payload["bankAccountCode"] = body.get("bankAccountCode")
+    # A321 — the bank's date and, for a foreign request, the pesos the bank took (Code.gs v5 checks both)
+    for key in ("bankAccountCode", "valueDate", "amountPHP"):
+        if body.get(key):
+            gs_payload[key] = str(body.get(key))
     gs_result = _gs_post(gs_payload)
     if not gs_result.get("success"):
         return jsonify({"success": False, "message": gs_result.get("message", "Sheet update failed")}), 500

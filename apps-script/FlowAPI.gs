@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 161;   // A320 — the books: a complete double-entry general ledger behind the booksEngine switch (off by default). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 162;   // A321 — payroll, Billing, Director Payables and bank transfers reach the books (Flask /books/sync). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -756,7 +756,7 @@ var _SECURED = {
   dispatchByScan: 1, linkBarcode: 1, receiveByScan: 1, saveScanCount: 1,   // A316
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
-  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1, syncBooks: 1,   // A320 — the books
+  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1, syncBooks: 1, ingestBookEvents: 1,   // A320 — the books
   getBooksCoverage: 1,
   getBooksStatus: 1, getAccounts: 1, getAccountRules: 1, getTaxCodes: 1, getGLEntries: 1, getGLTrialBalance: 1, getBooksInbox: 1,   // A320 — secured READS
   getScanContext: 1, getScanLookup: 1, getLabels: 1, getStockInOptions: 1, getScanPhotos: 1,   // A318 — secured READS (codes → details)
@@ -839,7 +839,7 @@ function _dispatch(params) {
   var action = params.action || '';
   _SS = null;
   _ROWS_MEMO = MUTATIONS[action] ? null : {};      // AS-2 — reads memoise each tab for this execution
-  _BOOKS_CFG = _BOOKS_ACCTS = _BOOKS_PERIODS = _BOOKS_EVX = null;   // A320 — the books caches live for one call
+  _BOOKS_CFG = _BOOKS_ACCTS = _BOOKS_PERIODS = _BOOKS_EVX = _BOOKS_IBX = null;   // A320 — the books caches live for one call
   try {
     var handler = HANDLERS[action];
     if (!handler) return _json({ success: false, message: 'Unknown action: ' + action });
@@ -13776,7 +13776,7 @@ var _MODULE_MAP = {
   dispatchByScan: ['Dispatch', 'Scanned Out'], linkBarcode: ['Inventory', 'Barcode Linked'],
   returnByScan: ['Dispatch', 'Returned'], setItemTracking: ['Inventory', 'Tracking Set'],   // A318
   registerAssets: ['Inventory', 'Pieces Registered'], createItemByScan: ['Inventory', 'Added by scan'],   // A319
-  saveAccount: ['Books', 'Account Saved'], saveAccountRule: ['Books', 'Rule Saved'], resolveBooksInboxItem: ['Books', 'Inbox Resolved'], syncBooks: ['Books', 'Synced'],   // A320
+  saveAccount: ['Books', 'Account Saved'], saveAccountRule: ['Books', 'Rule Saved'], resolveBooksInboxItem: ['Books', 'Inbox Resolved'], syncBooks: ['Books', 'Synced'], ingestBookEvents: ['Books', 'Payroll & payments synced'],   // A320 · A321
   createHire: ['Hire', 'Opened'], dispatchHireUnit: ['Hire', 'Dispatched'],
   returnHireUnit: ['Hire', 'Returned'], closeHire: ['Hire', 'Closed'],
   saveSupplier: ['Supplier', 'Saved'], deleteSupplier: ['Supplier', 'Removed'],
@@ -15679,7 +15679,10 @@ var _BOOKS_RULE_SEED = [
   ['expense.category', 'bank service charge', '6330'], ['expense.category', 'janitorial', '6350'],
   ['expense.category', 'medical expenses', '6360'], ['expense.category', 'miscellaneous', '6500'],
   ['travel.item', 'toll', '6120'], ['travel.item', 'fuel', '6110'], ['travel.item', 'meals', '6130'],
-  ['travel.item', 'load', '6140'], ['travel.item', 'other', '6100']
+  ['travel.item', 'load', '6140'], ['travel.item', 'other', '6100'],
+  // A321 — Director Payables categories that have one clear meaning; Tax, Loan, Insurance and
+  // Reimbursement need a person (which tax, principal vs interest, prepaid or expense, whose money).
+  ['dp.category', 'utilities', '6210'], ['dp.category', 'rent', '6200'], ['dp.category', 'personal', '1230']
 ];
 
 function _booksSeed() {
@@ -15830,6 +15833,49 @@ function _glInboxSettle(key, note) {
   });
 }
 
+/* A321 — a person's Inbox decision outlives the item. An event rebuilt from its source (a resync, an
+   edit, the coverage check) arrives with the same blank account it had the first time, because the
+   source never learns what was chosen. Without this it would land in the Inbox again on every sync.
+     · posted with an account → the same blanks take that account again (and the same new date, if the
+       person moved it out of a closed month), so the rebuilt entry matches and is a no-op;
+     · ignored → it stays out while the event is unchanged; a changed amount or date asks again. */
+var _BOOKS_IBX = null;
+function _glRawFp(evt) {
+  if (!evt) return '';
+  return _fnv(JSON.stringify([_dateStr(evt.date), (evt.lines || []).map(function (l) {
+    return [String(l.account || '').trim() || '?' + String(l.need || ''), _cents(l.debit), _cents(l.credit)]; })]));
+}
+/** Per event key: the raw fingerprints waiting Open, and the latest decision a person made. One read. */
+function _glInboxState() {
+  var st = {};
+  _rows('GLInbox').forEach(function (r) {
+    var k = String(r['Event Key']), status = String(r['Status']), s = st[k] = st[k] || { open: [], decision: null };
+    var human = status === 'Ignored' || (status === 'Resolved' && String(r['Resolved By']) !== 'system');
+    if (status !== 'Open' && !human) return;
+    var det = {};
+    try { det = JSON.parse(r['Detail JSON'] || '{}'); } catch (e) {}
+    if (status === 'Open') { s.open.push(_glRawFp(det.evt)); return; }
+    var at = r['Resolved At'] ? new Date(r['Resolved At']).getTime() || 0 : 0;
+    if (s.decision && at < s.decision.at) return;
+    var d = det.decision || {};
+    s.decision = { ignored: status === 'Ignored', at: at, fp: _glRawFp(det.evt), account: String(d.account || ''),
+                   needs: d.needs || [], date: String(d.date || ''), fromDate: String(d.fromDate || '') };
+  });
+  return st;
+}
+/** Apply the earlier decision to a rebuilt event (in place). Returns 'ignored' when it must stay out. */
+function _glApplyDecision(evt, state, always) {
+  var blanks = (evt.lines || []).filter(function (l) { return !String(l.account || '').trim(); });
+  if (!blanks.length && !always) return '';                                         // nothing a decision could change: no read
+  if (!state) state = _BOOKS_IBX = _BOOKS_IBX || _glInboxState();                    // once per call; decisions do not change within one
+  var d = (state[String(evt.key || '')] || {}).decision;
+  if (!d) return '';
+  if (d.ignored) return blanks.length && d.fp === _glRawFp(evt) ? 'ignored' : '';
+  if (d.account) blanks.forEach(function (l) { if (d.needs.indexOf(String(l.need || '')) !== -1) l.account = d.account; });
+  if (d.date && d.fromDate && _dateStr(evt.date) === d.fromDate) evt.date = d.date;
+  return '';
+}
+
 /* ── the one writer ────────────────────────────────────────────────────────────────────────────── */
 /** Normalise an event's lines to centavos; returns { lines, dr, cr, problem }. */
 function _glLines(evt) {
@@ -15902,6 +15948,8 @@ function _glPost(evt) {
   var d = _dateStr(evt.date);
   if (!d) return _glInbox(evt, 'no date');
   if (d < _booksCfg().booksStartDate) return { skipped: 'before books start' };
+  if (_glApplyDecision(evt, _BOOKS_IBX) === 'ignored') return { ignored: true };      // only reads when a line is blank
+  d = _dateStr(evt.date);
   var n = _glLines(evt);
   if (n.problem) {
     var reason = n.problem.indexOf('needs-account:') === 0 ? 'no ' + n.problem.slice('needs-account:'.length)
@@ -15911,7 +15959,13 @@ function _glPost(evt) {
     return _glInbox(evt, reason, { problem: n.problem, dr: _pesos(n.dr), cr: _pesos(n.cr) });
   }
   var fp = _glFingerprint(evt, n.lines), prev = _booksIndex()[evt.key], reversed = '';
-  if (prev && String(prev['Status']) === 'Posted') {
+  var posted = prev && String(prev['Status']) === 'Posted';
+  if ((posted && String(prev['Fingerprint']) !== fp) || (!posted && _periodStatus(_periodOf(d)) === 'Closed')) {
+    // about to re-post or refuse: a person may have moved this event out of a closed month in the Inbox
+    _glApplyDecision(evt, _BOOKS_IBX, true);
+    if (_dateStr(evt.date) !== d) { d = _dateStr(evt.date); n = _glLines(evt); fp = _glFingerprint(evt, n.lines); }
+  }
+  if (posted) {
     if (String(prev['Fingerprint']) === fp) return { noop: true, entryNo: String(prev['Entry No']) };
     // the source changed: reverse the old entry and post the new one — but never inside a closed month
     if (_periodStatus(_periodOf(prev['Date'])) === 'Closed' || _periodStatus(_periodOf(d)) === 'Closed') {
@@ -16227,7 +16281,8 @@ function _booksOtherPaymentEvent(prNo) {
   var vatC = (meta['Supplier TIN'] && meta['SI/OR No']) ? _cents(meta['VAT Amount']) : 0;
   var ewtC = String(_booksCfg().ewtMode) === 'on' ? _cents(meta['EWT Amount']) : 0;
   var grossC = settledC + ewtC;                                  // what we owed: cash paid + tax withheld for BIR
-  evt.lines.push({ account: acct, need: need, debit: _pesos(grossC - vatC), memo: String(r['Purpose'] || 'Payment ' + prNo).slice(0, 120) });
+  evt.lines.push({ account: acct, need: need, debit: _pesos(grossC - vatC), memo: String(r['Purpose'] || 'Payment ' + prNo).slice(0, 120),
+                   rule: { source: 'pr.department', value: String(r['Department'] || '') } });
   if (vatC) evt.lines.push({ account: '1500', debit: _pesos(vatC), taxCode: 'VAT-IN-S', taxBase: _pesos(grossC - vatC), memo: 'Input VAT ' + meta['SI/OR No'] });
   if (charge) evt.lines.push({ account: '6330', debit: _pesos(charge), memo: 'Bank charge — ' + prNo });
   if (ewtC) evt.lines.push({ account: '2310', credit: _pesos(ewtC), taxCode: String(meta['EWT ATC'] || ''), taxBase: _num(meta['EWT Base']), memo: 'EWT withheld — ' + prNo });
@@ -16260,7 +16315,8 @@ function _booksExpenseEvent(expNo) {
   var amtC = _cents(e['Amount']), vatC = (meta['Supplier TIN'] && meta['SI/OR No']) ? _cents(meta['VAT Amount']) : 0;
   var evt = { key: key, date: e['Date'], sourceType: 'Expense', sourceNo: String(expNo), party: String(e['Client'] || ''),
               memo: 'Expense ' + expNo + ' — ' + String(e['Category'] || '') + (e['Description'] ? ' · ' + String(e['Description']).slice(0, 80) : ''), lines: [] };
-  evt.lines.push({ account: acct, need: 'account for ' + String(e['Category'] || 'this category'), debit: _pesos(amtC - vatC), memo: String(e['Description'] || e['Category'] || '').slice(0, 120) });
+  evt.lines.push({ account: acct, need: 'account for ' + String(e['Category'] || 'this category'), debit: _pesos(amtC - vatC), memo: String(e['Description'] || e['Category'] || '').slice(0, 120),
+                   rule: { source: 'expense.category', value: String(e['Category'] || '') } });   // A321 — what "remember this" saves
   if (vatC) evt.lines.push({ account: '1500', debit: _pesos(vatC), taxCode: 'VAT-IN-S', taxBase: _pesos(amtC - vatC), memo: 'Input VAT ' + meta['SI/OR No'] });
   evt.lines.push({ account: paidAcct, need: 'paid from', credit: _pesos(amtC), memo: 'Paid — ' + expNo });
   return evt;
@@ -16285,7 +16341,7 @@ function _booksTravelEvent(travNo) {
   ['toll', 'fuel', 'meals', 'load', 'other'].forEach(function (b) {
     if (!totals[b]) return;
     var rule = _booksRule('travel.item', b);
-    evt.lines.push({ account: rule ? rule.account : '', need: 'travel account for ' + b, debit: _pesos(totals[b]), memo: 'Travel ' + b + ' — ' + who });
+    evt.lines.push({ account: rule ? rule.account : '', need: 'travel account for ' + b, debit: _pesos(totals[b]), memo: 'Travel ' + b + ' — ' + who, rule: { source: 'travel.item', value: b } });
     sum += totals[b];
   });
   evt.lines.push({ account: '2025', credit: _pesos(sum), memo: 'Owed to ' + who + ' — ' + travNo });
@@ -16366,11 +16422,14 @@ function _booksCheck(src) {
   if (ev.skip) return { state: 'skipped', why: ev.skip };
   var ix = _booksIndex()[ev.key];
   if (ev.voided) return (!ix || String(ix['Status']) !== 'Posted') ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'voided but still posted' };
+  if (_glApplyDecision(ev, _BOOKS_IBX) === 'ignored') return { state: 'skipped', key: ev.key, why: 'ignored in the Inbox' };
   var open = _rows('GLInbox').some(function (i) { return String(i['Event Key']) === ev.key && String(i['Status']) === 'Open'; });
   if (!ix || String(ix['Status']) !== 'Posted') return { state: open ? 'inbox' : 'missing', key: ev.key };
   var n = _glLines(ev);
   if (n.problem) return { state: open ? 'inbox' : 'changed', key: ev.key, why: 'would not post now: ' + n.problem };
-  return String(ix['Fingerprint']) === _glFingerprint(ev, n.lines) ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'changed since it was posted' };
+  var fp = _glFingerprint(ev, n.lines), d0 = _dateStr(ev.date);
+  if (String(ix['Fingerprint']) !== fp && _glApplyDecision(ev, _BOOKS_IBX, true) !== 'ignored' && _dateStr(ev.date) !== d0) fp = _glFingerprint(ev, _glLines(ev).lines);   // moved by a person
+  return String(ix['Fingerprint']) === fp ? { state: 'ok', key: ev.key } : { state: 'changed', key: ev.key, why: 'changed since it was posted' };
 }
 function getBooksCoverage(p) {
   if (!_booksMayView(p)) return { success: false, message: 'Not permitted.' };
@@ -16407,6 +16466,128 @@ function syncBooks(p) {
            message: done + ' posted' + (inbox ? ', ' + inbox + ' sent to the Inbox' : '') + (left ? ', ' + left + ' left — press again' : '') + '.' };
 }
 
+/* ── A321 · money that lives in Code.gs (payroll, Billing, Director Payables, the bank page) ─────── */
+/* The Flask bridge (/books/sync) reads Code.gs getBooksFeed — a full snapshot each time — and hands it
+   here. Each item becomes an event keyed CG:<kind>:<id that never changes>; a key that has vanished
+   from the snapshot (un-marked, deleted) is withdrawn; a changed one re-posts by reversal. */
+function _cgPayrollEvent(pp, basicBefore) {
+  var period = String(pp.period || ''), m = period.slice(0, 7), cut = period.slice(-1);
+  var evt = { key: 'CG:PAY:' + period, date: m + (cut === 'A' ? '-10' : '-25'), sourceType: 'Payroll', sourceNo: period,
+              memo: 'Payroll ' + period + (pp.label ? ' (' + pp.label + ')' : ''), lines: [] };
+  var t = { gross: 0, hdmf: 0, sss: 0, ph: 0, adv: 0, wtax: 0, sd: 0, net: 0, basic: 0, ded: 0 };
+  (pp.rows || []).forEach(function (r) {
+    t.gross += _cents(r.gross); t.hdmf += _cents(r.pagibig); t.sss += _cents(r.sss); t.ph += _cents(r.philhealth);
+    t.adv += _cents(r.advances); t.wtax += _cents(r.wtax); t.sd += _cents(r.salaryDeduction); t.net += _cents(r.net); t.basic += _cents(r.basic);
+  });
+  var comm = Math.min(_cents(pp.commissionIncentives), t.gross);
+  evt.lines.push({ account: '6010', debit: _pesos(t.gross - comm), memo: 'Salaries & wages ' + period });
+  if (comm) evt.lines.push({ account: '2040', debit: _pesos(comm), memo: 'Commissions paid through payroll ' + period });
+  if (t.hdmf) evt.lines.push({ account: '2420', credit: _pesos(t.hdmf), memo: 'Pag-IBIG (employee) ' + period });
+  if (t.sss) evt.lines.push({ account: '2400', credit: _pesos(t.sss), memo: 'SSS (employee) ' + period });
+  if (t.ph) evt.lines.push({ account: '2410', credit: _pesos(t.ph), memo: 'PhilHealth (employee) ' + period });
+  if (t.wtax) evt.lines.push({ account: '2300', credit: _pesos(t.wtax), memo: 'Withholding tax on compensation ' + period });
+  if (t.adv) evt.lines.push({ account: '1210', credit: _pesos(t.adv), memo: 'Cash advances recovered ' + period });
+  if (t.sd) evt.lines.push({ account: '1220', credit: _pesos(t.sd), memo: 'Salary deductions recovered ' + period });
+  evt.lines.push({ account: '2030', credit: _pesos(t.net), memo: 'Net pay ' + period });
+  // 13th month = basic ÷ 12, exact per month: cutoff B accrues the month's total less what cutoff A already did
+  var before = _cents(basicBefore), thirteenth = Math.round((before + t.basic) / 12) - Math.round(before / 12);
+  if (thirteenth) { evt.lines.push({ account: '6030', debit: _pesos(thirteenth), memo: '13th-month accrual ' + period }); evt.lines.push({ account: '2035', credit: _pesos(thirteenth), memo: '13th-month accrual ' + period }); }
+  var es = pp.employerShares;
+  if (es) {
+    if ((es.missing || []).length) evt.lines.push({ account: '', need: 'contribution table for ' + es.missing.join(', '), debit: 0.01 });
+    else {
+      var tt = es.totals || {}, sssER = _cents(tt.sssER) + _cents(tt.sssEC), phER = _cents(tt.phER), hdER = _cents(tt.hdmfER);
+      if (sssER + phER + hdER) evt.lines.push({ account: '6020', debit: _pesos(sssER + phER + hdER), memo: 'Employer contributions ' + m });
+      if (sssER) evt.lines.push({ account: '2400', credit: _pesos(sssER), memo: 'SSS (employer + EC) ' + m });
+      if (phER) evt.lines.push({ account: '2410', credit: _pesos(phER), memo: 'PhilHealth (employer) ' + m });
+      if (hdER) evt.lines.push({ account: '2420', credit: _pesos(hdER), memo: 'Pag-IBIG (employer) ' + m });
+    }
+  }
+  if (Math.abs(t.gross - (t.hdmf + t.sss + t.ph + t.adv + t.wtax + t.sd + t.net)) > 1) evt.lines.push({ account: '', need: 'a payroll register that adds up (gross = deductions + net)', debit: 0.01 });
+  return evt;
+}
+function _cgPayrollPaidEvent(pp) {
+  if (!pp.paidDate) return null;
+  var net = 0;
+  (pp.rows || []).forEach(function (r) { net += _cents(r.net); });
+  return { key: 'CG:PAYPAID:' + pp.period, date: pp.paidDate, sourceType: 'Payroll paid', sourceNo: String(pp.period), memo: 'Payroll ' + pp.period + ' paid',
+           lines: [{ account: '2030', debit: _pesos(net), memo: 'Net pay ' + pp.period }, { account: _booksBankAccount(pp.paidBank), need: 'bank', credit: _pesos(net), memo: 'Paid from ' + (pp.paidBank || '?') }] };
+}
+/** A paid Billing request or Director Payable: Dr what it was for / Cr the bank it left. */
+function _cgPaymentEvent(key, src, ruleSource, ruleValue, x) {
+  var cur = String(x.currency || 'PHP').toUpperCase(), php = _cents(x.amountPHP) || (cur === 'PHP' ? _cents(x.amount) : 0);
+  var rule = _booksRule(ruleSource, ruleValue);
+  var evt = { key: key, date: x.valueDate || _dateStr(x.paidAt), sourceType: src, sourceNo: String(x.prNumber || x.id || ''), party: String(x.payee || ''),
+              memo: src + ' — ' + String(x.payee || '') + (x.purpose || x.description ? ' · ' + String(x.purpose || x.description).slice(0, 100) : ''), lines: [] };
+  if (!php) { evt.lines.push({ account: '', need: 'the pesos the bank debited', debit: 0.01 }); return evt; }
+  evt.lines.push({ account: rule ? rule.account : '', need: 'account for ' + (ruleValue || 'this payment'), debit: _pesos(php), memo: String(x.purpose || x.description || src).slice(0, 120),
+                   rule: { source: ruleSource, value: String(ruleValue || '') } });
+  evt.lines.push({ account: _booksBankAccount(x.bankAccountCode || x.bankAccount), need: 'bank', credit: _pesos(php), memo: 'Paid — ' + src });
+  return evt;
+}
+/** Bank-page movements: own-bank transfers post themselves; every other kind needs a person. */
+function _cgBankEvents(txs) {
+  var byId = {}, out = [], done = {};
+  (txs || []).forEach(function (t) { byId[t.id] = t; });
+  (txs || []).forEach(function (t) {
+    if (done[t.id]) return;
+    if (/transfer/i.test(t.type) && t.pairedId && byId[t.pairedId]) {
+      var o = byId[t.pairedId], inn = t.direction === 1 ? t : o, outL = t.direction === 1 ? o : t;
+      done[t.id] = done[o.id] = 1;
+      var xl = [{ account: _booksBankAccount(inn.accountCode), need: 'bank', debit: _pesos(_cents(inn.amount)) }, { account: _booksBankAccount(outL.accountCode), need: 'bank', credit: _pesos(_cents(outL.amount)) }];
+      var gap = _cents(outL.amount) - _cents(inn.amount);         // less arrived than left: usually a bank fee — a person says
+      if (gap) xl.push({ account: '', need: 'the transfer difference (a bank fee?)', debit: gap > 0 ? _pesos(gap) : 0, credit: gap < 0 ? _pesos(-gap) : 0 });
+      out.push({ key: 'CG:XFER:' + [t.id, o.id].sort()[0], date: inn.date || outL.date, sourceType: 'Bank transfer', sourceNo: t.id, memo: 'Transfer ' + (outL.accountCode || '?') + ' → ' + (inn.accountCode || '?'), lines: xl });
+      return;
+    }
+    done[t.id] = 1;
+    var bank = _booksBankAccount(t.accountCode), amt = _pesos(_cents(t.amount));
+    out.push({ key: 'CG:BANK:' + t.id, date: t.date, sourceType: 'Bank page', sourceNo: t.id, memo: (t.type || 'Bank movement') + ' — ' + String(t.description || '').slice(0, 120),
+               lines: t.direction === 1 ? [{ account: bank, need: 'bank', debit: amt }, { account: '', need: 'classification of this bank movement', credit: amt }]
+                                        : [{ account: '', need: 'classification of this bank movement', debit: amt }, { account: bank, need: 'bank', credit: amt }] });
+  });
+  return out;
+}
+function ingestBookEvents(p) {
+  if (!_booksMayAct(p) && _booksRole(p) !== 'system') return { success: false, message: 'Only accounting, admin or the director can sync the books.' };
+  if (!_booksOn()) return { success: false, message: 'The books are switched off.' };
+  var feed = {};
+  try { feed = typeof p.feed === 'string' ? JSON.parse(p.feed || '{}') : (p.feed || {}); } catch (e) { return { success: false, message: 'The payroll feed could not be read.' }; }
+  var evs = [];
+  var basicA = {};                                                  // month → cutoff A's basic, for B's 13th-month share
+  (feed.payroll || []).forEach(function (pp) { var s = String(pp.period || '');
+    if (s.slice(-1) === 'A') basicA[s.slice(0, 7)] = (pp.rows || []).reduce(function (n, r) { return n + (Number(r.basic) || 0); }, 0); });
+  (feed.payroll || []).forEach(function (pp) { var s = String(pp.period || '');
+    evs.push(_cgPayrollEvent(pp, s.slice(-1) === 'B' ? basicA[s.slice(0, 7)] : 0)); var paid = _cgPayrollPaidEvent(pp); if (paid) evs.push(paid); });
+  (feed.billing || []).forEach(function (b) { evs.push(_cgPaymentEvent('CG:BILL:' + (b.bankTxId || 'PR:' + b.prNumber), 'Billing', 'billing.department', b.department, b)); });
+  (feed.directorPayables || []).forEach(function (d) { evs.push(_cgPaymentEvent('CG:DP:' + d.id, 'Director payable', 'dp.category', d.category, d)); });
+  _cgBankEvents(feed.bankTransactions).forEach(function (e) { evs.push(e); });
+  var t0 = Date.now(), seen = {}, c = { posted: 0, unchanged: 0, inbox: 0, skipped: 0, withdrawn: 0, left: 0 };
+  _BOOKS_IBX = _glInboxState();                                     // decisions do not change during a sync
+  evs.forEach(function (e) {
+    seen[e.key] = 1;
+    if (Date.now() - t0 > 25000) { c.left++; return; }
+    e.by = p.actorName || '';
+    var st = _BOOKS_IBX[e.key];
+    if (st && st.open.length && !_glApplyDecision(e, _BOOKS_IBX) && (e.lines || []).some(function (l) { return !String(l.account || '').trim(); }) &&
+        st.open.indexOf(_glRawFp(e)) !== -1) { c.inbox++; return; }   // already waiting for a person, unchanged: nothing to write
+    var r = _booksSafe(e.key, function () { return _glPost(e); }) || {};
+    if (r.posted) c.posted++; else if (r.noop || r.ignored) c.unchanged++; else if (r.inbox) c.inbox++; else c.skipped++;
+  });
+  _BOOKS_IBX = null;
+  if (feed.complete && !c.left) {                                   // only a whole snapshot may withdraw
+    Object.keys(_booksIndex()).forEach(function (k) {
+      if (k.indexOf('CG:') !== 0 || seen[k]) return;
+      var ix = _booksIndex()[k];
+      if (String(ix['Status']) === 'Posted') { var w = _booksSafe(k, function () { return _glWithdraw(k, _dateStr(_now()), 'removed in Code.gs', p.actorName); }); if (w && w.reversed) c.withdrawn++; }
+      else _glInboxSettle(k, 'Removed in Code.gs');
+    });
+  }
+  _booksAudit(p, 'ingestBookEvents', 'Code.gs feed', null, c);
+  return { success: true, counts: c, refNo: 'payroll & payments', message: c.posted + ' posted, ' + c.unchanged + ' unchanged' + (c.inbox ? ', ' + c.inbox + ' waiting in the Inbox' : '') +
+           (c.withdrawn ? ', ' + c.withdrawn + ' withdrawn' : '') + (c.left ? ', ' + c.left + ' left — sync again' : '') + '.' };
+}
+
 /* ── reads ─────────────────────────────────────────────────────────────────────────────────────── */
 function getBooksStatus(p) {
   if (!_booksMayView(p)) return { success: false, message: 'The books are for accounting, admin, management and the director.' };
@@ -16414,8 +16595,13 @@ function getBooksStatus(p) {
   var inbox = _rows('GLInbox').filter(function (r) { return String(r['Status']) === 'Open'; }).length;
   var gl = _rows('GL'), dr = 0, cr = 0;
   gl.forEach(function (r) { dr += _cents(r['Debit']); cr += _cents(r['Credit']); });
+  var last = null;                                                  // A321 — the last payroll & payments sync
+  _rows('BooksAudit').forEach(function (r) { if (String(r['Action']) === 'ingestBookEvents') last = r; });
+  var lastSync = null;
+  if (last) { var cn = {}; try { cn = JSON.parse(last['After JSON'] || '{}') || {}; } catch (e) {}
+              lastSync = { at: last['At'] instanceof Date ? Utilities.formatDate(last['At'], Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : String(last['At'] || ''), by: String(last['Actor'] || ''), counts: cn }; }
   return { success: true, mode: c.booksEngine, startDate: c.booksStartDate, approvalMode: c.booksApprovalMode,
-           ewtMode: c.ewtMode, inboxOpen: inbox, glLines: gl.length, totals: { debit: _pesos(dr), credit: _pesos(cr), balanced: dr === cr } };
+           ewtMode: c.ewtMode, inboxOpen: inbox, glLines: gl.length, totals: { debit: _pesos(dr), credit: _pesos(cr), balanced: dr === cr }, lastSync: lastSync };
 }
 function getAccounts(p) {
   if (!_booksMayView(p)) return { success: false, message: 'Not permitted.' };
@@ -16532,10 +16718,12 @@ function saveAccount(p) {
   return { success: true, refNo: code, message: code + ' ' + name + ' added.' };
 }
 /** Add or change a mapping rule ("remember this"). */
+var _BOOKS_RULE_SOURCES = ['expense.category', 'pr.department', 'travel.item', 'billing.department', 'dp.category'];   // what a rule can match
 function saveAccountRule(p) {
   if (!_booksMayAct(p)) return { success: false, message: 'Only accounting, admin or the director can change the rules.' };
   var source = String(p.source || '').trim(), value = String(p.value || '').trim(), account = String(p.account || '').trim();
   if (!source || !value) return { success: false, message: 'A rule needs what it matches.' };
+  if (_BOOKS_RULE_SOURCES.indexOf(source) === -1) return { success: false, message: 'Unknown rule kind ' + source + '.' };
   var a = _booksAccounts();
   if (!a[account] || !a[account].active || !a[account].postable) return { success: false, message: 'Pick an active account for the rule.' };
   _booksSeed();
@@ -16564,6 +16752,7 @@ function resolveBooksInboxItem(p) {
   var det = {};
   try { det = JSON.parse(row['Detail JSON'] || '{}'); } catch (e) {}
   var evt = det.evt || null, act = String(p.resolution || p.action || '').toLowerCase(), result = '';
+  var orig = evt ? JSON.parse(JSON.stringify(evt)) : null;           // what the source said, before the person's choice
   if (act === 'ignore') {
     var why = String(p.reason || '').trim();
     if (why.length < 4) return { success: false, message: 'Say why this is not posted (for example "duplicate of INV-…").' };
@@ -16571,6 +16760,8 @@ function resolveBooksInboxItem(p) {
   } else if (act === 'post') {
     if (!evt) return { success: false, message: 'This item has nothing to post.' };
     var acct = String(p.account || '').trim();
+    det.decision = { account: acct, needs: (evt.lines || []).filter(function (l) { return !String(l.account || '').trim(); }).map(function (l) { return String(l.need || ''); }),
+                     date: p.date ? _dateStr(p.date) : '', fromDate: _dateStr(evt.date) };
     if (acct) (evt.lines || []).forEach(function (l) { if (!String(l.account || '').trim()) l.account = acct; });
     if (p.date) {
       if (!_periodOpen(p.date) || _periodStatus(_periodOf(p.date)) === 'Closed') return { success: false, message: _periodOf(p.date) + ' is closed.' };
@@ -16585,6 +16776,7 @@ function resolveBooksInboxItem(p) {
     if (p.remember && p.ruleSource && p.ruleValue && acct) saveAccountRule({ actorRole: p.actorRole, actorName: p.actorName, source: p.ruleSource, value: p.ruleValue, account: acct });
   } else return { success: false, message: 'Choose post or ignore.' };
   var line = SCHEMA.GLInbox.map(function (h) { return row[h]; });
+  if (orig) { det.evt = orig; line[9] = JSON.stringify(det); }       // A321 — kept so a rebuilt event reuses the decision
   line[11] = act === 'ignore' ? 'Ignored' : 'Resolved'; line[13] = p.actorName || ''; line[14] = _now(); line[15] = result;
   _sheet('GLInbox').getRange(row.rowIndex, 1, 1, line.length).setValues([line]);
   _booksAudit(p, 'resolveBooksInboxItem', id, { reason: row['Reason'] }, { result: result });
@@ -16683,7 +16875,7 @@ var HANDLERS = {
   getBooksStatus: getBooksStatus, getAccounts: getAccounts, getAccountRules: getAccountRules, getTaxCodes: getTaxCodes,
   getGLEntries: getGLEntries, getGLTrialBalance: getGLTrialBalance, getBooksInbox: getBooksInbox,
   saveAccount: saveAccount, saveAccountRule: saveAccountRule, resolveBooksInboxItem: resolveBooksInboxItem,
-  getBooksCoverage: getBooksCoverage, syncBooks: syncBooks,
+  getBooksCoverage: getBooksCoverage, syncBooks: syncBooks, ingestBookEvents: ingestBookEvents,
   previewReceivingReversal: previewReceivingReversal, reverseReceiving: reverseReceiving,
   getInvoices: getInvoices, createInvoice: createInvoice,
   getChartOfAccounts: getChartOfAccounts, getJournal: getJournal, getTrialBalance: getTrialBalance,
@@ -16747,7 +16939,7 @@ var MUTATIONS = {
   linkBarcode: 1, saveScanCount: 1, receiveByScan: 1, dispatchByScan: 1,
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
-  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1, syncBooks: 1,   // A320
+  saveAccount: 1, saveAccountRule: 1, resolveBooksInboxItem: 1, syncBooks: 1, ingestBookEvents: 1,   // A320 · A321
   // A276 — every hire write. The lock matters here for the same reason A243 gives: these read a row,
   // decide from it and write back, so two dispatches racing on one unit would both read 'not out'.
   createHire: 1, dispatchHireUnit: 1, returnHireUnit: 1, closeHire: 1,
@@ -16836,6 +17028,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A321 PAYROLL AND THE CODE.GS PAYMENTS REACH THE BOOKS (162). ingestBookEvents takes a full snapshot from Code.gs v5 (getBooksFeed, carried by Flask /books/sync with the shared secret and the caller's real role): each approved cutoff posts once (CG:PAY:<period>, dated the 10th or the 25th) — gross to 6010 with commission incentives clearing 2040, every deduction to its payable, net to 2030, the 13th month accrued at basic ÷ 12 exact per month, and on cutoff B the month's employer shares from the contribution tables (a missing table → Inbox, never a guess); Mark payroll paid clears 2030 from the bank (CG:PAYPAID); a paid Billing request (CG:BILL:<Bank Tx ID>) or Director Payable (CG:DP:<id>) posts by its rule (billing.department / dp.category; seeds utilities 6210, rent 6200, personal 1230) in the pesos the bank took, else the Inbox; own-bank transfers post themselves (a difference asks about the fee); every other bank-page movement waits for a person. A key gone from a COMPLETE snapshot is withdrawn by reversal; a partial one withdraws nothing. A person's Inbox decision now outlives the item (_glApplyDecision): a rebuilt event takes the same account (and the same moved date) and is a no-op, an ignored one stays out until its amount or date changes, and a waiting item is not rewritten on every sync. Event lines name the rule "remember this" saves (A320 always saved an expense category); saveAccountRule accepts only the five rule kinds. getBooksStatus says when payroll and payments were last synced.
 A320 THE BOOKS (161). A complete double-entry general ledger behind the booksEngine setting (off / shadow / on; OFF by default, and while off nothing is written and nothing is refused). One writer (_glPost): integer centavos, balanced or refused, one block write per entry, indexed by an immutable event key in EventIndex; the same event is a no-op, a changed one is reversed and re-posted, nothing is ever deleted. Anything uncertain waits in the Books Inbox (GLInbox) with the whole event; nothing posts on a guess. New tabs Accounts (chart as data), AccountRules, TaxCodes, GL, EventIndex, GLInbox, Periods, BooksAudit, DocMeta (accounting fields kept off the positional sheets, with a permanent Doc ID per document) and DocAliases. Posting: invoices (by VAT type 12% / zero-rated / exempt, rental, deposits, per-item COGS), collections (to the bank deposited, 2307 EWT), purchases by the advances model (payments before receipt to 1460, receiving at advances' historical pesos + unadvanced FC at the receipt-date rate to 2010, realised FX on later payments, import VAT with its import entry, local VAT only with TIN + SI), other payments, manual expenses, travel weeks (2025) and float advances (1210), commission accruals (2040). With the books on: closed months refuse documents, 0% invoices say zero-rated or exempt, collections say where the money went, payments say which company account and the bank value date, AP Aging is no second door to pay. Coverage (getBooksCoverage) proves every money record is posted, waiting or flagged; syncBooks posts what is missing or changed. LIVE FIXES regardless of the switch: an approved travel week is no longer expensed twice when its payout is paid, and a travel float advance is no longer booked as an expense.
 A319 STOCK IN ADDS A NEW ITEM (160). createItemByScan (every scanner role): photo first (New item photo, filed under _Warehouse/New items, then re-filed to the Item ID), name, brand (_SCAN_BRANDS), model, type (_SCAN_CATEGORIES), quantity. The item is created through addInventoryItem as Stock with the quantity on hand and no cost (no journal; accounting fills the cost); Description = Brand Type Name, Item No = model; refused when the model or the scanned barcode already belongs to an item (the reply names it). It gets its ITEM label, and with Track each piece a TrackedItems row and one PIECE label per piece. New tab ItemDetails keeps brand, model, type and photos; getScanLookup shows them and getScanContext(stockin) returns details incl. costPending.
 A318 SCANNER PROOF, PIECES AND LABELS (159). Every receive, count, dispatch and return now needs at least one photo, uploaded one at a time by uploadScanPhoto into the document's own Drive folder and the Documents register (types Receiving photo / Dispatch photo / Return photo / Piece photo, never a gated document type); ScanLog gains Photos. New tabs Labels, TrackedItems, Assets, Returns. An item switched to Track each piece (setItemTracking) gets one Assets row and one PIECE label per piece received (receiveByScan) or registered (registerAssets, capped by the balance); a tracked SO line is dispatched piece by piece (each In warehouse, of that item, once) and returnByScan brings Out pieces back. Still record only: no stock moves at dispatch or return. Labels carry an opaque code (HX + 12 Crockford base32, one per item type via ensureItemLabels, one per piece); logLabelPrint counts prints; getLabels is the label library. getScanContext, getScanLookup, getLabels, getStockInOptions (open PO lines holding an item, stock POs first) and getScanPhotos are secured reads limited to the scanner roles, so a code means nothing without a signed-in scanner. Old HXI: labels still resolve.

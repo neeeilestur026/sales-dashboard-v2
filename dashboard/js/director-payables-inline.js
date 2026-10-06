@@ -202,6 +202,15 @@
     // Default: AUB
     var aub = bankAccounts.find(function (a) { return /AUB/i.test(a.code); });
     if (aub) sel.value = aub.code;
+    // A321 — the bank's date (today by default); for a foreign payable, the pesos the bank took
+    var vd = document.getElementById('payValueDate');
+    if (vd) { vd.value = todayISO(); vd.max = todayISO(); }
+    var cur = String(p.currency || 'PHP').toUpperCase(), phpRow = document.getElementById('payPHPRow');
+    if (phpRow) {
+      phpRow.style.display = cur === 'PHP' ? 'none' : '';   // .dp-modal .row is display:flex, so [hidden] would not hide it
+      document.getElementById('payAmountPHP').value = '';
+      document.getElementById('payPHPLabel').textContent = 'Pesos the bank debited for ' + cur + ' ' + Number(p.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 }) + ' *';
+    }
     document.getElementById('payModalBg').classList.add('open');
   };
   window.closePayModal = function () { document.getElementById('payModalBg').classList.remove('open'); };
@@ -209,11 +218,21 @@
     var id = document.getElementById('payPayableId').value;
     var bankAccountCode = document.getElementById('payBankAccount').value;
     if (!id || !bankAccountCode) { alert('Choose a bank account.'); return; }
+    var vdEl = document.getElementById('payValueDate'), valueDate = vdEl ? vdEl.value : '';
+    if (vdEl && !/^\d{4}-\d{2}-\d{2}$/.test(valueDate)) { alert('Enter the date the bank paid it.'); return; }
+    if (valueDate > todayISO()) { alert('The bank date cannot be in the future.'); return; }
+    var phpRow = document.getElementById('payPHPRow'), amountPHP = '';
+    if (phpRow && phpRow.style.display !== 'none') {
+      amountPHP = parseFloat(document.getElementById('payAmountPHP').value) || 0;
+      if (!(amountPHP > 0)) { alert('Enter the pesos the bank debited — the books need what actually left the account.'); return; }
+    }
     var user = (typeof getCurrentUser === 'function' ? getCurrentUser() : null) || {};
     apiMarkDirectorPayablePaid({
       id: id,
       bankAccountCode: bankAccountCode,
-      paidBy: user.username || user.email || user.name || ''
+      paidBy: user.username || user.email || user.name || '',
+      valueDate: valueDate,                           // A321
+      amountPHP: amountPHP ? String(amountPHP) : ''
     }).then(function (res) {
       if (res && res.success === false) throw new Error(res.message || 'Mark Paid failed');
       closePayModal();

@@ -314,19 +314,49 @@ function confirmMarkPaid() {
   _confirmAndPay();
 }
 
-function _confirmAndPay() {
+/* A321 — Code.gs debits a bank account on the bank page and the books post the payment on the bank's
+   date in the pesos it took, so the confirm box asks for all three (the pesos only for a foreign request). */
+function _todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+async function _confirmAndPay() {
   const r = _currentRecord;
-  const amt = r.amount ? `₱${parseFloat(String(r.amount).replace(/,/g,'')).toLocaleString('en-PH',{minimumFractionDigits:2})}` : '';
+  const cur = String(r.currency || 'PHP').toUpperCase();
+  const amt = r.amount ? `${cur === 'PHP' ? '₱' : cur + ' '}${parseFloat(String(r.amount).replace(/,/g,'')).toLocaleString('en-PH',{minimumFractionDigits:2})}` : '';
   document.getElementById('confirmMsg').textContent =
     `Mark "${r.prNumber}" (${r.payeeName}, ${amt}) as Paid? A Payment Slip PDF will be auto-generated.`;
+  const vd = document.getElementById('payValueDate');
+  vd.value = _todayISO(); vd.max = _todayISO();
+  document.getElementById('payPHPGroup').style.display = cur === 'PHP' ? 'none' : '';   // .form-group is display:flex here, so [hidden] would not hide it
+  document.getElementById('payAmountPHP').value = '';
+  document.getElementById('payPHPLabel').textContent = 'Pesos the bank debited for ' + amt;
+  document.getElementById('payErr').hidden = true;
+  const sel = document.getElementById('payBank');
+  sel.innerHTML = '<option value="">Loading accounts…</option>';
   document.getElementById('confirmOverlay').classList.add('open');
+  try {
+    const res = await apiGetBankAccounts();
+    const accts = ((res && (res.data || res.accounts)) || []).filter(a => a && a.code);
+    sel.innerHTML = accts.length ? accts.map(a => `<option value="${hxEsc(a.code)}"${/AUB/i.test(a.code) ? ' selected' : ''}>${hxEsc(a.name || a.code)}</option>`).join('')
+                                 : '<option value="">No bank accounts set up</option>';
+  } catch (e) { sel.innerHTML = '<option value="">Could not load the accounts</option>'; }
 }
 
 async function doMarkPaid() {
-  document.getElementById('confirmOverlay').classList.remove('open');
   if (!_currentRecord) return;
-
   const r = _currentRecord;
+  const err = (m) => { const e = document.getElementById('payErr'); e.textContent = m; e.hidden = false; };
+  const bankAccountCode = document.getElementById('payBank').value;
+  const valueDate = document.getElementById('payValueDate').value;
+  const foreign = document.getElementById('payPHPGroup').style.display !== 'none';
+  const amountPHP = foreign ? parseFloat(document.getElementById('payAmountPHP').value) || 0 : 0;
+  if (!bankAccountCode) return err('Choose the account it was paid from.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valueDate)) return err('Enter the date the bank paid it.');
+  if (valueDate > _todayISO()) return err('The bank date cannot be in the future.');
+  if (foreign && !(amountPHP > 0)) return err('Enter the pesos the bank debited — the books need what actually left the account.');
+  document.getElementById('confirmOverlay').classList.remove('open');
+
   const btn = document.getElementById('btnMarkPaid');
   const origLabel = btn?.innerHTML;
   if (btn) btn.innerHTML = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M21 12c0-4.97-4.03-9-9-9"/></svg> Processing…';
@@ -342,6 +372,8 @@ async function doMarkPaid() {
         rowIndex:  r.rowIndex,
         prNumber:  r.prNumber,
         paidBy:    _session?.name || '',
+        bankAccountCode, valueDate,                  // A321
+        amountPHP: amountPHP ? String(amountPHP) : '',
         details:   details,
       }),
     });

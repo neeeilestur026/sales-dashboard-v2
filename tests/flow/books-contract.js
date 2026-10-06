@@ -9,6 +9,9 @@
  *      switch for the director/management — the same sets FlowAPI.gs enforces.
  *   4. The navbar offers "Books" to accounting, admin, management and the director, not to sales.
  *   5. The forms that feed the books send their new fields only when filled (an edit never blanks them).
+ *   6. A321: Payroll in the books (roles = Code.gs, the last decision per cutoff), the Books sync button
+ *      (Flask roles = the books' roles), rule kinds = FlowAPI, and every Code.gs pay dialog sending the
+ *      bank's date and the pesos.
  */
 const fs = require('fs');
 const path = require('path');
@@ -62,6 +65,45 @@ ok('collection: deposited-to and cheque no. only when filled', /if \(dep && dep\
 ok('mark-paid: value date always, paid-from when chosen, books fields for Other payments', /payload\.valueDate = document\.getElementById\('pmpValueDate'\)\.value;/.test(PR) && /if \(paidFrom\) payload\.paidFrom = paidFrom/.test(PR) && /if \(acct\) payload\.account = acct/.test(PR));
 ok('expense: paid-from / TIN / OR / VAT only when filled', /if \(pf\) payload\.paidFrom = pf/.test(EX) && /if \(num\('fVat'\) > 0\) payload\.vatAmount/.test(EX));
 ok('receiving: rate and VAT evidence only when filled', /payload\.receiptRate = flowNum/.test(RC) && /if \(_v\('shipImportEntry'\)\) payload\.importEntryNo/.test(RC) && /if \(_v\('shipTin'\)\) payload\.supplierTin/.test(RC));
+
+console.log('\n6 · A321 — payroll and Code.gs payments');
+{
+  const PH = read('payroll-books.html'), PJ = read('js/payroll-books.js'), CG = fs.readFileSync(path.join(__dirname, '../../apps-script/Code.gs'), 'utf8');
+  eq('payroll-books: scripts in order', scripts(PH), 'theme.js,api.js,auth.js,payroll-books.js');
+  ok('  theme.js first; no inline style or script', /<body class="bk">\s*<script src="js\/theme\.js"><\/script>/.test(PH) && !/<style[\s>]/.test(PH) && !/<script>/.test(PH) && !/style="/.test(PH));
+  const pc = { console, document: { addEventListener() {}, getElementById: () => null, querySelectorAll: () => [] }, window: {} };
+  vm.createContext(pc); vm.runInContext(PJ, pc);
+  const PB = pc.window.__payrollBooks;
+  const roles = (action) => eval(CG.match(new RegExp(action + ": (\\[[^\\]]*\\])"))[1]).slice().sort().join(',');
+  eq('  who marks payroll paid = Code.gs', PB.PAY_ROLES.slice().sort().join(','), roles('markPayrollPaid'));
+  eq('  who edits the tables = Code.gs', PB.TABLE_ROLES.slice().sort().join(','), roles('savePayrollContributionTables'));
+  eq('  the agencies = Code.gs', Object.keys(PB.COLS).join(','), eval(CG.match(/var _CONTRIB_AGENCIES = (\[[^\]]*\]);/)[1]).join(','));
+  eq('  the default bases = Code.gs', JSON.stringify(PB.BASIS_DEFAULT), JSON.stringify(eval('(' + CG.match(/var _CONTRIB_BASIS_DEFAULT = (\{[^}]*\});/)[1] + ')')));
+  const ap = [{ rowIndex: 2, period: '2026-05-A', status: 'Approved' }, { rowIndex: 3, period: '2026-05-B', status: 'Approved' },
+              { rowIndex: 4, period: '2026-05-B', status: 'For Approval' }, { rowIndex: 5, period: '2026-06-A', status: 'Rejected' }, { rowIndex: 6, period: '2026-06-A', status: 'Approved' }];
+  eq('  cutoffs to pay: the last decision per period, approved only, newest first', PB.latestPerPeriod(ap).map(r => r.period).join(','), '2026-06-A,2026-05-A');
+  eq('  five navbar links (admin, accounting, management, director, HR)', (A.match(/href="payroll-books\.html"/g) || []).length, 5);
+  const API = read('js/api.js');
+  ok('  api.js wrappers', ['apiGetPayrollContributionTables', 'apiSavePayrollContributionTables', 'apiGetPayrollEmployerShares', 'apiMarkPayrollPaid'].every(f => new RegExp('function ' + f + '\\(').test(API)));
+
+  ok('Books: the sync button posts to /books/sync with the session header', /fetch\('\/books\/sync', \{ method: 'POST', headers: hxAuthHeaders/.test(JS) && /id="bkSyncBtn"/.test(H));
+  const BP = fs.readFileSync(path.join(__dirname, '../../blueprints/books.py'), 'utf8');
+  eq('  who may sync (Flask) = who acts on the books', eval(BP.match(/SYNC_ROLES = (\[[^\]]*\])/)[1]).slice().sort().join(','), gsSet('_BOOKS_ACT_ROLES'));
+  eq('  the rule kinds the page knows = FlowAPI', Object.keys(ctx.__books ? eval('(' + JS.match(/const RULE_LABEL = (\{[\s\S]*?\});/)[1] + ')') : {}).join(','), eval(GS.match(/var _BOOKS_RULE_SOURCES = (\[[^\]]*\]);/)[1]).join(','));
+  ok('  the Inbox remembers the rule the line names, not always an expense category', /p\.ruleSource = card\.dataset\.ruleSource/.test(JS) && !/p\.ruleSource = 'expense\.category'/.test(JS));
+
+  const PRJ = read('js/payment-requests.js'), ABJ = read('js/accounting-billing.js'), DPJ = read('js/director-payables-inline.js');
+  const BILL = fs.readFileSync(path.join(__dirname, '../../blueprints/billing.py'), 'utf8');
+  ok('Billing (admin page): the bank date always, the pesos for a foreign request', /valueDate: pick\.valueDate/.test(PRJ) && /amountPHP: pick\.amountPHP/.test(PRJ) && /if \(foreign && !\(amountPHP > 0\)\)/.test(PRJ));
+  ok('Billing (accounting page): bank, date and pesos reach Code.gs through Flask', /bankAccountCode, valueDate,/.test(ABJ) && /for key in \("bankAccountCode", "valueDate", "amountPHP"\)/.test(BILL));
+  ok('Director Payables: the bank date and the pesos', /valueDate: valueDate,/.test(DPJ) && /amountPHP: amountPHP \? String\(amountPHP\) : ''/.test(DPJ) && /id="payValueDate"/.test(read('director-payables.html')));
+  const DH = read('js/director-home.js');
+  ok('employee TIN: sent formatted, a malformed one refused, an absent field never blanks it', /tin:\s+_eeTin\(\)/.test(DH) && /if \(data\.tin === null\)/.test(DH) && /if \(data\.tin === undefined\) delete data\.tin/.test(DH));
+  const tinCtx = { document: { getElementById: (id) => id === 'eeTin' ? { value: tinCtx.v } : null } };
+  vm.createContext(tinCtx); vm.runInContext(DH.match(/function _eeTin\(\) \{[\s\S]*?\n\}/)[0] + '; this.f = _eeTin;', tinCtx);
+  const tin = (v) => { tinCtx.v = v; return tinCtx.f(); };
+  ok('  123456789 → 123-456-789; with branch; spaces; junk refused', tin('123456789') === '123-456-789' && tin('123 456 789 00000') === '123-456-789-00000' && tin('') === '' && tin('12-34') === null && tin('123456789012345678') === null);
+}
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
 process.exit(FAIL ? 1 : 0);

@@ -203,3 +203,35 @@ when its payout is paid, and a travel float advance is no longer booked as an ex
 
 **Deploy:** Render first, then paste `apps-script/FlowAPI.gs` (161). Restart any local Flask server
 after pulling (it keeps the old secured-action list in memory).
+
+## Payroll and the main-backend payments in the books (A321, FlowAPI 162, Code.gs v5)
+
+Payroll, the Billing page, Director Payables and the bank page live in Code.gs; the ledger lives in
+FlowAPI. **Sync payroll & payments** on the Books page (accounting, admin, director; shown while the
+books are in shadow or on) asks Flask **`/books/sync`** to read a full snapshot from Code.gs
+(`getBooksFeed`) and hand it to FlowAPI (`ingestBookEvents`). Pressing it twice posts nothing twice; a
+payment un-marked in Code.gs is reversed; a partial read withdraws nothing.
+
+- **Each approved cutoff** posts once, dated the 10th (A) or the 25th (B): wages, every deduction to its
+  payable, net pay owed (2030), and the 13th month accrued at basic ÷ 12. Cutoff B also carries the
+  month's **employer shares**, computed per employee from the contribution tables.
+- **Payroll in the books** (`payroll-books.html`): director or accounting **marks a cutoff paid** with
+  the bank's date and account (that clears 2030); HR, accounting, admin or the director keep the
+  **SSS / PhilHealth / Pag-IBIG tables**, effective-dated, typed from the circulars (nothing is
+  pre-filled), each read against gross or basic pay; the **Employer shares** tab shows any month. A month
+  without its table waits in the Books Inbox instead of posting a guess.
+- **Billing and Director Payables** now ask for the bank's **date** and, for a foreign item, the **pesos
+  the bank debited** (the bank page is debited in pesos). They post by a rule on the Billing department
+  or the payable's category (utilities, rent and personal are seeded), else wait in the Inbox.
+- **Own-bank transfers** on the bank page post themselves; every other bank-page movement waits for a
+  person to say what it was. A decision made in the Inbox is kept: the same movement re-posts to the
+  same account on every sync, and an ignored one stays out until its amount or date changes.
+- The employee form takes the **TIN** (for the 2316 and the alphalist).
+
+**Fixed along the way:** the accounting Billing page's *Mark Paid* never sent a bank account, which
+Code.gs requires, so it could not mark anything paid; it now asks for the account, the date and the
+pesos. The Books page's confirmation and error messages were never visible. "Remember this" in the
+Inbox saved an expense-category rule even for a payment department or a travel item.
+
+**Deploy:** Render first, then paste **`apps-script/Code.gs` (v5)** and **`apps-script/FlowAPI.gs`
+(162)**. Restart any local Flask server after pulling (it registers the new `/books/sync` route).

@@ -341,6 +341,7 @@
       <div class="dh-field"><label for="eeStatus">Status</label><select id="eeStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
       <!-- A312 — the login that sees this employee's released payslip on their own dashboard -->
       <div class="dh-field"><label for="eeUsername">Login account</label><select id="eeUsername"></select><div class="help" id="eeUserHint">Their released payslip appears on this account's dashboard. Suggested from the name; check it.</div></div>
+      <div class="dh-field"><label for="eeTin">TIN</label><input type="text" id="eeTin" maxlength="17" inputmode="numeric" autocomplete="off" placeholder="123-456-789-00000"><div class="help">For the BIR 2316 and the year-end alphalist. Leave blank until known.</div></div>
       <!-- A198 — revealed only when the pay changes on an edit, so the raise is recorded with a date + reason -->
       <div class="dh-banner ok" id="eePayChange" style="display:none;">
         <strong id="eePayChangeMsg">Pay change, recorded in the salary history</strong>

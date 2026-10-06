@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payroll in the books</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/books.css">
+</head>
+<body class="bk">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+
+  <!-- A321: what the books need from payroll — when each approved cutoff was paid and from which account,
+       and the contribution tables the employer shares are computed from. The Books page reads both when
+       it syncs payroll and payments. -->
+  <main class="main-content bk-main">
+    <header class="bk-top">
+      <div>
+        <h1>Payroll in the books</h1>
+        <p>Mark each approved cutoff paid on the day the bank sent it, and keep the contribution tables current. The Books page reads both when you sync payroll and payments.</p>
+      </div>
+    </header>
+
+    <div class="bk-banner" id="pbBanner" hidden></div>
+
+    <nav class="bk-tabs" role="tablist" aria-label="Payroll in the books">
+      <button type="button" class="bk-tab active" data-tab="pay" role="tab" aria-selected="true">Cutoffs to pay</button>
+      <button type="button" class="bk-tab" data-tab="tables" role="tab" aria-selected="false">Contribution tables</button>
+      <button type="button" class="bk-tab" data-tab="shares" role="tab" aria-selected="false">Employer shares</button>
+    </nav>
+
+    <section class="hx-glass bk-pane" id="pane-pay">
+      <div class="hx-head"><h2>Approved cutoffs</h2><span class="hx-meta" id="payMeta"></span></div>
+      <p class="bk-dim" id="payHint">The net pay leaves the bank once per cutoff. Enter the date on the bank's advice, not today's, if they differ.</p>
+      <div class="flow-msg" id="payMsg" hidden></div>
+      <div id="payTable" class="bk-scroll"><div class="hx-empty">Loading…</div></div>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-tables" hidden>
+      <div class="hx-head"><h2>Contribution tables</h2><span class="hx-meta" id="tblMeta"></span></div>
+      <p class="bk-dim">Type the figures from the agency's current circular and confirm them with your CPA. Nothing here is filled in for you. A new table applies from its effective date; earlier months keep the table they had.</p>
+      <div class="bk-switch pb-agency" role="radiogroup" aria-label="Agency">
+        <button type="button" class="bk-pos active" data-agency="SSS" role="radio" aria-checked="true">SSS</button>
+        <button type="button" class="bk-pos" data-agency="PhilHealth" role="radio" aria-checked="false">PhilHealth</button>
+        <button type="button" class="bk-pos" data-agency="Pag-IBIG" role="radio" aria-checked="false">Pag-IBIG</button>
+      </div>
+      <div id="tblVersions" class="pb-versions"></div>
+      <div id="tblCurrent" class="bk-scroll"></div>
+
+      <form class="pb-editor" id="tblForm" hidden>
+        <h3 id="tblFormTitle">New table</h3>
+        <div class="bk-form">
+          <label>Effective from<input type="date" id="tblFrom" required></label>
+          <label>Read against<select id="tblBasis">
+            <option value="gross">Gross pay (everything earned in the month)</option>
+            <option value="basic">Basic pay only</option>
+          </select></label>
+          <label class="bk-wide">Source<input type="text" id="tblSource" maxlength="120" placeholder="e.g. the circular number"></label>
+        </div>
+        <div class="bk-scroll"><table class="bk-table pb-grid" id="tblGrid"></table></div>
+        <div class="bk-act">
+          <button type="button" class="btn btn-sm" id="tblAddRow">Add bracket</button>
+          <button type="submit" class="btn btn-sm btn-primary primary" id="tblSave">Save table</button>
+        </div>
+        <div class="flow-msg" id="tblMsg" hidden></div>
+      </form>
+    </section>
+
+    <section class="hx-glass bk-pane" id="pane-shares" hidden>
+      <div class="hx-head"><h2>Employer shares</h2><span class="hx-meta">Per employee, for a calendar month</span></div>
+      <div class="bk-filters">
+        <label>Month<input type="month" id="shMonth"></label>
+        <button type="button" class="btn btn-sm" id="shRun">Show</button>
+      </div>
+      <div class="flow-msg" id="shMsg" hidden></div>
+      <div id="shTable" class="bk-scroll"></div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/payroll-books.js"></script>
+</body>
+</html>

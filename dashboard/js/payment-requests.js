@@ -148,7 +148,10 @@ async function updatePRStatus(rowIndex, decision) {
   }
 }
 
-async function _pickBankAccountForPR(payeeName, defaultMatch) {
+/* A321 — the books post a payment on the day the BANK moved the money, in the pesos it actually took.
+   So the dialog asks for the bank's date (today by default) and, for a foreign request, the pesos
+   debited; it resolves { bank, valueDate, amountPHP } or null. */
+async function _pickBankAccountForPR(payeeName, defaultMatch, row) {
   let accounts = [];
   try {
     const res = await apiGetBankAccounts();
@@ -165,6 +168,8 @@ async function _pickBankAccountForPR(payeeName, defaultMatch) {
     overlay.style.cssText = 'position:fixed;inset:0;background:var(--hx-scrim);display:flex;align-items:center;justify-content:center;z-index:9999;';
     const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const defaultCode = (accounts.find(a => new RegExp(defaultMatch || 'AUB', 'i').test(a.code)) || accounts[0]).code;
+    const cur = String((row && row.currency) || 'PHP').toUpperCase(), foreign = cur !== 'PHP';
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     const optsHtml = accounts.map(a => {
       const bal = (a.currentBalance != null ? a.currentBalance : a.balance) || 0;
       const sel = a.code === defaultCode ? ' selected' : '';
@@ -175,7 +180,12 @@ async function _pickBankAccountForPR(payeeName, defaultMatch) {
         <div style="font-weight:700;font-size:1.05rem;margin-bottom:0.5rem;">Mark PR as Paid</div>
         <div style="color:var(--hx-ink-2);font-size:0.88rem;margin-bottom:0.9rem;">Choose the bank account to debit for ${payeeName ? '<b>' + payeeName + '</b>' : 'this payee'}.</div>
         <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--hx-ink-2);margin-bottom:0.3rem;">Bank Account</label>
-        <select id="_prBankSel" style="width:100%;padding:0.45rem 0.55rem;border:1px solid var(--hx-hair);border-radius:6px;font-size:0.9rem;margin-bottom:1rem;">${optsHtml}</select>
+        <select id="_prBankSel" style="width:100%;padding:0.45rem 0.55rem;border:1px solid var(--hx-hair);border-radius:6px;font-size:0.9rem;margin-bottom:0.8rem;">${optsHtml}</select>
+        <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--hx-ink-2);margin-bottom:0.3rem;">Date the bank paid it</label>
+        <input id="_prValueDate" type="date" value="${today}" max="${today}" style="width:100%;padding:0.45rem 0.55rem;border:1px solid var(--hx-hair);border-radius:6px;font-size:0.9rem;margin-bottom:0.8rem;">
+        ${foreign ? `<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--hx-ink-2);margin-bottom:0.3rem;">Pesos the bank debited for ${esc(formatAmount(row.amount, cur))}</label>
+        <input id="_prAmountPHP" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="from the bank's advice" style="width:100%;padding:0.45rem 0.55rem;border:1px solid var(--hx-hair);border-radius:6px;font-size:0.9rem;margin-bottom:0.8rem;">` : ''}
+        <div id="_prPayErr" style="display:none;color:var(--hx-red);font-size:0.82rem;margin-bottom:0.6rem;"></div>
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
           <button id="_prBankCancel" style="padding:0.45rem 0.9rem;border:1px solid var(--hx-hair);background:#fff;border-radius:6px;cursor:pointer;">Cancel</button>
           <button id="_prBankOk" style="padding:0.45rem 1rem;border:none;background:var(--hx-ok);color:#fff;border-radius:6px;cursor:pointer;font-weight:600;">Confirm Pay</button>
@@ -184,21 +194,32 @@ async function _pickBankAccountForPR(payeeName, defaultMatch) {
     document.body.appendChild(overlay);
     const cleanup = (val) => { document.body.removeChild(overlay); resolve(val); };
     overlay.querySelector('#_prBankCancel').onclick = () => cleanup(null);
-    overlay.querySelector('#_prBankOk').onclick = () => cleanup(overlay.querySelector('#_prBankSel').value);
+    overlay.querySelector('#_prBankOk').onclick = () => {
+      const err = (m) => { const e = overlay.querySelector('#_prPayErr'); e.textContent = m; e.style.display = 'block'; };
+      const valueDate = overlay.querySelector('#_prValueDate').value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(valueDate)) return err('Enter the date the bank paid it.');
+      if (valueDate > today) return err('The bank date cannot be in the future.');
+      const amountPHP = foreign ? parseFloat(overlay.querySelector('#_prAmountPHP').value) : 0;
+      if (foreign && !(amountPHP > 0)) return err('Enter the pesos the bank debited — the books need what actually left the account.');
+      cleanup({ bank: overlay.querySelector('#_prBankSel').value, valueDate, amountPHP });
+    };
     overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(null); });
   });
 }
 
 async function markPRPaid(rowIndex, payeeName) {
-  const bankAccountCode = await _pickBankAccountForPR(payeeName, 'AUB');
-  if (!bankAccountCode) return;
+  const row = filteredPR.find(r => String(r.rowIndex) === String(rowIndex)) || {};
+  const pick = await _pickBankAccountForPR(payeeName, 'AUB', row);
+  if (!pick) return;
   try {
     var paidBy = prSession ? (prSession.name || prSession.fullName || prSession.role || '') : '';
     const result = await fetchFromAPI({
       action: 'markBillPaid',
       rowIndex: String(rowIndex),
       paidBy: paidBy,
-      bankAccountCode: bankAccountCode
+      bankAccountCode: pick.bank,
+      valueDate: pick.valueDate,                      // A321
+      amountPHP: pick.amountPHP ? String(pick.amountPHP) : ''
     });
     if (!result || !result.success) {
       throw new Error((result && result.message) || 'Server did not return success');

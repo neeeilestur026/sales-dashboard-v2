@@ -622,6 +622,7 @@ function renderNavbar(activePage) {
             <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
             <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
             <a href="books.html" class="${activePage === 'books' ? 'active' : ''}">Books</a>
+            <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">Payroll in the Books</a>
             <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
             <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
           </div>
@@ -694,6 +695,7 @@ function renderNavbar(activePage) {
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
           <a href="books.html" class="${activePage === 'books' ? 'active' : ''}">Books</a>
+          <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">Payroll in the Books</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
         </div>
       </div>
@@ -807,6 +809,7 @@ function renderNavbar(activePage) {
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-ledger.html" class="${activePage === 'flow-ledger' ? 'active' : ''}">General Ledger</a>
           <a href="books.html" class="${activePage === 'books' ? 'active' : ''}">Books</a>
+          <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">Payroll in the Books</a>
           <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
           <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
@@ -896,6 +899,7 @@ function renderNavbar(activePage) {
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="balance-sheet.html" class="${activePage === 'balance-sheet' ? 'active' : ''}">Balance Sheet</a>
           <a href="books.html" class="${activePage === 'books' ? 'active' : ''}">Books</a>
+          <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">Payroll in the Books</a>
           <a href="ap-aging-monthly.html" class="${activePage === 'ap-aging-monthly' ? 'active' : ''}">Monthly AP Aging</a>
         </div>
       </div>
@@ -1015,6 +1019,10 @@ function renderNavbar(activePage) {
       <a href="hr-employees.html" class="${activePage === 'hr-employees' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Employees
+      </a>
+      <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="12" y1="9" x2="12" y2="21"/></svg>
+        Contribution Tables
       </a>
       <a href="hr-recruitment.html" class="${activePage === 'hr-recruitment' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>

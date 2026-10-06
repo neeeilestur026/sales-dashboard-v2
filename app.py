@@ -70,6 +70,7 @@ def create_app():
     from blueprints.email_log import email_log_bp
     from blueprints.flow import flow_bp
     from blueprints.session_auth import session_bp
+    from blueprints.books import books_bp   # A321 — the books bridge (/books/sync)
 
     app.register_blueprint(po_bp, url_prefix="/po")
     app.register_blueprint(pr_bp, url_prefix="/pr")
@@ -81,6 +82,7 @@ def create_app():
     app.register_blueprint(email_log_bp)
     app.register_blueprint(flow_bp)  # routes are /flow/quotation-pdf, /flow/po-pdf
     app.register_blueprint(session_bp)  # POST /api/session/logout
+    app.register_blueprint(books_bp)    # A321 — POST /books/sync
 
     # ── A300: revalidation must stay cheap. Flask-Compress suffixes a strong ETag with the
     # encoding ("...:br"), so the browser's If-None-Match would never match the file's own ETag and

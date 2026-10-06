@@ -40,6 +40,12 @@
         <div class="bk-fact"><span>Ledger lines</span><b id="bkLines">—</b></div>
         <div class="bk-fact bk-check" id="bkCheck"><span>Debits = credits</span><b>—</b></div>
       </div>
+      <!-- A321: payroll, Billing, Director Payables and the bank page live in the main backend; this pulls them in -->
+      <div class="bk-sync" id="bkSync" hidden>
+        <span class="bk-label">Payroll &amp; payments</span>
+        <span class="bk-hint" id="bkSyncHint"></span>
+        <button type="button" class="btn btn-sm" id="bkSyncBtn">Sync payroll &amp; payments</button>
+      </div>
     </section>
 
     <nav class="bk-tabs" role="tablist" aria-label="Books">
@@ -76,7 +82,8 @@
         <label>To<input type="date" id="glTo"></label>
         <label>Account<select id="glAccount"><option value="">All accounts</option></select></label>
         <label>Source<select id="glSource"><option value="">All</option><option>Invoice</option><option>Collection</option><option>Receiving</option>
-          <option>PO payment</option><option>Payment</option><option>Expense</option><option>Travel</option><option>Commission</option><option>Reversal</option></select></label>
+          <option>PO payment</option><option>Payment</option><option>Expense</option><option>Travel</option><option>Commission</option>
+          <option>Payroll</option><option>Payroll paid</option><option>Billing</option><option>Director payable</option><option>Bank transfer</option><option>Bank page</option><option>Reversal</option></select></label>
         <button type="button" class="btn btn-sm" id="glRun">Show</button>
       </div>
       <div id="glTable" class="bk-scroll"></div>
@@ -110,7 +117,8 @@
     <section class="hx-glass bk-pane" id="pane-rules" hidden>
       <div class="hx-head"><h2>Rules</h2><span class="hx-meta">Which account a category, department or travel item posts to</span></div>
       <form class="bk-form" id="ruForm" hidden>
-        <label>When<select id="ruSource"><option value="expense.category">Expense category is</option><option value="pr.department">Payment department is</option><option value="travel.item">Travel item is</option></select></label>
+        <label>When<select id="ruSource"><option value="expense.category">Expense category is</option><option value="pr.department">Payment department is</option><option value="travel.item">Travel item is</option>
+          <option value="billing.department">Billing department is</option><option value="dp.category">Director payable category is</option></select></label>
         <label class="bk-wide">Value<input type="text" id="ruValue" maxlength="80" placeholder="e.g. Utilities"></label>
         <label class="bk-wide">Post to<select id="ruAccount"></select></label>
         <button type="submit" class="btn btn-sm btn-primary">Save rule</button>
