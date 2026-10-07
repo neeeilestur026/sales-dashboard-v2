@@ -50,7 +50,9 @@ function _emailMetaHint() {
 // Live refresh of read-only sections (activity + sent emails) — never touches the notes field.
 async function refreshLive() {
   try {
-    const res = await fetchFlow('getActivityLog', { date: _date(), user: mdrSession.name });
+    const date = _date();
+    const res = await flowUserActivity(mdrSession.name, date, date);   // A326
+    if (date !== _date()) return;
     mdrEntries = ((res && res.data) || []).filter(e => e.module === 'Marketing' || e.module === 'Call');
     render();
   } catch (e) { /* keep previous */ }
@@ -62,7 +64,8 @@ async function load() {
   document.getElementById('reportMeta').textContent =
     `For ${date} · Prepared by ${mdrSession.name} · Generated ${new Date().toLocaleString('en-US')}`;
   try {
-    const res = await fetchFlow('getActivityLog', { date, user: mdrSession.name });
+    const res = await flowUserActivity(mdrSession.name, date, date);   // A326
+    if (date !== _date()) return;                   // A326 — a newer date's load owns the page now
     mdrEntries = ((res && res.data) || []).filter(e => e.module === 'Marketing' || e.module === 'Call');
   } catch (e) {
     mdrEntries = [];
@@ -142,7 +145,9 @@ async function loadEmails() {
 
 async function loadNotes() {
   try {
-    const r = await fetchFlow('getDailyNote', { date: _date(), user: mdrSession.name });
+    const date = _date();
+    const r = await fetchFlow('getDailyNote', { date, user: mdrSession.name });
+    if (date !== _date()) return;                   // A326 — never another day's notes in the box
     document.getElementById('notesField').value = (r && r.notes) || '';
   } catch (e) { /* leave as-is */ }
 }

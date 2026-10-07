@@ -43,7 +43,9 @@ function _emailMetaHint() {
 // Live refresh of read-only sections (activity + sent emails) — never touches the notes field.
 async function refreshLive() {
   try {
-    const res = await fetchFlow('getActivityLog', { date: _date(), user: drSession.name });
+    const date = _date();
+    const res = await flowUserActivity(drSession.name, date, date);   // A326
+    if (date !== _date()) return;
     drEntries = (res && res.data) || [];
     render();
   } catch (e) { /* keep previous */ }
@@ -57,10 +59,12 @@ async function load() {
 
   // A155: prime the request-number → client/supplier name map so legacy blank-ref
   // "Client saved" rows can be titled with the client they belong to (idempotent).
-  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
+  // A326 — primed ALONGSIDE the activity read, not before it: two whole lists ahead of the day's tasks
+  const primed = (typeof flowPrimeRefNames === 'function') ? flowPrimeRefNames() : Promise.resolve();
   // Activity (flow backend) — scoped to THIS accounting user only (personal report).
   try {
-    const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
+    const [res] = await Promise.all([flowUserActivity(drSession.name, date, date), primed]);   // A326
+    if (date !== _date()) return;                   // A326 — a newer date's load owns the page now
     drEntries = (res && res.data) || [];
   } catch (e) {
     drEntries = [];
@@ -169,7 +173,9 @@ async function loadEmails() {
 // ── Per-day Notes (flow backend) — scoped to this user ──
 async function loadNotes() {
   try {
-    const r = await fetchFlow('getDailyNote', { date: _date(), user: drSession.name });
+    const date = _date();
+    const r = await fetchFlow('getDailyNote', { date, user: drSession.name });
+    if (date !== _date()) return;                   // A326 — never another day's notes in the box
     document.getElementById('notesField').value = (r && r.notes) || '';
   } catch (e) { /* leave as-is */ }
 }

@@ -62,19 +62,15 @@ async function _rwRender() {
 
   mount.innerHTML = `<div class="dr-sect">${titleHtml}<div class="dr-empty">Loading weekly summary…</div></div>`;
 
-  // Activity ×7 in parallel (the flow read-cache absorbs repeats); skip future days.
-  const actPromises = days.map(d => (d > today)
-    ? Promise.resolve([])
-    : fetchFlow('getActivityLog', { date: d, user })
-        .then(r => ((r && r.data) || []).filter(e => e.module !== 'Call'))
-        .catch(() => []));
-
-  // Calls ×7 (sales only) — same pattern.
-  const callPromises = days.map(d => (!withCalls || d > today)
-    ? Promise.resolve([])
-    : fetchFlow('getSalesCalls', { date: d, user })
-        .then(r => (r && r.data) || [])
-        .catch(() => []));
+  // A326 — the week's activity (and calls) in ONE read each, split by day here. Seven reads at once
+  // queued past the page's minute and the day's tasks never showed. Future days stay empty.
+  const lastDay = days[6] > today ? today : days[6];
+  const weekAct = days[0] > today ? Promise.resolve([]) : flowUserActivity(user, days[0], lastDay)
+    .then(r => ((r && r.data) || []).filter(e => e.module !== 'Call')).catch(() => []);
+  const weekCalls = (!withCalls || days[0] > today) ? Promise.resolve([]) : flowUserCalls(user, days[0], lastDay)
+    .then(r => (r && r.data) || []).catch(() => []);
+  const actPromises = days.map(d => d > today ? Promise.resolve([]) : weekAct.then(rows => rows.filter(e => flowDate(e.date) === d)));
+  const callPromises = days.map(d => d > today ? Promise.resolve([]) : weekCalls.then(rows => rows.filter(c => flowDate(c.date) === d)));
 
   // Emails ×7 — batched (3 at a time) so a cold week never hammers the mailbox; server
   // caches past days for an hour. Future days are skipped.

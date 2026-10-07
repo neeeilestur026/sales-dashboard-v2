@@ -442,6 +442,20 @@ function flowDate(d) {
   try { return dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); } catch (e) { return dt.toISOString().slice(0, 10); }
 }
 
+/* A326 — one person's activity (or logged calls) for a day or a run of days, in ONE read. The server
+   reads its whole log for every call, so the week view's seven per-day reads plus today's queued past
+   the page's minute and the day's tasks never showed. FlowAPI 167 narrows by from/to itself; an older
+   one ignores them and returns the person's whole history (still cheaper there than a dated read), so
+   the days are always narrowed here too. */
+async function _flowUserDays(action, user, from, to, opts) {
+  const hi = to || from;
+  const r = await fetchFlow(action, { user, from, to: hi }, opts || {});
+  const rows = ((r && r.data) || []).filter(e => { const d = flowDate(e.date); return d >= from && d <= hi; });
+  return Object.assign({}, r, { data: rows });
+}
+function flowUserActivity(user, from, to, opts) { return _flowUserDays('getActivityLog', user, from, to, opts); }
+function flowUserCalls(user, from, to, opts) { return _flowUserDays('getSalesCalls', user, from, to, opts); }
+
 // Today's date in PH local time as 'yyyy-MM-dd' (use for date-input defaults instead of the UTC toISOString).
 function flowToday() {
   try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }

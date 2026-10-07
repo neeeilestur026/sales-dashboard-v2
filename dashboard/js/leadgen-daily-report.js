@@ -66,7 +66,7 @@ async function loadDay() {
   ldrDay = (r && r.success) ? r : null;
 }
 async function loadTimeline() {
-  const res = await fetchFlow('getActivityLog', { date: _date(), user: ldrSession.name }, { fresh: true });
+  const res = await flowUserActivity(ldrSession.name, _date(), _date(), { fresh: true });   // A326
   ldrEntries = ((res && res.data) || []).filter(e => e.module === 'Lead Gen' || e.module === 'Call');
 }
 async function loadCounts() {
@@ -252,7 +252,7 @@ async function loadEmails() {
 }
 
 async function loadNotes() {
-  try { const r = await fetchFlow('getDailyNote', { date: _date(), user: ldrSession.name }); document.getElementById('notesField').value = (r && r.notes) || ''; }
+  try { const date = _date(); const r = await fetchFlow('getDailyNote', { date, user: ldrSession.name }); if (date !== _date()) return; document.getElementById('notesField').value = (r && r.notes) || ''; }   // A326 — never another day's notes
   catch (e) { /* leave as-is */ }
 }
 async function saveNotes() {

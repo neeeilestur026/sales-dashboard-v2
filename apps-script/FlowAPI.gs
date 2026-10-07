@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 166;   // A325 — the system scan: refusals before writes, roles and owners checked, numbers kept as text. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 167;   // A326 — daily reports load again: the activity reads no longer format every row. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -10422,9 +10422,11 @@ function getLeadgenFollowups(p) {
 //  SALES CALL LOG  (per rep, per day; also mirrored to the ActivityLog)
 // ════════════════════════════════════════════════════════════════════════════
 function getSalesCalls(p) {
+  p = p || {};
   var rows = _rows('SalesCalls');
-  if (p && p.date) rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
-  if (p && p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+  if (p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });   // A326 — see getActivityLog
+  if (p.date) rows = _onDays(rows, 'Date', p.date, p.date);
+  else if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || p.to, p.to || p.from);
   if (p && p.kind) rows = rows.filter(function (r) { return String(r['Kind'] || '') === String(p.kind); });   // A277
   rows.sort(function (a, b) { return new Date(b['Created At']) - new Date(a['Created At']); });
   return { success: true, data: rows.map(function (r) {
@@ -10510,9 +10512,11 @@ function deleteSalesCall(p) {
    and what was discussed, which a call row has nowhere to put. */
 
 function getClientVisits(p) {
+  p = p || {};
   var rows = _rows('ClientVisits');
-  if (p && p.date) rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
-  if (p && p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+  if (p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });   // A326 — see getActivityLog
+  if (p.date) rows = _onDays(rows, 'Date', p.date, p.date);
+  else if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || p.to, p.to || p.from);
   // Newest first, but by the reported visit TIME where there is one — a rep logging the morning and
   // afternoon visits together in the evening should still read in the order the day happened.
   rows.sort(function (a, b) {
@@ -14452,10 +14456,32 @@ var _MODULE_MAP = {
   setupFlowDrive: ['Document', 'Drive Set Up']
 };
 
+/* A326 — the script's timezone, asked once per execution. _dateStr runs once per ROW in every
+   date-filtered read, and Session.getScriptTimeZone() is a service call: on the 9,600-row ActivityLog
+   that was 9,600 calls, which is most of why a daily report took 10-25 s and the week view (7 of
+   them at once) timed out — "my tasks are not showing". */
+var _TZ_ONCE = null;
+function _tz() { return _TZ_ONCE || (_TZ_ONCE = Session.getScriptTimeZone()); }
 function _dateStr(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  if (v instanceof Date) return Utilities.formatDate(v, _tz(), 'yyyy-MM-dd');
   var s = String(v || '');
   return s.length >= 10 ? s.substring(0, 10) : s;
+}
+/** A326 — rows whose `col` falls on a day from `from` to `to` (yyyy-MM-dd, inclusive), compared as
+ *  numbers: no per-row formatting. A Date cell is tested against the day bounds in the script's own
+ *  timezone (new Date(y, m, d) is local to it — the same days _dateStr would print); a text cell by
+ *  its first ten characters. */
+function _onDays(rows, col, from, to) {
+  from = String(from || '').substring(0, 10); to = String(to || from).substring(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return rows.filter(function () { return false; });
+  var lo = new Date(+from.substring(0, 4), +from.substring(5, 7) - 1, +from.substring(8, 10)).getTime();
+  var hi = new Date(+to.substring(0, 4), +to.substring(5, 7) - 1, +to.substring(8, 10) + 1).getTime();
+  return rows.filter(function (r) {
+    var v = r[col];
+    if (v instanceof Date) { var t = v.getTime(); return t >= lo && t < hi; }
+    var str = String(v || '').substring(0, 10);
+    return str >= from && str <= to;
+  });
 }
 
 /** A215 · A216 — a TIME-OF-DAY cell as 24-hour 'HH:mm'.
@@ -14531,9 +14557,13 @@ function _logActivity(action, params, result) {
 }
 
 function getActivityLog(p) {
+  p = p || {};
   var rows = _rows('ActivityLog');
-  if (p && p.date) rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
-  if (p && p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+  // A326 — the person first (a string compare), then the day(s) by number; `from`/`to` lets the week
+  // view ask once instead of seven times
+  if (p.user) rows = rows.filter(function (r) { return String(r['User']) === String(p.user); });
+  if (p.date) rows = _onDays(rows, 'Date', p.date, p.date);
+  else if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || p.to, p.to || p.from);
   rows.sort(function (a, b) { return new Date(b['Timestamp']) - new Date(a['Timestamp']); });
   return { success: true, data: rows.map(function (r) {
     return {
@@ -14763,10 +14793,9 @@ function submitDailyReport(p) {
 function getDailyReports(p) {
   var rows = _rows('DailyReports');
   p = p || {};
-  if (p.date)  rows = rows.filter(function (r) { return _dateStr(r['Date']) === String(p.date); });
-  if (p.start) rows = rows.filter(function (r) { return _dateStr(r['Date']) >= String(p.start); });
-  if (p.end)   rows = rows.filter(function (r) { return _dateStr(r['Date']) <= String(p.end); });
-  if (p.user)  rows = rows.filter(function (r) { return String(r['User']).trim() === String(p.user).trim(); });
+  if (p.user)  rows = rows.filter(function (r) { return String(r['User']).trim() === String(p.user).trim(); });   // A326 — person first
+  if (p.date)  rows = _onDays(rows, 'Date', p.date, p.date);
+  if (p.start || p.end) rows = _onDays(rows, 'Date', p.start || '0000-01-01', p.end || '9999-12-31');
   if (p.role)  rows = rows.filter(function (r) { return String(r['Role']).toLowerCase() === String(p.role).toLowerCase(); });
   if (p.status) rows = rows.filter(function (r) { return String(r['Status']) === String(p.status); });
   rows.sort(function (a, b) {
@@ -17636,6 +17665,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A326 DAILY REPORTS SHOW THE DAY'S TASKS AGAIN (167). getActivityLog formatted the date of EVERY row of the 9,600-row ActivityLog (a Session.getScriptTimeZone() call and a formatDate per row) before it looked at who the row belonged to: 10-25 s per call, and a sales rep's report fires eight at once (today + seven for the week), so they queued past the page's minute and the tasks never appeared. The timezone is now asked once per execution (_tz), the person is filtered first, and the day(s) by number (_onDays); getActivityLog and getSalesCalls also take from/to so the week is one call. getSalesCalls, getClientVisits and getDailyReports filter the same way.
 A325 THE SYSTEM SCAN (166). updatePurchaseOrder runs every refusal (payment requests standing on the PO, currency, FX) BEFORE the first write — "refused" used to arrive after the PO, its items and the stock had changed — and a refused revise no longer wipes the approval; neither PO nor quotation takes a status from the browser (Draft only). voidInvoice returns stock for goods lines only (a voided rental gained phantom tools). A revised travel week drops its Expenses row and never re-uses a rejected or differently-sized payment request. updatePaymentRequest caps a foreign request in its own currency, keeps the order's currency and refreshes the peso estimate; _poRequestedPHP counts foreign requests in pesos. Expenses and marketing records check the row still holds the record the page showed. reverseReceiving chains two lines on one item. Renaming a quotation re-keys its pricing-request lines. Fingerprints and cheque numbers that Sheets parsed as numbers compare equal (_fpSame / _idNorm) and the id columns are set to plain text once. The commission reads are secured and scoped; 'Voided At Claim' marks the claim's own row. Field follow-ups order by time. _nextNumber no longer wraps after 999; GL entry numbers never restart below the sheet and resetSequenceCounters is admin-only and skips them. Daily reports and notes, weekly itineraries and document deletes check who is acting.
 A324 NO MORE "READ TIMED OUT" ON THE BOOKS PAGE (165). Flask stops waiting for Apps Script after a minute while the script runs on, so a long books job showed the raw "HTTPSConnectionPool … Read timed out (read timeout=60)". syncBooks ("Post what is missing") checked EVERY record before looking at its budget, and as a write call it read every sheet afresh for each one — minutes on a real year. Now every long job counts its budget from the start of the execution (_EXEC_T0, the lock wait included) and stops starting new work at 35 s (writes) / 40 s (reads), always doing at least one item: syncBooks checks under the read memo, posts what that slice found missing or changed, and returns a `next` cursor and `done`, so books.js presses again until done; ingestBookEvents says what is left and the page repeats the sync; getBooksCoverage checks oldest first and, if it runs out, says how far it got (partial, checkedThrough). A sync no longer re-reads the Inbox after every post when nothing can be waiting for that event.
 A323 COLLECT — THE DIRECTOR'S PHONE (164). New FieldCollections tab (one row per invoice line, a Batch No per payment). getCollectorQueue (director): open receivables most overdue first, our banks from the chart, his recent payments. recordFieldCollection (director): cheque (number required; post-dated allowed) / cash / bank transfer, the deposit place checked against the method (cheque → 1100 or a bank, cash → 1010 or a bank, transfer → a bank), one payment over several of ONE customer's invoices, every line validated (over-collection, proof of collection, closed month, a cheque number already used) before the first write, each line recorded through recordCollection so AR, DocMeta, journal and books behave as on the desktop. recordNotCollected: reason, promised date, note; getARAging rows carry the latest as followUp (missed when the promise has passed). getFieldCollectionNotices / acknowledgeFieldCollection (accounting, admin) are the notification; undoFieldCollection voids a payment the same day before it is acknowledged; uploadCollectionPhoto files a Proof of collection per receivable. Also: recordCollection recognises a retried clientRef before its over-collection guard, and the activity log records a collection's amount (it logged 0).

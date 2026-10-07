@@ -114,13 +114,19 @@ async function initReportSubmit(opts) {
 
   // Load any existing submission for this (user, date). An unknown action answers success:false —
   // never a throw — so check the flag rather than relying on catch.
-  _rsRecord = null;
+  if (_rsOpts !== opts) return;                      // A326 — a newer date's init owns the card
+  _rsRecord = null;                                  // nothing shown for this day until its own answer
+  let rec = null;
   if (_rsAvailable) {
     try {
       const r = await fetchFlow('getDailyReports', { date: opts.date, user: opts.user });
-      if (r && r.success && r.data && r.data.length) _rsRecord = r.data[0];
+      if (r && r.success && r.data && r.data.length) rec = r.data[0];
     } catch (e) { /* leave unsubmitted */ }
   }
+  /* A326 — a slow answer for a date that is no longer picked is dropped: it used to mark the newly
+     picked day "Submitted" with the other day's record */
+  if (_rsOpts !== opts) return;
+  _rsRecord = rec;
 
   const dis = _rsAvailable ? '' : ' disabled';
   mount.innerHTML = `

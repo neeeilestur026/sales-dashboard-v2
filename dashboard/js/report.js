@@ -51,12 +51,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function _date() { return document.getElementById('datePicker').value; }
+/* A326 — every read below answers for the date it was ASKED with. A slow answer for a date that is no
+   longer on the picker is dropped: today's first load finishing after a change to yesterday used to
+   paint today's tasks under yesterday's heading — and put the wrong day's notes in the box, where
+   Save would have filed them under the date on screen. */
+function _stale(date) { return date !== _date(); }
 
 // Live refresh of the read-only sections only (safe to run on a timer — leaves the notes field alone).
 async function refreshLive() {
   const date = _date();
   try {
-    const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
+    const res = await flowUserActivity(drSession.name, date, date);   // A326
+    if (_stale(date)) return;
     drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
     render();
   } catch (e) { /* keep previous */ }
@@ -73,12 +79,15 @@ async function load() {
   // Activity (flow backend) — scoped to THIS rep so reps never see each other's movements.
   // A155: prime the request-number → client/supplier name map so legacy blank-ref
   // "Client saved" rows can be titled with the client they belong to (idempotent).
-  if (typeof flowPrimeRefNames === 'function') await flowPrimeRefNames();
+  // A326 — primed ALONGSIDE the activity read, not before it: two whole lists ahead of the day's tasks
+  const primed = (typeof flowPrimeRefNames === 'function') ? flowPrimeRefNames() : Promise.resolve();
   // Calls are shown in their own section, so keep the 'Call' module out of the generic timeline.
   try {
-    const res = await fetchFlow('getActivityLog', { date, user: drSession.name });
+    const [res] = await Promise.all([flowUserActivity(drSession.name, date, date), primed]);   // A326
+    if (_stale(date)) return;                       // A326 — a newer date's load owns the page now
     drEntries = ((res && res.data) || []).filter(e => e.module !== 'Call');
   } catch (e) {
+    if (_stale(date)) return;
     drEntries = [];
     const tc = document.getElementById('taskCards');
     if (tc) tc.innerHTML = `<div class="dr-empty">${_esc(e.message)}</div>`;
@@ -163,9 +172,11 @@ function render() {
 async function loadEmails() {
   const body = document.getElementById('emailBody');
   let emails = [], needsSetup = false;
+  const date = _date();
   try {
     if (typeof apiFetchEmailLogToday === 'function') {
-      const r = await apiFetchEmailLogToday(undefined, _date());
+      const r = await apiFetchEmailLogToday(undefined, date);
+      if (_stale(date)) return;                     // A326
       needsSetup = !!(r && r.needsSetup);
       emails = (r && r.success && r.emails) || (r && r.data) || [];
       drEmailMeta = (r && r.meta) || null;
@@ -188,8 +199,10 @@ async function loadEmails() {
 
 // ── Per-rep Notes (flow backend, scoped by user) ──
 async function loadNotes() {
+  const date = _date();
   try {
-    const r = await fetchFlow('getDailyNote', { date: _date(), user: drSession.name });
+    const r = await fetchFlow('getDailyNote', { date, user: drSession.name });
+    if (_stale(date)) return;                       // A326 — never another day's notes in the box
     document.getElementById('notesField').value = (r && r.notes) || '';
   } catch (e) { /* leave as-is */ }
 }
@@ -207,10 +220,12 @@ async function saveNotes() {
 
 // ── Call Log (flow backend, scoped by rep + date) ──
 async function loadCalls() {
+  const date = _date();
   try {
-    const r = await fetchFlow('getSalesCalls', { date: _date(), user: drSession.name });
+    const r = await flowUserCalls(drSession.name, date, date);   // A326 — one cheap read
+    if (_stale(date)) return;
     drCalls = (r && r.data) || [];
-  } catch (e) { drCalls = []; }
+  } catch (e) { if (_stale(date)) return; drCalls = []; }
   document.getElementById('sumCalls').textContent = drCalls.length;
   document.getElementById('callCount').textContent = drCalls.length;
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
@@ -258,10 +273,12 @@ async function delCall(rowIndex) {
 
 // ── A189: Client Visits (flow backend, scoped by rep + date) ──
 async function loadVisits() {
+  const date = _date();
   try {
-    const r = await fetchFlow('getClientVisits', { date: _date(), user: drSession.name });
+    const r = await fetchFlow('getClientVisits', { date, user: drSession.name });
+    if (_stale(date)) return;                       // A326
     drVisits = (r && r.data) || [];
-  } catch (e) { drVisits = []; }
+  } catch (e) { if (_stale(date)) return; drVisits = []; }
   document.getElementById('sumVisits').textContent = drVisits.length;
   document.getElementById('visitCount').textContent = drVisits.length;
   if (typeof reportSubmitRefreshSnapshot === 'function') reportSubmitRefreshSnapshot();
