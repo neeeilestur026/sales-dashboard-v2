@@ -29,7 +29,7 @@ function boot(soType, extra) {
                   'Purchase Price/Unit': 40000, 'Shipping Cost/Unit': 0, 'Landed Cost/Unit': 40000,
                   'Total Landed Cost': 1200000, 'Currency': 'PHP', 'Type': 'Stock', 'Item ID': 'ITM-00001' }],
     SalesOrders: [{ 'SO No': 'SO-001', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open',
-                    'Total': 190000, 'Type': soType || '' }],
+                    'Total': 190000, 'Type': soType || '', 'VAT Type': 'VAT-12' }],
     Clients: [{ 'Customer': 'ACME', 'Payment Terms': '30 days' }],
     Invoices: [], InvoiceItems: [], ARAging: [], Collections: [], Journal: [], ChartOfAccounts: []
   }, extra || {});
@@ -70,6 +70,7 @@ const inv = (ctx, items, extra) => call(ctx, 'createInvoice', Object.assign(
 {
   section('2 · exempt / zero-rated');
   const { ctx, store } = boot();
+  store.SalesOrders[0]['VAT Type'] = 'VAT-EX';   // A331 — the order says exempt; the invoice follows it
   const r = inv(ctx, [{ itemNo: 'TW-01', itemName: TOOL, qty: 1, price: 50000, itemId: 'ITM-00001' }], { vatRate: 0 });
   ok('the invoice is raised', r.success === true, r);
   eq('no VAT', Number(store.Invoices[0]['VAT']), 0);
@@ -246,7 +247,8 @@ const inv = (ctx, items, extra) => call(ctx, 'createInvoice', Object.assign(
   const r = inv(ctx, [{ itemNo: 'TW-01', itemName: TOOL, qty: 2, price: 60000, itemId: 'ITM-00001' }]);
   const arNo = r.arNo;
   // The client remits the VAT-inclusive amount less 1% withholding on the net: 134,400 - 1,200.
-  const col = call(ctx, 'recordCollection', { arNo: arNo, amount: 134400, ewtPHP: 1200,
+  const col = call(ctx, 'recordCollection', { arNo: arNo, amount: 134400, ewt: 1200,   // `ewt` is what the AR page sends (ewtPHP was never read)
+   
     date: '2026-09-20', method: 'Bank', confirmNoDocs: true, actorName: 'Acct', actorRole: 'accounting' });
   ok('it records without a confirmation prompt', col.success === true && !col.needsConfirm, col);
   const a = call(ctx, 'getARAging', {}).data[0];
@@ -256,8 +258,13 @@ const inv = (ctx, items, extra) => call(ctx, 'createInvoice', Object.assign(
   // ...and the guard still works: paying only the net must NOT close the invoice.
   const b = boot();
   const r2 = inv(b.ctx, [{ itemNo: 'TW-01', itemName: TOOL, qty: 2, price: 60000, itemId: 'ITM-00001' }]);
-  call(b.ctx, 'recordCollection', { arNo: r2.arNo, amount: 120000, date: '2026-09-20',
+  const short = call(b.ctx, 'recordCollection', { arNo: r2.arNo, amount: 120000, date: '2026-09-20',
     method: 'Bank', confirmNoDocs: true, actorName: 'Acct', actorRole: 'accounting' });
+  // A331 — no EWT against a customer that withholds is the very mistake being guarded: it needs a reason.
+  eq('A331: the net-only payment with no EWT asks for a reason', short.needsReason, 'ewtMissing');
+  call(b.ctx, 'recordCollection', { arNo: r2.arNo, amount: 120000, date: '2026-09-20',
+    method: 'Bank', confirmNoDocs: true, actorName: 'Acct', actorRole: 'accounting',
+    overrideReason: '2307 to follow (test)' });
   const a2 = call(b.ctx, 'getARAging', {}).data[0];
   eq('paying only the net leaves the VAT outstanding', a2.outstanding, 14400);
   eq('  and the row is Partial, not Paid', a2.status, 'Partial');

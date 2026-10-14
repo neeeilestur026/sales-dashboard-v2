@@ -28,7 +28,7 @@ function invWorld(soType) {
     Inventory: [{ 'Item No': 'TW-01', 'Description': TOOL, 'Available Balance': 3, 'Purchase Price/Unit': 40000,
                   'Shipping Cost/Unit': 0, 'Landed Cost/Unit': 40000, 'Total Landed Cost': 120000, 'Currency': 'PHP',
                   'Type': 'Stock', 'Item ID': 'ITM-00001' }],
-    SalesOrders: [{ 'SO No': 'SO-001', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open', 'Total': 190000, 'Type': soType }],
+    SalesOrders: [{ 'SO No': 'SO-001', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open', 'Total': 190000, 'Type': soType, 'VAT Type': 'VAT-12' }],
     Clients: [{ 'Customer': 'ACME', 'Payment Terms': '30 days' }],
     Invoices: [], InvoiceItems: [], ARAging: [], Journal: [], ChartOfAccounts: [], Collections: []
   };

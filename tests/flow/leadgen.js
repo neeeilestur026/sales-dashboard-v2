@@ -34,7 +34,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   ['logSalesCall', 'deleteSalesCall'].forEach(a =>
     ok(a + ' takes the lock, logs, and IS secured (AS-2: every mutation goes through Flask; the client list ships first)',
        c.MUTATIONS[a] === 1 && !!c._MODULE_MAP[a] && c._SECURED[a] === 1));
-  ok('Clients is 12 wide and ends in Stage', c.SCHEMA.Clients.length === 12 && c.SCHEMA.Clients[11] === 'Stage');
+  ok('Clients is 16 wide: Stage at 12, then the A331 tax defaults', c.SCHEMA.Clients.length === 16 && c.SCHEMA.Clients[11] === 'Stage' && c.SCHEMA.Clients[15] === 'TIN');
   ok('SalesCalls is 11 wide, Kind + Contact No + Reached appended', c.SCHEMA.SalesCalls.slice(8).join() === 'Kind,Contact No,Reached');
   ok('LgTouches carries no Deleted On (it follows its batch)', c.SCHEMA.LgTouches.indexOf('Deleted On') === -1);
 }
@@ -388,7 +388,7 @@ const contact = (c, plantNo, over, who, extra) => save(c, 'contacts', Object.ass
   const c = load();
   let r = call(c, 'saveClient', { customer: 'Eagle Cement', paymentTerms: '45 days', actorName: 'acct', actorRole: 'accounting' });
   ok('saveClient no longer throws with Stage in the schema', r.success, r);
-  ok('a client saved from the clients page has no stage', c.__store.Clients[0]['Stage'] === '' && c.__store.Clients[0].__arity === 12, c.__store.Clients[0]);
+  ok('a client saved from the clients page has no stage', c.__store.Clients[0]['Stage'] === '' && c.__store.Clients[0].__arity === 16, c.__store.Clients[0]);
   c.__store.Clients[0]['Stage'] = 'Prospect';
   r = call(c, 'saveClient', { customer: 'Eagle Cement', paymentTerms: '60 days', actorName: 'acct', actorRole: 'accounting' });
   ok('a re-save keeps Stage unless the caller sets it', c.__store.Clients[0]['Stage'] === 'Prospect' && c.__store.Clients[0]['Payment Terms'] === '60 days');

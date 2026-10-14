@@ -1,0 +1,50 @@
+/* month-check.css — A331. The Month check page (month-check.html). */
+/* A331 — the report shell ap-aging-monthly.html and balance-sheet.html use. */
+.report { max-width: 1180px; margin: 0 auto; }
+.report-sheet { background: var(--hx-card); border: 1px solid var(--hx-hair);
+                border-radius: var(--hx-r-md); padding: 1.4rem 1.6rem; }
+.report-head { display: flex; justify-content: space-between; align-items: flex-start;
+               gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.report-head h1 { margin: 0; font-size: 1.35rem; }
+.report-head .meta { color: var(--hx-ink-3); font-size: 0.8rem; margin-top: 0.25rem; }
+.report-controls { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.mc-label { font-size: 0.78rem; color: var(--hx-ink-3); }
+.report-controls select { padding: 0.35rem 0.5rem; border: 1px solid var(--hx-hair);
+                          border-radius: 8px; background: var(--hx-card); color: var(--hx-ink); }
+
+.mc-banner { border: 1px solid var(--hx-warn-line); background: var(--hx-warn-soft); color: var(--hx-ink);
+             border-radius: 10px; padding: 0.6rem 0.8rem; font-size: 0.8rem; margin-bottom: 0.9rem; }
+.mc-banner.bad { border-color: var(--hx-red-soft); background: var(--hx-red-soft); color: var(--hx-red); }
+
+/* The index: one line per check, the count on the right. A check with nothing is quiet. */
+.mc-index { list-style: none; margin: 0 0 1.2rem; padding: 0; border: 1px solid var(--hx-hair);
+            border-radius: 10px; overflow: hidden; }
+.mc-index li + li { border-top: 1px solid var(--hx-hair); }
+.mc-index a { display: flex; gap: 0.75rem; align-items: baseline; padding: 0.5rem 0.8rem;
+              color: var(--hx-ink); text-decoration: none; }
+.mc-index a:hover, .mc-index a:focus-visible { background: var(--hx-inset); }
+.mc-index .n { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mc-index li.zero a { color: var(--hx-ink-3); }
+.mc-index li.zero .n { font-weight: 400; }
+.mc-index li.hit .n { color: var(--hx-warn); }
+
+.mc-sec { margin-top: 1.6rem; scroll-margin-top: 80px; }
+.mc-sec h2 { font-size: 0.98rem; margin: 0; display: flex; align-items: baseline; gap: 0.5rem; }
+.mc-sec h2 .c { font-size: 0.78rem; font-weight: 400; color: var(--hx-ink-3); }
+.mc-why { font-size: 0.78rem; color: var(--hx-ink-3); margin: 0.2rem 0 0.6rem; max-width: 75ch; }
+.mc-none { font-size: 0.8rem; color: var(--hx-ink-3); }
+.mc-table td.when { white-space: nowrap; }
+.mc-table td.detail { white-space: normal; min-width: 28ch; max-width: 60ch; }   /* the reason is the point: it wraps */
+.mc-table td.reason { font-style: italic; }
+.mc-wrap { overflow-x: auto; }
+
+@media (max-width: 640px) {
+  .report-sheet { padding: 1rem; }
+}
+@media print {
+  .navbar, .no-print { display: none !important; }
+  body { background: var(--hx-card); }
+  .main-content { padding: 0 !important; margin: 0 !important; }
+  .report-sheet { border: none; box-shadow: none; }
+  .mc-sec, table { break-inside: avoid; }
+}

@@ -244,7 +244,7 @@ console.log('\n== the names at every hard-coded column anchor ==');
    Named individually because these are the ones where a silent short write costs the most. */
 console.log('\n== the money-bearing widths ==');
 [['CommissionRequests', 42, 'decides what a person is paid'],
- ['Clients', 12, 'A277 appended Stage — saveClient writes this sheet as a LITERAL and throws on a mismatch'],
+ ['Clients', 16, 'A277 appended Stage; A331 Default VAT Type + Zero Rating Ref + EWT Rate + TIN — saveClient writes this sheet as a LITERAL and throws on a mismatch'],
  ['SalesCalls', 11, 'A277 appended Kind + Contact No; A279 appended Reached'],
  ['LgPlants', 19, 'A277; A279 appended Intel Updated On'], ['LgContacts', 19, 'A277; A279 appended Next Call Date + Scheduled On'],
  ['LgSuppliers', 17, 'A279'], ['LgTouches', 8, 'A277'],
@@ -252,7 +252,7 @@ console.log('\n== the money-bearing widths ==');
  ['SOCostDetails', 18, 'the gross-profit record; saveSOCostDetails is a FULL-ROW overwrite'],
  ['DailyReports', 24, 'no test mentioned this sheet at all before A243'],
  ['Quotations', 29, 'A276 appended Type + Service Kind'],
- ['SalesOrders', 14, 'A276 appended Type + Service Kind — createInvoice reads Type to know a hire from a sale'],
+ ['SalesOrders', 16, 'A276 appended Type + Service Kind (createInvoice reads Type to know a hire from a sale); A331 VAT Type + Zero Rating Ref'],
  ['SalesOrderItems', 10, 'A276 appended Charge Kind + Rate Basis + Duration'],
  ['QuotationItems', 16, 'A276 appended Charge Kind + Rate Basis + Duration'],
  ['InvoiceItems', 12, 'A282 appended Charge Kind + Rate Basis + Duration — a hire line is qty x rate x DURATION and Line Sales alone cannot be checked against Qty and Selling Price'],

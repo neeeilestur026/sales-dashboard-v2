@@ -34,6 +34,20 @@
         <div class="full"><label>Address</label><input type="text" id="cAddress"></div>
         <div class="full"><label>Notes</label><input type="text" id="cNotes"></div>
       </div>
+      <!-- A331: what the VAT and EWT checks expect for this client (FlowAPI 169 and later).
+           Accounting, admin and the director set these; everyone else sees them. -->
+      <div id="cTaxBlock" hidden style="margin-top:.75rem;">
+        <div style="font-size:.82rem;font-weight:600;margin-bottom:.15rem;">Tax defaults</div>
+        <div id="cTaxNote" style="font-size:.76rem;color:var(--hx-ink-3);margin-bottom:.4rem;">New sales orders take this VAT type, and payments are checked against this EWT rate.</div>
+        <div class="flow-form">
+          <div><label for="cVatType">VAT type</label><select id="cVatType" onchange="cliTaxChanged()">
+            <option value="">Not set</option><option value="VAT-12">12% VAT</option><option value="VAT-0">Zero-rated</option><option value="VAT-EX">VAT-exempt</option></select></div>
+          <div id="cZeroBlock" hidden><label for="cZeroRef">Zero-rating reference</label><input type="text" id="cZeroRef" maxlength="120" placeholder="e.g. PEZA certificate no."></div>
+          <div><label for="cEwtRate">EWT the client withholds</label><select id="cEwtRate">
+            <option value="">Not set (goods 1% / services 2%)</option><option value="auto">Goods 1% / services 2%</option><option value="1">1% on everything</option><option value="2">2% on everything</option><option value="none">Does not withhold</option></select></div>
+          <div><label for="cTin">TIN</label><input type="text" id="cTin" maxlength="20" placeholder="000-000-000-000"></div>
+        </div>
+      </div>
       <div class="flow-actions">
         <button class="btn btn-primary" id="saveBtn" onclick="saveClientRec()">Save Client</button>
         <button class="btn btn-secondary" onclick="resetForm()">Reset</button>

@@ -2,13 +2,22 @@
 let arData = [];
 let arInvoices = null;   // A248: the invoice list, or null when it could not be read
 let arSession = null;
+/* A331 — FlowAPI 169's safeguards. Until it is pasted this stays false and the payment form is exactly
+   what it was; once live, the form takes the cash received and the EWT, shows the EWT expected, and
+   asks for a reason instead of a yes/no. */
+let arSg = false;
+const AR_PAY_ROLES = ['accounting', 'admin', 'director'];
+const arMayCollect = () => !arSg || AR_PAY_ROLES.includes(String((arSession && arSession.role) || '').toLowerCase());
 
 document.addEventListener('DOMContentLoaded', async () => {
   arSession = requireOversight();
   if (!arSession) return;
   renderNavbar('flow-ar-aging');
   renderFlowNav('flow-ar-aging.html');
+  const sg = (typeof flowVersionAtLeast === 'function' ? flowVersionAtLeast(169) : Promise.resolve(false)).catch(() => false);
   await loadAR();
+  arSg = await sg;
+  if (arSg) render();   // management becomes view-only: the Collect buttons go
 });
 
 /* ── A248 — WHICH INVOICES NEVER REACHED AR AGING ─────────────────────────────────────────────────
@@ -316,7 +325,7 @@ function rowHtml(r) {
     <td><input type="date" class="f-due" value="${flowDate(r.dueDate)}"></td>
     <td><input type="text" class="f-notes" value="${flowEsc(r.notes)}"></td>
     <td style="white-space:nowrap;">
-      ${done ? '' : `<button class="link-btn" onclick='openCollect("${flowEsc(r.arNo)}")'>Collect</button>`}
+      ${done || !arMayCollect() ? '' : `<button class="link-btn" onclick='openCollect("${flowEsc(r.arNo)}")'>Collect</button>`}
       <button class="link-btn" onclick="saveRow('${flowEsc(r.arNo)}', this)" style="margin-left:0.4rem;">Save</button>
       <button class="link-btn" onclick='openDocsModal("AR Aging","${flowEsc(r.arNo)}")' style="margin-left:0.4rem;">Docs</button>
     </td></tr>`;
@@ -374,13 +383,27 @@ async function saveRow(arNo, btn) {
 }
 
 // ─── Collection modal ─────────────────────────────
+/* A331 — one clientRef per OPEN form, not per click: a resubmit after a timeout, or after the reason
+   dialog, is the same payment and the server records it once. A new form gets a new one. */
+let collectClientRef = '';
+let collectGuide = null;   // { check, perPeso, basis } from getPaymentGuide, or null while unknown
+let collectOutstanding = 0;
+
 function openCollect(arNo) {
   const r = arData.find(x => x.arNo === arNo);
   if (!r) return;
+  collectClientRef = flowClientRef();
+  collectGuide = null;
+  collectOutstanding = flowNum(r.outstanding);
   document.getElementById('collectArNo').value = arNo;
   document.getElementById('collectSub').textContent = `${arNo} · ${r.customer} · outstanding ${flowMoney(r.outstanding, 'PHP')}`;
-  document.getElementById('collectAmount').value = r.outstanding > 0 ? r.outstanding : '';
+  document.getElementById('collectAmountLbl').textContent = arSg ? 'Cash received (PHP) *' : 'Amount (PHP) *';
+  document.getElementById('collectEwtLbl').textContent = arSg ? 'EWT withheld, per the 2307 (PHP)' : 'EWT / 2307 (PHP)';
+  document.getElementById('collectAmount').value = arSg ? '' : (r.outstanding > 0 ? r.outstanding : '');
   document.getElementById('collectEwt').value = '';
+  const guide = document.getElementById('collectGuide');
+  if (guide) { guide.hidden = !arSg; guide.textContent = arSg ? 'Checking the EWT this customer withholds…' : ''; }
+  if (arSg) collectLoadGuide(arNo);
   document.getElementById('collectDate').value = flowToday();
   document.getElementById('collectRef').value = '';
   document.getElementById('collectNotes').value = '';
@@ -392,18 +415,64 @@ function openCollect(arNo) {
 }
 function closeCollect() { document.getElementById('collectModal').classList.remove('open'); }
 
+async function collectLoadGuide(arNo) {
+  try {
+    const g = await postFlow('getPaymentGuide', { arNos: arNo });   // a secured read: through Flask, which says who is asking
+    if (document.getElementById('collectArNo').value !== arNo) return;   // the form moved on
+    collectGuide = (g && g.success && g.data && g.data[arNo]) || { check: false };
+  } catch (e) { collectGuide = { check: false }; }
+  // A full settlement is the usual case: offer the cash that, with the expected EWT, clears the balance.
+  const cash = document.getElementById('collectAmount');
+  if (collectGuide.check && !cash.value && collectOutstanding > 0) {
+    const e = Math.round(collectGuide.perPeso * collectOutstanding * 100) / 100;
+    cash.placeholder = (collectOutstanding - e).toFixed(2) + ' clears it, with ' + e.toFixed(2) + ' EWT';
+  }
+  collectRecalcNet();
+}
+
+/* The EWT the server will expect for what the form now settles: rate × before-VAT share × (cash + EWT). */
+function collectExpectedEwt() {
+  if (!collectGuide || !collectGuide.check) return null;
+  const cash = flowNum(document.getElementById('collectAmount').value);
+  const ewt = flowNum(document.getElementById('collectEwt').value);
+  return Math.round(collectGuide.perPeso * (cash + ewt) * 100) / 100;
+}
+/* "Use" — the EWT that makes cash + EWT consistent: E = k·(cash + E)  →  E = k·cash / (1 − k). */
+function collectUseExpected() {
+  if (!collectGuide || !collectGuide.check) return;
+  const k = collectGuide.perPeso, cash = flowNum(document.getElementById('collectAmount').value);
+  document.getElementById('collectEwt').value = (Math.round(k * cash / (1 - k) * 100) / 100).toFixed(2);
+  collectRecalcNet();
+}
+
 function collectRecalcNet() {
   const amount = flowNum(document.getElementById('collectAmount').value);
   const ewt = flowNum(document.getElementById('collectEwt').value);
-  const net = amount - ewt;
+  if (!arSg) {
+    const net = amount - ewt;
+    document.getElementById('collectNet').textContent =
+      `Net cash = ${flowMoney(net, 'PHP')}  (Amount ${flowMoney(amount, 'PHP')} − EWT ${flowMoney(ewt, 'PHP')})`;
+    return;
+  }
+  const settled = amount + ewt, left = collectOutstanding - settled;
   document.getElementById('collectNet').textContent =
-    `Net cash = ${flowMoney(net, 'PHP')}  (Amount ${flowMoney(amount, 'PHP')} − EWT ${flowMoney(ewt, 'PHP')})`;
+    `Amount settled = ${flowMoney(settled, 'PHP')} (cash ${flowMoney(amount, 'PHP')} + EWT ${flowMoney(ewt, 'PHP')}) · ` +
+    (left > 0.005 ? `${flowMoney(left, 'PHP')} still due after this` : left < -0.005 ? `${flowMoney(-left, 'PHP')} MORE than is due` : 'clears the balance');
+  const guide = document.getElementById('collectGuide');
+  if (!guide || collectGuide === null) return;
+  if (!collectGuide.check) { guide.innerHTML = 'The EWT cannot be checked for this receivable (no invoice on file), so enter it as the 2307 shows.'; guide.classList.remove('bad'); return; }
+  const exp = collectExpectedEwt();
+  const off = Math.abs(ewt - exp) > 1 && exp > 1;
+  guide.classList.toggle('bad', off);
+  guide.innerHTML = `Expected EWT <b>${flowMoney(exp, 'PHP')}</b> — ${flowEsc(collectGuide.basis)}.` +
+    (off ? ` What you entered differs, so saving will ask for the reason.` : '') +
+    (amount > 0 && Math.abs(ewt - exp) > 0.005 && exp > 0 ? ` <button type="button" class="link-btn" onclick="collectUseExpected()">Use the expected EWT</button>` : '');
 }
 
 async function submitCollection() {
   const arNo = document.getElementById('collectArNo').value;
   const amount = flowNum(document.getElementById('collectAmount').value);
-  if (!(amount > 0)) { flowMsg('collectMsg', 'Enter an amount greater than zero.', false); return; }
+  if (!(amount > 0)) { flowMsg('collectMsg', arSg ? 'Enter the cash received.' : 'Enter an amount greater than zero.', false); return; }
   const btn = document.getElementById('collectBtn');
   btn.disabled = true; btn.textContent = 'Recording...';
   try {
@@ -413,13 +482,17 @@ async function submitCollection() {
       method: document.getElementById('collectMethod').value,
       ref: document.getElementById('collectRef').value.trim(),
       notes: document.getElementById('collectNotes').value.trim(),
-      clientRef: flowClientRef()                            // idempotent create (safe retry)
+      clientRef: collectClientRef || flowClientRef()        // idempotent create (safe retry) — one per open form (A331)
     };
+    // A331 — the one payment model: the cash received plus the EWT withheld is what settles the invoice
+    if (arSg) { delete payload.amount; payload.received = amount; }
     // A320 — the books: where it was deposited, and the cheque number (an older backend ignores both)
     const dep = document.getElementById('collectDepositedTo'), chq = document.getElementById('collectCheque');
     if (dep && dep.value) payload.depositedTo = dep.value;
     if (chq && chq.value.trim()) payload.chequeNo = chq.value.trim();
     let res = await postFlow('recordCollection', payload);
+    // A331 — a safeguard asks for the reason; the same payload (same clientRef) goes again with it.
+    if (arSg) res = await flowWithReason(res, extra => postFlow('recordCollection', Object.assign({}, payload, extra)));
     // A158: this would collect more than the receivable is due — a real overpayment happens, but it
     // should be a decision rather than a silent entry that only gets flagged afterwards.
     if (!res.success && res.needsConfirm === 'overCollect') {
@@ -427,6 +500,7 @@ async function submitCollection() {
       res = await postFlow('recordCollection', Object.assign({}, payload, { confirmOver: true }));
     }
     if (!res.success) throw new Error(res.message);
+    collectClientRef = '';                                   // recorded: the next form is a new payment
     flowMsg('collectMsg', `${res.message} (status: ${res.status})`, true);
     await loadAR();
     setTimeout(closeCollect, 800);

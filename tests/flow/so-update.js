@@ -26,6 +26,7 @@ const eq = (l, got, want) => ok(l + ' = ' + JSON.stringify(want), got === want, 
 const store = {
   Quotations: [{ 'Quotation No': 'Q-RENT', 'Customer': 'ABOITIZ POWER CORPORATION', 'Type': 'Rental', 'Service Kind': 'Tool hire', 'Status': 'Approved' },
                { 'Quotation No': 'Q-SUPPLY', 'Customer': 'ABOITIZ POWER CORPORATION', 'Type': 'Supply', 'Service Kind': '', 'Status': 'Approved' }],
+  Clients: [{ 'Customer': 'ABOITIZ POWER CORPORATION' }],   // A331 — orders are for known clients
   ActivityLog: []
 };
 const ctx = load(process.env.FLOW_GS || undefined, store);
@@ -36,7 +37,7 @@ const so = () => store.SalesOrders.find(r => r['SO No'] === '150001774');
 console.log('\n1 · the edit the form sends');
 let r = call(ctx, 'createSalesOrder', Object.assign({ soNo: '150001774', quotationNo: 'Q-RENT', customer: 'ABOITIZ POWER CORPORATION',
   date: '2026-08-11', status: 'Open', supplierType: 'International', clientPoDate: '2026-08-10', poReceivedDate: '2026-08-11',
-  createdBy: 'Kim Sales', items: line(6, 70000), clientRef: 'c-1' }, WHO));
+  createdBy: 'Kim Sales', items: line(6, 70000), clientRef: 'c-1', vatType: 'VAT-12' }, WHO));
 ok('created', r.success, r);
 eq('  type from the quotation', so()['Type'], 'Rental');
 eq('  service kind from the quotation', so()['Service Kind'], 'Tool hire');

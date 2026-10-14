@@ -30,6 +30,10 @@
 .flow-msg { display: none; padding: 8px 12px; border-radius: var(--hx-r-sm); font: 600 12.5px/1.4 var(--hx-text); margin-top: 10px; }
 .flow-msg.ok { background: var(--hx-ok-soft); color: var(--hx-ok); }
 .flow-msg.bad { background: var(--hx-red-soft); color: var(--hx-red); }
+/* A331 — the expected-EWT line on a payment form; .bad when what is typed will need a reason */
+.flow-guide-line { padding: 8px 12px; border-radius: var(--hx-r-sm); background: var(--hx-inset); font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-2); }
+.flow-guide-line[hidden] { display: none; }
+.flow-guide-line.bad { background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-line); color: var(--hx-ink); }
 
 /* status badges: one semantic map */
 .flow-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: var(--hx-r-pill); font: 700 10.5px/1.5 var(--hx-text); white-space: nowrap; background: var(--hx-inset); color: var(--hx-ink-2); border: 1px solid var(--hx-hair-2); }

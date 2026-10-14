@@ -95,7 +95,7 @@ eq('  and rateBasis, which the form turns back into the picker', got.items[0].ra
 /* ── 3 · the sales order inherits it without being told ────────────────────────────────────── */
 sec('3 · createSalesOrder inherits the type from the quotation');
 const so = call(ctx, 'createSalesOrder', Object.assign({
-  quotationNo: q.quotationNo, customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-22',
+  quotationNo: q.quotationNo, customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-22', vatType: 'VAT-12',
   items: JSON.stringify(ITEMS)
 }, ADMIN));
 ok('the order is created', so.success === true, so);
@@ -233,7 +233,7 @@ eq('the deposit is per TOOL: 2 x 10,000', Number(l460('t4')['Line Total']), 2000
 ok('  and not per day — 140,000 appears nowhere', Number(l460('t4')['Line Total']) !== 140000);
 
 const so2 = call(c2, 'createSalesOrder', Object.assign({
-  quotationNo: '2026-460-NE', customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-22',
+  quotationNo: '2026-460-NE', customer: 'HOLCIM PHILIPPINES, INC.', date: '2026-09-22', vatType: 'VAT-12',
   items: JSON.stringify(TWO)
 }, ADMIN));
 eq('the sales order carries the same total', Number(s2.SalesOrders[0]['Total']), 185500);

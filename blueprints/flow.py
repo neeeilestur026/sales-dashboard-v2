@@ -666,6 +666,8 @@ SECURED_ACTIONS = [
     "dispatchByScan", "linkBarcode", "receiveByScan", "saveScanCount", "uploadScanPhoto", "setItemTracking", "registerAssets", "returnByScan", "ensureItemLabels", "logLabelPrint", "getScanContext", "getScanLookup", "getLabels", "getStockInOptions", "getScanPhotos", "createItemByScan", "saveAccount", "saveAccountRule", "resolveBooksInboxItem", "getBooksCoverage", "syncBooks", "ingestBookEvents", "getBooksStatus", "getAccounts", "getAccountRules", "getTaxCodes", "getGLEntries", "getGLTrialBalance", "getBooksInbox", "recordFieldCollection", "recordNotCollected", "acknowledgeFieldCollection", "undoFieldCollection", "uploadCollectionPhoto", "getCollectorQueue", "getFieldCollectionNotices",
     # A325 — the commission reads that carried every rep's pay to an unsigned GET
     "getCommissionPayoutReport", "getCommissionPreview", "auditCommissionIntegrity", "getCommissionRates", "previewCommissionAttribution",
+    # A331 — the Month check (orders, invoices, receivables, payments and the overrides used)
+    "getMonthCheck", "getPaymentGuide",
 ]
 
 

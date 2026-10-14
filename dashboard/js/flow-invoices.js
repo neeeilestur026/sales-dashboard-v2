@@ -7,6 +7,10 @@ let ivCanVoid = false;   // A158: the void action needs FlowAPI v94
 let ivCanVat = false;    // A278: storing a VAT rate needs FlowAPI v153
 let ivCanRename = false; // A252: renaming the invoice number needs FlowAPI v142
 let ivViewer = false;    // A231: management looks, does not touch
+/* A331 — FlowAPI 169: the invoice follows its sales order (customer and VAT type), the billing so far is
+   shown before saving, and a re-invoice or over-billing asks for a recorded reason instead of a yes/no. */
+let ivSg = false;
+let ivLive = [];         // live (not voided) invoices, for "already invoiced" on the billing panel
 
 document.addEventListener('DOMContentLoaded', async () => {
   /* A268 — collapse the form so the list below can own the screen and be the only thing that
@@ -41,6 +45,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   if (ivCanVat) { const vtb = document.getElementById('vatTypeBlock'); if (vtb) vtb.hidden = false; }   // A320
   vatRepairVisible();
+  try { ivSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(169) : false; }
+  catch (e) { ivSg = false; }
   if (ivViewer) ivCanVoid = false;   // A231 — one flag decides the button, as on flow-collections
   if (ivViewer) ivCanRename = false;
   document.getElementById('date').value = flowToday();
@@ -89,10 +95,56 @@ function loadFromSO() {
   const no = document.getElementById('loadSO').value;
   const s = ivSOs.find(x => String(x.soNo) === String(no));   // migrated SOs may have numeric ids
   ivCurrent = s || null;
-  if (!s) { document.getElementById('itemRows').innerHTML = ''; recalc(); return; }
+  if (!s) { document.getElementById('itemRows').innerHTML = ''; ivBillingPanel(0); return; }
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('customer').value = s.customer;
+  if (ivSg) ivFollowOrder(s);
   renderItems();
+}
+
+/* A331 — the invoice bills the ORDER's customer at the ORDER's VAT type. The server refuses another
+   customer outright and asks a reason for another VAT type, so the form simply follows the order. An
+   older order with no VAT type yet keeps the picker open, and says so. */
+function ivFollowOrder(s) {
+  const cust = document.getElementById('customer');
+  cust.readOnly = true;
+  cust.title = 'The invoice goes to the sales order’s customer. To change it, correct the sales order.';
+  const sel = document.getElementById('vatType'), note = document.getElementById('ivVatNote');
+  const t = String(s.vatType || '');
+  /* Start from nothing on every order: the previous order's zero-rated status and certificate must
+     never carry over to the next customer's invoice. */
+  const zr = document.getElementById('zeroRatingRef');
+  if (zr) zr.value = '';
+  if (sel) {
+    sel.value = t || 'VAT-12';
+    ivVatTypeChanged();
+    if (t === 'VAT-0' && zr && s.zeroRatingRef) zr.value = s.zeroRatingRef;
+  }
+  if (note) {
+    note.hidden = false;
+    note.textContent = t
+      ? 'From the sales order. Choosing another VAT type will ask for the reason.'
+      : 'This sales order has no VAT type yet. Choose it here, or set it on the sales order first.';
+  }
+}
+
+/* A331 — the order total, what is already invoiced, this invoice and what is left: all before VAT,
+   deposits excluded, the same sums createInvoice checks (sgRevenue / sgBilled). */
+function ivBillingPanel(thisRevenue) {
+  const el = document.getElementById('ivBilling');
+  if (!el) return;
+  if (!ivSg || !ivCurrent) { el.hidden = true; return; }
+  const order = flowNum(ivCurrent.total);
+  const billed = ivLive.filter(v => String(v.soNo) === String(ivCurrent.soNo)).reduce((t, v) => t + flowNum(v.totalSales), 0);
+  const left = order - billed - thisRevenue;
+  const over = order > 0 && left < -1;
+  el.hidden = false;
+  el.classList.toggle('bad', over);
+  el.innerHTML = order > 0
+    ? `Order total ${flowMoney(order, 'PHP')} · already invoiced ${flowMoney(billed, 'PHP')} · this invoice ${flowMoney(thisRevenue, 'PHP')} · ` +
+      (over ? `<b>${flowMoney(-left, 'PHP')} above the order</b>, so saving will ask for the reason.` : `${flowMoney(Math.max(0, left), 'PHP')} left to bill.`) +
+      ' All before VAT.'
+    : 'This sales order has no total, so billing cannot be compared with it.';
 }
 
 function renderItems() {
@@ -137,7 +189,7 @@ function ivVatOf(net) {
 }
 
 function recalc() {
-  let sales = 0, cogs = 0;
+  let sales = 0, cogs = 0, revenue = 0;
   document.querySelectorAll('#itemRows tr').forEach((tr, i) => {
     const it = ivCurrent.items[i];
     const qty = flowNum(tr.querySelector('.qty').value);
@@ -149,7 +201,9 @@ function recalc() {
     tr.querySelector('.lineSales').textContent = ls.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     tr.querySelector('.lineCOGS').textContent = lc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     sales += ls; cogs += lc;
+    if (String(it.chargeKind || '').trim().toLowerCase() !== 'deposit') revenue += ls;   // A331 — as createInvoice
   });
+  ivBillingPanel(revenue);
   const money2 = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const vat = ivVatOf(sales);
   document.getElementById('totalVat').textContent = money2(vat);
@@ -206,16 +260,24 @@ async function saveInvoice() {
   try {
     let res = await postFlow('createInvoice', payload);
     const extra = {};
-    // A158: issuing more than is on hand — stock clamps at zero and the shortfall is untracked.
-    if (!res.success && res.needsConfirm === 'shortStock') {
-      if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled — check the stock first.', false); return; }
-      extra.confirmShort = true;
-      res = await postFlow('createInvoice', Object.assign({}, payload, extra));
-    }
-    // A158: the sales order already carries an invoice — a second one bills the customer twice.
-    if (!res.success && res.needsConfirm === 'alreadyInvoiced') {
-      if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled.', false); return; }
-      extra.confirmReinvoice = true;
+    /* Each answer goes back with the same payload (same clientRef); the server may ask its questions
+       in any order, so answer whichever comes back until it saves, refuses, or the user stops. */
+    for (let ask = 0; ask < 4 && !res.success; ask++) {
+      if (res.needsConfirm === 'shortStock') {
+        // A158: issuing more than is on hand — stock clamps at zero and the shortfall is untracked.
+        if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled — check the stock first.', false); return; }
+        extra.confirmShort = true;
+      } else if (res.needsConfirm === 'alreadyInvoiced') {
+        // A158: the sales order already carries an invoice — a second one bills the customer twice.
+        if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled.', false); return; }
+        extra.confirmReinvoice = true;
+      } else if (ivSg && res.needsReason) {
+        // A331 — re-invoicing, billing above the order, the same amount twice, another VAT type: a
+        // recorded reason instead of a yes/no.
+        const reason = await flowAskReason(res);
+        if (!reason) { flowMsg('formMsg', 'Invoice not issued. ' + res.message, false); return; }
+        extra.overrideReason = reason;
+      } else break;
       res = await postFlow('createInvoice', Object.assign({}, payload, extra));
     }
     if (!res.success) throw new Error(res.message);
@@ -232,6 +294,9 @@ function resetForm() {
   document.getElementById('loadSO').value = '';
   document.getElementById('soNo').value = '';
   document.getElementById('customer').value = '';
+  document.getElementById('customer').readOnly = false;
+  const ivNote = document.getElementById('ivVatNote'); if (ivNote) ivNote.hidden = true;
+  const ivB = document.getElementById('ivBilling'); if (ivB) ivB.hidden = true;
   const ivn = document.getElementById('invNo'); if (ivn) ivn.value = '';
   document.getElementById('date').value = flowToday();
   document.getElementById('itemRows').innerHTML = '';
@@ -250,6 +315,7 @@ async function loadInvoices() {
   try {
     const res = await fetchFlow('getInvoices');
     const list = (res && res.data) || [];
+    ivLive = list.filter(v => !v.voided);   // A331 — the billing panel's "already invoiced"
     if (!list.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No invoices yet.</p>'; return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>INV No</th><th>SO</th><th>Date</th><th>Customer</th><th class="num">Net Sales</th><th class="num">VAT</th><th class="num">Total Due</th><th class="num">COGS</th><th class="num">Gross Profit</th><th>Items</th><th></th></tr></thead><tbody>${list.map(v => `
       <tr><td>${flowEsc(v.invNo)}</td><td>${flowEsc(v.soNo)}</td><td>${flowDate(v.date)}</td><td>${flowEsc(v.customer)}</td>

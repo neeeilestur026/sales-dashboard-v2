@@ -16,7 +16,10 @@
   const MIN_VERSION = 164;
   const MAX_PHOTOS = 4;
   const C = { session: null, q: null, filter: 'overdue', ar: null, method: '', place: '', lines: [], photoIds: [], clientRef: '',
-              notRef: '', reason: '', last: null, busy: false, confirm: {}, afterPhoto: null };
+              notRef: '', reason: '', last: null, busy: false, confirm: {}, afterPhoto: null,
+              sg: false, guide: {} };   // A331 — FlowAPI 169: the expected tax per invoice, and reasons
+  const SG_VERSION = 169;   // 168 is A327's staging build, which has none of this
+  const REASON_MIN = 10;
   const $ = (id) => document.getElementById(id);
   const esc = (v) => flowEsc(v);
   const peso = (v) => flowMoney(v, 'PHP');
@@ -110,6 +113,8 @@
     const mine = C.q.receivables.filter(r => r.customer === x.customer);
     mine.sort((a, b) => (a.arNo === x.arNo ? -1 : b.arNo === x.arNo ? 1 : (b.daysOverdue || 0) - (a.daysOverdue || 0)));
     C.lines = mine.map(r => ({ ar: r, on: r.arNo === x.arNo, amount: r.arNo === x.arNo ? r.balance : 0, ewt: 0, touched: false }));
+    C.guide = {};
+    if (C.sg) loadGuide(mine.map(r => r.arNo));
     $('clPayHead').innerHTML = headHtml(x);
     document.querySelectorAll('.cl-method').forEach(b => b.setAttribute('aria-pressed', 'false'));
     ['clChequeNo', 'clChequeBank', 'clRef', 'clNotes'].forEach(id => { $(id).value = ''; });
@@ -149,7 +154,7 @@
         ${l.on ? `<div class="cl-line-amts">
           <div><label class="cl-label" for="clAmt${i}">Received</label><input type="number" class="cl-input" id="clAmt${i}" data-amt="${i}" min="0" step="0.01" inputmode="decimal" value="${l.amount || ''}"></div>
           <div><label class="cl-label" for="clEwt${i}">Tax withheld (2307)</label><input type="number" class="cl-input" id="clEwt${i}" data-ewt="${i}" min="0" step="0.01" inputmode="decimal" value="${l.ewt || ''}" placeholder="0.00"></div>
-        </div><p class="cl-line-left" id="clLeft${i}"></p>` : ''}
+        </div><p class="cl-line-left" id="clLeft${i}"></p><p class="cl-line-ewt" id="clEwtHint${i}" hidden></p>` : ''}
       </div>`).join('');
     lineTotals();
   }
@@ -160,11 +165,55 @@
       total += r2(l.amount);
       const left = r2(l.ar.balance - r2(l.amount) - r2(l.ewt)), el = $('clLeft' + i);
       if (el) el.textContent = left > 0.005 ? 'Balance left after this: ' + peso(left) : left < -0.005 ? peso(-left) + ' more than the balance' : 'Pays it in full';
+      ewtHint(l, i);
     });
     const word = C.method === 'Cheque' ? 'the cheque' : C.method === 'Cash' ? 'the cash' : C.method === 'Bank Transfer' ? 'the transfer' : 'what you received';
     $('clTotal').textContent = 'Total received: ' + peso(total);
     $('clTotalHint').textContent = 'It should match ' + word + '.';
   }
+  /* A331 — what the customer's rate says should have been withheld, from the same rule the server checks:
+     rate × before-VAT share × (received + withheld). One tap fills it in; recording anything else asks why. */
+  async function loadGuide(arNos) {
+    try {
+      const g = await postFlow('getPaymentGuide', { arNos: arNos.join(',') });
+      if (g && g.success && g.data) C.guide = g.data;
+    } catch (e) { C.guide = {}; }
+    if (!$('clPay').hidden) lineTotals();
+  }
+  const expectedFor = (l) => { const g = C.guide[l.ar.arNo]; return g && g.check ? r2(g.perPeso * (r2(l.amount) + r2(l.ewt))) : null; };
+  function ewtHint(l, i) {
+    const el = $('clEwtHint' + i), g = C.guide[l.ar.arNo];
+    if (!el) return;
+    if (!C.sg || !g || !g.check) { el.hidden = true; return; }
+    const exp = expectedFor(l), off = exp > 1 && Math.abs(r2(l.ewt) - exp) > 1;
+    el.hidden = false;
+    el.classList.toggle('warn', off);
+    el.innerHTML = 'Expected tax withheld: ' + peso(exp) + ' (' + esc(g.basis) + ')' + (off ? '. What is typed differs, so recording will ask why.' : '') +
+      (Math.abs(r2(l.ewt) - exp) > 0.005 && exp > 0 ? ` <button type="button" data-use="${i}">Use it</button>` : '');
+  }
+  function useExpected(i) {
+    const l = C.lines[i], g = C.guide[l.ar.arNo];
+    if (!g || !g.check) return;
+    const k = g.perPeso;
+    if (!l.touched) { l.ewt = r2(k * l.ar.balance); l.amount = r2(l.ar.balance - l.ewt); }   // the usual case: it pays the invoice in full
+    else l.ewt = r2(k * r2(l.amount) / (1 - k));                                             // the cheque is what it is; the tax follows it
+    renderLines(); validate();
+  }
+  function askReason(r) {
+    const probs = (r.problems && r.problems.length) ? r.problems : [{ message: r.message }];
+    const text = probs.map(p => p.message).join(' ');
+    $('clSheetReason').value = '';
+    const note = () => { const n = $('clSheetReason').value.trim().length; $('clSheetReasonNote').textContent = n < REASON_MIN ? (REASON_MIN - n) + ' more characters needed' : 'The reason is recorded with the payment.'; return n; };
+    ask('This needs a reason', text, [
+      ['Record with this reason', () => { C.confirm.overrideReason = $('clSheetReason').value.trim(); record(); }, true],
+      ['Go back and change it', () => go('pay')]]);
+    show('clSheetReasonBox', true);
+    const okBtn = $('clSheetActs').querySelector('[data-act="0"]');
+    const sync = () => { okBtn.disabled = note() < REASON_MIN; };
+    $('clSheetReason').oninput = sync; sync();
+    setTimeout(() => $('clSheetReason').focus(), 30);
+  }
+
   function pdcNote() { show('clPdcNote', C.method === 'Cheque' && $('clChequeDate').value > $('clDate').value); }
   function payProblem() {
     if (!C.method) return 'Choose how it was paid.';
@@ -218,6 +267,7 @@
     try {
       const r = await postFlow('recordFieldCollection', payload());
       if (r && r.success) return done(r);
+      if (C.sg && r && r.needsReason) return askReason(r);
       if (r && r.needsConfirm === 'overCollect') return ask('More than the balance', r.message,
         [['Record it anyway', () => { C.confirm.confirmOver = true; record(); }, true], ['Go back and change it', () => go('pay')]]);
       if (r && r.needsConfirm === 'duplicateCheque') return ask('This cheque was used before', r.message,
@@ -324,6 +374,7 @@
   /* ── the question sheet ──────────────────────────────────────────────────────────────────────── */
   function ask(title, text, actions) {
     $('clSheetTitle').textContent = title; $('clSheetText').textContent = text;
+    show('clSheetReasonBox', false);   // A331 — only askReason shows it
     $('clSheetActs').innerHTML = actions.map((a, i) => `<button type="button" class="btn${a[2] ? ' btn-primary primary' : ''}" data-act="${i}">${esc(a[0])}</button>`).join('');
     $('clSheetActs').querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => { const a = actions[+b.dataset.act]; closeSheet(); a[1](); }));
     show('clSheet', true);
@@ -340,6 +391,7 @@
     try { const r = await fetchFlow('getVersion', {}, { fresh: true }); v = Number(r && r.version) || 0; }
     catch (e) { banner('Can\'t reach the server. Check your signal, then tap Refresh — nothing has been recorded.'); return; }
     if (v < MIN_VERSION) { banner('Collect needs the latest FlowAPI (' + MIN_VERSION + '). Paste FlowAPI.gs, then reload.'); $('clWho').textContent = ''; return; }
+    C.sg = v >= SG_VERSION;
 
     document.querySelectorAll('.cl-tab').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
     document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => go(b.dataset.back)));
@@ -373,6 +425,7 @@
       }
       lineTotals(); validate();
     });
+    $('clLines').addEventListener('click', (e) => { const u = e.target.closest('[data-use]'); if (u) useExpected(+u.dataset.use); });   // A331
     ['clChequeNo', 'clDate'].forEach(id => $(id).addEventListener('input', () => { pdcNote(); validate(); }));
     $('clChequeDate').addEventListener('input', pdcNote);
     $('clReview').addEventListener('click', review);
@@ -385,5 +438,5 @@
     $('clSheet').addEventListener('click', (e) => { if (e.target === $('clSheet')) closeSheet(); });
     await loadQueue();
   });
-  window.__collect = { C, MIN_VERSION, dueText, payProblem };   // tests
+  window.__collect = { C, MIN_VERSION, SG_VERSION, dueText, payProblem, expectedFor };   // tests
 })();

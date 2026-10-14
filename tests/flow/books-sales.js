@@ -28,12 +28,14 @@ const sec = (t) => console.log('\n' + t);
 const ACC = { actorRole: 'accounting', actorName: 'Ana Acct' };
 const TOOL = 'HYDRAULIC TORQUE WRENCH';
 function boot(mode, extra) {
+  extra = Object.assign({}, extra || {});
+  const sgOff = extra.sgOff; delete extra.sgOff;   // A331 — a section that pins pre-safeguard behaviour runs with them off
   const store = Object.assign({
-    FlowSettings: mode ? [{ Key: 'booksEngine', Value: mode }] : [],
+    FlowSettings: (mode ? [{ Key: 'booksEngine', Value: mode }] : []).concat(sgOff ? [{ Key: 'safeguards', Value: 'off' }] : []),
     Inventory: [{ 'Item No': 'TW-01', 'Description': TOOL, 'Available Balance': 30, 'Purchase Price/Unit': 40000, 'Shipping Cost/Unit': 0,
                   'Landed Cost/Unit': 40000, 'Total Landed Cost': 1200000, 'Currency': 'PHP', 'Type': 'Stock', 'Item ID': 'ITM-00001' }],
-    SalesOrders: [{ 'SO No': 'SO-001', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open', 'Total': 190000, 'Type': '' },
-                  { 'SO No': 'SO-H', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open', 'Total': 50000, 'Type': 'service' }],
+    SalesOrders: [{ 'SO No': 'SO-001', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open', 'Total': 190000, 'Type': '', 'VAT Type': 'VAT-12' },
+                  { 'SO No': 'SO-H', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open', 'Total': 50000, 'Type': 'service', 'VAT Type': 'VAT-12' }],
     Clients: [{ 'Customer': 'ACME', 'Payment Terms': '30 days' }],
     Invoices: [], InvoiceItems: [], ARAging: [], Collections: [], Journal: [], ChartOfAccounts: [], ActivityLog: []
   }, extra || {});
@@ -48,11 +50,13 @@ const WRENCH = [{ itemNo: 'TW-01', itemName: TOOL, qty: 2, price: 60000, itemId:
 
 sec('1 · books off: nothing changes');
 {
-  const { ctx, store } = boot();
+  const { ctx, store } = boot(undefined, { sgOff: true });
   const r = inv(ctx, WRENCH, { vatRate: 0 });
-  ok('a 0% invoice needs no VAT type while the books are off', r.success, r);
+  ok('a 0% invoice needs no VAT type while the books are off (safeguards off)', r.success, r);
   ok('  nothing reaches the GL or the side table', !(store.GL || []).length && !(store.DocMeta || []).length);
   ok('  the legacy journal still posts', store.Journal.some(j => j['Account Code'] === '1200'));
+  const on = boot();
+  ok('  A331: with the safeguards on, a 0% invoice on a 12% order is refused', !inv(on.ctx, WRENCH, { vatRate: 0 }).success);
 }
 
 sec('2 · an invoice posts to the books');
@@ -85,7 +89,7 @@ sec('2 · an invoice posts to the books');
 
 sec('3 · VAT type with the books on');
 {
-  const { ctx, store } = boot('shadow');
+  const { ctx, store } = boot('shadow', { sgOff: true });   // the books' own VAT-type rules, on their own
   let r = inv(ctx, WRENCH, { vatRate: 0 });
   ok('a 0% invoice without a type is refused', !r.success && /zero-rated or VAT-exempt/.test(r.message), r);
   r = inv(ctx, WRENCH, { vatRate: 0, vatType: 'VAT-0', zeroRatingRef: 'PEZA cert 2026-114' });
@@ -155,7 +159,7 @@ sec('5 · collections');
   eq('  the bank is back to zero', net(store, '1020'), 0);
   eq('  and the receivable is open again', net(store, '1200'), 134400);
   ok('  balanced throughout', balanced(store));
-  c = call(ctx, 'recordCollection', Object.assign({ arNo, amount: 1000, date: '2026-10-03', confirmNoDocs: true, depositedTo: '1100' }, ACC));
+  c = call(ctx, 'recordCollection', Object.assign({ arNo, amount: 1000, date: '2026-10-03', confirmNoDocs: true, depositedTo: '1100', overrideReason: '2307 to follow (test)' }, ACC));
   ok('undeposited cheques go to 1100', c.success && net(store, '1100') === 1000, c);
 }
 
@@ -180,7 +184,7 @@ sec('7 · what needs a person, and engine errors');
   ok('  but waits in the Inbox (its invoice is not in the books)', store.GLInbox.some(i => i['Source No'] === c.collectionNo && i.Reason === 'no invoice in the books'), store.GLInbox);
   ok('  and nothing half-posted', !(store.GL || []).length);
   ctx._booksInvoiceEvent = () => { throw new Error('boom'); };
-  const r = inv(ctx, WRENCH, { confirmReinvoice: true });
+  const r = inv(ctx, WRENCH, { overrideReason: 'second invoice on this order (test)' });   // A331 — a reason, not a confirm
   ok('an engine error does not fail the invoice', r.success, r);
   ok('  it is parked in the Inbox with the message', store.GLInbox.some(i => i.Reason === 'engine error' && /boom/.test(i.Description)), store.GLInbox.map(i => i.Reason));
 }

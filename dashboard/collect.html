@@ -186,6 +186,12 @@
     <div class="cl-sheet-card">
       <h3 id="clSheetTitle"></h3>
       <p id="clSheetText"></p>
+      <!-- A331: a payment that breaks a check is recorded only with a reason (FlowAPI 169) -->
+      <div id="clSheetReasonBox" hidden>
+        <label class="cl-label" for="clSheetReason">Why record it as it is?</label>
+        <textarea class="cl-input" id="clSheetReason" rows="3" maxlength="300" placeholder="e.g. 2307 to follow; withheld on the gross per their 2307"></textarea>
+        <p class="cl-note" id="clSheetReasonNote"></p>
+      </div>
       <div class="cl-sheet-acts" id="clSheetActs"></div>
     </div>
   </div>
