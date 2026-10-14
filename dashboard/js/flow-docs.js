@@ -93,7 +93,13 @@ async function _flowDocsFillTypes(module, presetType, kind) {
   const rules = await _flowDocRulesLoad();
   const seen = {}, opts = [];
   rules.forEach(r => {
-    if (module && r.module && r.module !== module) return;
+    /* A332 — submitting a payment request is gated on the proforma and the TT slip (gate 'pay'), but
+       those rules belong to the Shipment module, so the request's own window offered only "Proof of
+       payment" and "Other…". People typed the name instead, and PRF-2026-113 was refused for a
+       proforma filed as "Pro Forma Invoice". The server counts a document on the request wherever
+       it was filed (_soDocChain), so offer the gate's documents here too. */
+    const payDoc = module === 'Payment Request' && r.gate === 'pay';
+    if (module && r.module && r.module !== module && !payDoc) return;
     if (kind && r.applies && r.applies !== 'both' && r.applies !== kind) return;
     if (seen[r.type]) return;
     seen[r.type] = true;

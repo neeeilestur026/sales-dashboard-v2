@@ -661,7 +661,21 @@ async function prSubmit(no) {
     openDocsModal('Payment Request', no, 'Supporting documents · ' + no, 'proof of payment');
     return;
   }
-  if (confirm('Submit ' + no + ' for approval (Admin → Management → Director)?')) _prAct('submitPaymentRequest', no);
+  if (!confirm('Submit ' + no + ' for approval (Admin → Management → Director)?')) return;
+  /* A332 — the server names what is still missing (missingDocs, as rule labels). Say it plainly and
+     open this request's own Docs window on the first missing type, instead of an alert that pointed
+     at "the shipment" and left the person to type the document's name themselves. */
+  try {
+    const res = await postFlow('submitPaymentRequest', { prNo: no });
+    if (res && res.success) { await loadPRs(); return; }
+    const missing = (res && res.missingDocs) || [];
+    if (!missing.length) throw new Error((res && res.message) || 'Could not submit ' + no + '.');
+    const rules = typeof _flowDocRulesLoad === 'function' ? await _flowDocRulesLoad() : [];
+    const first = rules.find(r => r.label === missing[0]);
+    alert('Still missing for ' + no + ':\n• ' + missing.join('\n• ') +
+      '\n\nAttach ' + (missing.length > 1 ? 'each one' : 'it') + ' here, choosing that document type, then submit again. One file counts for one type only.');
+    openDocsModal('Payment Request', no, 'Supporting documents · ' + no, first ? first.type : '');
+  } catch (e) { alert(e.message); }
 }
 function prApprove(no) { _prAct('approvePaymentRequest', no); }
 function prReject(no) { const reason = prompt('Reason for rejecting ' + no + ' (optional):', ''); if (reason === null) return; _prAct('rejectPaymentRequest', no, { reason }); }
