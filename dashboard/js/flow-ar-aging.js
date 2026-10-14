@@ -423,11 +423,24 @@ async function collectLoadGuide(arNo) {
   } catch (e) { collectGuide = { check: false }; }
   // A full settlement is the usual case: offer the cash that, with the expected EWT, clears the balance.
   const cash = document.getElementById('collectAmount');
-  if (collectGuide.check && !cash.value && collectOutstanding > 0) {
-    const e = Math.round(collectGuide.perPeso * collectOutstanding * 100) / 100;
-    cash.placeholder = (collectOutstanding - e).toFixed(2) + ' clears it, with ' + e.toFixed(2) + ' EWT';
+  if (!cash.value && collectOutstanding > 0) {
+    const e = collectGuide.check ? Math.round(collectGuide.perPeso * collectOutstanding * 100) / 100 : 0;
+    cash.placeholder = collectGuide.check ? (collectOutstanding - e).toFixed(2) + ' clears it, with ' + e.toFixed(2) + ' EWT'
+                                          : collectOutstanding.toFixed(2) + ' clears it, less any EWT';
   }
   collectRecalcNet();
+}
+
+/* Why the server cannot work out an expected EWT here — said truthfully, from the invoice list this
+   page already loads (arInvoices, A248): the server skips migrated invoices and receivables with none. */
+function collectUncheckedWhy() {
+  const r = arData.find(x => x.arNo === document.getElementById('collectArNo').value) || {};
+  const inv = (arInvoices || []).find(v => String(v.invNo).trim() === String(r.invNo || '').trim());
+  const tail = ' Enter the EWT as the customer\u2019s 2307 shows; it is not checked.';
+  if (!String(r.invNo || '').trim() || (arInvoices && !inv)) return 'This receivable has no invoice on file, so there is nothing to work the EWT out from.' + tail;
+  if (inv && String(inv.createdBy || '').indexOf('Migrated') === 0)
+    return 'Invoice ' + inv.invNo + ' came over from the old records, where VAT was not kept reliably, so the expected EWT cannot be worked out.' + tail;
+  return 'The expected EWT cannot be worked out for this receivable.' + tail;
 }
 
 /* The EWT the server will expect for what the form now settles: rate × before-VAT share × (cash + EWT). */
@@ -460,7 +473,14 @@ function collectRecalcNet() {
     (left > 0.005 ? `${flowMoney(left, 'PHP')} still due after this` : left < -0.005 ? `${flowMoney(-left, 'PHP')} MORE than is due` : 'clears the balance');
   const guide = document.getElementById('collectGuide');
   if (!guide || collectGuide === null) return;
-  if (!collectGuide.check) { guide.innerHTML = 'The EWT cannot be checked for this receivable (no invoice on file), so enter it as the 2307 shows.'; guide.classList.remove('bad'); return; }
+  if (!collectGuide.check) { guide.textContent = collectUncheckedWhy(); guide.classList.remove('bad'); return; }
+  if (!(amount + ewt > 0)) {   // nothing typed yet: the figures for paying the whole balance
+    const full = Math.round(collectGuide.perPeso * collectOutstanding * 100) / 100;
+    guide.classList.remove('bad');
+    guide.innerHTML = `On the full balance the expected EWT is <b>${flowMoney(full, 'PHP')}</b> — ${flowEsc(collectGuide.basis)} — ` +
+      `so <b>${flowMoney(collectOutstanding - full, 'PHP')}</b> in cash clears it.`;
+    return;
+  }
   const exp = collectExpectedEwt();
   const off = Math.abs(ewt - exp) > 1 && exp > 1;
   guide.classList.toggle('bad', off);
