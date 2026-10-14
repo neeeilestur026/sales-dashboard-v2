@@ -35,7 +35,7 @@
         <div><label>Load Quotation</label><select id="loadQuotation" onchange="loadFromQuotation()"></select></div>
         <div><label>Source Quotation No</label><input type="text" id="quotationNo" readonly></div>
         <div><label>Customer *</label><input type="text" id="customer" required autocomplete="off"><datalist id="soClientList"></datalist></div>
-        <!-- A331: the VAT basis of the order (FlowAPI 168 and later). Amounts are entered before VAT. -->
+        <!-- A331: the VAT basis of the order (FlowAPI 169 and later). Amounts are entered before VAT. -->
         <div id="soVatBlock" hidden><label for="soVatType">VAT type *</label>
           <select id="soVatType" onchange="soVatAuto = ''; soVatChanged()">
             <option value="">Choose…</option><option value="VAT-12">12% VAT</option><option value="VAT-0">Zero-rated</option><option value="VAT-EX">VAT-exempt</option>

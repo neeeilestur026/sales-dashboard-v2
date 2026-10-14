@@ -17,8 +17,8 @@
   const MAX_PHOTOS = 4;
   const C = { session: null, q: null, filter: 'overdue', ar: null, method: '', place: '', lines: [], photoIds: [], clientRef: '',
               notRef: '', reason: '', last: null, busy: false, confirm: {}, afterPhoto: null,
-              sg: false, guide: {} };   // A331 — FlowAPI 168: the expected tax per invoice, and reasons
-  const SG_VERSION = 168;
+              sg: false, guide: {} };   // A331 — FlowAPI 169: the expected tax per invoice, and reasons
+  const SG_VERSION = 169;   // 168 is A327's staging build, which has none of this
   const REASON_MIN = 10;
   const $ = (id) => document.getElementById(id);
   const esc = (v) => flowEsc(v);

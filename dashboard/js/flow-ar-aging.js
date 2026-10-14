@@ -2,7 +2,7 @@
 let arData = [];
 let arInvoices = null;   // A248: the invoice list, or null when it could not be read
 let arSession = null;
-/* A331 — FlowAPI 168's safeguards. Until it is pasted this stays false and the payment form is exactly
+/* A331 — FlowAPI 169's safeguards. Until it is pasted this stays false and the payment form is exactly
    what it was; once live, the form takes the cash received and the EWT, shows the EWT expected, and
    asks for a reason instead of a yes/no. */
 let arSg = false;
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!arSession) return;
   renderNavbar('flow-ar-aging');
   renderFlowNav('flow-ar-aging.html');
-  const sg = (typeof flowVersionAtLeast === 'function' ? flowVersionAtLeast(168) : Promise.resolve(false)).catch(() => false);
+  const sg = (typeof flowVersionAtLeast === 'function' ? flowVersionAtLeast(169) : Promise.resolve(false)).catch(() => false);
   await loadAR();
   arSg = await sg;
   if (arSg) render();   // management becomes view-only: the Collect buttons go

@@ -7,7 +7,7 @@ let ivCanVoid = false;   // A158: the void action needs FlowAPI v94
 let ivCanVat = false;    // A278: storing a VAT rate needs FlowAPI v153
 let ivCanRename = false; // A252: renaming the invoice number needs FlowAPI v142
 let ivViewer = false;    // A231: management looks, does not touch
-/* A331 — FlowAPI 168: the invoice follows its sales order (customer and VAT type), the billing so far is
+/* A331 — FlowAPI 169: the invoice follows its sales order (customer and VAT type), the billing so far is
    shown before saving, and a re-invoice or over-billing asks for a recorded reason instead of a yes/no. */
 let ivSg = false;
 let ivLive = [];         // live (not voided) invoices, for "already invoiced" on the billing panel
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   if (ivCanVat) { const vtb = document.getElementById('vatTypeBlock'); if (vtb) vtb.hidden = false; }   // A320
   vatRepairVisible();
-  try { ivSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(168) : false; }
+  try { ivSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(169) : false; }
   catch (e) { ivSg = false; }
   if (ivViewer) ivCanVoid = false;   // A231 — one flag decides the button, as on flow-collections
   if (ivViewer) ivCanRename = false;

@@ -1,4 +1,4 @@
-/* A331 — safeguards on sales orders, invoices and payments (FlowAPI 168).
+/* A331 — safeguards on sales orders, invoices and payments (FlowAPI 169).
  *
  * Run:  node tests/flow/a331-safeguards.js
  *

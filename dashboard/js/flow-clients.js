@@ -2,7 +2,7 @@
 let cliData = [];
 let cliSession = null;
 let cliViewer = false;    // A231: management looks, does not touch
-/* A331 — FlowAPI 168: the client's tax defaults. Shown to everyone once live; editable only by the
+/* A331 — FlowAPI 169: the client's tax defaults. Shown to everyone once live; editable only by the
    roles the server lets change them (saveClient refuses anyone else). */
 let cliSg = false;
 const cliMayTax = () => cliSg && ['accounting', 'admin', 'director'].includes(String((cliSession && cliSession.role) || '').toLowerCase());
@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderFlowNav('flow-clients.html');
   const s = document.getElementById('cSearch');
   if (s) s.addEventListener('input', render);
-  try { cliSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(168) : false; }
+  try { cliSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(169) : false; }
   catch (e) { cliSg = false; }
   if (cliSg) {
     document.getElementById('cTaxBlock').hidden = false;

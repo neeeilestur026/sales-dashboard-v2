@@ -10,7 +10,7 @@
    The 14 Oct 2026 reconciliation found, by hand, every kind of problem listed here: receivables
    imported twice (June and September), invoices at 0% VAT with nothing saying why, EWT taken on the
    total with VAT or left out, a real payment saved as a DEMO record, and invoices on one order billing
-   ₱404,731 more than the order. FlowAPI 168 now blocks each of these unless a reason is given; this
+   ₱404,731 more than the order. FlowAPI 169 now blocks each of these unless a reason is given; this
    is the second half — what got through, and every reason that let it through, in one place.
 
    ── THE RULES (each matches the server's, so the page and a save never disagree) ─────────────────

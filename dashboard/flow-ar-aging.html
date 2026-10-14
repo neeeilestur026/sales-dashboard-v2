@@ -55,7 +55,7 @@
       <div class="flow-form">
         <div><label id="collectAmountLbl" for="collectAmount">Amount (PHP) *</label><input type="number" step="any" min="0" id="collectAmount" oninput="collectRecalcNet()"></div>
         <div><label id="collectEwtLbl" for="collectEwt">EWT / 2307 (PHP)</label><input type="number" step="any" min="0" id="collectEwt" placeholder="0.00" oninput="collectRecalcNet()"></div>
-        <!-- A331: the EWT this customer's rate gives for what is being settled (FlowAPI 168 and later) -->
+        <!-- A331: the EWT this customer's rate gives for what is being settled (FlowAPI 169 and later) -->
         <div class="full flow-guide-line" id="collectGuide" hidden aria-live="polite"></div>
         <div><label>Date</label><input type="date" id="collectDate"></div>
         <div><label>Method</label><select id="collectMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option><option>Other</option></select></div>

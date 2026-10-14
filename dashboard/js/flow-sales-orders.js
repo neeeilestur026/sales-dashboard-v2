@@ -13,8 +13,8 @@ let soSession = null;
 let soOrigNo = '';     // A220: the number the open record had when it was loaded, so an edited SO No
                        // is recognised as a RENAME and routed to renameSalesOrder, not to an update.
 let soViewer = false;  // A231: management looks, does not touch
-/* A331 — FlowAPI 168: every order carries a VAT type (12% VAT, zero-rated or exempt), its amounts are
-   before VAT, and the customer comes from the Clients list. Until 168 is pasted none of this shows. */
+/* A331 — FlowAPI 169: every order carries a VAT type (12% VAT, zero-rated or exempt), its amounts are
+   before VAT, and the customer comes from the Clients list. Until 169 is pasted none of this shows. */
 let soSg = false;
 let soClients = [];    // [{ customer, vatType, zeroRatingRef }] — for the suggestions and the VAT default
 let soVatAuto = '';    // the VAT type last filled in from the client, so a later client change may replace it
@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-sales-orders');
   renderFlowNav('flow-sales-orders.html');
   document.getElementById('date').value = flowToday();
-  try { soSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(168) : false; }
+  try { soSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(169) : false; }
   catch (e) { soSg = false; }
   if (soSg) soVatInit();
   await loadQuotationOptions();

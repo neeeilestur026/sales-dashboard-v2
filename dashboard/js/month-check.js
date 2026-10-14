@@ -39,9 +39,9 @@ async function load() {
     return;
   }
   let live = false;
-  try { live = await flowVersionAtLeast(168); } catch (e) { live = false; }
+  try { live = await flowVersionAtLeast(169); } catch (e) { live = false; }
   if (!live) {
-    body.innerHTML = '<div class="mc-banner">The Month check needs FlowAPI 168. Paste FlowAPI.gs into Apps Script, deploy it, then reload this page.</div>';
+    body.innerHTML = '<div class="mc-banner">The Month check needs FlowAPI 169. Paste FlowAPI.gs into Apps Script, deploy it, then reload this page.</div>';
     document.getElementById('mcMeta').textContent = '';
     return;
   }
