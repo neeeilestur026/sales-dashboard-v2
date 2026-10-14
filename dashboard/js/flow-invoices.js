@@ -98,8 +98,11 @@ function loadFromSO() {
   if (!s) { document.getElementById('itemRows').innerHTML = ''; ivBillingPanel(0); return; }
   document.getElementById('soNo').value = s.soNo;
   document.getElementById('customer').value = s.customer;
-  if (ivSg) ivFollowOrder(s);
+  /* Lines first, then the VAT: ivFollowOrder recalculates, and recalc walks the rendered rows — before
+     renderItems those are still the PREVIOUS order's, which crashed on a switch to a shorter order and
+     left its lines and totals on screen. */
   renderItems();
+  if (ivSg) ivFollowOrder(s);
 }
 
 /* A331 — the invoice bills the ORDER's customer at the ORDER's VAT type. The server refuses another
@@ -201,7 +204,7 @@ function recalc() {
     tr.querySelector('.lineSales').textContent = ls.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     tr.querySelector('.lineCOGS').textContent = lc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     sales += ls; cogs += lc;
-    if (String(it.chargeKind || '').trim().toLowerCase() !== 'deposit') revenue += ls;   // A331 — as createInvoice
+    if (it && String(it.chargeKind || '').trim().toLowerCase() !== 'deposit') revenue += ls;   // A331 — as createInvoice
   });
   ivBillingPanel(revenue);
   const money2 = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

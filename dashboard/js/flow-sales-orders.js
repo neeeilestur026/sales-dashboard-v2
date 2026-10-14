@@ -18,7 +18,8 @@ let soViewer = false;  // A231: management looks, does not touch
 let soSg = false;
 let soClients = [];    // [{ customer, vatType, zeroRatingRef }] — for the suggestions and the VAT default
 let soVatAuto = '';    // the VAT type last filled in from the client, so a later client change may replace it
-let soZeroAuto = '';   // likewise the zero-rating reference: one client's certificate never stays on another's order
+let soZeroAuto = '';
+let soOrigCustomer = '';   // the customer of the order being edited: keeping it asks no reason (updateSalesOrder)   // likewise the zero-rating reference: one client's certificate never stays on another's order
 
 document.addEventListener('DOMContentLoaded', async () => {
   soSession = requireFlowOperations();                  // A231 — management admitted as a viewer
@@ -55,9 +56,18 @@ async function soVatInit() {
   const dl = document.getElementById('soClientList');
   if (dl) dl.innerHTML = soClients.map(c => `<option value="${flowEsc(c.customer)}"></option>`).join('');
 }
+/* The client record a typed name belongs to — matched the way the server's _sgClientRow does: the exact
+   name first, then the canonical key (crCanonKey, client-rollup.js — the faithful port of _canonKey), so
+   "JGC Philippines, Inc." finds "JGC PHILIPPINES INC." here exactly as it does when the order is saved.
+   (The server also reads the ClientAliases sheet; the browser has no copy of it.) */
 function soClientOf(name) {
-  const k = String(name || '').trim().toUpperCase().replace(/\s+/g, ' ');
-  return soClients.find(c => String(c.customer).trim().toUpperCase().replace(/\s+/g, ' ') === k) || null;
+  const raw = String(name || '').trim();
+  if (!raw) return null;
+  const low = raw.toLowerCase();
+  const exact = soClients.find(c => String(c.customer).trim().toLowerCase() === low);
+  if (exact || typeof crCanonKey !== 'function') return exact || null;
+  const k = crCanonKey(raw);
+  return (k && soClients.find(c => crCanonKey(c.customer) === k)) || null;
 }
 function soVatFromClient() {
   if (!soSg) return;
@@ -80,13 +90,20 @@ function soVatNote() {
   if (!note) return;
   const name = document.getElementById('customer').value.trim(), t = document.getElementById('soVatType').value;
   const c = soClientOf(name);
-  note.textContent = !name ? (t ? '' : 'Choose the VAT type. The amounts below are before VAT.')
-    : !c ? 'Not on the Clients list. Saving will ask for the reason; adding the client first is better.'
-    : !t ? (c.vatType ? 'The client record says ' + SO_VAT_WORDS[c.vatType] + '. Choose the type for this order.'
+  if (!name) { note.textContent = t ? '' : 'Choose the VAT type. The amounts below are before VAT.'; return; }
+  if (!c) {
+    const kept = document.getElementById('soNo').value && name.toLowerCase() === soOrigCustomer.toLowerCase();
+    note.textContent = kept ? 'Not on the Clients list. Add the client so its orders get its VAT and EWT defaults.'
+                            : 'Not on the Clients list. Saving will ask for the reason; adding the client first is better.';
+    return;
+  }
+  const as = String(c.customer).trim().toLowerCase() !== name.toLowerCase() ? 'On the Clients list as \u201c' + c.customer + '\u201d. ' : '';
+  note.textContent = as + (
+      !t ? (c.vatType ? 'The client record says ' + SO_VAT_WORDS[c.vatType] + '. Choose the type for this order.'
                       : 'This client has no VAT type on record yet. Choose one; it is kept on this order.')
     : !c.vatType ? 'Kept on this order. The client record has no VAT type yet.'
     : t !== c.vatType ? 'The client record says ' + SO_VAT_WORDS[c.vatType] + '; this order is ' + SO_VAT_WORDS[t] + '.'
-    : 'Default from the client record.';
+    : 'Default from the client record.');
 }
 function soVatChanged() {
   const t = document.getElementById('soVatType').value;
@@ -472,7 +489,7 @@ function resetForm() {
   const zr = document.getElementById('soZeroRef'); if (zr) zr.value = '';
   const zb = document.getElementById('soZeroBlock'); if (zb) zb.hidden = true;
   const vn = document.getElementById('soVatNote'); if (vn) vn.textContent = '';
-  soVatAuto = ''; soZeroAuto = '';
+  soVatAuto = ''; soZeroAuto = ''; soOrigCustomer = '';
   document.getElementById('status').value = 'Open';
   const st = document.getElementById('soSupplierType'); if (st) st.value = '';
   document.getElementById('date').value = flowToday();
@@ -730,6 +747,7 @@ function editSO(no) {
   soOrigNo = String(s.soNo);
   document.getElementById('quotationNo').value = s.quotationNo || '';
   document.getElementById('customer').value = s.customer;
+  soOrigCustomer = String(s.customer || '').trim();
   if (soSg) {                                              // A331 — the order's own VAT basis
     document.getElementById('soVatType').value = s.vatType || '';
     document.getElementById('soZeroRef').value = s.zeroRatingRef || '';
