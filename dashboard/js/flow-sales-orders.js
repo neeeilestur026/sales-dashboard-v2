@@ -13,6 +13,12 @@ let soSession = null;
 let soOrigNo = '';     // A220: the number the open record had when it was loaded, so an edited SO No
                        // is recognised as a RENAME and routed to renameSalesOrder, not to an update.
 let soViewer = false;  // A231: management looks, does not touch
+/* A331 — FlowAPI 168: every order carries a VAT type (12% VAT, zero-rated or exempt), its amounts are
+   before VAT, and the customer comes from the Clients list. Until 168 is pasted none of this shows. */
+let soSg = false;
+let soClients = [];    // [{ customer, vatType, zeroRatingRef }] — for the suggestions and the VAT default
+let soVatAuto = '';    // the VAT type last filled in from the client, so a later client change may replace it
+let soZeroAuto = '';   // likewise the zero-rating reference: one client's certificate never stays on another's order
 
 document.addEventListener('DOMContentLoaded', async () => {
   soSession = requireFlowOperations();                  // A231 — management admitted as a viewer
@@ -26,10 +32,68 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-sales-orders');
   renderFlowNav('flow-sales-orders.html');
   document.getElementById('date').value = flowToday();
+  try { soSg = (typeof flowVersionAtLeast === 'function') ? await flowVersionAtLeast(168) : false; }
+  catch (e) { soSg = false; }
+  if (soSg) soVatInit();
   await loadQuotationOptions();
   addRow();
   await loadSOs();
 });
+
+/* A331 — the VAT picker, the client suggestions, and the default from the client's record. */
+async function soVatInit() {
+  const vb = document.getElementById('soVatBlock'); if (vb) vb.hidden = false;
+  const vl = document.getElementById('soVatLine'); if (vl) vl.hidden = false;
+  const gl = document.getElementById('grandTotalLbl'); if (gl) gl.textContent = 'Before VAT:';
+  const cust = document.getElementById('customer');
+  cust.setAttribute('list', 'soClientList');
+  cust.addEventListener('change', soVatFromClient);
+  try {
+    const r = await fetchFlow('getClients');
+    soClients = ((r && r.data) || []).filter(c => c && c.customer);
+  } catch (e) { soClients = []; }
+  const dl = document.getElementById('soClientList');
+  if (dl) dl.innerHTML = soClients.map(c => `<option value="${flowEsc(c.customer)}"></option>`).join('');
+}
+function soClientOf(name) {
+  const k = String(name || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  return soClients.find(c => String(c.customer).trim().toUpperCase().replace(/\s+/g, ' ') === k) || null;
+}
+function soVatFromClient() {
+  if (!soSg) return;
+  const sel = document.getElementById('soVatType'), c = soClientOf(document.getElementById('customer').value);
+  // Replace only what this function filled in itself (or nothing at all) — never a choice someone made.
+  // A client with no default clears what the previous client put there.
+  const zr = document.getElementById('soZeroRef');
+  const auto = !sel.value || sel.value === soVatAuto;
+  if (auto) { sel.value = (c && c.vatType) || ''; soVatAuto = sel.value; }
+  if (zr && (!zr.value || zr.value === soZeroAuto)) {
+    zr.value = sel.value === 'VAT-0' && c ? (c.zeroRatingRef || '') : '';
+    soZeroAuto = zr.value;
+  }
+  soVatChanged();
+}
+const SO_VAT_WORDS = { 'VAT-12': '12% VAT', 'VAT-0': 'zero-rated', 'VAT-EX': 'VAT-exempt' };
+/* Where the VAT type came from, said once the picker has settled. */
+function soVatNote() {
+  const note = document.getElementById('soVatNote');
+  if (!note) return;
+  const name = document.getElementById('customer').value.trim(), t = document.getElementById('soVatType').value;
+  const c = soClientOf(name);
+  note.textContent = !name ? (t ? '' : 'Choose the VAT type. The amounts below are before VAT.')
+    : !c ? 'Not on the Clients list. Saving will ask for the reason; adding the client first is better.'
+    : !t ? (c.vatType ? 'The client record says ' + SO_VAT_WORDS[c.vatType] + '. Choose the type for this order.'
+                      : 'This client has no VAT type on record yet. Choose one; it is kept on this order.')
+    : !c.vatType ? 'Kept on this order. The client record has no VAT type yet.'
+    : t !== c.vatType ? 'The client record says ' + SO_VAT_WORDS[c.vatType] + '; this order is ' + SO_VAT_WORDS[t] + '.'
+    : 'Default from the client record.';
+}
+function soVatChanged() {
+  const t = document.getElementById('soVatType').value;
+  const zb = document.getElementById('soZeroBlock'); if (zb) zb.hidden = t !== 'VAT-0';
+  soVatNote();
+  recalc();
+}
 
 async function loadQuotationOptions() {
   try {
@@ -95,6 +159,7 @@ function loadFromQuotation() {
 function soApplyQuotation(q) {
   document.getElementById('quotationNo').value = q.quotationNo;
   document.getElementById('customer').value = q.customer;
+  if (soSg) soVatFromClient();   // A331 — the client's VAT default follows the quotation's customer
   document.getElementById('itemRows').innerHTML = '';
   /* A182: load the quotation's DISCOUNTED prices. This used to copy it.price verbatim and ignore
      discountPct entirely, so converting 2026-393-KIM-THPAL-CEJN HOSES (5%) would have created a
@@ -181,6 +246,13 @@ function recalc() {
     total += lt;
   });
   document.getElementById('grandTotal').textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (soSg) {   // A331 — the order is before VAT; show what the client will be billed
+    const t = (document.getElementById('soVatType') || {}).value || '';
+    const vat = t === 'VAT-12' ? Math.round(total * 0.12 * 100) / 100 : 0;
+    const vl = document.getElementById('soVatLine');
+    if (vl) vl.textContent = !t ? 'VAT: choose the VAT type'
+      : `VAT ${t === 'VAT-12' ? '12%' : t === 'VAT-0' ? '0% (zero-rated)' : 'exempt'}: ${flowMoney(vat, 'PHP')} · Total with VAT: ${flowMoney(total + vat, 'PHP')}`;
+  }
 }
 
 function collectItems() {
@@ -283,6 +355,16 @@ async function saveSO() {
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
+  if (soSg && !document.getElementById('soVatType').value) {
+    flowMsg('formMsg', 'Choose the VAT type: 12% VAT, zero-rated or VAT-exempt. The amounts are before VAT.', false);
+    document.getElementById('soVatType').focus();
+    return;
+  }
+  if (soSg && document.getElementById('soVatType').value === 'VAT-0' && !soVal('soZeroRef')) {
+    flowMsg('formMsg', 'A zero-rated order needs its zero-rating reference (e.g. the PEZA or BOI certificate).', false);
+    document.getElementById('soZeroRef').focus();
+    return;
+  }
   const btn = document.getElementById('saveBtn');
   let soNo = document.getElementById('soNo').value;
   /* A220 — the visible field is editable on an edit now, so it carries the number the user INTENDS,
@@ -325,6 +407,10 @@ async function saveSO() {
     createdBy: soSession.name, items: JSON.stringify(items)
   };
   if (!soNo) payload.clientRef = flowClientRef();          // idempotent create (safe retry)
+  if (soSg) {                                              // A331
+    payload.vatType = document.getElementById('soVatType').value;
+    payload.zeroRatingRef = payload.vatType === 'VAT-0' ? soVal('soZeroRef') : '';
+  }
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     /* A220 — a changed SO No on an EXISTING record is a rename, and must go through its own handler
@@ -339,7 +425,10 @@ async function saveSO() {
       document.getElementById('soNo').value = renamed;
       soOrigNo = renamed;
     }
-    const res = await postFlow(soNo ? 'updateSalesOrder' : 'createSalesOrder', payload);
+    const act = soNo ? 'updateSalesOrder' : 'createSalesOrder';
+    let res = await postFlow(act, payload);
+    // A331 — a customer not on the Clients list: a recorded reason, then the same payload again
+    if (soSg) res = await flowWithReason(res, extra => postFlow(act, Object.assign({}, payload, extra)));
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message} (${res.soNo || soNo})`, true);
     resetForm();
@@ -379,6 +468,11 @@ function resetForm() {
   document.getElementById('quotationNo').value = '';
   document.getElementById('loadQuotation').value = '';
   document.getElementById('customer').value = '';
+  const vt = document.getElementById('soVatType'); if (vt) vt.value = '';   // A331
+  const zr = document.getElementById('soZeroRef'); if (zr) zr.value = '';
+  const zb = document.getElementById('soZeroBlock'); if (zb) zb.hidden = true;
+  const vn = document.getElementById('soVatNote'); if (vn) vn.textContent = '';
+  soVatAuto = ''; soZeroAuto = '';
   document.getElementById('status').value = 'Open';
   const st = document.getElementById('soSupplierType'); if (st) st.value = '';
   document.getElementById('date').value = flowToday();
@@ -636,6 +730,12 @@ function editSO(no) {
   soOrigNo = String(s.soNo);
   document.getElementById('quotationNo').value = s.quotationNo || '';
   document.getElementById('customer').value = s.customer;
+  if (soSg) {                                              // A331 — the order's own VAT basis
+    document.getElementById('soVatType').value = s.vatType || '';
+    document.getElementById('soZeroRef').value = s.zeroRatingRef || '';
+    soVatAuto = ''; soZeroAuto = '';
+    soVatChanged();                                        // also says where the type came from
+  }
   document.getElementById('date').value = flowDate(s.date);
   document.getElementById('status').value = s.status || 'Open';
   document.getElementById('soSupplierType').value = s.supplierType || '';

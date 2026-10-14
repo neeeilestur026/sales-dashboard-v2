@@ -64,6 +64,10 @@ function liftVar(name) {
 const SCHEMA = eval(liftVar('SCHEMA'));
 const _COMM_LOCKING = eval(liftVar('_COMM_LOCKING'));
 const _COMM_DEMO_PREFIX = 'DEMO-';
+/* A331 — the safeguards switch. Off by default here so the pre-A331 confirm path below stays pinned;
+   the A331 section turns it on. */
+let SG_ON = false;
+const _sgOn = () => SG_ON;
 
 /* ── The fake sheet ─────────────────────────────────────────────────────────────────────────────
    A cell write goes to CELLS so the test can prove exactly which cells moved and that nothing else
@@ -266,6 +270,20 @@ console.log('\n== the DEMO- guard ==');
   reset();
   const r4 = go({ soNo: 'SO-202607-002', newSoNo: 'DEMO-SO-042', confirmDocs: true });
   ok('and renaming a REAL order INTO the prefix asks too — it would become clearable', !r4.success, r4.message);
+}
+
+console.log('\n== A331: with the safeguards on, demo data never becomes a real order ==');
+{
+  SG_ON = true;
+  reset();
+  const r5 = go({ soNo: 'DEMO-SO-001', newSoNo: 'SO-2026-REAL-01', confirmDocs: true, confirmDemo: true });
+  ok('renaming OUT of the prefix is refused even when confirmed', !r5.success && !r5.needsConfirm, r5);
+  eq('and nothing moved', DB.SalesOrders[2]['SO No'], 'DEMO-SO-001');
+  eq('not a single cell was written', CELLS.length, 0);
+  reset();
+  ok('renaming WITHIN the prefix still works once confirmed',
+     go({ soNo: 'DEMO-SO-001', newSoNo: 'DEMO-SO-009', confirmDocs: true, confirmDemo: true }).success);
+  SG_ON = false;
 }
 
 console.log('\n== a live commission claim blocks it ==');

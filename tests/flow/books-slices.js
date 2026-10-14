@@ -24,7 +24,7 @@ const ACC = { actorRole: 'accounting', actorName: 'Ana Acct' };
 
 function world() {
   const store = {
-    FlowSettings: [],
+    FlowSettings: [{ Key: 'safeguards', Value: 'off' }],   // A331 — this suite is about the books, not the safeguards
     Inventory: [{ 'Item No': 'TW-01', 'Description': 'Wrench', 'Available Balance': 100, 'Landed Cost/Unit': 40000, 'Item ID': 'ITM-00001', 'Type': 'Stock', 'Currency': 'PHP' }],
     SalesOrders: [{ 'SO No': 'SO-001', 'Customer': 'ACME', 'Status': 'Open', 'Type': '' }], Clients: [],
     Invoices: [], InvoiceItems: [], ARAging: [], Collections: [], Journal: [], ActivityLog: [], Expenses: []

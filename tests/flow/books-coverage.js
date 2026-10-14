@@ -24,7 +24,7 @@ const ACC = { actorRole: 'accounting', actorName: 'Ana Acct' };
 const MGT = { actorRole: 'management', actorName: 'Max' };
 
 const store = {
-  FlowSettings: [],
+  FlowSettings: [{ Key: 'safeguards', Value: 'off' }],   // A331 — this suite is about the books, not the safeguards
   Inventory: [{ 'Item No': 'TW-01', 'Description': 'Wrench', 'Available Balance': 30, 'Landed Cost/Unit': 40000, 'Item ID': 'ITM-00001', 'Type': 'Stock', 'Currency': 'PHP' }],
   SalesOrders: [{ 'SO No': 'SO-001', 'Customer': 'ACME', 'Status': 'Open', 'Type': '' }], Clients: [],
   Invoices: [{ 'INV No': 'INV-OLD', 'SO No': 'SO-001', 'Date': '2025-12-20', 'Customer': 'ACME', 'Total Sales': 500, 'VAT Rate': 12, 'VAT': 60, 'Created By': 'x' },

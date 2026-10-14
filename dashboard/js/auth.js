@@ -623,6 +623,7 @@ function renderNavbar(activePage) {
             <div class="dd-title">Bill & collect</div>
             <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
             <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
+            <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
             <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
           </div>
           <div class="dd-group">
@@ -697,6 +698,7 @@ function renderNavbar(activePage) {
           <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
           <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
+          <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
@@ -745,7 +747,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'management') {
     const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226
-    const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
+    const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
     const mAcctPages = ['leave-request', 'change-password'];
     /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
        entry here is absent from Approvals and Financials above, so nothing appears in two menus.
@@ -797,6 +799,7 @@ function renderNavbar(activePage) {
           <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
           <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
+          <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <!-- A271 — management-sales-orders.html removed from management's nav. Sales Orders —
                Operations below is the one page, and it now shows the lines and prices on click. -->
@@ -855,7 +858,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'director') {
     const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
-    const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly'].includes(activePage);
+    const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-performance', 'management-itinerary'].includes(activePage);   // A216
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
@@ -910,6 +913,7 @@ function renderNavbar(activePage) {
           <a href="books.html" class="${activePage === 'books' ? 'active' : ''}">Books</a>
           <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">Payroll in the Books</a>
           <a href="ap-aging-monthly.html" class="${activePage === 'ap-aging-monthly' ? 'active' : ''}">Monthly AP Aging</a>
+          <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
         </div>
       </div>
       <div class="nav-dropdown">

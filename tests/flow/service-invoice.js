@@ -39,7 +39,7 @@ function boot(soType) {
                   'Purchase Price/Unit': 40000, 'Shipping Cost/Unit': 0, 'Landed Cost/Unit': 40000,
                   'Total Landed Cost': 120000, 'Currency': 'PHP', 'Type': 'Stock', 'Item ID': 'ITM-00001' }],
     SalesOrders: [{ 'SO No': 'SO-001', 'Date': '2026-09-01', 'Customer': 'ACME', 'Status': 'Open',
-                    'Total': 190000, 'Type': soType || '' }],
+                    'Total': 190000, 'Type': soType || '', 'VAT Type': 'VAT-12' }],
     Clients: [{ 'Customer': 'ACME', 'Payment Terms': '30 days' }],
     Invoices: [], InvoiceItems: [], ARAging: [], Journal: [], ChartOfAccounts: []
   };
@@ -180,7 +180,7 @@ section('7 · the type survives the whole chain');
     QuotationItems: [{ 'Quotation No': 'Q1', 'Item Name': 'RENTAL', 'Quoted Qty': 7,
                        'Quoted Price': 8500, 'UOM': 'DAYS', 'Charge Kind': 'Rental',
                        'Rate Basis': 'Day', 'Duration': 7 }],
-    SalesOrders: [], SalesOrderItems: [], Clients: [], Shipments: [], Documents: [], ActivityLog: [],
+    SalesOrders: [], SalesOrderItems: [], Clients: [{ 'Customer': 'ACME' }], Shipments: [], Documents: [], ActivityLog: [],
     Inventory: [], Invoices: [], InvoiceItems: [], ARAging: [], Journal: []
   };
   const ctx = load(undefined, store);
@@ -192,7 +192,7 @@ section('7 · the type survives the whole chain');
   eq('  and its duration', q.items[0].duration, 7);
 
   // No type passed — the order must take it from the quotation rather than silently becoming a sale.
-  const so = call(ctx, 'createSalesOrder', { customer: 'ACME', quotationNo: 'Q1', createdBy: 'me',
+  const so = call(ctx, 'createSalesOrder', { customer: 'ACME', quotationNo: 'Q1', createdBy: 'me', vatType: 'VAT-12',
     items: JSON.stringify([{ itemName: 'RENTAL', qty: 7, price: 8500,
                              chargeKind: 'Rental', rateBasis: 'Day', duration: 7 }]) });
   ok('the order is created', so.success === true, so);

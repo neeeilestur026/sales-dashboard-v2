@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 167;   // A326 — daily reports load again: the activity reads no longer format every row. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 168;   // A331 — safeguards on sales orders, invoices and collections (VAT type, billing cap, EWT, duplicates, reasons). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -113,7 +113,10 @@ var SCHEMA = {
   //    SO-YYYYMM-NNN whose client PO arrived later.
   //    A276: 'Type' is 'Service' for the hire of a tool, blank or 'Supply' for the sale of goods.
   //    It is what stops createInvoice destroying stock for a rental — see _invLineKind there.
-  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date', 'Client PO No', 'Type', 'Service Kind'],
+  //    A331: 'VAT Type' (VAT-12 | VAT-0 zero-rated | VAT-EX exempt) and 'Zero Rating Ref' APPENDED. The
+  //    order's Total is before VAT; this says what the invoice adds on top, so an invoice can no
+  //    longer go out at VAT 0% by default (111 of 113 imported invoices did). Blank on every older row.
+  SalesOrders:     ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Supplier Type', 'Client PO Date', 'PO Received Date', 'Client PO No', 'Type', 'Service Kind', 'VAT Type', 'Zero Rating Ref'],
   SalesOrderItems: ['SO No', 'Item No', 'Item Name', 'Qty', 'Price/Unit', 'Total Price', 'Item ID', 'Charge Kind', 'Rate Basis', 'Duration'],
 
   /* ── A276 — THE HIRE REGISTER: which tool is with which client, and when it is due back ────────
@@ -274,8 +277,12 @@ var SCHEMA = {
   // A277 — 'Stage' APPENDED: 'Prospect' on a row the lead-gen hand-off created, blank on a real
   // customer. saveClient writes this sheet as a LITERAL of SCHEMA.Clients.length values, so any
   // further column goes at the end and that literal grows with it, or saveClient throws.
+  // A331 — the customer's tax defaults APPENDED: 'Default VAT Type' seeds a new sales order, 'Zero
+  // Rating Ref' backs a VAT-0 one, 'EWT Rate' (none | 1 | 2 | auto; blank = auto) is what a payment's
+  // withholding is checked against, and 'TIN'. saveClient's literal grows with them.
   Clients:   ['Customer', 'Address', 'Contact Person', 'Designation', 'Email', 'Phone', 'RFQ Ref',
-              'Payment Terms', 'Notes', 'Updated By', 'Updated At', 'Stage'],
+              'Payment Terms', 'Notes', 'Updated By', 'Updated At', 'Stage',
+              'Default VAT Type', 'Zero Rating Ref', 'EWT Rate', 'TIN'],
 
   // ── Marketing workspace (B2B industrial marketing) ──
   MktgLeads:      ['Lead No', 'Date', 'Company', 'Contact', 'Email', 'Phone', 'Industry', 'Source',
@@ -365,6 +372,8 @@ var SCHEMA = {
               'Thread Root', 'In Reply To', 'Company', 'Indexed At'],
   // A208 small key/value config so a threshold is a screen, not a deploy.
   FlowSettings: ['Key', 'Value', 'Updated By', 'Updated At'],
+  // A331 — every time someone saved past a safeguard, and why. Append-only; read by the Month check.
+  Overrides:    ['Timestamp', 'User', 'Role', 'Action', 'Ref No', 'Rule', 'Expected', 'Entered', 'Reason'],
 
   // ── A207 Commission Requests: what a sales rep is owed on business they won ──
   // A claim CONSUMES SPECIFIC COLLECTION ROWS (see CommissionRequestItems), not a sales order. That
@@ -793,6 +802,8 @@ var _SECURED = {
   getCollectorQueue: 1, getFieldCollectionNotices: 1,   // A323 — secured READS (role-gated)
   getCommissionPayoutReport: 1, getCommissionPreview: 1, auditCommissionIntegrity: 1, getCommissionRates: 1,   // A325 — secured READS:
   previewCommissionAttribution: 1,                                    // pay data went to an unsigned GET
+  getMonthCheck: 1,                                                   // A331 — secured READ (the books' viewers)
+  getPaymentGuide: 1,                                                 // A331 — secured READ (who records payments)
 };
 
 /* A209 — commission requests are built but NOT open to everyone yet.
@@ -875,6 +886,7 @@ function _dispatch(params) {
   _SS = null;
   _ROWS_MEMO = MUTATIONS[action] ? null : {};      // AS-2 — reads memoise each tab for this execution
   _BOOKS_CFG = _BOOKS_ACCTS = _BOOKS_PERIODS = _BOOKS_EVX = _BOOKS_IBX = null;   // A320 — the books caches live for one call
+  _SG_CFG = null; _SG_INTERNAL = false;           // A331 — the safeguard switches are read once per call
   try {
     var handler = HANDLERS[action];
     if (!handler) return _json({ success: false, message: 'Unknown action: ' + action });
@@ -1886,6 +1898,7 @@ function getSalesOrders() {
       clientPoNo: s['Client PO No'] || '',                                                    // A193
       // A276 — the order's own type, which is what createInvoice reads to know a hire from a sale.
       type: String(s['Type'] || '').trim(), serviceKind: String(s['Service Kind'] || '').trim(),
+      vatType: _sgVatType(s['VAT Type']), zeroRatingRef: String(s['Zero Rating Ref'] || '').trim(),   // A331
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: String(r['Item No']), itemName: r['Item Name'], qty: _num(r['Qty']),
         price: _num(r['Price/Unit']), total: _num(r['Total Price']),
@@ -1893,6 +1906,243 @@ function getSalesOrders() {
         duration: _num(r['Duration']) }; })              // A276
     };
   }) };
+}
+
+// ═════════════════════════════════════════════════════════════════════
+//  A331 — SAFEGUARDS: sales orders, invoices and collections
+//
+//  The 14 Oct reconciliation of accounting's COLLECTED sheet against these records found invoices at
+//  VAT 0% because nothing said what the order's VAT was, EWT typed by hand on the wrong base or not at
+//  all, payments recorded twice, a real payment entered as demo data, and invoices billing past their
+//  order. These rules stop each of those at the moment it is saved.
+//
+//  THE RULE OF EVERY RULE: a mismatch BLOCKS the save unless the person types a reason. Real business
+//  breaks rules (a customer withholds on the gross, a 2307 follows later, one cheque pays two
+//  invoices), so a hard wall would only teach people to type wrong numbers to get past it. The
+//  reason, the expected and the entered figure go to the Overrides sheet, and the Month check lists
+//  them. A few things are plain refusals with no override — a negative EWT, an invoice for a different
+//  customer than its order — because there is no honest reason for them.
+//
+//  KILL SWITCH: FlowSettings `safeguards` = 'off' turns every A331 rule into a pass-through and every
+//  path behaves exactly as it did before (including the old yes/no confirms). Missing = on.
+// ═════════════════════════════════════════════════════════════════════
+var _SG_CFG = null;            // per execution (reset in _dispatch)
+var _SG_INTERNAL = false;      // true only while recordFieldCollection calls recordCollection itself
+function _sgCfg() {
+  if (_SG_CFG) return _SG_CFG;
+  var all = {};
+  try { all = getFlowSettings().data || {}; } catch (e) { all = {}; }
+  _SG_CFG = { on: String(all.safeguards == null ? 'on' : all.safeguards).trim().toLowerCase() !== 'off',
+              demo: String(all.allowDemo == null ? '' : all.allowDemo).trim().toLowerCase() === 'on' };
+  return _SG_CFG;
+}
+function _sgOn() { return _sgCfg().on; }
+
+/* Who may move money in or out of a receivable. Read from the identity Flask stamps (actorRole). */
+var _SG_PAY_ROLES = { accounting: 1, admin: 1, director: 1 };
+function _sgMayPay(p) { return !!_SG_PAY_ROLES[String((p && p.actorRole) || '').trim().toLowerCase()]; }
+function _sgRole(p) { return String((p && p.actorRole) || '').trim().toLowerCase(); }
+
+/* 'VAT-12' | 'VAT-0' | 'VAT-EX' from whatever was typed or stored; '' when it is none of them. */
+function _sgVatType(v) {
+  var t = String(v == null ? '' : v).trim().toUpperCase().replace(/[\s_]+/g, '-');
+  if (t === 'VAT-12' || t === 'VAT12' || t === '12' || t === 'VAT' || t === 'VATABLE') return 'VAT-12';
+  if (t === 'VAT-0' || t === 'VAT0' || t === '0' || t === 'ZERO-RATED' || t === 'ZERO') return 'VAT-0';
+  if (t === 'VAT-EX' || t === 'VATEX' || t === 'EXEMPT' || t === 'VAT-EXEMPT') return 'VAT-EX';
+  return '';
+}
+function _sgVatRate(type) { return type === 'VAT-12' ? 12 : 0; }
+
+/* The customer's row in Clients: the exact name first, then any spelling of the same client. */
+/* A331 — memoised for the length of a READ dispatch only (_ROWS_MEMO is null during a mutation, which
+   must see its own writes). getMonthCheck asks the same questions once per payment; without this each
+   one rebuilt every Invoices, InvoiceItems and Clients row object again. */
+function _sgMemo(key, build) {
+  if (!_ROWS_MEMO) return build();
+  var k = '__sg_' + key;
+  if (!Object.prototype.hasOwnProperty.call(_ROWS_MEMO, k)) _ROWS_MEMO[k] = build();
+  return _ROWS_MEMO[k];
+}
+function _sgClientRow(name) {
+  var raw = String(name || '').trim();
+  if (!raw) return null;
+  return _sgMemo('client|' + raw, function () {
+    var rows = _rows('Clients'), low = raw.toLowerCase();
+    var hit = rows.filter(function (r) { return String(r['Customer'] || '').trim().toLowerCase() === low; })[0];
+    if (hit) return hit;
+    var key = '';
+    try { key = _canonClient(raw).key; } catch (e) { key = ''; }
+    if (!key) return null;
+    return rows.filter(function (r) { return String(r['Customer'] || '') && _canonKey(String(r['Customer'])) === key; })[0] || null;
+  });
+}
+function _sgClientVat(name) { var r = _sgClientRow(name); return r ? _sgVatType(r['Default VAT Type']) : ''; }
+function _sgClientZeroRef(name) { var r = _sgClientRow(name); return r ? String(r['Zero Rating Ref'] || '').trim() : ''; }
+/* 'none' | '1' | '2' | 'auto'. Blank or unknown is auto: 1% on goods, 2% on services. */
+function _sgClientEwt(name) {
+  var r = _sgClientRow(name);
+  var t = r ? String(r['EWT Rate'] == null ? '' : r['EWT Rate']).trim().toLowerCase().replace('%', '') : '';
+  if (t === 'none' || t === '0' || t === 'no') return 'none';
+  if (t === '1' || t === '0.01') return '1';
+  if (t === '2' || t === '0.02') return '2';
+  return 'auto';
+}
+function _sgSameClient(a, b) {
+  var x = String(a || '').trim(), y = String(b || '').trim();
+  if (!x || !y) return false;
+  if (x.toLowerCase() === y.toLowerCase()) return true;
+  try { var kx = _canonClient(x).key, ky = _canonClient(y).key; return !!kx && kx === ky; } catch (e) { return false; }
+}
+
+/* What withholding a payment SHOULD carry. EWT is a share of the income in the payment, and the
+   income is the before-VAT part: never the VAT (the state's money) and never a refundable deposit.
+     expected = rate x (net / (net + VAT + deposit)) x amount settled
+   Returns null when the receivable cannot be checked — no invoice behind it, or a migrated one whose
+   VAT basis is unknown — so a legacy row is never blocked on a guess. */
+function _sgInvIndex() {
+  return _sgMemo('invIndex', function () {
+    var idx = { inv: {}, items: {} };
+    _rows('Invoices').forEach(function (v) { var k = String(v['INV No']).trim(); if (!idx.inv[k]) idx.inv[k] = v; });
+    _rows('InvoiceItems').forEach(function (r) { var k = String(r['INV No']).trim(); (idx.items[k] = idx.items[k] || []).push(r); });
+    return idx;
+  });
+}
+function _sgEwtContext(ar) {
+  if (!ar) return null;
+  var invNo = String(ar['INV No'] || '').trim();
+  if (!invNo) return null;
+  return _sgMemo('ewt|' + invNo + '|' + String(ar['Customer'] || ''), function () { return _sgEwtContextOf(ar, invNo); });
+}
+function _sgEwtContextOf(ar, invNo) {
+  var idx = _sgInvIndex();
+  var inv = idx.inv[invNo];
+  if (!inv || String(inv['Voided'] || '') === 'true') return null;
+  if (String(inv['Created By'] || '').indexOf('Migrated') === 0) return null;
+  var net = _num(inv['Total Sales']), vat = _num(inv['VAT']), dep = _num(inv['Total Deposit']);
+  var gross = net + vat + dep;
+  if (!(net > 0) || !(gross > 0)) return null;
+  var soSvc = _soIsService(inv['SO No']);
+  var goods = 0, service = 0;
+  (idx.items[invNo] || []).forEach(function (r) {
+    var kind = _invLineKind({ chargeKind: r['Charge Kind'] }, soSvc);
+    if (kind === 'goods') goods += _num(r['Line Sales']);
+    else if (kind === 'service') service += _num(r['Line Sales']);
+  });
+  if (!(goods + service > 0)) goods = net;
+  var setting = _sgClientEwt(inv['Customer'] || ar['Customer']);
+  var rate = setting === 'none' ? 0 : setting === '1' ? 0.01 : setting === '2' ? 0.02
+           : (goods * 0.01 + service * 0.02) / (goods + service);
+  return { invNo: invNo, setting: setting, rate: rate, share: net / gross, net: net, vat: vat, deposit: dep, gross: gross };
+}
+function _sgEwtBasis(ctx) {
+  return ctx.setting === 'none' ? 'this customer does not withhold'
+       : (ctx.setting === 'auto' ? 'goods 1% / services 2%' : ctx.setting + '%') + ' of the before-VAT amount';
+}
+function _sgExpectedEwt(ctx, applied) { return ctx ? Math.round(ctx.rate * ctx.share * _num(applied) * 100) / 100 : 0; }
+
+/* The EWT checks for one payment, as problems. Tolerance is one peso: a 2307 is rounded per line. */
+function _sgEwtProblems(ar, applied, ewt) {
+  var ctx = _sgEwtContext(ar), out = [];
+  if (!ctx) return out;
+  var exp = _sgExpectedEwt(ctx, applied), ref = String(ar['AR No'] || ''), basis = _sgEwtBasis(ctx);
+  if (exp > 1 && !(ewt > 0.005)) {
+    out.push({ rule: 'ewtMissing', ref: ref, expected: exp, entered: 0,
+      message: 'No EWT entered; ' + exp.toFixed(2) + ' is expected (' + basis + ').' });
+  } else if (Math.abs(ewt - exp) > 1) {
+    out.push({ rule: 'ewtMismatch', ref: ref, expected: exp, entered: ewt,
+      message: 'EWT ' + ewt.toFixed(2) + ' does not match the expected ' + exp.toFixed(2) + ' (' + basis + ').' });
+  }
+  return out;
+}
+
+/* Resolve a save's problems: with no (or too short a) reason, refuse and say everything at once; with
+   one, write each to Overrides and let the save go ahead. Called immediately before the first write,
+   after every plain refusal, so an override is never logged for a save that then fails. */
+function _sgResolve(problems, p, action, refNo) {
+  if (!problems || !problems.length || !_sgOn()) return null;
+  var reason = String((p && p.overrideReason) || '').trim();
+  if (reason.length < 10) {
+    return { success: false, needsReason: problems.map(function (x) { return x.rule; }).join(','),
+      problems: problems.map(function (x) { return { rule: x.rule, ref: x.ref || refNo || '', expected: x.expected, entered: x.entered, message: x.message }; }),
+      message: problems.map(function (x) { return x.message; }).join(' ') +
+               ' To save anyway, give the reason (at least 10 characters); it is recorded.' };
+  }
+  problems.forEach(function (x) {
+    _append('Overrides', [_now(), String((p && p.actorName) || ''), _sgRole(p), action, x.ref || refNo || '', x.rule,
+      x.expected == null ? '' : x.expected, x.entered == null ? '' : x.entered, reason.slice(0, 300)]);
+  });
+  return null;
+}
+
+/* A plain "no", in the shape the pages already show. */
+function _sgRefuse(message) { return { success: false, message: message }; }
+
+/** Read-only. Everything the Month check page compares, in one round trip: orders, invoices,
+ *  receivables, payments (each with the EWT it should have carried), the overrides used, and which
+ *  payments have a BIR 2307 on file. The page does the comparing (js/month-check-model.js), so the
+ *  rules can be tested without a spreadsheet. Who: the people who keep or read the books. */
+function getMonthCheck(p) {
+  if (!_booksMayView(p)) return { success: false, message: 'The Month check is for accounting, admin, management and the director.' };
+  var meta = {};
+  _rows('DocMeta').forEach(function (m) { if (String(m['Source Type']) === 'Invoice') meta[String(m['Source No'])] = _sgVatType(m['VAT Type']); });
+  var arBy = {};
+  var receivables = _rows('ARAging').map(function (a) {
+    arBy[String(a['AR No'])] = a;
+    return { arNo: String(a['AR No']), invNo: String(a['INV No'] || ''), soNo: String(a['SO No'] || ''), customer: String(a['Customer'] || ''),
+      amount: _num(a['Amount (PHP)']), collected: _num(a['Collected (PHP)']), status: String(a['Status'] || ''),
+      dueDate: _dateStr(a['Due Date']), createdAt: _dateStr(a['Created At']), notes: String(a['Notes'] || '') };
+  });
+  var with2307 = {};
+  _rows('Documents').forEach(function (d) {
+    if (_docTypeKey(d['Doc Type']) !== 'bir 2307') return;
+    with2307[String(d['Module']) + '|' + String(d['Ref No'])] = true;
+  });
+  var collections = _rows('Collections').map(function (c) {
+    var ar = arBy[String(c['AR No'])], amt = _num(c['Amount (PHP)']), ctx = null;
+    try { ctx = _sgEwtContext(ar); } catch (e) { ctx = null; }
+    return { collectionNo: String(c['Collection No']), arNo: String(c['AR No'] || ''), invNo: String(c['INV No'] || ''), soNo: String(c['SO No'] || ''),
+      customer: String(c['Customer'] || ''), date: _dateStr(c['Date']), amount: amt, ewt: _num(c['EWT (PHP)']), ref: String(c['Reference No'] || ''),
+      voided: String(c['Voided'] || '') === 'true', createdAt: _dateStr(c['Created At']),
+      expectedEwt: ctx ? _sgExpectedEwt(ctx, amt) : null, ewtSetting: ctx ? ctx.setting : '',
+      has2307: !!(with2307['Collection|' + String(c['Collection No'])] || with2307['AR Aging|' + String(c['AR No'])]) };
+  });
+  var invoices = _rows('Invoices').map(function (v) {
+    return { invNo: String(v['INV No']), soNo: String(v['SO No'] || ''), date: _dateStr(v['Date']), customer: String(v['Customer'] || ''),
+      totalSales: _num(v['Total Sales']), vat: _num(v['VAT']), vatRate: v['VAT Rate'] === '' ? null : _num(v['VAT Rate']),
+      deposit: _num(v['Total Deposit']), voided: String(v['Voided'] || '') === 'true', createdBy: String(v['Created By'] || ''),
+      vatType: meta[String(v['INV No'])] || '' };
+  });
+  var salesOrders = _rows('SalesOrders').map(function (o) {
+    return { soNo: String(o['SO No']), customer: String(o['Customer'] || ''), date: _dateStr(o['Date']), total: _num(o['Total']),
+      vatType: _sgVatType(o['VAT Type']), createdBy: String(o['Created By'] || ''), createdAt: _dateStr(o['Created At']) };
+  });
+  var overrides = _rows('Overrides').map(function (o) {
+    return { at: _dateStr(o['Timestamp']), user: String(o['User'] || ''), role: String(o['Role'] || ''), action: String(o['Action'] || ''),
+      refNo: String(o['Ref No'] || ''), rule: String(o['Rule'] || ''), expected: o['Expected'], entered: o['Entered'], reason: String(o['Reason'] || '') };
+  });
+  return { success: true, safeguards: _sgOn(), salesOrders: salesOrders, invoices: invoices, receivables: receivables,
+    collections: collections, overrides: overrides };
+}
+
+/** A331 — read-only. What a payment form needs to show the expected EWT BEFORE anything is saved: per
+ *  receivable, the EWT per peso settled and its basis, from the same _sgEwtContext the save checks
+ *  against, so the page and the server can never disagree. check:false means the receivable cannot be
+ *  checked (no invoice, migrated, voided) and the form shows nothing rather than a guess.
+ *  Who: whoever may record a payment. */
+function getPaymentGuide(p) {
+  if (!_sgMayPay(p)) return { success: false, message: 'Only accounting, admin or the director record payments.' };
+  var want = {}, n = 0;
+  String((p && p.arNos) || '').split(',').forEach(function (x) { x = x.trim(); if (x && n < 60 && !want[x]) { want[x] = 1; n++; } });
+  var out = {};
+  _rows('ARAging').forEach(function (a) {
+    var no = String(a['AR No']);
+    if (!want[no] || out[no]) return;
+    var c = _sgEwtContext(a);
+    out[no] = c ? { check: true, invNo: c.invNo, setting: c.setting, rate: c.rate, share: c.share,
+                    perPeso: c.rate * c.share, basis: _sgEwtBasis(c) }
+                : { check: false };
+  });
+  return { success: true, on: _sgOn(), data: out };
 }
 
 function createSalesOrder(p) {
@@ -1905,6 +2155,19 @@ function createSalesOrder(p) {
   // createQuotation/createPurchaseOrder checks) so a re-submit can't mint two SOs + two shipments.
   if (p.soNo && _rows('SalesOrders').some(function (r) { return String(r['SO No']) === String(p.soNo); })) {
     return { success: false, message: 'SO No already exists — open it with Edit instead.' };
+  }
+  /* A331 — the order says what VAT goes on top of its (before-VAT) total, taken from the customer
+     when the form does not say. With nothing recorded, invoices went out at 0% by default. */
+  var sgVat = _sgVatType(p.vatType) || _sgClientVat(p.customer);
+  var sgZero = String(p.zeroRatingRef || '').trim() || (sgVat === 'VAT-0' ? _sgClientZeroRef(p.customer) : '');
+  if (_sgOn()) {
+    if (!sgVat) return _sgRefuse('Choose the VAT type for this order: 12% VAT, zero-rated or VAT-exempt. The order\'s amounts are before VAT.');
+    if (sgVat === 'VAT-0' && !sgZero) return _sgRefuse('A zero-rated order needs its zero-rating reference (the certificate or ruling). Add it to the order or to the client.');
+    var sgBlock = _sgResolve(_sgClientRow(p.customer) ? [] : [{ rule: 'unknownCustomer', ref: p.soNo || '',
+      expected: 'a customer on the Clients list', entered: String(p.customer),
+      message: '"' + p.customer + '" is not on the Clients list, so its VAT and EWT defaults are unknown. Add the client first, or choose its existing spelling.' }],
+      p, 'createSalesOrder', p.soNo || '');
+    if (sgBlock) return sgBlock;
   }
   var no = p.soNo || _nextNumber('SalesOrders', 1, 'SO');
   var total = 0;
@@ -1919,7 +2182,8 @@ function createSalesOrder(p) {
        tool's stock. Blank is Supply, which is every order made before A276.
        READ FROM THE QUOTATION when the caller did not say: the type is a fact about the deal that was
        quoted, and making the browser remember to resend it is how an order silently becomes a sale. */
-    _soType.type, _soType.kind]);
+    _soType.type, _soType.kind,
+    sgVat, sgZero]);                                  // A331 — 16 values
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _lineAmount(it),
             it.itemId || '',   // A159 Item ID
@@ -1935,7 +2199,7 @@ function createSalesOrder(p) {
   _registerClient(p.customer);   // A193 — pin the spelling before it names a folder
   _adoptSoDocs(no);              // A193 — pull the quotation/PR documents out of _Pre-Sales Order
   _refStore('createSalesOrder', p.clientRef, no);
-  return { success: true, soNo: no, message: 'Sales Order created.' };
+  return { success: true, soNo: no, vatType: sgVat, message: 'Sales Order created.' };
 }
 
 /** Create a Shipment row for a Sales Order if one doesn't already exist (keyed by SO No). */
@@ -2121,14 +2385,39 @@ function importSalesOrders(p) {
 function importCollections(p) {
   var incoming = JSON.parse(p.items || '[]');
   if (!incoming.length) return { success: false, message: 'No collections to import.' };
+  /* A331 — this is how 14 invoices came in twice (June, then September): the only duplicate check was
+     an exact invoice-number string, a blank number was never checked, and orphans were attached to
+     their orders AFTER the check ran. With the safeguards on it is the director's call, with a reason,
+     and a row is skipped when its invoice is already here in any spelling ('000123' = '123'), when it
+     has no invoice number, when the same payment (customer, amount, date) is already recorded, or when
+     its month is closed. */
+  var sg = _sgOn();
+  if (sg) {
+    if (_sgRole(p) !== 'director') return _sgRefuse('Only the director can bulk-import collections.');
+    var sgBlock = _sgResolve([{ rule: 'bulkImport', ref: incoming.length + ' rows', expected: 'entries recorded one by one', entered: incoming.length + ' rows',
+      message: 'A bulk import writes receivables and payments without the checks a normal entry gets.' }], p, 'importCollections', incoming.length + ' rows');
+    if (sgBlock) return sgBlock;
+  }
   var existing = {};
-  _rows('ARAging').forEach(function (r) { existing[String(r['INV No'])] = true; });
+  _rows('ARAging').forEach(function (r) { existing[sg ? _idNorm(r['INV No']) : String(r['INV No'])] = true; });
+  var paid = {};
+  if (sg) _rows('Collections').forEach(function (r) {
+    if (String(r['Voided'] || '') === 'true') return;
+    paid[_canonClient(r['Customer']).key + '|' + _num(r['Amount (PHP)']).toFixed(2) + '|' + _dateStr(r['Date'])] = String(r['Collection No']);
+  });
   var createdAR = 0, createdPayments = 0, skipped = 0, errors = [];
   incoming.forEach(function (c) {
     try {
       var invNo = c.invoiceNo != null ? String(c.invoiceNo) : '';
-      if (invNo && existing[invNo]) { skipped++; return; }
+      if (sg && !invNo.trim()) { errors.push({ invoiceNo: '', message: 'No invoice number — skipped (it could not be checked for a duplicate).' }); return; }
+      if (invNo && existing[sg ? _idNorm(invNo) : invNo]) { skipped++; return; }
       var due = _num(c.totalAmountDue), recv = _num(c.amountReceived);
+      if (sg && recv > 0) {
+        var colDay = _dateStr(c.dateCollected || c.date || _now());
+        var seenCol = paid[_canonClient(c.customer || '').key + '|' + recv.toFixed(2) + '|' + colDay];
+        if (seenCol) { errors.push({ invoiceNo: invNo, message: 'The same payment is already recorded (' + seenCol + ') — skipped.' }); return; }
+        if (!_periodOpen(colDay)) { errors.push({ invoiceNo: invNo, message: colDay.slice(0, 7) + ' is closed — skipped.' }); return; }
+      }
       // A157: some legacy rows record Amount Received as the GROSS invoice value while the receivable is
       // booked net of the customer's withholding tax. Imported verbatim that leaves the receivable looking
       // over-collected (negative Outstanding, and the AR total stops matching its own column). When the
@@ -2169,7 +2458,7 @@ function importCollections(p) {
           colEwt || '', '', '']);   // A147: EWT (PHP) explicit · A158 trailing: Voided / Void Reason
         createdPayments++;
       }
-      if (invNo) existing[invNo] = true;
+      if (invNo) existing[sg ? _idNorm(invNo) : invNo] = true;
       createdAR++;
     } catch (e) {
       errors.push({ invoiceNo: c && c.invoiceNo, message: String(e && e.message || e) });
@@ -2187,6 +2476,34 @@ function updateSalesOrder(p) {
   var total = 0;
   items.forEach(function (it) { total += _lineAmount(it); });
   var sh = _sheet('SalesOrders');
+  /* A331 — the VAT basis is kept unless the form sends one, and once an order is billed neither its
+     VAT type nor a total below what is already invoiced can be changed: the invoices were issued on
+     those terms, and the receivables and the books follow them. */
+  var cur = _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === String(no); })[0];
+  var storedVat = cur ? _sgVatType(cur['VAT Type']) : '';
+  var sgVat = p.vatType != null ? _sgVatType(p.vatType) : storedVat;
+  var sgZero = p.zeroRatingRef != null ? String(p.zeroRatingRef).trim() : (cur ? String(cur['Zero Rating Ref'] || '') : '');
+  if (cur && _sgOn()) {
+    if (p.vatType != null && !sgVat) return _sgRefuse('Choose the VAT type for this order: 12% VAT, zero-rated or VAT-exempt.');
+    if (sgVat === 'VAT-0' && !sgZero) sgZero = _sgClientZeroRef(p.customer || cur['Customer']);
+    if (sgVat === 'VAT-0' && !sgZero) return _sgRefuse('A zero-rated order needs its zero-rating reference. Add it to the order or to the client.');
+    var billed = _rows('Invoices').filter(function (v) {
+      return String(v['SO No']) === String(no) && String(v['Voided'] || '') !== 'true';
+    }).reduce(function (s2, v) { return s2 + _num(v['Total Sales']); }, 0);
+    if (billed > 0 && storedVat && sgVat !== storedVat) {
+      return _sgRefuse(no + ' is already invoiced as ' + storedVat + '. Void its invoices before changing the VAT type.');
+    }
+    if (billed > 0 && total < billed - 0.005) {
+      return _sgRefuse('The new total ' + total.toFixed(2) + ' is below the ' + billed.toFixed(2) + ' already invoiced on ' + no + '.');
+    }
+    if (p.customer && !_sgSameClient(p.customer, cur['Customer'])) {
+      var sgBlock = _sgResolve(_sgClientRow(p.customer) ? [] : [{ rule: 'unknownCustomer', ref: String(no),
+        expected: 'a customer on the Clients list', entered: String(p.customer),
+        message: '"' + p.customer + '" is not on the Clients list. Add the client first, or choose its existing spelling.' }],
+        p, 'updateSalesOrder', String(no));
+      if (sgBlock) return sgBlock;
+    }
+  }
   _rows('SalesOrders').forEach(function (r) {
     if (String(r['SO No']) === String(no)) {
       /* A322 — the order's Type and Service Kind (A276) decide whether invoicing treats it as a hire
@@ -2199,8 +2516,9 @@ function updateSalesOrder(p) {
       var soType = (p.quoteType || p.type) ? String(p.quoteType || p.type).trim() : (derived ? derived.type : String(r['Type'] || ''));
       var soKind = p.serviceKind != null ? String(p.serviceKind).trim() : (derived ? derived.kind : String(r['Service Kind'] || ''));
       /* This value list is written into a SCHEMA.SalesOrders.length-wide range, so it must carry all
-         14: SO No, Quotation No, Date, Customer, Status, Total, Created By, Created At, Supplier Type,
-         Client PO Date, PO Received Date, Client PO No, Type, Service Kind. One short and Sheets
+         16: SO No, Quotation No, Date, Customer, Status, Total, Created By, Created At, Supplier Type,
+         Client PO Date, PO Received Date, Client PO No, Type, Service Kind, VAT Type, Zero Rating Ref
+         (A331). One short and Sheets
          refuses EVERY edit ("data has 12 columns but the range has 14" — A276 → A322);
          tests/audit/schema-width.js now counts these rewrites too. */
       sh.getRange(r.rowIndex, 1, 1, SCHEMA.SalesOrders.length).setValues([[no, p.quotationNo || r['Quotation No'],
@@ -2211,7 +2529,8 @@ function updateSalesOrder(p) {
         (p.poReceivedDate != null ? p.poReceivedDate : (r['PO Received Date'] || '')),
         // A193 — same null-means-not-sent rule, so an edit that omits it keeps what is stored.
         (p.clientPoNo != null ? p.clientPoNo : (r['Client PO No'] || '')),
-        soType, soKind]]);
+        soType, soKind,
+        sgVat, sgZero]]);                               // A331 — 16 values
     }
   });
   _writeItems('SalesOrderItems', 'SO No', no, items, function (it) {
@@ -2306,6 +2625,10 @@ function renameSalesOrder(p) {
      indexOf('DEMO-') === 0, and _COMM_DEMO_SHEETS recognises SalesOrderItems ONLY by 'SO No'. */
   var wasDemo = oldNo.indexOf(_COMM_DEMO_PREFIX) === 0;
   var staysDemo = newNo.indexOf(_COMM_DEMO_PREFIX) === 0;
+  /* A331 — never on live: renaming demo data out of its prefix turns it into real revenue */
+  if (_sgOn() && wasDemo && !staysDemo) {
+    return { success: false, message: oldNo + ' is demo data. It cannot be renamed into a real order; record the real order on its own.' };
+  }
   if ((wasDemo || staysDemo) && !p.confirmDemo) {
     var why = wasDemo && !staysDemo
       ? 'Renaming ' + oldNo + ' out of the "DEMO-" prefix makes it PERMANENT. clearCommissionDemo '
@@ -3166,6 +3489,39 @@ function _arRow(arNo) {
   return _rows('ARAging').filter(function (r) { return String(r['AR No']) === String(arNo); })[0];
 }
 
+/* A331 — has this payment already been recorded? Two signs, either enough to stop and ask:
+   the same amount on the same receivable on the same day, or a cheque / reference number this
+   customer has already used (desktop and phone entries alike). `skipAr` leaves out receivables in
+   the same phone batch, where one cheque legitimately pays several invoices. */
+function _sgDuplicatePayment(ar, amount, date, refs, skipAr) {
+  var out = [], arNo = String(ar['AR No']), cust = String(ar['Customer'] || ''), day = _dateStr(date);
+  var cols = _rows('Collections').filter(function (r) { return String(r['Voided'] || '') !== 'true'; });
+  var same = cols.filter(function (r) {
+    return String(r['AR No']) === arNo && Math.abs(_num(r['Amount (PHP)']) - amount) < 0.005 && _dateStr(r['Date']) === day;
+  });
+  if (same.length) out.push({ rule: 'duplicatePayment', ref: arNo, expected: 'one payment', entered: same.map(function (r) { return r['Collection No']; }).join(', '),
+    message: same.map(function (r) { return r['Collection No']; }).join(', ') + ' already records ' + amount.toFixed(2) + ' on ' + arNo + ' for ' + day + '.' });
+  var want = {};
+  // a reference with no digit ("Per master AR ledger", "cash", "OR to follow") identifies nothing
+  (refs || []).forEach(function (x) { var k = _idNorm(x); if (k && /\d/.test(k)) want[k] = String(x).trim(); });
+  if (Object.keys(want).length) {
+    var cheque = {};
+    _rows('DocMeta').forEach(function (m) {
+      if (String(m['Source Type']) === 'Collection' && String(m['Cheque No'] || '').trim()) cheque[String(m['Source No'])] = _idNorm(m['Cheque No']);
+    });
+    var used = cols.filter(function (r) {
+      if (skipAr && skipAr[String(r['AR No'])]) return false;
+      if (!_sgSameClient(r['Customer'], cust)) return false;
+      return !!want[_idNorm(r['Reference No'])] || !!want[cheque[String(r['Collection No'])] || '\u0000'];
+    });
+    if (used.length) out.push({ rule: 'duplicateReference', ref: arNo, expected: 'a new cheque / reference',
+      entered: Object.keys(want).map(function (k) { return want[k]; }).join(', '),
+      message: 'Cheque / reference ' + Object.keys(want).map(function (k) { return want[k]; }).join(', ') + ' was already used for ' + cust + ' on ' +
+               used.map(function (r) { return (r['INV No'] || r['AR No']) + ' (' + r['Collection No'] + ')'; }).join(', ') + '.' });
+  }
+  return out;
+}
+
 function recordCollection(p) {
   if (!p.arNo) return { success: false, message: 'arNo required.' };
   var ar = _arRow(p.arNo);
@@ -3176,19 +3532,48 @@ function recordCollection(p) {
   var dup = _refSeen('recordCollection', p.clientRef);
   if (dup) return { success: true, collectionNo: dup, arNo: p.arNo, duplicate: true,
     status: String(ar['Status'] || ''), message: 'Collection ' + dup + ' recorded.' };
-  var amount = _num(p.amount);
-  if (amount <= 0) return { success: false, message: 'Collection amount must be greater than zero.' };
+  var sg = _sgOn();
+  /* A331 — only accounting, admin and the director record a payment. Checked here, on the identity
+     Flask stamps, because the page hiding the button is not a control. */
+  if (sg && !_SG_INTERNAL && !_sgMayPay(p)) return _sgRefuse('Only accounting, admin or the director can record a payment.');
   var ewt = _num(p.ewt);                                  // creditable withholding tax (2307) on this collection
-  if (ewt < 0) ewt = 0;
-  if (ewt > amount) ewt = amount;
-  /* A158 — correctCollection has always refused to leave a receivable over-collected; recording a
-     collection did not, so more than the amount due could be booked in the first place and only get
-     flagged afterwards. Overridable, because a genuine overpayment does happen. */
-  if (!p.confirmOver) {
-    var already = _rows('Collections').filter(function (r) {
-      return String(r['AR No']) === String(p.arNo) && String(r['Voided'] || '') !== 'true';
-    }).reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
-    var due = _num(ar['Amount (PHP)']);
+  /* A331 — ONE payment model everywhere: the cash received plus the EWT withheld is what settles the
+     receivable. The phone app always worked this way; the desktop page asked for the settled figure,
+     and the legacy import stored the cash there, which is how one column came to mean three things.
+     `received` is the new input; `amount` (the settled figure) still works for a page not reloaded. */
+  var hasReceived = !(p.received === undefined || p.received === null || String(p.received).trim() === '');
+  var amount = hasReceived ? Math.round((_num(p.received) + ewt) * 100) / 100 : _num(p.amount);
+  if (amount <= 0) return { success: false, message: 'Collection amount must be greater than zero.' };
+  if (sg) {
+    // A331 — said, not silently clamped: a clamped figure is a wrong figure nobody was told about
+    if (ewt < 0) return _sgRefuse('EWT cannot be negative.');
+    if (ewt > amount) return _sgRefuse('EWT cannot be more than the amount settled.');
+  } else {
+    if (ewt < 0) ewt = 0;
+    if (ewt > amount) ewt = amount;
+  }
+  var colDate = p.date || _dateStr(_now());
+  var already = _rows('Collections').filter(function (r) {
+    return String(r['AR No']) === String(p.arNo) && String(r['Voided'] || '') !== 'true';
+  }).reduce(function (s, r) { return s + _num(r['Amount (PHP)']); }, 0);
+  var due = _num(ar['Amount (PHP)']);
+  var sgProblems = [];
+  if (sg && !_SG_INTERNAL) {
+    /* A331 — over-collection and a payment against nothing need a reason, not a click */
+    if (!(due > 0)) {
+      sgProblems.push({ rule: 'zeroReceivable', ref: String(p.arNo), expected: 0, entered: amount,
+        message: p.arNo + ' has nothing due (its amount is ' + due.toFixed(2) + ').' });
+    } else if (already + amount > due + 0.005) {
+      sgProblems.push({ rule: 'overCollect', ref: String(p.arNo), expected: Math.round((due - already) * 100) / 100, entered: amount,
+        message: 'That would collect ' + (already + amount).toFixed(2) + ' against ' + p.arNo + ', which is due ' + due.toFixed(2) +
+                 (already > 0 ? ' (already collected ' + already.toFixed(2) + ')' : '') + '.' });
+    }
+    sgProblems = sgProblems.concat(_sgEwtProblems(ar, amount, ewt));
+    sgProblems = sgProblems.concat(_sgDuplicatePayment(ar, amount, colDate, [p.ref, p.chequeNo], {}));
+  } else if (!sg && !p.confirmOver) {
+    /* A158 — correctCollection has always refused to leave a receivable over-collected; recording a
+       collection did not, so more than the amount due could be booked in the first place and only get
+       flagged afterwards. Overridable, because a genuine overpayment does happen. */
     if (due > 0 && already + amount > due + 0.005) {
       return { success: false, needsConfirm: 'overCollect', due: due, already: already,
         message: 'That would collect ' + (already + amount).toFixed(2) + ' against ' + p.arNo +
@@ -3210,6 +3595,8 @@ function recordCollection(p) {
      matches against. */
   if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
   if (_booksOn() && !_booksBankAccount(p.depositedTo)) return { success: false, message: 'Choose where this money was deposited.' };
+  var sgBlock = _sgResolve(sgProblems, p, 'recordCollection', String(p.arNo));   // A331
+  if (sgBlock) return sgBlock;
   var colNo = _nextNumber('Collections', 1, 'COL');
   _append('Collections', [colNo, p.arNo, ar['INV No'], ar['SO No'], ar['Customer'], p.date || _dateStr(_now()),
     amount, p.method || '', p.ref || '', p.notes || '', _now(), ewt,
@@ -3256,6 +3643,7 @@ function _arRecomputeFromCollections(arNo, arRow) {
    Creditable Withholding Tax (2307) asset, where it belonged. */
 function correctCollection(p) {
   if (!p.collectionNo) return { success: false, message: 'collectionNo required.' };
+  if (_sgOn() && !_sgMayPay(p)) return _sgRefuse('Only accounting, admin or the director can correct a payment.');   // A331
   var rows = _rows('Collections');
   var col = rows.filter(function (r) { return String(r['Collection No']) === String(p.collectionNo); })[0];
   if (!col) return { success: false, message: 'Collection ' + p.collectionNo + ' not found.' };
@@ -3311,6 +3699,9 @@ function voidCollection(p) {
   if (!col) return { success: false, message: 'Collection ' + p.collectionNo + ' not found.' };
   if (String(col['Voided'] || '') === 'true') return { success: false, message: 'This collection is already voided.' };
   if (!p.reason) return { success: false, message: 'A reason is required to void a collection.' };
+  /* A331 — who may reverse money, and not inside a month accounting has closed */
+  if (_sgOn() && !_sgMayPay(p)) return _sgRefuse('Only accounting, admin or the director can void a payment.');
+  if (_sgOn() && !_periodOpen(col['Date'])) return _periodRefusal(col['Date']);
 
   /* A207 — this cash may already be counted in someone's commission. Say so before reversing it,
      with the peso impact, rather than letting a claim quietly become wrong. The void is never
@@ -3373,6 +3764,9 @@ function voidInvoice(p) {
   if (!inv) return { success: false, message: 'Invoice ' + p.invNo + ' not found.' };
   if (String(inv['Voided'] || '') === 'true') return { success: false, message: 'This invoice is already voided.' };
   if (!p.reason) return { success: false, message: 'A reason is required to void an invoice.' };
+  /* A331 — voiding an invoice deletes its receivable: the same people, and the same closed months */
+  if (_sgOn() && !_sgMayPay(p)) return _sgRefuse('Only accounting, admin or the director can void an invoice.');
+  if (_sgOn() && !_periodOpen(inv['Date'])) return _periodRefusal(inv['Date']);
 
   var ars = _rows('ARAging').filter(function (a) { return String(a['INV No']) === String(p.invNo); });
   var collected = 0;
@@ -3828,7 +4222,20 @@ function recordFieldCollection(p) {
   // validate EVERY line before the first write, so a payment is never half-recorded
   if (!_periodOpen(date)) return _periodRefusal(date);
   var over = checked.filter(function (c) { return !c.done && c.applied > c.balance + 0.005; });
-  if (over.length && !_fieldBool(p.confirmOver)) {
+  /* A331 — the same checks as the desktop, per invoice line, resolved ONCE for the whole payment with
+     one reason; then recordCollection is told (via _SG_INTERNAL) that they were already decided. */
+  var sgOn = _sgOn(), sgProblems = [];
+  if (sgOn) {
+    over.forEach(function (c) {
+      sgProblems.push({ rule: 'overCollect', ref: c.arNo, expected: c.balance, entered: c.applied,
+        message: (c.ar['INV No'] || c.arNo) + ': ' + c.applied.toFixed(2) + ' against a balance of ' + c.balance.toFixed(2) + '.' });
+    });
+    checked.forEach(function (c) {
+      if (c.done) return;
+      sgProblems = sgProblems.concat(_sgEwtProblems(c.ar, c.applied, c.ewt));
+      sgProblems = sgProblems.concat(_sgDuplicatePayment(c.ar, c.applied, date, [], {}));
+    });
+  } else if (over.length && !_fieldBool(p.confirmOver)) {
     return { success: false, needsConfirm: 'overCollect', lines: over.map(function (c) { return { arNo: c.arNo, invNo: String(c.ar['INV No']), applied: c.applied, balance: c.balance }; }),
              message: over.map(function (c) { return (c.ar['INV No'] || c.arNo) + ': ' + c.applied.toFixed(2) + ' against a balance of ' + c.balance.toFixed(2); }).join('; ') + '. Record it anyway?' };
   }
@@ -3841,16 +4248,27 @@ function recordFieldCollection(p) {
   if (gaps.length && !_fieldBool(p.confirmNoDocs)) {
     return { success: false, missingDocs: gaps, message: 'This order needs a photo of the official receipt, cheque or deposit slip first.' };
   }
-  if (method === 'Cheque' && !_fieldBool(p.confirmDupCheque)) {
+  if (method === 'Cheque' && (sgOn || !_fieldBool(p.confirmDupCheque))) {
     var used = _rows('FieldCollections').filter(function (r) {
       return String(r['Outcome']) === 'Collected' && String(r['Status']) !== 'Undone' && String(r['Customer']) === cust &&
              _idNorm(r['Cheque No']) === _idNorm(chequeNo) && !arSeen[String(r['AR No'])];   // A325 — '000123' is stored as 123
     });
-    if (used.length) {
+    if (sgOn) {
+      // A331 — the desktop's entries count too: a cheque recorded on AR Aging is the same cheque
+      var dupRef = _sgDuplicatePayment(checked[0].ar, -1, '', [chequeNo], arSeen);
+      if (used.length || dupRef.length) sgProblems.push({ rule: 'duplicateReference', ref: checked[0].arNo, expected: 'a new cheque', entered: chequeNo,
+        message: 'Cheque #' + chequeNo + ' was already recorded for ' + cust +
+                 (used.length ? ' on ' + used.map(function (r) { return r['INV No']; }).join(', ') : '') +
+                 (dupRef.length ? (used.length ? '; ' : ' — ') + dupRef[0].message : '.') });
+    } else if (used.length) {
       return { success: false, needsConfirm: 'duplicateCheque', usedOn: used.map(function (r) { return String(r['INV No']); }),
                message: 'Cheque #' + chequeNo + ' was already recorded for ' + cust + ' on ' + used.map(function (r) { return r['INV No']; }).join(', ') +
                         '. If the same cheque pays these invoices too, record it anyway.' };
     }
+  }
+  if (sgOn) {
+    var sgBlock = _sgResolve(sgProblems, p, 'recordFieldCollection', checked.map(function (c) { return c.arNo; }).join(', '));
+    if (sgBlock) return sgBlock;
   }
   var noProof = gaps.length > 0;
   var photoIds = String(p.photoIds || '').split(',').map(function (x) { return x.trim(); }).filter(function (x) { return /^DOC-[A-Z0-9]{4,12}$/.test(x); }).join(',');
@@ -3863,9 +4281,13 @@ function recordFieldCollection(p) {
   for (var j = 0; j < checked.length; j++) {
     var c = checked[j];
     if (c.done) { made.push(c.done); continue; }
-    var r = recordCollection({ arNo: c.arNo, amount: c.applied, ewt: c.ewt, date: date, method: method, ref: ref,
-      notes: noteBits.join(' · '), depositedTo: place, chequeNo: chequeNo, clientRef: String(p.clientRef || batchNo) + ':' + c.arNo,
-      confirmOver: true, confirmNoDocs: true, actorName: p.actorName, actorRole: p.actorRole });   // both were decided above, for the whole batch
+    var r;
+    _SG_INTERNAL = true;   // A331 — the safeguards were resolved above, for the whole batch
+    try {
+      r = recordCollection({ arNo: c.arNo, amount: c.applied, ewt: c.ewt, date: date, method: method, ref: ref,
+        notes: noteBits.join(' · '), depositedTo: place, chequeNo: chequeNo, clientRef: String(p.clientRef || batchNo) + ':' + c.arNo,
+        confirmOver: true, confirmNoDocs: true, actorName: p.actorName, actorRole: p.actorRole });   // both were decided above, for the whole batch
+    } finally { _SG_INTERNAL = false; }
     if (!r || !r.success) {
       return { success: false, partial: made, message: 'Stopped at ' + (c.ar['INV No'] || c.arNo) + ': ' + ((r && r.message) || 'not recorded') +
                (made.length ? '. Already recorded: ' + made.join(', ') + ' — tell accounting.' : '.') };
@@ -4293,6 +4715,13 @@ var _DOC_RULES = [
   { stage: 'ap_supplier_invoice', module: 'AP Aging', type: 'supplier sales invoice',
     label: "Supplier's invoice or statement",     applies: 'both',  gate: null, vocabOnly: true },
 
+  /* A331 — vocabulary only: the customer's BIR Form 2307 for the tax it withheld, filed against the
+     payment (or its receivable). It gates nothing; the Month check lists payments with EWT and none. */
+  { stage: 'bir_2307', module: 'Collection', type: 'bir 2307',
+    label: 'BIR Form 2307 (certificate of tax withheld)', applies: 'both', gate: null, vocabOnly: true },
+  { stage: 'bir_2307', module: 'AR Aging', type: 'bir 2307',
+    label: 'BIR Form 2307 (certificate of tax withheld)', applies: 'both', gate: null, vocabOnly: true },
+
   /* A275 — vocabulary only. These gate nothing in the sales-order flow; they exist so the shared
      documents picker offers real names on a salary deduction. _flowDocsFillTypes filters the rule
      list by module, so without an entry here the module's only option is "Other…". */
@@ -4324,7 +4753,10 @@ var _DOC_TYPE_ALIASES = {
   'tt application form': 'tt_sent', 'tt form': 'tt_sent', 'tt slip': 'tt_sent',
   'bank remittance slip': 'tt_sent', 'remittance slip': 'tt_sent',
   'outward remittance': 'tt_sent', 'wire transfer': 'tt_sent', 'swift copy': 'tt_sent',
-  'signed delivery receipt': 'delivered_client', 'customer delivery receipt': 'delivered_client'
+  'signed delivery receipt': 'delivered_client', 'customer delivery receipt': 'delivered_client',
+  // A331 — the withholding certificate under the names people give it
+  '2307': 'bir 2307', 'bir 2307': 'bir 2307', 'form 2307': 'bir 2307', 'bir form 2307': 'bir 2307',
+  'certificate of creditable tax withheld at source': 'bir 2307', 'ewt certificate': 'bir 2307'
 };
 
 /* ── A251 · the fallback pass ────────────────────────────────────────────────────────────────────
@@ -5678,6 +6110,13 @@ function createInvoice(p) {
   var _kindOf = function (it) { return _invLineKind(it, _soService); };
   var dup = _refSeen('createInvoice', p.clientRef);
   if (dup) return { success: true, invNo: dup, duplicate: true, message: 'Invoice issued; AR entry created, inventory deducted and journal posted.' };
+  /* A331 — an invoice goes to its order's customer, on its order's VAT basis, and never past the
+     order's total. Problems are collected here and resolved once, just before the number is taken. */
+  var sgProblems = [];
+  var sgSo = p.soNo ? _rows('SalesOrders').filter(function (r) { return String(r['SO No']) === String(p.soNo); })[0] : null;
+  if (_sgOn() && sgSo && !_sgSameClient(p.customer, sgSo['Customer'])) {
+    return _sgRefuse('This invoice is for ' + p.customer + ' but ' + p.soNo + ' is ' + sgSo['Customer'] + '. An invoice goes to its sales order\'s customer.');
+  }
 
   /* A195 — we cannot bill for goods with no signed proof the customer received them. Reports every
      gap at once and, like the other money gates, names where to attach. */
@@ -5710,15 +6149,19 @@ function createInvoice(p) {
   }
 
   /* A158 — an SO invoiced twice creates a second full AR row, so the customer appears to owe it twice. */
-  if (p.soNo && !p.confirmReinvoice) {
+  if (p.soNo && (_sgOn() || !p.confirmReinvoice)) {
     var prior = _rows('Invoices').filter(function (v) {
       return String(v['SO No'] || '') === String(p.soNo) && String(v['Voided'] || '') !== 'true';
     });
     if (prior.length) {
       var priorTotal = prior.reduce(function (s, v) { return s + _num(v['Total Sales']); }, 0);
-      return { success: false, needsConfirm: 'alreadyInvoiced', priorInvoices: prior.length, priorTotal: priorTotal,
-        message: p.soNo + ' already has ' + prior.length + ' invoice(s) totalling ' + priorTotal.toFixed(2) +
-          ' (' + prior.map(function (v) { return v['INV No']; }).join(', ') + '). Issue another?' };
+      var priorMsg = p.soNo + ' already has ' + prior.length + ' invoice(s) totalling ' + priorTotal.toFixed(2) +
+          ' (' + prior.map(function (v) { return v['INV No']; }).join(', ') + ').';
+      // A331 — a second invoice on one order is a reasoned decision (a down payment's balance, a
+      // progress billing), not a yes/no click.
+      if (_sgOn()) sgProblems.push({ rule: 'reinvoice', ref: String(p.soNo), expected: priorTotal, entered: prior.length + 1, message: priorMsg });
+      else return { success: false, needsConfirm: 'alreadyInvoiced', priorInvoices: prior.length, priorTotal: priorTotal,
+        message: priorMsg + ' Issue another?' };
     }
   }
 
@@ -5738,11 +6181,50 @@ function createInvoice(p) {
      whether it is zero-rated or exempt (they are different lines on the VAT return). */
   if (!_periodOpen(p.date || _now())) return _periodRefusal(p.date || _now());
   var _vatType = String(p.vatType || '').trim();
+  /* A331 — the VAT type comes from the order unless the page says otherwise, and is checked whether
+     or not the books are on: a missing type is what let 111 invoices go out at 0%. */
+  if (_sgOn()) {
+    var sgSoVat = sgSo ? _sgVatType(sgSo['VAT Type']) : '';
+    var _rateSent = !(p.vatRate === undefined || p.vatRate === null || String(p.vatRate).trim() === '');
+    _vatType = _sgVatType(_vatType) || sgSoVat || (_rateSent && _num(p.vatRate) > 0 ? 'VAT-12' : '');
+    if (!_vatType) return _sgRefuse('Say whether this invoice is 12% VAT, zero-rated or VAT-exempt' +
+      (sgSo ? ': ' + p.soNo + ' has no VAT type yet, so set it on the sales order.' : '.'));
+    if (sgSoVat && _vatType !== sgSoVat) sgProblems.push({ rule: 'vatTypeMismatch', ref: String(p.soNo), expected: sgSoVat, entered: _vatType,
+      message: p.soNo + ' is ' + sgSoVat + ' but this invoice is ' + _vatType + '.' });
+    if (!_rateSent) p.vatRate = _sgVatRate(_vatType);          // the type decides the rate when the page does not
+    if (_vatType === 'VAT-12' && !(_num(p.vatRate) > 0)) return _sgRefuse('A 12% VAT invoice cannot carry 0% VAT.');
+    if (_vatType !== 'VAT-12' && _num(p.vatRate) > 0) return _sgRefuse('A zero-rated or exempt invoice carries 0% VAT.');
+    if (_vatType === 'VAT-0' && !String(p.zeroRatingRef || '').trim()) {
+      p.zeroRatingRef = (sgSo && String(sgSo['Zero Rating Ref'] || '').trim()) || _sgClientZeroRef(p.customer);
+    }
+    if (_vatType === 'VAT-0' && !String(p.zeroRatingRef || '').trim()) return _sgRefuse('A zero-rated invoice needs its zero-rating reference.');
+  }
   if (_vatType && !_BOOKS_SALES_ACCT[_vatType]) return { success: false, message: 'Unknown VAT type ' + _vatType + '.' };
   if (_booksOn()) {
     var _rateIn = (p.vatRate === undefined || p.vatRate === null || String(p.vatRate).trim() === '') ? 12 : _num(p.vatRate);
     if (_rateIn === 0 && _vatType !== 'VAT-0' && _vatType !== 'VAT-EX') return { success: false, message: 'A 0% invoice must say whether it is zero-rated or VAT-exempt.' };
     if (_rateIn > 0 && _vatType && _vatType !== 'VAT-12') return { success: false, message: 'A zero-rated or exempt invoice carries 0% VAT.' };
+  }
+  if (_sgOn()) {
+    // the revenue this invoice will carry (not the deposit), worked out before anything is written
+    var sgRevenue = 0;
+    items.forEach(function (it) { if (_kindOf(it) !== 'deposit') sgRevenue += _num(it.qty) * _num(it.price) * _lineSpan(it); });
+    if (p.soNo) {
+      var sgLive = _rows('Invoices').filter(function (v) { return String(v['SO No'] || '') === String(p.soNo) && String(v['Voided'] || '') !== 'true'; });
+      var sgBilled = sgLive.reduce(function (s2, v) { return s2 + _num(v['Total Sales']); }, 0);
+      var sgOrder = sgSo ? _num(sgSo['Total']) : 0;
+      if (sgOrder > 0 && sgBilled + sgRevenue > sgOrder + 1) {
+        var sgLeft = Math.max(0, Math.round((sgOrder - sgBilled) * 100) / 100);
+        sgProblems.push({ rule: 'overBilling', ref: String(p.soNo), expected: sgLeft, entered: Math.round(sgRevenue * 100) / 100,
+          message: 'This invoice bills ' + sgRevenue.toFixed(2) + ' before VAT, but ' + p.soNo + ' has ' + sgLeft.toFixed(2) +
+                   ' left of its ' + sgOrder.toFixed(2) + ' (' + sgBilled.toFixed(2) + ' already invoiced).' });
+      }
+      var sgSame = sgLive.filter(function (v) { return _sgSameClient(v['Customer'], p.customer) && Math.abs(_num(v['Total Sales']) - sgRevenue) < 0.01; });
+      if (sgSame.length) sgProblems.push({ rule: 'duplicateInvoice', ref: String(p.soNo), expected: 'a new amount', entered: Math.round(sgRevenue * 100) / 100,
+        message: 'Invoice ' + sgSame.map(function (v) { return v['INV No']; }).join(', ') + ' already bills ' + p.customer + ' ' + sgRevenue.toFixed(2) + ' on ' + p.soNo + '.' });
+    }
+    var sgBlock = _sgResolve(sgProblems, p, 'createInvoice', String(p.soNo || p.invNo || ''));
+    if (sgBlock) return sgBlock;
   }
   var no = p.invNo || _nextNumber('Invoices', 1, 'INV');
   var totalCOGS = 0, zeroCogsLines = 0, ambiguousLines = 0;
@@ -13137,6 +13619,11 @@ function seedCommissionDemo(p) {
   if (String((p && p.actorRole) || '').toLowerCase() !== 'director') {
     return { success: false, message: 'Only the director can create the commission demo order.' };
   }
+  /* A331 — demo rows are written straight into the live sheets, where a real Mincon payment ended up
+     recorded as DEMO-COL-001. Off unless FlowSettings allowDemo = 'on', which only staging sets. */
+  if (_sgOn() && !_sgCfg().demo) {
+    return { success: false, message: 'Demo data is switched off on the live system. Use the staging copy to try commissions.' };
+  }
   /* Attribution is the whole point: commission follows Quotations['Created By']. Defaults to the
      person pressing the button so they can walk their own claim through; name a rep to watch it
      from the other side. */
@@ -13162,7 +13649,7 @@ function seedCommissionDemo(p) {
   ]);
   _append('SalesOrders', [
     d.soNo, d.quotationNo, today, d.customer, 'Delivered', d.exVat, who, now,
-    'Local', today, today, '', '', ''                                      // A276: 14 values
+    'Local', today, today, '', '', '', 'VAT-12', ''                        // A276: 14 values · A331: 16
   ]);
   _append('SalesOrderItems', [
     d.soNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat, '', '', '', ''      // A276: 10 values
@@ -15743,6 +16230,8 @@ function getClients() {
       designation: r['Designation'] || '', email: r['Email'] || '', phone: r['Phone'] || '',
       rfqRef: r['RFQ Ref'] || '', paymentTerms: r['Payment Terms'] || '', notes: r['Notes'] || '',
       updatedBy: r['Updated By'] || '', updatedAt: r['Updated At'] || '', stage: r['Stage'] || '',   // A277
+      vatType: _sgVatType(r['Default VAT Type']), zeroRatingRef: String(r['Zero Rating Ref'] || ''),        // A331
+      ewtRate: String(r['EWT Rate'] == null ? '' : r['EWT Rate']), tin: String(r['TIN'] || ''),
       rowIndex: r.rowIndex };
   }) };
 }
@@ -15751,12 +16240,28 @@ function saveClient(p) {
   if (!name) return { success: false, message: 'Customer name is required.' };
   var sh = _sheet('Clients'), n = SCHEMA.Clients.length;
   var existing = _rows('Clients').filter(function (r) { return String(r['Customer']).toLowerCase() === name.toLowerCase(); })[0];
-  /* A277 — twelve values for a twelve-column range: this literal MUST match SCHEMA.Clients or the
+  /* A277 — sixteen values (A331) for a sixteen-column range: this literal MUST match SCHEMA.Clients or the
      setValues below throws. 'Stage' is kept from the row unless the caller sets it — a paying
      customer saved from the clients page does not become a prospect. */
+  /* A331 — the tax defaults are KEPT unless the caller sends them (an older page does not), checked
+     when it does: a VAT type or EWT rate the rules cannot read would silently mean "none". */
+  var keep = function (field, col) { return p[field] !== undefined ? String(p[field] == null ? '' : p[field]).trim() : (existing ? String(existing[col] == null ? '' : existing[col]) : ''); };
+  var vatIn = keep('vatType', 'Default VAT Type'), ewtIn = keep('ewtRate', 'EWT Rate').toLowerCase().replace('%', '');
+  if (vatIn && !_sgVatType(vatIn)) return { success: false, message: 'VAT type must be VAT-12, VAT-0 (zero-rated) or VAT-EX (exempt).' };
+  if (ewtIn && ['none', '1', '2', 'auto'].indexOf(ewtIn) < 0) return { success: false, message: 'EWT rate must be none, 1, 2 or auto.' };
+  /* A331 — the tax defaults decide what the VAT and EWT checks expect, so "this client does not withhold"
+     is the same kind of decision as recording a payment: accounting, admin or the director make it. */
+  if (_sgOn() && !_sgMayPay(p)) {
+    var was = function (col) { return existing ? String(existing[col] == null ? '' : existing[col]).trim() : ''; };
+    var taxMoved = (vatIn ? _sgVatType(vatIn) : '') !== (was('Default VAT Type') ? _sgVatType(was('Default VAT Type')) : '') ||
+      keep('zeroRatingRef', 'Zero Rating Ref') !== was('Zero Rating Ref') ||
+      ewtIn !== was('EWT Rate').toLowerCase().replace('%', '') || keep('tin', 'TIN') !== was('TIN');
+    if (taxMoved) return { success: false, message: 'Only accounting, admin or the director can change a client\'s VAT type, zero-rating reference, EWT rate or TIN.' };
+  }
   var row = [name, p.address || '', p.contactPerson || '', p.designation || '', p.email || '', p.phone || '',
     p.rfqRef || '', p.paymentTerms || '', p.notes || '', p.actorName || '', _now(),
-    p.stage !== undefined ? String(p.stage || '') : (existing ? (existing['Stage'] || '') : '')];
+    p.stage !== undefined ? String(p.stage || '') : (existing ? (existing['Stage'] || '') : ''),
+    vatIn ? _sgVatType(vatIn) : '', keep('zeroRatingRef', 'Zero Rating Ref'), ewtIn, keep('tin', 'TIN')];   // A331: 16
   if (row.length !== n) throw new Error('saveClient writes ' + row.length + ' values into ' + n + ' columns.');
   if (existing) sh.getRange(existing.rowIndex, 1, 1, n).setValues([row]);
   else _append('Clients', row);
@@ -16981,13 +17486,14 @@ function _booksSources(from, to) {
   if (lo < start) lo = start;
   var inRange = function (d) { d = _dateStr(d); return d && d >= lo && d <= hi; };
   var out = [];
+  var demo = function (no) { return String(no || '').indexOf('DEMO-') === 0; };   // A331 — demo rows never reach the books
   _rows('Invoices').forEach(function (r) {
-    if (String(r['Created By'] || '').indexOf('Migrated') === 0 || !inRange(r['Date'])) return;
+    if (String(r['Created By'] || '').indexOf('Migrated') === 0 || !inRange(r['Date']) || demo(r['INV No'])) return;
     out.push({ type: 'Invoice', no: String(r['INV No']), date: _dateStr(r['Date']), amount: _num(r['Total Sales']) + _num(r['VAT']) + _num(r['Total Deposit']),
                voided: String(r['Voided'] || '') === 'true', build: _booksInvoiceEvent });
   });
   _rows('Collections').forEach(function (r) {
-    if (!inRange(r['Date'])) return;
+    if (!inRange(r['Date']) || demo(r['Collection No'])) return;
     out.push({ type: 'Collection', no: String(r['Collection No']), date: _dateStr(r['Date']), amount: _num(r['Amount (PHP)']), voided: String(r['Voided'] || '') === 'true', build: _booksCollectionEvent });
   });
   _rows('MaterialsReceiving').forEach(function (r) {
@@ -17550,6 +18056,7 @@ var HANDLERS = {
   getSOLifecycle: getSOLifecycle, getDocumentsForSO: getDocumentsForSO,
   // A195 — the document contract. All read-only: HANDLERS only, no MUTATIONS, no _SECURED.
   getSODocCompliance: getSODocCompliance, getDocComplianceReport: getDocComplianceReport,
+  getMonthCheck: getMonthCheck, getPaymentGuide: getPaymentGuide,   // A331
   getDocRules: getDocRules,
   backfillMissingAR: backfillMissingAR, setFlowDriveFolder: setFlowDriveFolder,
   /* A278 — the preview is HANDLERS-only on purpose: it writes nothing, and getInvoices/getARAging
@@ -17665,6 +18172,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A331 SAFEGUARDS ON SALES ORDERS, INVOICES AND COLLECTIONS (168). From the 14 Oct reconciliation (invoices at VAT 0%, EWT unchecked, payments recorded twice, a real payment entered as demo data, billing past the order). A mismatch now BLOCKS the save unless a reason (10+ characters) is given; every reason goes to the new Overrides tab. SalesOrders + VAT Type, Zero Rating Ref (16 columns, both writers); Clients + Default VAT Type, Zero Rating Ref, EWT Rate, TIN (16; saveClient's literal grew and keeps them when an older page omits them). createSalesOrder/updateSalesOrder need a VAT type (from the client when the form is silent), a zero-rating reference for VAT-0, a reason for a customer not on the Clients list; a billed order keeps its VAT type and cannot drop below what is invoiced. createInvoice: the order's customer only (no override), the order's VAT type (checked with the books off too), a reason to bill past the order's before-VAT total, to repeat an amount, or for a second invoice (was a yes/no confirm); all decided before a number is taken. recordCollection: `received` (cash) + EWT = amount settled (the phone app's model; `amount` still accepted), accounting/admin/director only, EWT refused when negative or above the amount (was clamped), a reason for EWT off the expected rate x before-VAT share (client EWT Rate: none/1/2/auto = goods 1% services 2%) or missing, for a repeat payment or a cheque/reference this customer already used, for over-collection (was a confirm) or a 0 receivable. recordFieldCollection runs the same checks per line, one reason per payment. correct/voidCollection and voidInvoice: the same roles; voids refuse a closed month. importCollections: director + reason, _idNorm de-dupe, no blank invoice numbers, no repeat payments, no closed months. seedCommissionDemo off unless allowDemo = on (staging); demo cannot be renamed into a real order; the books skip DEMO- rows. getMonthCheck (secured read) for the Month check page; getPaymentGuide (secured read) gives the payment forms the expected EWT from the same rule the save checks. saveClient: only accounting/admin/director change a client's VAT type, zero-rating reference, EWT rate or TIN. A reference with no digit is never a duplicate cheque. BIR 2307 document type on collections and receivables. KILL SWITCH: FlowSettings safeguards = off restores 167's behaviour exactly.
 A326 DAILY REPORTS SHOW THE DAY'S TASKS AGAIN (167). getActivityLog formatted the date of EVERY row of the 9,600-row ActivityLog (a Session.getScriptTimeZone() call and a formatDate per row) before it looked at who the row belonged to: 10-25 s per call, and a sales rep's report fires eight at once (today + seven for the week), so they queued past the page's minute and the tasks never appeared. The timezone is now asked once per execution (_tz), the person is filtered first, and the day(s) by number (_onDays); getActivityLog and getSalesCalls also take from/to so the week is one call. getSalesCalls, getClientVisits and getDailyReports filter the same way.
 A325 THE SYSTEM SCAN (166). updatePurchaseOrder runs every refusal (payment requests standing on the PO, currency, FX) BEFORE the first write — "refused" used to arrive after the PO, its items and the stock had changed — and a refused revise no longer wipes the approval; neither PO nor quotation takes a status from the browser (Draft only). voidInvoice returns stock for goods lines only (a voided rental gained phantom tools). A revised travel week drops its Expenses row and never re-uses a rejected or differently-sized payment request. updatePaymentRequest caps a foreign request in its own currency, keeps the order's currency and refreshes the peso estimate; _poRequestedPHP counts foreign requests in pesos. Expenses and marketing records check the row still holds the record the page showed. reverseReceiving chains two lines on one item. Renaming a quotation re-keys its pricing-request lines. Fingerprints and cheque numbers that Sheets parsed as numbers compare equal (_fpSame / _idNorm) and the id columns are set to plain text once. The commission reads are secured and scoped; 'Voided At Claim' marks the claim's own row. Field follow-ups order by time. _nextNumber no longer wraps after 999; GL entry numbers never restart below the sheet and resetSequenceCounters is admin-only and skips them. Daily reports and notes, weekly itineraries and document deletes check who is acting.
 A324 NO MORE "READ TIMED OUT" ON THE BOOKS PAGE (165). Flask stops waiting for Apps Script after a minute while the script runs on, so a long books job showed the raw "HTTPSConnectionPool … Read timed out (read timeout=60)". syncBooks ("Post what is missing") checked EVERY record before looking at its budget, and as a write call it read every sheet afresh for each one — minutes on a real year. Now every long job counts its budget from the start of the execution (_EXEC_T0, the lock wait included) and stops starting new work at 35 s (writes) / 40 s (reads), always doing at least one item: syncBooks checks under the read memo, posts what that slice found missing or changed, and returns a `next` cursor and `done`, so books.js presses again until done; ingestBookEvents says what is left and the page repeats the sync; getBooksCoverage checks oldest first and, if it runs out, says how far it got (partial, checkedThrough). A sync no longer re-reads the Inbox after every post when nothing can be waiting for that event.

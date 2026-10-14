@@ -17,6 +17,9 @@
  *   7. Notices: what is New, what arrived since a moment; acknowledging clears it.
  *   8. Undo: recorder only, same day, before acknowledgement; it voids the collections and reopens AR.
  *   9. The activity log carries the amount; with the books in shadow each method posts to its account.
+ *  10. A331 — with the safeguards on (the live default), the questions in 4 become ONE reason for the
+ *      whole payment: a missing or wrong EWT, over-collection, and a cheque already used — on the phone
+ *      OR on the AR Aging page. Sections 1-9 run with the safeguards off, which is what they pin.
  */
 const path = require('path');
 const { load, call } = require(path.join(__dirname, 'gasload.js'));
@@ -31,7 +34,7 @@ const NEIL = { actorRole: 'director', actorName: 'Neil Estur' };
 const ANA = { actorRole: 'accounting', actorName: 'Ana Acct' };
 const ADMIN = { actorRole: 'admin', actorName: 'Ada Admin' };
 
-function boot(books) {
+function boot(books, sg) {
   const ar = (no, inv, so, cust, amt, due) => ({ 'AR No': no, 'INV No': inv, 'SO No': so, 'Customer': cust, 'Amount (PHP)': amt,
     'Collected (PHP)': 0, 'Status': 'Unpaid', 'Due Date': due, 'Notes': '', 'Created At': '2026-07-01', 'Updated At': '' });
   const so = (no, cust, created) => ({ 'SO No': no, 'Quotation No': '', 'Date': created, 'Customer': cust, 'Status': 'Delivered', 'Total': 0,
@@ -39,7 +42,9 @@ function boot(books) {
   const inv = (no, so, cust, total) => ({ 'INV No': no, 'SO No': so, 'Date': '2026-07-01', 'Customer': cust, 'Total Sales': total, 'Total COGS': 0,
     'Created By': 'x', 'Created At': '2026-07-01', 'Voided': '', 'Void Reason': '', 'Total Deposit': 0, 'VAT Rate': 0, 'VAT': 0 });
   const store = {
-    FlowSettings: books ? [{ Key: 'booksEngine', Value: books }] : [], ActivityLog: [],
+    FlowSettings: (books ? [{ Key: 'booksEngine', Value: books }] : []).concat(sg ? [] : [{ Key: 'safeguards', Value: 'off' }]),
+    ActivityLog: [],
+    Clients: [{ 'Customer': 'ABOITIZ', 'EWT Rate': '2' }, { 'Customer': 'DMCI', 'EWT Rate': 'none' }],
     SalesOrders: [so('SO-OLD', 'ABOITIZ', '2026-05-01'), so('SO-NEW', 'ABOITIZ', '2026-09-01'), so('SO-D', 'DMCI', '2026-05-02')],
     Invoices: [inv('INV-1', 'SO-OLD', 'ABOITIZ', 420000), inv('INV-2', 'SO-OLD', 'ABOITIZ', 100000), inv('INV-3', 'SO-NEW', 'ABOITIZ', 50000), inv('INV-4', 'SO-D', 'DMCI', 30000)],
     ARAging: [ar('AR-1', 'INV-1', 'SO-OLD', 'ABOITIZ', 420000, '2026-08-01'), ar('AR-2', 'INV-2', 'SO-OLD', 'ABOITIZ', 100000, '2099-12-31'),
@@ -240,6 +245,41 @@ sec('9 · the activity log and the books');
   eq('  the cash in 1010', dr('1010'), 2000);
   eq('  the transfer in AUB (1022)', dr('1022'), 3000);
   eq('  receivables down by all three', (bs.GL || []).filter(g => g.Account === '1200').reduce((s, g) => s + (Number(g.Credit) || 0), 0), 6000);
+}
+
+sec('10 · A331 · with the safeguards on, every question is one reason for the whole payment');
+{
+  const { ctx, store } = boot(undefined, true);
+  // ABOITIZ withholds 2%: 8,400 on INV-1 is right; nothing on INV-2 is the "2307 never came" mistake.
+  const body = { chequeNo: '555111', lines: lines([['AR-1', 411600, 8400], ['AR-2', 60000]]) };
+  let r = call(ctx, 'recordFieldCollection', Object.assign(pay(body), NEIL));
+  eq('a line with no EWT asks for a reason', r.needsReason, 'ewtMissing');
+  ok('  naming the invoice and the EWT expected', r.problems && r.problems[0].ref === 'AR-2' && r.problems[0].expected === 1200, r.problems);
+  ok('  and nothing was written — not even the line that was right', !(store.Collections || []).length && !(store.FieldCollections || []).length);
+  r = call(ctx, 'recordFieldCollection', Object.assign(pay(Object.assign({ overrideReason: 'too short' }, body)), NEIL));
+  eq('a reason under 10 characters is not a reason', r.needsReason, 'ewtMissing');
+  r = call(ctx, 'recordFieldCollection', Object.assign(pay(Object.assign({ overrideReason: '2307 to follow from Aboitiz' }, body)), NEIL));
+  ok('with a reason it records both lines', r.success && r.collectionNos.length === 2, r);
+  const ov = (store.Overrides || []);
+  ok('  the override is recorded once, against INV-2 only',
+     ov.length === 1 && ov[0]['Rule'] === 'ewtMissing' && ov[0]['Ref No'] === 'AR-2' && ov[0]['Action'] === 'recordFieldCollection', ov);
+  eq('  with who and why', ov[0] && ov[0]['Reason'], '2307 to follow from Aboitiz');
+  eq('  and the role, from the server', ov[0] && ov[0]['Role'], 'director');
+
+  r = call(ctx, 'recordFieldCollection', Object.assign(pay({ chequeNo: '601', lines: lines([['AR-2', 49000, 1000]]) }), NEIL));
+  eq('more than the balance is a reason now, not a yes/no', r.needsReason, 'overCollect');
+  ok('  and the old confirm no longer answers it',
+     !call(ctx, 'recordFieldCollection', Object.assign(pay({ chequeNo: '601', confirmOver: true, lines: lines([['AR-2', 49000, 1000]]) }), NEIL)).success);
+
+  // A cheque recorded on the AR Aging page is the same cheque on the phone.
+  const { ctx: d, store: ds } = boot(undefined, true);
+  const desk = call(d, 'recordCollection', Object.assign({ arNo: 'AR-1', amount: 420000, ewt: 8400, date: '2026-10-01',
+    method: 'Cheque', ref: '777888', confirmNoDocs: true }, ANA));
+  ok('the desktop records cheque 777888 (EWT right, nothing to ask)', desk.success, desk);
+  r = call(d, 'recordFieldCollection', Object.assign(pay({ chequeNo: '777888', lines: lines([['AR-2', 9800, 200]]) }), NEIL));
+  eq('the phone then asks about the same cheque', r.needsReason, 'duplicateReference');
+  ok('  and says where it was used', /777888/.test(r.message), r.message);
+  eq('  one collection only so far', ds.Collections.length, 1);
 }
 
 console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');

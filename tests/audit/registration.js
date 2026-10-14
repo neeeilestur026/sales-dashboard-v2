@@ -116,6 +116,8 @@ const EXCEPTIONS = {
     getStockInOptions:             'A318 — a secured READ',
     getScanPhotos:                 'A318 — a secured READ',
     getBooksStatus:                'A320 — a secured READ of the books',
+    getMonthCheck:                 'A331 — a secured READ (the Month check: the books\' viewers only)',
+    getPaymentGuide:               'A331 — a secured READ (the expected EWT, for whoever records payments)',
     getCollectorQueue:             'A323 — a secured READ (director only)',
     getFieldCollectionNotices:     'A323 — a secured READ (accounting / admin / management / director)',
     getAccounts:                   'A320 — a secured READ of the books',
