@@ -821,6 +821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      everything here — including the survey, which carries customer contact details. Idempotent: it
      redirects only when there is no valid session, so running alongside that check costs nothing. */
   if (typeof requireProductFinderAccess === 'function' && !requireProductFinderAccess()) return;
+  if (typeof renderNavbar === 'function') renderNavbar('product-finder');   // A333: was cylinder-recommender.js, gated on the old form
   // Industry options come from the one PF_INDUSTRIES constant (no HTML drift)
   const ind = document.getElementById('pfIndustry');
   if (ind && ind.options.length <= 1) {

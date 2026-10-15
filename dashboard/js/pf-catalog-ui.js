@@ -1,4 +1,5 @@
-/* pf-catalog-ui.js — A333 · the search-first Product Finder: Find, Build a set and the basket.
+/* pf-catalog-ui.js — A333 · the Product Finder page: Find a model, Choose a cylinder, Build a set,
+ * and the basket.
  *
  * All matching lives in pf-engine.js (pure, tested in Node); this file only draws it. The Power Team
  * files are fetched on first use through pfFetchFile (product-finder.js), so pf-admin's per-device
@@ -7,6 +8,7 @@
 
 const PFC_FILES = ['pt_catalog.json', 'pt_crossover.json', 'pt_index.json'];
 const PFC_BASKET_KEY = 'pf_basket_v1';
+const PFC_MODES = ['find', 'select', 'set', 'tools'];
 const PFC_KIND_LABEL = { lift: 'Lifting or pressing', pull: 'Pulling or tensioning', puller: 'Hydraulic puller', torque: 'Torque wrench', tool: 'Hydraulic tool' };
 const PFC_ITEMS_TITLE = { lift: 'Cylinders', pull: 'Cylinders', torque: 'Torque wrenches', tool: 'Tools' };
 
@@ -14,7 +16,8 @@ let pfcCtx = null;
 let pfcLoadingP = null;
 let pfcResults = [];          // the answers on screen (after any pick by hand)
 let pfcOrig = [];             // the engine's own answers, so a pick can be undone
-let pfcSet = null;            // { spec, out, resolved, useKit }
+let pfcSet = null;            // Build a set: { spec, out, resolved, items, pumpModel, pumpQuality, useKit }
+let pfcSel = { model: null, useJack: false, out: null, a: null };   // Choose a cylinder
 let pfcKind = 'lift';
 let pfcBasket = pfcReadBasket();
 
@@ -40,20 +43,20 @@ function pfcLoadError(e) {
     + '. Reload the page; if it keeps failing, the server needs a restart.</p>';
 }
 
-/* ── tabs ── */
+/* ── modes ── */
 function pfcTop(name) {
-  ['find', 'set', 'tools'].forEach(n => {
-    const pane = pfc$('pfc-' + n);
-    if (pane) pane.hidden = n !== name;
-  });
+  PFC_MODES.forEach(n => { const pane = pfc$('pfc-' + n); if (pane) pane.hidden = n !== name; });
   document.querySelectorAll('[data-top]').forEach(b => {
     const on = b.getAttribute('data-top') === name;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.tabIndex = on ? 0 : -1;
   });
+  if (name === 'set') pfc$('pfcFromFind').hidden = !pfcResults.some(r => r.best && (r.best.cat === 'cylinder' || r.best.cat === 'torque-wrench'));
+  if (name === 'select') pfcSelUpdate();
 }
 
-/* ── Find ── */
+/* ── Find a model ── */
 async function pfcFind() {
   const q = (pfc$('pfcQ') || {}).value || '';
   const out = pfc$('pfcFindOut');
@@ -114,8 +117,8 @@ function pfcSpecsHtml(rec) {
 
 function pfcCard(r, i) {
   const b = r.best;
-  const head = '<div class="pfc-head">'
-    + '<span class="pfc-model">' + (b ? pfEsc(b.m) : 'No model yet') + '</span>'
+  const tag = '<div class="pfc-tag"><span class="no">Line ' + (r.n || i + 1) + '</span>'
+    + '<span class="pfc-model' + (b ? '' : ' none') + '">' + (b ? pfEsc(b.m) : 'No model yet') + '</span>'
     + '<span class="pfc-pill pfc-q-' + r.quality + '">' + pfEsc(PFE_QUALITY_LABEL[r.quality]) + '</span>'
     + (r.source ? '<span class="pfc-page" title="Printed catalog page, with the PDF page in brackets">' + pfEsc(r.source) + '</span>' : '')
     + '</div>';
@@ -146,10 +149,9 @@ function pfcCard(r, i) {
       + '<span class="pfc-added" id="pfcAdded' + i + '" aria-live="polite"></span>'
       + '</div>'
     : '';
-  return '<article class="pfc-card pfc-q-' + r.quality + '" id="pfcCard' + i + '">'
-    + '<div class="pfc-line"><span class="no">' + (r.n || i + 1) + '</span><span class="txt">' + pfEsc(r.line) + '</span></div>'
+  return '<article class="pfc-card pfc-q-' + r.quality + '" id="pfcCard' + i + '">' + tag
+    + '<div class="pfc-body"><p class="pfc-line">' + pfEsc(r.line) + '</p>'
     + '<div class="pfc-read">' + pfcReadChips(r) + '</div>'
-    + '<div class="pfc-ans">' + head
     + (r.basis ? '<div class="pfc-basis">' + pfEsc(r.basis) + '</div>' : '')
     + (r.why.length ? '<p class="pfc-desc">' + pfEsc(r.why.join(' ')) + '</p>' : '')
     + (b ? pfcSpecsHtml(b) : '') + ladder + hits + diffs + notes + act
@@ -161,6 +163,109 @@ function pfcRerenderCard(i) {
   if (el) el.outerHTML = pfcCard(pfcResults[i], i);
 }
 
+/* ── the set sheet (Choose a cylinder and Build a set) ── */
+/** o = { title, sub, need: [[label, value]], parts: [{ model, qty, role, why, whys, page }], leadFirst,
+ *        extra (html), warnings, notes, acts: [[act, label, primary]], addedId } */
+function pfcSheetHtml(o) {
+  const ctx = pfcCtx;
+  const li = (p, lead) => {
+    const rec = ctx && ctx.M[p.model];
+    const short = rec ? pfeShort(rec) : (p.desc || '');
+    const whys = p.whys && p.whys.length ? '<ul class="w">' + p.whys.map(w => '<li>' + pfEsc(w) + '</li>').join('') + '</ul>'
+      : p.why ? '<p class="w">' + pfEsc(p.why) + '</p>' : '';
+    return '<li' + (lead ? ' class="lead"' : '') + '><span class="q">' + p.qty + ' ×</span>'
+      + '<span class="m">' + pfEsc(p.model) + '<small>' + pfEsc(p.role) + '</small></span>'
+      + (p.page ? '<span class="pfc-page">' + pfEsc(String(p.page).replace(/^catalog /, '')) + '</span>' : '<span></span>')
+      + (short ? '<span class="d">' + pfEsc(short) + '</span>' : '') + whys + '</li>';
+  };
+  return '<div class="pfc-sheet-head"><h2>' + pfEsc(o.title) + '</h2>' + (o.sub ? '<p>' + pfEsc(o.sub) + '</p>' : '') + '</div>'
+    + (o.need && o.need.length ? '<div class="pfc-need">' + o.need.map(([k, v]) => '<div><span>' + pfEsc(k) + '</span><strong>' + pfEsc(v) + '</strong></div>').join('') + '</div>' : '')
+    + (o.parts.length ? '<ol class="pfc-plist">' + o.parts.map((p, i) => li(p, o.leadFirst && i === 0)).join('') + '</ol>' : '')
+    + (o.extra || '')
+    + (o.warnings && o.warnings.length ? '<div class="pfc-warn"><b>Check</b><ul>' + o.warnings.map(w => '<li>' + pfEsc(w) + '</li>').join('') + '</ul></div>' : '')
+    + (o.notes && o.notes.length ? '<ul class="pfc-notes">' + o.notes.map(n => '<li>' + pfEsc(n) + '</li>').join('') + '</ul>' : '')
+    + (o.acts && o.acts.length && o.parts.length ? '<div class="pfc-act">' + o.acts.map(([a, l, primary]) => '<button type="button" class="pfc-btn-sm' + (primary ? ' primary' : '')
+        + '" data-act="' + a + '">' + pfEsc(l) + '</button>').join('') + '<span class="pfc-added" id="' + o.addedId + '" aria-live="polite"></span></div>' : '');
+}
+
+function pfcNextSetNo() {
+  return 1 + pfcBasket.reduce((a, b) => Math.max(a, Number((String(b.set).match(/^Set (\d+)/) || [])[1]) || 0), 0);
+}
+
+/* ── Choose a cylinder ── */
+function pfcRadio(name) { const el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; }
+
+function pfcSelAnswers() {
+  return {
+    job: pfcRadio('pfcJob') || 'lift', load: pfc$('pfcSelLoad').value, loadUnit: pfc$('pfcSelLoadU').value,
+    points: pfc$('pfcSelPoints').value, travel: pfc$('pfcSelTravel').value, travelUnit: pfc$('pfcSelTravelU').value,
+    space: pfc$('pfcSelSpace').value, spaceUnit: pfc$('pfcSelSpaceU').value, power: pfcRadio('pfcPower') || 'manual',
+    powered: pfc$('pfcSelPowered').checked, light: pfc$('pfcSelLight').checked, hoseLen: pfc$('pfcSelHose').value,
+    model: pfcSel.model, useJack: pfcSel.useJack,
+  };
+}
+
+let pfcSelTimer = null;
+function pfcSelUpdate(resetPick) {
+  if (resetPick) { pfcSel.model = null; pfcSel.useJack = false; }
+  clearTimeout(pfcSelTimer);
+  pfcSelTimer = setTimeout(pfcSelRun, 160);
+}
+
+async function pfcSelRun() {
+  const sheet = pfc$('pfcSelSheet');
+  const a = pfcSelAnswers();
+  if (!(Number(a.load) > 0) || !(Number(a.travel) > 0)) {
+    const miss = [!(Number(a.load) > 0) ? 'how heavy the load is' : '', !(Number(a.travel) > 0) ? 'how far it must move' : ''].filter(Boolean);
+    sheet.innerHTML = '<div class="pfc-sheet-empty"><b>Your set appears here</b>Answer ' + pfEsc(miss.join(' and ')) + '.</div>';
+    pfcSel.out = null;
+    return;
+  }
+  let ctx;
+  try { ctx = await pfcLoad(); } catch (e) { sheet.innerHTML = pfcLoadError(e); return; }
+  const o = pfeSelect(a, ctx);
+  pfcSel.out = o; pfcSel.a = a;
+  const loadTxt = pfeFmt(Number(a.load)) + ' ' + ({ t: 't', kg: 'kg', ton: 'US tons' }[a.loadUnit] || 't');
+  const n = Math.max(1, Math.round(Number(a.points) || 1));
+  const sub = loadTxt + (n > 1 ? ' shared by ' + n + ' cylinders' : '') + ', ' + pfeFmt(Number(a.travel)) + ' ' + a.travelUnit + ' of travel'
+    + (Number(a.space) > 0 ? ', ' + pfeFmt(Number(a.space)) + ' ' + a.spaceUnit + ' of space' : '');
+  if (!o.ok) {
+    sheet.innerHTML = pfcSheetHtml({ title: 'No cylinder fits yet', sub, parts: [], warnings: o.warnings });
+    return;
+  }
+  const need = [['Force per cylinder', pfeFmt(o.need.needUs, 1) + ' t at 10,000 psi'], ['Stroke for 80% use', pfeFmt(o.need.wantIn, 2) + ' in or more']];
+  if (o.need.spaceIn) need.push(['Space', pfeFmt(o.need.spaceIn, 2) + ' in']);
+  const parts = o.set.parts.map((p, i) => Object.assign({}, p, i === 0 ? { whys: o.usingJack ? [o.jack.why] : o.why, why: '' } : {}));
+  let extra = '';
+  if (!o.usingJack && o.alts.length) {
+    extra += '<div class="pfc-alt"><h3>Other cylinders that fit</h3><div class="pfc-swap">'
+      + o.alts.map(r => '<button type="button" data-sel-model="' + pfEsc(r.m) + '">' + pfEsc(r.m) + '<small>' + pfEsc(pfeFmt(r.cap) + ' t, ' + pfeFmt(r.stroke) + ' in stroke, '
+        + pfeFmt(r.closed) + ' in closed') + '</small></button>').join('')
+      + (o.chosen ? '<button type="button" data-sel-model="">Back to the first choice</button>' : '') + '</div></div>';
+  }
+  if (o.jack) {
+    extra += '<div class="pfc-alt">' + (o.usingJack
+      ? '<h3>Or a cylinder with a separate pump</h3><button type="button" class="pfc-btn-sm" data-act="sel-cyl">Use ' + pfEsc(o.cylinder.m) + ' and its set instead</button>'
+      : '<h3>Or one tool instead</h3><b>' + pfEsc(o.jack.rec.m) + '</b> ' + pfEsc(o.jack.why) + ' <span class="pfc-page">' + pfEsc(o.jack.page.replace(/^catalog /, '')) + '</span>'
+        + '<div class="pfc-swap"><button type="button" data-act="sel-jack">Use the jack</button></div>') + '</div>';
+  }
+  if (o.set.kit && o.set.kit.replaces) {
+    extra += '<div class="pfc-kit"><b>' + pfEsc(o.set.kit.model) + '</b>: ' + pfEsc(o.set.kit.why) + ' (' + pfEsc(o.set.kit.page) + ').</div>';
+  }
+  sheet.innerHTML = pfcSheetHtml({
+    title: o.usingJack ? 'Your jack' : 'Your set', sub, need, parts, leadFirst: true, extra,
+    warnings: o.warnings.concat(o.set.warnings || []), notes: o.notes.concat(o.set.notes || []),
+    acts: [['sel-add', 'Add to basket', true], ['sel-xlsx', 'Download Excel'], ['sel-edit', 'Edit in Build a set']], addedId: 'pfcSelAdded',
+  });
+}
+
+function pfcSelBasketItems(name) {
+  const o = pfcSel.out;
+  if (!o || !o.ok) return [];
+  return o.set.parts.map((p, i) => ({ model: p.model, qty: p.qty, line: '', quality: 'close',
+    basis: i === 0 ? (o.usingJack ? o.jack.why : o.why.join(' ')) : p.why, source: p.page, notes: [], set: name, role: p.role }));
+}
+
 /* ── basket ── */
 function pfcReadBasket() {
   try { const v = JSON.parse(localStorage.getItem(PFC_BASKET_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
@@ -168,7 +273,7 @@ function pfcReadBasket() {
 function pfcSaveBasket() {
   try { localStorage.setItem(PFC_BASKET_KEY, JSON.stringify(pfcBasket)); } catch (e) { /* private window: the basket lasts this visit */ }
   const n = pfc$('pfcBasketN');
-  if (n) n.textContent = String(pfcBasket.reduce((a, b) => a + 1, 0));
+  if (n) n.textContent = String(pfcBasket.length);
   if (pfc$('pfcDrawer') && pfc$('pfcDrawer').classList.contains('open')) pfcRenderBasket();
 }
 
@@ -203,7 +308,7 @@ function pfcRenderBasket() {
   pfc$('pfcBasketXlsx').disabled = !pfcBasket.length;
   pfc$('pfcBasketHint').textContent = !canPR ? 'Only sales and admin can start a pricing request. Download the Excel and send it to them.'
     : pfcBasket.length ? 'The pricing request opens with these lines filled in: model as the item number, the catalog page in the remarks.' : '';
-  if (!pfcBasket.length) { body.innerHTML = '<p class="pfc-empty">The basket is empty. Add answers from Find, or a whole set from Build a set.</p>'; return; }
+  if (!pfcBasket.length) { body.innerHTML = '<p class="pfc-empty">The basket is empty. Add answers from Find a model, or a whole set from Choose a cylinder or Build a set.</p>'; return; }
   const groups = [];
   pfcBasket.forEach(b => { const g = b.set || ''; let G = groups.find(x => x.name === g); if (!G) { G = { name: g, items: [] }; groups.push(G); } G.items.push(b); });
   body.innerHTML = groups.map(G => (G.name ? '<div class="pfc-bgroup">' + pfEsc(G.name) + '</div>' : (groups.length > 1 ? '<div class="pfc-bgroup">Single items</div>' : ''))
@@ -246,6 +351,7 @@ async function pfcExcel(items) {
       [PFE_QUALITY_LABEL.check, 'Something in the line does not fit or is missing: confirm with the customer or the engineer.'],
       [PFE_QUALITY_LABEL.none, 'Not found: the line is logged for the engineer.'],
       [],
+      ['Sizing', 'Cylinders are chosen at 80% of rated capacity and stroke, as the catalog advises (p.7).'],
       ['Capacities', 'US short tons as printed in the catalog; multiply by 0.907 for metric tonnes.'],
       ['Prices', 'Not included. Ask purchasing for current prices.'],
     ];
@@ -295,8 +401,7 @@ function pfcItemRow(model, qty) {
 }
 
 function pfcSetItems(list) {
-  const box = pfc$('pfcItems');
-  box.innerHTML = (list && list.length ? list : [{ model: '', qty: 1 }]).map(it => pfcItemRow(it.model, it.qty)).join('');
+  pfc$('pfcItems').innerHTML = (list && list.length ? list : [{ model: '', qty: 1 }]).map(it => pfcItemRow(it.model, it.qty)).join('');
 }
 
 function pfcReadItems() {
@@ -333,7 +438,8 @@ async function pfcBuild() {
     hoseLen: Number(pfc$('pfcHoseLen').value) || 6, hoseType: pfc$('pfcHoseType').value, highFlow: pfc$('pfcHighFlow').checked,
     together, gauge: pfc$('pfcGauge').checked, tons: Number(pfc$('pfcTons').value) || null, jaws: pfc$('pfcJaws').value || null,
   };
-  if (pfcKind === 'puller' && !spec.tons) { out.innerHTML = '<p class="pfc-status">Type the puller capacity in tons first.</p>'; return; }
+  if (pfcKind === 'puller' && !spec.tons) { out.innerHTML = '<div class="pfc-sheet-empty"><b>How strong a puller?</b>Type the puller capacity in tons.</div>'; return; }
+  if (pfcKind !== 'puller' && !items.length) { out.innerHTML = '<div class="pfc-sheet-empty"><b>Name at least one model</b>A Power Team model such as C108C, or a competitor\'s such as RC-108.</div>'; return; }
   pfcSet = { spec, out: pfeBuildSet(spec, ctx), resolved: resolved.filter(r => r.note), items, pumpModel, pumpQuality, useKit: false };
   pfcRenderSet();
 }
@@ -350,25 +456,20 @@ function pfcSetParts() {
 }
 
 function pfcRenderSet() {
-  const S = pfcSet, o = S.out, out = pfc$('pfcSetOut');
-  const parts = pfcSetParts();
+  const S = pfcSet, o = S.out;
   const kit = o.kit && o.kit.replaces
     ? '<div class="pfc-kit"><b>' + pfEsc(o.kit.model) + '</b>: ' + pfEsc(o.kit.why) + ' (' + pfEsc(o.kit.page) + '). '
       + '<button type="button" class="pfc-btn-sm" data-act="use-kit">' + (S.useKit ? 'List the parts separately' : 'Use ' + pfEsc(o.kit.model) + ' instead') + '</button></div>'
     : '';
-  out.innerHTML = '<div class="cr-card">'
-    + '<div class="cr-result-head"><h2>' + pfEsc(PFC_KIND_LABEL[o.kind] || 'Set') + ' set</h2>'
-    + (o.oilNeeded ? '<span class="pfc-pill pfc-q-close">' + pfEsc(o.oilNeeded) + ' in³ of oil needed</span>' : '') + '</div>'
-    + (S.resolved.length ? '<ul class="pfc-notes">' + S.resolved.map(r => '<li>' + pfEsc(r.note) + '</li>').join('') + '</ul>' : '')
-    + (parts.length ? '<table class="pfc-parts"><thead><tr><th class="num">Qty</th><th>Model</th><th>Role</th><th>Why</th><th>Page</th></tr></thead><tbody>'
-      + parts.map(p => '<tr><td class="num">' + p.qty + '</td><td class="m">' + pfEsc(p.model) + '</td><td>' + pfEsc(p.role) + '</td><td class="why">' + pfEsc(p.why)
-        + '</td><td class="pg">' + pfEsc(p.page) + '</td></tr>').join('') + '</tbody></table>' : '')
-    + kit
-    + (o.warnings.length ? '<div class="pfc-warn"><b>Check</b><ul>' + o.warnings.map(w => '<li>' + pfEsc(w) + '</li>').join('') + '</ul></div>' : '')
-    + (o.notes.length ? '<ul class="pfc-notes">' + o.notes.map(n => '<li>' + pfEsc(n) + '</li>').join('') + '</ul>' : '')
-    + (parts.length ? '<div class="pfc-act"><button type="button" class="pfc-btn-sm primary" data-act="set-add">Add set to basket</button>'
-      + '<button type="button" class="pfc-btn-sm" data-act="set-xlsx">Download Excel</button><span class="pfc-added" id="pfcSetAdded" aria-live="polite"></span></div>' : '')
-    + '</div>';
+  const given = ['cylinder', 'torque wrench', 'tool'];
+  pfc$('pfcSetOut').innerHTML = pfcSheetHtml({
+    title: (PFC_KIND_LABEL[o.kind] || 'Set') + ' set',
+    sub: S.resolved.map(r => r.note).join(' · '),
+    need: o.oilNeeded ? [['Oil the cylinders take', pfeFmt(o.oilNeeded, 1) + ' in³'], ['Pump holds', o.pump && o.pump.usable ? pfeFmt(o.pump.usable) + ' in³ usable' : 'see the pump']] : [],
+    parts: pfcSetParts().map(p => (given.includes(p.role) ? Object.assign({}, p, { why: '' }) : p)),
+    extra: kit, warnings: o.warnings, notes: o.notes,
+    acts: [['set-add', 'Add set to basket', true], ['set-xlsx', 'Download Excel']], addedId: 'pfcSetAdded',
+  });
 }
 
 function pfcSetBasketItems(name) {
@@ -395,6 +496,19 @@ function pfcFromFind() {
   return true;
 }
 
+/** Choose a cylinder -> Build a set, with the same cylinder, count, power and hose. */
+function pfcSelToBuild() {
+  const o = pfcSel.out, a = pfcSel.a;
+  if (!o || !o.ok) return;
+  pfcSetKind(a.job === 'pull' ? 'pull' : 'lift');
+  pfcSetItems([{ model: o.usingJack ? o.jack.rec.m : o.cylinder.m, qty: o.need.points }]);
+  pfc$('pfcPow').value = a.power || 'manual';
+  pfc$('pfcPump').value = '';
+  pfc$('pfcHoseLen').value = String(a.hoseLen || 6);
+  pfcTop('set');
+  pfcBuild();
+}
+
 /* ── wiring (scripts load at the end of <body>, so the markup is there) ── */
 function pfcInit() {
   if (!pfc$('pfcQ')) return;                       // pf-admin.html and engine-only contexts
@@ -404,15 +518,66 @@ function pfcInit() {
   pfc$('pfcFindBtn').addEventListener('click', pfcFind);
   pfc$('pfcQ').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); pfcFind(); } });
   document.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { pfc$('pfcQ').value = b.getAttribute('data-ex'); pfcFind(); }));
-  document.querySelectorAll('[data-top]').forEach(b => b.addEventListener('click', () => {
-    const t = b.getAttribute('data-top');
-    pfcTop(t);
-    if (t === 'set') pfc$('pfcFromFind').hidden = !pfcResults.some(r => r.best && (r.best.cat === 'cylinder' || r.best.cat === 'torque-wrench'));
-  }));
+
+  const modes = Array.from(document.querySelectorAll('[data-top]'));
+  modes.forEach((b, i) => {
+    b.addEventListener('click', () => pfcTop(b.getAttribute('data-top')));
+    b.addEventListener('keydown', e => {                       // arrow keys move along the tab list
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      const next = modes[(i + d + modes.length) % modes.length];
+      next.focus(); pfcTop(next.getAttribute('data-top'));
+    });
+  });
+
+  /* Choose a cylinder: every answer redraws the set */
+  const sel = pfc$('pfcSelForm');
+  sel.addEventListener('input', () => pfcSelUpdate(true));
+  sel.addEventListener('change', () => pfcSelUpdate(true));
+  sel.addEventListener('submit', e => e.preventDefault());
+  pfc$('pfcSelSheet').addEventListener('click', e => {
+    const m = e.target.closest('[data-sel-model]');
+    if (m) { pfcSel.model = m.getAttribute('data-sel-model') || null; pfcSel.useJack = false; pfcSelRun(); return; }
+    const t = e.target.closest('[data-act]');
+    if (!t) return;
+    const act = t.getAttribute('data-act');
+    if (act === 'sel-jack') { pfcSel.useJack = true; pfcSelRun(); }
+    else if (act === 'sel-cyl') { pfcSel.useJack = false; pfcSelRun(); }
+    else if (act === 'sel-add') {
+      const n = pfcNextSetNo();
+      pfcSelBasketItems('Set ' + n + ': ' + (pfcSel.out.usingJack ? 'jack' : 'cylinder set')).forEach(pfcAddItem);
+      pfcSaveBasket();
+      const s = pfc$('pfcSelAdded'); if (s) s.textContent = 'Added as set ' + n;
+    } else if (act === 'sel-xlsx') pfcExcel(pfcSelBasketItems('Cylinder set'));
+    else if (act === 'sel-edit') pfcSelToBuild();
+  });
+
+  /* Build a set */
   document.querySelectorAll('#pfcKinds [data-kind]').forEach(b => b.addEventListener('click', () => pfcSetKind(b.getAttribute('data-kind'))));
   pfc$('pfcAddItem').addEventListener('click', () => { pfc$('pfcItems').insertAdjacentHTML('beforeend', pfcItemRow('', 1)); });
   pfc$('pfcFromFind').addEventListener('click', pfcFromFind);
   pfc$('pfcSetForm').addEventListener('submit', e => { e.preventDefault(); pfcBuild(); });
+  pfc$('pfcItems').addEventListener('click', e => {
+    if (e.target.getAttribute('data-act') !== 'del-item') return;
+    const row = e.target.closest('.pfc-item');
+    if (row) row.remove();
+    if (!document.querySelector('#pfcItems .pfc-item')) pfcSetItems([]);
+  });
+  pfc$('pfcSetOut').addEventListener('click', e => {
+    const t = e.target.closest('[data-act]');
+    if (!t || !pfcSet) return;
+    const act = t.getAttribute('data-act');
+    if (act === 'use-kit') { pfcSet.useKit = !pfcSet.useKit; pfcRenderSet(); }
+    else if (act === 'set-add') {
+      const n = pfcNextSetNo();
+      pfcSetBasketItems('Set ' + n + ': ' + (PFC_KIND_LABEL[pfcSet.out.kind] || 'set')).forEach(pfcAddItem);
+      pfcSaveBasket();
+      const s = pfc$('pfcSetAdded'); if (s) s.textContent = 'Added as set ' + n;
+    } else if (act === 'set-xlsx') pfcExcel(pfcSetBasketItems('Set'));
+  });
+
+  /* basket */
   pfc$('pfcBasketBtn').addEventListener('click', pfcOpenBasket);
   pfc$('pfcDrawerClose').addEventListener('click', pfcCloseBasket);
   pfc$('pfcScrim').addEventListener('click', pfcCloseBasket);
@@ -435,6 +600,7 @@ function pfcInit() {
     if (k) { pfcBasket = pfcBasket.filter(x => x.key !== k); pfcSaveBasket(); pfcRenderBasket(); }
   });
 
+  /* Find a model */
   const find = pfc$('pfcFindOut');
   find.addEventListener('change', e => {
     const ai = e.target.getAttribute('data-alt');
@@ -465,24 +631,6 @@ function pfcInit() {
     } else if (act === 'to-set') {
       if (pfcFromFind()) { pfcTop('set'); pfc$('pfcFromFind').hidden = false; pfcBuild(); }
     }
-  });
-  pfc$('pfcSetOut').addEventListener('click', e => {
-    const t = e.target.closest('[data-act]');
-    if (!t || !pfcSet) return;
-    const act = t.getAttribute('data-act');
-    if (act === 'use-kit') { pfcSet.useKit = !pfcSet.useKit; pfcRenderSet(); }
-    else if (act === 'set-add') {
-      const n = 1 + pfcBasket.reduce((a, b) => Math.max(a, Number((String(b.set).match(/^Set (\d+)/) || [])[1]) || 0), 0);
-      pfcSetBasketItems('Set ' + n + ': ' + (PFC_KIND_LABEL[pfcSet.out.kind] || 'set')).forEach(pfcAddItem);
-      pfcSaveBasket();
-      const s = pfc$('pfcSetAdded'); if (s) s.textContent = 'Added as set ' + n;
-    } else if (act === 'set-xlsx') pfcExcel(pfcSetBasketItems('Set'));
-  });
-  pfc$('pfcItems').addEventListener('click', e => {
-    if (e.target.getAttribute('data-act') !== 'del-item') return;
-    const row = e.target.closest('.pfc-item');
-    if (row) row.remove();
-    if (!document.querySelector('#pfcItems .pfc-item')) pfcSetItems([]);
   });
 }
 

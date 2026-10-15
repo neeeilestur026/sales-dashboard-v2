@@ -12,65 +12,125 @@
   <header class="navbar" id="navbar"></header>
 
   <main class="main-content">
-    <div class="cr-headband">
+    <div class="pfc-top">
       <div>
         <h1>Product Finder</h1>
-        <p>Paste what the customer wrote, one line or a whole list. Each line comes back as a Power Team model with the catalog page it is on and the reason it fits. Build a full set from it, or use the earlier tools under More tools.</p>
-      </div>
-    </div>
-
-    <p id="pfDataErr" class="cr-warn" style="display:none;"></p>
-
-    <section class="pfc-search" aria-label="Find Power Team models">
-      <label class="pfc-lbl" for="pfcQ">Customer's item, model or list</label>
-      <textarea id="pfcQ" class="pfc-q" rows="3" spellcheck="false"
-        placeholder="One item per line. For example: RC-108, P-80, 10 ton cylinder 6 in stroke, or a whole SAP line such as JACK:HYDRAULIC;TYPE:SINGLE ACTING CYLINDER,LOAD CARRYING CAPACITY:10 TO,MAX. HEIGHT:8 IN"></textarea>
-      <div class="pfc-bar">
-        <input type="text" id="pfcCompany" list="pfClientList" placeholder="Company (optional)" aria-label="Company">
-        <button type="button" class="cr-btn" id="pfcFindBtn">Find models</button>
-      </div>
-      <div class="pfc-ex"><span>Try</span>
-        <button type="button" data-ex="RC-108">RC-108</button>
-        <button type="button" data-ex="P-80">P-80</button>
-        <button type="button" data-ex="15 tonne cylinder 6 in stroke">15 tonne cylinder, 6 in stroke</button>
-        <button type="button" data-ex="hydraulic torque wrench 6000 ft-lb">torque wrench, 6,000 ft-lb</button>
-      </div>
-    </section>
-
-    <div class="pfc-nav">
-      <div class="hx-seg" role="tablist" aria-label="Product Finder sections">
-        <button type="button" class="hx-tab active" role="tab" id="pfcTabFind" aria-selected="true" aria-controls="pfc-find" data-top="find">Find</button>
-        <button type="button" class="hx-tab" role="tab" id="pfcTabSet" aria-selected="false" aria-controls="pfc-set" data-top="set">Build a set</button>
-        <button type="button" class="hx-tab" role="tab" id="pfcTabTools" aria-selected="false" aria-controls="pfc-tools" data-top="tools">More tools</button>
+        <p>Turn what the customer asked for into Power Team part numbers, with the catalog page for each.</p>
       </div>
       <button type="button" class="pfc-basket-btn" id="pfcBasketBtn" aria-haspopup="dialog" aria-controls="pfcDrawer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.5 11a2 2 0 0 1-2 1.7H8.5a2 2 0 0 1-2-1.7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg> Basket <span class="n" id="pfcBasketN">0</span></button>
     </div>
 
+    <p id="pfDataErr" class="cr-warn" style="display:none;"></p>
+
+    <div class="pfc-modes" role="tablist" aria-label="Product Finder">
+      <button type="button" class="pfc-mode active" role="tab" id="pfcTabFind" aria-selected="true" aria-controls="pfc-find" data-top="find">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <span class="t">Find a model</span><span class="h">Paste a line, a list or a model number</span></button>
+      <button type="button" class="pfc-mode" role="tab" id="pfcTabSelect" aria-selected="false" aria-controls="pfc-select" data-top="select">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="9" width="12" height="12" rx="1.5"/><path d="M10 9V3h4v6"/><path d="M9 14h6"/></svg>
+        <span class="t">Choose a cylinder</span><span class="h">Five questions, then the cylinder, pump and hose</span></button>
+      <button type="button" class="pfc-mode" role="tab" id="pfcTabSet" aria-selected="false" aria-controls="pfc-set" data-top="set">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>
+        <span class="t">Build a set</span><span class="h">The parts around models you already know</span></button>
+      <button type="button" class="pfc-mode" role="tab" id="pfcTabTools" aria-selected="false" aria-controls="pfc-tools" data-top="tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+        <span class="t">More tools</span><span class="h">Bolting, pullers, calculators, the logbook</span></button>
+    </div>
+
     <section class="pfc-pane" id="pfc-find" role="tabpanel" aria-labelledby="pfcTabFind">
+      <div class="pfc-search">
+        <label class="pfc-lbl" for="pfcQ">What did the customer ask for?</label>
+        <div class="pfc-qwrap">
+          <textarea id="pfcQ" class="pfc-q" rows="3" spellcheck="false"
+            placeholder="One item per line: RC-108, P-80, 10 ton cylinder 6 in stroke, or a whole SAP line such as JACK:HYDRAULIC;TYPE:SINGLE ACTING CYLINDER,LOAD CARRYING CAPACITY:10 TO,MAX. HEIGHT:8 IN"></textarea>
+          <button type="button" class="pfc-go" id="pfcFindBtn">Find models</button>
+        </div>
+        <div class="pfc-ex"><span>Try</span>
+          <button type="button" data-ex="RC-108">RC-108</button>
+          <button type="button" data-ex="P-80">P-80</button>
+          <button type="button" data-ex="15 tonne cylinder 6 in stroke">15 tonne cylinder, 6 in stroke</button>
+          <button type="button" data-ex="hydraulic torque wrench 6000 ft-lb">torque wrench, 6,000 ft-lb</button>
+        </div>
+      </div>
       <div id="pfcFindOut"><p class="pfc-status">Each answer shows what was read from the line, the Power Team model, its catalog page, and anything to check with the customer.</p></div>
     </section>
 
+    <section class="pfc-pane" id="pfc-select" role="tabpanel" aria-labelledby="pfcTabSelect" hidden>
+      <div class="pfc-split">
+        <form class="pfc-panel pfc-qs" id="pfcSelForm" autocomplete="off">
+          <p class="pfc-lead">The questions from Power Team's selection guide (catalog p.7). The suggested set updates as you answer.</p>
+          <fieldset>
+            <legend><span class="n">1</span>What will it do?</legend>
+            <div class="pfc-choice">
+              <label><input type="radio" name="pfcJob" value="lift" checked><span><b>Lift or push</b><small>raise, press, spread</small></span></label>
+              <label><input type="radio" name="pfcJob" value="pull"><span><b>Pull or tension</b><small>a rod or cable through it</small></span></label>
+              <label><input type="radio" name="pfcJob" value="hold"><span><b>Hold it up</b><small>for hours or days</small></span></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend><span class="n">2</span>How heavy is the load?</legend>
+            <div class="pfc-row">
+              <input type="number" id="pfcSelLoad" min="0" step="any" inputmode="decimal" placeholder="e.g. 8" aria-label="Load">
+              <select id="pfcSelLoadU" aria-label="Load unit"><option value="t">tonnes</option><option value="kg">kg</option><option value="ton">US tons</option></select>
+            </div>
+            <label class="pfc-inline">Shared by <input type="number" id="pfcSelPoints" min="1" step="1" value="1" inputmode="numeric"> cylinder(s)</label>
+          </fieldset>
+          <fieldset>
+            <legend><span class="n">3</span>How far must it move?</legend>
+            <div class="pfc-row">
+              <input type="number" id="pfcSelTravel" min="0" step="any" inputmode="decimal" placeholder="e.g. 150" aria-label="Travel">
+              <select id="pfcSelTravelU" aria-label="Travel unit"><option value="mm">mm</option><option value="in">in</option></select>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend><span class="n">4</span>Height of the space <small>if it is tight</small></legend>
+            <div class="pfc-row">
+              <input type="number" id="pfcSelSpace" min="0" step="any" inputmode="decimal" placeholder="leave empty if there is room" aria-label="Space height">
+              <select id="pfcSelSpaceU" aria-label="Space unit"><option value="mm">mm</option><option value="in">in</option></select>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend><span class="n">5</span>Power at the site</legend>
+            <div class="pfc-choice">
+              <label><input type="radio" name="pfcPower" value="manual" checked><span><b>None</b><small>hand pump</small></span></label>
+              <label><input type="radio" name="pfcPower" value="electric"><span><b>Electric</b><small>220 V</small></span></label>
+              <label><input type="radio" name="pfcPower" value="air"><span><b>Air</b><small>compressor</small></span></label>
+            </div>
+          </fieldset>
+          <details class="pfc-more">
+            <summary>More options</summary>
+            <label class="pfc-check"><input type="checkbox" id="pfcSelPowered"> Powered return (double-acting)</label>
+            <label class="pfc-check"><input type="checkbox" id="pfcSelLight"> Light to carry around (aluminium)</label>
+            <label class="pfc-inline">Hose length <select id="pfcSelHose"><option value="6" selected>6 ft</option><option value="10">10 ft</option><option value="20">20 ft</option><option value="50">50 ft</option></select></label>
+          </details>
+        </form>
+        <aside class="pfc-sheet" id="pfcSelSheet" aria-live="polite" aria-label="Suggested set">
+          <div class="pfc-sheet-empty"><b>Your set appears here</b>Answer how heavy the load is and how far it must move.</div>
+        </aside>
+      </div>
+    </section>
+
     <section class="pfc-pane" id="pfc-set" role="tabpanel" aria-labelledby="pfcTabSet" hidden>
-      <div class="cr-card">
-        <form class="pfc-setform" id="pfcSetForm">
+      <div class="pfc-split">
+        <form class="pfc-panel pfc-setform" id="pfcSetForm" autocomplete="off">
           <div>
-            <div class="cr-sect-title">What kind of set?</div>
-            <div class="hx-seg" role="radiogroup" aria-label="Set type" id="pfcKinds">
-              <button type="button" class="hx-tab active" role="radio" aria-checked="true" data-kind="lift">Lifting or pressing</button>
-              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="pull">Pulling or tensioning</button>
-              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="puller">Hydraulic puller</button>
-              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="torque">Torque wrench</button>
-              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="tool">Nut splitter, spreader or punch</button>
+            <span class="pfc-lbl">What kind of set?</span>
+            <div class="pfc-kinds" role="radiogroup" aria-label="Set type" id="pfcKinds">
+              <button type="button" class="active" role="radio" aria-checked="true" data-kind="lift">Lifting or pressing</button>
+              <button type="button" role="radio" aria-checked="false" data-kind="pull">Pulling or tensioning</button>
+              <button type="button" role="radio" aria-checked="false" data-kind="puller">Hydraulic puller</button>
+              <button type="button" role="radio" aria-checked="false" data-kind="torque">Torque wrench</button>
+              <button type="button" role="radio" aria-checked="false" data-kind="tool">Nut splitter, spreader or punch</button>
             </div>
           </div>
           <div data-for="lift pull torque tool">
-            <div class="cr-sect-title" id="pfcItemsTitle">Cylinders</div>
+            <span class="pfc-lbl" id="pfcItemsTitle">Cylinders</span>
             <div class="pfc-items" id="pfcItems"></div>
             <div class="pfc-bar">
               <button type="button" class="pfc-btn-sm" id="pfcAddItem">Add another</button>
               <button type="button" class="pfc-btn-sm" id="pfcFromFind" hidden>Use the models from Find</button>
             </div>
-            <p class="cr-hint" id="pfcItemsHint">A Power Team model such as C108C, or a competitor's such as RC-108.</p>
+            <p class="pfc-help" id="pfcItemsHint">A Power Team model such as C108C, or a competitor's such as RC-108.</p>
           </div>
           <div class="pfc-opts">
             <div data-for="lift pull torque tool"><label for="pfcPow">Pump power</label>
@@ -82,27 +142,28 @@
               <select id="pfcHoseLen"><option value="3">3 ft</option><option value="6" selected>6 ft</option><option value="10">10 ft</option><option value="15">15 ft</option><option value="20">20 ft</option><option value="30">30 ft</option><option value="50">50 ft</option></select></div>
             <div data-for="lift pull"><label for="pfcHoseType">Hose type</label>
               <select id="pfcHoseType"><option value="rubber">Rubber, wire-braid</option><option value="polyurethane">Polyurethane</option><option value="non-conductive">Non-conductive</option></select>
-              <label class="chk"><input type="checkbox" id="pfcHighFlow"> 3/8 in high flow</label></div>
-            <div data-for="lift pull"><span class="cr-sect-title">Cylinders run</span>
-              <label class="chk"><input type="radio" name="pfcTogether" value="1" checked> Together, from one pump</label>
-              <label class="chk"><input type="radio" name="pfcTogether" value="0"> One at a time</label></div>
-            <div data-for="lift pull tool"><span class="cr-sect-title">Gauge</span>
-              <label class="chk"><input type="checkbox" id="pfcGauge" checked> Include a gauge and tee</label></div>
+              <label class="pfc-check"><input type="checkbox" id="pfcHighFlow"> 3/8 in high flow</label></div>
+            <div data-for="lift pull"><span class="pfc-lbl">Cylinders run</span>
+              <label class="pfc-check"><input type="radio" name="pfcTogether" value="1" checked> Together, from one pump</label>
+              <label class="pfc-check"><input type="radio" name="pfcTogether" value="0"> One at a time</label></div>
+            <div data-for="lift pull tool"><span class="pfc-lbl">Gauge</span>
+              <label class="pfc-check"><input type="checkbox" id="pfcGauge" checked> Include a gauge and tee</label></div>
             <div data-for="puller" hidden><label for="pfcTons">Puller capacity (tons)</label><input type="number" id="pfcTons" min="1" step="any" placeholder="e.g. 10"></div>
             <div data-for="puller" hidden><label for="pfcJaws">Jaws</label>
               <select id="pfcJaws"><option value="">Either</option><option value="3">3-jaw</option><option value="2">2-jaw</option></select></div>
           </div>
-          <div class="cr-actions"><button type="submit" class="cr-btn">Build the set</button></div>
+          <button type="submit" class="pfc-go">Build the set</button>
         </form>
+        <aside class="pfc-sheet" id="pfcSetOut" aria-live="polite" aria-label="Built set">
+          <div class="pfc-sheet-empty"><b>The set appears here</b>Name the cylinders (or tools) and build it: pump, hoses, couplers, gauge and manifold are added.</div>
+        </aside>
       </div>
-      <div id="pfcSetOut"></div>
     </section>
 
     <section class="pfc-pane" id="pfc-tools" role="tabpanel" aria-labelledby="pfcTabTools" hidden>
     <div class="pf-tabs" id="pfTabs">
       <button class="pf-tab active" data-tab="rfq" onclick="pfTab('rfq', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> RFQ — I need this item</button>
       <button class="pf-tab" data-tab="match" onclick="pfTab('match', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Match — find its partner</button>
-      <button class="pf-tab" data-tab="selector" onclick="pfTab('selector', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4z"/><path d="m7.5 10.5 2 2M10.5 7.5l2 2M13.5 4.5l2 2"/></svg> Cylinder Selector</button>
       <button class="pf-tab" data-tab="survey" onclick="pfTab('survey', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Bolting Survey</button>
       <button class="pf-tab" data-tab="puller" onclick="pfTab('puller', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Puller Selector</button>
       <button class="pf-tab" data-tab="xref" onclick="pfTab('xref', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Competitor Cross-Ref</button>
@@ -191,110 +252,6 @@
     </div>
 
     <!-- ── Cylinder Selector (the A164 survey — unchanged) ── -->
-    <div class="pf-pane" id="pane-selector" style="display:none;">
-    <form id="crForm" class="cr-card" onsubmit="event.preventDefault(); crRecommend();">
-      <div class="cr-sect-title">1 · Customer</div>
-      <div class="cr-grid" style="margin-bottom:16px;">
-        <div class="cr-field"><label>Company</label><input type="text" id="crCompany" placeholder="e.g. Petra Cement Inc."></div>
-        <div class="cr-field"><label>Contact person</label><input type="text" id="crContact" placeholder="optional"></div>
-      </div>
-
-      <div class="cr-sect-title">2 · What is the job?</div>
-      <div class="cr-checks" style="margin-bottom:16px;">
-        <label><input type="checkbox" name="crJob" value="lifting"> Lifting</label>
-        <label><input type="checkbox" name="crJob" value="pressing"> Pressing</label>
-        <label><input type="checkbox" name="crJob" value="pulling"> Pulling</label>
-        <label><input type="checkbox" name="crJob" value="holding"> Holding a load</label>
-        <label><input type="checkbox" name="crJob" value="tensioning"> Tensioning (cable/bolt/rod)</label>
-        <label><input type="checkbox" name="crJob" value="spreading"> Pushing apart / spreading</label>
-      </div>
-
-      <div class="cr-sect-title">3 · How heavy?</div>
-      <div class="cr-grid" style="margin-bottom:16px;">
-        <div class="cr-field"><label>Total load weight</label>
-          <div class="cr-unit">
-            <input type="number" step="any" min="0" id="crLoad" placeholder="e.g. 80">
-            <select id="crLoadUnit"><option value="tons">tons</option><option value="kg">kg</option></select>
-          </div>
-          <div class="cr-hint">Example from the survey: 80-ton load on 1 point → 100-ton cylinder.</div>
-        </div>
-        <div class="cr-field"><label>Lifting points (cylinders sharing the load)</label>
-          <input type="number" min="1" step="1" id="crPoints" placeholder="1, 2, 4…"></div>
-      </div>
-
-      <div class="cr-sect-title">4 · Stroke &amp; space</div>
-      <div class="cr-grid" style="margin-bottom:8px;">
-        <div class="cr-field"><label>Lifting / pushing distance needed</label>
-          <div class="cr-unit">
-            <input type="number" step="any" min="0" id="crStroke" placeholder="e.g. 250">
-            <select id="crStrokeUnit"><option value="mm">mm</option><option value="in">in</option></select>
-          </div></div>
-        <div class="cr-field"><label>Height of the gap (mm)</label>
-          <input type="number" step="any" min="0" id="crGap" placeholder="measure the gap!"></div>
-      </div>
-      <div class="cr-checks" style="margin-bottom:16px;">
-        <label><input type="radio" name="crTight" value="yes"> Very tight gap (flat cylinder needed)</label>
-        <label><input type="radio" name="crTight" value="no"> Normal space</label>
-      </div>
-
-      <div class="cr-sect-title">5 · After lifting</div>
-      <div class="cr-grid" style="margin-bottom:8px;">
-        <div class="cr-field"><label>Load stays up for hours / days?</label>
-          <div class="cr-checks">
-            <label><input type="radio" name="crHold" value="yes"> Yes — needs mechanical lock</label>
-            <label><input type="radio" name="crHold" value="no"> No — lift, work, lower</label>
-          </div></div>
-        <div class="cr-field"><label>Piston return</label>
-          <div class="cr-checks">
-            <label><input type="radio" name="crReturn" value="load"> Load pushes it down</label>
-            <label><input type="radio" name="crReturn" value="powered"> Powered return (double-acting)</label>
-            <label><input type="radio" name="crReturn" value="unsure"> Not sure — recommend</label>
-          </div></div>
-      </div>
-
-      <div class="cr-sect-title">6 · Environment</div>
-      <div class="cr-checks" style="margin-bottom:16px;">
-        <label><input type="checkbox" name="crEnv" value="indoor"> Indoor workshop</label>
-        <label><input type="checkbox" name="crEnv" value="outdoor"> Outdoor / field</label>
-        <label><input type="checkbox" name="crEnv" value="marine"> Humid / near sea</label>
-        <label><input type="checkbox" name="crEnv" value="explosive"> Explosive area (no sparks)</label>
-        <label><input type="checkbox" name="crEnv" value="carried"> Carried around often</label>
-      </div>
-
-      <div class="cr-sect-title">7 · Power for the pump</div>
-      <div class="cr-grid" style="margin-bottom:8px;">
-        <div class="cr-field"><label>Power available at the site</label>
-          <div class="cr-checks">
-            <label><input type="radio" name="crPower" value="electric"> Electricity</label>
-            <label><input type="radio" name="crPower" value="air"> Compressed air</label>
-            <label><input type="radio" name="crPower" value="none"> None</label>
-          </div></div>
-        <div class="cr-field"><label>Voltage (if electric)</label>
-          <input type="text" id="crVoltage" placeholder="e.g. 220V"></div>
-        <div class="cr-field"><label>How often used?</label>
-          <div class="cr-checks">
-            <label><input type="radio" name="crUsage" value="occasional"> Occasionally</label>
-            <label><input type="radio" name="crUsage" value="daily"> Daily / production</label>
-          </div></div>
-      </div>
-
-      <div class="cr-sect-title">8 · Quantity &amp; notes</div>
-      <div class="cr-grid" style="margin-bottom:16px;">
-        <div class="cr-field"><label>Sets needed</label><input type="number" min="1" step="1" id="crQty" placeholder="1"></div>
-        <div class="cr-field"><label>Target date</label><input type="date" id="crDate"></div>
-        <div class="cr-field"><label>Existing pumps / cylinders to match</label><input type="text" id="crExisting" placeholder="brand / model"></div>
-        <div class="cr-field" style="grid-column:1/-1;"><label>Other requirements or notes</label><textarea id="crNotes"></textarea></div>
-      </div>
-
-      <div class="cr-actions">
-        <button type="button" class="cr-btn cr-btn-sec" onclick="crReset()">Clear</button>
-        <button type="submit" class="cr-btn">Recommend cylinder + pump</button>
-      </div>
-    </form>
-
-    <div id="crResult" class="cr-card" style="display:none;"></div>
-    </div>
-
     <!-- ── Competitor cross-reference ── -->
     <div class="pf-pane" id="pane-xref" style="display:none;">
       <div class="cr-card">
@@ -596,6 +553,8 @@
     <div class="pfc-dhead"><h2 id="pfcDrawerTitle">Basket</h2><button type="button" class="pfc-btn-sm" id="pfcDrawerClose">Close</button></div>
     <div class="pfc-dbody" id="pfcBasketBody"></div>
     <div class="pfc-dfoot">
+      <label class="pfc-lbl" for="pfcCompany">Company</label>
+      <input type="text" id="pfcCompany" class="pfc-input" list="pfClientList" placeholder="Customer name, for the Excel and the request">
       <div class="row">
         <button type="button" class="pfc-btn-sm" id="pfcBasketXlsx">Download Excel</button>
         <button type="button" class="pfc-btn-sm primary" id="pfcBasketPR">Create pricing request</button>

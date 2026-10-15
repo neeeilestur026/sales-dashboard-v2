@@ -987,7 +987,144 @@ function pfeBuildSet(spec, ctx) {
   return out;
 }
 
-/* ─────────────────────────── 6 · what leaves the page ─────────────────────────── */
+/* ─────────────────────────── 6 · the cylinder selector ─────────────────────────── */
+
+const PFE_JACK_KINDS = ['bottle', 'low-profile', 'telescoping', 'toe'];
+const PFE_JOB_SERIES = {
+  lift: 'general-purpose cylinder',
+  pull: 'centre-hole or pull cylinder: the rod or cable passes through the piston',
+  hold: 'locking-collar cylinder: the collar holds the load with no pressure in the cylinder',
+};
+
+/**
+ * Power Team's own questions (catalog p.7, PDF 9) cut to five: what the cylinder does, the load and
+ * how many cylinders share it, how far it moves, the space it must fit, and the power at the site.
+ * "Use 80% of the rated capacity and stroke" (p.7): the load per cylinder is divided by 0.8, and
+ * a stroke that leaves the 20% is preferred over one that only just covers the travel.
+ *
+ * a = { job: 'lift'|'pull'|'hold', load, loadUnit: 't'|'kg'|'ton', points, travel, travelUnit: 'mm'|'in',
+ *       space, spaceUnit, power: 'manual'|'electric'|'air', powered, light, hoseLen,
+ *       model (use this cylinder instead of the first choice), useJack (the jack instead of a set) }
+ * -> { ok, missing[], need, cylinder, why[], alts[], jack, set, notes[], warnings[] }
+ */
+function pfeSelect(a, ctx) {
+  const q = Object.assign({ job: 'lift', loadUnit: 't', points: 1, travelUnit: 'mm', spaceUnit: 'mm', power: 'manual', hoseLen: 6 }, a || {});
+  const out = { ok: false, missing: [], need: null, cylinder: null, why: [], alts: [], jack: null, set: null, notes: [], warnings: [] };
+  const load = Number(q.load) || 0, travel = Number(q.travel) || 0, space = Number(q.space) || 0;
+  const n = Math.max(1, Math.round(Number(q.points) || 1));
+  if (!(load > 0)) out.missing.push('the load');
+  if (!(travel > 0)) out.missing.push('how far it must move');
+  if (out.missing.length) return out;
+
+  const toUs = { t: PFE_TONNE_TO_US, kg: PFE_TONNE_TO_US / 1000, ton: 1 }[q.loadUnit] || PFE_TONNE_TO_US;
+  const perUs = load * toUs / n;
+  const needUs = perUs / 0.8;
+  const tIn = q.travelUnit === 'in' ? travel : travel * PFE_IN_PER_MM;
+  const wantIn = tIn / 0.8;
+  const spaceIn = space > 0 ? (q.spaceUnit === 'in' ? space : space * PFE_IN_PER_MM) : null;
+  const unitTxt = { t: 't', kg: 'kg', ton: 'US tons' }[q.loadUnit] || 't';
+  const travelTxt = pfeFmt(travel) + ' ' + (q.travelUnit === 'in' ? 'in' : 'mm');
+  const spaceTxt = pfeFmt(space) + ' ' + (q.spaceUnit === 'in' ? 'in' : 'mm');
+  out.need = { perUs: Math.round(perUs * 100) / 100, needUs: Math.round(needUs * 100) / 100, travelIn: Math.round(tIn * 100) / 100,
+    wantIn: Math.round(wantIn * 100) / 100, spaceIn: spaceIn && Math.round(spaceIn * 100) / 100, points: n };
+
+  const act = q.powered && q.job !== 'hold' ? 'DA' : 'SA';
+  if (q.powered && q.job === 'hold') out.warnings.push('Locking-collar cylinders are single-acting: none has a powered return. The lock was kept; the load lowers the cylinder.');
+  const fits = (r, o) => {
+    if (r.cat !== 'cylinder' || r.act !== act) return false;
+    const f = r.flags || [];
+    if (q.job === 'pull') { if (!f.includes('hollow') && !f.includes('pull')) return false; }
+    else if (q.job === 'hold') { if (!f.includes('locking')) return false; }
+    else if (f.some(x => PFE_SPECIALTY.includes(x) && !(o.low && x === 'low'))) return false;
+    if (o.light && r.body !== 'aluminum') return false;
+    if ((r.t10k || r.cap) < needUs - 1e-9) return false;
+    if (o.space && spaceIn && !(r.closed && r.closed <= spaceIn + 0.01)) return false;
+    return true;
+  };
+  const bucket = r => (r.stroke >= wantIn - 0.01 ? 0 : r.stroke >= tIn - 0.01 ? 1 : 2);
+  const rankOf = r => (PFE_SERIES_RANK[r.ser] == null ? 9 : PFE_SERIES_RANK[r.ser]);
+  const over = r => ((r.t10k || r.cap) > needUs * 1.6 ? 1 : 0);        // far bigger than needed sorts after a close fit
+  const rank = list => list.sort((x, y) => bucket(x) - bucket(y) || over(x) - over(y) || rankOf(x) - rankOf(y)
+    || (x.t10k || x.cap) - (y.t10k || y.cap) || x.stroke - y.stroke || (x.wt || 999) - (y.wt || 999) || (x.m < y.m ? -1 : 1));
+  const all = Object.values(ctx.M);
+  /* relax one thing at a time, and say which */
+  const tries = [{ light: !!q.light, space: true, low: q.job === 'lift' && !!spaceIn }];   // a tight space is what low-height series are for
+  if (q.job === 'lift' && !spaceIn) tries.push({ light: !!q.light, space: true, low: true });
+  if (q.light) tries.push({ space: true, low: q.job === 'lift', dropLight: true });
+  tries.push({ light: !!q.light, space: false, low: q.job === 'lift', dropSpace: !!spaceIn });
+  tries.push({ space: false, low: q.job === 'lift', dropLight: !!q.light, dropSpace: !!spaceIn });
+  let list = [], used = tries[0];
+  for (const t of tries) {
+    list = rank(all.filter(r => fits(r, t)));
+    used = t;
+    if (list.length && bucket(list[0]) < 2) break;
+  }
+  if (!list.length) {
+    out.warnings.push('No ' + (act === 'DA' ? 'double-acting ' : '') + PFE_JOB_SERIES[q.job].split(':')[0] + ' in the catalog gives ' + pfeFmt(needUs, 1)
+      + ' t at 10,000 psi. Split the load over more cylinders, or ask the engineer.');
+    return out;
+  }
+  if (used.dropSpace) list.sort((x, y) => bucket(x) - bucket(y) || (x.closed || 99) - (y.closed || 99));   // then the lowest that does the job
+  const forced = q.model && ctx.M[q.model] && ctx.M[q.model].cat === 'cylinder' ? ctx.M[q.model] : null;
+  const best = forced || list[0];
+  out.ok = true;
+  out.cylinder = best;
+  out.chosen = !!forced && forced !== list[0];
+  out.alts = list.filter(r => r !== best && bucket(r) <= Math.max(1, bucket(list[0]))).slice(0, 3);
+  if (forced) {
+    if ((forced.t10k || forced.cap) < needUs - 1e-9) out.warnings.push(forced.m + ' gives ' + pfeFmt(forced.t10k || forced.cap, 1) + ' t: less than the ' + pfeFmt(needUs, 1) + ' t the 80% rule asks for.');
+    if (bucket(forced) === 2) out.warnings.push(forced.m + ' strokes ' + pfeFmt(forced.stroke) + ' in: shorter than the ' + travelTxt + ' travel.');
+    if (spaceIn && forced.closed > spaceIn + 0.01) out.warnings.push(forced.m + ' closes at ' + pfeFmt(forced.closed) + ' in: taller than the space.');
+  }
+
+  out.why.push(pfeFmt(load) + ' ' + unitTxt + (n > 1 ? ' over ' + n + ' cylinders is ' + pfeFmt(perUs, 1) + ' US tons each' : ' is ' + pfeFmt(perUs, 1) + ' US tons')
+    + '. At 80% of rated capacity (catalog p.7) that needs ' + pfeFmt(needUs, 1) + ' t at 10,000 psi; ' + best.m + ' gives ' + pfeFmt(best.t10k || best.cap, 1) + ' t.');
+  const b = bucket(best);
+  out.why.push('Travel ' + travelTxt + (q.travelUnit === 'in' ? '' : ' (' + pfeFmt(tIn, 2) + ' in)') + ': ' + best.m + ' strokes ' + pfeFmt(best.stroke) + ' in'
+    + (b === 0 ? ', so the move stays within 80% of it.' : b === 1 ? '. It covers the move but uses ' + Math.round(tIn / best.stroke * 100) + '% of the stroke.' : '.'));
+  if (b === 1) out.notes.push('A longer stroke would keep the move within 80% of it, but none fits ' + (spaceIn ? 'the space' : 'this choice') + '.');
+  if (b === 2) out.warnings.push('No cylinder this strong strokes ' + travelTxt + ': lift in stages with cribbing, or ask the engineer.');
+  if (spaceIn) {
+    if (used.dropSpace) {
+      out.why.push('Nothing this strong closes under ' + spaceTxt + '; ' + best.m + ' is the lowest that does the job, closing at ' + pfeFmt(best.closed) + ' in.');
+      out.warnings.push('The cylinder does not fit the space given: lift in stages with cribbing, or measure the space again.');
+    } else out.why.push(best.m + ' closes at ' + pfeFmt(best.closed) + ' in, inside the ' + spaceTxt + (q.spaceUnit === 'in' ? '' : ' (' + pfeFmt(spaceIn, 2) + ' in)') + ' space.');
+  }
+  const S = (ctx.series || {})[best.ser];
+  out.why.push((S ? S.title.charAt(0).toUpperCase() + S.title.slice(1) : PFE_JOB_SERIES[q.job]) + ' (' + best.ser.replace('_', '…') + ' series)'
+    + ((best.flags || []).includes('low') ? ': a low-height series, for the space available' : '')
+    + (q.job !== 'lift' ? ': ' + PFE_JOB_SERIES[q.job].split(': ')[1] : '') + '.');
+  if (used.dropLight) out.warnings.push('No aluminium cylinder covers this, so a steel one is suggested.');
+  else if (q.light && best.body === 'aluminum') out.notes.push('Aluminium is about half the weight of steel: ' + best.m + ' weighs ' + pfeFmt(best.wt, 1) + ' lb.');
+  if (n > 1) out.notes.push('With ' + n + ' cylinders on one load, the set uses a manifold so each cylinder can be controlled and the load kept level.');
+
+  /* an all-in-one jack, when one cylinder lifts the load and no powered return is needed */
+  if (q.job === 'lift' && n === 1 && !q.powered) {
+    const jacks = all.filter(r => r.cat === 'jack' && PFE_JACK_KINDS.includes(r.sub) && r.cap >= needUs - 1e-9 && r.stroke >= tIn - 0.01
+      && (!spaceIn || (r.closed && r.closed <= spaceIn + 0.01) || r.sub === 'toe'))
+      .sort((x, y) => (x.stroke >= wantIn - 0.01 ? 0 : 1) - (y.stroke >= wantIn - 0.01 ? 0 : 1) || x.cap - y.cap || (x.closed || 0) - (y.closed || 0) || (x.m < y.m ? -1 : 1));
+    if (jacks.length) {
+      const j = jacks[0];
+      out.jack = { rec: j, page: pfeSource(j),
+        why: 'Self-contained ' + j.sub + ' jack with the pump built in: no hose, coupler or gauge. ' + pfeFmt(j.cap) + ' t, stroke ' + pfeFmt(j.stroke) + ' in'
+          + (j.closed ? ', ' + pfeFmt(j.closed) + ' in closed' : '') + (j.screw ? ', with a ' + pfeFmt(j.screw) + ' in extension screw' : '')
+          + (j.sub === 'toe' ? '; it lifts from a toe near the floor' : '') + '.' };
+    }
+  }
+
+  if (q.useJack && out.jack) {
+    const j = out.jack.rec;
+    out.usingJack = true;
+    out.set = { kind: 'lift', kit: null, kits: [], warnings: [], notes: [], oilNeeded: null, pump: null,
+      parts: [{ model: j.m, qty: 1, role: 'jack', why: out.jack.why, page: out.jack.page, desc: pfeDescribe(j, ctx) }] };
+    return out;
+  }
+  out.set = pfeBuildSet({ kind: q.job === 'pull' ? 'pull' : 'lift', items: [{ model: best.m, qty: n }], pumpPow: q.power || 'manual',
+    hoseLen: Number(q.hoseLen) || 6, together: true, gauge: true }, ctx);
+  return out;
+}
+
+/* ─────────────────────────── 7 · what leaves the page ─────────────────────────── */
 
 const PFE_QUALITY_LABEL = { exact: 'Exact', close: 'Close: check the differences', check: 'Needs checking', none: 'No match' };
 
@@ -1015,6 +1152,6 @@ function pfePrItems(basket, ctx) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { pfeParseLine, pfeSplitBulk, pfeSapPairs, pfeModelTokens, pfeCapacity, pfeLength, pfeFrac,
-    pfeShort, pfePrepare, pfeDecode, pfeRcRule, pfeMatch, pfeMatchAll, pfeChoose, pfeLookup, pfeSearchIndex, pfeBuildSet, pfeDescribe, pfeSpecs,
+    pfeShort, pfePrepare, pfeDecode, pfeRcRule, pfeMatch, pfeMatchAll, pfeChoose, pfeLookup, pfeSelect, pfeSearchIndex, pfeBuildSet, pfeDescribe, pfeSpecs,
     pfeSource, pfeExcelRows, pfePrItems, PFE_COMPETITOR_SPECS, PFE_QUALITY_LABEL };
 }

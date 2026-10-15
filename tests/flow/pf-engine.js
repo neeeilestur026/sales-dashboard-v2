@@ -208,6 +208,47 @@ const parts = o => o.parts.map(p => p.qty + ' ' + p.model);
 }
 eq('an unknown model is reported, not invented', set({ kind: 'lift', items: [{ model: 'C999C' }] }).warnings[0], 'C999C is not in the catalog: it was left out of the set.');
 
+console.log('\n== the cylinder selector (five questions, catalog p.7) ==');
+{
+  const sel = a => E.pfeSelect(a, ctx);
+  const parts = o => o.set.parts.map(p => p.qty + ' ' + p.model);
+  eq('load and travel are required, and named when missing', sel({ job: 'lift', load: 10 }).missing, ['how far it must move']);
+  {
+    const o = sel({ job: 'lift', load: 8, travel: 150 });
+    eq('8 t, 150 mm: 8.8 US tons / 0.8 = 11.0 t -> C108C (11.2 t), 8.13 in keeps 5.9 in within 80%', [o.cylinder.m, o.need.needUs, o.need.wantIn], ['C108C', 11.03, 7.38]);
+    eq('...with its pump, hose, coupler, gauge and tee', parts(o), ['1 C108C', '1 P55', '1 9756', '1 9798', '1 9055', '1 9670']);
+    ok('...and says the 80% rule and the page', /80% of rated capacity \(catalog p\.7\)/.test(o.why[0]), o.why);
+    eq('a self-contained jack is offered for a single lift', o.jack && o.jack.rec.m, '9013X');
+    const j = sel({ job: 'lift', load: 8, travel: 150, useJack: true });
+    eq('...and can replace the whole set', parts(j), ['1 9013X']);
+  }
+  eq('80 t on one cylinder: the 80% rule passes 100 t (103.1 t < 110.3 t) -> the 150 t heavy-lift RGG1508', sel({ job: 'lift', load: 80, travel: 150 }).cylinder.m, 'RGG1508');
+  {
+    const o = sel({ job: 'lift', load: 80, points: 4, travel: 100 });
+    eq('80 t over 4 cylinders -> 4 x C308C, a manifold, 4 hoses + the feed', [o.cylinder.m, parts(o).filter(p => /C308C|9756|9798|LM4S/.test(p))], ['C308C', ['4 C308C', '5 9756', '4 9798', '1 LM4S']]);
+    eq('...no jack when several cylinders share the load', o.jack, null);
+  }
+  eq('a tight space (150 mm) picks a low-height series that fits: RSS302 closes at 4.63 in', [sel({ job: 'lift', load: 20, travel: 50, space: 150 }).cylinder.m], ['RSS302']);
+  {
+    const o = sel({ job: 'lift', load: 10, travel: 20, space: 80 });
+    eq('nothing fits 80 mm: the lowest that does the job, and a warning', [o.cylinder.m, o.warnings.some(w => /does not fit the space/.test(w))], ['RSS202', true]);
+  }
+  eq('pull or tension -> a centre-hole cylinder', sel({ job: 'pull', load: 20, travel: 50 }).cylinder.ser, 'RH');
+  eq('hold for days -> a locking collar', (sel({ job: 'hold', load: 150, travel: 150 }).cylinder.flags || []).includes('locking'), true);
+  {
+    const o = sel({ job: 'lift', load: 30, travel: 100, powered: true });
+    eq('powered return -> double-acting RD556 with the P159D pump and two hoses', parts(o), ['1 RD556', '1 P159D', '2 9756', '2 9798', '1 9069', '1 9670']);
+  }
+  eq('light to carry -> aluminium RA556', sel({ job: 'lift', load: 30, travel: 100, light: true }).cylinder.m, 'RA556');
+  eq('kg and inches convert: 8,000 kg and 5.9 in -> C108C', sel({ job: 'lift', load: 8000, loadUnit: 'kg', travel: 5.9, travelUnit: 'in' }).cylinder.m, 'C108C');
+  eq('electric power: the set gets an electric pump', sel({ job: 'lift', load: 8, travel: 150, power: 'electric' }).set.pump.pow, 'electric');
+  {
+    const o = sel({ job: 'lift', load: 8, travel: 150, model: 'C106C' });
+    eq('a cylinder picked by hand is used, and warned about when its stroke is short of 80%', [o.cylinder.m, o.chosen, o.why[1].includes('uses')], ['C106C', true, true]);
+  }
+  eq('too heavy for any cylinder: a clear message, no guess', [sel({ job: 'lift', load: 500, travel: 100 }).ok, /Split the load/.test(sel({ job: 'lift', load: 500, travel: 100 }).warnings[0])], [false, true]);
+}
+
 console.log('\n== what leaves the page ==');
 {
   const basket = [{ model: 'C108C', qty: 2, line: LINES[0], quality: 'exact', basis: all[0].basis, source: all[0].source },
