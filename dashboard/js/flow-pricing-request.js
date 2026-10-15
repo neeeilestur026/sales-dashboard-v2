@@ -164,11 +164,11 @@ async function prLoadFromInquiry(id) {
   const cust = document.getElementById('customer');
   if (cust && inq.client) { cust.value = inq.client; prFillContacts(); }   // fills blanks from the client master
   items.forEach(it => addRow({
-    itemNo: 'N/A',                          // finder products are catalog names, not part numbers
+    itemNo: it.model || 'N/A',              // A333: a Power Team model is a real order number; family picks are not
     itemName: it.name,
     qty: flowNum(it.qty) || 1,
     uom: 'pc',
-    remarks: 'From Product Finder — confirm exact model'
+    remarks: it.remarks || 'From Product Finder — confirm exact model'
   }));
   if (!items.length) addRow();
   countLines();

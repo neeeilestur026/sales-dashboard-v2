@@ -5,84 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Product Finder — Hi-ESCORP</title>
   <link rel="stylesheet" href="css/styles.css">
-  <style>
-    /* Self-contained, matching the A131 director design language (indigo, Inter, soft cards). */
-    :root{--ac:var(--hx-navy);--ac2:var(--hx-navy-ink);--ink:var(--hx-ink);--ink2:var(--hx-ink-2);--line:var(--hx-hair);--card:var(--hx-glass-solid);}
-    .main-content{max-width:1160px;margin:0 auto;padding-top:88px;}
-    .cr-headband{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
-    .cr-headband h1{font:800 26px/1 'Inter',sans-serif;letter-spacing:-.02em;color: var(--ink);margin:0;}
-    .cr-headband p{font:400 13.5px 'Inter',sans-serif;color: var(--ink2);margin:7px 0 0;}
-    .cr-card{background: var(--card);border: 1px solid var(--line);border-radius: 18px;
-      box-shadow: var(--hx-sh-2);
-      padding:20px 22px;margin-bottom:18px;}
-    .cr-sect-title{font:700 12px 'Inter',sans-serif;letter-spacing:.08em;text-transform:uppercase;
-      color: var(--ac2);margin:0 0 10px;}
-    .cr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px 18px;}
-    .cr-field label{display:block;font:600 12.5px 'Inter',sans-serif;color: var(--ink);margin-bottom:5px;}
-    .cr-field input[type="text"],.cr-field input[type="number"],.cr-field input[type="date"],
-    .cr-field select,.cr-field textarea{width:100%;padding:8px 10px;border: 1px solid var(--hx-hair);
-      border-radius: 9px;font:400 13.5px 'Inter',sans-serif;background: var(--hx-card);box-sizing:border-box;}
-    .cr-field textarea{min-height:56px;resize:vertical;}
-    .cr-unit{display:flex;gap:8px;}
-    .cr-unit input{flex:1;}
-    .cr-unit select{width:84px;}
-    .cr-checks{display:flex;flex-wrap:wrap;gap:8px 16px;}
-    .cr-checks label{display:flex;align-items:center;gap:6px;font:400 13.5px 'Inter',sans-serif;
-      color: var(--ink);cursor:pointer;padding:6px 10px;border: 1px solid var(--line);border-radius: 999px;}
-    .cr-checks input{accent-color:var(--ac);}
-    .cr-hint{font:400 12px 'Inter',sans-serif;color: var(--ink2);margin-top:5px;}
-    .cr-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
-    .cr-btn{border: none;border-radius: 999px;padding:10px 22px;font:600 14px 'Inter',sans-serif;
-      cursor:pointer;background: linear-gradient(180deg,var(--hx-navy),var(--ac2));color: var(--hx-slab-ink);
-      box-shadow: var(--hx-sh-1);}
-    .cr-btn:hover{filter:brightness(1.06);}
-    .cr-btn-sec{background: var(--hx-card);color: var(--ink);border: 1px solid var(--hx-hair);box-shadow: none;}
-    /* Result */
-    .cr-result-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
-    .cr-result-head h2{font:800 20px 'Inter',sans-serif;color: var(--ink);margin:0;flex:1;}
-    .cr-conf{font:700 11.5px 'Inter',sans-serif;letter-spacing:.04em;padding:4px 12px;border-radius: 999px;}
-    .cr-capnote{font:400 13.5px 'Inter',sans-serif;color: var(--ink);background: var(--hx-navy-soft);
-      border: 1px solid var(--hx-navy-line);border-radius: 10px;padding:10px 14px;}
-    .cr-rec{border: 1px solid var(--line);border-left: 4px solid var(--ac);border-radius: 12px;
-      padding:14px 16px;margin:10px 0;}
-    .cr-rec-label{font:700 11px 'Inter',sans-serif;letter-spacing:.08em;text-transform:uppercase;color: var(--ink2);}
-    .cr-rec-series{font:800 19px 'Inter',sans-serif;color: var(--ink);margin:4px 0 6px;}
-    .cr-rec-line{font:400 13.5px/1.55 'Inter',sans-serif;color: var(--ink);margin:3px 0;}
-    .cr-sect{margin-top:14px;}
-    .cr-sect h3{font:700 13.5px 'Inter',sans-serif;color: var(--ink);margin:0 0 6px;}
-    .cr-sect ul{margin:0;padding-left:20px;}
-    .cr-sect li{font:400 13.5px/1.6 'Inter',sans-serif;color: var(--ink);margin:3px 0;}
-    .cr-warn{background: var(--hx-warn-soft);border: 1px solid var(--hx-warn-soft);border-radius: 10px;padding:10px 14px;}
-    .cr-miss{background: var(--hx-inset);border: 1px solid var(--line);border-radius: 10px;padding:10px 14px;}
-    /* Product Finder tabs (A165) */
-    .pf-tabs{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:16px;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
-    .pf-tab{flex:0 0 auto;border: 1px solid var(--hx-hair);background: var(--hx-card);color: var(--ink);border-radius: 999px;
-      padding:9px 18px;font:600 13.5px 'Inter',sans-serif;cursor:pointer;white-space:nowrap;}
-    .pf-tab svg,.pf-mtab svg{width:14px;height:14px;vertical-align:-2px;margin-right:5px;}
-    .pf-tab.active{background: linear-gradient(180deg,var(--hx-navy),var(--ac2));color: var(--hx-slab-ink);border-color: transparent;
-      box-shadow: var(--hx-sh-1);}
-    .pf-mtab{border: 1px solid var(--hx-hair);background: var(--hx-card);border-radius: 999px;padding:7px 14px;
-      font:600 12.5px 'Inter',sans-serif;cursor:pointer;}
-    .pf-mtab.active{background: var(--hx-navy-soft);border-color: var(--ac);color: var(--ac2);}
-    .pf-badge{font:700 10.5px 'Inter',sans-serif;letter-spacing:.03em;padding:2px 9px;border-radius: 999px;margin-left:6px;}
-    .pf-ok{background: var(--hx-ok-soft);color: var(--hx-ok);}
-    .pf-sample{background: var(--hx-warn-soft);color: var(--hx-warn);}
-    .pf-follow{background: var(--hx-red-soft);color: var(--hx-red);margin-left:8px;}
-    .bs-pick{margin-top:10px;padding:12px 14px;border: 1px solid var(--hx-hair);border-radius: 12px;background: var(--hx-inset);}
-    .bs-pick label{display:block;font:700 11px 'Inter',sans-serif;letter-spacing:.04em;
-      text-transform:uppercase;color: var(--hx-ink-2);margin-bottom:5px;}
-    .bs-pick select,.bs-pick input{width:100%;padding:8px 10px;border: 1px solid var(--hx-hair);border-radius: 9px;
-      font:400 13.5px 'Inter',sans-serif;background: var(--hx-card);}
-    .bs-pick input{margin-top:7px;}
-    .bs-hint{font:400 11.5px 'Inter',sans-serif;color: var(--hx-ink-2);margin:7px 0 0;}
-    .pf-calc-out{font:600 14px 'Inter',sans-serif;color: var(--ac2);margin-top:8px;min-height:20px;}
-    @media print{
-      .navbar,.no-print,#crForm,.pf-tabs,#bsResult .cr-actions,#psResult .cr-actions,.pf-pane:not(#pane-selector):not(#pane-survey):not(#pane-puller),.cr-headband .no-print{display:none !important;}
-      body{background: var(--hx-card);}
-      .main-content{padding-top:0;max-width:none;}
-      .cr-card{box-shadow: none;border: none;padding:0;}
-    }
-  </style>
+  <link rel="stylesheet" href="css/product-finder.css">
 </head>
 <body>
   <script src="js/theme.js"></script>
@@ -92,12 +15,90 @@
     <div class="cr-headband">
       <div>
         <h1>Product Finder</h1>
-        <p>Match customers to the right Power Team / CEJN / RAD equipment — RFQ matching, partner finding, the cylinder survey, competitor cross-reference and calculators. Safety specs come only from the catalog data; anything unconfirmed goes to the engineer.</p>
+        <p>Paste what the customer wrote, one line or a whole list. Each line comes back as a Power Team model with the catalog page it is on and the reason it fits. Build a full set from it, or use the earlier tools under More tools.</p>
       </div>
     </div>
 
-    <p id="pfDataErr" class="cr-warn" style="display:none;padding:10px 14px;border-radius: 10px;margin-bottom:14px;"></p>
+    <p id="pfDataErr" class="cr-warn" style="display:none;"></p>
 
+    <section class="pfc-search" aria-label="Find Power Team models">
+      <label class="pfc-lbl" for="pfcQ">Customer's item, model or list</label>
+      <textarea id="pfcQ" class="pfc-q" rows="3" spellcheck="false"
+        placeholder="One item per line. For example: RC-108, P-80, 10 ton cylinder 6 in stroke, or a whole SAP line such as JACK:HYDRAULIC;TYPE:SINGLE ACTING CYLINDER,LOAD CARRYING CAPACITY:10 TO,MAX. HEIGHT:8 IN"></textarea>
+      <div class="pfc-bar">
+        <input type="text" id="pfcCompany" list="pfClientList" placeholder="Company (optional)" aria-label="Company">
+        <button type="button" class="cr-btn" id="pfcFindBtn">Find models</button>
+      </div>
+      <div class="pfc-ex"><span>Try</span>
+        <button type="button" data-ex="RC-108">RC-108</button>
+        <button type="button" data-ex="P-80">P-80</button>
+        <button type="button" data-ex="15 tonne cylinder 6 in stroke">15 tonne cylinder, 6 in stroke</button>
+        <button type="button" data-ex="hydraulic torque wrench 6000 ft-lb">torque wrench, 6,000 ft-lb</button>
+      </div>
+    </section>
+
+    <div class="pfc-nav">
+      <div class="hx-seg" role="tablist" aria-label="Product Finder sections">
+        <button type="button" class="hx-tab active" role="tab" id="pfcTabFind" aria-selected="true" aria-controls="pfc-find" data-top="find">Find</button>
+        <button type="button" class="hx-tab" role="tab" id="pfcTabSet" aria-selected="false" aria-controls="pfc-set" data-top="set">Build a set</button>
+        <button type="button" class="hx-tab" role="tab" id="pfcTabTools" aria-selected="false" aria-controls="pfc-tools" data-top="tools">More tools</button>
+      </div>
+      <button type="button" class="pfc-basket-btn" id="pfcBasketBtn" aria-haspopup="dialog" aria-controls="pfcDrawer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.5 11a2 2 0 0 1-2 1.7H8.5a2 2 0 0 1-2-1.7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg> Basket <span class="n" id="pfcBasketN">0</span></button>
+    </div>
+
+    <section class="pfc-pane" id="pfc-find" role="tabpanel" aria-labelledby="pfcTabFind">
+      <div id="pfcFindOut"><p class="pfc-status">Each answer shows what was read from the line, the Power Team model, its catalog page, and anything to check with the customer.</p></div>
+    </section>
+
+    <section class="pfc-pane" id="pfc-set" role="tabpanel" aria-labelledby="pfcTabSet" hidden>
+      <div class="cr-card">
+        <form class="pfc-setform" id="pfcSetForm">
+          <div>
+            <div class="cr-sect-title">What kind of set?</div>
+            <div class="hx-seg" role="radiogroup" aria-label="Set type" id="pfcKinds">
+              <button type="button" class="hx-tab active" role="radio" aria-checked="true" data-kind="lift">Lifting or pressing</button>
+              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="pull">Pulling or tensioning</button>
+              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="puller">Hydraulic puller</button>
+              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="torque">Torque wrench</button>
+              <button type="button" class="hx-tab" role="radio" aria-checked="false" data-kind="tool">Nut splitter, spreader or punch</button>
+            </div>
+          </div>
+          <div data-for="lift pull torque tool">
+            <div class="cr-sect-title" id="pfcItemsTitle">Cylinders</div>
+            <div class="pfc-items" id="pfcItems"></div>
+            <div class="pfc-bar">
+              <button type="button" class="pfc-btn-sm" id="pfcAddItem">Add another</button>
+              <button type="button" class="pfc-btn-sm" id="pfcFromFind" hidden>Use the models from Find</button>
+            </div>
+            <p class="cr-hint" id="pfcItemsHint">A Power Team model such as C108C, or a competitor's such as RC-108.</p>
+          </div>
+          <div class="pfc-opts">
+            <div data-for="lift pull torque tool"><label for="pfcPow">Pump power</label>
+              <select id="pfcPow"><option value="manual">Manual (hand pump)</option><option value="electric">Electric, 220 V</option><option value="air">Air</option><option value="gas">Gasoline</option><option value="battery">Battery</option></select></div>
+            <div data-for="lift pull"><label for="pfcPump">Pump model (optional)</label><input type="text" id="pfcPump" placeholder="e.g. P159 or P-80"></div>
+            <div data-for="lift pull"><label for="pfcSpeed">Pump speed</label>
+              <select id="pfcSpeed"><option value="">As the catalog pairs it</option><option value="2">Two-speed</option></select></div>
+            <div data-for="lift pull torque"><label for="pfcHoseLen">Hose length</label>
+              <select id="pfcHoseLen"><option value="3">3 ft</option><option value="6" selected>6 ft</option><option value="10">10 ft</option><option value="15">15 ft</option><option value="20">20 ft</option><option value="30">30 ft</option><option value="50">50 ft</option></select></div>
+            <div data-for="lift pull"><label for="pfcHoseType">Hose type</label>
+              <select id="pfcHoseType"><option value="rubber">Rubber, wire-braid</option><option value="polyurethane">Polyurethane</option><option value="non-conductive">Non-conductive</option></select>
+              <label class="chk"><input type="checkbox" id="pfcHighFlow"> 3/8 in high flow</label></div>
+            <div data-for="lift pull"><span class="cr-sect-title">Cylinders run</span>
+              <label class="chk"><input type="radio" name="pfcTogether" value="1" checked> Together, from one pump</label>
+              <label class="chk"><input type="radio" name="pfcTogether" value="0"> One at a time</label></div>
+            <div data-for="lift pull tool"><span class="cr-sect-title">Gauge</span>
+              <label class="chk"><input type="checkbox" id="pfcGauge" checked> Include a gauge and tee</label></div>
+            <div data-for="puller" hidden><label for="pfcTons">Puller capacity (tons)</label><input type="number" id="pfcTons" min="1" step="any" placeholder="e.g. 10"></div>
+            <div data-for="puller" hidden><label for="pfcJaws">Jaws</label>
+              <select id="pfcJaws"><option value="">Either</option><option value="3">3-jaw</option><option value="2">2-jaw</option></select></div>
+          </div>
+          <div class="cr-actions"><button type="submit" class="cr-btn">Build the set</button></div>
+        </form>
+      </div>
+      <div id="pfcSetOut"></div>
+    </section>
+
+    <section class="pfc-pane" id="pfc-tools" role="tabpanel" aria-labelledby="pfcTabTools" hidden>
     <div class="pf-tabs" id="pfTabs">
       <button class="pf-tab active" data-tab="rfq" onclick="pfTab('rfq', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> RFQ — I need this item</button>
       <button class="pf-tab" data-tab="match" onclick="pfTab('match', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Match — find its partner</button>
@@ -113,6 +114,7 @@
     <div class="pf-pane" id="pane-rfq">
       <form class="cr-card" onsubmit="event.preventDefault(); pfRfqSubmit();">
         <div class="cr-sect-title">What does the customer need?</div>
+        <p class="cr-hint">This form matches product families. For Power Team model numbers and catalog pages, use Find at the top of the page.</p>
         <div class="cr-grid" style="margin-bottom:12px;">
           <div class="cr-field" style="grid-column:1/-1;"><label>Item needed (their own words)</label>
             <input type="text" id="pfItem" list="pfSynList" placeholder="e.g. 100 ton jack, UHP coupling, torque gun…">
@@ -297,6 +299,7 @@
     <div class="pf-pane" id="pane-xref" style="display:none;">
       <div class="cr-card">
         <div class="cr-sect-title">Competitor cross-reference</div>
+        <p class="cr-hint">These are the rows the team checked by hand. The full 2025 Power Team crossover (768 Enerpac numbers) answers in Find, at the top of the page.</p>
         <div class="cr-grid" style="margin-bottom:12px;">
           <div class="cr-field" style="grid-column:1/-1;"><label>Competitor brand + model</label>
             <input type="text" id="pfXrefQ" placeholder="e.g. Enerpac RC-1006"></div>
@@ -585,13 +588,30 @@
         <div id="pfLogBody"></div>
       </div>
     </div>
+    </section>
   </main>
+
+  <div class="pfc-scrim" id="pfcScrim" hidden></div>
+  <aside class="pfc-drawer" id="pfcDrawer" role="dialog" aria-modal="true" aria-labelledby="pfcDrawerTitle">
+    <div class="pfc-dhead"><h2 id="pfcDrawerTitle">Basket</h2><button type="button" class="pfc-btn-sm" id="pfcDrawerClose">Close</button></div>
+    <div class="pfc-dbody" id="pfcBasketBody"></div>
+    <div class="pfc-dfoot">
+      <div class="row">
+        <button type="button" class="pfc-btn-sm" id="pfcBasketXlsx">Download Excel</button>
+        <button type="button" class="pfc-btn-sm primary" id="pfcBasketPR">Create pricing request</button>
+      </div>
+      <p class="cr-hint" id="pfcBasketHint"></p>
+      <div class="row"><button type="button" class="pfc-x" id="pfcBasketClear">Empty the basket</button></div>
+    </div>
+  </aside>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/cylinder-recommender.js"></script>
   <script src="js/product-finder.js"></script>
+  <script src="js/pf-engine.js"></script>
+  <script src="js/pf-catalog-ui.js"></script>
   <script src="js/bolting-survey.js"></script>
   <script src="js/puller-selector.js"></script>
 </body>

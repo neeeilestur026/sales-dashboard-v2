@@ -7,7 +7,8 @@
    "our_id": "pt-c-100",
    "note": "Official crossover: Power Team C1006C \u2014 100 ton, 6-5/8 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "C1006C"
   },
   {
    "competitor_brand": "Enerpac",
@@ -15,7 +16,8 @@
    "our_id": "pt-c-100",
    "note": "Official crossover: Power Team C10010C \u2014 100 ton, 10-1/4 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "C10010C"
   },
   {
    "competitor_brand": "Enerpac",
@@ -23,7 +25,8 @@
    "our_id": "pt-c-55",
    "note": "Official crossover: Power Team C556C \u2014 55 ton, 6-1/4 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "C556C"
   },
   {
    "competitor_brand": "Enerpac",
@@ -31,7 +34,8 @@
    "our_id": "pt-c-10",
    "note": "Official crossover: Power Team C102C \u2014 10 ton, 2-1/8 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "C102C"
   },
   {
    "competitor_brand": "Enerpac",
@@ -39,7 +43,8 @@
    "our_id": "pt-c-10",
    "note": "Official crossover: Power Team C1010C \u2014 10 ton, 10-1/8 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "C1010C"
   },
   {
    "competitor_brand": "Enerpac",
@@ -47,7 +52,8 @@
    "our_id": "pt-c-25",
    "note": "Official crossover: Power Team C254C \u2014 25 ton, 4 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "C254C"
   },
   {
    "competitor_brand": "Enerpac",
@@ -55,7 +61,8 @@
    "our_id": "pt-rls-5",
    "note": "Official crossover: Power Team RLS50 \u2014 5 ton low-height, 9/16 in stroke",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "RLS50"
   },
   {
    "competitor_brand": "Enerpac",
@@ -63,7 +70,8 @@
    "our_id": "pt-rgl-100",
    "note": "Official crossover: Power Team R1006L lock-ring 100 ton; we quote the RGL locking-collar class",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "R1006L"
   },
   {
    "competitor_brand": "Enerpac",
@@ -71,7 +79,8 @@
    "our_id": "pt-p460",
    "note": "Official crossover: Power Team P460 two-speed hand pump",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "P460"
   },
   {
    "competitor_brand": "Enerpac",
@@ -79,7 +88,8 @@
    "our_id": "pt-p460",
    "note": "Official crossover: Power Team P460D (double-acting version of the P460)",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "P460D"
   },
   {
    "competitor_brand": "Enerpac",
@@ -87,7 +97,8 @@
    "our_id": "pt-pa9",
    "note": "Official crossover: Power Team PA9 air pump",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "PA9"
   },
   {
    "competitor_brand": "Enerpac",
@@ -95,7 +106,8 @@
    "our_id": "pt-pa6",
    "note": "Official crossover: Power Team PA6 air pump",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "PA6"
   },
   {
    "competitor_brand": "Enerpac",
@@ -103,7 +115,8 @@
    "our_id": "pt-pa6d",
    "note": "Official crossover: Power Team PA6D air pump (double-acting)",
    "verified": true,
-   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)"
+   "source": "Hydraulic Technologies \u2014 2025 Power Team Crossover Reference (hydraulictechnologies.com)",
+   "our_model": "PA6D"
   }
  ]
 }
