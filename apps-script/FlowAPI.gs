@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 169;   // A331 — safeguards on sales orders, invoices and collections (VAT type, billing cap, EWT, duplicates, reasons). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 170;   // A334 — retireDuplicateReceivables (accounting-approved duplicate clean-up). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -790,7 +790,7 @@ var _SECURED = {
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
-  voidCollection: 1, voidInvoice: 1,
+  voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
   dispatchByScan: 1, linkBarcode: 1, receiveByScan: 1, saveScanCount: 1,   // A316
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
@@ -3805,6 +3805,179 @@ function voidInvoice(p) {
   _booksSyncInvoice(p.invNo, _dateStr(_now()), p.actorName);   // A320 — a reversal dated today, at the original COGS
   return { success: true, invNo: p.invNo, arRemoved: ars.length,
     message: 'Invoice ' + p.invNo + ' voided — stock restored, receivable removed and the journal cleared.' };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   A334 — RETIRE DUPLICATE RECEIVABLES.
+
+   16 invoices were brought in twice (imported on 24 Jun and again on 6 Sep, or typed in and also
+   imported), each copy fully paid by its own payment, so ₱4.62M of collections was counted twice.
+   Accounting checked every pair against its COLLECTED sheet and approved keeping one copy
+   (15 Oct 2026). Nothing could take ONE receivable away: voidInvoice removes every receivable of an
+   invoice, and the two copies share the invoice number.
+
+   One call does the whole approved list, all or nothing:
+     · every pair is checked before the first write: both receivables exist and differ, the same
+       invoice number (its last run of digits, so 'INV-2026-0100' is 100), amounts within 2%, and the
+       copy that stays is still fully paid by its own live payments afterwards;
+     · the going copy's live payments are voided through voidCollection, so each row stays, marked
+       void with the reason, and the commission, books and closed-month rules apply exactly as to a
+       void by hand;
+     · the going receivable is copied in full into Overrides (rule 'retired-duplicate'; the row as
+       JSON in Entered) and then removed, with its collection journal;
+     · when only the going copy points at a real invoice, the copy that stays (and its payments)
+       takes that invoice number, so the invoice keeps its receivable ('relinked-invoice');
+     · `extraVoids` are payments to void on a copy that STAYS (a ₱0.0012 leftover). If that leaves
+       less than half a centavo open, the receivable is settled to what was collected
+       ('settled-sub-centavo'), so it does not reopen as Partial over a fraction of a centavo.
+   dryRun: true answers with the plan and writes nothing.
+   params: pairs [{ removeArNo, keepArNo }], extraVoids [collectionNo], reason (10+ characters),
+           confirmCommissionImpact, dryRun.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+function _retireInvKey(v) {
+  var m = String(v == null ? '' : v).match(/(\d+)\D*$/);
+  return m ? String(parseInt(m[1], 10)) : String(v || '').trim().toUpperCase();
+}
+
+function retireDuplicateReceivables(p) {
+  var list = function (v) {
+    if (v == null || v === '') return [];
+    return typeof v === 'string' ? JSON.parse(v) : v;
+  };
+  var pairs, extra;
+  try { pairs = list(p.pairs); extra = list(p.extraVoids); }
+  catch (e) { return { success: false, message: 'pairs / extraVoids must be JSON lists.' }; }
+  if (!pairs.length && !extra.length) return { success: false, message: 'Nothing to retire.' };
+  var reason = String(p.reason || '').trim();
+  if (reason.length < 10) return { success: false, message: 'Give the reason (at least 10 characters); it is recorded on every change.' };
+  if (_sgOn() && !_sgMayPay(p)) return _sgRefuse('Only accounting, admin or the director can retire a receivable.');
+
+  var cols = _rows('Collections');
+  var invNos = {};
+  _rows('Invoices').forEach(function (v) { if (String(v['Voided'] || '') !== 'true') invNos[String(v['INV No'])] = true; });
+  var liveOf = function (arNo) {
+    return cols.filter(function (c) { return String(c['AR No']) === String(arNo) && String(c['Voided'] || '') !== 'true'; });
+  };
+  var sum = function (rows) { return rows.reduce(function (s, c) { return s + _num(c['Amount (PHP)']); }, 0); };
+  var problems = [], seen = {}, plan = [], extraPlan = [], extraSet = {};
+  extra.forEach(function (n) { extraSet[String(n)] = true; });
+
+  var checkPayment = function (c, where) {
+    var no = String(c['Collection No']);
+    var claim = _commClaimHolding(no);
+    if (claim && !p.confirmCommissionImpact) problems.push(where + ': payment ' + no + ' is claimed on commission ' + claim.commNo + ' (' + claim.salesperson + ').');
+    if (_sgOn() && !_periodOpen(c['Date'])) problems.push(where + ': payment ' + no + ' is in ' + _periodOf(c['Date']) + ', which is closed.');
+  };
+
+  pairs.forEach(function (x, i) {
+    var rm = String((x && x.removeArNo) || '').trim(), kp = String((x && x.keepArNo) || '').trim();
+    var where = 'Pair ' + (i + 1) + ' (remove ' + (rm || '?') + ', keep ' + (kp || '?') + ')';
+    if (!rm || !kp || rm === kp) { problems.push(where + ': two different receivables are needed.'); return; }
+    if (seen[rm] || seen[kp]) { problems.push(where + ': a receivable is listed twice.'); return; }
+    seen[rm] = seen[kp] = true;
+    var a = _arRow(rm), b = _arRow(kp);
+    if (!a) { problems.push(where + ': ' + rm + ' was not found.'); return; }
+    if (!b) { problems.push(where + ': ' + kp + ' was not found.'); return; }
+    if (_retireInvKey(a['INV No']) !== _retireInvKey(b['INV No'])) {
+      problems.push(where + ': invoice ' + a['INV No'] + ' and invoice ' + b['INV No'] + ' are not the same invoice.');
+    }
+    var am = _num(a['Amount (PHP)']), bm = _num(b['Amount (PHP)']);
+    if (Math.abs(am - bm) > Math.max(am, bm) * 0.02) {
+      problems.push(where + ': the amounts differ by more than 2% (' + am.toFixed(2) + ' and ' + bm.toFixed(2) + ').');
+    }
+    var going = liveOf(rm);
+    var staying = liveOf(kp).filter(function (c) { return !extraSet[String(c['Collection No'])]; });
+    if (sum(staying) < bm - 0.005) {
+      problems.push(where + ': ' + kp + ' would not be fully paid (' + sum(staying).toFixed(2) + ' of ' + bm.toFixed(2) + ').');
+    }
+    going.forEach(function (c) { checkPayment(c, where); });
+    var relink = !invNos[String(b['INV No'])] && invNos[String(a['INV No'])] ? String(a['INV No']) : '';
+    plan.push({ removeArNo: rm, keepArNo: kp, invNo: String(b['INV No']), customer: String(b['Customer'] || ''), amount: am,
+      payments: going.map(function (c) { return String(c['Collection No']); }), paid: sum(going), relinkTo: relink,
+      keepPaying: liveOf(kp).map(function (c) { return String(c['Collection No']); }) });
+  });
+
+  extra.forEach(function (n) {
+    var c = cols.filter(function (r) { return String(r['Collection No']) === String(n); })[0];
+    var where = 'Payment ' + n;
+    if (!c) { problems.push(where + ' was not found.'); return; }
+    if (String(c['Voided'] || '') === 'true') { problems.push(where + ' is already voided.'); return; }
+    if (plan.some(function (x) { return x.removeArNo === String(c['AR No']); })) {
+      problems.push(where + ' is on ' + c['AR No'] + ', which is being retired: its payments are voided anyway.'); return;
+    }
+    checkPayment(c, where);
+    var ar = _arRow(c['AR No']);
+    var left = ar ? _num(ar['Amount (PHP)']) - (sum(liveOf(c['AR No'])) - _num(c['Amount (PHP)'])) : 0;
+    if (ar && left >= 0.005) problems.push(where + ': voiding it would leave ' + left.toFixed(2) + ' unpaid on ' + c['AR No'] + '.');
+    extraPlan.push({ collectionNo: String(n), arNo: String(c['AR No'] || ''), amount: _num(c['Amount (PHP)']) });
+  });
+
+  if (problems.length) {
+    return { success: false, problems: problems, message: problems.length + ' problem(s); nothing was changed. ' + problems.join(' ') };
+  }
+  var totals = { receivables: plan.length, payments: plan.reduce(function (s, x) { return s + x.payments.length; }, 0) + extraPlan.length,
+    amount: Math.round(plan.reduce(function (s, x) { return s + x.paid; }, 0) * 100) / 100 };
+  if (p.dryRun === true || String(p.dryRun) === 'true') {
+    return { success: true, dryRun: true, plan: plan, extraVoids: extraPlan, totals: totals,
+      message: 'Would retire ' + totals.receivables + ' receivable(s) and void ' + totals.payments + ' payment(s) (' + totals.amount.toFixed(2) + ').' };
+  }
+
+  var who = String(p.actorName || ''), role = _sgRole(p), done = [], voided = [], relinked = [], settled = [];
+  var log = function (ref, rule, expected, entered) {
+    _append('Overrides', [_now(), who, role, 'retireDuplicateReceivables', ref, rule, expected, entered, reason.slice(0, 300)]);
+  };
+  var voidOne = function (no, why) {
+    var r = voidCollection({ collectionNo: no, reason: why, actorName: who, actorRole: p.actorRole,
+      confirmCommissionImpact: p.confirmCommissionImpact });
+    if (!r || !r.success) throw new Error('Voiding ' + no + ' failed: ' + ((r && r.message) || 'no answer') + '.');
+    voided.push(no);
+  };
+  try {
+    plan.forEach(function (x) {
+      x.payments.forEach(function (no) { voidOne(no, reason + ' Duplicate of ' + x.keepArNo + '.'); });
+      if (x.relinkTo) {
+        _setCellByKey('ARAging', 'AR No', x.keepArNo, 'INV No', x.relinkTo);
+        x.keepPaying.forEach(function (no) { _setCellByKey('Collections', 'Collection No', no, 'INV No', x.relinkTo); });
+        log(x.keepArNo, 'relinked-invoice', x.invNo, x.relinkTo);
+        relinked.push(x.keepArNo + ' → ' + x.relinkTo);
+      }
+    });
+    extraPlan.forEach(function (x) { voidOne(x.collectionNo, reason); });
+    /* settle a fraction of a centavo left by an extra void */
+    extraPlan.forEach(function (x) {
+      var ar = _arRow(x.arNo);
+      if (!ar) return;
+      var paid = _rows('Collections').filter(function (c) { return String(c['AR No']) === x.arNo && String(c['Voided'] || '') !== 'true'; })
+        .reduce(function (s, c) { return s + _num(c['Amount (PHP)']); }, 0);
+      var amt = _num(ar['Amount (PHP)']);
+      if (amt - paid > 0 && amt - paid < 0.005) {
+        _setCellByKey('ARAging', 'AR No', x.arNo, 'Amount (PHP)', paid);
+        _arRecomputeFromCollections(x.arNo, null);
+        log(x.arNo, 'settled-sub-centavo', amt, paid);
+        settled.push(x.arNo);
+      }
+    });
+    /* keep a full copy of each going receivable, then remove the rows bottom-up */
+    var going = {};
+    plan.forEach(function (x) { going[x.removeArNo] = x; });
+    var arSh = _sheet('ARAging');
+    _rows('ARAging').filter(function (r) { return going[String(r['AR No'])]; })
+      .sort(function (a, b) { return b.rowIndex - a.rowIndex; })
+      .forEach(function (r) {
+        var copy = {};
+        SCHEMA.ARAging.forEach(function (h) { copy[h] = r[h] instanceof Date ? _dateStr(r[h]) : r[h]; });
+        log(String(r['AR No']), 'retired-duplicate', 'kept ' + going[String(r['AR No'])].keepArNo, JSON.stringify(copy));
+        _removeJournal('ARCOLL', r['AR No']);
+        arSh.deleteRow(r.rowIndex);
+        done.push(String(r['AR No']));
+      });
+  } catch (e) {
+    return { success: false, partial: true, retired: done, voided: voided, relinked: relinked, settled: settled,
+      message: 'Stopped part-way: ' + e.message + ' Done so far: ' + voided.length + ' payment(s) voided, ' + done.length + ' receivable(s) retired.' };
+  }
+  return { success: true, retired: done.reverse(), voided: voided, relinked: relinked, settled: settled, totals: totals,
+    message: 'Retired ' + done.length + ' duplicate receivable(s) and voided ' + voided.length + ' payment(s) (' + totals.amount.toFixed(2) + ' counted twice).'
+      + (relinked.length ? ' Relinked: ' + relinked.join(', ') + '.' : '') + (settled.length ? ' Settled to the centavo: ' + settled.join(', ') + '.' : '') };
 }
 
 /* A252 — RENAME AN INVOICE NUMBER. The business issues its own invoice numbers on its own paper;
@@ -14824,6 +14997,7 @@ var _MODULE_MAP = {
   backfillItemIds: ['Inventory', 'Item IDs Assigned'],
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
+  retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
@@ -17945,6 +18119,7 @@ var HANDLERS = {
   acknowledgeFieldCollection: acknowledgeFieldCollection, undoFieldCollection: undoFieldCollection, uploadCollectionPhoto: uploadCollectionPhoto,
   attachOrphanToSO: attachOrphanToSO, setCollectionMeta: setCollectionMeta,   // A265
   voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
+  retireDuplicateReceivables: retireDuplicateReceivables,   // A334
   correctCollection: correctCollection,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
@@ -18103,7 +18278,7 @@ var MUTATIONS = {
      index it read a moment ago writes into the wrong record.
      Found by tests/audit/registration.js, which fails on precisely this if it is ever undone. */
   reverseReceiving: 1,
-  voidCollection: 1, voidInvoice: 1,
+  voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334: voids and deleteRow()s, so the lock matters
   backfillItemIds: 1,                                   // A159 (findDuplicateInventory is read-only)
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
@@ -18172,6 +18347,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A334 RETIRE DUPLICATE RECEIVABLES (170; A327's staging build moves to 171 when it merges). 16 invoices were in the portal twice, each copy fully paid by its own payment (P4.62M counted twice). Accounting approved keeping one copy of each (15 Oct 2026). retireDuplicateReceivables takes the approved pairs and checks them all before the first write (same invoice number by its last digits, amounts within 2%, the kept copy still fully paid); then voids the going copy's payments through voidCollection (row kept, marked void, reason recorded), copies the going receivable in full into Overrides ('retired-duplicate') and removes it with its collection journal. When only the going copy pointed at a real invoice, the kept copy and its payments take that invoice number ('relinked-invoice'). extraVoids void further payments on a kept copy; a fraction of a centavo left open is settled ('settled-sub-centavo'). dryRun answers with the plan and writes nothing. Accounting, admin or the director only.
 A331 SAFEGUARDS ON SALES ORDERS, INVOICES AND COLLECTIONS (169; 168 was taken by A327 on staging). From the 14 Oct reconciliation (invoices at VAT 0%, EWT unchecked, payments recorded twice, a real payment entered as demo data, billing past the order). A mismatch now BLOCKS the save unless a reason (10+ characters) is given; every reason goes to the new Overrides tab. SalesOrders + VAT Type, Zero Rating Ref (16 columns, both writers); Clients + Default VAT Type, Zero Rating Ref, EWT Rate, TIN (16; saveClient's literal grew and keeps them when an older page omits them). createSalesOrder/updateSalesOrder need a VAT type (from the client when the form is silent), a zero-rating reference for VAT-0, a reason for a customer not on the Clients list; a billed order keeps its VAT type and cannot drop below what is invoiced. createInvoice: the order's customer only (no override), the order's VAT type (checked with the books off too), a reason to bill past the order's before-VAT total, to repeat an amount, or for a second invoice (was a yes/no confirm); all decided before a number is taken. recordCollection: `received` (cash) + EWT = amount settled (the phone app's model; `amount` still accepted), accounting/admin/director only, EWT refused when negative or above the amount (was clamped), a reason for EWT off the expected rate x before-VAT share (client EWT Rate: none/1/2/auto = goods 1% services 2%) or missing, for a repeat payment or a cheque/reference this customer already used, for over-collection (was a confirm) or a 0 receivable. recordFieldCollection runs the same checks per line, one reason per payment. correct/voidCollection and voidInvoice: the same roles; voids refuse a closed month. importCollections: director + reason, _idNorm de-dupe, no blank invoice numbers, no repeat payments, no closed months. seedCommissionDemo off unless allowDemo = on (staging); demo cannot be renamed into a real order; the books skip DEMO- rows. getMonthCheck (secured read) for the Month check page; getPaymentGuide (secured read) gives the payment forms the expected EWT from the same rule the save checks. saveClient: only accounting/admin/director change a client's VAT type, zero-rating reference, EWT rate or TIN. A reference with no digit is never a duplicate cheque. BIR 2307 document type on collections and receivables. KILL SWITCH: FlowSettings safeguards = off restores 167's behaviour exactly.
 A326 DAILY REPORTS SHOW THE DAY'S TASKS AGAIN (167). getActivityLog formatted the date of EVERY row of the 9,600-row ActivityLog (a Session.getScriptTimeZone() call and a formatDate per row) before it looked at who the row belonged to: 10-25 s per call, and a sales rep's report fires eight at once (today + seven for the week), so they queued past the page's minute and the tasks never appeared. The timezone is now asked once per execution (_tz), the person is filtered first, and the day(s) by number (_onDays); getActivityLog and getSalesCalls also take from/to so the week is one call. getSalesCalls, getClientVisits and getDailyReports filter the same way.
 A325 THE SYSTEM SCAN (166). updatePurchaseOrder runs every refusal (payment requests standing on the PO, currency, FX) BEFORE the first write — "refused" used to arrive after the PO, its items and the stock had changed — and a refused revise no longer wipes the approval; neither PO nor quotation takes a status from the browser (Draft only). voidInvoice returns stock for goods lines only (a voided rental gained phantom tools). A revised travel week drops its Expenses row and never re-uses a rejected or differently-sized payment request. updatePaymentRequest caps a foreign request in its own currency, keeps the order's currency and refreshes the peso estimate; _poRequestedPHP counts foreign requests in pesos. Expenses and marketing records check the row still holds the record the page showed. reverseReceiving chains two lines on one item. Renaming a quotation re-keys its pricing-request lines. Fingerprints and cheque numbers that Sheets parsed as numbers compare equal (_fpSame / _idNorm) and the id columns are set to plain text once. The commission reads are secured and scoped; 'Voided At Claim' marks the claim's own row. Field follow-ups order by time. _nextNumber no longer wraps after 999; GL entry numbers never restart below the sheet and resetSequenceCounters is admin-only and skips them. Daily reports and notes, weekly itineraries and document deletes check who is acting.
