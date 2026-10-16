@@ -190,9 +190,10 @@ html[data-skin="ledger"] body.flow-screen .kpi { border-radius: var(--l-r-panel)
 html[data-skin="ledger"] body.flow-screen .kpi::before { display: none; }
 html[data-skin="ledger"] body.flow-screen .kpi .chip, html[data-skin="ledger"] .stat-card-icon { border-radius: var(--l-r-ctl); }
 /* the small count tiles (HR lists, leave approvals): the number, then what it counts, read left to right */
-html[data-skin="ledger"] .stat-card { text-align: left; }
-html[data-skin="ledger"] .stat-card > .num { text-align: left; font: 500 24px/1.2 var(--l-mono); color: var(--l-ink); }
-html[data-skin="ledger"] .stat-card > .lbl { font: 500 13px/1.3 var(--l-sans); color: var(--l-ink-2); margin-top: 4px; }
+html[data-skin="ledger"] .stat-card, html[data-skin="ledger"] .mini-stat { text-align: left; }
+html[data-skin="ledger"] .mini-stat { border-radius: var(--l-r-panel); padding: 14px 16px; }
+html[data-skin="ledger"] .stat-card > .num, html[data-skin="ledger"] .mini-stat > .num { text-align: left; font: 500 24px/1.2 var(--l-mono); color: var(--l-ink); }
+html[data-skin="ledger"] .stat-card > .lbl, html[data-skin="ledger"] .mini-stat > .lbl { font: 500 13px/1.3 var(--l-sans); color: var(--l-ink-2); margin-top: 4px; }
 
 /* page headers stack: the title, then what the page is for (no floating explainer on the right) */
 html[data-skin="ledger"] .page-header { display: block; margin-bottom: 24px; }
@@ -505,7 +506,11 @@ html[data-skin="ledger"] body.dh .dh-deck { grid-template-columns: minmax(0, 1fr
 html[data-skin="ledger"] body.dh #dirApprovals .da-wrap .flow-table th, html[data-skin="ledger"] body.dh #dirApprovals .da-wrap .flow-table td { padding-left: 9px; padding-right: 9px; }
 html[data-skin="ledger"] body.dh .dh-deck > .dh-rail { order: 2; top: calc(var(--l-bar) + 24px); max-height: calc(100vh - var(--l-bar) - 40px); gap: 16px; }
 html[data-skin="ledger"] body.dh .dh-col { gap: 20px; }
-html[data-skin="ledger"] body.dh .dh-rail-date .theme-toggle { display: none; }
+html[data-skin="ledger"] body.dh .dh-rail-date .dh-theme { display: none; }
+/* a plan's week reads as two whole dates; it never breaks at a date's hyphen */
+html[data-skin="ledger"] body.dh #dirApprovals td.da-n > .da-sub { white-space: nowrap; }
+/* a long request number or name wraps at its spaces, so Approve and Reject stay inside the panel */
+html[data-skin="ledger"] body.dh #dirApprovals .flow-table td.da-no, html[data-skin="ledger"] body.dh #dirApprovals .flow-table td.da-who { white-space: normal; min-width: 96px; }
 html[data-skin="ledger"] body.dh .dh-deck .dh-slab {
   --dh-slab: var(--l-panel); --dh-slab-2: var(--l-panel); --dh-slab-ink: var(--l-ink); --dh-slab-ink-2: var(--l-ink-2); --dh-slab-line: var(--l-line);
   background: var(--l-panel); color: var(--l-ink); border: 1px solid var(--l-line); border-radius: var(--l-r-panel); box-shadow: var(--l-shadow);
@@ -587,6 +592,14 @@ html[data-skin="ledger"][data-motion="off"] *, html[data-skin="ledger"][data-mot
   html[data-skin="ledger"] .fa-amt { grid-column: 2; grid-row: 2; text-align: left; }
   html[data-skin="ledger"] .fa-verb { grid-column: 3; grid-row: 1 / span 2; min-width: 0; }
   html[data-skin="ledger"] .flow-tab, html[data-skin="ledger"] body.flow-screen .flow-nav a { white-space: nowrap; flex-shrink: 0; }
+  /* the phone shows today's date already; the title gets the width */
+  html[data-skin="ledger"] body.flow-screen .hband .dpill { display: none; }
+}
+@media (max-width: 599px) {
+  /* whole peso figures on a phone: the headline tile takes the row, the rest pair up at a size that fits */
+  html[data-skin="ledger"] body.flow-screen .kpi-row.five > .kpi.spot { grid-column: 1 / -1; }
+  html[data-skin="ledger"] body.flow-screen .kpi .v { font-size: 17px; }
+  html[data-skin="ledger"] body.flow-screen .kpi.spot .v { font-size: 24px; }
 }
 
 }
