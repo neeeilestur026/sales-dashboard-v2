@@ -32,15 +32,18 @@
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
 
   /* A336 — the "Ledger" look, for every office role (never the warehouse phones), on a page that links
-     css/ledger.css. The director's FlowSettings decide: portalSkin 'on' (unless the person chose
-     classic) or 'optin' (only if they chose new); portalSkinRoles, when set, limits it to those roles.
-     Both are cached (hx_lg_sw, hx_lg_roles) and refreshed at most every 10 minutes. ?skin=ledger
+     css/ledger.css. It is ON by default (Neil, 2026-10-16). The director's FlowSettings can change that:
+     portalSkin 'off' turns it off for everyone, 'optin' offers it only to those who choose it, and 'on'
+     or no row at all gives it to everyone who has not chosen classic; portalSkinRoles, when set, limits
+     it to those roles.
+     Both are cached (hx_lg_mode, hx_lg_roles; the key was hx_lg_sw until the default became on, so an
+     'off' cached under the old default is ignored) and refreshed at most every 10 minutes. ?skin=ledger
      previews on localhost; ?skin=off|reset and ?look=new|classic and ?motion=on|off work anywhere.
      Off = nothing set at all. On = auth.js draws the Ledger bar and rail, js/ledger.js loads. */
   var LG_ROLES = ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'];
   function get(k, ok) { try { var v = localStorage.getItem(k); return ok.indexOf(v) >= 0 ? v : null; } catch (e) { return null; } }
   function put(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
-  function sw() { return get('hx_lg_sw', ['off', 'optin', 'on']); }
+  function sw() { return get('hx_lg_mode', ['off', 'optin', 'on']) || 'on'; }   // no row (or nothing cached yet) = on
   function roleList() {
     try { var v = localStorage.getItem('hx_lg_roles'); return typeof v === 'string' && /^[a-z,]{1,120}$/.test(v) ? v.split(',') : null; } catch (e) { return null; }
   }
@@ -86,13 +89,13 @@
   /* refresh the cached switch at most every 10 minutes; it applies on the next page load */
   if (typeof document.addEventListener === 'function') document.addEventListener('DOMContentLoaded', function () {
     try {
-      if (!ok() || typeof fetchFlow !== 'function' || Date.now() - (parseInt(localStorage.getItem('hx_lg_at'), 10) || 0) < 600000) return;
+      if (!ok() || typeof fetchFlow !== 'function' || Date.now() - (parseInt(localStorage.getItem('hx_lg_mode_at'), 10) || 0) < 600000) return;
       fetchFlow('getFlowSettings', {}, { fresh: true }).then(function (r) {
         if (!r || !r.success || !r.data) return;
         var v = String(r.data.portalSkin || '').toLowerCase(), rl = String(r.data.portalSkinRoles || '').toLowerCase().replace(/[^a-z,]/g, '');
-        put('hx_lg_sw', v === 'on' || v === 'optin' ? v : 'off');
+        put('hx_lg_mode', v === 'off' || v === 'optin' ? v : 'on');   // only an explicit 'off' turns it off
         put('hx_lg_roles', rl.split(',').filter(function (x) { return LG_ROLES.indexOf(x) >= 0; }).join(',') || null);
-        put('hx_lg_at', String(Date.now()));
+        put('hx_lg_mode_at', String(Date.now()));
       }).catch(function () {});
     } catch (e) {}
   });
