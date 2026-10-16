@@ -71,6 +71,10 @@
   "styleBytes": 4152,
   "scriptLines": 0
  },
+ "books.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
  "change-password.html": {
   "styleBytes": 0,
   "scriptLines": 56
@@ -81,6 +85,10 @@
  },
  "clients.html": {
   "styleBytes": 2826,
+  "scriptLines": 0
+ },
+ "collect.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "commission-payout-report.html": {
@@ -160,7 +168,7 @@
   "scriptLines": 3
  },
  "flow-expenses.html": {
-  "styleBytes": 10032,
+  "styleBytes": 10029,
   "scriptLines": 16
  },
  "flow-guide.html": {
@@ -291,6 +299,10 @@
   "styleBytes": 0,
   "scriptLines": 50
  },
+ "labels.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
  "leadgen-daily-report.html": {
   "styleBytes": 0,
   "scriptLines": 0
@@ -351,8 +363,16 @@
   "styleBytes": 3426,
   "scriptLines": 0
  },
+ "month-check.html": {
+  "styleBytes": 0,
+  "scriptLines": 0
+ },
  "mro-queue.html": {
   "styleBytes": 811,
+  "scriptLines": 0
+ },
+ "my-payslips.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "my-reports.html": {
@@ -361,6 +381,10 @@
  },
  "payment-requests.html": {
   "styleBytes": 6152,
+  "scriptLines": 0
+ },
+ "payroll-books.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "pending-items.html": {
@@ -392,7 +416,7 @@
   "scriptLines": 0
  },
  "product-finder.html": {
-  "styleBytes": 6261,
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "purchase-request-tracker.html": {
@@ -429,6 +453,10 @@
  },
  "sales-orders.html": {
   "styleBytes": 5603,
+  "scriptLines": 0
+ },
+ "scan.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "supplier-quotation.html": {

@@ -821,6 +821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      everything here — including the survey, which carries customer contact details. Idempotent: it
      redirects only when there is no valid session, so running alongside that check costs nothing. */
   if (typeof requireProductFinderAccess === 'function' && !requireProductFinderAccess()) return;
+  if (typeof renderNavbar === 'function') renderNavbar('product-finder');   // A333: was cylinder-recommender.js, gated on the old form
   // Industry options come from the one PF_INDUSTRIES constant (no HTML drift)
   const ind = document.getElementById('pfIndustry');
   if (ind && ind.options.length <= 1) {
@@ -901,12 +902,15 @@ function pfCopyDetails(btn, text) {
   } else fallback();
 }
 
-/** Hand off to the Purchase Request form: record WHICH product was chosen, then navigate. */
+/** Hand off to the Purchase Request form: record WHICH product was chosen, then navigate.
+ *  A333: `product` may be an array of pfePrItems lines (a basket of Power Team models), each
+ *  carrying its model and remark through to the request. */
 function pfCreatePR(inquiryId, product, qty) {
   // the localStorage write is synchronous, so it survives the navigation that follows
   pfUpdateInquiry(inquiryId, {
-    items: [{ id: product.id || '', name: product.name, category: product.category || '',
-              capacityTons: product.capacityTons || null, qty: Number(qty) || 1 }],
+    items: Array.isArray(product) ? product
+      : [{ id: product.id || '', name: product.name, category: product.category || '',
+           capacityTons: product.capacityTons || null, qty: Number(qty) || 1 }],
     chosenAt: new Date().toISOString()
   });
   window.location.href = 'flow-pricing-request.html?fromInquiry=' + encodeURIComponent(inquiryId);
