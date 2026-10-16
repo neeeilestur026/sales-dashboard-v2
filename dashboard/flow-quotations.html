@@ -10,7 +10,7 @@
 <style>
   /* ── A215 · the worklist ───────────────────────────────────────────────────────────────────── */
   .qw-tabs { display: flex; gap: .35rem; flex-wrap: wrap; }
-  .qw-tab { padding: .34rem .8rem; border-radius: 999px; font: 700 .78rem 'Inter', sans-serif;
+  .qw-tab { padding: .34rem .8rem; border-radius: 999px; font: 700 .78rem var(--hx-text);
     cursor: pointer; border: 1px solid var(--hx-hair); background: var(--hx-card);
     color: var(--hx-ink-2); transition: all .14s ease; white-space: nowrap; }
   .qw-tab:hover { border-color: var(--hx-navy); color: var(--hx-navy-ink); }
@@ -23,20 +23,20 @@
   .qw-row .act { flex: none; width: 84px; }
   .qw-row .act .btn { width: 100%; }
   .qw-row .body { flex: 1; min-width: 0; }
-  .qw-row .no { font: 600 .82rem/1.4 'Inter', sans-serif; color: var(--hx-ink);
+  .qw-row .no { font: 600 .82rem/1.4 var(--hx-text); color: var(--hx-ink);
     overflow-wrap: anywhere; }
   .qw-row .cust { font-size: .8rem; color: var(--hx-ink-2); overflow-wrap: anywhere; }
   .qw-row .why { font-size: .74rem; color: var(--hx-ink-3); margin-top: .18rem; }
-  .qw-row .money { flex: none; text-align: right; font: 600 .82rem 'Inter', sans-serif;
+  .qw-row .money { flex: none; text-align: right; font: 600 .82rem var(--hx-text);
     font-variant-numeric: tabular-nums; color: var(--hx-ink); min-width: 108px; }
   .qw-row .extra { flex: none; display: flex; gap: .3rem; align-items: center; }
   .qw-pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px;
-    font: 700 .66rem 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .03em; }
+    font: 700 .66rem var(--hx-text); text-transform: uppercase; letter-spacing: .03em; }
   .qw-est { background: var(--hx-inset); color: var(--hx-ink-2); font-weight: 600;
     text-transform: none; letter-spacing: 0; }
   .qw-empty { padding: 1.1rem .2rem; color: var(--hx-ink-3); font-size: .86rem; }
   .qw-banner { margin-top: .7rem; padding: .7rem .85rem; border-radius: 10px; background: var(--hx-warn-soft);
-    border: 1px solid var(--hx-warn-soft); color: var(--hx-warn); font: 500 .8rem/1.6 'Inter', sans-serif;
+    border: 1px solid var(--hx-warn-soft); color: var(--hx-warn); font: 500 .8rem/1.6 var(--hx-text);
     display: flex; gap: .8rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .qw-story { padding: .5rem 0 .7rem 92px; font-size: .76rem; color: var(--hx-ink-2); }
   .qw-story .ev { display: flex; gap: .6rem; padding: .16rem 0; }
@@ -98,7 +98,7 @@
   .qc-scope-on { color: var(--hx-navy-text); font-weight: 700; }
   .qc-scope-hint { font-size: .74rem; color: var(--hx-ink-3); margin: .1rem 0 .5rem; }
   .qc-scope-count { font-size: .72rem; color: var(--hx-ink-3); margin-top: .4rem; }
-  #qcScopeText { width: 100%; min-height: 220px; font: 13px/1.55 'Inter', system-ui, sans-serif;
+  #qcScopeText { width: 100%; min-height: 220px; font: 13px/1.55 var(--hx-text);
     padding: .6rem .7rem; border: 1px solid var(--hx-hair); border-radius: 8px;
     resize: vertical; box-sizing: border-box; }
   #qcScopeText:focus { outline: none; border-color: var(--hx-navy);
@@ -143,6 +143,7 @@
   .qc-createhead h3 { margin: 0; font-size: .95rem; font-weight: 700; }
   #qcCreate[hidden] { display: none; }
 </style>
+  <link rel="stylesheet" href="css/ledger.css">
 </head>
 <body class="flow-screen">
   <script src="js/theme.js"></script>
@@ -567,6 +568,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/quotation-email-match.js"></script>

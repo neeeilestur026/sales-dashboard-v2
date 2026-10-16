@@ -137,7 +137,7 @@ function render() {
   const { open, history } = flowLedgerSplit(rows, apIsOpen);
 
   const openTable = open.length
-    ? `<table class="flow-table flow-items">${apHead()}<tbody>${open.map(rowHtml).join('')}${apFoot(open)}</tbody></table>`
+    ? `<table class="flow-table flow-items">${apHead()}${flowLedgerGroupedBody(open, rowHtml, { due: r => r.dueDate, owed: r => Math.max(0, flowNum(r.amountPHP) - flowNum(r.paidPHP)), cols: 13, foot: apFoot(open) })}</table>`
     : '<p style="color:var(--text-muted,#64748b);">No open payables in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table flow-items">${apHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';

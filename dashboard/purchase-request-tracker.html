@@ -33,7 +33,7 @@
    * Same pill treatment flow-screen.css:200-208 already gives `.flow-nav a.active`, so the page reads
    * as one design rather than two. */
   .seg { display:flex; gap:7px; flex-wrap:wrap; margin:16px 0 14px; }
-  .seg button { padding:9px 16px; border-radius: 999px; font:600 12.5px 'Inter',sans-serif;
+  .seg button { padding:9px 16px; border-radius: 999px; font:600 12.5px var(--hx-text);
                 border: 1px solid var(--hx-hair); background: var(--hx-card); color: var(--hx-ink-3); cursor:pointer;
                 transition:background .15s, color .15s; }
   .seg button:hover { background: var(--hx-inset); color: var(--hx-ink); }
@@ -47,7 +47,7 @@
                  border: 1px solid var(--hx-warn-soft); background: var(--hx-warn-soft);
                  border-radius: 14px; }
   .prt-finding .ic { flex-shrink:0; margin-top:1px; line-height:0; }
-  .prt-finding .tx { font:400 12.5px/1.55 'Inter',sans-serif; color: var(--hx-warn); }
+  .prt-finding .tx { font:400 12.5px/1.55 var(--hx-text); color: var(--hx-warn); }
   .prt-finding b { font-weight:800; }
   .prt-finding a { color: var(--hx-warn); text-decoration:underline; cursor:pointer; }
 
@@ -65,7 +65,7 @@
                    border-radius: 999px; padding:0 13px; margin:6px 6px 10px; color: var(--hx-ink-3); }
   .prt-searchbox svg { flex-shrink:0; }
   .prt-search { flex:1; min-width:0; border: 0; background: none; outline: none; padding:8px 0;
-                font:400 12.5px 'Inter',sans-serif; color: var(--hx-ink); }
+                font:400 12.5px var(--hx-text); color: var(--hx-ink); }
   .prt-search::placeholder { color: var(--hx-ink-3); }
   /* Safari draws its own clear button on type=search; it collides with the pill's right edge. */
   .prt-search::-webkit-search-decoration, .prt-search::-webkit-search-cancel-button { -webkit-appearance:none; }
@@ -89,7 +89,7 @@
   .prt-grp > summary { align-items:flex-start; }
 
   .prt-row { display:block; width:100%; text-align:left; border: 0; background: none; cursor:pointer;
-             padding:.5rem .6rem; border-radius: 12px; font-family:'Inter',sans-serif; }
+             padding:.5rem .6rem; border-radius: 12px; font-family:var(--hx-text); }
   .prt-row:hover { background: var(--bg-inset); }
   .prt-row.on { background: var(--hx-navy-soft); box-shadow: inset 0 0 0 1px var(--hx-navy-line); }
   .prt-row .t { display:flex; align-items:baseline; gap:.4rem; }
@@ -112,12 +112,12 @@
   /* Title and status pill share one row — the pill is the answer to "what is this waiting on", which
      is the question the page exists for, so it belongs beside the name and not buried below. */
   .prt-head .ttl { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-  .prt-head h2 { margin:0; font:800 18px 'Inter',sans-serif; color: var(--hx-ink); }
-  .prt-head .sub { font:400 12.5px 'Inter',sans-serif; color: var(--hx-ink-3); margin-top:3px; }
+  .prt-head h2 { margin:0; font:800 18px var(--hx-text); color: var(--hx-ink); }
+  .prt-head .sub { font:400 12.5px var(--hx-text); color: var(--hx-ink-3); margin-top:3px; }
   .prt-stats { display:flex; gap:22px; flex-wrap:wrap; margin-top:12px; }
-  .prt-stats div { font:700 10.5px 'Inter',sans-serif; color: var(--hx-ink-3); text-transform:uppercase;
+  .prt-stats div { font:700 10.5px var(--hx-text); color: var(--hx-ink-3); text-transform:uppercase;
                    letter-spacing:.04em; }
-  .prt-stats b { display:block; font:800 16px 'Inter',sans-serif; color: var(--hx-ink);
+  .prt-stats b { display:block; font:800 16px var(--hx-text); color: var(--hx-ink);
                  letter-spacing:0; text-transform:none; font-variant-numeric:tabular-nums; margin-top:2px; }
 
   /* The next action — the one instruction, and the button that goes where the work is done. */
@@ -140,7 +140,7 @@
   .prt-dot .b { height:5px; border-radius: 3px; background: var(--border); }
   .prt-dot.done .b { background: var(--hx-ok); }
   .prt-dot.at .b   { background: var(--hx-navy); }
-  .prt-dot .l { font:700 9.5px 'Inter',sans-serif; margin-top:5px; color: var(--hx-ink-3);
+  .prt-dot .l { font:700 9.5px var(--hx-text); margin-top:5px; color: var(--hx-ink-3);
                 text-transform:uppercase; letter-spacing:.03em;
                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .prt-dot.at .l { color: var(--hx-navy-text); }
@@ -149,7 +149,7 @@
 
   .prt-sec { margin-top:16px; }
   .prt-sec:first-child { margin-top:0; }
-  .prt-sec > h3 { font:800 10.5px 'Inter',sans-serif; text-transform:uppercase; letter-spacing:.05em;
+  .prt-sec > h3 { font:800 10.5px var(--hx-text); text-transform:uppercase; letter-spacing:.05em;
                   color: var(--hx-ink-3); margin:0 0 8px; }
 
   /* THE TABLE WRAPPER. A rounded, clipped box so the header band and the total row meet the border
@@ -229,7 +229,7 @@
   .prt-stage.hot { border-color: var(--hx-red-soft); background: var(--hx-red-soft); }
   .prt-stage .l { font-size:.62rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em;
                   color: var(--text-muted); }
-  .prt-stage .n { font:800 1.3rem 'Inter',sans-serif; font-variant-numeric:tabular-nums; line-height:1.2; }
+  .prt-stage .n { font:800 1.3rem var(--hx-text); font-variant-numeric:tabular-nums; line-height:1.2; }
   .prt-stage.hot .n { color: var(--hx-red); }
   .prt-stage .v { font-size:.68rem; color: var(--text-muted); font-variant-numeric:tabular-nums; }
   .prt-stage .who { font-size:.62rem; font-weight:700; margin-top:.3rem; }
@@ -252,6 +252,7 @@
     body { background: var(--hx-card); }
   }
 </style>
+  <link rel="stylesheet" href="css/ledger.css">
 </head>
 <body class="flow-screen">
   <script src="js/theme.js"></script>
@@ -314,6 +315,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-ledger-view.js"></script>

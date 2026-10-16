@@ -28,6 +28,9 @@ function hxToken(name, fallback) {
   try { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}
   return fallback == null ? '' : fallback;
 }
+/* A336 — a chart value that follows the Ledger look: the classic value exactly while the look is off,
+   the token's value (read at draw time, like hxToken) while it is on. */
+function hxSkinC(name, classic) { return window.hxSkinOn ? hxToken(name, classic) : classic; }
 function hxDebounce(fn, ms) {
   let t; return function () { const a = arguments, c = this; clearTimeout(t); t = setTimeout(function () { fn.apply(c, a); }, ms); };
 }

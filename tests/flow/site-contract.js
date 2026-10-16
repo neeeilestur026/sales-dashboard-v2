@@ -111,7 +111,7 @@ sec('3 · the shared scripts');
   const A = read('js/auth.js'), X = read('js/flow-api.js'), TH = read('js/theme.js');
   ok('auth.js renders the bell, badge and dropdown with classes, and the theme toggle', /class="notif-badge" id="notifBadge" style="display:none;"/.test(A) && /class="notif-dropdown" id="notifDropdown" style="display:none;"/.test(A) && /class="theme-toggle nav-theme" id="navThemeToggle"/.test(A));
   ok('  the action strip is classed rows on a tone', /class="fa-row" data-tone=/.test(A) && /class="fa-empty"/.test(A) && !/>→</.test(A));
-  ok('  action items carry a tone, never a hex colour', /const add = \(icon, tone, text, link\)/.test(A) && !/add\('\w+', '#/.test(A) && !/#ef4444/.test(A));
+  ok('  action items carry a tone, never a hex colour', /const add = \(icon, tone, text, link(, amt)?\)/.test(A) && !/add\('\w+', '#/.test(A) && !/#ef4444/.test(A));
   ok('  the navbar labels the commission pages "SOON" still (commission-hold.js pins them)', /Commission Requests/.test(A) && /flowSoonTag\(\)/.test(A));
   ok('flow-api.js: flowMsg writes classes, flowSoonTag a class, the banners classed', /classList\.add\(ok \? 'ok' : 'bad'\)/.test(X) && /class="soon-tag"/.test(X) && /class="flow-banner bad"/.test(X) && /class="flow-soon"/.test(X));
   ok('  flowComingSoonHtml keeps its wording', /— coming soon/.test(X));

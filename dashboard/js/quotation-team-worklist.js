@@ -117,12 +117,12 @@ async function quotationTeamWorklist(containerId) {
     .qtw-rep { border-top:1px solid var(--hx-hair); padding:.6rem 0; }
     .qtw-rep:first-of-type { border-top:0; }
     .qtw-rephead { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem; }
-    .qtw-rephead .who { font:700 .86rem 'Inter',sans-serif; color:var(--hx-ink); }
-    .qtw-rephead .val { margin-left:auto; font:600 .82rem 'Inter',sans-serif;
+    .qtw-rephead .who { font:700 .86rem var(--hx-text); color:var(--hx-ink); }
+    .qtw-rephead .val { margin-left:auto; font:600 .82rem var(--hx-text);
       font-variant-numeric:tabular-nums; color:var(--hx-ink); }
     .qtw-chip { display:inline-block; padding:.08rem .45rem; border-radius:999px; margin-right:.25rem;
       background:var(--hx-inset); color:var(--hx-ink-2);
-      font:700 .66rem 'Inter',sans-serif; }
+      font:700 .66rem var(--hx-text); }
     .qtw-item { display:flex; gap:.55rem; align-items:baseline; padding:.16rem 0 .16rem .3rem;
       font-size:.78rem; color:var(--hx-ink-2); }
     .qtw-item .step { flex:none; width:44px; font-weight:700; color:var(--hx-ink); }

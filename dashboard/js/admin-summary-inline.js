@@ -100,21 +100,21 @@ async function renderChart(data) {
     data: {
       labels: data.map(d => d.agentName),
       datasets: [
-        { label: 'Quotations', data: data.map(d => d.totalQuotations), backgroundColor: 'rgba(249,115,22,0.7)', borderRadius: 4 },
-        { label: 'PRs', data: data.map(d => d.totalPRs), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
-        { label: 'Calls', data: data.map(d => d.totalCalls), backgroundColor: 'rgba(34,197,94,0.7)', borderRadius: 4 },
-        { label: 'Emails', data: data.map(d => d.totalLeadsEmails + d.totalFollowUpEmails), backgroundColor: 'rgba(168,85,247,0.7)', borderRadius: 4 }
+        { label: 'Quotations', data: data.map(d => d.totalQuotations), backgroundColor: hxSkinC('--l-accent', 'rgba(249,115,22,0.7)'), borderRadius: 4 },
+        { label: 'PRs', data: data.map(d => d.totalPRs), backgroundColor: hxSkinC('--l-p-accent-2', 'rgba(59,130,246,0.7)'), borderRadius: 4 },
+        { label: 'Calls', data: data.map(d => d.totalCalls), backgroundColor: hxSkinC('--l-ok', 'rgba(34,197,94,0.7)'), borderRadius: 4 },
+        { label: 'Emails', data: data.map(d => d.totalLeadsEmails + d.totalFollowUpEmails), backgroundColor: hxSkinC('--l-soon', 'rgba(168,85,247,0.7)'), borderRadius: 4 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#94a3b8', usePointStyle: true, pointStyle: 'circle', padding: 16, font: { family: 'Inter', size: 11 } } },
-        tooltip: { backgroundColor: '#1e293b', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: '#334155', borderWidth: 1, cornerRadius: 8, padding: 10 }
+        legend: { labels: { color: hxSkinC('--l-ink-3', '#94a3b8'), usePointStyle: true, pointStyle: 'circle', padding: 16, font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 } } },
+        tooltip: { backgroundColor: hxSkinC('--l-panel', '#1e293b'), titleColor: hxSkinC('--l-ink', '#f1f5f9'), bodyColor: hxSkinC('--l-ink-2', '#94a3b8'), borderColor: hxSkinC('--l-line', '#334155'), borderWidth: 1, cornerRadius: 8, padding: 10 }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } },
-        y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#64748b', font: { family: 'Inter', size: 11 }, stepSize: 1 } }
+        x: { grid: { display: false }, ticks: { color: hxSkinC('--l-ink-3', '#94a3b8'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 } } },
+        y: { beginAtZero: true, grid: { color: hxSkinC('--l-p-grid', '#e2e8f0') }, ticks: { color: hxSkinC('--l-ink-2', '#64748b'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 }, stepSize: 1 } }
       }
     }
   });

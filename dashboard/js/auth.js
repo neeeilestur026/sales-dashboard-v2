@@ -1163,6 +1163,7 @@ function renderNavbar(activePage) {
 
   const nav = document.getElementById('navbar');
   if (!nav) return;
+  if (window.hxSkinOn && typeof ledgerNavbar === 'function' && ledgerNavbar(nav, session, initials)) return;   // A336, the Ledger look
 
   nav.innerHTML = `
     <div class="navbar-brand">
@@ -1174,7 +1175,7 @@ function renderNavbar(activePage) {
     <nav class="navbar-nav" id="navLinks">
       ${navLinks}
     </nav>
-    <div class="navbar-user">
+    <div class="navbar-user">${typeof hxSkinNavItem === 'function' ? hxSkinNavItem() : ''}
       <button type="button" class="theme-toggle nav-theme" id="navThemeToggle" aria-pressed="false" aria-label="Dark theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Dark</span></button>
       <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()" title="Notifications">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -1262,7 +1263,7 @@ async function flowComputeActions(session) {
   const role = String(session.role || '').toLowerCase();
   if (role === 'warehouse') return items;   // A316 — the scanner has no quotation or pricing nudges
   // A289 — tone, not colour: urgent | warn | info | ok. The stylesheet paints [data-tone].
-  const add = (icon, tone, text, link) => items.push({ icon, tone, text, link });
+  const add = (icon, tone, text, link, amt) => items.push({ icon, tone, text, link, amt });   // A336: amt (PHP) is shown by the Ledger look only
   const isMgmt = role === 'management', isDir = role === 'director';
   const isAdmin = role === 'admin', isAcct = role === 'accounting', isSales = role === 'sales';
   /* A280 — the quotation/PR nudges belong to whoever RAISES them, which is now sales and lead-gen.
@@ -1488,12 +1489,12 @@ async function flowComputeActions(session) {
   // Accounting: payables past due + receivables past due.
   if (isAcct || isAdmin) {
     jobs.push(fetchFlow('getAPAging').then(r => {
-      const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
-      if (n) add('urgent', 'urgent', n + ' payable(s) past due', 'flow-ap-aging.html');
+      const due = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)), n = due.length;
+      if (n) add('urgent', 'urgent', n + ' payable(s) past due', 'flow-ap-aging.html', due.reduce((t, a) => t + Math.max(0, (+a.amountPHP || 0) - (+a.paidPHP || 0)), 0));
     }).catch(() => {}));
     jobs.push(fetchFlow('getARAging').then(r => {
-      const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
-      if (n) add('urgent', 'urgent', n + ' receivable(s) past due — collect', 'flow-ar-aging.html');
+      const due = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)), n = due.length;
+      if (n) add('urgent', 'urgent', n + ' receivable(s) past due — collect', 'flow-ar-aging.html', due.reduce((t, a) => t + Math.max(0, +a.outstanding || 0), 0));
     }).catch(() => {}));
     /* A323 — money the director collected on his phone, waiting for accounting or admin to say they
        have it. A secured read; it simply fails (and adds nothing) until FlowAPI 164 is pasted. */
@@ -1660,7 +1661,7 @@ async function flowActionsStrip(containerId) {
   }
   // A289 — classed rows on a tone; the stylesheet paints them, so every page and both themes agree.
   el.innerHTML = `<div class="fa-list">${items.map(n => `
-    <a href="${n.link}" class="fa-row" data-tone="${n.tone || 'neutral'}"><span class="fa-ico" data-tone="${n.tone || 'neutral'}">${_flowActionIconSvg(n.icon)}</span><span class="fa-text">${n.text}</span></a>`).join('')}</div>`;
+    <a href="${n.link}" class="fa-row" data-tone="${n.tone || 'neutral'}"><span class="fa-ico" data-tone="${n.tone || 'neutral'}">${_flowActionIconSvg(n.icon)}</span><span class="fa-text">${n.text}</span>${window.hxSkinOn && typeof ledgerTaskTail === 'function' ? ledgerTaskTail(n) : ''}</a>`).join('')}</div>`;
 }
 
 async function loadNotifications() {

@@ -257,7 +257,7 @@ function render() {
   open.sort(arNewestFirst); history.sort(arNewestFirst);
 
   const openTable = open.length
-    ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${open.map(rowHtml).join('')}${arFoot(open)}</tbody></table>`
+    ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}${flowLedgerGroupedBody(open, rowHtml, { due: r => r.dueDate, owed: r => flowNum(r.outstanding), cols: 11, foot: arFoot(open) })}</table>`
     : '<p style="color:var(--hx-ink-3);">No open receivables in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';

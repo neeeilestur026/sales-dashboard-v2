@@ -93,7 +93,7 @@ function crRender(res) {
       <th>Name</th><th>Applies to</th><th>Claim size</th><th class="num">Rate</th><th>In force</th><th></th>
     </tr></thead><tbody>` +
     crRates.map(r => `<tr>
-      <td><b>${flowEsc(r.rateKey)}</b>${r.notes ? `<div style="font:400 11.5px 'Inter',sans-serif;color:var(--hx-ink-3);margin-top:3px;">${flowEsc(r.notes)}</div>` : ''}</td>
+      <td><b>${flowEsc(r.rateKey)}</b>${r.notes ? `<div style="font:400 11.5px var(--hx-text);color:var(--hx-ink-3);margin-top:3px;">${flowEsc(r.notes)}</div>` : ''}</td>
       <td>${flowEsc(SCOPE[r.scope] || r.scope)}${r.scopeValue ? '<br><span style="font:500 12px \'Inter\',sans-serif;color:var(--hx-ink-2);">' + flowEsc(r.scopeValue) + '</span>' : ''}</td>
       <td>${flowEsc(band(r))}</td>
       <td class="num"><b>${flowNum(r.rate)}%</b></td>
@@ -103,7 +103,7 @@ function crRender(res) {
         <button class="link-btn del-btn" onclick="crDelete('${flowEsc(r.rateKey)}')">Delete</button></td>
     </tr>`).join('') +
     `</tbody></table>
-    <p style="font:400 11.5px 'Inter',sans-serif;color:var(--hx-ink-3);margin-top:10px;">
+    <p style="font:400 11.5px var(--hx-text);color:var(--hx-ink-3);margin-top:10px;">
       Brackets are combined in <b>${flowEsc(res.tierMode)}</b> mode${res.tierMode === 'flat'
         ? ' — the whole claim is charged at the matching bracket’s rate.'
         : ' — each slice of the claim is charged at its own bracket’s rate.'}

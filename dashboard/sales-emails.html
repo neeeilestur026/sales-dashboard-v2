@@ -120,7 +120,7 @@
                max-height: 68vh; overflow-y: auto; }
     .se-msg { display: block; width: 100%; text-align: left; border: 0; background: none;
               cursor: pointer; padding: .5rem .7rem; border-bottom: 1px solid var(--border);
-              font-family: 'Inter', sans-serif; }
+              font-family: var(--hx-text); }
     .se-msg:hover { background: var(--bg-inset); }
     .se-msg.on { background: var(--hx-navy-soft); box-shadow: inset 3px 0 0 var(--hx-navy); }
     .se-msg .top { display: flex; gap: .5rem; align-items: baseline; }
@@ -130,7 +130,7 @@
     .se-msg .sj { font-size: .75rem; color: var(--text-secondary); margin-top: .1rem;
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .se-msg .tag { display: inline-block; margin-top: .18rem; padding: .03rem .38rem; border-radius: 999px;
-                   font: 700 .62rem 'Inter', sans-serif; }
+                   font: 700 .62rem var(--hx-text); }
     .se-msg .tag.linked { background: var(--hx-ok-soft); color: var(--hx-ok); }
     .se-msg .tag.none   { background: var(--bg-inset); color: var(--hx-ink-3); }
 
@@ -151,9 +151,10 @@
     .se-cand .me { font-size: .7rem; color: var(--text-muted); }
     .se-cand .why span { display: inline-block; background: var(--bg-inset);
                          color: var(--text-secondary); border-radius: 999px;
-                         padding: .02rem .36rem; margin: .16rem .16rem 0 0; font: 600 .62rem 'Inter', sans-serif; }
+                         padding: .02rem .36rem; margin: .16rem .16rem 0 0; font: 600 .62rem var(--hx-text); }
     .se-cand .why span.none { background: var(--hx-warn-soft); color: var(--hx-warn); }
   </style>
+  <link rel="stylesheet" href="css/ledger.css">
 </head>
 <body>
   <script src="js/theme.js"></script>
@@ -231,6 +232,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/quotation-email-match.js"></script>
   <script src="js/sales-emails.js"></script>

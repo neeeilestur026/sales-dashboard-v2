@@ -126,7 +126,7 @@ function cpRender(res) {
     if (cpCanRelease()) {
       html += `<div class="cp-noprint" style="margin-top:14px;">
         <button class="btn btn-primary btn-sm" onclick="cpReleaseAll()">Mark all as entered into payroll</button>
-        <span style="font:400 11.5px 'Inter',sans-serif;color:var(--hx-ink-3);margin-left:8px;">
+        <span style="font:400 11.5px var(--hx-text);color:var(--hx-ink-3);margin-left:8px;">
           Do this once the figures are keyed in — it stops the same commission being paid again next cutoff.</span>
       </div>`;
     }
@@ -136,7 +136,7 @@ function cpRender(res) {
 
   if (released.length) {
     const total = released.reduce((s, g) => s + flowNum(g.released), 0);
-    html += `<details style="margin-top:18px;"><summary style="cursor:pointer;font:600 12.5px 'Inter',sans-serif;color:var(--hx-ink-2);">
+    html += `<details style="margin-top:18px;"><summary style="cursor:pointer;font:600 12.5px var(--hx-text);color:var(--hx-ink-2);">
       Already entered into payroll for this cutoff — ${flowMoney(total, 'PHP')} (${released.length} person(s))</summary>
       <table class="cp"><thead><tr><th>Salesperson</th><th class="num">Claims</th><th class="num">Amount</th></tr></thead><tbody>` +
       released.map(g => `<tr><td class="cp-name">${flowEsc(g.salesperson)}</td>
@@ -227,7 +227,7 @@ async function cpAudit() {
     }
     card.style.display = '';
     el.innerHTML = res.findings.map(f =>
-      `<div style="padding:8px 11px;margin-bottom:6px;border-radius:8px;font:500 12.5px 'Inter',sans-serif;
+      `<div style="padding:8px 11px;margin-bottom:6px;border-radius:8px;font:500 12.5px var(--hx-text);
         background:${f.level === 'error' ? 'var(--hx-red-soft)' : 'var(--hx-warn-soft)'};color:${f.level === 'error' ? 'var(--hx-red)' : 'var(--hx-warn)'};">
         <b>${flowEsc(f.commNo || '')}</b> ${flowEsc(f.message)}</div>`).join('');
   } catch (e) { /* the audit is advisory — never let it blank the report */ }

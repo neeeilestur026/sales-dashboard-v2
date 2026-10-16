@@ -20,7 +20,7 @@
   .ct-search { width: 100%; margin: .35rem 0 .5rem; }
 
   .ct-who { display:block; width:100%; text-align:left; border: 0; background: none; cursor:pointer;
-            padding:.5rem .6rem; border-radius: 12px; font-family:'Inter',sans-serif; }
+            padding:.5rem .6rem; border-radius: 12px; font-family:var(--hx-text); }
   .ct-who:hover { background: var(--hx-inset); }
   .ct-who.on { background: var(--hx-navy-soft); box-shadow: inset 0 0 0 1px var(--hx-navy-line); }
   .ct-who .n { font-weight:700; font-size:.8rem; color: var(--hx-ink);
@@ -36,7 +36,7 @@
   .ct-stats { display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:.5rem; }
   .ct-stats div { font-size:.72rem; color: var(--hx-ink-3); text-transform:uppercase;
                   letter-spacing:.04em; font-weight:700; }
-  .ct-stats b { display:block; font:800 1.15rem 'Inter',sans-serif; color: var(--hx-ink);
+  .ct-stats b { display:block; font:800 1.15rem var(--hx-text); color: var(--hx-ink);
                 text-transform:none; letter-spacing:0; font-variant-numeric: tabular-nums; }
 
   .ct-note { padding:.6rem .8rem; border-radius: 11px; font-size:.78rem; line-height:1.6;
@@ -59,15 +59,15 @@
   .ct-ev.visit::before     { background: var(--hx-ok); }
   .ct-ev.order::before     { background: var(--hx-warn); }
   .ct-ev .top { display:flex; gap:.5rem; align-items:baseline; flex-wrap:wrap; }
-  .ct-ev .d { font:700 .7rem 'Inter',sans-serif; color: var(--hx-ink-3);
+  .ct-ev .d { font:700 .7rem var(--hx-text); color: var(--hx-ink-3);
               font-variant-numeric: tabular-nums; min-width:74px; }
   .ct-ev .t { font-weight:700; font-size:.82rem; color: var(--hx-ink); }
-  .ct-ev .v { margin-left:auto; font:700 .8rem 'Inter',sans-serif; font-variant-numeric: tabular-nums; }
+  .ct-ev .v { margin-left:auto; font:700 .8rem var(--hx-text); font-variant-numeric: tabular-nums; }
   .ct-ev .sub { font-size:.74rem; color: var(--hx-ink-2); margin-top:.14rem;
                 padding-left:74px; }
   @media (max-width:640px) { .ct-ev .sub { padding-left:0; } }
   .ct-kind { display:inline-block; padding:.04rem .38rem; border-radius: 999px;
-             font:700 .62rem 'Inter',sans-serif; text-transform:uppercase; letter-spacing:.03em;
+             font:700 .62rem var(--hx-text); text-transform:uppercase; letter-spacing:.03em;
              background: var(--hx-inset); color: var(--hx-ink-2); }
   .ct-photo { height:44px; border-radius: 6px; border: 1px solid var(--hx-hair);
               cursor:zoom-in; margin-top:.3rem; }
@@ -82,6 +82,7 @@
     .ct-ev { break-inside: avoid; }
   }
 </style>
+  <link rel="stylesheet" href="css/ledger.css">
 </head>
 <body class="flow-screen">
   <script src="js/theme.js"></script>
@@ -116,6 +117,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
   <script src="js/flow-api.js"></script>
   <script src="js/client-rollup.js"></script>
   <script src="js/client-tracker.js"></script>
