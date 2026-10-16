@@ -30,11 +30,11 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
-eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,financial-reports.css');
+eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,financial-reports.css,ledger.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="fr"> — the scope every rule hangs off', /<body class="fr">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="fr">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
-eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), 'theme.js,api.js,auth.js,flow-api.js,financial-reports.js');
+eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), 'theme.js,api.js,auth.js,ledger-nav.js,flow-api.js,financial-reports.js');
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab and the nav, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && /<nav class="hx-rail-nav"/.test(HTML) && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));

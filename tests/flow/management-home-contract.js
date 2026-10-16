@@ -40,12 +40,12 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
-eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,shipments.css,management-home.css');
+eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,shipments.css,management-home.css,ledger.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="mg"> — the scope every rule hangs off', /<body class="mg">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="mg">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order (A301: html2pdf is no longer eager — the payroll renderer injects it on demand)', (HTML.match(/<script src="([^"]+)"/g) || []).map(s => s.match(/src="([^"]+)"/)[1].replace(/^js\//, '')).join(','),
-   'theme.js,api.js,salary-deduction-card.js,auth.js,flow-api.js,quotation-worklist.js,stage-meta.js,management-home.js,report-render.js,report-pdf.js,team-performance.js,itinerary-week.js,management-flow.js,so-cost-editor.js,management-income.js,management-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,auth.js,ledger-nav.js,flow-api.js,quotation-worklist.js,stage-meta.js,management-home.js,report-render.js,report-pdf.js,team-performance.js,itinerary-week.js,management-flow.js,so-cost-editor.js,management-income.js,management-home-page.js');
 ok('  no CDN script tag on the page; html2pdf is loaded by the renderer itself', !/cdnjs\.cloudflare\.com/.test(HTML) && /var HTML2PDF_CDN = 'https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/html2pdf\.js/.test(fs.readFileSync(D + 'js/management-home.js', 'utf8')));
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab, the nav and five jumps, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && (HTML.match(/class="hx-jump" data-target="/g) || []).length === 5 && /<div class="hx-col">/.test(HTML));

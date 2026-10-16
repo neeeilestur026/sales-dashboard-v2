@@ -28,6 +28,75 @@
     var h = document.documentElement;
     return (h && typeof h.getAttribute === 'function' && h.getAttribute('data-theme')) || 'light';
   }
+  var reduced = false;
+  try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+
+  /* A336 — the "Ledger" look, for every office role (never the warehouse phones), on a page that links
+     css/ledger.css. The director's FlowSettings decide: portalSkin 'on' (unless the person chose
+     classic) or 'optin' (only if they chose new); portalSkinRoles, when set, limits it to those roles.
+     Both are cached (hx_lg_sw, hx_lg_roles) and refreshed at most every 10 minutes. ?skin=ledger
+     previews on localhost; ?skin=off|reset and ?look=new|classic and ?motion=on|off work anywhere.
+     Off = nothing set at all. On = auth.js draws the Ledger bar and rail, js/ledger.js loads. */
+  var LG_ROLES = ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'];
+  function get(k, ok) { try { var v = localStorage.getItem(k); return ok.indexOf(v) >= 0 ? v : null; } catch (e) { return null; } }
+  function put(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+  function sw() { return get('hx_lg_sw', ['off', 'optin', 'on']); }
+  function roleList() {
+    try { var v = localStorage.getItem('hx_lg_roles'); return typeof v === 'string' && /^[a-z,]{1,120}$/.test(v) ? v.split(',') : null; } catch (e) { return null; }
+  }
+  function role() {
+    try { var s = JSON.parse(localStorage.getItem('session')); return s && LG_ROLES.indexOf(s.role) >= 0 ? s.role : null; } catch (e) { return null; }
+  }
+  function linked() { try { return !!document.querySelector('link[href="css/ledger.css"]'); } catch (e) { return false; } }
+  function ok() { return !!role() && linked(); }
+  function allowed() { var l = roleList(); return !l || l.indexOf(role()) >= 0; }
+  var local = false, skin = false, still = false;
+  try {
+    local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+    var q = new URLSearchParams(location.search), look = q.get('look'), sk = q.get('skin'), mo = q.get('motion');
+    if (look === 'new' || look === 'classic') put('hx_lg_me', look);
+    if (mo === 'on' || mo === 'off') put('hx_lg_motion', mo);
+    if (sk === 'off' || (sk === 'ledger' && local)) put('hx_lg_pv', sk); else if (sk === 'reset') put('hx_lg_pv', null);
+  } catch (e) {}
+  if (ok()) {
+    var pv = get('hx_lg_pv', ['ledger', 'off']), me = get('hx_lg_me', ['new', 'classic']);
+    skin = pv === 'off' ? false : (pv === 'ledger' && local) || (allowed() && (sw() === 'on' ? me !== 'classic' : sw() === 'optin' && me === 'new'));
+  }
+  if (skin) {
+    still = reduced || get('hx_lg_motion', ['off']) === 'off';
+    window.hxSkinOn = true;
+    try {
+      var h = document.documentElement, hd = document.head;
+      h.setAttribute('data-skin', 'ledger');
+      h.setAttribute('data-page', (location.pathname.split('/').pop() || 'index').replace(/\.html$/, ''));
+      if (still) h.setAttribute('data-motion', 'off');
+      else { var vt = document.createElement('style'); vt.textContent = '@view-transition{navigation:auto}'; hd.appendChild(vt); }
+      var js = document.createElement('script'); js.src = 'js/ledger.js'; hd.appendChild(js);
+    } catch (e) {}
+  }
+  /* the way in from the classic navbar (only while the director offers it), and the way back out */
+  window.hxSkinNavItem = function () {
+    if (!ok() || skin || !allowed() || ['optin', 'on'].indexOf(sw()) < 0) return '';
+    return '<a class="lg-try" href="?look=new">Try the new look</a>';
+  };
+  window.hxSkinLookItems = function () {
+    if (!skin) return '';
+    return '<a href="?look=classic">Classic look</a>' + (get('hx_lg_motion', ['off']) === 'off' ? '<a href="?motion=on">Motion on</a>' : '<a href="?motion=off">Motion off</a>');
+  };
+  /* refresh the cached switch at most every 10 minutes; it applies on the next page load */
+  if (typeof document.addEventListener === 'function') document.addEventListener('DOMContentLoaded', function () {
+    try {
+      if (!ok() || typeof fetchFlow !== 'function' || Date.now() - (parseInt(localStorage.getItem('hx_lg_at'), 10) || 0) < 600000) return;
+      fetchFlow('getFlowSettings', {}, { fresh: true }).then(function (r) {
+        if (!r || !r.success || !r.data) return;
+        var v = String(r.data.portalSkin || '').toLowerCase(), rl = String(r.data.portalSkinRoles || '').toLowerCase().replace(/[^a-z,]/g, '');
+        put('hx_lg_sw', v === 'on' || v === 'optin' ? v : 'off');
+        put('hx_lg_roles', rl.split(',').filter(function (x) { return LG_ROLES.indexOf(x) >= 0; }).join(',') || null);
+        put('hx_lg_at', String(Date.now()));
+      }).catch(function () {});
+    } catch (e) {}
+  });
+
   apply(stored() || 'light', false);
   window.hxTheme = {
     get: current,
@@ -36,8 +105,6 @@
   };
   window.dhTheme = window.hxTheme;
 
-  var reduced = false;
-  try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
   function crossfade() {
     if (reduced) return;
     var h = document.documentElement, b = document.body;

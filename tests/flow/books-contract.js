@@ -28,7 +28,7 @@ const GS = fs.readFileSync(path.join(__dirname, '../../apps-script/FlowAPI.gs'),
 console.log('\n1 · the page');
 const H = read('books.html'), JS = read('js/books.js');
 const scripts = (h) => (h.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(',');
-eq('scripts in order', scripts(H), 'theme.js,api.js,auth.js,flow-api.js,books.js');
+eq('scripts in order', scripts(H), 'theme.js,api.js,auth.js,ledger-nav.js,flow-api.js,books.js');
 ok('theme.js first in body; no inline style or script', /<body class="bk">\s*<script src="js\/theme\.js"><\/script>/.test(H) && !/<style[\s>]/.test(H) && !/<script>/.test(H) && !/style="/.test(H));
 ok('styles.css first, then flow.css and books.css', /href="css\/styles\.css">\s*<link rel="stylesheet" href="css\/flow\.css">\s*<link rel="stylesheet" href="css\/books\.css">/.test(H));
 ok('six tabs: Inbox, Coverage, General ledger, Trial balance, Chart of accounts, Rules',
@@ -94,7 +94,7 @@ ok('FlowAPI counts its budget from the start of the call', /_EXEC_T0 = Date\.now
 console.log('\n6 · A321 — payroll and Code.gs payments');
 {
   const PH = read('payroll-books.html'), PJ = read('js/payroll-books.js'), CG = fs.readFileSync(path.join(__dirname, '../../apps-script/Code.gs'), 'utf8');
-  eq('payroll-books: scripts in order', scripts(PH), 'theme.js,api.js,auth.js,payroll-books.js');
+  eq('payroll-books: scripts in order', scripts(PH), 'theme.js,api.js,auth.js,ledger-nav.js,payroll-books.js');
   ok('  theme.js first; no inline style or script', /<body class="bk">\s*<script src="js\/theme\.js"><\/script>/.test(PH) && !/<style[\s>]/.test(PH) && !/<script>/.test(PH) && !/style="/.test(PH));
   const pc = { console, document: { addEventListener() {}, getElementById: () => null, querySelectorAll: () => [] }, window: {} };
   vm.createContext(pc); vm.runInContext(PJ, pc);
