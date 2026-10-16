@@ -301,16 +301,129 @@ html[data-skin="ledger"] .l-cmdk-list .l-cmdk-empty { color: var(--l-ink-3); cur
 html[data-skin="ledger"] .l-cmdk-foot { display: flex; gap: 16px; padding: 9px 16px; border-top: 1px solid var(--l-line-2); color: var(--l-ink-3); font: 400 12.5px/1 var(--l-sans); }
 html[data-skin="ledger"] .l-cmdk-foot kbd { font: 500 11px/1 var(--l-mono); border: 1px solid var(--l-line); border-radius: 4px; padding: 2px 5px; margin-right: 2px; background: var(--l-inset); }
 
+/* ─── 10b · The role homes: what needs you first, the figures beside it ─────────────────── */
+/* the deck (admin, accounting, management, sales, hr, marketing): main column left, figures right */
+html[data-skin="ledger"] .hx-deck { grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; }
+html[data-skin="ledger"] .hx-deck > .hx-rail { order: 2; top: calc(var(--l-bar) + 24px); max-height: calc(100vh - var(--l-bar) - 40px); gap: 16px; }
+html[data-skin="ledger"] .hx-deck > .hx-col { gap: 20px; }
+html[data-skin="ledger"] .hx-rail-date { padding: 4px 2px 0; }
+html[data-skin="ledger"] .hx-rail-date b { font: 500 22px/1 var(--l-mono); letter-spacing: -.02em; color: var(--l-ink); }
+html[data-skin="ledger"] .hx-rail-date span { font: 500 13px/1.3 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"] .hx-rail-date .theme-toggle { display: none; }
+/* the home's figure tile turns into a white figures panel: its tokens re-pointed, so the page's own
+   rules and inline styles (which read --hx-slab-*) follow */
+html[data-skin="ledger"] .hx-deck .hx-slab {
+  --hx-slab: var(--l-panel); --hx-slab-2: var(--l-panel); --hx-slab-ink: var(--l-ink); --hx-slab-ink-2: var(--l-ink-2); --hx-slab-line: var(--l-line);
+  --hx-red: var(--l-late); --hx-ok: var(--l-ok);
+  background: var(--l-panel); color: var(--l-ink); border: 1px solid var(--l-line); box-shadow: var(--l-shadow); padding: 20px 22px;
+}
+html[data-skin="ledger"] .hx-deck .hx-slab .cap .l { font: 500 13px/1.3 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"] .hx-deck .hx-slab .tag { background: var(--l-inset); border-color: var(--l-line); color: var(--l-ink-2); font: 550 12px/1.2 var(--l-sans); }
+html[data-skin="ledger"] .hx-deck .hx-slab .v { font: 500 28px/1.15 var(--l-mono); color: var(--l-ink); margin: 10px 0 4px; }
+html[data-skin="ledger"] .hx-deck .hx-slab .sub { font: 400 13px/1.45 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"] .hx-deck .hx-facts dt { font: 500 12.5px/1.3 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"] .hx-deck .hx-facts dd { font: 500 15px/1.25 var(--l-mono); color: var(--l-ink); }
+html[data-skin="ledger"] .hx-deck .hx-facts dd.accent { color: var(--l-accent); }
+html[data-skin="ledger"] .hx-comp { background: transparent; height: 8px; gap: 3px; }
+html[data-skin="ledger"] .hx-comp > i { background: var(--l-accent); border-radius: 4px; }
+html[data-skin="ledger"] .hx-comp > i.b { background: var(--l-p-accent-2); }
+html[data-skin="ledger"] .hx-comp > i.c { background: var(--l-line); }
+html[data-skin="ledger"] .hx-comp-key { color: var(--l-ink-2); font: 500 12px/1.3 var(--l-sans); }
+html[data-skin="ledger"] .hx-comp-key i { background: var(--l-accent); }
+html[data-skin="ledger"] .hx-comp-key i.b { background: var(--l-p-accent-2); }
+html[data-skin="ledger"] .hx-comp-key i.c { background: var(--l-line); }
+html[data-skin="ledger"] .hx-rail-nav a { font: 500 13.5px/1.2 var(--l-sans); }
+html[data-skin="ledger"] .hx-rail-nav a.on { background: var(--l-accent-soft); color: var(--l-accent); }
+
+/* the director's pages (director.css, body.dh) and lead gen's (leadgen.css, body.lg) carry private
+   copies of the tokens; re-pointed here the same way, so their components follow without editing them */
+html[data-skin="ledger"] body.dh {
+  --dh-navy: var(--l-p-solid); --dh-navy-ink: var(--l-p-solid-hover); --dh-navy-text: var(--l-accent); --dh-navy-soft: var(--l-accent-soft); --dh-navy-line: var(--l-accent-line);
+  --dh-cyan: var(--l-p-accent-2); --dh-cyan-ink: var(--l-accent); --dh-cyan-soft: var(--l-accent-soft); --dh-cyan-ring: var(--l-p-ring);
+  --dh-red: var(--l-late); --dh-red-soft: var(--l-p-late-soft); --dh-red-line: var(--l-p-late-line);
+  --dh-page: var(--l-page); --dh-inset: var(--l-inset); --dh-hair: var(--l-line); --dh-hair-2: var(--l-line-2);
+  --dh-ink: var(--l-ink); --dh-ink-2: var(--l-ink-2); --dh-ink-3: var(--l-ink-3);
+  --dh-glass: var(--l-panel); --dh-glass-line: var(--l-line); --dh-glass-solid: var(--l-panel); --dh-blur: none;
+  --dh-chart-grid: var(--l-p-grid); --dh-aurora-1: transparent; --dh-aurora-2: transparent;
+  --dh-r-sm: 8px; --dh-r-md: 12px; --dh-r-lg: 12px;
+  --dh-sh-1: none; --dh-sh-2: var(--l-shadow); --dh-sh-3: var(--l-shadow-pop);
+  --dh-display: var(--l-sans); --dh-text: var(--l-sans);
+  --accent: var(--l-p-solid); --accent-hover: var(--l-p-solid-hover); --accent-dark: var(--l-p-solid-hover); --accent-light: var(--l-accent-soft); --accent-ring: var(--l-p-ring);
+  --bg-primary: var(--l-page); --bg-inset: var(--l-inset); --bg-card: var(--l-panel); --surface: var(--l-panel); --surface-2: var(--l-inset); --border: var(--l-line);
+  --text-primary: var(--l-ink); --text-secondary: var(--l-ink-2); --text-muted: var(--l-ink-3);
+  background: var(--l-page); color: var(--l-ink); font-family: var(--l-sans);
+}
+html[data-skin="ledger"] body.lg {
+  --lg-navy: var(--l-p-solid); --lg-navy-ink: var(--l-p-solid-hover); --lg-navy-soft: var(--l-accent-soft); --lg-navy-line: var(--l-accent-line);
+  --lg-cyan: var(--l-p-accent-2); --lg-cyan-ink: var(--l-accent); --lg-cyan-soft: var(--l-accent-soft); --lg-cyan-ring: var(--l-p-ring);
+  --lg-red: var(--l-late); --lg-red-soft: var(--l-p-late-soft); --lg-red-line: var(--l-p-late-line);
+  --lg-page: var(--l-page); --lg-inset: var(--l-inset); --lg-hair: var(--l-line); --lg-hair-2: var(--l-line-2);
+  --lg-ink: var(--l-ink); --lg-ink-2: var(--l-ink-2); --lg-ink-3: var(--l-ink-3);
+  --lg-glass: var(--l-panel); --lg-glass-line: var(--l-line); --lg-glass-solid: var(--l-panel); --lg-blur: none;
+  --lg-r-sm: 8px; --lg-r-md: 12px; --lg-r-lg: 12px;
+  --lg-sh-1: none; --lg-sh-2: var(--l-shadow); --lg-sh-3: var(--l-shadow-pop);
+  --lg-display: var(--l-sans); --lg-text: var(--l-sans);
+  --accent: var(--l-p-solid); --accent-hover: var(--l-p-solid-hover); --accent-dark: var(--l-p-solid-hover); --accent-light: var(--l-accent-soft); --accent-ring: var(--l-p-ring);
+  --bg-primary: var(--l-page); --bg-inset: var(--l-inset); --bg-card: var(--l-panel); --surface: var(--l-panel); --border: var(--l-line);
+  --text-primary: var(--l-ink); --text-secondary: var(--l-ink-2); --text-muted: var(--l-ink-3);
+  background: var(--l-page); color: var(--l-ink); font-family: var(--l-sans);
+}
+html[data-skin="ledger"] body.dh::before, html[data-skin="ledger"] body.lg::before { background: var(--l-page); }
+/* the director's home: the same arrangement as the other homes */
+html[data-skin="ledger"] body.dh .dh-deck { grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; }
+html[data-skin="ledger"] body.dh .dh-deck > .dh-rail { order: 2; top: calc(var(--l-bar) + 24px); max-height: calc(100vh - var(--l-bar) - 40px); gap: 16px; }
+html[data-skin="ledger"] body.dh .dh-col { gap: 20px; }
+html[data-skin="ledger"] body.dh .dh-rail-date .theme-toggle { display: none; }
+html[data-skin="ledger"] body.dh .dh-deck .dh-slab {
+  --dh-slab: var(--l-panel); --dh-slab-2: var(--l-panel); --dh-slab-ink: var(--l-ink); --dh-slab-ink-2: var(--l-ink-2); --dh-slab-line: var(--l-line);
+  background: var(--l-panel); color: var(--l-ink); border: 1px solid var(--l-line); border-radius: var(--l-r-panel); box-shadow: var(--l-shadow);
+}
+html[data-skin="ledger"] body.dh .dh-deck .dh-slab::after { display: none; }
+html[data-skin="ledger"] body.dh .dh-mast h1 { font: 650 28px/1.15 var(--l-sans); letter-spacing: -.025em; color: var(--l-ink); }
+
+/* "Needs you": a task list. Each row is one link: tinted icon, what it is, the amount, the verb. */
+html[data-skin="ledger"] .fa-list { display: block; }
+html[data-skin="ledger"] .fa-row, html[data-skin="ledger"] a.fa-row[data-tone] {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(0, max-content) 104px; align-items: center; gap: 14px; padding: 12px 6px;
+  border: 0; border-radius: var(--l-r-ctl); background: transparent; color: var(--l-ink); text-decoration: none;
+}
+html[data-skin="ledger"] .fa-row + .fa-row { border-top: 1px solid var(--l-line-2); border-radius: 0; }
+html[data-skin="ledger"] .fa-row:hover, html[data-skin="ledger"] a.fa-row[data-tone]:hover { background: var(--l-inset); color: var(--l-ink); }
+html[data-skin="ledger"] .fa-ico { width: 40px; height: 40px; border-radius: 10px; background: var(--l-inset); color: var(--l-ink-2); }
+html[data-skin="ledger"] .fa-ico svg { width: 18px; height: 18px; }
+html[data-skin="ledger"] .fa-ico[data-tone="urgent"] { background: var(--l-p-late-soft); color: var(--l-late); }
+html[data-skin="ledger"] .fa-ico[data-tone="warn"] { background: var(--l-p-soon-soft); color: var(--l-soon); }
+html[data-skin="ledger"] .fa-ico[data-tone="ok"] { background: var(--l-p-ok-soft); color: var(--l-ok); }
+html[data-skin="ledger"] .fa-ico[data-tone="info"], html[data-skin="ledger"] .fa-ico[data-tone="neutral"] { background: var(--l-accent-soft); color: var(--l-accent); }
+html[data-skin="ledger"] .fa-text { font: 500 14px/1.45 var(--l-sans); color: var(--l-ink); }
+html[data-skin="ledger"] .fa-amt { grid-column: 3; font: 500 14px/1 var(--l-mono); color: var(--l-ink-2); white-space: nowrap; text-align: right; }
+html[data-skin="ledger"] .fa-verb {
+  grid-column: 4; display: inline-flex; align-items: center; justify-content: center; height: 34px; padding: 0 12px; white-space: nowrap;
+  border: 1px solid var(--l-line); border-radius: var(--l-r-ctl); background: var(--l-panel); color: var(--l-ink); font: 550 13.5px/1 var(--l-sans);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+html[data-skin="ledger"] .fa-row:hover .fa-verb { border-color: var(--l-accent-line); }
+/* one filled button per list: the first urgent row's */
+html[data-skin="ledger"] .fa-list > .fa-row[data-tone="urgent"]:not(.fa-row[data-tone="urgent"] ~ .fa-row) .fa-verb { background: var(--l-accent); border-color: var(--l-accent); color: var(--l-accent-ink); }
+html[data-skin="ledger"] .fa-empty, html[data-skin="ledger"] .fa-loading { padding: 14px 6px; font: 400 14px/1.5 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"] .fa-empty { color: var(--l-ok); }
+
 /* ─── 11 · Motion: a change shown once; the loading line is the only loop ───────────────── */
 @keyframes ledger-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes ledger-busy { 0% { transform: translateX(-100%) scaleX(.3); } 100% { transform: translateX(100%) scaleX(.3); } }
 html[data-skin="ledger"] .l-fly:not([hidden]), html[data-skin="ledger"] .l-menu:not([hidden]),
 html[data-skin="ledger"] .l-cmdk:not([hidden]) .l-cmdk-panel { animation: ledger-rise .16s var(--l-ease) both; }
 html[data-skin="ledger"] .modal-overlay.open .modal, html[data-skin="ledger"] .flow-modal-overlay.open .flow-modal { animation: ledger-rise .2s var(--l-ease) both; }
+html[data-skin="ledger"] .fa-list .fa-row { animation: ledger-rise .3s var(--l-ease) both; }
+html[data-skin="ledger"] .fa-list .fa-row:nth-child(2) { animation-delay: 40ms; }
+html[data-skin="ledger"] .fa-list .fa-row:nth-child(3) { animation-delay: 80ms; }
+html[data-skin="ledger"] .fa-list .fa-row:nth-child(4) { animation-delay: 120ms; }
+html[data-skin="ledger"] .fa-list .fa-row:nth-child(n+5) { animation-delay: 160ms; }
 html[data-skin="ledger"].l-busy .navbar::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--l-accent); transform-origin: left center;
   animation: ledger-busy 1.1s var(--l-ease) infinite;
 }
+html[data-skin="ledger"][data-motion="off"].l-busy .navbar::after { display: none; }   /* a still line would read as a border */
 html[data-skin="ledger"][data-motion="off"] *, html[data-skin="ledger"][data-motion="off"] *::before, html[data-skin="ledger"][data-motion="off"] *::after {
   animation: none !important; transition: none !important;
 }
@@ -334,6 +447,13 @@ html[data-skin="ledger"][data-motion="off"] *, html[data-skin="ledger"][data-mot
   html[data-skin="ledger"] .l-fly { left: 8px; right: 8px; top: auto; bottom: calc(72px + env(safe-area-inset-bottom)); width: auto; max-height: 70vh; }
   html[data-skin="ledger"] .main-content, html[data-skin="ledger"] .hx-main { padding-top: calc(var(--l-bar) + 18px); }
   html[data-skin="ledger"] .flow-nav, html[data-skin="ledger"] body.flow-screen .flow-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  html[data-skin="ledger"] .hx-deck { grid-template-columns: 1fr; }
+  html[data-skin="ledger"] .hx-deck > .hx-rail { position: static; max-height: none; }
+  html[data-skin="ledger"] body.dh .dh-deck { grid-template-columns: 1fr; }
+  html[data-skin="ledger"] body.dh .dh-deck > .dh-rail { position: static; max-height: none; }
+  html[data-skin="ledger"] .fa-row, html[data-skin="ledger"] a.fa-row[data-tone] { grid-template-columns: 40px minmax(0, 1fr) auto; row-gap: 2px; }
+  html[data-skin="ledger"] .fa-amt { grid-column: 2; grid-row: 2; text-align: left; }
+  html[data-skin="ledger"] .fa-verb { grid-column: 3; grid-row: 1 / span 2; min-width: 0; }
   html[data-skin="ledger"] .flow-tab, html[data-skin="ledger"] body.flow-screen .flow-nav a { white-space: nowrap; flex-shrink: 0; }
 }
 

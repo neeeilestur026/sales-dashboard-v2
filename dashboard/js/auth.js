@@ -1263,7 +1263,7 @@ async function flowComputeActions(session) {
   const role = String(session.role || '').toLowerCase();
   if (role === 'warehouse') return items;   // A316 — the scanner has no quotation or pricing nudges
   // A289 — tone, not colour: urgent | warn | info | ok. The stylesheet paints [data-tone].
-  const add = (icon, tone, text, link) => items.push({ icon, tone, text, link });
+  const add = (icon, tone, text, link, amt) => items.push({ icon, tone, text, link, amt });   // A336: amt (PHP) is shown by the Ledger look only
   const isMgmt = role === 'management', isDir = role === 'director';
   const isAdmin = role === 'admin', isAcct = role === 'accounting', isSales = role === 'sales';
   /* A280 — the quotation/PR nudges belong to whoever RAISES them, which is now sales and lead-gen.
@@ -1489,12 +1489,12 @@ async function flowComputeActions(session) {
   // Accounting: payables past due + receivables past due.
   if (isAcct || isAdmin) {
     jobs.push(fetchFlow('getAPAging').then(r => {
-      const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
-      if (n) add('urgent', 'urgent', n + ' payable(s) past due', 'flow-ap-aging.html');
+      const due = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)), n = due.length;
+      if (n) add('urgent', 'urgent', n + ' payable(s) past due', 'flow-ap-aging.html', due.reduce((t, a) => t + Math.max(0, (+a.amountPHP || 0) - (+a.paidPHP || 0)), 0));
     }).catch(() => {}));
     jobs.push(fetchFlow('getARAging').then(r => {
-      const n = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)).length;
-      if (n) add('urgent', 'urgent', n + ' receivable(s) past due — collect', 'flow-ar-aging.html');
+      const due = ((r && r.data) || []).filter(a => String(a.status || '').toLowerCase() !== 'paid' && _pastDue(a.dueDate)), n = due.length;
+      if (n) add('urgent', 'urgent', n + ' receivable(s) past due — collect', 'flow-ar-aging.html', due.reduce((t, a) => t + Math.max(0, +a.outstanding || 0), 0));
     }).catch(() => {}));
     /* A323 — money the director collected on his phone, waiting for accounting or admin to say they
        have it. A secured read; it simply fails (and adds nothing) until FlowAPI 164 is pasted. */
@@ -1661,7 +1661,7 @@ async function flowActionsStrip(containerId) {
   }
   // A289 — classed rows on a tone; the stylesheet paints them, so every page and both themes agree.
   el.innerHTML = `<div class="fa-list">${items.map(n => `
-    <a href="${n.link}" class="fa-row" data-tone="${n.tone || 'neutral'}"><span class="fa-ico" data-tone="${n.tone || 'neutral'}">${_flowActionIconSvg(n.icon)}</span><span class="fa-text">${n.text}</span></a>`).join('')}</div>`;
+    <a href="${n.link}" class="fa-row" data-tone="${n.tone || 'neutral'}"><span class="fa-ico" data-tone="${n.tone || 'neutral'}">${_flowActionIconSvg(n.icon)}</span><span class="fa-text">${n.text}</span>${window.hxSkinOn && typeof ledgerTaskTail === 'function' ? ledgerTaskTail(n) : ''}</a>`).join('')}</div>`;
 }
 
 async function loadNotifications() {

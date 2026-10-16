@@ -231,3 +231,20 @@ function _lgWire(nav, secs, here, role) {
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !fly.hidden) close(true); });
 }
+
+/* "Needs you" rows in the Ledger look (auth.js flowActionsStrip calls this only while it is on):
+   the amount when the item carries one, and the one verb that says what the row is for. The row
+   stays a single link; the verb is its label, not a second control. */
+const LEDGER_VERBS = [
+  [/past due — collect|collect\b/i, 'Collect'], [/to pay\b/i, 'Pay'], [/past due/i, 'Settle'], [/acknowledge/i, 'Acknowledge'],
+  [/sent back|rejected|returned/i, 'Fix'], [/awaiting your (approval|verification)|waiting for your (signature|final pricing)/i, 'Review'],
+  [/waiting to be sourced/i, 'Source'], [/ready to quote|still waiting to be quoted/i, 'Quote'], [/not sent to the client/i, 'Send'],
+  [/repl(y|ies) waiting|follow-up|follow up/i, 'Follow up'], [/not received yet/i, 'Receive'], [/not yet invoiced/i, 'Invoice'],
+  [/no purchase order/i, 'Order'], [/running low/i, 'Restock'], [/handed to you|book the presentation/i, 'Book'],
+  [/expiring/i, 'Renew'], [/cutoff/i, 'Include'], [/behind on/i, 'Catch up']
+];
+function ledgerTaskTail(n) {
+  const v = (LEDGER_VERBS.find(([re]) => re.test(String(n.text || ''))) || [null, 'Open'])[1];
+  const amt = typeof n.amt === 'number' && n.amt > 0 ? '<span class="fa-amt">₱' + n.amt.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</span>' : '';
+  return amt + '<span class="fa-verb">' + v + '</span>';
+}

@@ -92,7 +92,7 @@ sec('1 · ledger.css cannot leak');
   const trans = STYLE.filter(r => /(^|;)\s*transition\s*:/.test(r.body));
   ok('transitions name their properties (never all) and last 200 ms or less', trans.every(r => { const v = /transition\s*:\s*([^;]+)/.exec(r.body)[1];
     return v.trim() === 'none !important' || (!/\ball\b/.test(v) && (v.match(/([\d.]+)(m?s)/g) || []).every(t => parseFloat(t) * (/ms$/.test(t) ? 1 : 1000) <= 200)); }), trans.map(r => r.body.match(/transition[^;]*/)[0]));
-  const off = STYLE.find(r => /data-motion="off"/.test(r.sel));
+  const off = STYLE.find(r => /\[data-motion="off"\] \*/.test(r.sel));
   ok('data-motion="off" stops every animation and transition (theme.js sets it for reduced motion too)', !!off && /animation:\s*none !important/.test(off.body) && /transition:\s*none !important/.test(off.body));
   ok('the focus ring is the accent', STYLE.some(r => /:focus-visible/.test(r.sel) && /outline:\s*2px solid var\(--l-accent\)/.test(r.body)));
   ok('a dark set re-defines the primitives', STYLE.some(r => /^html\[data-skin="ledger"\]\[data-theme="dark"\]$/.test(r.sel.trim()) && /--l-p-page:/.test(r.body)));
@@ -269,7 +269,7 @@ function guardAdmits(page, role) {
 {
   const notSame = [];
   ALL_ROLES.forEach(r => { if (navbar(AUTH, r).html !== navbar(AUTH_BEFORE, r, { nav: false }).html) notSame.push(r); });
-  ok('the A336 lines in auth.js are the two expected, and nothing else changed there', AUTH.includes(HOOK) && AUTH.includes(ITEM) && AUTH_BEFORE.split('\n').length === AUTH.split('\n').length - 1);
+  ok('the navbar hand-over and the "Try the new look" slot are where expected in auth.js', AUTH.includes(HOOK) && AUTH.includes(ITEM) && AUTH_BEFORE.split('\n').length === AUTH.split('\n').length - 1);
   ok('with the look off, all 9 navbars are byte-identical to auth.js without the A336 lines', notSame.length === 0, notSame);
   const withTry = navbar(AUTH, 'sales', { item: () => '<a class="lg-try" href="?look=new">Try the new look</a>' }).html;
   ok('  the only difference the switch can make while off is the "Try the new look" link', withTry.replace('<a class="lg-try" href="?look=new">Try the new look</a>', '') === navbar(AUTH_BEFORE, 'sales', { nav: false }).html);
@@ -299,5 +299,29 @@ function guardAdmits(page, role) {
   ok('ledger-nav.js escapes through api.js (no helper of its own) and holds no colour', /hxEsc\(s\)/.test(NAV) && !/#[0-9a-fA-F]{3,6}\b/.test(NAV));
 }
 
+/* ── 6 · the "Needs you" strip ─────────────────────────────────────────────────────────────── */
+sec('6 · the "Needs you" strip: unchanged while off, a verb and the amount while on');
+{
+  const TAIL = "${window.hxSkinOn && typeof ledgerTaskTail === 'function' ? ledgerTaskTail(n) : ''}";
+  const ITEMS = [{ icon: 'urgent', tone: 'urgent', text: '6 receivable(s) past due — collect', link: 'flow-ar-aging.html', amt: 1534548.69 },
+    { icon: 'report', tone: 'warn', text: '2 quotation(s) awaiting your approval', link: 'flow-quotations.html' },
+    { icon: 'report', tone: 'ok', text: '3 collections recorded by Neil — acknowledge', link: 'flow-collections.html#field' }];
+  function strip(src, on) {
+    const el = { innerHTML: '', style: {} };
+    const r = navbar(src, 'accounting', { on, nav: true });
+    r.ctx.document.getElementById = () => el;
+    r.ctx.flowComputeActionsOnce = () => Promise.resolve(ITEMS);
+    return vm.runInContext('flowActionsStrip("x")', r.ctx).then(() => el.innerHTML);
+  }
+  ok('auth.js appends the Ledger tail in one place, gated on the look', AUTH.split(TAIL).length === 2);
+  Promise.all([strip(AUTH, false), strip(AUTH.replace(TAIL, ''), false), strip(AUTH, true)]).then(([off, before, on]) => {
+    ok('  off: byte-identical to the strip without the A336 tail', off === before && /class="fa-row"/.test(off));
+    ok('  on: each row ends in its verb, and the money row shows its amount', /Collect<\/span><\/a>/.test(on.replace(/\s+/g, ' ')) && /₱1,534,548\.69/.test(on)
+      && /Review<\/span>/.test(on) && /Acknowledge<\/span>/.test(on) && (on.match(/class="fa-verb"/g) || []).length === 3, on.slice(0, 300));
+    finish();
+  });
+}
+function finish() {
 console.log('\n' + (FAIL ? 'FAIL — ' + FAIL + ' of ' + N : 'all ' + N + ' passed'));
 process.exit(FAIL ? 1 : 0);
+}
