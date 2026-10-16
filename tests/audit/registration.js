@@ -126,7 +126,9 @@ const EXCEPTIONS = {
     getGLEntries:                  'A320 — a secured READ of the books',
     getGLTrialBalance:             'A320 — a secured READ of the books',
     getBooksInbox:                 'A320 — a secured READ of the books',
-    getBooksCoverage:              'A320 — a secured READ of the books'
+    getBooksCoverage:              'A320 — a secured READ of the books',
+    getWebRequests:                'A338 — a secured READ (website visitors\' personal data, admin / director)',
+    collectWebsiteRequestsNow:     'A338 — fetches from the website first, then takes its own short tryLock to file; holding the 20 s mutation lock across a network call would stall every user action'
   }
 };
 

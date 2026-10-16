@@ -109,6 +109,29 @@ call per sheet. Flask already sends the secret on every call (A299).
 
 Rollback: Manage deployments → previous version.
 
+## Connecting the website (A338, FlowAPI 172)
+
+hiescorp.com keeps every quote request and contact message; FlowAPI collects them every 5 minutes into
+the WebRequests tab, and the admin and director answer them on `website-requests.html` (and their
+"Needs you"). The website half (its endpoints, `portal_key`, `requests_enabled`) is in `hiescorp-shop`.
+
+1. Render first: this commit adds the page and lists the five new actions as secured.
+2. In the FlowAPI project, check Project Settings → "Show appsscript.json": if it lists `oauthScopes`,
+   add `https://www.googleapis.com/auth/script.external_request` and `.../auth/script.send_mail`.
+3. Paste the file and Save. **Before deploying**, run any function from the editor (e.g.
+   `websiteFeedSelfTest`) and Allow the new permissions (connect to an external service, send email).
+   Deploying first would make every `/exec` call return Google's permission page.
+4. Deploy → Manage deployments → Edit → New version → Deploy (same deployment). Smoke: `getVersion` → 172.
+5. Script properties: `WEBSITE_FEED_URL` = `https://hiescorp.com/api/requests-feed.php` (exactly; no
+   www), `WEBSITE_FEED_KEY` = the website's `portal_key`, optionally `WEBSITE_ALERT_EMAIL`.
+6. Run `websiteFeedSelfTest` (Executions → its log says OK and how many are waiting; it never logs a
+   name). Then Triggers → Add trigger → `websiteCollectTick`, time-driven, every 5 minutes. Add it
+   once, from one account: a second account's trigger would collect twice as often.
+7. Smoke: send a test quote from the website; within 5 minutes it is on `website-requests.html`.
+
+Off switch: Script property `WEBSITE_COLLECT_OFF` = `1` (or `requests_enabled` false on the website).
+A staging copy (`HX_ENV` = `staging`) never collects.
+
 ## The warehouse scanner (A316 + A318 + A319, FlowAPI 160)
 
 `/scan.html` is a phone web app: open it in Safari (iPhone) or Chrome (Android), then Share → Add to

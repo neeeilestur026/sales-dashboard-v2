@@ -668,6 +668,8 @@ SECURED_ACTIONS = [
     "getCommissionPayoutReport", "getCommissionPreview", "auditCommissionIntegrity", "getCommissionRates", "previewCommissionAttribution",
     # A331 — the Month check (orders, invoices, receivables, payments and the overrides used)
     "getMonthCheck", "getPaymentGuide",
+    # A338 — website requests: visitors' personal data, admin / director only
+    "getWebRequests", "collectWebsiteRequestsNow", "convertWebRequest", "setWebRequestStatus", "eraseWebRequest",
 ]
 
 

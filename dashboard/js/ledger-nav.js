@@ -38,7 +38,7 @@ const LEDGER_ICONS = {
 const LEDGER_NAV = {
   admin: [
     ['Home', 'home', 'admin.html'],
-    ['Sell', 'cart', [['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['admin-import-quotation.html', 'Import quotation'], ['flow-sales-orders.html', 'Sales orders'], ['flow-lifecycle.html', 'SO lifecycle']]],
+    ['Sell', 'cart', [['website-requests.html', 'Website requests'], ['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['admin-import-quotation.html', 'Import quotation'], ['flow-sales-orders.html', 'Sales orders'], ['flow-lifecycle.html', 'SO lifecycle']]],
     ['Clients', 'users', [['clients.html', 'Client list'], ['flow-clients.html', 'Client master'], ['client-tracker.html', 'Client tracker'], ['admin-targets.html', 'Sales targets'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],
     ['Buy & pay', 'card', [['flow-purchase-orders.html', 'Purchase orders'], ['flow-payment-requests.html', 'Payment requests'], ['payment-requests.html', 'Sales payment requests'], ['flow-ap-aging.html', 'AP aging'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['flow-payments.html', 'Payment register'], ['flow-other-payables.html', 'Other payables'], ['flow-suppliers.html', 'Suppliers']]],
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['flow-shipments.html', 'Shipments'], ['scan.html', 'Scanner']]],
@@ -50,7 +50,7 @@ const LEDGER_NAV = {
   ],
   director: [
     ['Home', 'home', 'director-home.html'],
-    ['Quotes', 'file', [['flow-quotations.html', 'All quotations'], ['quotation-board.html', 'Quotation board'], ['client-tracker.html', 'Client tracker'], ['flow-purchase-orders.html', 'Purchase orders'], ['product-finder.html', 'Product finder']]],
+    ['Quotes', 'file', [['website-requests.html', 'Website requests'], ['flow-quotations.html', 'All quotations'], ['quotation-board.html', 'Quotation board'], ['client-tracker.html', 'Client tracker'], ['flow-purchase-orders.html', 'Purchase orders'], ['product-finder.html', 'Product finder']]],
     ['Payables', 'card', [['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-payments.html', 'Payment register'], ['director-expenses.html', 'Expenses'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Commissions for payroll'], ['commission-rates.html', 'Commission rates']]],
     ['Reports', 'chart', [['director-sales-orders.html', 'Sales orders'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['month-check.html', 'Month check']]],
     ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['management-itinerary.html', 'Weekly itineraries'], ['team-performance.html', 'Team performance']]],
@@ -236,6 +236,7 @@ function _lgWire(nav, secs, here, role) {
    the amount when the item carries one, and the one verb that says what the row is for. The row
    stays a single link; the verb is its label, not a second control. */
 const LEDGER_VERBS = [
+  [/website requests? to answer/i, 'Answer'], [/not reaching the portal/i, 'Check'],   // A338
   [/past due — collect|collect\b/i, 'Collect'], [/to pay\b/i, 'Pay'], [/past due/i, 'Settle'], [/acknowledge/i, 'Acknowledge'],
   [/sent back|rejected|returned/i, 'Fix'], [/awaiting your (approval|verification)|waiting for your (signature|final pricing)/i, 'Review'],
   [/waiting to be sourced/i, 'Source'], [/ready to quote|still waiting to be quoted/i, 'Quote'], [/not sent to the client/i, 'Send'],

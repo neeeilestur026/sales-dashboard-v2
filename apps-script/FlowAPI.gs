@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 170;   // A334 — retireDuplicateReceivables (accounting-approved duplicate clean-up). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 172;   // A338 — website requests: the bridge from hiescorp.com. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -552,7 +552,12 @@ var SCHEMA = {
   DocMeta:       ['Source Type', 'Source No', 'Doc ID', 'VAT Type', 'Zero Rating Ref', 'Deposited To', 'Cheque No', 'Paid From',
                   'Account', 'Supplier TIN', 'SI/OR No', 'VAT Amount', 'EWT ATC', 'EWT Base', 'EWT Amount', 'Expense Period',
                   'Receipt Rate', 'Import Entry No', 'Import Release Date', 'Dutiable Value', 'SO No', 'Notes', 'Updated By', 'Updated At'],
-  DocAliases:    ['Doc ID', 'Source Type', 'Old No', 'New No', 'At', 'By']
+  DocAliases:    ['Doc ID', 'Source Type', 'Old No', 'New No', 'At', 'By'],
+  // A338 — one row per request collected from hiescorp.com (see WEBSITE REQUESTS). Written only as whole
+  // rows built from this list (_webSetRow / the collector's block), so it can grow at the end safely.
+  WebRequests:   ['Ref', 'Key', 'Kind', 'Received At', 'Sent At', 'Name', 'Company', 'Email', 'Phone', 'Location', 'Subject',
+                  'Message', 'Items JSON', 'Item Count', 'Unit Count', 'Status', 'Customer', 'Salesperson', 'PR No',
+                  'Handled By', 'Handled At', 'Note']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -603,7 +608,8 @@ function _ss() {
    The columns are set to plain text once per sheet (a Script Property remembers it); values already
    parsed stay as they are, so readers compare through _idNorm / _fpSame. */
 var _TEXT_COLS = { EventIndex: ['Fingerprint'], PaymentRequests: ['Account Number'], Suppliers: ['Account Number'],
-                   FieldCollections: ['Cheque No', 'Reference No'] };
+                   FieldCollections: ['Cheque No', 'Reference No'],
+                   WebRequests: ['Ref', 'Key', 'Phone'] };   // A338 — a phone '0917…' must keep its 0
 var _TEXT_DONE = {};
 function _textColumns(name, sh) {
   if (!_TEXT_COLS[name] || _TEXT_DONE[name]) return;
@@ -804,6 +810,9 @@ var _SECURED = {
   previewCommissionAttribution: 1,                                    // pay data went to an unsigned GET
   getMonthCheck: 1,                                                   // A331 — secured READ (the books' viewers)
   getPaymentGuide: 1,                                                 // A331 — secured READ (who records payments)
+  convertWebRequest: 1, setWebRequestStatus: 1, eraseWebRequest: 1,   // A338 — website requests (admin / director)
+  getWebRequests: 1, collectWebsiteRequestsNow: 1,                    // A338 — a secured READ (visitors' personal data) and
+                                                                      // the on-demand collect (it takes its own short lock)
 };
 
 /* A209 — commission requests are built but NOT open to everyone yet.
@@ -14998,6 +15007,8 @@ var _MODULE_MAP = {
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
+  convertWebRequest: ['Website request', 'Pricing request made'],    // A338
+  setWebRequestStatus: ['Website request', 'Status changed'], eraseWebRequest: ['Website request', 'Personal data erased'],
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
@@ -18096,6 +18107,331 @@ function resolveBooksInboxItem(p) {
   return { success: true, refNo: id, message: result + '.' };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+//  A338 WEBSITE REQUESTS — the bridge from hiescorp.com
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+/* The website keeps every quote request and contact message in its own database; this side COLLECTS
+   them every 5 minutes (websiteCollectTick, a time trigger the owner adds in the editor's Triggers
+   page) from a private feed and files them in WebRequests. Pull, not push: Render's free plan sleeps,
+   the website's CSP lets the browser talk only to hiescorp.com, and nobody on the internet gets a way
+   to write into the portal. The admin and director answer them on website-requests.html: one click
+   makes a pricing request; anything else is closed or marked spam.
+
+   EVERYTHING IN A ROW WAS TYPED BY A STRANGER. Three rules follow:
+     · _webCell: no cell ever starts with = + - @ (a formula), single-line fields lose < and > and a
+       message keeps its meaning with ‹ › — nothing a visitor typed can become markup, here or in a PDF;
+     · an existing client is NEVER patched from a request (anyone can claim to be a customer): the
+       visitor's details go only into the pricing request's own contact block;
+     · the "Needs you" line carries counts, never names.
+
+   Script Properties: WEBSITE_FEED_URL (exactly https://hiescorp.com/api/requests-feed.php),
+   WEBSITE_FEED_KEY (the website's portal_key), WEBSITE_ALERT_EMAIL (optional), WEBSITE_COLLECT_OFF
+   (any value stops collecting). A staging copy (HX_ENV=staging) never collects: it would take live
+   requests and acknowledge them. Protocol: GET → {ok, requests[], more}; POST {ack:[ref]} → {ok, acked}. */
+var _WEB_ROLES = { admin: 1, director: 1 };
+var _WEB_RING_MAX = 300;                   // keys already filed, for dedupe across stale sheet reads
+var _WEB_ALERT_GAP = 30 * 60000;           // at most one alert email per 30 minutes
+var _WEB_STALE = 30 * 60000;               // no good read for this long, after 3 failures → urgent
+var _WEB_KEEP_SPAM = 30 * 86400000;        // spam keeps its personal data for 30 days
+var _WEB_LIST_DAYS = 60;                   // the inbox shows New plus the last 60 days
+var _WEB_PII = ['Name', 'Company', 'Email', 'Phone', 'Location', 'Subject', 'Message', 'Items JSON'];
+var _WEB_PORTAL = 'https://hi-escorp-portal-wufz.onrender.com/website-requests.html';
+
+function _webRole(p) { return String((p && p.actorRole) || '').trim().toLowerCase(); }
+
+/** A stranger's text as a cell: never a formula, never markup. */
+function _webCell(v, multi) {
+  var s = String(v === null || v === undefined ? '' : v);
+  if (multi) s = s.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/</g, '‹').replace(/>/g, '›');
+  else s = s.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/[<>]/g, '');
+  s = s.trim().slice(0, multi ? 3000 : 190);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+function _webProps() { return PropertiesService.getScriptProperties(); }
+function _webFeedUrl() { return String(_fprop('WEBSITE_FEED_URL') || '').trim(); }
+
+/** How the bridge is doing, for the inbox and the "Needs you" line. */
+function _webHealth() {
+  var g = function (k) { return _fprop(k); };
+  var configured = !!(_webFeedUrl() && g('WEBSITE_FEED_KEY'));
+  var okAt = g('web_ok_at'), fails = parseInt(g('web_fails'), 10) || 0;
+  var since = okAt ? Date.now() - new Date(okAt).getTime() : Infinity;
+  return { configured: configured, off: !!g('WEBSITE_COLLECT_OFF'), staging: g('HX_ENV') === 'staging',
+           okAt: okAt, errAt: g('web_err_at'), error: g('web_err'), fails: fails,
+           stale: configured && !g('WEBSITE_COLLECT_OFF') && fails >= 3 && since > _WEB_STALE };
+}
+function _webNote(ok, error) {
+  var pr = _webProps(), now = _now().toISOString();
+  if (ok) { pr.setProperty('web_ok_at', now); pr.setProperty('web_fails', '0'); pr.setProperty('web_err', ''); }
+  else {
+    pr.setProperty('web_err', String(error || 'unknown error').slice(0, 300)); pr.setProperty('web_err_at', now);
+    pr.setProperty('web_fails', String((parseInt(_fprop('web_fails'), 10) || 0) + 1));
+  }
+}
+
+/** One call to the website's feed. Throws a plain sentence for anything but {ok:true}. */
+function _webFetch(method, payload) {
+  var url = _webFeedUrl();
+  var opt = { method: method, muteHttpExceptions: true, followRedirects: false,
+              headers: { 'X-Portal-Key': _fprop('WEBSITE_FEED_KEY'), 'Accept': 'application/json' } };
+  if (payload) { opt.contentType = 'application/json'; opt.payload = JSON.stringify(payload); }
+  else url += (url.indexOf('?') < 0 ? '?' : '&') + 'limit=50';
+  var res = UrlFetchApp.fetch(url, opt);
+  var code = res.getResponseCode(), body = null;
+  try { body = JSON.parse(res.getContentText() || ''); } catch (e) { body = null; }
+  if (code >= 300 && code < 400) throw new Error('the website redirected (HTTP ' + code + '): WEBSITE_FEED_URL must be exactly https://hiescorp.com/api/requests-feed.php');
+  if (!body || typeof body !== 'object') throw new Error('the website did not answer with data (HTTP ' + code + ')' + (code === 403 || code === 406 || code === 200 ? ', probably its host firewall' : ''));
+  if (code === 401) throw new Error('the website refused the key: WEBSITE_FEED_KEY must equal portal_key in hiescorp-config.php');
+  if (code === 429) throw new Error('the website locked the feed after wrong keys; it reopens within 15 minutes');
+  if (code === 503) throw new Error(body.error === 'off' ? 'requests are switched off on the website (requests_enabled or portal_key)' : 'the website database is unavailable');
+  if (code !== 200 || body.ok !== true) throw new Error('unexpected answer from the website (HTTP ' + code + ')');
+  return body;
+}
+
+/** A feed entry as a WebRequests row, or null when it is not one. */
+function _webRecord(q) {
+  if (!q || typeof q !== 'object') return null;
+  var ref = String(q.ref || '').trim();
+  if (!/^[QC]-\d{6}-\d{4,6}$/.test(ref)) return null;
+  var sent = new Date(String(q.createdAt || ''));
+  var items = (Array.isArray(q.items) ? q.items : []).slice(0, 100).map(function (it) {
+    it = it || {};
+    return { id: parseInt(it.id, 10) || 0, sku: _webCell(it.sku), name: _webCell(it.name), brand: _webCell(it.brand),
+             category: _webCell(it.category), range: _webCell(it.range), qty: Math.max(1, Math.min(999, parseInt(it.qty, 10) || 1)) };
+  }).filter(function (it) { return it.sku || it.name; });
+  return {
+    'Ref': ref, 'Key': String(q.key || (ref + '@' + String(q.createdAt || ''))).slice(0, 80),
+    'Kind': q.kind === 'contact' ? 'contact' : 'quote', 'Received At': _now(), 'Sent At': isNaN(sent.getTime()) ? '' : sent,
+    'Name': _webCell(q.name), 'Company': _webCell(q.company), 'Email': _webCell(q.email), 'Phone': _webCell(q.phone),
+    'Location': _webCell(q.location), 'Subject': _webCell(q.subject), 'Message': _webCell(q.message, true),
+    'Items JSON': JSON.stringify(items), 'Item Count': items.length,
+    'Unit Count': items.reduce(function (s, it) { return s + it.qty; }, 0), 'Status': 'New'
+  };
+}
+
+function _webRing() { try { var a = JSON.parse(_fprop('web_ring') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function _webRingAdd(keys) {
+  if (!keys.length) return;
+  var ring = _webRing().concat(keys);
+  _webProps().setProperty('web_ring', JSON.stringify(ring.slice(-_WEB_RING_MAX)));
+}
+
+/** Spam keeps its personal data for 30 days, then only its ref and status remain. Under the lock. */
+function _webPurge() {
+  var cut = Date.now() - _WEB_KEEP_SPAM, n = 0;
+  _rows('WebRequests').forEach(function (r) {
+    if (r['Status'] !== 'Spam' || !r['Handled At'] || new Date(r['Handled At']).getTime() > cut) return;
+    if (!_WEB_PII.some(function (h) { return String(r[h] || '') !== ''; })) return;
+    var patch = {}; _WEB_PII.forEach(function (h) { patch[h] = ''; });
+    patch['Note'] = 'Spam: personal data removed after 30 days';
+    _webSetRow(r, patch); n++;
+  });
+  _webProps().setProperty('web_purge_at', String(Date.now()));
+  return n;
+}
+
+function _webSetRow(row, patch) {
+  var fields = SCHEMA.WebRequests;
+  var line = fields.map(function (h) { var v = patch.hasOwnProperty(h) ? patch[h] : row[h]; return v === undefined ? '' : v; });
+  _sheet('WebRequests').getRange(row.rowIndex, 1, 1, fields.length).setValues([line]);
+}
+
+/** The alert email: counts and a link only. Throttled; what it holds back goes out with the next one. */
+function _webAlert(added) {
+  var to = String(_fprop('WEBSITE_ALERT_EMAIL') || '').trim();
+  if (to.indexOf('@') < 0) return;
+  var pr = _webProps();
+  var n = (parseInt(_fprop('web_alert_n'), 10) || 0) + added.length;
+  if (!n) return;
+  if (Date.now() - (parseInt(_fprop('web_alert_at'), 10) || 0) < _WEB_ALERT_GAP) { pr.setProperty('web_alert_n', String(n)); return; }
+  try {
+    MailApp.sendEmail(to, n + ' new website request' + (n === 1 ? '' : 's') + ' in the portal',
+      n + ' new request' + (n === 1 ? ' has' : 's have') + ' come in from hiescorp.com.\n\nAnswer ' + (n === 1 ? 'it' : 'them') +
+      ' in the portal: ' + _WEB_PORTAL + '\n\n(Names and details are only in the portal, never in this email.)');
+    pr.setProperty('web_alert_at', String(Date.now())); pr.setProperty('web_alert_n', '0');
+  } catch (e) { pr.setProperty('web_alert_n', String(n)); }
+}
+
+/** Collect once: fetch (no lock) → file the new ones (a short lock) → acknowledge (no lock) → alert. */
+function _webCollect() {
+  if (_fprop('HX_ENV') === 'staging') return { success: false, message: 'This is a staging copy: it never collects live website requests.' };
+  if (_fprop('WEBSITE_COLLECT_OFF')) return { success: false, off: true, message: 'Collecting is switched off (WEBSITE_COLLECT_OFF).' };
+  if (!_webFeedUrl() || !_fprop('WEBSITE_FEED_KEY')) return { success: false, notConfigured: true, message: 'Not connected yet: set WEBSITE_FEED_URL and WEBSITE_FEED_KEY.' };
+  var body;
+  try { body = _webFetch('get'); }
+  catch (e) { _webNote(false, e.message); return { success: false, message: 'Could not read the website: ' + e.message + '.' }; }
+  var list = Array.isArray(body.requests) ? body.requests : [];
+  var purgeDue = Date.now() - (parseInt(_fprop('web_purge_at'), 10) || 0) > 86400000;
+  if (!list.length && !purgeDue) { _webNote(true); _webAlert([]); return { success: true, collected: 0, message: 'No new website requests.' }; }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) { _webNote(true); return { success: true, collected: 0, busy: true, message: 'The portal was busy; the next run files them.' }; }
+  var added = [], seen = [];
+  try {
+    _ROWS_MEMO = null;                                   // a write phase never reads a memo
+    var have = {};
+    _webRing().forEach(function (k) { have[k] = 1; });
+    if (list.length) _rows('WebRequests').forEach(function (r) { have[String(r['Key'])] = 1; });
+    var fields = SCHEMA.WebRequests, block = [];
+    list.forEach(function (q) {
+      var rec = _webRecord(q);
+      if (!rec) return;
+      seen.push(rec['Ref']);
+      if (have[rec['Key']]) return;
+      have[rec['Key']] = 1;
+      added.push(rec);
+      block.push(fields.map(function (h) { return rec[h] === undefined ? '' : rec[h]; }));
+    });
+    if (block.length) {
+      var sh = _sheet('WebRequests');
+      sh.getRange(sh.getLastRow() + 1, 1, block.length, fields.length).setValues(block);
+      SpreadsheetApp.flush();
+      _webRingAdd(added.map(function (r) { return r['Key']; }));
+    }
+    if (purgeDue) _webPurge();
+  } finally { lock.releaseLock(); }
+
+  var ackError = '';
+  if (seen.length) { try { _webFetch('post', { ack: seen }); } catch (e) { ackError = e.message; } }
+  _webNote(!ackError, ackError ? 'filed, but the website did not take the acknowledgement: ' + ackError : '');
+  _webAlert(added);
+  return { success: true, collected: added.length, more: !!body.more,
+           message: added.length ? added.length + ' new website request' + (added.length === 1 ? '' : 's') + ' filed.' : 'No new website requests.' };
+}
+
+/** The 5-minute time trigger (add it in the editor: Triggers → websiteCollectTick → time-driven, every 5 minutes). */
+function websiteCollectTick() {
+  try { _SS = null; _webCollect(); }
+  catch (e) { try { _webNote(false, String(e && e.message || e)); } catch (x) {} }
+}
+
+/** Run from the editor once after setting the properties: says whether the feed answers, without any personal data. */
+function websiteFeedSelfTest() {
+  var h = _webHealth();
+  if (!h.configured) { Logger.log('Not configured: set WEBSITE_FEED_URL and WEBSITE_FEED_KEY in Script Properties.'); return; }
+  try {
+    var b = _webFetch('get');
+    Logger.log('OK: the website answered. Waiting requests: ' + ((b.requests || []).length) + (b.more ? ' (more)' : '') + '.');
+  } catch (e) { Logger.log('FAILED: ' + e.message); }
+}
+
+/** "Check the website now", from the inbox. Takes its own short lock after the fetch, like the timer. */
+function collectWebsiteRequestsNow(p) {
+  if (!_WEB_ROLES[_webRole(p)]) return { success: false, message: 'The admin or the director checks the website.' };
+  var out = _webCollect();
+  out.health = _webHealth();
+  return out;
+}
+
+function _webItems(r) { try { var a = JSON.parse(r['Items JSON'] || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function _webIso(v) { if (!v) return ''; var d = new Date(v); return isNaN(d.getTime()) ? '' : d.toISOString(); }
+
+/** The inbox: New first, then the last 60 days. countOnly reads the Status column alone (the bell asks often). */
+function getWebRequests(p) {
+  if (!_WEB_ROLES[_webRole(p)]) return { success: false, message: 'Not permitted.' };
+  var health = _webHealth();
+  var sh = _ss().getSheetByName('WebRequests');            // a read never creates the tab
+  if (!sh || sh.getLastRow() < 2) return { success: true, count: 0, data: [], health: health };
+  if (String(p.countOnly) === 'true' || p.countOnly === true) {
+    var col = SCHEMA.WebRequests.indexOf('Status') + 1;
+    var n = sh.getRange(2, col, sh.getLastRow() - 1, 1).getValues().filter(function (v) { return v[0] === 'New'; }).length;
+    return { success: true, count: n, health: health };
+  }
+  var cut = Date.now() - _WEB_LIST_DAYS * 86400000, count = 0;
+  var data = _rows('WebRequests').filter(function (r) {
+    if (r['Status'] === 'New') { count++; return true; }
+    return new Date(r['Handled At'] || r['Received At']).getTime() >= cut;
+  }).map(function (r) {
+    return { ref: String(r['Ref']), kind: r['Kind'], receivedAt: _webIso(r['Received At']), sentAt: _webIso(r['Sent At']),
+             name: r['Name'], company: r['Company'], email: r['Email'], phone: String(r['Phone'] || ''), location: r['Location'],
+             subject: r['Subject'], message: r['Message'], items: _webItems(r), itemCount: _num(r['Item Count']), unitCount: _num(r['Unit Count']),
+             status: r['Status'], customer: r['Customer'], salesperson: r['Salesperson'], prNo: r['PR No'],
+             handledBy: r['Handled By'], handledAt: _webIso(r['Handled At']), note: r['Note'] };
+  }).sort(function (a, b) {
+    if ((a.status === 'New') !== (b.status === 'New')) return a.status === 'New' ? -1 : 1;
+    return a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0;
+  });
+  return { success: true, count: count, data: data, health: health };
+}
+
+function _webRow(ref) {
+  ref = String(ref || '').trim();
+  return ref ? _rows('WebRequests').filter(function (r) { return String(r['Ref']) === ref; })[0] : null;
+}
+
+/** An existing client by name or alias, never patched; otherwise a new Prospect from the request. */
+function _webClient(name, r, actor) {
+  var rk = _rawKey(name), key = _canonKey(name);
+  var ex = _rows('Clients').filter(function (c) { var n = c['Customer']; return _rawKey(n) === rk || (key && _canonKey(n) === key); })[0];
+  if (ex) return { created: false, customer: String(ex['Customer']) };
+  return _upsertClientFields(name, {
+    contactPerson: _webCell(r['Name']), email: _webCell(r['Email']), phone: _webCell(r['Phone']), address: _webCell(r['Location']),
+    rfqRef: String(r['Ref']), notes: 'From website request ' + r['Ref']
+  }, actor);
+}
+
+/** Make a pricing request from a quote request. Idempotent: the website ref is the clientRef. */
+function convertWebRequest(p) {
+  if (!_WEB_ROLES[_webRole(p)]) return { success: false, message: 'The admin or the director makes the pricing request.' };
+  var r = _webRow(p.ref);
+  if (!r) return { success: false, message: 'Website request ' + (p.ref || '?') + ' was not found.' };
+  var ref = String(r['Ref']), cref = 'web:' + ref;
+  if (r['PR No']) return { success: true, duplicate: true, prNo: r['PR No'], refNo: ref, message: ref + ' is already pricing request ' + r['PR No'] + '.' };
+  var items = _webItems(r);
+  if (!items.length) return { success: false, message: ref + ' lists no products, so there is nothing to price. Close it once you have replied.' };
+  if (r['Status'] !== 'New') return { success: false, message: ref + ' is ' + String(r['Status']).toLowerCase() + '. Reopen it first.' };
+  var customer = _webCell(p.customer || r['Company'] || r['Name']);
+  if (!customer) return { success: false, message: 'Enter the customer name.' };
+  var who = String(p.actorName || ''), salesperson = _webCell(p.salesperson);
+  var prNo = _fprop('pr_cref_' + cref), client = { created: false, customer: customer };
+  if (!prNo) {                                            // the clientRef check runs first, so a retry makes no second prospect
+    client = _webClient(customer, r, who);
+    var out = createPricingRequest({
+      customer: _webCell(client.customer || customer), clientRef: cref, requestedBy: who, salesperson: salesperson,
+      actorName: who, actorRole: p.actorRole, clientLocation: _webCell(r['Location']),
+      notes: _webCell('Website request ' + ref + (r['Message'] ? ': ' + r['Message'] : ''), true).slice(0, 1000),
+      docJson: JSON.stringify({ companyName: _webCell(r['Company']), contactPerson: _webCell(r['Name']), contactEmail: _webCell(r['Email']),
+                                contactPhone: _webCell(r['Phone']), companyAddress: _webCell(r['Location']), preparedByName: who }),
+      items: JSON.stringify(items.map(function (it) {
+        return { itemNo: _webCell(it.sku) || 'N/A', itemName: _webCell([it.brand, it.name].filter(function (x) { return x; }).join(' ')),
+                 qty: it.qty, uom: '', remarks: _webCell([it.category, it.range].filter(function (x) { return x; }).join(' / ')) };
+      }))
+    });
+    if (!out || !out.success) return out || { success: false, message: 'The pricing request was not made.' };
+    prNo = out.prNo;
+  }
+  _webSetRow(r, { 'Status': 'Converted', 'Customer': client.customer || customer, 'Salesperson': salesperson, 'PR No': prNo,
+                  'Handled By': who, 'Handled At': _now() });
+  return { success: true, prNo: prNo, refNo: ref, clientCreated: !!client.created, customer: client.customer || customer,
+           message: 'Pricing request ' + prNo + ' made from ' + ref + (client.created ? ' (new prospect ' + client.customer + ')' : '') + '.' };
+}
+
+/** Closed (answered by email or phone), Spam, or back to New. A converted request stays converted. */
+function setWebRequestStatus(p) {
+  if (!_WEB_ROLES[_webRole(p)]) return { success: false, message: 'The admin or the director handles website requests.' };
+  var r = _webRow(p.ref);
+  if (!r) return { success: false, message: 'Website request ' + (p.ref || '?') + ' was not found.' };
+  var to = String(p.status || '');
+  if (['Closed', 'Spam', 'New'].indexOf(to) < 0) return { success: false, message: 'Choose Closed, Spam or New.' };
+  if (r['Status'] === 'Converted') return { success: false, message: r['Ref'] + ' is already pricing request ' + r['PR No'] + '.' };
+  if (r['Status'] === to) return { success: true, refNo: r['Ref'], message: r['Ref'] + ' is already ' + to.toLowerCase() + '.' };
+  _webSetRow(r, { 'Status': to, 'Handled By': String(p.actorName || ''), 'Handled At': _now(), 'Note': _webCell(p.note).slice(0, 200) });
+  return { success: true, refNo: r['Ref'], message: r['Ref'] + (to === 'New' ? ' is back in the inbox.' : ' marked ' + to.toLowerCase() + '.') };
+}
+
+/** Data Privacy Act: blank the visitor's personal data, keep the ref and what happened to it. */
+function eraseWebRequest(p) {
+  if (!_WEB_ROLES[_webRole(p)]) return { success: false, message: 'The admin or the director erases website requests.' };
+  var r = _webRow(p.ref);
+  if (!r) return { success: false, message: 'Website request ' + (p.ref || '?') + ' was not found.' };
+  var patch = {}; _WEB_PII.forEach(function (h) { patch[h] = ''; });
+  patch['Note'] = 'Personal data erased by ' + (p.actorName || 'the admin') + ' on ' + _dateStr(_now());
+  _webSetRow(r, patch);
+  return { success: true, refNo: r['Ref'], message: 'Personal data erased from ' + r['Ref'] + '.' +
+           (r['PR No'] ? ' Pricing request ' + r['PR No'] + ' keeps its own copy of the contact details.' : '') };
+}
+
 var HANDLERS = {
   getVersion: getVersion,
   getSuppliers: getSuppliers, saveSupplier: saveSupplier, deleteSupplier: deleteSupplier,
@@ -18120,6 +18456,8 @@ var HANDLERS = {
   attachOrphanToSO: attachOrphanToSO, setCollectionMeta: setCollectionMeta,   // A265
   voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
   retireDuplicateReceivables: retireDuplicateReceivables,   // A334
+  getWebRequests: getWebRequests, collectWebsiteRequestsNow: collectWebsiteRequestsNow,   // A338
+  convertWebRequest: convertWebRequest, setWebRequestStatus: setWebRequestStatus, eraseWebRequest: eraseWebRequest,
   correctCollection: correctCollection,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
@@ -18279,6 +18617,7 @@ var MUTATIONS = {
      Found by tests/audit/registration.js, which fails on precisely this if it is ever undone. */
   reverseReceiving: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334: voids and deleteRow()s, so the lock matters
+  convertWebRequest: 1, setWebRequestStatus: 1, eraseWebRequest: 1,   // A338 (collectWebsiteRequestsNow takes its own lock)
   backfillItemIds: 1,                                   // A159 (findDuplicateInventory is read-only)
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
@@ -18347,6 +18686,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A338 WEBSITE REQUESTS (172; 171 stays A327's only if A327 is pasted first, otherwise A327 becomes 173). The bridge from hiescorp.com: the website keeps each quote request and contact message, and websiteCollectTick (a 5-minute time trigger the owner adds in the editor) COLLECTS them from its private feed (WEBSITE_FEED_URL + WEBSITE_FEED_KEY Script Properties; X-Portal-Key header; no redirects) into the new WebRequests tab, deduped by key (a ring of the last 300 in a Script Property plus the sheet), one block write under a short tryLock, acknowledged after the write, then one alert email (counts and a link only, at most every 30 min, WEBSITE_ALERT_EMAIL). Secured, admin / director only: getWebRequests (New + 60 days, health; countOnly reads the Status column), collectWebsiteRequestsNow, convertWebRequest (a pricing request with clientRef web:<ref>, checked first; an existing client is never patched, a new one is a Prospect; HE item numbers kept as the requested code; no inventory add), setWebRequestStatus (Closed / Spam / New), eraseWebRequest (Data Privacy Act). Every visitor string goes through _webCell (no formulas, no markup). Spam loses its personal data after 30 days. WEBSITE_COLLECT_OFF stops collecting; HX_ENV=staging never collects. websiteFeedSelfTest() checks the connection from the editor without logging personal data.
 A334 RETIRE DUPLICATE RECEIVABLES (170; A327's staging build moves to 171 when it merges). 16 invoices were in the portal twice, each copy fully paid by its own payment (P4.62M counted twice). Accounting approved keeping one copy of each (15 Oct 2026). retireDuplicateReceivables takes the approved pairs and checks them all before the first write (same invoice number by its last digits, amounts within 2%, the kept copy still fully paid); then voids the going copy's payments through voidCollection (row kept, marked void, reason recorded), copies the going receivable in full into Overrides ('retired-duplicate') and removes it with its collection journal. When only the going copy pointed at a real invoice, the kept copy and its payments take that invoice number ('relinked-invoice'). extraVoids void further payments on a kept copy; a fraction of a centavo left open is settled ('settled-sub-centavo'). dryRun answers with the plan and writes nothing. Accounting, admin or the director only.
 A331 SAFEGUARDS ON SALES ORDERS, INVOICES AND COLLECTIONS (169; 168 was taken by A327 on staging). From the 14 Oct reconciliation (invoices at VAT 0%, EWT unchecked, payments recorded twice, a real payment entered as demo data, billing past the order). A mismatch now BLOCKS the save unless a reason (10+ characters) is given; every reason goes to the new Overrides tab. SalesOrders + VAT Type, Zero Rating Ref (16 columns, both writers); Clients + Default VAT Type, Zero Rating Ref, EWT Rate, TIN (16; saveClient's literal grew and keeps them when an older page omits them). createSalesOrder/updateSalesOrder need a VAT type (from the client when the form is silent), a zero-rating reference for VAT-0, a reason for a customer not on the Clients list; a billed order keeps its VAT type and cannot drop below what is invoiced. createInvoice: the order's customer only (no override), the order's VAT type (checked with the books off too), a reason to bill past the order's before-VAT total, to repeat an amount, or for a second invoice (was a yes/no confirm); all decided before a number is taken. recordCollection: `received` (cash) + EWT = amount settled (the phone app's model; `amount` still accepted), accounting/admin/director only, EWT refused when negative or above the amount (was clamped), a reason for EWT off the expected rate x before-VAT share (client EWT Rate: none/1/2/auto = goods 1% services 2%) or missing, for a repeat payment or a cheque/reference this customer already used, for over-collection (was a confirm) or a 0 receivable. recordFieldCollection runs the same checks per line, one reason per payment. correct/voidCollection and voidInvoice: the same roles; voids refuse a closed month. importCollections: director + reason, _idNorm de-dupe, no blank invoice numbers, no repeat payments, no closed months. seedCommissionDemo off unless allowDemo = on (staging); demo cannot be renamed into a real order; the books skip DEMO- rows. getMonthCheck (secured read) for the Month check page; getPaymentGuide (secured read) gives the payment forms the expected EWT from the same rule the save checks. saveClient: only accounting/admin/director change a client's VAT type, zero-rating reference, EWT rate or TIN. A reference with no digit is never a duplicate cheque. BIR 2307 document type on collections and receivables. KILL SWITCH: FlowSettings safeguards = off restores 167's behaviour exactly.
 A326 DAILY REPORTS SHOW THE DAY'S TASKS AGAIN (167). getActivityLog formatted the date of EVERY row of the 9,600-row ActivityLog (a Session.getScriptTimeZone() call and a formatDate per row) before it looked at who the row belonged to: 10-25 s per call, and a sales rep's report fires eight at once (today + seven for the week), so they queued past the page's minute and the tasks never appeared. The timezone is now asked once per execution (_tz), the person is filtered first, and the day(s) by number (_onDays); getActivityLog and getSalesCalls also take from/to so the week is one call. getSalesCalls, getClientVisits and getDailyReports filter the same way.
