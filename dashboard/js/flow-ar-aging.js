@@ -502,7 +502,11 @@ async function submitCollection() {
       method: document.getElementById('collectMethod').value,
       ref: document.getElementById('collectRef').value.trim(),
       notes: document.getElementById('collectNotes').value.trim(),
-      clientRef: collectClientRef || flowClientRef()        // idempotent create (safe retry) — one per open form (A331)
+      clientRef: collectClientRef || flowClientRef(),       // idempotent create (safe retry) — one per open form (A331)
+      /* A337 — Neil, 2026-10-16: a collection is recorded whether or not the official receipt is on file
+         yet. The server's A195 document gate stays for other callers; this form always passes it, and the
+         Collections list keeps saying "No proof of collection on file yet" until the receipt is filed. */
+      confirmNoDocs: true
     };
     // A331 — the one payment model: the cash received plus the EWT withheld is what settles the invoice
     if (arSg) { delete payload.amount; payload.received = amount; }

@@ -154,6 +154,10 @@ function finish() {
   ok('  only accounting and admin acknowledge', /const FC_ACK_ROLES = \['accounting', 'admin'\];/.test(FCJ) && /!colViewer/.test(FCJ));
   eq('  the same roles FlowAPI uses', ['accounting', 'admin'].sort().join(','), gsObj('_FIELD_ACK_ROLES'));
   ok('AR Aging shows the follow-up chip', /\$\{arFollowUpChip\(r\.followUp\)\}/.test(ARJ) && /promise missed/.test(ARJ));
+  // A337 — recording a collection never waits on the official receipt; the list keeps the reminder
+  const sub = (ARJ.match(/async function submitCollection\(\)[\s\S]*?\n\}/) || [''])[0];
+  ok('  recording a collection never stops for the missing official receipt', /const payload = \{[\s\S]*?confirmNoDocs: true\s*\};/.test(sub));
+  ok('  and Collections still flags a payment with no proof on file', /No proof of collection on file yet/.test(FCJ));
   console.log(FAIL ? `\n${FAIL} FAILED\n` : '\nall ok\n');
   process.exit(FAIL ? 1 : 0);
 }
