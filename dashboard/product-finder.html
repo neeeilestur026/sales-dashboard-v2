@@ -60,23 +60,38 @@
         <form class="pfc-panel pfc-qs" id="pfcSelForm" autocomplete="off">
           <p class="pfc-lead">The questions from Power Team's selection guide (catalog p.7). The suggested set updates as you answer.</p>
           <fieldset>
+            <legend>Start from</legend>
+            <div class="pfc-choice two">
+              <label><input type="radio" name="pfcBasis" value="load" checked><span><b>The load and how far it moves</b><small>sized with Power Team's 80% margin</small></span></label>
+              <label><input type="radio" name="pfcBasis" value="rating"><span><b>The cylinder's rating</b><small>capacity and stroke, e.g. 10 t, 8 in</small></span></label>
+            </div>
+          </fieldset>
+          <fieldset>
             <legend><span class="n">1</span>What will it do?</legend>
             <div class="pfc-choice">
               <label><input type="radio" name="pfcJob" value="lift" checked><span><b>Lift or push</b><small>raise, press, spread</small></span></label>
               <label><input type="radio" name="pfcJob" value="pull"><span><b>Pull or tension</b><small>a rod or cable through it</small></span></label>
               <label><input type="radio" name="pfcJob" value="hold"><span><b>Hold it up</b><small>for hours or days</small></span></label>
             </div>
+            <div class="pfc-sub">
+              <span class="pfc-sublbl">Single- or double-acting?</span>
+              <div class="pfc-choice">
+                <label><input type="radio" name="pfcAct" value="SA"><span><b>Single-acting</b><small>a spring or the load returns it</small></span></label>
+                <label><input type="radio" name="pfcAct" value="DA"><span><b>Double-acting</b><small>pulled back under power</small></span></label>
+                <label><input type="radio" name="pfcAct" value="" checked><span><b>Not sure</b><small>single-acting is the usual</small></span></label>
+              </div>
+            </div>
           </fieldset>
           <fieldset>
-            <legend><span class="n">2</span>How heavy is the load?</legend>
+            <legend><span class="n">2</span><span id="pfcSelQ2">How heavy is the load?</span></legend>
             <div class="pfc-row">
               <input type="number" id="pfcSelLoad" min="0" step="any" inputmode="decimal" placeholder="e.g. 8" aria-label="Load">
               <select id="pfcSelLoadU" aria-label="Load unit"><option value="t">tonnes</option><option value="kg">kg</option><option value="ton">US tons</option></select>
             </div>
-            <label class="pfc-inline">Shared by <input type="number" id="pfcSelPoints" min="1" step="1" value="1" inputmode="numeric"> cylinder(s)</label>
+            <label class="pfc-inline"><span id="pfcSelPtsLbl">Shared by</span> <input type="number" id="pfcSelPoints" min="1" step="1" value="1" inputmode="numeric"> cylinder(s)</label>
           </fieldset>
           <fieldset>
-            <legend><span class="n">3</span>How far must it move?</legend>
+            <legend><span class="n">3</span><span id="pfcSelQ3">How far must it move?</span></legend>
             <div class="pfc-row">
               <input type="number" id="pfcSelTravel" min="0" step="any" inputmode="decimal" placeholder="e.g. 150" aria-label="Travel">
               <select id="pfcSelTravelU" aria-label="Travel unit"><option value="mm">mm</option><option value="in">in</option></select>
@@ -96,10 +111,17 @@
               <label><input type="radio" name="pfcPower" value="electric"><span><b>Electric</b><small>220 V</small></span></label>
               <label><input type="radio" name="pfcPower" value="air"><span><b>Air</b><small>compressor</small></span></label>
             </div>
+            <div class="pfc-sub" id="pfcSelSpeedRow">
+              <span class="pfc-sublbl">Hand pump</span>
+              <div class="pfc-choice">
+                <label><input type="radio" name="pfcSelSpeed" value="" checked><span><b>Either</b><small>as the catalog pairs it</small></span></label>
+                <label><input type="radio" name="pfcSelSpeed" value="1"><span><b>One-speed</b><small>simpler and lighter</small></span></label>
+                <label><input type="radio" name="pfcSelSpeed" value="2"><span><b>Two-speed</b><small>fast approach to the load</small></span></label>
+              </div>
+            </div>
           </fieldset>
           <details class="pfc-more">
             <summary>More options</summary>
-            <label class="pfc-check"><input type="checkbox" id="pfcSelPowered"> Powered return (double-acting)</label>
             <label class="pfc-check"><input type="checkbox" id="pfcSelLight"> Light to carry around (aluminium)</label>
             <label class="pfc-inline">Hose length <select id="pfcSelHose"><option value="6" selected>6 ft</option><option value="10">10 ft</option><option value="20">20 ft</option><option value="50">50 ft</option></select></label>
           </details>
@@ -137,7 +159,7 @@
               <select id="pfcPow"><option value="manual">Manual (hand pump)</option><option value="electric">Electric, 220 V</option><option value="air">Air</option><option value="gas">Gasoline</option><option value="battery">Battery</option></select></div>
             <div data-for="lift pull"><label for="pfcPump">Pump model (optional)</label><input type="text" id="pfcPump" placeholder="e.g. P159 or P-80"></div>
             <div data-for="lift pull"><label for="pfcSpeed">Pump speed</label>
-              <select id="pfcSpeed"><option value="">As the catalog pairs it</option><option value="2">Two-speed</option></select></div>
+              <select id="pfcSpeed"><option value="">As the catalog pairs it</option><option value="1">One-speed</option><option value="2">Two-speed</option></select></div>
             <div data-for="lift pull torque"><label for="pfcHoseLen">Hose length</label>
               <select id="pfcHoseLen"><option value="3">3 ft</option><option value="6" selected>6 ft</option><option value="10">10 ft</option><option value="15">15 ft</option><option value="20">20 ft</option><option value="30">30 ft</option><option value="50">50 ft</option></select></div>
             <div data-for="lift pull"><label for="pfcHoseType">Hose type</label>
