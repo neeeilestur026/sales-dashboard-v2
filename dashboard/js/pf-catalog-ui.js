@@ -196,13 +196,31 @@ function pfcNextSetNo() {
 function pfcRadio(name) { const el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; }
 
 function pfcSelAnswers() {
+  const power = pfcRadio('pfcPower') || 'manual';
   return {
-    job: pfcRadio('pfcJob') || 'lift', load: pfc$('pfcSelLoad').value, loadUnit: pfc$('pfcSelLoadU').value,
+    job: pfcRadio('pfcJob') || 'lift', basis: pfcRadio('pfcBasis') || 'load', act: pfcRadio('pfcAct') || '',
+    load: pfc$('pfcSelLoad').value, loadUnit: pfc$('pfcSelLoadU').value,
     points: pfc$('pfcSelPoints').value, travel: pfc$('pfcSelTravel').value, travelUnit: pfc$('pfcSelTravelU').value,
-    space: pfc$('pfcSelSpace').value, spaceUnit: pfc$('pfcSelSpaceU').value, power: pfcRadio('pfcPower') || 'manual',
-    powered: pfc$('pfcSelPowered').checked, light: pfc$('pfcSelLight').checked, hoseLen: pfc$('pfcSelHose').value,
+    space: pfc$('pfcSelSpace').value, spaceUnit: pfc$('pfcSelSpaceU').value, power,
+    speed: power === 'manual' ? (Number(pfcRadio('pfcSelSpeed')) || '') : '',
+    light: pfc$('pfcSelLight').checked, hoseLen: pfc$('pfcSelHose').value,
     model: pfcSel.model, useJack: pfcSel.useJack,
   };
+}
+
+/** The questions say what is being asked: a load and a move, or a cylinder's own rating. */
+function pfcSelLabels() {
+  const rating = (pfcRadio('pfcBasis') || 'load') === 'rating';
+  pfc$('pfcSelQ2').textContent = rating ? 'What capacity is the cylinder?' : 'How heavy is the load?';
+  pfc$('pfcSelQ3').textContent = rating ? 'What stroke?' : 'How far must it move?';
+  pfc$('pfcSelPtsLbl').textContent = rating ? 'How many:' : 'Shared by';
+  pfc$('pfcSelLoad').setAttribute('aria-label', rating ? 'Capacity' : 'Load');
+  pfc$('pfcSelTravel').setAttribute('aria-label', rating ? 'Stroke' : 'Travel');
+  pfc$('pfcSelLoad').placeholder = rating ? 'e.g. 10' : 'e.g. 8';
+  pfc$('pfcSelTravel').placeholder = rating ? 'e.g. 8' : 'e.g. 150';
+  const t = pfc$('pfcSelLoadU').querySelector('option[value="t"]');
+  if (t) t.textContent = rating ? 'tons' : 'tonnes';
+  pfc$('pfcSelSpeedRow').hidden = (pfcRadio('pfcPower') || 'manual') !== 'manual';
 }
 
 let pfcSelTimer = null;
@@ -225,15 +243,23 @@ async function pfcSelRun() {
   try { ctx = await pfcLoad(); } catch (e) { sheet.innerHTML = pfcLoadError(e); return; }
   const o = pfeSelect(a, ctx);
   pfcSel.out = o; pfcSel.a = a;
-  const loadTxt = pfeFmt(Number(a.load)) + ' ' + ({ t: 't', kg: 'kg', ton: 'US tons' }[a.loadUnit] || 't');
+  const rating = a.basis === 'rating';
+  const loadTxt = pfeFmt(Number(a.load)) + ' ' + (rating ? ({ kg: 'kg', ton: 'US ton' }[a.loadUnit] || 't') + ' class' : ({ t: 't', kg: 'kg', ton: 'US tons' }[a.loadUnit] || 't'));
   const n = Math.max(1, Math.round(Number(a.points) || 1));
-  const sub = loadTxt + (n > 1 ? ' shared by ' + n + ' cylinders' : '') + ', ' + pfeFmt(Number(a.travel)) + ' ' + a.travelUnit + ' of travel'
-    + (Number(a.space) > 0 ? ', ' + pfeFmt(Number(a.space)) + ' ' + a.spaceUnit + ' of space' : '');
+  const sub = rating
+    ? loadTxt + ', ' + pfeFmt(Number(a.travel)) + ' ' + a.travelUnit + ' stroke' + (n > 1 ? ', ' + n + ' cylinders' : '')
+      + (Number(a.space) > 0 ? ', ' + pfeFmt(Number(a.space)) + ' ' + a.spaceUnit + ' of space' : '')
+    : loadTxt + (n > 1 ? ' shared by ' + n + ' cylinders' : '') + ', ' + pfeFmt(Number(a.travel)) + ' ' + a.travelUnit + ' of travel'
+      + (Number(a.space) > 0 ? ', ' + pfeFmt(Number(a.space)) + ' ' + a.spaceUnit + ' of space' : '');
   if (!o.ok) {
     sheet.innerHTML = pfcSheetHtml({ title: 'No cylinder fits yet', sub, parts: [], warnings: o.warnings });
     return;
   }
-  const need = [['Force per cylinder', pfeFmt(o.need.needUs, 1) + ' t at 10,000 psi'], ['Stroke for 80% use', pfeFmt(o.need.wantIn, 2) + ' in or more']];
+  const need = rating
+    ? [['Capacity class', pfeFmt(o.need.classT) + ' t or more'], ['Stroke', 'nearest to ' + pfeFmt(o.need.strokeIn, 2) + ' in']]
+    : [['Force per cylinder', pfeFmt(o.need.needUs, 1) + ' t at 10,000 psi'], ['Stroke for 80% use', pfeFmt(o.need.wantIn, 2) + ' in or more']];
+  need.push(['Cylinder', (o.cylinder.act === 'DA' ? 'double' : 'single') + '-acting']);
+  if (o.set.pump) need.push(['Pump', (o.set.pump.pow === 'manual' ? 'hand, ' : o.set.pump.pow + ', ') + (o.set.pump.speed === 2 ? 'two-speed' : o.set.pump.speed === 1 ? 'one-speed' : 'speed per catalog')]);
   if (o.need.spaceIn) need.push(['Space', pfeFmt(o.need.spaceIn, 2) + ' in']);
   const parts = o.set.parts.map((p, i) => Object.assign({}, p, i === 0 ? { whys: o.usingJack ? [o.jack.why] : o.why, why: '' } : {}));
   let extra = '';
@@ -505,6 +531,7 @@ function pfcSelToBuild() {
   pfc$('pfcPow').value = a.power || 'manual';
   pfc$('pfcPump').value = '';
   pfc$('pfcHoseLen').value = String(a.hoseLen || 6);
+  pfc$('pfcSpeed').value = a.speed ? String(a.speed) : '';
   pfcTop('set');
   pfcBuild();
 }
@@ -533,8 +560,9 @@ function pfcInit() {
 
   /* Choose a cylinder: every answer redraws the set */
   const sel = pfc$('pfcSelForm');
-  sel.addEventListener('input', () => pfcSelUpdate(true));
-  sel.addEventListener('change', () => pfcSelUpdate(true));
+  pfcSelLabels();
+  sel.addEventListener('input', () => { pfcSelLabels(); pfcSelUpdate(true); });
+  sel.addEventListener('change', () => { pfcSelLabels(); pfcSelUpdate(true); });
   sel.addEventListener('submit', e => e.preventDefault());
   pfc$('pfcSelSheet').addEventListener('click', e => {
     const m = e.target.closest('[data-sel-model]');

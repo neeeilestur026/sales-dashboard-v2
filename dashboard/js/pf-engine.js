@@ -40,6 +40,8 @@ const PFE_SERIES_RANK = { C: 0, RGG: 1, R_C: 2, CBT: 3, RA: 4, RD: 0, R_D: 1, RD
   RH: 5, RHA: 6, RT: 7, RLS: 5, RSS: 6, RGP: 7, RGL: 5, R_L: 6, RA_L: 7, RP: 5 };
 const PFE_MANUAL_SA = ['P12', 'P55', 'P159', 'P300', 'P460'];      // the RPS sets' own pairings (p.52)
 const PFE_MANUAL_DA = ['P159D', 'P300D', 'P460D'];
+const PFE_MANUAL_ONE = ['P12', 'P55'];                                  // one-speed hand pumps
+const PFE_MANUAL_TWO = ['P59', 'P159', 'P300', 'P460'];                  // two-speed hand pumps
 const PFE_RC_TONS = ['100', '75', '55', '50', '25', '15', '10', '5'];
 
 /* Competitor pumps whose specs were read from the maker's own page, to show the differences beside
@@ -323,7 +325,7 @@ function pfeDescribe(rec, ctx) {
   }
   if (r.cat === 'pump') {
     const kind = r.pow === 'manual' ? 'Hand pump' : r.pow.charAt(0).toUpperCase() + r.pow.slice(1) + ' pump';
-    return kind + (r.speed === 2 ? ', two-speed' : r.speed === 1 ? ', single-speed' : '')
+    return kind + (r.speed === 2 ? ', two-speed' : r.speed === 1 ? ', one-speed' : '')
       + ', for ' + (r.act === 'DA' ? 'double' : 'single') + '-acting ' + (r.use === 'torque-wrench' ? 'torque wrenches' : 'cylinders')
       + (r.lpVol ? ': ' + pfeFmt(r.lpVol) + ' in³/stroke to ' + pfeFmt(r.lpPsi) + ' psi, then ' + pfeFmt(r.hpVol, 3) + ' in³/stroke to ' + pfeFmt(r.maxPsi) + ' psi'
         : r.hpVol ? ': ' + pfeFmt(r.hpVol, 3) + ' in³/stroke to ' + pfeFmt(r.maxPsi) + ' psi' : '')
@@ -355,7 +357,7 @@ function pfeShort(rec) {
   if (!rec) return '';
   const r = rec;
   if (r.cat === 'cylinder') return pfeFmt(r.cap) + ' t ' + (r.act === 'DA' ? 'double' : 'single') + '-acting cylinder, ' + pfeFmt(r.stroke) + ' in stroke';
-  if (r.cat === 'pump') return (r.pow === 'manual' ? 'hand' : r.pow) + ' pump' + (r.speed === 2 ? ', two-speed' : '') + (r.usable ? ', ' + pfeFmt(r.usable) + ' in³ usable oil' : '')
+  if (r.cat === 'pump') return (r.pow === 'manual' ? 'hand' : r.pow) + ' pump' + (r.speed === 2 ? ', two-speed' : r.speed === 1 ? ', one-speed' : '') + (r.usable ? ', ' + pfeFmt(r.usable) + ' in³ usable oil' : '')
     + (r.use === 'torque-wrench' ? ', for torque wrenches' : '');
   if (r.cat === 'hose') return pfeFmt(r.len) + ' ft ' + r.id + ' ' + r.type + ' hose' + (r.withCoupler ? ' with coupler' : '');
   if (r.cat === 'gauge') return 'gauge, ' + pfeFmt(r.face, 1) + ' in' + (r.tonScale ? ', 0-' + pfeFmt(r.tonScale) + ' t scale' : ', psi');
@@ -827,11 +829,24 @@ function pfeGaugeFor(ctx, cyls) {
     : 'mixed cylinder sizes read differently in tons, so a psi gauge' } : null;
 }
 
+/** The hand pump for `needed` in³: the catalog's own pairings, or one-speed / two-speed when asked
+ *  (p.49-51: P12 and P55 are one-speed; P59, P159, P300 and P460 two-speed; every D pump is two-speed). */
 function pfePickManual(ctx, act, needed, maxCap, speed) {
-  const ladder = (act === 'DA' ? PFE_MANUAL_DA : PFE_MANUAL_SA).filter(m => ctx.M[m] && !(m === 'P12' && maxCap > 5));
-  const pick = ladder.find(m => ctx.M[m].usable >= needed) || ladder[ladder.length - 1];
-  if (pick === 'P55' && speed === 2 && ctx.M.P59) return 'P59';
-  return pick;
+  const ok = m => ctx.M[m] && !(m === 'P12' && maxCap > 5);
+  const first = l => l.filter(ok).find(m => ctx.M[m].usable >= needed) || null;
+  if (act === 'DA') {
+    const m = first(PFE_MANUAL_DA) || PFE_MANUAL_DA[PFE_MANUAL_DA.length - 1];
+    return { m, note: speed === 1 ? 'No one-speed hand pump drives a double-acting cylinder: ' + m + ' is two-speed.' : '' };
+  }
+  if (speed === 1) {
+    const m = first(PFE_MANUAL_ONE);
+    if (m) return { m, note: '' };
+    const t = first(PFE_MANUAL_TWO) || 'P460';
+    return { m: t, note: 'No one-speed hand pump holds ' + pfeFmt(needed, 1) + ' in³: ' + t + ' is two-speed.' };
+  }
+  if (speed === 2) return { m: first(PFE_MANUAL_TWO) || 'P460', note: '' };
+  const l = PFE_MANUAL_SA.filter(ok);
+  return { m: l.find(m => ctx.M[m].usable >= needed) || l[l.length - 1], note: '' };
 }
 
 function pfePickPowered(ctx, pow, act, needed) {
@@ -930,11 +945,13 @@ function pfeBuildSet(spec, ctx) {
   } else if (s.pumpPow === 'manual') {
     const rps = n === 1 && act === 'SA' ? ctx.rps.find(k => k.parts[0] === cyls[0].rec.m) : null;
     const rpsPump = rps && rps.parts.find(p => ctx.M[p] && ctx.M[p].cat === 'pump');
-    if (rpsPump && !(s.speed === 2 && ctx.M[rpsPump].speed !== 2)) {
+    if (rpsPump && !(s.speed && ctx.M[rpsPump].speed && ctx.M[rpsPump].speed !== s.speed)) {
       pump = ctx.M[rpsPump];
       pumpWhy = 'Power Team pairs ' + cyls[0].rec.m + ' with ' + pump.m + ' in its own set ' + rps.m + ' (' + pfeSource(rps) + ')';
     } else {
-      pump = ctx.M[pfePickManual(ctx, act, needed, maxCap, s.speed)];
+      const pk = pfePickManual(ctx, act, needed, maxCap, s.speed);
+      pump = ctx.M[pk.m];
+      if (pk.note) out.notes.push(pk.note);
       pumpWhy = 'the cylinders take ' + pfeFmt(oil, 1) + ' in³' + (s.together && n > 1 ? ' together' : '') + '; with a 20% reserve that is '
         + pfeFmt(needed, 1) + ' in³, and ' + (pump ? pump.m + ' holds ' + pfeFmt(pump.usable) + ' in³ usable' : 'no hand pump is big enough')
         + ' (p.10: the pump\'s usable oil must exceed the cylinders\')';
@@ -999,37 +1016,48 @@ const PFE_JOB_SERIES = {
 /**
  * Power Team's own questions (catalog p.7, PDF 9) cut to five: what the cylinder does, the load and
  * how many cylinders share it, how far it moves, the space it must fit, and the power at the site.
- * "Use 80% of the rated capacity and stroke" (p.7): the load per cylinder is divided by 0.8, and
- * a stroke that leaves the 20% is preferred over one that only just covers the travel.
+ * Two ways in (`basis`):
+ *   'load'   — the weight to move and how far. "Use 80% of the rated capacity and stroke" (p.7): the
+ *              load per cylinder is divided by 0.8, and a stroke that leaves the 20% is preferred;
+ *   'rating' — the cylinder's own rating, as a spec line or a competitor's model states it ("10 TO,
+ *              8 IN"): the nominal ton class and the nearest stroke, matched as stated, like Find.
  *
- * a = { job: 'lift'|'pull'|'hold', load, loadUnit: 't'|'kg'|'ton', points, travel, travelUnit: 'mm'|'in',
- *       space, spaceUnit, power: 'manual'|'electric'|'air', powered, light, hoseLen,
+ * a = { job: 'lift'|'pull'|'hold', basis: 'load'|'rating', load, loadUnit: 't'|'kg'|'ton', points, travel,
+ *       travelUnit: 'mm'|'in', space, spaceUnit, act: 'SA'|'DA'|'' (not sure: single-acting),
+ *       power: 'manual'|'electric'|'air', speed: 1|2|'' (hand pump), light, hoseLen,
  *       model (use this cylinder instead of the first choice), useJack (the jack instead of a set) }
  * -> { ok, missing[], need, cylinder, why[], alts[], jack, set, notes[], warnings[] }
  */
 function pfeSelect(a, ctx) {
-  const q = Object.assign({ job: 'lift', loadUnit: 't', points: 1, travelUnit: 'mm', spaceUnit: 'mm', power: 'manual', hoseLen: 6 }, a || {});
+  const q = Object.assign({ job: 'lift', basis: 'load', loadUnit: 't', points: 1, travelUnit: 'mm', spaceUnit: 'mm', power: 'manual', hoseLen: 6 }, a || {});
+  const rating = q.basis === 'rating';
   const out = { ok: false, missing: [], need: null, cylinder: null, why: [], alts: [], jack: null, set: null, notes: [], warnings: [] };
   const load = Number(q.load) || 0, travel = Number(q.travel) || 0, space = Number(q.space) || 0;
   const n = Math.max(1, Math.round(Number(q.points) || 1));
-  if (!(load > 0)) out.missing.push('the load');
-  if (!(travel > 0)) out.missing.push('how far it must move');
+  if (!(load > 0)) out.missing.push(rating ? 'the capacity' : 'the load');
+  if (!(travel > 0)) out.missing.push(rating ? 'the stroke' : 'how far it must move');
   if (out.missing.length) return out;
 
   const toUs = { t: PFE_TONNE_TO_US, kg: PFE_TONNE_TO_US / 1000, ton: 1 }[q.loadUnit] || PFE_TONNE_TO_US;
-  const perUs = load * toUs / n;
-  const needUs = perUs / 0.8;
+  /* a rating is a ton class: "10 t", "10 TO" and "10 US tons" all mean the 10-ton class */
+  const classT = rating ? (q.loadUnit === 'kg' ? load / 1000 : load) : null;
+  const perUs = rating ? null : load * toUs / n;
+  const needUs = rating ? null : perUs / 0.8;
   const tIn = q.travelUnit === 'in' ? travel : travel * PFE_IN_PER_MM;
-  const wantIn = tIn / 0.8;
+  const wantIn = rating ? tIn : tIn / 0.8;
   const spaceIn = space > 0 ? (q.spaceUnit === 'in' ? space : space * PFE_IN_PER_MM) : null;
   const unitTxt = { t: 't', kg: 'kg', ton: 'US tons' }[q.loadUnit] || 't';
   const travelTxt = pfeFmt(travel) + ' ' + (q.travelUnit === 'in' ? 'in' : 'mm');
   const spaceTxt = pfeFmt(space) + ' ' + (q.spaceUnit === 'in' ? 'in' : 'mm');
-  out.need = { perUs: Math.round(perUs * 100) / 100, needUs: Math.round(needUs * 100) / 100, travelIn: Math.round(tIn * 100) / 100,
-    wantIn: Math.round(wantIn * 100) / 100, spaceIn: spaceIn && Math.round(spaceIn * 100) / 100, points: n };
+  const r2 = v => Math.round(v * 100) / 100;
+  out.need = rating
+    ? { basis: 'rating', classT: r2(classT), strokeIn: r2(tIn), spaceIn: spaceIn && r2(spaceIn), points: n }
+    : { basis: 'load', perUs: r2(perUs), needUs: r2(needUs), travelIn: r2(tIn), wantIn: r2(wantIn), spaceIn: spaceIn && r2(spaceIn), points: n };
 
-  const act = q.powered && q.job !== 'hold' ? 'DA' : 'SA';
-  if (q.powered && q.job === 'hold') out.warnings.push('Locking-collar cylinders are single-acting: none has a powered return. The lock was kept; the load lowers the cylinder.');
+  const wantDA = q.act === 'DA' || (!q.act && !!q.powered);
+  const act = wantDA && q.job !== 'hold' ? 'DA' : 'SA';
+  if (wantDA && q.job === 'hold') out.warnings.push('Locking-collar cylinders are single-acting: none has a powered return. The lock was kept; the load lowers the cylinder.');
+  const strong = r => (rating ? r.cap >= classT - 1e-9 : (r.t10k || r.cap) >= needUs - 1e-9);
   const fits = (r, o) => {
     if (r.cat !== 'cylinder' || r.act !== act) return false;
     const f = r.flags || [];
@@ -1037,15 +1065,20 @@ function pfeSelect(a, ctx) {
     else if (q.job === 'hold') { if (!f.includes('locking')) return false; }
     else if (f.some(x => PFE_SPECIALTY.includes(x) && !(o.low && x === 'low'))) return false;
     if (o.light && r.body !== 'aluminum') return false;
-    if ((r.t10k || r.cap) < needUs - 1e-9) return false;
+    if (!strong(r)) return false;
     if (o.space && spaceIn && !(r.closed && r.closed <= spaceIn + 0.01)) return false;
     return true;
   };
-  const bucket = r => (r.stroke >= wantIn - 0.01 ? 0 : r.stroke >= tIn - 0.01 ? 1 : 2);
+  const bucket = rating
+    ? r => (Math.abs(r.stroke - tIn) <= 0.5 ? 0 : r.stroke > tIn ? 1 : 2)
+    : r => (r.stroke >= wantIn - 0.01 ? 0 : r.stroke >= tIn - 0.01 ? 1 : 2);
   const rankOf = r => (PFE_SERIES_RANK[r.ser] == null ? 9 : PFE_SERIES_RANK[r.ser]);
-  const over = r => ((r.t10k || r.cap) > needUs * 1.6 ? 1 : 0);        // far bigger than needed sorts after a close fit
-  const rank = list => list.sort((x, y) => bucket(x) - bucket(y) || over(x) - over(y) || rankOf(x) - rankOf(y)
-    || (x.t10k || x.cap) - (y.t10k || y.cap) || x.stroke - y.stroke || (x.wt || 999) - (y.wt || 999) || (x.m < y.m ? -1 : 1));
+  const over = rating ? r => (r.cap > classT * 1.6 ? 1 : 0) : r => ((r.t10k || r.cap) > needUs * 1.6 ? 1 : 0);   // far bigger than asked sorts after a close fit
+  const strokeKey = rating ? r => Math.abs(r.stroke - tIn) : r => r.stroke;
+  /* a rating: the class asked, then a bigger class with the stroke; a shorter stroke last, since it cannot do the job */
+  const tier = rating ? r => (bucket(r) === 2 ? 3 : over(r) ? 2 : bucket(r)) : r => bucket(r) * 2 + over(r);
+  const rank = list => list.sort((x, y) => tier(x) - tier(y) || rankOf(x) - rankOf(y)
+    || (rating ? x.cap - y.cap : (x.t10k || x.cap) - (y.t10k || y.cap)) || strokeKey(x) - strokeKey(y) || (x.wt || 999) - (y.wt || 999) || (x.m < y.m ? -1 : 1));
   const all = Object.values(ctx.M);
   /* relax one thing at a time, and say which */
   const tries = [{ light: !!q.light, space: true, low: q.job === 'lift' && !!spaceIn }];   // a tight space is what low-height series are for
@@ -1060,8 +1093,8 @@ function pfeSelect(a, ctx) {
     if (list.length && bucket(list[0]) < 2) break;
   }
   if (!list.length) {
-    out.warnings.push('No ' + (act === 'DA' ? 'double-acting ' : '') + PFE_JOB_SERIES[q.job].split(':')[0] + ' in the catalog gives ' + pfeFmt(needUs, 1)
-      + ' t at 10,000 psi. Split the load over more cylinders, or ask the engineer.');
+    out.warnings.push('No ' + (act === 'DA' ? 'double-acting ' : '') + PFE_JOB_SERIES[q.job].split(':')[0] + ' in the catalog '
+      + (rating ? 'comes in the ' + pfeFmt(classT) + ' t class or above.' : 'gives ' + pfeFmt(needUs, 1) + ' t at 10,000 psi. Split the load over more cylinders, or ask the engineer.'));
     return out;
   }
   if (used.dropSpace) list.sort((x, y) => bucket(x) - bucket(y) || (x.closed || 99) - (y.closed || 99));   // then the lowest that does the job
@@ -1071,22 +1104,41 @@ function pfeSelect(a, ctx) {
   out.cylinder = best;
   out.chosen = !!forced && forced !== list[0];
   out.alts = list.filter(r => r !== best && bucket(r) <= Math.max(1, bucket(list[0]))).slice(0, 3);
+  if (rating) {   /* the neighbouring strokes of the same class first, then the next class up */
+    const same = all.filter(r => r.cat === 'cylinder' && r !== best && r.ser === best.ser && r.cap === best.cap && r.act === best.act)
+      .sort((x, y) => Math.abs(x.stroke - tIn) - Math.abs(y.stroke - tIn)).slice(0, 2);
+    out.alts = same.concat(out.alts.filter(r => !same.includes(r))).slice(0, 3);
+  }
   if (forced) {
-    if ((forced.t10k || forced.cap) < needUs - 1e-9) out.warnings.push(forced.m + ' gives ' + pfeFmt(forced.t10k || forced.cap, 1) + ' t: less than the ' + pfeFmt(needUs, 1) + ' t the 80% rule asks for.');
-    if (bucket(forced) === 2) out.warnings.push(forced.m + ' strokes ' + pfeFmt(forced.stroke) + ' in: shorter than the ' + travelTxt + ' travel.');
+    if (!strong(forced)) out.warnings.push(rating ? forced.m + ' is a ' + pfeFmt(forced.cap) + ' t cylinder: below the ' + pfeFmt(classT) + ' t class asked.'
+      : forced.m + ' gives ' + pfeFmt(forced.t10k || forced.cap, 1) + ' t: less than the ' + pfeFmt(needUs, 1) + ' t the 80% rule asks for.');
+    if (bucket(forced) === 2) out.warnings.push(forced.m + ' strokes ' + pfeFmt(forced.stroke) + ' in: shorter than the ' + travelTxt + ' asked.');
     if (spaceIn && forced.closed > spaceIn + 0.01) out.warnings.push(forced.m + ' closes at ' + pfeFmt(forced.closed) + ' in: taller than the space.');
   }
 
-  out.why.push(pfeFmt(load) + ' ' + unitTxt + (n > 1 ? ' over ' + n + ' cylinders is ' + pfeFmt(perUs, 1) + ' US tons each' : ' is ' + pfeFmt(perUs, 1) + ' US tons')
-    + '. At 80% of rated capacity (catalog p.7) that needs ' + pfeFmt(needUs, 1) + ' t at 10,000 psi; ' + best.m + ' gives ' + pfeFmt(best.t10k || best.cap, 1) + ' t.');
   const b = bucket(best);
-  out.why.push('Travel ' + travelTxt + (q.travelUnit === 'in' ? '' : ' (' + pfeFmt(tIn, 2) + ' in)') + ': ' + best.m + ' strokes ' + pfeFmt(best.stroke) + ' in'
-    + (b === 0 ? ', so the move stays within 80% of it.' : b === 1 ? '. It covers the move but uses ' + Math.round(tIn / best.stroke * 100) + '% of the stroke.' : '.'));
-  if (b === 1) out.notes.push('A longer stroke would keep the move within 80% of it, but none fits ' + (spaceIn ? 'the space' : 'this choice') + '.');
-  if (b === 2) out.warnings.push('No cylinder this strong strokes ' + travelTxt + ': lift in stages with cribbing, or ask the engineer.');
+  if (rating) {
+    const tm = Math.round((best.t10k || best.cap) * 0.907 * 10) / 10;
+    out.why.push('Capacity: the ' + pfeFmt(classT) + ' t class' + (n > 1 ? ', ' + n + ' cylinders' : '') + '. ' + best.m + ' is a ' + pfeFmt(best.cap) + ' t cylinder ('
+      + pfeFmt(best.t10k || best.cap, 1) + ' US tons, ' + pfeFmt(tm, 1) + ' tonnes, at 10,000 psi).');
+    if (tm < classT) out.notes.push('If the ' + pfeFmt(classT) + ' t is metric tonnes rather than the ton class, ' + best.m + ' gives only ' + pfeFmt(tm, 1) + ' tonnes: confirm with the customer.');
+    out.why.push('Stroke: ' + travelTxt + (q.travelUnit === 'in' ? '' : ' (' + pfeFmt(tIn, 2) + ' in)') + ' asked; ' + best.m + ' strokes ' + pfeFmt(best.stroke) + ' in'
+      + (best.closed ? ' (closed ' + pfeFmt(best.closed) + ' in, extended ' + pfeFmt(best.ext) + ' in).' : '.'));
+    if (b < 2 && over(best)) out.notes.push('No ' + (act === 'DA' ? 'double-acting ' : '') + 'cylinder near the ' + pfeFmt(classT) + ' t class strokes ' + travelTxt + '; ' + best.m + ' is a bigger class that does.');
+    else if (b === 1) out.notes.push('No cylinder of this class strokes ' + travelTxt + ' exactly; ' + best.m + ' is the nearest longer one.');
+    if (b === 2) out.warnings.push('No cylinder of this class strokes ' + travelTxt + '; ' + best.m + ' is the nearest.');
+    out.notes.push('Matched to the rating as given. To size from the weight instead, start from "the load and how far it moves": Power Team advises using 80% of rated capacity and stroke (catalog p.7).');
+  } else {
+    out.why.push(pfeFmt(load) + ' ' + unitTxt + (n > 1 ? ' over ' + n + ' cylinders is ' + pfeFmt(perUs, 1) + ' US tons each' : ' is ' + pfeFmt(perUs, 1) + ' US tons')
+      + '. At 80% of rated capacity (catalog p.7) that needs ' + pfeFmt(needUs, 1) + ' t at 10,000 psi; ' + best.m + ' gives ' + pfeFmt(best.t10k || best.cap, 1) + ' t.');
+    out.why.push('Travel ' + travelTxt + (q.travelUnit === 'in' ? '' : ' (' + pfeFmt(tIn, 2) + ' in)') + ': ' + best.m + ' strokes ' + pfeFmt(best.stroke) + ' in'
+      + (b === 0 ? ', so the move stays within 80% of it.' : b === 1 ? '. It covers the move but uses ' + Math.round(tIn / best.stroke * 100) + '% of the stroke.' : '.'));
+    if (b === 1) out.notes.push('A longer stroke would keep the move within 80% of it, but none fits ' + (spaceIn ? 'the space' : 'this choice') + '.');
+    if (b === 2) out.warnings.push('No cylinder this strong strokes ' + travelTxt + ': lift in stages with cribbing, or ask the engineer.');
+  }
   if (spaceIn) {
     if (used.dropSpace) {
-      out.why.push('Nothing this strong closes under ' + spaceTxt + '; ' + best.m + ' is the lowest that does the job, closing at ' + pfeFmt(best.closed) + ' in.');
+      out.why.push('Nothing ' + (rating ? 'of this class' : 'this strong') + ' closes under ' + spaceTxt + '; ' + best.m + ' is the lowest that does the job, closing at ' + pfeFmt(best.closed) + ' in.');
       out.warnings.push('The cylinder does not fit the space given: lift in stages with cribbing, or measure the space again.');
     } else out.why.push(best.m + ' closes at ' + pfeFmt(best.closed) + ' in, inside the ' + spaceTxt + (q.spaceUnit === 'in' ? '' : ' (' + pfeFmt(spaceIn, 2) + ' in)') + ' space.');
   }
@@ -1094,13 +1146,15 @@ function pfeSelect(a, ctx) {
   out.why.push((S ? S.title.charAt(0).toUpperCase() + S.title.slice(1) : PFE_JOB_SERIES[q.job]) + ' (' + best.ser.replace('_', '…') + ' series)'
     + ((best.flags || []).includes('low') ? ': a low-height series, for the space available' : '')
     + (q.job !== 'lift' ? ': ' + PFE_JOB_SERIES[q.job].split(': ')[1] : '') + '.');
+  if (!q.act && !q.powered && q.job !== 'hold') out.notes.push('Single-acting was assumed (the load or a spring returns it). Choose double-acting if it must be pulled back under power.');
   if (used.dropLight) out.warnings.push('No aluminium cylinder covers this, so a steel one is suggested.');
   else if (q.light && best.body === 'aluminum') out.notes.push('Aluminium is about half the weight of steel: ' + best.m + ' weighs ' + pfeFmt(best.wt, 1) + ' lb.');
   if (n > 1) out.notes.push('With ' + n + ' cylinders on one load, the set uses a manifold so each cylinder can be controlled and the load kept level.');
 
-  /* an all-in-one jack, when one cylinder lifts the load and no powered return is needed */
-  if (q.job === 'lift' && n === 1 && !q.powered) {
-    const jacks = all.filter(r => r.cat === 'jack' && PFE_JACK_KINDS.includes(r.sub) && r.cap >= needUs - 1e-9 && r.stroke >= tIn - 0.01
+  /* an all-in-one jack, when one single-acting cylinder lifts the load */
+  if (q.job === 'lift' && n === 1 && act === 'SA') {
+    const jStrong = r => (rating ? r.cap >= classT - 1e-9 : r.cap >= needUs - 1e-9);
+    const jacks = all.filter(r => r.cat === 'jack' && PFE_JACK_KINDS.includes(r.sub) && jStrong(r) && r.stroke >= tIn - (rating ? 0.5 : 0.01)
       && (!spaceIn || (r.closed && r.closed <= spaceIn + 0.01) || r.sub === 'toe'))
       .sort((x, y) => (x.stroke >= wantIn - 0.01 ? 0 : 1) - (y.stroke >= wantIn - 0.01 ? 0 : 1) || x.cap - y.cap || (x.closed || 0) - (y.closed || 0) || (x.m < y.m ? -1 : 1));
     if (jacks.length) {
@@ -1120,7 +1174,7 @@ function pfeSelect(a, ctx) {
     return out;
   }
   out.set = pfeBuildSet({ kind: q.job === 'pull' ? 'pull' : 'lift', items: [{ model: best.m, qty: n }], pumpPow: q.power || 'manual',
-    hoseLen: Number(q.hoseLen) || 6, together: true, gauge: true }, ctx);
+    speed: Number(q.speed) || null, hoseLen: Number(q.hoseLen) || 6, together: true, gauge: true }, ctx);
   return out;
 }
 

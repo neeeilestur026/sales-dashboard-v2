@@ -249,6 +249,45 @@ console.log('\n== the cylinder selector (five questions, catalog p.7) ==');
   eq('too heavy for any cylinder: a clear message, no guess', [sel({ job: 'lift', load: 500, travel: 100 }).ok, /Split the load/.test(sel({ job: 'lift', load: 500, travel: 100 }).warnings[0])], [false, true]);
 }
 
+console.log('\n== Choose a cylinder from a rating (the spec lines Neil sent) ==');
+{
+  const sel = x => E.pfeSelect(Object.assign({ job: 'lift', basis: 'rating', act: 'SA', loadUnit: 't', travelUnit: 'in' }, x), ctx);
+  eq('10 t / 8 in, 15 t / 4 in, 15 t / 6 in, 25 t / 4 in give the equivalents of RC-108, RC-154, RC-156, RC-254',
+     [[10, 8], [15, 4], [15, 6], [25, 4]].map(([t, st]) => sel({ load: t, travel: st }).cylinder.m), ['C108C', 'C154C', 'C156C', 'C254C']);
+  eq('...the same as Find gives for the lines themselves', LINES.slice(0, 4).map(l => best(l)), ['C108C', 'C154C', 'C156C', 'C254C']);
+  const r = sel({ load: 10, travel: 8 });
+  ok('the rating is matched as given, and the 80% rule is named for the other way in', r.notes.some(n => /Matched to the rating as given/.test(n) && /80%/.test(n)), r.notes);
+  ok('the class is explained with tons and tonnes', /10 t class/.test(r.why[0]) && /11\.2 US tons, 10\.2 tonnes/.test(r.why[0]), r.why);
+  eq('alternates: the next strokes of the same class first', r.alts.slice(0, 2).map(x => x.m), ['C106C', 'C1010C']);
+  ok('15 t: the metric shortfall is said', sel({ load: 15, travel: 4 }).notes.some(n => /14\.2 tonnes/.test(n)));
+  eq('a stroke in mm: 205 mm (8.07 in) is still C108C', sel({ load: 10, travel: 205, travelUnit: 'mm' }).cylinder.m, 'C108C');
+  eq('the load way in is unchanged: 10 t load over 8 in needs more than a 10-ton cylinder', E.pfeSelect({ job: 'lift', load: 10, travel: 8, travelUnit: 'in' }, ctx).cylinder.m, 'C1510C');
+}
+{
+  const sel = x => E.pfeSelect(Object.assign({ job: 'lift', basis: 'rating', load: 10, travel: 6, travelUnit: 'in' }, x), ctx);
+  eq('double-acting chosen: an RD cylinder and a D pump with two hoses', (o => [o.cylinder.m, o.cylinder.act, o.set.pump.m, o.set.parts.find(p => p.role === 'hose').qty])(sel({ act: 'DA' })), ['RD106', 'DA', 'P159D', 2]);
+  eq('single-acting chosen', sel({ act: 'SA' }).cylinder.act, 'SA');
+  eq('double-acting 10 t / 8 in: RD1010, never a 55 t cylinder just because its stroke is 8 in', (o => [o.cylinder.m, o.alts[0].m])(sel({ act: 'DA', travel: 8 })), ['RD1010', 'RD106']);
+  ok('...and it says the 8 in stroke is not made in this class', sel({ act: 'DA', travel: 8 }).notes.some(n => /strokes 8 in exactly; RD1010 is the nearest longer one/.test(n)));
+  ok('double-acting 10 t / 14 in: a bigger class that has the stroke (RD2514), said so', (o => o.cylinder.m === 'RD2514' && o.notes.some(n => /bigger class that does/.test(n)))(sel({ act: 'DA', travel: 14 })));
+  eq('30 t / 6 in: RA306 (the C series has no 30 t 6 in), C308C offered', (o => [o.cylinder.m, o.alts.map(x => x.m).includes('C308C')])(sel({ act: 'SA', load: 30, travel: 6 })), ['RA306', true]);
+  ok('not sure: single-acting, and it says so', sel({ act: '' }).cylinder.act === 'SA' && sel({ act: '' }).notes.some(n => /Single-acting was assumed/.test(n)));
+  ok('double-acting cannot hold a load on a locking collar: kept single-acting, with a warning', (o => o.cylinder.act === 'SA' && o.warnings.some(w => /Locking-collar cylinders are single-acting/.test(w)))(E.pfeSelect({ job: 'hold', basis: 'rating', act: 'DA', load: 100, travel: 6, travelUnit: 'in' }, ctx)));
+  eq('the old "powered" flag still means double-acting', E.pfeSelect({ job: 'lift', load: 30, travel: 100, powered: true }, ctx).cylinder.act, 'DA');
+}
+{
+  const pump = x => E.pfeSelect(Object.assign({ job: 'lift', basis: 'rating', act: 'SA', load: 10, travel: 8, travelUnit: 'in' }, x), ctx).set.pump;
+  eq('hand pump, either: the catalog pairing (P55, one-speed)', [pump({}).m, pump({}).speed], ['P55', 1]);
+  eq('hand pump, one-speed: P55', pump({ speed: 1 }).m, 'P55');
+  eq('hand pump, two-speed: P59 (the same 45 in³, two-speed)', [pump({ speed: 2 }).m, pump({ speed: 2 }).speed], ['P59', 2]);
+  const big = E.pfeBuildSet({ kind: 'lift', items: ['C108C', 'C154C', 'C156C', 'C254C'].map(m => ({ model: m })), together: true, speed: 1 }, ctx);
+  ok('one-speed asked but no one-speed pump holds the oil: two-speed P159, and it says so', big.pump.m === 'P159' && big.notes.some(n => /No one-speed hand pump holds/.test(n)), [big.pump.m, big.notes]);
+  eq('four cylinders together, two-speed: P159, the P-80 equivalent', E.pfeBuildSet({ kind: 'lift', items: ['C108C', 'C154C', 'C156C', 'C254C'].map(m => ({ model: m })), together: true, speed: 2 }, ctx).pump.m, 'P159');
+  eq('C154C one-speed keeps its RPS154 pairing; two-speed moves to P59', [E.pfeBuildSet({ kind: 'lift', items: [{ model: 'C154C' }], speed: 1 }, ctx).pump.m, E.pfeBuildSet({ kind: 'lift', items: [{ model: 'C154C' }], speed: 2 }, ctx).pump.m], ['P55', 'P59']);
+  eq('short names say one-speed and two-speed', [E.pfeShort(ctx.M.P55), E.pfeShort(ctx.M.P159)], ['hand pump, one-speed, 45 in³ usable oil', 'hand pump, two-speed, 137 in³ usable oil']);
+}
+eq('Find reads the first line even with its J missing ("ACK:HYDRAULIC…")', best('ACK:HYDRAULIC;TYPE:SINGLE ACTING CYLINDER,LOAD CARRYING CAPACITY:10 TO,MAX. HEIGHT:8 IN,MATERIAL:CHROMIUM STEEL RC-108'), 'C108C');
+
 console.log('\n== what leaves the page ==');
 {
   const basket = [{ model: 'C108C', qty: 2, line: LINES[0], quality: 'exact', basis: all[0].basis, source: all[0].source },
