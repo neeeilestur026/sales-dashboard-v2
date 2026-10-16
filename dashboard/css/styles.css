@@ -167,6 +167,9 @@ html.hx-theming *, html.hx-theming *::before, html.hx-theming *::after {
 .nav-dropdown-menu a.active { color: var(--hx-navy-text); background: var(--hx-navy-soft); }
 .navbar-user { display: flex; align-items: center; gap: .75rem; }
 .navbar-user-name { font: 500 .875rem/1.2 var(--hx-text); color: var(--hx-ink-2); }
+/* A336: the way into the new look, drawn only while the director offers it (FlowSettings portalSkin) */
+.navbar-user .lg-try { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid var(--hx-navy-line); border-radius: var(--hx-r-pill); font: 600 .78rem/1 var(--hx-text); color: var(--hx-navy-text); white-space: nowrap; text-decoration: none; }
+.navbar-user .lg-try:hover { background: var(--hx-navy-soft); }
 .navbar-user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--hx-navy-soft); color: var(--hx-navy-text); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .875rem; border: 1px solid var(--hx-hair); }
 .mobile-menu-toggle { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: transparent; color: var(--hx-ink-2); cursor: pointer; border-radius: var(--hx-r-sm); }
 .mobile-menu-toggle:hover { background: var(--hx-inset); }
