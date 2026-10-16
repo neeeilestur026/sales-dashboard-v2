@@ -18,11 +18,11 @@
   .mi-rail { background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: 18px;
              padding: .4rem; position: sticky; top: 96px; max-height: calc(100vh - 120px); overflow-y: auto; }
   @media (max-width: 1000px) { .mi-rail { position: static; max-height: none; } }
-  .mi-railhead { font: 700 10.5px 'Inter', sans-serif; letter-spacing: .05em; text-transform: uppercase;
+  .mi-railhead { font: 700 10.5px var(--hx-text); letter-spacing: .05em; text-transform: uppercase;
                  color: var(--hx-ink-3); padding: .55rem .6rem .35rem; }
 
   .mi-who { display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
-            padding: .55rem .6rem; border-radius: 12px; font-family: 'Inter', sans-serif; }
+            padding: .55rem .6rem; border-radius: 12px; font-family: var(--hx-text); }
   .mi-who:hover { background: var(--hx-inset); }
   .mi-who.on { background: var(--hx-navy-soft); box-shadow: inset 0 0 0 1px var(--hx-navy-line); }
   .mi-who .n { display: flex; align-items: center; gap: .35rem; font-weight: 700; font-size: .82rem;
@@ -49,7 +49,7 @@
                  border-bottom: 1px solid var(--hx-hair); padding-bottom: .8rem; margin-bottom: .9rem; }
   .mi-panehead h2 { margin: 0; font-size: 1.08rem; font-weight: 800; }
   .mi-panehead .acts { margin-left: auto; display: flex; gap: .4rem; }
-  .mi-chip { display: inline-block; padding: .12rem .5rem; border-radius: 999px; font: 700 .68rem 'Inter', sans-serif;
+  .mi-chip { display: inline-block; padding: .12rem .5rem; border-radius: 999px; font: 700 .68rem var(--hx-text);
              text-transform: uppercase; letter-spacing: .03em; background: var(--hx-inset); }
   .mi-note { font-size: .78rem; color: var(--hx-ink-2); line-height: 1.6; margin-top: .3rem; }
   .mi-note b { color: var(--hx-ink); }
@@ -65,14 +65,14 @@
   .mi-day.quiet { opacity: .62; }
   .mi-dayhead { display: flex; align-items: center; gap: .55rem; padding: .5rem .7rem;
                 background: var(--hx-inset); border-bottom: 1px solid var(--hx-hair); }
-  .mi-dayhead .d { font: 800 .82rem 'Inter', sans-serif; }
+  .mi-dayhead .d { font: 800 .82rem var(--hx-text); }
   .mi-dayhead .dt { font-size: .74rem; color: var(--hx-ink-3); }
   .mi-dayhead .n { margin-left: auto; font-size: .72rem; color: var(--hx-ink-3);
                    font-variant-numeric: tabular-nums; }
-  .mi-sect { font: 700 .66rem 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .05em;
+  .mi-sect { font: 700 .66rem var(--hx-text); text-transform: uppercase; letter-spacing: .05em;
              color: var(--hx-ink-3); padding: .5rem .7rem .25rem; }
   .mi-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
-  .mi-table th { text-align: left; font: 700 .66rem 'Inter', sans-serif; text-transform: uppercase;
+  .mi-table th { text-align: left; font: 700 .66rem var(--hx-text); text-transform: uppercase;
                  letter-spacing: .03em; color: var(--hx-ink-3); padding: .3rem .55rem; border-bottom: 1px solid var(--hx-hair); }
   .mi-table td { padding: .38rem .55rem; border-bottom: 1px solid var(--hx-inset); vertical-align: top;
                  color: var(--hx-ink-2); }
@@ -83,7 +83,7 @@
   /* The three match kinds must never look alike — a guess that reads like a fact is the one thing
      this page cannot afford. */
   .mi-tag { display: inline-block; padding: .05rem .4rem; border-radius: 999px; white-space: nowrap;
-            font: 700 .64rem 'Inter', sans-serif; }
+            font: 700 .64rem var(--hx-text); }
   .mi-tag.exact  { background: var(--hx-ok-soft); color: var(--hx-ok); }
   .mi-tag.likely { background: var(--hx-inset); color: var(--hx-ink-2); font-style: italic; font-weight: 600; }
   .mi-tag.miss   { background: var(--hx-warn-soft); color: var(--hx-warn); }
@@ -93,7 +93,7 @@
   .mi-photo { height: 40px; border-radius: 6px; border: 1px solid var(--hx-hair); cursor: zoom-in; }
 
   .weeknav { display: flex; gap: 6px; align-items: center; }
-  .weeknav .rng { font: 700 .82rem 'Inter', sans-serif; min-width: 172px; text-align: center;
+  .weeknav .rng { font: 700 .82rem var(--hx-text); min-width: 172px; text-align: center;
                   font-variant-numeric: tabular-nums; }
 
   @media print {

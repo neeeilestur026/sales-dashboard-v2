@@ -266,14 +266,14 @@ async function renderPLChart(monthly) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: _hx('--hx-ink-2', '#465067'), usePointStyle: true, pointStyle: 'circle', padding: 14, font: { family: 'Inter', size: 11 } } },
+      plugins: { legend: { labels: { color: _hx('--hx-ink-2', '#465067'), usePointStyle: true, pointStyle: 'circle', padding: 14, font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 } } },
         tooltip: { backgroundColor: _hx('--hx-card', '#fff'), titleColor: _hx('--hx-ink', '#0F1730'), bodyColor: _hx('--hx-ink-2', '#465067'), borderColor: _hx('--hx-hair', '#C6CEDA'), borderWidth: 1, cornerRadius: 8, padding: 10,
           callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + peso(ctx.raw); } }
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: _hx('--hx-ink-3', '#8E98AC'), font: { family: 'Inter', size: 10 } } },
-        y: { grid: { color: _hx('--hx-chart-grid', '#DCE2EA') }, ticks: { color: _hx('--hx-ink-3', '#8E98AC'), font: { family: 'Inter', size: 10 }, callback: function(v) { return '₱' + (v/1000).toFixed(0) + 'k'; } } }
+        x: { grid: { display: false }, ticks: { color: _hx('--hx-ink-3', '#8E98AC'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 10 } } },
+        y: { grid: { color: _hx('--hx-chart-grid', '#DCE2EA') }, ticks: { color: _hx('--hx-ink-3', '#8E98AC'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 10 }, callback: function(v) { return '₱' + (v/1000).toFixed(0) + 'k'; } } }
       }
     }
   });
@@ -306,7 +306,7 @@ async function renderExpBreakdownChart(expByCat, summary) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'right', labels: { color: _hx('--hx-ink-2', '#465067'), padding: 8, font: { family: 'Inter', size: 10 }, usePointStyle: true, pointStyle: 'circle' } },
+        legend: { position: 'right', labels: { color: _hx('--hx-ink-2', '#465067'), padding: 8, font: { family: hxSkinC('--hx-text', 'Inter'), size: 10 }, usePointStyle: true, pointStyle: 'circle' } },
         tooltip: { backgroundColor: _hx('--hx-card', '#fff'), titleColor: _hx('--hx-ink', '#0F1730'), bodyColor: _hx('--hx-ink-2', '#465067'), borderColor: _hx('--hx-hair', '#C6CEDA'), borderWidth: 1, cornerRadius: 8, padding: 10,
           callbacks: { label: function(ctx) { return ctx.label + ': ' + peso(ctx.raw); } }
         }

@@ -145,19 +145,19 @@ async function loadTargetHistory() {
       data: {
         labels: labels,
         datasets: [
-          { label: 'Team Quotation Target', data: qTargets, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4 },
-          { label: 'Team PR Target', data: prTargets, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3, pointRadius: 4 }
+          { label: 'Team Quotation Target', data: qTargets, borderColor: hxSkinC('--l-accent', '#f97316'), backgroundColor: hxSkinC('--l-accent-soft', 'rgba(249,115,22,0.1)'), fill: true, tension: 0.3, pointRadius: 4 },
+          { label: 'Team PR Target', data: prTargets, borderColor: hxSkinC('--l-p-accent-2', '#3b82f6'), backgroundColor: hxSkinC('--l-p-ring', 'rgba(59,130,246,0.1)'), fill: true, tension: 0.3, pointRadius: 4 }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } },
-          tooltip: { backgroundColor: '#1e293b', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: '#334155', borderWidth: 1, cornerRadius: 8 }
+          legend: { labels: { color: hxSkinC('--l-ink-3', '#94a3b8'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 } } },
+          tooltip: { backgroundColor: hxSkinC('--l-panel', '#1e293b'), titleColor: hxSkinC('--l-ink', '#f1f5f9'), bodyColor: hxSkinC('--l-ink-2', '#94a3b8'), borderColor: hxSkinC('--l-line', '#334155'), borderWidth: 1, cornerRadius: 8 }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } },
-          y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#64748b' } }
+          x: { grid: { display: false }, ticks: { color: hxSkinC('--l-ink-3', '#94a3b8'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 } } },
+          y: { beginAtZero: true, grid: { color: hxSkinC('--l-p-grid', '#e2e8f0') }, ticks: { color: hxSkinC('--l-ink-2', '#64748b') } }
         }
       }
     });

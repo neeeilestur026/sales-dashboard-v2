@@ -100,13 +100,13 @@
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: hx('--hx-ink-2', '#465067'), usePointStyle: true, pointStyle: 'circle', padding: 14, font: { family: 'Inter', size: 11 } } },
+        legend: { labels: { color: hx('--hx-ink-2', '#465067'), usePointStyle: true, pointStyle: 'circle', padding: 14, font: { family: hxSkinC('--hx-text', 'Inter'), size: 11 } } },
         tooltip: { backgroundColor: hx('--hx-card', '#fff'), titleColor: hx('--hx-ink', '#0F1730'), bodyColor: hx('--hx-ink-2', '#465067'), borderColor: hx('--hx-hair', '#C6CEDA'), borderWidth: 1, cornerRadius: 8, padding: 10,
           callbacks: { label: function (c) { return c.dataset.label + ': ' + money(c.raw); } } }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: hx('--hx-ink-3', '#8E98AC'), font: { family: 'Inter', size: 10 }, maxRotation: 0, autoSkip: true } },
-        y: { beginAtZero: true, grid: { color: hx('--hx-chart-grid', '#DCE2EA') }, ticks: { color: hx('--hx-ink-3', '#8E98AC'), font: { family: 'Inter', size: 10 }, callback: moneyAxis ? function (v) { return short(v); } : undefined } }
+        x: { grid: { display: false }, ticks: { color: hx('--hx-ink-3', '#8E98AC'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 10 }, maxRotation: 0, autoSkip: true } },
+        y: { beginAtZero: true, grid: { color: hx('--hx-chart-grid', '#DCE2EA') }, ticks: { color: hx('--hx-ink-3', '#8E98AC'), font: { family: hxSkinC('--hx-text', 'Inter'), size: 10 }, callback: moneyAxis ? function (v) { return short(v); } : undefined } }
       }
     };
   }

@@ -321,6 +321,47 @@ sec('6 · the "Needs you" strip: unchanged while off, a verb and the amount whil
     finish();
   });
 }
+/* ── 7 · charts ────────────────────────────────────────────────────────────────────────────── */
+sec('7 · charts: the classic colours exactly while off, the Ledger tokens while on');
+{
+  const FILES = ['accounting.js', 'admin-summary-inline.js', 'admin-team.js', 'admin-targets-inline.js', 'financial-reports.js'];
+  const loose = [], fonts = [];
+  FILES.forEach(f => {
+    const src = read('js/' + f), bare = src.replace(/hxSkinC\('[^']+', '[^']+'\)/g, '');
+    if (/family:\s*'Inter'/.test(bare)) fonts.push(f);
+    if (/admin-/.test(f) && /'#[0-9a-fA-F]{3,6}'|'rgba\(/.test(bare)) loose.push(f + ': ' + (bare.match(/'#[0-9a-fA-F]{3,6}'|'rgba\([^)]*\)'/g) || []).slice(0, 3).join(' '));
+  });
+  ok('every chart names its font through hxSkinC (canvas cannot read var())', fonts.length === 0, fonts);
+  ok('  the admin charts write no colour of their own outside an hxSkinC fallback', loose.length === 0, loose);
+  const ctx = { getComputedStyle: () => ({ getPropertyValue: (n) => (n === '--l-accent' ? ' #2E3192 ' : '') }), document: { documentElement: {} }, window: {} };
+  ctx.window = ctx;
+  vm.createContext(ctx); vm.runInContext(API, ctx);
+  const off = vm.runInContext("hxSkinC('--l-accent', '#f97316')", ctx);
+  ctx.hxSkinOn = true;
+  const on = vm.runInContext("hxSkinC('--l-accent', '#f97316')", ctx), missing = vm.runInContext("hxSkinC('--l-none', '#f97316')", ctx);
+  ok('  hxSkinC: the classic value while off, the token while on, the classic value if the token is missing', off === '#f97316' && on === '#2E3192' && missing === '#f97316', [off, on, missing]);
+}
+/* ── 8 · aging lists ───────────────────────────────────────────────────────────────────────── */
+sec('8 · the aging lists: the same rows while off, grouped by lateness while on');
+{
+  const LV = read('js/flow-ledger-view.js');
+  const day = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const ROWS = [{ id: 'a', due: day(-5), o: 100 }, { id: 'b', due: day(75), o: 200 }, { id: 'c', due: day(12), o: 50 }, { id: 'd', due: day(90), o: 25 }, { id: 'e', due: '', o: 10 }];
+  function run(on) {
+    const ctx = { window: {}, flowDate: (v) => v, flowMoney: (n) => 'P' + n.toFixed(2), Date, Math };
+    ctx.window = ctx; if (on) ctx.hxSkinOn = true;
+    vm.createContext(ctx); vm.runInContext(LV.replace(/^const [A-Z_]+ = [^;]*;$/gm, ''), ctx);
+    ctx.ROWS = ROWS;
+    return vm.runInContext("flowLedgerGroupedBody(ROWS, r => '<tr id=' + r.id + '></tr>', { due: r => r.due, owed: r => r.o, cols: 5, foot: '<tr class=f></tr>' })", ctx);
+  }
+  const off = run(false), on = run(true);
+  ok('off: exactly the rows in their order and the foot, in one body', off === '<tbody><tr id=a></tr><tr id=b></tr><tr id=c></tr><tr id=d></tr><tr id=e></tr><tr class=f></tr></tbody>', off);
+  const order = (on.match(/<tr id=(\w)>/g) || []).map(x => x.slice(7, 8)).join('');
+  ok('on: oldest first, every row once (d, b over 60; c 1 to 30; then not yet due: the undated e, a due in 5 days)', order === 'dbcea', order);
+  ok('  each group says its count and what it still owes; the late ones are marked late', /Over 60 days late<\/span><span class="l-grp-n">2<\/span><span class="l-grp-sum">P225\.00 outstanding/.test(on)
+    && /l-late">1 to 30 days late/.test(on) && /class="l-grp-l">Not yet due/.test(on) && !/31 to 60/.test(on) && /<tbody><tr class=f><\/tr><\/tbody>$/.test(on), on.slice(0, 300));
+  ok('  the AR and AP pages hand their rows to it', /flowLedgerGroupedBody\(open, rowHtml/.test(read('js/flow-ar-aging.js')) && /flowLedgerGroupedBody\(open, rowHtml/.test(read('js/flow-ap-aging.js')));
+}
 function finish() {
 console.log('\n' + (FAIL ? 'FAIL — ' + FAIL + ' of ' + N : 'all ' + N + ' passed'));
 process.exit(FAIL ? 1 : 0);

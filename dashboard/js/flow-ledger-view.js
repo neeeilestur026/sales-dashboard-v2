@@ -99,6 +99,26 @@ function flowLedgerFootRow(cells, colCount) {
   return `<tr class="lv-foot">${tds.join('')}</tr>`;
 }
 
+/* A336 — the open rows of an aging list, as <tbody> markup. Classic: exactly the rows and the foot,
+   as before. Under the Ledger look: grouped by how late they are (the KPI buckets: over 60, 31 to 60,
+   1 to 30 days late, not yet due), oldest first, each group headed by its count and what is still
+   owed, and the foot in a body of its own.
+   o: { due: r => the due date, owed: r => the amount still owed, cols: column count, foot: html } */
+function flowLedgerGroupedBody(rows, rowHtml, o) {
+  if (!window.hxSkinOn) return `<tbody>${rows.map(rowHtml).join('')}${o.foot || ''}</tbody>`;
+  const today = new Date();
+  const late = r => { const d = o.due(r) ? new Date(flowDate(o.due(r))) : null; return d && !isNaN(d) ? Math.floor((today - d) / 86400000) : 0; };
+  const GROUPS = [['Over 60 days late', d => d > 60], ['31 to 60 days late', d => d > 30 && d <= 60], ['1 to 30 days late', d => d > 0 && d <= 30], ['Not yet due', d => d <= 0]];
+  return GROUPS.map(([label, inGroup], i) => {
+    const rs = rows.filter(r => inGroup(late(r))).sort((a, b) => late(b) - late(a));
+    if (!rs.length) return '';
+    const owed = rs.reduce((t, r) => t + o.owed(r), 0);
+    return `<tbody class="l-grp-body"><tr class="l-grp"><th colspan="${o.cols}" scope="rowgroup"><span class="l-grp-h">`
+      + `<span class="l-grp-l${i < 3 ? ' l-late' : ''}">${label}</span><span class="l-grp-n">${rs.length}</span>`
+      + `<span class="l-grp-sum">${flowMoney(owed, 'PHP')} outstanding</span></span></th></tr>${rs.map(rowHtml).join('')}</tbody>`;
+  }).join('') + (o.foot ? `<tbody>${o.foot}</tbody>` : '');
+}
+
 /** Shared styles, injected once. */
 function flowLedgerInjectCss() {
   if (document.getElementById('lvCss')) return;

@@ -19,11 +19,11 @@
   .qb-col.no { background: var(--hx-red-soft); box-shadow: inset 0 0 0 2px var(--hx-red-soft); }
 
   .qb-head { padding: .6rem .7rem .5rem; border-bottom: 1px solid var(--border); }
-  .qb-head .l { font: 800 .74rem 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .04em;
+  .qb-head .l { font: 800 .74rem var(--hx-text); text-transform: uppercase; letter-spacing: .04em;
                 color: var(--text-primary); }
   .qb-head .s { font-size: .66rem; color: var(--text-muted); margin-top: .05rem; }
   .qb-head .n { display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; }
-  .qb-head .n b { font: 800 1.05rem 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+  .qb-head .n b { font: 800 1.05rem var(--hx-text); font-variant-numeric: tabular-nums; }
   .qb-head .n span { font-size: .72rem; color: var(--text-secondary);
                      font-variant-numeric: tabular-nums; }
 
@@ -31,7 +31,7 @@
               max-height: calc(100vh - 340px); overflow-y: auto; min-height: 60px; }
 
   .qb-card { background: var(--hx-card); border: 1px solid var(--border); border-left: 3px solid var(--hx-hair);
-             border-radius: 10px; padding: .45rem .55rem; cursor: grab; font-family: 'Inter', sans-serif; }
+             border-radius: 10px; padding: .45rem .55rem; cursor: grab; font-family: var(--hx-text); }
   .qb-card:hover { box-shadow: var(--hx-sh-1); }
   .qb-card.dragging { opacity: .45; }
   .qb-card .cust { font-weight: 700; font-size: .78rem; color: var(--text-primary);
@@ -39,7 +39,7 @@
   .qb-card .no { font: 400 .64rem ui-monospace, SFMono-Regular, Menlo, monospace;
                  color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .qb-card .foot { display: flex; align-items: baseline; gap: .4rem; margin-top: .28rem; }
-  .qb-card .val { font: 700 .74rem 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+  .qb-card .val { font: 700 .74rem var(--hx-text); font-variant-numeric: tabular-nums; }
   .qb-card .age { margin-left: auto; font-size: .66rem; font-weight: 700; }
   .qb-card .who { font-size: .64rem; color: var(--text-muted); margin-top: .18rem; }
 
@@ -54,7 +54,7 @@
               font-size: .72rem; font-style: italic; }
   .qb-more { padding: .3rem; text-align: center; font-size: .7rem; }
   .qb-more button { background: none; border: 0; color: var(--accent-dark); cursor: pointer;
-                    font: 700 .7rem 'Inter', sans-serif; }
+                    font: 700 .7rem var(--hx-text); }
 
   .qb-note { font-size: .76rem; color: var(--text-secondary); line-height: 1.6;
              padding: .55rem .75rem; border-radius: 10px; background: var(--bg-inset);

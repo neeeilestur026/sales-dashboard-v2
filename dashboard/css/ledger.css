@@ -189,6 +189,121 @@ html[data-skin="ledger"] body.flow-screen .kpi { border-radius: var(--l-r-panel)
 html[data-skin="ledger"] body.flow-screen .kpi::before { display: none; }
 html[data-skin="ledger"] body.flow-screen .kpi .chip, html[data-skin="ledger"] .stat-card-icon { border-radius: var(--l-r-ctl); }
 
+/* page headers stack: the title, then what the page is for (no floating explainer on the right) */
+html[data-skin="ledger"] .page-header { display: block; margin-bottom: 24px; }
+html[data-skin="ledger"] .page-header p { margin-top: 6px; max-width: 65ch; }
+
+/* sentence case, not all-caps labels: every selector the pages and sheets uppercase (generated from
+   their <style> blocks and css/*.css; the payslip card keeps its printed look) */
+html[data-skin="ledger"] #qcItems th,
+html[data-skin="ledger"] #tvLegs th,
+html[data-skin="ledger"] #tvQueue th,
+html[data-skin="ledger"] .acc-sec h4,
+html[data-skin="ledger"] .acc-so-head .lbl,
+html[data-skin="ledger"] .acc-summary span small,
+html[data-skin="ledger"] .apm-kpi .l,
+html[data-skin="ledger"] .as-kpi .l,
+html[data-skin="ledger"] .as-sect-title,
+html[data-skin="ledger"] .at-best,
+html[data-skin="ledger"] .bank-card .bk-name,
+html[data-skin="ledger"] .billing-table th,
+html[data-skin="ledger"] .bk-modal .row label,
+html[data-skin="ledger"] .bk-table th,
+html[data-skin="ledger"] .bs-kpi .l,
+html[data-skin="ledger"] .bs-opening h3,
+html[data-skin="ledger"] .bs-pick label,
+html[data-skin="ledger"] .bs-section,
+html[data-skin="ledger"] .cm-cols th,
+html[data-skin="ledger"] .config-grid label,
+html[data-skin="ledger"] .cr-rec-label,
+html[data-skin="ledger"] .cr-sect-title,
+html[data-skin="ledger"] .ct-kind,
+html[data-skin="ledger"] .ct-stats div,
+html[data-skin="ledger"] .dd-kpi .lbl,
+html[data-skin="ledger"] .dd-panel h3,
+html[data-skin="ledger"] .dd-rank th,
+html[data-skin="ledger"] .dd-table th,
+html[data-skin="ledger"] .detail-section-title,
+html[data-skin="ledger"] .dp-kpi .lbl,
+html[data-skin="ledger"] .dp-modal .row label,
+html[data-skin="ledger"] .dp-table th,
+html[data-skin="ledger"] .dr-sect-title,
+html[data-skin="ledger"] .dr-tile .l,
+html[data-skin="ledger"] .em-table th,
+html[data-skin="ledger"] .ex-grand .gl,
+html[data-skin="ledger"] .ex-kpi .l,
+html[data-skin="ledger"] .ex-table th,
+html[data-skin="ledger"] .eyebrow,
+html[data-skin="ledger"] .feed-table th,
+html[data-skin="ledger"] .fg-sec,
+html[data-skin="ledger"] .fg-who,
+html[data-skin="ledger"] .flow-banner-title,
+html[data-skin="ledger"] .flow-form label,
+html[data-skin="ledger"] .flow-table th,
+html[data-skin="ledger"] .form-lbl,
+html[data-skin="ledger"] .form-section-title,
+html[data-skin="ledger"] .hist-table th,
+html[data-skin="ledger"] .info-item .info-label,
+html[data-skin="ledger"] .items-table th,
+html[data-skin="ledger"] .kpi-label,
+html[data-skin="ledger"] .kpi-pill .kp-label,
+html[data-skin="ledger"] .line-table th,
+html[data-skin="ledger"] .ll-badge.mig,
+html[data-skin="ledger"] .ll-head .lbl,
+html[data-skin="ledger"] .ll-subh,
+html[data-skin="ledger"] .ll-tlphase-h,
+html[data-skin="ledger"] .mi-chip,
+html[data-skin="ledger"] .mi-railhead,
+html[data-skin="ledger"] .mi-sect,
+html[data-skin="ledger"] .mi-table th,
+html[data-skin="ledger"] .mi-who .s,
+html[data-skin="ledger"] .mso-items th,
+html[data-skin="ledger"] .mso-kpi .lbl,
+html[data-skin="ledger"] .mso-table th,
+html[data-skin="ledger"] .pdf-card-header,
+html[data-skin="ledger"] .pe-bd .l,
+html[data-skin="ledger"] .pe-config-grid label,
+html[data-skin="ledger"] .pe-ctx .k,
+html[data-skin="ledger"] .pe-inputs label,
+html[data-skin="ledger"] .pe-kpi .l,
+html[data-skin="ledger"] .pe-line-table th,
+html[data-skin="ledger"] .pe-results-table th,
+html[data-skin="ledger"] .pe-ro-label,
+html[data-skin="ledger"] .pl-kpi-label,
+html[data-skin="ledger"] .pl-table th,
+html[data-skin="ledger"] .pr-kpi-label,
+html[data-skin="ledger"] .preview-details .detail-label,
+html[data-skin="ledger"] .prt-dot .l,
+html[data-skin="ledger"] .prt-grp > summary,
+html[data-skin="ledger"] .prt-next .k,
+html[data-skin="ledger"] .prt-sec > h3,
+html[data-skin="ledger"] .prt-stage .l,
+html[data-skin="ledger"] .prt-stats div,
+html[data-skin="ledger"] .pstat .k,
+html[data-skin="ledger"] .ptable th,
+html[data-skin="ledger"] .pv-details .dl-label,
+html[data-skin="ledger"] .pv-docs-label,
+html[data-skin="ledger"] .qb-head .l,
+html[data-skin="ledger"] .qc-grid label,
+html[data-skin="ledger"] .qw-pill,
+html[data-skin="ledger"] .readout-label,
+html[data-skin="ledger"] .results-table th,
+html[data-skin="ledger"] .revision-details .detail-label,
+html[data-skin="ledger"] .role-badge,
+html[data-skin="ledger"] .sec-title,
+html[data-skin="ledger"] .section-label,
+html[data-skin="ledger"] .section-title,
+html[data-skin="ledger"] .sh-phase-h,
+html[data-skin="ledger"] .summary-tile .label,
+html[data-skin="ledger"] .tv-grid label,
+html[data-skin="ledger"] .wiStatus,
+html[data-skin="ledger"] .wiTable th,
+html[data-skin="ledger"] body.flow-screen .eyebrow,
+html[data-skin="ledger"] table.cm-diag th,
+html[data-skin="ledger"] table.cp th,
+html[data-skin="ledger"] table.cr th,
+html[data-skin="ledger"] th { text-transform: none; letter-spacing: 0; }
+
 /* ─── 6 · Buttons: 8px corners, one accent ──────────────────────────────────────────────── */
 html[data-skin="ledger"] .btn, html[data-skin="ledger"] .hx-btn, html[data-skin="ledger"] body.flow-screen .btn,
 html[data-skin="ledger"] body.flow-screen .btn-secondary, html[data-skin="ledger"] body.flow-screen .btn-sm {
@@ -244,6 +359,15 @@ html[data-skin="ledger"] tr.total-row td, html[data-skin="ledger"] tr.total td, 
 html[data-skin="ledger"] .flow-table tr.tot td, html[data-skin="ledger"] .flow-table tr.total-row td, html[data-skin="ledger"] body.flow-screen .flow-table tr.tot td {
   font-weight: 600; color: var(--l-ink); background: var(--l-inset); border-top: 1px solid var(--l-line); border-bottom: none;
 }
+
+/* aging lists grouped by lateness (flow-ledger-view.js flowLedgerGroupedBody) */
+html[data-skin="ledger"] tr.l-grp th { position: static; padding: 16px 14px 8px; background: var(--l-panel); border-bottom: 1px solid var(--l-line-2); text-align: left; cursor: default; }
+html[data-skin="ledger"] tbody.l-grp-body + tbody.l-grp-body tr.l-grp th { border-top: 1px solid var(--l-line); }
+html[data-skin="ledger"] .l-grp-h { display: flex; align-items: baseline; gap: 8px; }
+html[data-skin="ledger"] .l-grp-l { font: 600 14px/1.3 var(--l-sans); color: var(--l-ink); }
+html[data-skin="ledger"] .l-grp-l.l-late { color: var(--l-late); }
+html[data-skin="ledger"] .l-grp-n { font: 500 12px/1 var(--l-mono); color: var(--l-ink-3); }
+html[data-skin="ledger"] .l-grp-sum { margin-left: 10px; font: 500 13px/1 var(--l-mono); color: var(--l-ink-2); }
 
 /* ─── 9 · Badges, chips, tabs and the flow strip ────────────────────────────────────────── */
 html[data-skin="ledger"] .badge, html[data-skin="ledger"] .flow-badge, html[data-skin="ledger"] body.flow-screen .flow-badge, html[data-skin="ledger"] .status-badge, html[data-skin="ledger"] .mod-badge {

@@ -11,37 +11,37 @@
     500;600;700;800&display=swap');
     :root{--ac:var(--hx-navy-text);--card:var(--hx-glass-solid);--line:var(--hx-hair);--ink:var(--hx-ink);--ink2:var(--hx-ink-3);
       --accent:var(--hx-navy-text);--accent-hover:var(--hx-navy-text);--accent-dark:var(--hx-navy-text);--accent-light:var(--hx-navy-soft);--accent-ring:var(--hx-navy-line);}
-    body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background: radial-gradient(1100px 560px at 12% -8%,var(--hx-inset),var(--hx-inset) 60%) !important;}
+    body{font-family:var(--hx-text);-webkit-font-smoothing:antialiased;background: radial-gradient(1100px 560px at 12% -8%,var(--hx-inset),var(--hx-inset) 60%) !important;}
     .main-content{max-width:1100px;margin:0 auto;padding:104px 24px 40px !important;}
     .chart-card{background: var(--hx-glass-solid);border: 1px solid var(--hx-hair);border-radius: 18px;padding:20px 22px;margin-bottom:1rem;box-shadow: var(--hx-sh-2);}
-    .chart-card h3{font:700 15px 'Inter',sans-serif;color: var(--hx-ink);margin:0;}
-    .btn{border-radius: 999px;padding:10px 18px;font:600 13px 'Inter',sans-serif;border: 1px solid var(--hx-hair);background: var(--hx-card);color: var(--hx-ink);cursor:pointer;transition:all .18s;}
+    .chart-card h3{font:700 15px var(--hx-text);color: var(--hx-ink);margin:0;}
+    .btn{border-radius: 999px;padding:10px 18px;font:600 13px var(--hx-text);border: 1px solid var(--hx-hair);background: var(--hx-card);color: var(--hx-ink);cursor:pointer;transition:all .18s;}
     .btn:hover{background: var(--hx-inset);}
     .btn-primary{background: linear-gradient(180deg,var(--hx-navy),var(--hx-navy));color: var(--hx-slab-ink);border: none;}
     .btn-sm{padding:7px 14px;font-size:12px;}
     .btn:disabled{opacity:.45;cursor:not-allowed;}
     .cp-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;}
-    .cp-bar select{padding:9px 12px;border: 1px solid var(--hx-hair);border-radius: 9px;font:500 13px 'Inter',sans-serif;background: var(--hx-card);}
+    .cp-bar select{padding:9px 12px;border: 1px solid var(--hx-hair);border-radius: 9px;font:500 13px var(--hx-text);background: var(--hx-card);}
     .cp-window{margin-top:10px;padding:11px 13px;border-radius: 10px;background: var(--hx-navy-soft);border-left: 3px solid var(--ac);
-      font:500 12.5px/1.6 'Inter',sans-serif;color: var(--hx-navy-text);}
+      font:500 12.5px/1.6 var(--hx-text);color: var(--hx-navy-text);}
     /* The two systems do not share employee identities. Say so where the keying happens. */
     .cp-warn{margin-top:10px;padding:11px 13px;border-radius: 10px;background: var(--hx-warn-soft);border-left: 3px solid var(--hx-warn);
-      font:500 12.5px/1.6 'Inter',sans-serif;color: var(--hx-warn);}
-    table.cp{width:100%;border-collapse: collapse;font:400 13px 'Inter',sans-serif;margin-top:14px;}
-    table.cp th{text-align:left;font:600 10.5px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+      font:500 12.5px/1.6 var(--hx-text);color: var(--hx-warn);}
+    table.cp{width:100%;border-collapse: collapse;font:400 13px var(--hx-text);margin-top:14px;}
+    table.cp th{text-align:left;font:600 10.5px var(--hx-text);text-transform:uppercase;letter-spacing:.04em;
       color: var(--hx-ink-3);padding:9px 10px;border-bottom: 1px solid var(--hx-hair);}
     table.cp td{padding:10px;border-bottom: 1px solid var(--hx-inset);color: var(--hx-ink);vertical-align:top;}
     table.cp td.num,table.cp th.num{text-align:right;white-space:nowrap;}
-    table.cp tfoot td{font:700 14px 'Inter',sans-serif;border-top: 2px solid var(--hx-ink);border-bottom: none;padding-top:12px;}
-    .cp-key{font:700 15px 'Inter',sans-serif;color: var(--hx-ok);}
-    .cp-name{font:600 13.5px 'Inter',sans-serif;}
-    .cp-detail{font:400 11.5px/1.7 'Inter',sans-serif;color: var(--hx-ink-3);margin-top:4px;}
-    .cp-copy{background: none;border: 1px solid var(--hx-hair);border-radius: 6px;padding:1px 7px;font:600 10.5px 'Inter',sans-serif;
+    table.cp tfoot td{font:700 14px var(--hx-text);border-top: 2px solid var(--hx-ink);border-bottom: none;padding-top:12px;}
+    .cp-key{font:700 15px var(--hx-text);color: var(--hx-ok);}
+    .cp-name{font:600 13.5px var(--hx-text);}
+    .cp-detail{font:400 11.5px/1.7 var(--hx-text);color: var(--hx-ink-3);margin-top:4px;}
+    .cp-copy{background: none;border: 1px solid var(--hx-hair);border-radius: 6px;padding:1px 7px;font:600 10.5px var(--hx-text);
       color: var(--hx-ink-2);cursor:pointer;margin-left:6px;}
     .cp-copy:hover{background: var(--hx-inset);}
-    .cp-empty{padding:2rem;text-align:center;color: var(--hx-ink-3);font:500 13px 'Inter',sans-serif;}
-    .cp-flag{color: var(--hx-red);font:600 11.5px 'Inter',sans-serif;}
-    .loading-overlay{display:flex;align-items:center;justify-content:center;gap:.6rem;padding:2rem;color: var(--hx-ink-3);font:500 13px 'Inter',sans-serif;}
+    .cp-empty{padding:2rem;text-align:center;color: var(--hx-ink-3);font:500 13px var(--hx-text);}
+    .cp-flag{color: var(--hx-red);font:600 11.5px var(--hx-text);}
+    .loading-overlay{display:flex;align-items:center;justify-content:center;gap:.6rem;padding:2rem;color: var(--hx-ink-3);font:500 13px var(--hx-text);}
     .spinner{width:22px;height:22px;border: 3px solid var(--hx-hair);border-top-color: var(--ac);border-radius: 50%;animation:spin .8s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
     /* This gets printed and sat next to the payroll register. */
@@ -66,7 +66,7 @@
       <div class="cp-bar">
         <div>
           <h3>Commissions for Payroll</h3>
-          <p style="font:400 12.5px 'Inter',sans-serif;color: var(--hx-ink-3);margin:5px 0 0;">
+          <p style="font:400 12.5px var(--hx-text);color: var(--hx-ink-3);margin:5px 0 0;">
             Approved commissions grouped by salary cutoff — the figure to enter as an <strong>Incentive</strong> for each person, with <strong>Commission</strong> as the category. Entered that way it is paid once, in that cutoff only, and appears in the employee's incentive history.
           </p>
         </div>
@@ -88,7 +88,7 @@
 
     <div class="chart-card cp-noprint" id="cpAuditCard" style="display:none;">
       <h3>Before you pay — integrity check</h3>
-      <p style="font:400 12.5px 'Inter',sans-serif;color: var(--hx-ink-3);margin:5px 0 0;">
+      <p style="font:400 12.5px var(--hx-text);color: var(--hx-ink-3);margin:5px 0 0;">
         Anything that changed underneath an approved claim: a payment reversed, an amount corrected,
         an approval with no cutoff.
       </p>
