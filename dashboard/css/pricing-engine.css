@@ -1,0 +1,72 @@
+/* pricing-engine.css — A340 · the director's pricing engine (director-pricing-engine.html). Tokens only. */
+.pe-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; }
+.pe-tabs button { padding: 8px 14px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-pill); background: var(--hx-card); color: var(--hx-ink-2); font: 600 13px/1 var(--hx-text); cursor: pointer; }
+.pe-tabs button[aria-selected="true"] { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-card); }
+.pe-status { margin: -4px 0 14px; font-size: 13px; color: var(--hx-ink-2); }
+.pe-status b { color: var(--hx-ink); }
+.pe-status .bad { color: var(--hx-red); font-weight: 600; }
+.pe-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); gap: 16px; align-items: start; }
+.pe-grid > * { min-width: 0; }   /* the wide line table scrolls inside its card instead of widening the page */
+.pe-card { margin-bottom: 14px; }
+.pe-card h3 { margin: 0 0 10px; font-size: 0.95rem; font-weight: 700; }
+.pe-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
+.pe-form .wide { grid-column: span 2; }
+.pe-form label { display: block; font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); margin-bottom: 4px; }
+.pe-form input, .pe-form select { width: 100%; padding: 7px 9px; font: 400 13px/1.3 var(--hx-text); color: var(--hx-ink); background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.pe-form input[type="checkbox"] { width: auto; margin-right: 6px; }
+.pe-form .check { display: flex; align-items: center; padding-top: 18px; font: 500 13px/1.3 var(--hx-text); color: var(--hx-ink); }
+.pe-help { font-size: 11.5px; color: var(--hx-ink-3); margin-top: 3px; }
+.pe-line { border: 1px solid var(--hx-hair-2); border-left: 4px solid var(--hx-navy); border-radius: var(--hx-r-md); padding: 12px; margin-bottom: 10px; background: var(--hx-glass-solid); }
+.pe-line-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 700 13px/1.3 var(--hx-text); }
+.pe-line-head .sp { flex: 1; }
+.pe-line details { margin-top: 8px; }
+.pe-line summary { cursor: pointer; font: 600 12.5px/1.3 var(--hx-text); color: var(--hx-ink-2); margin-bottom: 8px; }
+.pe-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pe-sum { position: sticky; top: 76px; }
+.pe-total { font: 800 26px/1.15 var(--hx-display); color: var(--hx-ink); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.pe-sub { font-size: 13px; color: var(--hx-ink-2); margin: 2px 0 10px; }
+.pe-kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; margin: 8px 0; }
+.pe-kv dt { color: var(--hx-ink-2); }
+.pe-kv dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pe-badge { display: inline-block; padding: 4px 10px; border-radius: var(--hx-r-pill); font: 700 12px/1 var(--hx-text); }
+.pe-badge.ready { background: var(--hx-ok-soft); color: var(--hx-ok); }
+.pe-badge.not { background: var(--hx-warn-soft); color: var(--hx-ink); }
+.pe-flags { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
+.pe-flags li { padding: 7px 10px; border-radius: var(--hx-r-sm); font-size: 12.5px; line-height: 1.4; background: var(--hx-warn-soft); color: var(--hx-ink); }
+.pe-flags li.block { background: var(--hx-red-soft); }
+.pe-flags li.info { background: var(--hx-inset); color: var(--hx-ink-2); }
+.pe-flags b { font-weight: 700; }
+.pe-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pe-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--hx-hair); color: var(--hx-ink-2); font-weight: 700; font-size: 11.5px; white-space: normal; vertical-align: bottom; }
+.pe-table td { padding: 6px 8px; border-bottom: 1px solid var(--hx-hair-2); white-space: nowrap; vertical-align: top; }
+.pe-table td.num, .pe-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pe-table td.desc { white-space: normal; min-width: 140px; }
+.pe-table tr.below td { background: var(--hx-red-soft); }
+.pe-table tfoot td { font-weight: 700; border-top: 2px solid var(--hx-hair); }
+.pe-scroll { overflow-x: auto; }
+.pe-explain { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--hx-ink); }
+.pe-explain li { margin-bottom: 6px; }
+.pe-approve { border-top: 1px dashed var(--hx-hair); margin-top: 12px; padding-top: 12px; }
+.pe-msg { margin-top: 8px; }
+.pe-mini { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px 10px; }
+.pe-tables h3 { margin-top: 18px; }
+.pe-tables table input { width: 100%; min-width: 70px; padding: 5px 7px; font: 400 12.5px/1.3 var(--hx-text); color: var(--hx-ink); background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.pe-empty { color: var(--hx-ink-3); font-size: 13px; padding: 6px 0; }
+.pe-print-only { display: none; }
+
+@media (max-width: 1100px) {
+  .pe-grid { grid-template-columns: minmax(0, 1fr); }
+  .pe-sum { position: static; }
+}
+@media (max-width: 600px) {
+  .pe-form { grid-template-columns: 1fr 1fr; }
+  .pe-form .wide { grid-column: 1 / -1; }
+}
+/* Print: the result only (Print → Save as PDF gives the client-ready sheet) */
+@media print {
+  .navbar, .hband .pe-actions, .pe-tabs, .pe-status, .pe-inputs, .pe-approve, .pe-noprint, #peSaved, #peTables, .flow-msg { display: none !important; }
+  .pe-grid { display: block; }
+  .pe-sum { position: static; }
+  .pe-print-only { display: block; }
+  .pe-table td, .pe-table th { font-size: 10px; padding: 3px 4px; }
+}

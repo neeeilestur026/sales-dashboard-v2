@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 172;   // A338 — website requests: the bridge from hiescorp.com. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 173;   // A340 — the director's standalone pricing engine. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -557,7 +557,11 @@ var SCHEMA = {
   // rows built from this list (_webSetRow / the collector's block), so it can grow at the end safely.
   WebRequests:   ['Ref', 'Key', 'Kind', 'Received At', 'Sent At', 'Name', 'Company', 'Email', 'Phone', 'Location', 'Subject',
                   'Message', 'Items JSON', 'Item Count', 'Unit Count', 'Status', 'Customer', 'Salesperson', 'PR No',
-                  'Handled By', 'Handled At', 'Note']
+                  'Handled By', 'Handled At', 'Note'],
+  // A340 — the director's standalone pricing engine. Its own tabs: nothing else reads or writes them.
+  PETables:      ['Version', 'Effective Date', 'Tables JSON', 'Note', 'Saved By', 'Saved At'],
+  PERecords:     ['Ref', 'Revision', 'Date', 'Client', 'Net Sale', 'COGS', 'Margin', 'Flags', 'Approver Needed', 'Status',
+                  'Approved By', 'Table Version', 'Inputs JSON', 'Result JSON', 'Saved By', 'Saved At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -813,6 +817,8 @@ var _SECURED = {
   convertWebRequest: 1, setWebRequestStatus: 1, eraseWebRequest: 1,   // A338 — website requests (admin / director)
   getWebRequests: 1, collectWebsiteRequestsNow: 1,                    // A338 — a secured READ (visitors' personal data) and
                                                                       // the on-demand collect (it takes its own short lock)
+  peSaveTables: 1, peSetApprovalCode: 1, peSaveRecord: 1,             // A340 — the pricing engine (director only)
+  peGetTables: 1, peListRecords: 1, peGetRecord: 1,                   // A340 — secured READS (the director's own records)
 };
 
 /* A209 — commission requests are built but NOT open to everyone yet.
@@ -15009,6 +15015,8 @@ var _MODULE_MAP = {
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
   convertWebRequest: ['Website request', 'Pricing request made'],    // A338
   setWebRequestStatus: ['Website request', 'Status changed'], eraseWebRequest: ['Website request', 'Personal data erased'],
+  peSaveTables: ['Pricing engine', 'Tables saved'], peSetApprovalCode: ['Pricing engine', 'Approval code set'],   // A340
+  peSaveRecord: ['Pricing engine', 'Quotation priced'],
   importCollections: ['Collection', 'Imported'],
   addExpense: ['Expense', 'Added'], updateExpense: ['Expense', 'Updated'],
   deleteExpense: ['Expense', 'Deleted'], importExpenses: ['Expense', 'Imported'],
@@ -18432,6 +18440,143 @@ function eraseWebRequest(p) {
            (r['PR No'] ? ' Pricing request ' + r['PR No'] + ' keeps its own copy of the contact details.' : '') };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+//  A340 PRICING ENGINE — the director's standalone pricing tool (director-pricing-engine.html)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+/* The calculation runs in the browser (dashboard/js/pe-engine.js); this side only KEEPS things: the
+   director's reference tables (forex, allowances, freight, delivery, bands — every save is a new
+   version with its effective date) and each priced quotation (every input, the table version and the
+   result, revision by revision). It reads and writes nothing else: no quotation, pricing request,
+   inventory or order is touched or linked. Director only.
+
+   Approval codes: the director and the president each set a code; it is stored only as a salted HMAC in
+   a Script Property and never sent back. A quotation is saved as "Ready" only when it has no blocking
+   flag and, when an approval is needed, the right code is given (the president's code also covers the
+   director's approvals). */
+var _PE_ROLES = { director: 1 };
+var _PE_MAX_JSON = 45000;
+function _peRole(p) { return String((p && p.actorRole) || '').trim().toLowerCase(); }
+function _peNo(p) { return _PE_ROLES[_peRole(p)] ? null : { success: false, message: 'The pricing engine is the director\'s.' }; }
+function _peJson(s) { try { return JSON.parse(String(s || '')); } catch (e) { return null; } }
+function _peHash(code, salt) {
+  var b = Utilities.computeHmacSha256Signature(String(code), String(salt));
+  return b.map(function (x) { var h = (x < 0 ? x + 256 : x).toString(16); return h.length === 1 ? '0' + h : h; }).join('');
+}
+
+function peGetTables(p) {
+  var no = _peNo(p); if (no) return no;
+  var sh = _ss().getSheetByName('PETables'), rows = sh && sh.getLastRow() >= 2 ? _rows('PETables') : [];
+  var last = rows[rows.length - 1], tables = last ? _peJson(last['Tables JSON']) : null;
+  return { success: true, tables: tables,
+           versions: rows.slice(-20).reverse().map(function (r) {
+             return { version: _num(r['Version']), effectiveDate: String(r['Effective Date'] || ''), note: r['Note'], savedBy: r['Saved By'], savedAt: _webIso(r['Saved At']) };
+           }),
+           codes: { director: !!_fprop('pe_code_director'), president: !!_fprop('pe_code_president') } };
+}
+
+function peSaveTables(p) {
+  var no = _peNo(p); if (no) return no;
+  var t = _peJson(p.tables);
+  if (!t || typeof t !== 'object') return { success: false, message: 'The tables could not be read.' };
+  var bad = [];
+  if (!t.forex || typeof t.forex !== 'object') bad.push('forex');
+  if (!Array.isArray(t.allowance) || t.allowance.length < 1) bad.push('allowance');
+  if (!Array.isArray(t.bands) || t.bands.length !== 4) bad.push('bands');
+  if (!Array.isArray(t.destinations)) bad.push('destinations');
+  ['fixedPerShipment', 'commission', 'localTax', 'vat', 'contingency', 'aboveFloor', 'forexBuffer', 'forexBufferLongTerms'].forEach(function (k) {
+    if (!(typeof t[k] === 'number' && isFinite(t[k]) && t[k] >= 0)) bad.push(k);
+  });
+  Object.keys(t.forex || {}).forEach(function (c) {
+    var r = t.forex[c] || {};
+    if (r.rate !== null && r.rate !== '' && !(isFinite(r.rate) && r.rate > 0)) bad.push('forex ' + c);
+    if (r.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(String(r.asOf))) bad.push('forex ' + c + ' date');
+  });
+  if (bad.length) return { success: false, message: 'Check these tables: ' + bad.join(', ') + '.' };
+  var eff = String(p.effectiveDate || _dateStr(_now()));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eff)) return { success: false, message: 'Effective date must be yyyy-mm-dd.' };
+  var rows = _ss().getSheetByName('PETables') ? _rows('PETables') : [];
+  var version = rows.reduce(function (m, r) { return Math.max(m, _num(r['Version'])); }, 0) + 1;
+  t.version = version; t.effectiveDate = eff; t.note = _webCell(p.note).slice(0, 200);
+  var json = JSON.stringify(t);
+  if (json.length > _PE_MAX_JSON) return { success: false, message: 'The tables are too large to save.' };
+  _append('PETables', [version, eff, json, t.note, String(p.actorName || ''), _now()]);
+  return { success: true, version: version, refNo: 'Tables v' + version, message: 'Tables saved as version ' + version + ', effective ' + eff + '.' };
+}
+
+function peSetApprovalCode(p) {
+  var no = _peNo(p); if (no) return no;
+  var who = String(p.who || '');
+  if (who !== 'director' && who !== 'president') return { success: false, message: 'Choose the director or the president.' };
+  var code = String(p.code || '');
+  if (code.length < 6) return { success: false, message: 'Use at least 6 characters.' };
+  var salt = Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperty('pe_code_' + who, salt + ':' + _peHash(code, salt));
+  return { success: true, refNo: who, message: 'The ' + who + '\'s approval code is set.' };
+}
+function _peCodeIs(who, code) {
+  var v = _fprop('pe_code_' + who), i = v.indexOf(':');
+  if (!v || i < 0 || !code) return false;
+  return _fctEq(_peHash(code, v.slice(0, i)), v.slice(i + 1));
+}
+
+function peSaveRecord(p) {
+  var no = _peNo(p); if (no) return no;
+  var inputs = String(p.inputs || ''), result = String(p.result || ''), r = _peJson(result);
+  if (!_peJson(inputs) || !r || typeof r !== 'object') return { success: false, message: 'The quotation could not be read.' };
+  if (inputs.length > _PE_MAX_JSON || result.length > _PE_MAX_JSON) return { success: false, message: 'Too many lines to save in one record; split the quotation.' };
+  var status = p.status === 'Ready' ? 'Ready' : 'Draft', approvedBy = '';
+  var flags = Array.isArray(r.flags) ? r.flags : [], appr = r.approval || {};
+  if (status === 'Ready') {
+    var blocking = flags.filter(function (f) { return f && f.blocking; });
+    if (blocking.length) return { success: false, message: 'Not ready: ' + blocking.map(function (f) { return f.text; }).join('; ') + '.' };
+    if (appr.needed) {
+      var code = String(p.approvalCode || '');
+      if (_peCodeIs('president', code)) approvedBy = 'President';
+      else if (appr.approver === 'director' && _peCodeIs('director', code)) approvedBy = 'Director';
+      else return { success: false, message: 'This quotation needs the ' + (appr.approver || 'director') + '\'s approval code.' };
+    }
+  }
+  var rows = _ss().getSheetByName('PERecords') ? _rows('PERecords') : [];
+  var ref = String(p.ref || '').trim(), revision = 1;
+  if (ref) {
+    var mine = rows.filter(function (x) { return String(x['Ref']) === ref; });
+    if (!mine.length) return { success: false, message: 'Record ' + ref + ' was not found.' };
+    revision = mine.reduce(function (m, x) { return Math.max(m, _num(x['Revision'])); }, 0) + 1;
+  } else ref = _nextNumber('PERecords', 1, 'PE');
+  var t = r.totals || {};
+  _append('PERecords', [ref, revision, _now(), _webCell(p.client), _num(t.netSale), _num(t.cogs), _num(t.margin),
+    flags.map(function (f) { return f && f.code; }).filter(function (c, i, a) { return c && a.indexOf(c) === i; }).join(', '),
+    String(appr.needed ? appr.approver : ''), status, approvedBy, _num(r.tablesVersion), inputs, result, String(p.actorName || ''), _now()]);
+  return { success: true, ref: ref, revision: revision, status: status, approvedBy: approvedBy, refNo: ref,
+           message: ref + (revision > 1 ? ' revision ' + revision : '') + ' saved' + (status === 'Ready' ? ' as ready to send' + (approvedBy ? ', approved by the ' + approvedBy.toLowerCase() : '') : ' as a draft') + '.' };
+}
+
+function _peLatest() {
+  var by = {};
+  (_ss().getSheetByName('PERecords') ? _rows('PERecords') : []).forEach(function (x) {
+    var k = String(x['Ref']); if (!by[k] || _num(x['Revision']) > _num(by[k]['Revision'])) by[k] = x;
+  });
+  return by;
+}
+function peListRecords(p) {
+  var no = _peNo(p); if (no) return no;
+  var by = _peLatest();
+  var data = Object.keys(by).map(function (k) {
+    var x = by[k];
+    return { ref: k, revision: _num(x['Revision']), date: _webIso(x['Date']), client: x['Client'], netSale: _num(x['Net Sale']), cogs: _num(x['COGS']),
+             margin: _num(x['Margin']), flags: String(x['Flags'] || ''), approver: x['Approver Needed'], status: x['Status'], approvedBy: x['Approved By'],
+             tablesVersion: _num(x['Table Version']), savedBy: x['Saved By'], savedAt: _webIso(x['Saved At']) };
+  }).sort(function (a, b) { return a.savedAt < b.savedAt ? 1 : -1; }).slice(0, 300);
+  return { success: true, data: data };
+}
+function peGetRecord(p) {
+  var no = _peNo(p); if (no) return no;
+  var x = _peLatest()[String(p.ref || '')];
+  if (!x) return { success: false, message: 'Record ' + (p.ref || '?') + ' was not found.' };
+  return { success: true, ref: String(x['Ref']), revision: _num(x['Revision']), status: x['Status'], approvedBy: x['Approved By'],
+           tablesVersion: _num(x['Table Version']), inputs: _peJson(x['Inputs JSON']), result: _peJson(x['Result JSON']), savedAt: _webIso(x['Saved At']) };
+}
+
 var HANDLERS = {
   getVersion: getVersion,
   getSuppliers: getSuppliers, saveSupplier: saveSupplier, deleteSupplier: deleteSupplier,
@@ -18458,6 +18603,8 @@ var HANDLERS = {
   retireDuplicateReceivables: retireDuplicateReceivables,   // A334
   getWebRequests: getWebRequests, collectWebsiteRequestsNow: collectWebsiteRequestsNow,   // A338
   convertWebRequest: convertWebRequest, setWebRequestStatus: setWebRequestStatus, eraseWebRequest: eraseWebRequest,
+  peGetTables: peGetTables, peSaveTables: peSaveTables, peSetApprovalCode: peSetApprovalCode,   // A340
+  peSaveRecord: peSaveRecord, peListRecords: peListRecords, peGetRecord: peGetRecord,
   correctCollection: correctCollection,
   importCollections: importCollections,
   getExpenses: getExpenses, addExpense: addExpense, updateExpense: updateExpense,
@@ -18618,6 +18765,7 @@ var MUTATIONS = {
   reverseReceiving: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334: voids and deleteRow()s, so the lock matters
   convertWebRequest: 1, setWebRequestStatus: 1, eraseWebRequest: 1,   // A338 (collectWebsiteRequestsNow takes its own lock)
+  peSaveTables: 1, peSetApprovalCode: 1, peSaveRecord: 1,             // A340
   backfillItemIds: 1,                                   // A159 (findDuplicateInventory is read-only)
   addExpense: 1, updateExpense: 1, deleteExpense: 1, importExpenses: 1, reclassifyExpenses: 1,
   saveMarketingRecord: 1, deleteMarketingRecord: 1,
@@ -18686,6 +18834,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A340 THE PRICING ENGINE (173; A327 takes the next free number, 174 or later, when it merges). A standalone pricing tool on the director's dashboard (director-pricing-engine.html, dashboard/js/pe-engine.js). The calculation runs in the browser; FlowAPI only keeps its own two tabs: PETables (the director's reference tables, every save a new version with an effective date) and PERecords (each priced quotation: inputs, table version, result, revision by revision). It reads and writes nothing else — no quotation, pricing request, inventory or order. Director only, all secured: peGetTables, peSaveTables, peSetApprovalCode (the director's and the president's codes, kept only as salted HMACs in Script Properties pe_code_director / pe_code_president, never returned), peSaveRecord ("Ready" only with no blocking flag and, when approval is needed, the right code; the president's covers the director's), peListRecords, peGetRecord.
 A338 WEBSITE REQUESTS (172; 171 stays A327's only if A327 is pasted first, otherwise A327 becomes 173). The bridge from hiescorp.com: the website keeps each quote request and contact message, and websiteCollectTick (a 5-minute time trigger the owner adds in the editor) COLLECTS them from its private feed (WEBSITE_FEED_URL + WEBSITE_FEED_KEY Script Properties; X-Portal-Key header; no redirects) into the new WebRequests tab, deduped by key (a ring of the last 300 in a Script Property plus the sheet), one block write under a short tryLock, acknowledged after the write, then one alert email (counts and a link only, at most every 30 min, WEBSITE_ALERT_EMAIL). Secured, admin / director only: getWebRequests (New + 60 days, health; countOnly reads the Status column), collectWebsiteRequestsNow, convertWebRequest (a pricing request with clientRef web:<ref>, checked first; an existing client is never patched, a new one is a Prospect; HE item numbers kept as the requested code; no inventory add), setWebRequestStatus (Closed / Spam / New), eraseWebRequest (Data Privacy Act). Every visitor string goes through _webCell (no formulas, no markup). Spam loses its personal data after 30 days. WEBSITE_COLLECT_OFF stops collecting; HX_ENV=staging never collects. websiteFeedSelfTest() checks the connection from the editor without logging personal data.
 A334 RETIRE DUPLICATE RECEIVABLES (170; A327's staging build moves to 171 when it merges). 16 invoices were in the portal twice, each copy fully paid by its own payment (P4.62M counted twice). Accounting approved keeping one copy of each (15 Oct 2026). retireDuplicateReceivables takes the approved pairs and checks them all before the first write (same invoice number by its last digits, amounts within 2%, the kept copy still fully paid); then voids the going copy's payments through voidCollection (row kept, marked void, reason recorded), copies the going receivable in full into Overrides ('retired-duplicate') and removes it with its collection journal. When only the going copy pointed at a real invoice, the kept copy and its payments take that invoice number ('relinked-invoice'). extraVoids void further payments on a kept copy; a fraction of a centavo left open is settled ('settled-sub-centavo'). dryRun answers with the plan and writes nothing. Accounting, admin or the director only.
 A331 SAFEGUARDS ON SALES ORDERS, INVOICES AND COLLECTIONS (169; 168 was taken by A327 on staging). From the 14 Oct reconciliation (invoices at VAT 0%, EWT unchecked, payments recorded twice, a real payment entered as demo data, billing past the order). A mismatch now BLOCKS the save unless a reason (10+ characters) is given; every reason goes to the new Overrides tab. SalesOrders + VAT Type, Zero Rating Ref (16 columns, both writers); Clients + Default VAT Type, Zero Rating Ref, EWT Rate, TIN (16; saveClient's literal grew and keeps them when an older page omits them). createSalesOrder/updateSalesOrder need a VAT type (from the client when the form is silent), a zero-rating reference for VAT-0, a reason for a customer not on the Clients list; a billed order keeps its VAT type and cannot drop below what is invoiced. createInvoice: the order's customer only (no override), the order's VAT type (checked with the books off too), a reason to bill past the order's before-VAT total, to repeat an amount, or for a second invoice (was a yes/no confirm); all decided before a number is taken. recordCollection: `received` (cash) + EWT = amount settled (the phone app's model; `amount` still accepted), accounting/admin/director only, EWT refused when negative or above the amount (was clamped), a reason for EWT off the expected rate x before-VAT share (client EWT Rate: none/1/2/auto = goods 1% services 2%) or missing, for a repeat payment or a cheque/reference this customer already used, for over-collection (was a confirm) or a 0 receivable. recordFieldCollection runs the same checks per line, one reason per payment. correct/voidCollection and voidInvoice: the same roles; voids refuse a closed month. importCollections: director + reason, _idNorm de-dupe, no blank invoice numbers, no repeat payments, no closed months. seedCommissionDemo off unless allowDemo = on (staging); demo cannot be renamed into a real order; the books skip DEMO- rows. getMonthCheck (secured read) for the Month check page; getPaymentGuide (secured read) gives the payment forms the expected EWT from the same rule the save checks. saveClient: only accounting/admin/director change a client's VAT type, zero-rating reference, EWT rate or TIN. A reference with no digit is never a duplicate cheque. BIR 2307 document type on collections and receivables. KILL SWITCH: FlowSettings safeguards = off restores 167's behaviour exactly.

@@ -670,6 +670,8 @@ SECURED_ACTIONS = [
     "getMonthCheck", "getPaymentGuide",
     # A338 — website requests: visitors' personal data, admin / director only
     "getWebRequests", "collectWebsiteRequestsNow", "convertWebRequest", "setWebRequestStatus", "eraseWebRequest",
+    # A340 — the director's pricing engine
+    "peGetTables", "peSaveTables", "peSetApprovalCode", "peSaveRecord", "peListRecords", "peGetRecord",
 ]
 
 

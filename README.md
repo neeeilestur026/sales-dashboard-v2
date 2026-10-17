@@ -109,6 +109,19 @@ call per sheet. Flask already sends the secret on every call (A299).
 
 Rollback: Manage deployments → previous version.
 
+## The director's pricing engine (A340, FlowAPI 173)
+
+`director-pricing-engine.html` (director only; linked from the director's navbar, rail and home). The rules are
+`dashboard/js/pe-engine.js` (pure, tested by `tests/flow/pricing-engine.js` against the build spec's cases). It is
+separate from Quotations, Pricing Requests and the older `pricing.js` / `flow-pricing-engine.js`: it reads and
+writes only its own FlowAPI tabs, PETables (versioned reference tables) and PERecords (priced quotations).
+
+1. Render first, then paste FlowAPI 173 and deploy a new version (no new Google permissions). Smoke: `getVersion` → 173.
+2. On the page's Tables tab: type this month's bank selling rates (USD, SGD, ...) with their dates, check the
+   allowance, freight, delivery and band tables, and Save as a new version. Set the director's and the president's
+   approval codes there (stored only as salted fingerprints in Script Properties `pe_code_director` / `pe_code_president`).
+3. Until 173 is pasted the page still prices, with the starting values, but cannot save.
+
 ## Connecting the website (A338, FlowAPI 172)
 
 hiescorp.com keeps every quote request and contact message; FlowAPI collects them every 5 minutes into
