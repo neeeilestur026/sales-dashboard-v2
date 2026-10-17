@@ -55,7 +55,9 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   // A297 — the accounting financial reports
   'financial-reports.html', 'my-payslips.html', 'scan.html', 'labels.html', 'books.html', 'payroll-books.html', 'collect.html',
   // A331 — the Month check
-  'month-check.html'];
+  'month-check.html',
+  // A338 — the website requests inbox
+  'website-requests.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

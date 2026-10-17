@@ -801,7 +801,7 @@ function sourcingTable(r) {
       <th class="num">Price (FC)</th><th>VAT</th><th class="num">CBM</th><th>Incl</th></tr></thead><tbody>${r.items.map(i =>
       `<tr data-line="${i.line}">
         <td><input type="text" class="s-no" value="${flowEsc(i.itemNo)}" style="min-width:110px;"></td>
-        <td><input type="text" class="s-name" value="${flowEsc(i.itemName || '')}" style="min-width:200px;"></td>
+        <td><input type="text" class="s-name" value="${flowEsc(i.itemName || '')}" style="min-width:200px;">${/^HE-\d{5}$/.test(String(i.itemNo || '').trim()) ? '<div class="fc-dim">Website product family (A338): choose the exact model and enter its code.</div>' : ''}</td>
         <td class="num">${flowNum(i.qty)}</td>
         <td><input type="text" class="s-sup" value="${flowEsc(i.supplier || '')}"></td>
         <td><select class="s-prin">${principalSelect(i.principal)}</select></td>

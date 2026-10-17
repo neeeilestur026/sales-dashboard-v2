@@ -278,6 +278,20 @@ function requirePricingFlowAccess() { return requireQuotationAccess(); }   // A3
  * deliberately OUT: they have no navbar link to it and cannot use the Purchase Request form the
  * finder hands off to, so admitting them would only strand them on a dead-end page.
  */
+/** A338 — the website requests inbox: the admin and the director answer what comes in from hiescorp.com. */
+function requireWebRequestsAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['admin', 'director'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 function requireProductFinderAccess() {
   const session = getSession();
   if (!session) {
@@ -578,7 +592,7 @@ function renderNavbar(activePage) {
         Lead Gen
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder') ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -593,6 +607,7 @@ function renderNavbar(activePage) {
           </div>
           <div class="dd-group">
             <div class="dd-title">Quote & sell</div>
+            <a href="website-requests.html" class="${activePage === 'website-requests' ? 'active' : ''}">Website Requests</a>
             <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
             <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
             <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
@@ -862,7 +877,7 @@ function renderNavbar(activePage) {
     const dirTeamActive = ['all-daily-reports', 'team-performance', 'management-itinerary'].includes(activePage);   // A216
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
-    const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker'].includes(activePage);   // A217
+    const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests'].includes(activePage);   // A217 · A338
     navLinks = `
       <a href="director-home.html" class="${activePage === 'director-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -879,6 +894,7 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
+          <a href="website-requests.html" class="${activePage === 'website-requests' ? 'active' : ''}">Website Requests</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">All Quotations</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
@@ -1506,6 +1522,14 @@ async function flowComputeActions(session) {
       add('report', 'ok', it.length + ' collection' + (it.length === 1 ? '' : 's') + ' recorded by ' + by + ' — acknowledge', 'flow-collections.html#field');
     }).catch(() => {}));
   }
+  /* A338 — requests from hiescorp.com waiting in the inbox. COUNTS ONLY: a visitor's name or company
+     never reaches this innerHTML. A secured read; it adds nothing until FlowAPI 172 is pasted. */
+  if ((isAdmin || isDir) && typeof postFlow === 'function') jobs.push(postFlow('getWebRequests', { countOnly: true }).then(r => {
+    if (!r || !r.success) return;
+    const n = +r.count || 0;
+    if (n) add('report', 'warn', n + ' website request' + (n === 1 ? '' : 's') + ' to answer', 'website-requests.html');
+    if (r.health && r.health.stale) add('urgent', 'urgent', 'Website requests are not reaching the portal — check the connection', 'website-requests.html');
+  }).catch(() => {}));
   // Admin/Accounting procurement follow-ups: sales orders with no PO, POs not yet received.
   if (isAdmin || isAcct) {
     jobs.push(Promise.all([

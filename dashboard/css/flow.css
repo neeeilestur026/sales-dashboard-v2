@@ -170,3 +170,21 @@
 /* A323 — the follow-up chip on an AR Aging row */
 .ar-follow { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--hx-r-pill); font-size: 11.5px; font-weight: 700; background: var(--hx-inset); color: var(--hx-ink-2); white-space: nowrap; }
 .ar-follow.missed { background: var(--hx-red-soft); color: var(--hx-red); }
+/* A338 — website requests (website-requests.html): the fc-* cards, one per row, with the items listed */
+.wr-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+.wr-health { margin: -6px 0 14px; font-size: 13px; color: var(--hx-ink-2); }
+.wr-health.bad { color: var(--hx-red); font-weight: 600; }
+.wr-filter { margin-left: auto; font-size: 13px; color: var(--hx-ink-2); }
+.wr-filter select { margin-left: 6px; padding: 5px 8px; font: inherit; color: var(--hx-ink); background: var(--hx-card); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.wr-list { display: grid; gap: 12px; }
+.wr-card { min-width: 0; overflow-wrap: anywhere; border-left-color: var(--hx-navy); }
+.wr-card .fc-top > .fc-dim { white-space: nowrap; }
+.wr-card[data-status="Converted"], .wr-card[data-status="Closed"] { border-left-color: var(--hx-hair); }
+.wr-card[data-status="Spam"] { border-left-color: var(--hx-red); }
+.wr-items { width: 100%; border-collapse: collapse; font-size: 13px; margin: 4px 0; }
+.wr-items td { padding: 5px 10px 5px 0; border-top: 1px solid var(--hx-hair-2); border-bottom: 0; vertical-align: top; white-space: normal; }   /* styles.css: tbody td is nowrap */
+.wr-items td:first-child { width: 96px; white-space: nowrap; }
+.wr-items td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wr-msg { white-space: pre-wrap; }
+.wr-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.wr-form { margin: 8px 0 0; padding-top: 10px; border-top: 1px dashed var(--hx-hair); }

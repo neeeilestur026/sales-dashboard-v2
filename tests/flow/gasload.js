@@ -138,7 +138,7 @@ function makeCtx(store) {
         deleteProperty: (k) => { delete props[k]; }
       })
     },
-    LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
+    LockService: { getScriptLock: () => ({ waitLock: () => {}, tryLock: () => true, hasLock: () => true, releaseLock: () => {} }) },   // A338 — the collector tries, never waits
     ContentService: {
       MimeType: { JSON: 'application/json' },
       createTextOutput: (t) => ({ _text: t, setMimeType: function () { return this; },
