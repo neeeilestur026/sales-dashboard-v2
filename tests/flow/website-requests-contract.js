@@ -136,6 +136,22 @@ async function render() {
     (html.match(/data-act="convert"/g) || []).length === 1);
   ok('the health line is written as text, never HTML', /el\.textContent = text;/.test(JS));
 
+  console.log('\n4b · A341: quote lists become purchase requests by themselves');
+  const now = new Date().toISOString();
+  p.ctx.wrShowHealth({ configured: true, okAt: now, auto: true, autoWaiting: 2 });
+  ok('the health line says so, and how many are still to make', /become purchase requests by themselves\. 2 still to make on the next check\./.test(p.els.wrHealth.textContent), p.els.wrHealth.textContent);
+  p.ctx.wrShowHealth({ configured: true, okAt: now, auto: false });
+  ok('  and when it is switched off, what to do instead', /WEBSITE_AUTO_PR_OFF\): use Make pricing request/.test(p.els.wrHealth.textContent), p.els.wrHealth.textContent);
+  p.ctx.wrShowHealth({ configured: true, okAt: now });
+  ok('  FlowAPI before 174 says nothing about it', !/purchase request/.test(p.els.wrHealth.textContent), p.els.wrHealth.textContent);
+  const made = p.ctx.wrCard({ ref: 'Q-261018-1010', kind: 'quote', status: 'Converted', prNo: 'PR-261018-001', customer: 'Acme', salesperson: 'Admin', handledBy: 'Website',
+    handledAt: now, receivedAt: now, name: 'Juan', items: [{ sku: 'HE-1', name: 'Pump', qty: 1 }], unitCount: 1, note: '' });
+  ok('a request made automatically links its purchase request and says what happens next',
+    /Purchase request <a href="flow-pricing-request\.html\?pr=PR-261018-001">PR-261018-001<\/a> for Acme, made automatically/.test(made) && /forwards it to a sales rep/.test(made)
+    && !/quoted by Admin/.test(made) && !/data-act="convert"/.test(made), made);
+  const failed = p.ctx.wrCard(Object.assign({}, evil, { note: 'Automatic purchase request failed: Customer is required.' }));
+  ok('  one the automatic step could not make keeps its note and the button', /Automatic purchase request failed/.test(failed) && /data-act="convert"/.test(failed));
+
   console.log('\n5 · before FlowAPI 172');
   const q = page(['js/website-requests.js'], 'website-requests.html', { username: 'u', name: 'N', role: 'director' }, { data: {} });
   q.run('requireWebRequestsAccess = function(){ return __session; }; flowVersionAtLeast = function(){ return Promise.resolve(false); };');

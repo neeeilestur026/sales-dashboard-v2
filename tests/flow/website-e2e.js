@@ -6,8 +6,9 @@
  * and stop the website:      bash <hiescorp-shop>/tools/tests/run.sh --stop <dir>
  *
  * A visitor sends a quote (with markup and a formula in it) and a contact message; the collector files
- * them, acknowledges them so the website stops offering them, and a pricing request is made from the
- * quote. Nothing the visitor typed may reach a cell as markup or as a formula.
+ * them, acknowledges them so the website stops offering them, and (A341) the quote becomes a purchase
+ * request by itself, owned by "Admin" and waiting for sourcing. Nothing the visitor typed may reach a
+ * cell as markup or as a formula.
  */
 const fs = require('fs');
 const { execFileSync } = require('child_process');
@@ -61,6 +62,7 @@ const ADMIN = { actorRole: 'admin', actorName: 'Ana Admin' };
 let r = call(c, 'collectWebsiteRequestsNow', ADMIN);
 const refs = (store.WebRequests || []).map(x => x['Ref']);
 ok('the collector files both from the live feed', r.success && refs.indexOf(quote.ref) >= 0 && refs.indexOf(contact.ref) >= 0, { r, refs });
+const firstRun = r;
 const row = (store.WebRequests || []).find(x => x['Ref'] === quote.ref) || {};
 const items = JSON.parse(row['Items JSON'] || '[]');
 ok('  the items came back from the website database with their HE numbers', items.length === 2 && items[0].sku === 'HE-01323' && items[0].qty === 2 && !!items[0].brand, items);
@@ -72,10 +74,13 @@ ok('the website no longer offers them: the acknowledgement landed', fs2 === 200 
 r = call(c, 'collectWebsiteRequestsNow', ADMIN);
 ok('a second run files nothing new', r.success && r.collected === 0, r);
 
-console.log('\n== a pricing request is made from the quote');
-r = call(c, 'convertWebRequest', Object.assign({ ref: quote.ref, customer: 'Acme Mining Corp.', salesperson: 'Kimberlyn Blones' }, ADMIN));
-ok('the pricing request is made', r.success && /^PR-/.test(r.prNo), r);
+console.log('\n== the quote became a purchase request by itself (A341)');
 const pr = store.PricingRequests[0] || {}, lines = store.PricingRequestItems;
+ok('made in the same run, without a click', firstRun.autoMade === 1 && store.PricingRequests.length === 1 && /^PR-/.test(pr['PR No']) && row['PR No'] === pr['PR No'], firstRun);
+ok('  waiting for admin\'s sourcing, owned by Admin, requested by the website', pr['Status'] === 'Requested' && pr['Salesperson'] === 'Admin' && pr['Requested By'] === 'Website (hiescorp.com)', pr);
+r = call(c, 'convertWebRequest', Object.assign({ ref: quote.ref }, ADMIN));
+ok('  the inbox button now just points at it', r.success && r.duplicate && r.prNo === pr['PR No'] && store.PricingRequests.length === 1, r);
+ok('  the contact message waits in the inbox', ((store.WebRequests || []).find(x => x['Ref'] === contact.ref) || {})['Status'] === 'New');
 ok('  with both products, HE numbers kept as the requested codes', lines.length === 2 && lines[0]['Item No'] === 'HE-01323', lines.map(l => l['Item No']));
 const cells = JSON.stringify([pr, lines, store.Clients, store.WebRequests]);
 ok('  and no cell anywhere holds a visitor\'s < or >', !/[<>]/.test(cells));

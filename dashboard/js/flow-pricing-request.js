@@ -562,7 +562,7 @@ function filteredList() {
 function prRowHtml(r) {
   const incl = r.items.filter(i => i.included).length;
   return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowDate(r.date)}</td><td>${flowEsc(r.customer)}</td>
-    <td>${flowEsc(r.requestedBy)}</td><td class="num">${incl}/${r.items.length}</td>
+    <td>${flowEsc(r.requestedBy)}${prOwnerDiffers(r) ? `<div class="fc-dim">for ${flowEsc(r.salesperson)}</div>` : ''}</td><td class="num">${incl}/${r.items.length}</td>
     <td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(prStatusLabel(r.status))}</span></td>
     <td style="white-space:nowrap;">${rowActions(r)}</td></tr>`;
 }
@@ -707,7 +707,61 @@ function openPr(no) {
       ${!r.pdfLink && canRegen ? `<button class="btn btn-secondary" onclick="openPdf('${flowEsc(no)}')">Generate PR PDF</button>` : ''}
       ${r.pdfLink ? `<a class="btn btn-secondary" href="${flowEsc(r.pdfLink)}" target="_blank">View PDF</a>` : ''}`;
   }
+  if (prCanForward()) { body.insertAdjacentHTML('afterbegin', prOwnerBlock(r)); prFillReps(); }
   document.getElementById('prModal').classList.add('open');
+}
+
+/* A341 — WHO IT BELONGS TO, AND FORWARDING IT. A website quote request becomes a purchase request owned by
+   "Admin" (FlowAPI 174); admin sources it as usual and forwards it to the sales rep who will quote it. The
+   owner is the Salesperson column (_prOwner: Salesperson, else Requested By) — the same one a rep's list is
+   scoped by — so once forwarded it is in that rep's Purchase Requests, and at "For Quotation" their Create
+   Quotation shows. setPricingRequestSalesperson (A226) already allows exactly these roles; it changes the
+   owner only, never the stage. Management prices from the page-level engine and never opens this modal. */
+let prReps = null;          // sales reps from the staff roster, loaded on first use
+function prCanForward() { return ['admin', 'director', 'accounting', 'management'].indexOf(prRole) >= 0; }
+function prSameName(a, b) { return String(a || '').replace(/\s+/g, ' ').trim().toLowerCase() === String(b || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function prOwnerDiffers(r) { return !!r.salesperson && !prSameName(r.salesperson, r.requestedBy); }
+function prOwnerBlock(r) {
+  const no = flowEsc(r.prNo);
+  return `<div class="flow-form pr-own">
+      <div><label>Belongs to</label><div class="pr-own-who"><b>${flowEsc(r.salesperson || r.requestedBy || 'Nobody')}</b>${r.salespersonSource === 'from who requested it' ? ' <span class="fc-dim">(who requested it)</span>' : ''}</div></div>
+      <div><label for="prOwnTo">Forward to a sales rep</label><input id="prOwnTo" type="text" maxlength="80" list="prReps" autocomplete="off" placeholder="Sales rep's name"><datalist id="prReps"></datalist></div>
+      <div class="pr-own-act"><button type="button" class="btn btn-secondary" id="prOwnBtn" onclick="forwardPr('${no}')">Forward to rep</button></div>
+      <p class="pr-own-hint fc-dim">The rep sees it in their Purchase Requests and creates the quotation once it is priced.</p>
+    </div>`;
+}
+async function prLoadReps() {
+  if (prReps) return prReps;
+  let names = [];
+  try {
+    const r = typeof apiFetchEmailUsers === 'function' ? await apiFetchEmailUsers() : null;
+    names = ((r && r.users) || []).filter(u => String(u.role || '').toLowerCase() === 'sales')
+      .map(u => String(u.fullName || u.username || '').trim()).filter(Boolean);
+  } catch (e) { /* the roster is a convenience: fall back to the names already on requests */ }
+  if (!names.length) names = prList.map(x => String(x.salesperson || '').trim()).filter(n => n && !/^admin$|^website\b/i.test(n));
+  prReps = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+  return prReps;
+}
+async function prFillReps() {
+  const names = await prLoadReps();
+  const dl = document.getElementById('prReps');
+  if (dl) dl.innerHTML = names.map(n => `<option value="${flowEsc(n)}">`).join('');
+}
+async function forwardPr(no) {
+  const inp = document.getElementById('prOwnTo'), btn = document.getElementById('prOwnBtn');
+  const who = inp ? inp.value.replace(/\s+/g, ' ').trim() : '';
+  const r = curPr(no);
+  if (!who) { flowMsg('modalMsg', 'Enter the sales rep to forward it to.', false); return; }
+  if (r && prSameName(who, r.salesperson)) { flowMsg('modalMsg', no + ' already belongs to ' + who + '.', false); return; }
+  if (btn) btn.disabled = true;
+  try {
+    const res = await postFlow('setPricingRequestSalesperson', { prNo: no, salesperson: who });
+    if (!res || !res.success) throw new Error((res && res.message) || 'Not forwarded.');
+    const ready = r && r.status === 'Returned to Sales';
+    await loadRequests();
+    if (curPr(no)) openPr(no);
+    flowMsg('modalMsg', `${no} now belongs to ${who}. It is in their Purchase Requests, and they can create the quotation ${ready ? 'now' : 'once it is priced'}.`, true);
+  } catch (e) { flowMsg('modalMsg', e.message, false); if (btn) btn.disabled = false; }
 }
 
 // Admin (and oversight) can correct the supplier pricing at ANY stage — the button swaps the modal
@@ -1606,7 +1660,7 @@ function openPdf(no) {
   sv('Designation', 'designation'); sv('ContactEmail', 'contactEmail'); sv('ContactPhone', 'contactPhone');
   sv('DateNeeded', 'dateNeeded'); sv('Urgency', 'urgency'); sv('PrNumberClient', 'prNumberClient');
   sv('PreparedByName', 'preparedByName'); sv('PreparedByPosition', 'preparedByPosition');
-  if (!document.getElementById('pdfPreparedByName').value) document.getElementById('pdfPreparedByName').value = r.requestedBy || prSession.name;
+  if (!document.getElementById('pdfPreparedByName').value) document.getElementById('pdfPreparedByName').value = (/^Website\b/.test(r.requestedBy || '') ? '' : r.requestedBy) || prSession.name;   // A341 — never "Website (hiescorp.com)"
   document.getElementById('pdfModalMsg').style.display = 'none';
   document.getElementById('pdfModal').classList.add('open');
 }
