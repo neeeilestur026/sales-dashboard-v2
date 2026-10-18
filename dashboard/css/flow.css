@@ -188,3 +188,10 @@
 .wr-msg { white-space: pre-wrap; }
 .wr-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .wr-form { margin: 8px 0 0; padding-top: 10px; border-top: 1px dashed var(--hx-hair); }
+/* A341 — the purchase request window: who it belongs to, and forwarding it to a sales rep */
+.pr-own { grid-template-columns: minmax(120px, auto) minmax(220px, 340px) auto minmax(0, 1fr); align-items: end; gap: 8px 16px; padding: 10px 12px; margin-bottom: 14px; background: var(--hx-inset); border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); }
+.pr-own-who { padding: 8px 0 7px; font-size: 13px; color: var(--hx-ink); }
+.pr-own-act .btn { white-space: nowrap; }
+.pr-own-hint { grid-column: 1 / -1; margin: 0; font-size: 12.5px; }
+@media (max-width: 900px) { .pr-own { grid-template-columns: minmax(120px, auto) minmax(0, 1fr) auto; } }
+@media (max-width: 640px) { .pr-own { grid-template-columns: minmax(0, 1fr) auto; } .pr-own > :first-child { grid-column: 1 / -1; } }

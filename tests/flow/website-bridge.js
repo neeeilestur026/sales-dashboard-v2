@@ -1,4 +1,4 @@
-/* A338 — the website bridge, backend (FlowAPI 172).
+/* A338 — the website bridge, backend (FlowAPI 172); A341 — quote requests become purchase requests by themselves (174).
  *
  * Run:  node tests/flow/website-bridge.js
  *
@@ -15,7 +15,13 @@
  *   • converting: item-less requests refused, the clientRef check first (a retry makes no second
  *     prospect or pricing request), an existing client is never patched, HE numbers kept as the
  *     requested code, no inventory added;
- *   • admin and director only, through the secured path; spam loses its personal data after 30 days.
+ *   • admin and director only, through the secured path; spam loses its personal data after 30 days;
+ *   • A341: a collected quote request becomes a purchase request by itself — status Requested (waiting for
+ *     admin's sourcing, never sent to management), owner "Admin", requested by "Website (hiescorp.com)";
+ *     contact messages and requests from before the switch stay in the inbox; at most 5 a run, each under
+ *     its own short lock; a failure leaves the request New with a note and is not retried; never twice;
+ *     WEBSITE_AUTO_PR_OFF and staging stop it.
+ * The A338 sections run with WEBSITE_AUTO_PR_OFF so they still pin the inbox's own buttons.
  */
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +46,7 @@ function boot(opts) {
   const store = Object.assign({ ActivityLog: [], Clients: [], PricingRequests: [], PricingRequestItems: [], Inventory: [], FlowSettings: [] }, opts.store || {});
   const c = load(undefined, store);
   if (opts.configured !== false) { c.__props.WEBSITE_FEED_URL = URL_; c.__props.WEBSITE_FEED_KEY = KEY; c.__props.WEBSITE_ALERT_EMAIL = 'neil@example.com'; }
+  if (!opts.auto) c.__props.WEBSITE_AUTO_PR_OFF = '1';   // A341 — the A338 sections test the inbox buttons
   Object.assign(c.__props, opts.props || {});
   c.__calls = []; c.__mail = []; c.__log = [];
   c.MailApp = { sendEmail: (to, subject, body) => c.__mail.push({ to, subject, body }) };
@@ -254,6 +261,110 @@ section('make a pricing request');
   ok('a customer name typed as a formula is stored as text everywhere', r.success && c.__store.PricingRequests[0]['Customer'].startsWith("'=") && c.__store.Clients[0]['Customer'].startsWith("'="), c.__store.PricingRequests[0]['Customer']);
   r = call(c, 'setWebRequestStatus', Object.assign({ ref: 'C-261016-1177', status: 'Deleted' }, ADMIN));
   ok('an unknown status is refused', !r.success && /Closed, Spam or New/.test(r.message), r);
+}
+
+section('A341 — a quote request becomes a purchase request by itself');
+{
+  const c = boot({ auto: true });
+  const r = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('the collector files both and makes one purchase request', r.success && r.collected === 2 && r.autoMade === 1
+    && /1 purchase request made, waiting for sourcing/.test(r.message), r);
+  const pr = c.__store.PricingRequests[0], q = rows(c)[0], m = rows(c)[1];
+  ok('  status Requested: waiting for admin\'s sourcing, NOT sent to management', c.__store.PricingRequests.length === 1 && pr['Status'] === 'Requested', pr);
+  ok('  owner "Admin", requested by "Website (hiescorp.com)", clientRef web:<ref>',
+    pr['Salesperson'] === 'Admin' && pr['Requested By'] === 'Website (hiescorp.com)' && pr['Client Ref'] === 'web:Q-261016-4821', pr);
+  ok('  the customer is the company; a new one becomes a Prospect', pr['Customer'] === 'Acme Mining Corp.' && c.__store.Clients.length === 1 && c.__store.Clients[0]['Stage'] === 'Prospect', pr['Customer']);
+  ok('  the line keeps the HE number, no inventory added', c.__store.PricingRequestItems.length === 1 && c.__store.PricingRequestItems[0]['Item No'] === 'HE-01323' && c.__store.Inventory.length === 0);
+  ok('  "Prepared by" is left for the person who prints it', JSON.parse(pr['Doc JSON']).preparedByName === '' && JSON.parse(pr['Doc JSON']).contactPerson === 'Juan Dela Cruz');
+  ok('  the request is Converted with the PR, handled by "Website"', q['Status'] === 'Converted' && q['PR No'] === pr['PR No'] && q['Handled By'] === 'Website' && q['Salesperson'] === 'Admin', q);
+  ok('  the contact message stays New in the inbox', m['Status'] === 'New' && !m['PR No'], m);
+  ok('  the purchase request\'s history says the website made it', c.__store.ActivityLog.some(a => JSON.stringify(a).indexOf(pr['PR No']) >= 0 && JSON.stringify(a).indexOf('Website') >= 0));
+  ok('  the alert email counts it (no names)', c.__mail.length === 1 && /1 became purchase request, waiting for sourcing/.test(c.__mail[0].body) && !/Juan|acme/i.test(c.__mail[0].subject + c.__mail[0].body), c.__mail[0]);
+  ok('  the inbox count is the contact message only', call(c, 'getWebRequests', Object.assign({ countOnly: true }, DIR)).count === 1);
+  const again = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('the same feed again makes no second purchase request', again.success && c.__store.PricingRequests.length === 1 && c.__store.PricingRequestItems.length === 1, again);
+  // the stamp lost after the purchase request was made: the next run heals it with the SAME one
+  Object.assign(q, { 'Status': 'New', 'PR No': '', 'Handled By': '', 'Handled At': '' });
+  c.__props.web_auto_pending = '1';
+  c.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, more: false, requests: [] }) }) };
+  const heal = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('a lost stamp heals with the same purchase request, logged once', heal.success && q['PR No'] === pr['PR No'] && c.__store.PricingRequests.length === 1
+    && c.__store.ActivityLog.filter(a => JSON.stringify(a).indexOf('Pricing Request') >= 0).length === 1, { heal, log: c.__store.ActivityLog.length });
+  ok('  the admin can still forward it to a sales rep (the existing action)',
+    call(c, 'setPricingRequestSalesperson', Object.assign({ prNo: pr['PR No'], salesperson: 'Kimberlyn Blones' }, ADMIN)).success && c.__store.PricingRequests[0]['Salesperson'] === 'Kimberlyn Blones');
+}
+{
+  // requests already in the inbox before 174 ran are left to the people
+  const c = boot({ auto: true, store: { WebRequests: [] } });
+  call(c, 'collectWebsiteRequestsNow', ADMIN);
+  const q = rows(c)[0];
+  Object.assign(q, { 'Status': 'New', 'PR No': '', 'Received At': new Date(Date.now() - 86400000) });
+  c.__store.PricingRequests.length = 0; c.__store.PricingRequestItems.length = 0;
+  delete c.__props['pr_cref_web:Q-261016-4821'];
+  c.__props.web_auto_pending = '1';
+  c.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, more: false, requests: [] }) }) };
+  call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('a request received before the switch stays New for a person', q['Status'] === 'New' && c.__store.PricingRequests.length === 0, q['Status']);
+}
+{
+  // seven quote requests at once: five now, two on the next run (even an empty one)
+  const many = { ok: true, more: false, requests: Array.from({ length: 7 }, (_, i) => ({ ref: 'Q-261018-10' + (10 + i), key: 'm' + i, kind: 'quote',
+    createdAt: '2026-10-18T09:00:00+08:00', name: 'Buyer ' + i, company: 'Mine ' + i, email: 'b' + i + '@x.ph',
+    items: [{ id: i, sku: 'HE-0000' + i, name: 'Pump', brand: 'RAD', qty: 1 }] })) };
+  let feed = many;
+  const c = boot({ auto: true, handler: (u, o) => ({ code: 200, body: o.method === 'post' ? { ok: true, acked: 7 } : feed }) });
+  const r = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('at most 5 a run', r.autoMade === 5 && c.__store.PricingRequests.length === 5 && c.__props.web_auto_pending === '2', { made: r.autoMade, pending: c.__props.web_auto_pending });
+  ok('  oldest first', rows(c).slice(0, 5).every(x => x['Status'] === 'Converted') && rows(c).slice(5).every(x => x['Status'] === 'New'));
+  feed = { ok: true, more: false, requests: [] };
+  const r2 = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('  the other two on the next run, even with nothing new', r2.autoMade === 2 && c.__store.PricingRequests.length === 7 && c.__props.web_auto_pending === '0'
+    && /2 purchase requests made from earlier ones/.test(r2.message), r2);
+  ok('  every one has its own number', new Set(c.__store.PricingRequests.map(x => x['PR No'])).size === 7);
+}
+{
+  // a busy portal: the lock is not free, so nothing is made and the next run does it
+  const c = boot({ auto: true });
+  let n = 0;
+  c.LockService = { getScriptLock: () => ({ waitLock() {}, hasLock: () => true, releaseLock() {}, tryLock: () => (++n === 1) }) };   // filing gets it, the step does not
+  const r = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('a busy lock skips cleanly: filed, no purchase request yet, one waiting', r.success && r.collected === 2 && !r.autoMade && rows(c)[0]['Status'] === 'New' && c.__props.web_auto_pending === '1', r);
+  c.LockService = { getScriptLock: () => ({ waitLock() {}, hasLock: () => true, releaseLock() {}, tryLock: () => true }) };
+  c.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, more: false, requests: [] }) }) };
+  const r2 = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('  the next run makes it', r2.autoMade === 1 && rows(c)[0]['Status'] === 'Converted', r2);
+}
+{
+  // a failure: the request stays New with a note, for a person, and is not tried again
+  const c = boot({ auto: true });
+  const real = c.createPricingRequest;
+  c.createPricingRequest = () => ({ success: false, message: 'Customer is required.' });
+  const r = call(c, 'collectWebsiteRequestsNow', ADMIN);
+  const q = rows(c)[0];
+  ok('a failure leaves the request New with a note', r.success && r.autoFailed === 1 && q['Status'] === 'New' && /^Automatic purchase request failed: Customer is required\./.test(q['Note'])
+    && /could not be made automatically/.test(r.message), { r, note: q['Note'] });
+  c.createPricingRequest = real;
+  c.__props.web_auto_pending = '1';
+  c.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, more: false, requests: [] }) }) };
+  call(c, 'collectWebsiteRequestsNow', ADMIN);
+  ok('  and is not retried by itself', q['Status'] === 'New' && c.__store.PricingRequests.length === 0);
+  const byHand = call(c, 'convertWebRequest', Object.assign({ ref: 'Q-261016-4821' }, ADMIN));
+  ok('  the admin can still make it from the inbox', byHand.success && c.__store.PricingRequests.length === 1 && c.__store.PricingRequests[0]['Requested By'] === 'Ana Admin', byHand);
+  const thrown = boot({ auto: true });
+  thrown.createPricingRequest = () => { throw new Error('Sheet busy'); };
+  const rt = call(thrown, 'collectWebsiteRequestsNow', ADMIN);
+  ok('  an exception is a failure note too, never a crash of the collector', rt.success && /failed: Sheet busy/.test(rows(thrown)[0]['Note']), rt);
+}
+{
+  const off = boot({ auto: true, props: { WEBSITE_AUTO_PR_OFF: '1' } });
+  call(off, 'collectWebsiteRequestsNow', ADMIN);
+  ok('WEBSITE_AUTO_PR_OFF: back to clicking in the inbox', rows(off)[0]['Status'] === 'New' && off.__store.PricingRequests.length === 0);
+  const own = boot({ auto: true, props: { WEBSITE_PR_OWNER: 'Kimberlyn Blones' } });
+  call(own, 'collectWebsiteRequestsNow', ADMIN);
+  ok('WEBSITE_PR_OWNER names a different owner', own.__store.PricingRequests[0]['Salesperson'] === 'Kimberlyn Blones');
+  const tick = boot({ auto: true });
+  tick.websiteCollectTick();
+  ok('the 5-minute trigger makes it too', tick.__store.PricingRequests.length === 1 && rows(tick)[0]['Status'] === 'Converted');
 }
 
 section('privacy: erase, and spam after 30 days');

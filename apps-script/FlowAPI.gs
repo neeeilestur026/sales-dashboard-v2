@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 173;   // A340 — the director's standalone pricing engine. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 174;   // A341 — website quote requests become purchase requests by themselves. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -18167,7 +18167,8 @@ function _webHealth() {
   var since = okAt ? Date.now() - new Date(okAt).getTime() : Infinity;
   return { configured: configured, off: !!g('WEBSITE_COLLECT_OFF'), staging: g('HX_ENV') === 'staging',
            okAt: okAt, errAt: g('web_err_at'), error: g('web_err'), fails: fails,
-           stale: configured && !g('WEBSITE_COLLECT_OFF') && fails >= 3 && since > _WEB_STALE };
+           stale: configured && !g('WEBSITE_COLLECT_OFF') && fails >= 3 && since > _WEB_STALE,
+           auto: _webAutoOn(), autoWaiting: parseInt(g('web_auto_pending'), 10) || 0 };   // A341
 }
 function _webNote(ok, error) {
   var pr = _webProps(), now = _now().toISOString();
@@ -18246,19 +18247,21 @@ function _webSetRow(row, patch) {
 }
 
 /** The alert email: counts and a link only. Throttled; what it holds back goes out with the next one. */
-function _webAlert(added) {
+function _webAlert(added, made) {
   var to = String(_fprop('WEBSITE_ALERT_EMAIL') || '').trim();
   if (to.indexOf('@') < 0) return;
   var pr = _webProps();
   var n = (parseInt(_fprop('web_alert_n'), 10) || 0) + added.length;
-  if (!n) return;
-  if (Date.now() - (parseInt(_fprop('web_alert_at'), 10) || 0) < _WEB_ALERT_GAP) { pr.setProperty('web_alert_n', String(n)); return; }
+  var m = (parseInt(_fprop('web_alert_pr'), 10) || 0) + (made || 0);   // A341 — how many became purchase requests
+  if (!n && !m) return;
+  if (Date.now() - (parseInt(_fprop('web_alert_at'), 10) || 0) < _WEB_ALERT_GAP) { pr.setProperty('web_alert_n', String(n)); pr.setProperty('web_alert_pr', String(m)); return; }
   try {
-    MailApp.sendEmail(to, n + ' new website request' + (n === 1 ? '' : 's') + ' in the portal',
-      n + ' new request' + (n === 1 ? ' has' : 's have') + ' come in from hiescorp.com.\n\nAnswer ' + (n === 1 ? 'it' : 'them') +
-      ' in the portal: ' + _WEB_PORTAL + '\n\n(Names and details are only in the portal, never in this email.)');
-    pr.setProperty('web_alert_at', String(Date.now())); pr.setProperty('web_alert_n', '0');
-  } catch (e) { pr.setProperty('web_alert_n', String(n)); }
+    MailApp.sendEmail(to, (n || m) + ' new website request' + ((n || m) === 1 ? '' : 's') + ' in the portal',
+      (n ? n + ' new request' + (n === 1 ? ' has' : 's have') + ' come in from hiescorp.com.' : '') +
+      (m ? (n ? ' ' : '') + m + ' became purchase request' + (m === 1 ? '' : 's') + ', waiting for sourcing in Purchase Requests.' : '') +
+      '\n\nThe inbox: ' + _WEB_PORTAL + '\n\n(Names and details are only in the portal, never in this email.)');
+    pr.setProperty('web_alert_at', String(Date.now())); pr.setProperty('web_alert_n', '0'); pr.setProperty('web_alert_pr', '0');
+  } catch (e) { pr.setProperty('web_alert_n', String(n)); pr.setProperty('web_alert_pr', String(m)); }
 }
 
 /** Collect once: fetch (no lock) → file the new ones (a short lock) → acknowledge (no lock) → alert. */
@@ -18266,12 +18269,18 @@ function _webCollect() {
   if (_fprop('HX_ENV') === 'staging') return { success: false, message: 'This is a staging copy: it never collects live website requests.' };
   if (_fprop('WEBSITE_COLLECT_OFF')) return { success: false, off: true, message: 'Collecting is switched off (WEBSITE_COLLECT_OFF).' };
   if (!_webFeedUrl() || !_fprop('WEBSITE_FEED_KEY')) return { success: false, notConfigured: true, message: 'Not connected yet: set WEBSITE_FEED_URL and WEBSITE_FEED_KEY.' };
+  if (_webAutoOn()) _webAutoSince();                     // A341 — set before filing, so this run's requests count
   var body;
   try { body = _webFetch('get'); }
   catch (e) { _webNote(false, e.message); return { success: false, message: 'Could not read the website: ' + e.message + '.' }; }
   var list = Array.isArray(body.requests) ? body.requests : [];
   var purgeDue = Date.now() - (parseInt(_fprop('web_purge_at'), 10) || 0) > 86400000;
-  if (!list.length && !purgeDue) { _webNote(true); _webAlert([]); return { success: true, collected: 0, message: 'No new website requests.' }; }
+  if (!list.length && !purgeDue) {
+    _webNote(true);
+    var late = (parseInt(_fprop('web_auto_pending'), 10) || 0) > 0 ? _webAutoConvert() : { made: 0 };
+    _webAlert([], late.made);
+    return { success: true, collected: 0, autoMade: late.made, message: 'No new website requests.' + (late.made ? ' ' + late.made + ' purchase request' + (late.made === 1 ? '' : 's') + ' made from earlier ones.' : '') };
+  }
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) { _webNote(true); return { success: true, collected: 0, busy: true, message: 'The portal was busy; the next run files them.' }; }
@@ -18303,9 +18312,66 @@ function _webCollect() {
   var ackError = '';
   if (seen.length) { try { _webFetch('post', { ack: seen }); } catch (e) { ackError = e.message; } }
   _webNote(!ackError, ackError ? 'filed, but the website did not take the acknowledgement: ' + ackError : '');
-  _webAlert(added);
-  return { success: true, collected: added.length, more: !!body.more,
-           message: added.length ? added.length + ' new website request' + (added.length === 1 ? '' : 's') + ' filed.' : 'No new website requests.' };
+  var auto = _webAutoConvert();                          // A341 — after the filing lock is released
+  _webAlert(added, auto.made);
+  var msg = added.length ? added.length + ' new website request' + (added.length === 1 ? '' : 's') + ' filed.' : 'No new website requests.';
+  if (auto.made) msg += ' ' + auto.made + ' purchase request' + (auto.made === 1 ? '' : 's') + ' made, waiting for sourcing.';
+  if (auto.failed) msg += ' ' + auto.failed + ' could not be made automatically: see the inbox.';
+  return { success: true, collected: added.length, more: !!body.more, autoMade: auto.made, autoFailed: auto.failed, message: msg };
+}
+
+/* A341 — a quote request (with products) becomes a purchase request by itself, Neil 2026-10-18. It is NOT
+   sent to management: it waits for admin's sourcing like any other request. It belongs to "Admin"
+   (WEBSITE_PR_OWNER) until admin forwards it to a sales rep (setPricingRequestSalesperson), who makes the
+   quotation. Only requests received after this version first ran (web_auto_since) — the inbox that was
+   already there is left to the people. At most 5 per run, each under its own short tryLock (a busy portal
+   just waits for the next run). A failure leaves the request New with a note, for a person, and is not
+   retried. WEBSITE_AUTO_PR_OFF switches it off; a staging copy never does it. */
+var _WEB_AUTO_MAX = 5;
+var _WEB_AUTO_FAIL = 'Automatic purchase request failed';
+var _WEB_AUTO_BY = 'Website (hiescorp.com)';
+function _webAutoOn() { return !_fprop('WEBSITE_AUTO_PR_OFF') && _fprop('HX_ENV') !== 'staging'; }
+function _webAutoSince() {
+  var since = _fprop('web_auto_since');
+  if (!since) { since = _now().toISOString(); _webProps().setProperty('web_auto_since', since); }
+  return new Date(since).getTime();
+}
+function _webAutoConvert() {
+  var out = { made: 0, failed: 0, waiting: 0, prs: [] };
+  if (!_webAutoOn()) return out;
+  var sh = _ss().getSheetByName('WebRequests');
+  if (!sh || sh.getLastRow() < 2) { _webProps().setProperty('web_auto_pending', '0'); return out; }
+  var since = _webAutoSince(), owner = String(_fprop('WEBSITE_PR_OWNER') || 'Admin').trim() || 'Admin';
+  _ROWS_MEMO = null;
+  var refs = _rows('WebRequests').filter(function (r) {
+    return r['Status'] === 'New' && r['Kind'] === 'quote' && _num(r['Item Count']) > 0 && !r['PR No'] &&
+           new Date(r['Received At']).getTime() >= since && String(r['Note'] || '').indexOf(_WEB_AUTO_FAIL) !== 0;
+  }).sort(function (a, b) { return new Date(a['Received At']) - new Date(b['Received At']); })
+    .map(function (r) { return String(r['Ref']); });
+  var done = 0;
+  for (var i = 0; i < refs.length && done < _WEB_AUTO_MAX; i++) {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) break;
+    done++;
+    try {
+      _ROWS_MEMO = null;
+      var r = _webRow(refs[i]);                        // read again under the lock
+      if (!r || r['Status'] !== 'New' || r['PR No']) continue;
+      var res;
+      try { res = _webConvertCore(r, { customer: r['Company'] || r['Name'], salesperson: owner, requestedBy: _WEB_AUTO_BY, actorName: 'Website', actorRole: 'system', preparedBy: '' }); }
+      catch (e) { res = { success: false, message: String(e && e.message || e) }; }
+      if (res && res.success) {
+        out.made++; out.prs.push(res.prNo);
+        // the purchase request's history says who made it (the inbox button gets this from _dispatch)
+        if (!res.duplicate && !res.healed) _logActivity('createPricingRequest', { actorName: 'Website', customer: res.customer }, { prNo: res.prNo, message: res.message });
+      }
+      else { out.failed++; _webSetRow(r, { 'Note': (_WEB_AUTO_FAIL + ': ' + ((res && res.message) || 'no reason given')).slice(0, 200) }); }
+      SpreadsheetApp.flush();
+    } finally { lock.releaseLock(); }
+  }
+  out.waiting = refs.length - done;
+  _webProps().setProperty('web_auto_pending', String(out.waiting));
+  return out;
 }
 
 /** The 5-minute time trigger (add it in the editor: Triggers → websiteCollectTick → time-driven, every 5 minutes). */
@@ -18379,28 +18445,36 @@ function _webClient(name, r, actor) {
   }, actor);
 }
 
-/** Make a pricing request from a quote request. Idempotent: the website ref is the clientRef. */
+/** Make a pricing request from a quote request (the inbox button). Idempotent: the website ref is the clientRef. */
 function convertWebRequest(p) {
   if (!_WEB_ROLES[_webRole(p)]) return { success: false, message: 'The admin or the director makes the pricing request.' };
   var r = _webRow(p.ref);
   if (!r) return { success: false, message: 'Website request ' + (p.ref || '?') + ' was not found.' };
+  var who = String(p.actorName || '');
+  return _webConvertCore(r, { customer: p.customer, salesperson: p.salesperson, requestedBy: who, actorName: who, actorRole: p.actorRole });
+}
+
+/* A341 — the one way a website request becomes a purchase request, for the inbox button and for the
+   automatic step alike: the clientRef check first (a retry never makes a second one), an existing client is
+   never patched, every visitor string through _webCell, HE numbers kept as the requested code, no stock. */
+function _webConvertCore(r, o) {
   var ref = String(r['Ref']), cref = 'web:' + ref;
   if (r['PR No']) return { success: true, duplicate: true, prNo: r['PR No'], refNo: ref, message: ref + ' is already pricing request ' + r['PR No'] + '.' };
   var items = _webItems(r);
   if (!items.length) return { success: false, message: ref + ' lists no products, so there is nothing to price. Close it once you have replied.' };
   if (r['Status'] !== 'New') return { success: false, message: ref + ' is ' + String(r['Status']).toLowerCase() + '. Reopen it first.' };
-  var customer = _webCell(p.customer || r['Company'] || r['Name']);
+  var customer = _webCell(o.customer || r['Company'] || r['Name']);
   if (!customer) return { success: false, message: 'Enter the customer name.' };
-  var who = String(p.actorName || ''), salesperson = _webCell(p.salesperson);
-  var prNo = _fprop('pr_cref_' + cref), client = { created: false, customer: customer };
+  var who = String(o.actorName || ''), salesperson = _webCell(o.salesperson), requestedBy = String(o.requestedBy || who);
+  var prNo = _fprop('pr_cref_' + cref), healed = !!prNo, client = { created: false, customer: customer };
   if (!prNo) {                                            // the clientRef check runs first, so a retry makes no second prospect
     client = _webClient(customer, r, who);
     var out = createPricingRequest({
-      customer: _webCell(client.customer || customer), clientRef: cref, requestedBy: who, salesperson: salesperson,
-      actorName: who, actorRole: p.actorRole, clientLocation: _webCell(r['Location']),
+      customer: _webCell(client.customer || customer), clientRef: cref, requestedBy: requestedBy, salesperson: salesperson,
+      actorName: who, actorRole: o.actorRole, clientLocation: _webCell(r['Location']),
       notes: _webCell('Website request ' + ref + (r['Message'] ? ': ' + r['Message'] : ''), true).slice(0, 1000),
       docJson: JSON.stringify({ companyName: _webCell(r['Company']), contactPerson: _webCell(r['Name']), contactEmail: _webCell(r['Email']),
-                                contactPhone: _webCell(r['Phone']), companyAddress: _webCell(r['Location']), preparedByName: who }),
+                                contactPhone: _webCell(r['Phone']), companyAddress: _webCell(r['Location']), preparedByName: o.preparedBy !== undefined ? o.preparedBy : who }),
       items: JSON.stringify(items.map(function (it) {
         return { itemNo: _webCell(it.sku) || 'N/A', itemName: _webCell([it.brand, it.name].filter(function (x) { return x; }).join(' ')),
                  qty: it.qty, uom: '', remarks: _webCell([it.category, it.range].filter(function (x) { return x; }).join(' / ')) };
@@ -18411,7 +18485,7 @@ function convertWebRequest(p) {
   }
   _webSetRow(r, { 'Status': 'Converted', 'Customer': client.customer || customer, 'Salesperson': salesperson, 'PR No': prNo,
                   'Handled By': who, 'Handled At': _now() });
-  return { success: true, prNo: prNo, refNo: ref, clientCreated: !!client.created, customer: client.customer || customer,
+  return { success: true, prNo: prNo, refNo: ref, clientCreated: !!client.created, customer: client.customer || customer, healed: healed,
            message: 'Pricing request ' + prNo + ' made from ' + ref + (client.created ? ' (new prospect ' + client.customer + ')' : '') + '.' };
 }
 
@@ -18834,6 +18908,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A341 WEBSITE QUOTE REQUESTS BECOME PURCHASE REQUESTS (174; A327 takes 175 or later). Neil, 18 Oct 2026: a quote request from hiescorp.com creates its purchase request by itself; it is NOT sent to management — it waits for admin's sourcing like any other — and belongs to "Admin" (WEBSITE_PR_OWNER) until admin forwards it to a sales rep (the existing setPricingRequestSalesperson), who makes the quotation. _webAutoConvert runs after each collection (and on later runs while some are still waiting): requests with products received after this version first ran (web_auto_since), at most 5 per run, each under its own short tryLock; requested by "Website (hiescorp.com)"; same rules as the inbox button (shared _webConvertCore: clientRef web:<ref> first, an existing client never patched, a new name a Prospect, every visitor string through _webCell). A failure leaves the request New with a note for a person and is not retried. WEBSITE_AUTO_PR_OFF switches it off; staging never does it. The alert email adds how many became purchase requests (counts only).
 A340 THE PRICING ENGINE (173; A327 takes the next free number, 174 or later, when it merges). A standalone pricing tool on the director's dashboard (director-pricing-engine.html, dashboard/js/pe-engine.js). The calculation runs in the browser; FlowAPI only keeps its own two tabs: PETables (the director's reference tables, every save a new version with an effective date) and PERecords (each priced quotation: inputs, table version, result, revision by revision). It reads and writes nothing else — no quotation, pricing request, inventory or order. Director only, all secured: peGetTables, peSaveTables, peSetApprovalCode (the director's and the president's codes, kept only as salted HMACs in Script Properties pe_code_director / pe_code_president, never returned), peSaveRecord ("Ready" only with no blocking flag and, when approval is needed, the right code; the president's covers the director's), peListRecords, peGetRecord.
 A338 WEBSITE REQUESTS (172; 171 stays A327's only if A327 is pasted first, otherwise A327 becomes 173). The bridge from hiescorp.com: the website keeps each quote request and contact message, and websiteCollectTick (a 5-minute time trigger the owner adds in the editor) COLLECTS them from its private feed (WEBSITE_FEED_URL + WEBSITE_FEED_KEY Script Properties; X-Portal-Key header; no redirects) into the new WebRequests tab, deduped by key (a ring of the last 300 in a Script Property plus the sheet), one block write under a short tryLock, acknowledged after the write, then one alert email (counts and a link only, at most every 30 min, WEBSITE_ALERT_EMAIL). Secured, admin / director only: getWebRequests (New + 60 days, health; countOnly reads the Status column), collectWebsiteRequestsNow, convertWebRequest (a pricing request with clientRef web:<ref>, checked first; an existing client is never patched, a new one is a Prospect; HE item numbers kept as the requested code; no inventory add), setWebRequestStatus (Closed / Spam / New), eraseWebRequest (Data Privacy Act). Every visitor string goes through _webCell (no formulas, no markup). Spam loses its personal data after 30 days. WEBSITE_COLLECT_OFF stops collecting; HX_ENV=staging never collects. websiteFeedSelfTest() checks the connection from the editor without logging personal data.
 A334 RETIRE DUPLICATE RECEIVABLES (170; A327's staging build moves to 171 when it merges). 16 invoices were in the portal twice, each copy fully paid by its own payment (P4.62M counted twice). Accounting approved keeping one copy of each (15 Oct 2026). retireDuplicateReceivables takes the approved pairs and checks them all before the first write (same invoice number by its last digits, amounts within 2%, the kept copy still fully paid); then voids the going copy's payments through voidCollection (row kept, marked void, reason recorded), copies the going receivable in full into Overrides ('retired-duplicate') and removes it with its collection journal. When only the going copy pointed at a real invoice, the kept copy and its payments take that invoice number ('relinked-invoice'). extraVoids void further payments on a kept copy; a fraction of a centavo left open is settled ('settled-sub-centavo'). dryRun answers with the plan and writes nothing. Accounting, admin or the director only.

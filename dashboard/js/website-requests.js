@@ -1,7 +1,10 @@
 /* website-requests.js — A338 · requests from hiescorp.com: quote lists and contact messages.
    FlowAPI collects them from the website every 5 minutes (websiteCollectTick); the admin and the director
-   answer them here. A quote with products becomes a pricing request in one click (the existing sourcing →
-   quotation → SO chain takes it from there); anything else is closed once replied, or marked spam.
+   answer them here. A341 (FlowAPI 174): a quote with products becomes a purchase request by itself, owned
+   by "Admin" and waiting for sourcing (the existing sourcing → pricing → quotation chain takes it from
+   there; admin forwards it to a sales rep on the Purchase Requests page). The "Make pricing request" button
+   stays for one the automatic step could not make, and for FlowAPI before 174. Anything else is closed
+   once replied, or marked spam.
 
    EVERY FIELD ON THIS PAGE WAS TYPED BY A STRANGER on the website. Each one goes through flowEsc, links
    are built only as mailto:/tel:, and nothing else here turns their text into markup. */
@@ -78,6 +81,10 @@ function wrShowHealth(h) {
     text = 'The last check failed ' + wrAgo(h.errAt) + ': ' + h.error + '.' + (h.okAt ? ' Last good check ' + wrAgo(h.okAt) + '.' : '');
   } else if (h.okAt) text = 'Checked ' + wrAgo(h.okAt) + '. New requests arrive every 5 minutes.';
   else text = 'Connected. The first check runs within 5 minutes.';
+  if (!bad && h.configured && !h.staging && h.auto !== undefined) {    // A341 — FlowAPI 174 says whether it turns quotes into purchase requests
+    text += h.auto ? ' Quote lists become purchase requests by themselves.' + (h.autoWaiting ? ' ' + h.autoWaiting + ' still to make on the next check.' : '')
+      : ' Quote lists are not made into purchase requests by themselves (WEBSITE_AUTO_PR_OFF): use Make pricing request.';
+  }
   el.textContent = text;                       // textContent: the error can quote the website
   el.classList.toggle('bad', bad);
 }
@@ -107,7 +114,9 @@ function wrCard(q) {
       <td class="num">${flowEsc(it.qty)}</td></tr>`).join('')}</tbody></table>` : '';
   const text = [q.subject, q.message].filter(Boolean).join('\n');
   let state = '';
-  if (q.status === 'Converted') state = `Pricing request <a href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}">${flowEsc(q.prNo)}</a> for ${flowEsc(q.customer)}${q.salesperson ? ', quoted by ' + flowEsc(q.salesperson) : ''} · by ${flowEsc(q.handledBy)}`;
+  const prLink = `<a href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}">${flowEsc(q.prNo)}</a>`;
+  if (q.status === 'Converted' && q.handledBy === 'Website') state = `Purchase request ${prLink} for ${flowEsc(q.customer)}, made automatically ${flowEsc(wrWhen(q.handledAt))}. Admin sources it and forwards it to a sales rep for the quotation.`;   // A341
+  else if (q.status === 'Converted') state = `Purchase request ${prLink} for ${flowEsc(q.customer)}${q.salesperson ? ', quoted by ' + flowEsc(q.salesperson) : ''} · by ${flowEsc(q.handledBy)}`;
   else if (q.status !== 'New') state = `${flowEsc(q.status)} by ${flowEsc(q.handledBy)} ${flowEsc(wrWhen(q.handledAt))}${q.note ? ' · ' + flowEsc(q.note) : ''}`;
   else if (q.note) state = flowEsc(q.note);
   const acts = [];
