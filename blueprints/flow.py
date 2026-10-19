@@ -662,7 +662,7 @@ SECURED_ACTIONS = [
     "updateARAging", "updateCommissionRequest", "updateExpense", "updateInventoryItem", "updatePRSourcing",
     "updatePaymentRequest", "updatePurchaseOrder", "updateQuotation", "updateSalesOrder", "updateShipment",
     "verifyReturnToSales", "voidCollection", "voidInvoice", "retireDuplicateReceivables",
-    "restateMigratedInvoice", "removeReceivable",   # A342
+    "removeReceivable",   # A342
     # A316 — the warehouse scanner (dashboard/scan.html)
     "dispatchByScan", "linkBarcode", "receiveByScan", "saveScanCount", "uploadScanPhoto", "setItemTracking", "registerAssets", "returnByScan", "ensureItemLabels", "logLabelPrint", "getScanContext", "getScanLookup", "getLabels", "getStockInOptions", "getScanPhotos", "createItemByScan", "saveAccount", "saveAccountRule", "resolveBooksInboxItem", "getBooksCoverage", "syncBooks", "ingestBookEvents", "getBooksStatus", "getAccounts", "getAccountRules", "getTaxCodes", "getGLEntries", "getGLTrialBalance", "getBooksInbox", "recordFieldCollection", "recordNotCollected", "acknowledgeFieldCollection", "undoFieldCollection", "uploadCollectionPhoto", "getCollectorQueue", "getFieldCollectionNotices",
     # A325 — the commission reads that carried every rep's pay to an unsigned GET
