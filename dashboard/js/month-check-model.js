@@ -151,6 +151,8 @@ function monthCheck(data, month, today) {
   // arReconcile's baseline (A249): the AR ledger begins on its first receivable
   var baseline = realAr.map(function (a) { return mcDay(a.createdAt); }).filter(Boolean).sort()[0] || '';
   var claimed = {}, orphanAr = [];
+  // A342 — an invoice whose receivable the director removed on purpose (removeReceivable) is answered
+  OV.forEach(function (o) { if (mcS(o.rule) === 'removed-receivable' && mcS(o.expected)) claimed[mcS(o.expected)] = 1; });
   realAr.forEach(function (a) {
     if (invByNo[mcS(a.invNo)]) { claimed[mcS(a.invNo)] = 1; return; }
     var m = invBySo[mcS(a.soNo)];

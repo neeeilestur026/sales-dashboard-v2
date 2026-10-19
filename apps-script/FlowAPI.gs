@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 174;   // A341 — website quote requests become purchase requests by themselves. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 175;   // A342 — two director corrections on receivables. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -801,6 +801,7 @@ var _SECURED = {
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
+  restateMigratedInvoice: 1, removeReceivable: 1,                       // A342 — director corrections
   dispatchByScan: 1, linkBarcode: 1, receiveByScan: 1, saveScanCount: 1,   // A316
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
@@ -3479,7 +3480,7 @@ function getARAging(p) {
       followUp: (amt - col > 0.005) ? (follow[String(r['AR No'])] || null) : null,
       rowIndex: r.rowIndex
     };
-  }) };
+  }), removedInvoices: Object.keys(_a342RemovedInvoices()) };   // A342 — answered on purpose: never "missing a receivable"
 }
 
 function getCollections(p) {
@@ -3993,6 +3994,126 @@ function retireDuplicateReceivables(p) {
   return { success: true, retired: done.reverse(), voided: voided, relinked: relinked, settled: settled, totals: totals,
     message: 'Retired ' + done.length + ' duplicate receivable(s) and voided ' + voided.length + ' payment(s) (' + totals.amount.toFixed(2) + ' counted twice).'
       + (relinked.length ? ' Relinked: ' + relinked.join(', ') + '.' : '') + (settled.length ? ' Settled to the centavo: ' + settled.join(', ') + '.' : '') };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   A342 — TWO DIRECTOR CORRECTIONS ON RECEIVABLES (Neil, 19 Oct 2026).
+
+   · restateMigratedInvoice — an invoice brought in from the old records with the wrong amount. Sales
+     order 150005851 (Therma South) is billed in TWO invoices of 201,625.44 (one torch and one clamp
+     each), but the import put the whole order, 403,250.88, on invoice 126. This sets the invoice, its
+     one line and its receivable to what it really billed. Only an imported invoice (those never reach
+     the journal or the books), with one line, no VAT or deposit, exactly one receivable and no more
+     collected than the new amount. `expectTotal` must match the amount on file, so a second run, or a
+     run on a row that changed, is refused.
+   · removeReceivable — one receivable with nothing paid against it, taken away. A full copy goes to
+     Overrides (rule 'removed-receivable', Expected = the invoice it belonged to), and from then on the
+     AR page, the Month check and backfillMissingAR treat that invoice as answered, so the receivable is
+     never offered or re-created again. `expectAmount` must match.
+   Both director only, secured, with dryRun. The second invoice on 150005851 is then issued through
+   the invoice form as any other: after the restatement it fits inside the order total, and the
+   safeguards ask once for the reason (a second invoice on one order, the same amount as 126).
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+var _A342_ROLES = { director: 1 };
+function _a342Dry(p) { return !!p && (p.dryRun === true || String(p.dryRun) === 'true'); }
+function _a342Reason(p) { var r = String((p && p.reason) || '').trim(); return r.length >= 10 ? r : ''; }
+function _a342R2(n) { return Math.round(_num(n) * 100) / 100; }
+function _a342Log(p, action, ref, rule, expected, entered, reason) {
+  _append('Overrides', [_now(), String((p && p.actorName) || ''), _sgRole(p), action, ref, rule, expected, entered, String(reason || '').slice(0, 300)]);
+}
+/** Invoice numbers whose receivable was removed on purpose (removeReceivable). */
+function _a342RemovedInvoices() {
+  var out = {};
+  try {
+    _rows('Overrides').forEach(function (o) {
+      if (String(o['Rule']) === 'removed-receivable' && String(o['Expected'] || '').trim()) out[String(o['Expected']).trim()] = String(o['Ref No'] || '');
+    });
+  } catch (e) { /* no Overrides tab yet: nothing was removed */ }
+  return out;
+}
+function _a342SetRow(sheetName, rowIndex, patch) {
+  var sh = _sheet(sheetName);
+  Object.keys(patch).forEach(function (h) {
+    var col = SCHEMA[sheetName].indexOf(h) + 1;
+    if (col) sh.getRange(rowIndex, col, 1, 1).setValues([[patch[h]]]);
+  });
+}
+
+function restateMigratedInvoice(p) {
+  p = p || {};
+  if (!_A342_ROLES[_sgRole(p)]) return _sgRefuse('Only the director can restate an invoice.');
+  var reason = _a342Reason(p);
+  if (!reason) return _sgRefuse('Give the reason (at least 10 characters); it is recorded.');
+  var invNo = String(p.invNo || '').trim();
+  var invs = _rows('Invoices').filter(function (v) { return String(v['INV No']) === invNo; });
+  if (invs.length !== 1) return _sgRefuse(invs.length ? 'Invoice ' + invNo + ' is on file more than once.' : 'Invoice ' + (invNo || '?') + ' was not found.');
+  var inv = invs[0];
+  if (String(inv['Voided'] || '') === 'true') return _sgRefuse('Invoice ' + invNo + ' is voided.');
+  if (String(inv['Created By'] || '').indexOf('Migrated') !== 0) return _sgRefuse('Only an invoice brought in from the old records can be restated here. Void and re-issue an app invoice instead.');
+  if (_num(inv['VAT']) !== 0 || _num(inv['Total Deposit']) !== 0) return _sgRefuse('Invoice ' + invNo + ' carries VAT or a deposit, so its receivable is not its sales. Nothing was changed.');
+  var oldSales = _a342R2(inv['Total Sales']), oldCogs = _a342R2(inv['Total COGS']);
+  if (Math.abs(oldSales - _num(p.expectTotal)) > 0.005) return _sgRefuse('Invoice ' + invNo + ' is ' + oldSales.toFixed(2) + ' on file, not ' + _num(p.expectTotal).toFixed(2) + '. Nothing was changed.');
+  var newSales = _a342R2(p.totalSales);
+  var newCogs = (p.totalCogs === undefined || p.totalCogs === null || String(p.totalCogs).trim() === '') ? oldCogs : _a342R2(p.totalCogs);
+  if (!(newSales > 0)) return _sgRefuse('The new amount must be more than zero.');
+  if (newCogs < 0) return _sgRefuse('The cost cannot be negative.');
+  if (Math.abs(newSales - oldSales) < 0.005 && Math.abs(newCogs - oldCogs) < 0.005) return _sgRefuse('Invoice ' + invNo + ' already has these figures.');
+  var lines = _rows('InvoiceItems').filter(function (l) { return String(l['INV No']) === invNo; });
+  if (lines.length !== 1) return _sgRefuse('Invoice ' + invNo + ' has ' + lines.length + ' lines; only a one-line imported invoice can be restated.');
+  var ars = _rows('ARAging').filter(function (a) { return String(a['INV No']) === invNo; });
+  if (ars.length !== 1) return _sgRefuse('Invoice ' + invNo + ' has ' + ars.length + ' receivables; restate it only when it has exactly one.');
+  var ar = ars[0], arNo = String(ar['AR No']);
+  if (Math.abs(_num(ar['Amount (PHP)']) - oldSales) > 0.01) return _sgRefuse(arNo + ' is ' + _num(ar['Amount (PHP)']).toFixed(2) + ', not the invoice\'s ' + oldSales.toFixed(2) + '. Check it by hand.');
+  var paid = _rows('Collections').filter(function (c) { return String(c['AR No']) === arNo && String(c['Voided'] || '') !== 'true'; })
+    .reduce(function (s, c) { return s + _num(c['Amount (PHP)']); }, 0);
+  if (paid > newSales + 0.005) return _sgRefuse(arNo + ' already has ' + paid.toFixed(2) + ' collected, more than ' + newSales.toFixed(2) + '.');
+  if (_rows('Journal').some(function (j) { return String(j['Source']) === 'INV' && String(j['Source No']) === invNo; })) return _sgRefuse('Invoice ' + invNo + ' has journal entries, so it cannot be restated here.');
+  var so = inv['SO No'] ? _rows('SalesOrders').filter(function (s) { return String(s['SO No']) === String(inv['SO No']); })[0] : null;
+  var plan = { invNo: invNo, soNo: String(inv['SO No'] || ''), customer: String(inv['Customer'] || ''), arNo: arNo,
+    totalSales: { from: oldSales, to: newSales }, totalCogs: { from: oldCogs, to: newCogs }, collected: _a342R2(paid),
+    orderTotal: so ? _a342R2(so['Total']) : null };
+  var said = 'invoice ' + invNo + ' from ' + oldSales.toFixed(2) + ' to ' + newSales.toFixed(2) + ' (cost ' + oldCogs.toFixed(2) + ' → ' + newCogs.toFixed(2) + ') and ' + arNo + ' to match';
+  if (_a342Dry(p)) return { success: true, dryRun: true, plan: plan, message: 'Would restate ' + said + '.' };
+
+  var line = lines[0], qty = _num(line['Qty']) || 1;
+  _a342SetRow('Invoices', inv.rowIndex, { 'Total Sales': newSales, 'Total COGS': newCogs });
+  _a342SetRow('InvoiceItems', line.rowIndex, { 'Selling Price': _a342R2(newSales / qty), 'Line Sales': newSales,
+    'Landed Cost/Unit': _a342R2(newCogs / qty), 'Line COGS': newCogs });
+  var note = String(ar['Notes'] || '');
+  _a342SetRow('ARAging', ar.rowIndex, { 'Amount (PHP)': newSales,
+    'Notes': (note ? note + ' · ' : '') + 'Restated ' + _dateStr(_now()) + ' from ' + oldSales.toFixed(2), 'Updated At': _now() });
+  if (paid > 0) _arRecomputeFromCollections(arNo, null);
+  _a342Log(p, 'restateMigratedInvoice', invNo, 'restated-invoice', oldSales, newSales, reason + ' (cost ' + oldCogs.toFixed(2) + ' → ' + newCogs.toFixed(2) + ')');
+  return { success: true, invNo: invNo, arNo: arNo, plan: plan, message: 'Restated ' + said + '.' };
+}
+
+function removeReceivable(p) {
+  p = p || {};
+  if (!_A342_ROLES[_sgRole(p)]) return _sgRefuse('Only the director can remove a receivable.');
+  var reason = _a342Reason(p);
+  if (!reason) return _sgRefuse('Give the reason (at least 10 characters); it is recorded.');
+  var arNo = String(p.arNo || '').trim();
+  var ars = _rows('ARAging').filter(function (a) { return String(a['AR No']) === arNo; });
+  if (ars.length !== 1) return _sgRefuse(ars.length ? arNo + ' is on file more than once.' : 'Receivable ' + (arNo || '?') + ' was not found.');
+  var ar = ars[0], amount = _a342R2(ar['Amount (PHP)']);
+  if (Math.abs(amount - _num(p.expectAmount)) > 0.005) return _sgRefuse(arNo + ' is ' + amount.toFixed(2) + ' on file, not ' + _num(p.expectAmount).toFixed(2) + '. Nothing was changed.');
+  var cols = _rows('Collections').filter(function (c) { return String(c['AR No']) === arNo; });
+  var live = cols.filter(function (c) { return String(c['Voided'] || '') !== 'true'; });
+  if (live.length) return _sgRefuse(arNo + ' has ' + live.length + ' payment(s) recorded (' + live.map(function (c) { return c['Collection No']; }).join(', ') + '). Void them first.');
+  if (_num(ar['Collected (PHP)']) > 0.005) return _sgRefuse(arNo + ' shows ' + _num(ar['Collected (PHP)']).toFixed(2) + ' collected. Check it by hand.');
+  var copy = {};
+  SCHEMA.ARAging.forEach(function (h) { copy[h] = ar[h] instanceof Date ? _dateStr(ar[h]) : ar[h]; });
+  var invNo = String(ar['INV No'] || '').trim();
+  var others = invNo ? _rows('ARAging').filter(function (a) { return String(a['INV No']) === invNo && String(a['AR No']) !== arNo; }).length : 0;
+  var plan = { arNo: arNo, invNo: invNo, soNo: String(ar['SO No'] || ''), customer: String(ar['Customer'] || ''), amount: amount,
+    status: String(ar['Status'] || ''), voidedPayments: cols.length, otherReceivablesOnInvoice: others, row: copy };
+  var said = arNo + ' (' + plan.customer + ', invoice ' + (invNo || 'none') + ', ' + amount.toFixed(2) + ')';
+  if (_a342Dry(p)) return { success: true, dryRun: true, plan: plan, message: 'Would remove ' + said + '.' };
+  _a342Log(p, 'removeReceivable', arNo, 'removed-receivable', invNo, JSON.stringify(copy), reason);
+  _removeJournal('ARCOLL', arNo);
+  _sheet('ARAging').deleteRow(ar.rowIndex);
+  return { success: true, arNo: arNo, invNo: invNo, plan: plan,
+    message: 'Removed ' + said + '. A full copy is in Overrides' + (invNo && !others ? '; invoice ' + invNo + ' will not be offered a new receivable' : '') + '.' };
 }
 
 /* A252 — RENAME AN INVOICE NUMBER. The business issues its own invoice numbers on its own paper;
@@ -6548,13 +6669,14 @@ function backfillMissingAR(p) {
     } catch (e) { return { success: false, message: 'Could not read the list of invoices to backfill.' }; }
     if (!Object.keys(only).length) return { success: false, message: 'No invoices were selected.' };
   }
-  var hasAR = {};
+  var hasAR = {}, _removedAR = _a342RemovedInvoices();
   _rows('ARAging').forEach(function (r) { if (r['INV No'] != null && r['INV No'] !== '') hasAR[String(r['INV No'])] = true; });
   var created = 0, skipped = 0;
   _rows('Invoices').forEach(function (v) {
     var invNo = String(v['INV No'] || '');
     if (!invNo || hasAR[invNo]) { skipped++; return; }
     if (only && !only[invNo]) { skipped++; return; }        // A249 — outside the requested scope
+    if (_removedAR[invNo]) { skipped++; return; }            // A342 — its receivable was removed on purpose
     /* A248 — A VOIDED INVOICE IS SUPPOSED TO HAVE NO AR ROW.
        voidInvoice DELETES the receivable (ARAging has no 'Voided' column, unlike Invoices and
        Collections which are both flagged so the reversal stays auditable). So a voided invoice fits
@@ -13869,6 +13991,12 @@ function clearCommissionDemo(p) {
   if (String((p && p.actorRole) || '').toLowerCase() !== 'director') {
     return { success: false, message: 'Only the director can remove the commission demo order.' };
   }
+  /* A342 — and, like seeding, only where demo data is switched on (staging). On the live system the DEMO-
+     rows hold a real Mincon receivable and payment (DEMO-AR-001 / DEMO-COL-001, 43,240.88), kept on
+     purpose on 19 Oct 2026; clearing would delete that money. */
+  if (_sgOn() && !_sgCfg().demo) {
+    return { success: false, message: 'Clear demo order is switched off on the live system: the DEMO- rows here hold a real Mincon payment, kept on purpose.' };
+  }
   var removed = 0, detail = [];
   _COMM_DEMO_SHEETS.forEach(function (spec) {
     var name = spec[0], cols = spec[1], sh, rows;
@@ -15013,6 +15141,7 @@ var _MODULE_MAP = {
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
+  restateMigratedInvoice: ['Invoice', 'Restated'], removeReceivable: ['AR Aging', 'Receivable removed'],   // A342
   convertWebRequest: ['Website request', 'Pricing request made'],    // A338
   setWebRequestStatus: ['Website request', 'Status changed'], eraseWebRequest: ['Website request', 'Personal data erased'],
   peSaveTables: ['Pricing engine', 'Tables saved'], peSetApprovalCode: ['Pricing engine', 'Approval code set'],   // A340
@@ -18675,6 +18804,7 @@ var HANDLERS = {
   attachOrphanToSO: attachOrphanToSO, setCollectionMeta: setCollectionMeta,   // A265
   voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
   retireDuplicateReceivables: retireDuplicateReceivables,   // A334
+  restateMigratedInvoice: restateMigratedInvoice, removeReceivable: removeReceivable,   // A342
   getWebRequests: getWebRequests, collectWebsiteRequestsNow: collectWebsiteRequestsNow,   // A338
   convertWebRequest: convertWebRequest, setWebRequestStatus: setWebRequestStatus, eraseWebRequest: eraseWebRequest,
   peGetTables: peGetTables, peSaveTables: peSaveTables, peSetApprovalCode: peSetApprovalCode,   // A340
@@ -18837,6 +18967,7 @@ var MUTATIONS = {
      index it read a moment ago writes into the wrong record.
      Found by tests/audit/registration.js, which fails on precisely this if it is ever undone. */
   reverseReceiving: 1,
+  restateMigratedInvoice: 1, removeReceivable: 1,                       // A342: rewrites / deleteRow()s under the lock
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334: voids and deleteRow()s, so the lock matters
   convertWebRequest: 1, setWebRequestStatus: 1, eraseWebRequest: 1,   // A338 (collectWebsiteRequestsNow takes its own lock)
   peSaveTables: 1, peSetApprovalCode: 1, peSaveRecord: 1,             // A340
@@ -18908,6 +19039,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A342 TWO DIRECTOR CORRECTIONS ON RECEIVABLES (175; A327 takes 176 or later). Neil, 19 Oct 2026. restateMigratedInvoice: an invoice brought in from the old records with the wrong amount is set, with its one line and its one receivable, to what it really billed; only an imported invoice (no journal, never in the books), one line, no VAT or deposit, exactly one receivable, no more collected than the new amount, and expectTotal must match what is on file (so it cannot run twice); the cost is kept unless given; logged to Overrides ('restated-invoice'). First use: invoice 126 (Therma South, SO 150005851) 403,250.88 -> 201,625.44, the order being billed in two invoices of one torch and one clamp each. removeReceivable: one receivable with no payment against it is removed, a full copy in Overrides ('removed-receivable', Expected = its invoice); expectAmount must match; getARAging returns removedInvoices, and the AR page, the Month check and backfillMissingAR then treat that invoice as answered, so it is never offered or re-created. First use: AR-202608-009 (MINCON ENTERPRISES, invoice 121, 38,607.93 before VAT), the receivable kept being DEMO-AR-001 (43,240.88, paid by DEMO-COL-001). clearCommissionDemo now refuses on the live system (demo data off), because those DEMO- rows hold that real payment. Both corrections director only, secured, with dryRun.
 A341 WEBSITE QUOTE REQUESTS BECOME PURCHASE REQUESTS (174; A327 takes 175 or later). Neil, 18 Oct 2026: a quote request from hiescorp.com creates its purchase request by itself; it is NOT sent to management — it waits for admin's sourcing like any other — and belongs to "Admin" (WEBSITE_PR_OWNER) until admin forwards it to a sales rep (the existing setPricingRequestSalesperson), who makes the quotation. _webAutoConvert runs after each collection (and on later runs while some are still waiting): requests with products received after this version first ran (web_auto_since), at most 5 per run, each under its own short tryLock; requested by "Website (hiescorp.com)"; same rules as the inbox button (shared _webConvertCore: clientRef web:<ref> first, an existing client never patched, a new name a Prospect, every visitor string through _webCell). A failure leaves the request New with a note for a person and is not retried. WEBSITE_AUTO_PR_OFF switches it off; staging never does it. The alert email adds how many became purchase requests (counts only).
 A340 THE PRICING ENGINE (173; A327 takes the next free number, 174 or later, when it merges). A standalone pricing tool on the director's dashboard (director-pricing-engine.html, dashboard/js/pe-engine.js). The calculation runs in the browser; FlowAPI only keeps its own two tabs: PETables (the director's reference tables, every save a new version with an effective date) and PERecords (each priced quotation: inputs, table version, result, revision by revision). It reads and writes nothing else — no quotation, pricing request, inventory or order. Director only, all secured: peGetTables, peSaveTables, peSetApprovalCode (the director's and the president's codes, kept only as salted HMACs in Script Properties pe_code_director / pe_code_president, never returned), peSaveRecord ("Ready" only with no blocking flag and, when approval is needed, the right code; the president's covers the director's), peListRecords, peGetRecord.
 A338 WEBSITE REQUESTS (172; 171 stays A327's only if A327 is pasted first, otherwise A327 becomes 173). The bridge from hiescorp.com: the website keeps each quote request and contact message, and websiteCollectTick (a 5-minute time trigger the owner adds in the editor) COLLECTS them from its private feed (WEBSITE_FEED_URL + WEBSITE_FEED_KEY Script Properties; X-Portal-Key header; no redirects) into the new WebRequests tab, deduped by key (a ring of the last 300 in a Script Property plus the sheet), one block write under a short tryLock, acknowledged after the write, then one alert email (counts and a link only, at most every 30 min, WEBSITE_ALERT_EMAIL). Secured, admin / director only: getWebRequests (New + 60 days, health; countOnly reads the Status column), collectWebsiteRequestsNow, convertWebRequest (a pricing request with clientRef web:<ref>, checked first; an existing client is never patched, a new one is a Prospect; HE item numbers kept as the requested code; no inventory add), setWebRequestStatus (Closed / Spam / New), eraseWebRequest (Data Privacy Act). Every visitor string goes through _webCell (no formulas, no markup). Spam loses its personal data after 30 days. WEBSITE_COLLECT_OFF stops collecting; HX_ENV=staging never collects. websiteFeedSelfTest() checks the connection from the editor without logging personal data.
