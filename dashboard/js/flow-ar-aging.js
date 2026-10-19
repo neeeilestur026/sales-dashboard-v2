@@ -1,6 +1,7 @@
 /* flow-ar-aging.js — receivables generated from invoices; record collections to clear them. */
 let arData = [];
 let arInvoices = null;   // A248: the invoice list, or null when it could not be read
+let arRemovedInv = [];   // A342: invoices whose receivable the director removed on purpose
 let arSession = null;
 /* A331 — FlowAPI 169's safeguards. Until it is pasted this stays false and the payment form is exactly
    what it was; once live, the form takes the cash received and the EWT, shows the EWT expected, and
@@ -39,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
  * "paid" status anywhere, so nothing here knows whether they were collected. A person does.
  *
  * The classifier is pure and lives in arReconcile() so tests/flow/ar-reconcile.js can drive it. */
-function arReconcile(arRows, invRows) {
+function arReconcile(arRows, invRows, removedInv) {
   const S = v => String(v == null ? '' : v).trim();
   const N = v => (parseFloat(v) || 0);
   const ars = (arRows || []).filter(r => r && typeof r === 'object');
@@ -67,6 +68,8 @@ function arReconcile(arRows, invRows) {
 
   const claimed = {};
   ars.forEach(a => { if (S(a.invNo)) claimed[S(a.invNo)] = 1; });
+  // A342 — a receivable the director removed on purpose (removeReceivable) answers its invoice for good
+  (removedInv || []).forEach(n => { if (S(n)) claimed[S(n)] = 1; });
   viaSo.forEach(a => { if (a._via && S(a._via.invNo)) claimed[S(a._via.invNo)] = 1; });
   const unaged = invs.filter(v => !claimed[S(v.invNo)]);
 
@@ -115,6 +118,7 @@ async function loadAR() {
       fetchFlow('getInvoices').catch(() => null)
     ]);
     arData = (res && res.data) || [];
+    arRemovedInv = (res && res.removedInvoices) || [];   // A342
     arInvoices = (invs && invs.data) || null;
     render();
   } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
@@ -147,7 +151,7 @@ function arNewestFirst(a, b) {
  * The action is _SECURED: it mints debt, so it needs a real signed-in session and is refused to a
  * direct call. Management and director reach this page as viewers, so they never see the button. */
 async function arBackfillLive() {
-  const r = arReconcile(arData, arInvoices);
+  const r = arReconcile(arData, arInvoices, arRemovedInv);
   if (!r.unagedLive.length) { alert('Nothing to create — every live invoice already has a receivable.'); return; }
   const money = v => flowMoney(flowNum(v), 'PHP');
   const rows = r.unagedLive.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -176,7 +180,7 @@ async function arBackfillLive() {
 
 function arReconcileBanner() {
   if (!arInvoices) return '';                      // invoices could not be read — say nothing
-  const r = arReconcile(arData, arInvoices);
+  const r = arReconcile(arData, arInvoices, arRemovedInv);
   const money = v => flowMoney(flowNum(v), 'PHP');
   const esc = v => flowEsc(v);
   const out = [];
