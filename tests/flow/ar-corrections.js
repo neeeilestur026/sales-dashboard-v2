@@ -1,26 +1,26 @@
-/* A342 — two director corrections on receivables (FlowAPI 175).
+/* A342 — a director correction on receivables, and voiding an imported invoice (FlowAPI 175).
  *
  * Run:  node tests/flow/ar-corrections.js
  *
  * The fixtures are the live rows of 19 Oct 2026 (read-only), dates as Manila days (the harness formats a Date
  * object oddly, which would hide the date rules):
- *   • Therma South, SO 150005851: 2 torches x 175,193.09 + 2 clamps x 26,432.35 = 403,250.88, billed in
- *     TWO invoices of 201,625.44 (one torch + one clamp each). The import put the whole order on invoice
- *     126, and its receivable AR-202608-007 says 403,250.88.
+ *   • Therma South, SO 150005851: 2 torches x 175,193.09 + 2 clamps x 26,432.35 = 403,250.88, delivered
+ *     in two parts, so billed in TWO invoices of 201,625.44 (one torch + one clamp each). The import put
+ *     the whole order on invoice 126 (receivable AR-202608-007, 403,250.88). Neil: void it and re-issue.
  *   • MINCON: AR-202608-009 (invoice 121, 38,607.93 before VAT, unpaid) is to go; DEMO-AR-001
  *     (43,240.88, paid by DEMO-COL-001) stays.
  * Pinned here:
- *   • restateMigratedInvoice sets the invoice, its one line and its receivable, keeps the cost, logs to
- *     Overrides, and refuses: a non-director, a short reason, a wrong expectTotal (so it cannot run twice),
- *     an app invoice, VAT or a deposit, two lines, no / two receivables, more already collected, a journal;
- *   • after it, the second invoice fits inside the order: only the reason for a second invoice of the
- *     same amount is asked, never "above the order";
+ *   • voiding invoice 126 takes its receivable off AR Aging and keeps the row (voided, with the reason),
+ *     and puts NO stock back for an imported invoice (it never took any out); an app invoice still does;
+ *   • renaming the voided record frees the number 126; the first delivery is re-issued as 126 with no
+ *     question, the second asks once for the reason (second invoice, same amount), and the order ends up
+ *     billed exactly 403,250.88;
  *   • removeReceivable removes exactly one row, keeps a full copy in Overrides, and refuses a payment on it
  *     or a wrong expectAmount; the DEMO receivable and payment are untouched;
  *   • the removed invoice is never offered or re-created: backfillMissingAR skips it, getARAging lists it
  *     in removedInvoices, and the AR page and the Month check count it as answered;
  *   • Clear demo order refuses on the live system (it would delete the real Mincon payment);
- *   • dryRun writes nothing; both are secured.
+ *   • dryRun writes nothing; removeReceivable is secured and director only.
  */
 const fs = require('fs');
 const path = require('path');
@@ -32,7 +32,6 @@ const ok = (l, c, e) => { N++; if (c) console.log('  ok   ' + l); else { FAIL++;
 const section = (t) => console.log('\n== ' + t + ' ==');
 const DIR = { actorRole: 'director', actorName: 'Neil Estur' };
 const ACC = { actorRole: 'accounting', actorName: 'Acct One' };
-const REASON = 'SO 150005851 is billed in two invoices of 201,625.44 (one torch and one clamp each).';
 
 function store() {
   return {
@@ -70,60 +69,44 @@ function store() {
 const row = (c, sheet, key, val) => (c.__store[sheet] || []).find(r => String(r[key]) === String(val));
 const snapshot = (c) => JSON.stringify(['Invoices', 'InvoiceItems', 'ARAging', 'Collections', 'Overrides'].map(s => c.__store[s]));
 
-section('restate invoice 126');
+section('void invoice 126 and re-issue it as two deliveries');
 {
   const c = load(undefined, store());
-  const base = { invNo: '126', expectTotal: 403250.88, totalSales: 201625.44, reason: REASON };
-  const before = snapshot(c);
-  let r = call(c, 'restateMigratedInvoice', Object.assign({ dryRun: true }, base, DIR));
-  ok('dryRun: the plan, nothing written', r.success && r.dryRun && r.plan.arNo === 'AR-202608-007' && r.plan.totalSales.to === 201625.44
-    && r.plan.totalCogs.to === 127014.09 && r.plan.orderTotal === 403250.88 && snapshot(c) === before, r);
-  [
-    ['accounting is refused (director only)', Object.assign({}, base, ACC), /Only the director/],
-    ['a short reason is refused', Object.assign({}, base, DIR, { reason: 'fix it' }), /at least 10/],
-    ['a wrong expectTotal is refused', Object.assign({}, base, DIR, { expectTotal: 403250 }), /403250\.88 on file, not 403250\.00/],
-    ['an unknown invoice is refused', Object.assign({}, base, DIR, { invNo: '999' }), /not found/],
-    ['a zero amount is refused', Object.assign({}, base, DIR, { totalSales: 0 }), /more than zero/],
-  ].forEach(([l, prm, re]) => { const x = call(c, 'restateMigratedInvoice', prm); ok(l, !x.success && re.test(x.message), x); });
-  ok('  and none of them wrote anything', snapshot(c) === before);
-  ok('without the app\'s secret it is refused', /through the app/.test(call(c, 'restateMigratedInvoice', Object.assign({ flowSecret: '' }, base, DIR)).message));
+  const invCount = c.__store.Inventory.length;
+  const reason = 'SO 150005851 was delivered in two parts; accounting re-issues one invoice per delivery (Neil, 19 Oct 2026).';
+  let r = call(c, 'voidInvoice', Object.assign({ invNo: '126', reason: reason }, DIR));
+  const inv = row(c, 'Invoices', 'INV No', '126');
+  ok('invoice 126 is voided with the reason, its row kept', r.success && r.arRemoved === 1 && inv['Voided'] === 'true' && /two parts/.test(inv['Void Reason']), r);
+  ok('  its receivable AR-202608-007 is off AR Aging', !row(c, 'ARAging', 'AR No', 'AR-202608-007') && !!row(c, 'ARAging', 'AR No', 'AR-202608-009'));
+  ok('  an imported invoice puts NO stock back (no "Migrated legacy sales" item)', c.__store.Inventory.length === invCount, c.__store.Inventory);
+  ok('  nothing else moved', row(c, 'Invoices', 'INV No', '121')['Voided'] === '' && c.__store.Collections.length === 1);
 
-  r = call(c, 'restateMigratedInvoice', Object.assign({}, base, DIR));
-  const inv = row(c, 'Invoices', 'INV No', '126'), line = row(c, 'InvoiceItems', 'INV No', '126'), ar = row(c, 'ARAging', 'AR No', 'AR-202608-007');
-  ok('the invoice is 201,625.44 and keeps its cost', r.success && inv['Total Sales'] === 201625.44 && inv['Total COGS'] === 127014.09, inv);
-  ok('  its one line too', line['Selling Price'] === 201625.44 && line['Line Sales'] === 201625.44 && line['Line COGS'] === 127014.09 && line['Qty'] === 1, line);
-  ok('  its receivable is 201,625.44, still unpaid, with a note', ar['Amount (PHP)'] === 201625.44 && ar['Collected (PHP)'] === 0 && ar['Status'] === 'Unpaid'
-    && /^Backfilled \(missing AR\) · Restated \d{4}-\d{2}-\d{2} from 403250\.88$/.test(ar['Notes']), ar);
-  const ov = c.__store.Overrides;
-  ok('  one Overrides row: who, what, from, to and why', ov.length === 1 && ov[0]['Rule'] === 'restated-invoice' && ov[0]['Ref No'] === '126' && ov[0]['Expected'] === 403250.88
-    && ov[0]['Entered'] === 201625.44 && ov[0]['User'] === 'Neil Estur' && ov[0]['Role'] === 'director' && /two invoices/.test(ov[0]['Reason']), ov);
-  ok('  nothing else changed', row(c, 'Invoices', 'INV No', '121')['Total Sales'] === 38607.93 && c.__store.ARAging.length === 4 && c.__store.Journal.length === 0);
-  const again = call(c, 'restateMigratedInvoice', Object.assign({}, base, DIR));
-  ok('running it again is refused (the amount on file moved)', !again.success && /201625\.44 on file, not 403250\.88/.test(again.message), again);
+  r = call(c, 'renameInvoice', Object.assign({ invNo: '126', newInvNo: '126-VOID' }, DIR));
+  ok('the voided record is renamed 126-VOID, so the number 126 is free again', r.success && !!row(c, 'Invoices', 'INV No', '126-VOID') && !row(c, 'Invoices', 'INV No', '126'), r);
 
-  // the second invoice now fits inside the order: only "second invoice / same amount" asks
-  const ask = call(c, 'createInvoice', Object.assign({ soNo: '150005851', customer: 'THERMA SOUTH, INC.', invNo: '131', date: '2026-10-19', vatType: 'VAT-12', vatRate: 12,
-    createdBy: 'Acct One', confirmShort: true, items: JSON.stringify([{ itemNo: 'N/A', itemName: '1-TORCH; HAND; TOMAHAWK 625', qty: 1, price: 175193.09 },
-      { itemNo: 'N/A', itemName: 'CLAMP; WORK AND CABLE; FOR TOMAHAWK 625', qty: 1, price: 26432.35 }]) }, ACC));
-  const rules = (ask.problems || []).map(x => x.rule).sort().join(',');
-  ok('the second invoice asks once, for a second invoice of the same amount, never "above the order"', !ask.success && rules === 'duplicateInvoice,reinvoice', ask);
+  const items = JSON.stringify([{ itemNo: 'N/A', itemName: '1-TORCH; HAND; TOMAHAWK 625', qty: 1, price: 175193.09 },
+    { itemNo: 'N/A', itemName: 'CLAMP; WORK AND CABLE; FOR TOMAHAWK 625', qty: 1, price: 26432.35 }]);
+  const issue = (invNo, extra) => call(c, 'createInvoice', Object.assign({ soNo: '150005851', customer: 'THERMA SOUTH, INC.', invNo: invNo, date: '2026-10-19',
+    vatType: 'VAT-12', vatRate: 12, createdBy: 'Acct One', confirmShort: true, items: items }, ACC, extra || {}));
+  r = issue('126');
+  ok('the first delivery is re-issued as invoice 126 with no question asked', r.success && r.invNo === '126' && r.totalSales === 201625.44, r);
+  ok('  with its own receivable', !!(c.__store.ARAging.find(a => String(a['INV No']) === '126')));
+  r = issue('131');
+  ok('the second delivery asks once: a second invoice on one order, the same amount (never "above the order")',
+    !r.success && (r.problems || []).map(x => x.rule).sort().join() === 'duplicateInvoice,reinvoice', r);
+  r = issue('131', { overrideReason: 'Second delivery of SO 150005851.' });
+  ok('  and with the reason it is issued: the order is billed exactly, 403,250.88', r.success && c.__store.Invoices.filter(v => String(v['SO No']) === '150005851' && v['Voided'] !== 'true')
+    .reduce((t, v) => t + v['Total Sales'], 0) === 403250.88, r);
 }
 {
-  const refuse = (mut, re, l) => {
-    const s = store(); mut(s);
-    const c = load(undefined, s);
-    const x = call(c, 'restateMigratedInvoice', Object.assign({ invNo: '126', expectTotal: 403250.88, totalSales: 201625.44, reason: REASON }, DIR));
-    ok(l, !x.success && re.test(x.message) && c.__store.Overrides.length === 0, x);
-  };
-  refuse(s => { s.Invoices[0]['Created By'] = 'Acct One'; }, /brought in from the old records/, 'an app invoice is refused (void and re-issue it)');
-  refuse(s => { s.Invoices[0]['VAT'] = 48390.11; }, /VAT or a deposit/, 'an invoice with VAT is refused');
-  refuse(s => { s.Invoices[0]['Total Deposit'] = 5000; }, /VAT or a deposit/, '  or a deposit');
-  refuse(s => { s.InvoiceItems.push(Object.assign({}, s.InvoiceItems[0])); }, /has 2 lines/, 'two lines are refused');
-  refuse(s => { s.ARAging.splice(1, 1); }, /has 0 receivables/, 'no receivable is refused');
-  refuse(s => { s.ARAging.push(Object.assign({}, s.ARAging[1], { 'AR No': 'AR-X' })); }, /has 2 receivables/, 'two receivables are refused');
-  refuse(s => { s.ARAging[1]['Amount (PHP)'] = 451640.99; }, /not the invoice's 403250\.88/, 'a receivable on another basis is refused');
-  refuse(s => { s.Collections.push({ 'Collection No': 'COL-1', 'AR No': 'AR-202608-007', 'Amount (PHP)': 250000, 'Voided': '' }); }, /250000\.00 collected/, 'more already collected than the new amount is refused');
-  refuse(s => { s.Journal.push({ 'Source': 'INV', 'Source No': '126', 'Debit': 1 }); }, /journal entries/, 'an invoice with journal entries is refused');
+  // voiding an invoice the app issued still puts its stock back (A325 unchanged)
+  const s = store();
+  s.Inventory = [{ 'Item No': 'HE-1', 'Description': 'Pump', 'Available Balance': 3, 'Purchase Price/Unit': 100, 'Shipping Cost/Unit': 0, 'Landed Cost/Unit': 100, 'Total Landed Cost': 300, 'Currency': 'PHP', 'Type': 'Stock', 'Item ID': 'ITM-1' }];
+  s.Invoices.push({ 'INV No': 'INV-202610-001', 'SO No': '150005851', 'Customer': 'THERMA SOUTH, INC.', 'Total Sales': 100, 'Total COGS': 100, 'Created By': 'Acct One', 'Voided': '', 'Total Deposit': 0, 'VAT Rate': 0, 'VAT': 0 });
+  s.InvoiceItems.push({ 'INV No': 'INV-202610-001', 'Item No': 'HE-1', 'Item Name': 'Pump', 'Qty': 1, 'Selling Price': 100, 'Line Sales': 100, 'Landed Cost/Unit': 100, 'Line COGS': 100, 'Item ID': 'ITM-1' });
+  const c = load(undefined, s);
+  const r = call(c, 'voidInvoice', Object.assign({ invNo: 'INV-202610-001', reason: 'Issued by mistake' }, DIR));
+  ok('voiding an app invoice still puts its stock back', r.success && row(c, 'Inventory', 'Item No', 'HE-1')['Available Balance'] === 4, r);
 }
 
 section('remove AR-202608-009, keep the DEMO receivable');
