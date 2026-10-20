@@ -21,11 +21,11 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 
 const PAGES = {
-  'director-expenses.html': { body: 'dh dh-expenses', links: 'styles.css,director.css,director-pages.css,ledger.css', scripts: 'theme.js,api.js,auth.js,ledger-nav.js,director-expenses.js', js: 'director-expenses.js',
+  'director-expenses.html': { body: 'dh dh-expenses', links: 'styles.css,director.css,director-pages.css,ledger.css,apple.css', scripts: 'theme.js,api.js,auth.js,ledger-nav.js,director-expenses.js', js: 'director-expenses.js',
     tags: { dd: ['kpiCount', 'kpiAvg', 'kpiTopCat'], div: ['kpiTotal', 'dexCount'], small: ['kpiTopCatAmt'], tbody: ['topCatBody', 'typeBreakdownBody', 'dexBody'], input: ['dexSearch', 'dexMonth'], select: ['dexYear', 'dexCategory'], table: ['dexTable'], button: ['dexClear', 'dexRefresh', 'themeToggle'], aside: ['rail'] } },
-  'director-sales-orders.html': { body: 'dh dh-so', links: 'styles.css,director.css,director-pages.css,ledger.css', scripts: 'theme.js,api.js,auth.js,ledger-nav.js,director-sales-orders.js', js: 'director-sales-orders.js',
+  'director-sales-orders.html': { body: 'dh dh-so', links: 'styles.css,director.css,director-pages.css,ledger.css,apple.css', scripts: 'theme.js,api.js,auth.js,ledger-nav.js,director-sales-orders.js', js: 'director-sales-orders.js',
     tags: { dd: ['kpiTotal', 'kpiPending', 'kpiDelivered'], div: ['kpiAmount', 'dsoCount'], tbody: ['topBuyersBody', 'leastBuyersBody', 'dsoBody'], input: ['dsoSearch', 'dsoMonth'], select: ['dsoYear'], table: ['dsoTable'], button: ['tabAll', 'tabPending', 'tabDelivered', 'dsoClear', 'dsoRefresh', 'themeToggle'], h3: ['leastTitle'], p: ['leastNote'], aside: ['rail'] } },
-  'director-emails.html': { body: 'dh dh-emails', links: 'styles.css,flow.css,director.css,director-pages.css,ledger.css', scripts: 'theme.js,api.js,auth.js,ledger-nav.js,director-emails.js', js: 'director-emails.js',
+  'director-emails.html': { body: 'dh dh-emails', links: 'styles.css,flow.css,director.css,director-pages.css,ledger.css,apple.css', scripts: 'theme.js,api.js,auth.js,ledger-nav.js,director-emails.js', js: 'director-emails.js',
     tags: { span: ['whoTag', 'cntInbox', 'cntSent', 'cntSpam'], button: ['refreshBtn', 'themeToggle'], div: ['setupBox', 'feedBox', 'tabs', 'catFilter', 'listBox', 'metaLine'], input: ['search'], select: ['daysSel'], aside: ['rail'] } },
 };
 

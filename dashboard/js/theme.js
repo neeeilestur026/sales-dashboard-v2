@@ -39,7 +39,11 @@
      Both are cached (hx_lg_mode, hx_lg_roles; the key was hx_lg_sw until the default became on, so an
      'off' cached under the old default is ignored) and refreshed at most every 10 minutes. ?skin=ledger
      previews on localhost; ?skin=off|reset and ?look=new|classic and ?motion=on|off work anywhere.
-     Off = nothing set at all. On = auth.js draws the Ledger bar and rail, js/ledger.js loads. */
+     Off = nothing set at all. On = auth.js draws the Ledger bar and rail, js/ledger.js loads.
+     A344 — the APPLE look rides on the same skin: html[data-look="apple"] switches css/apple.css on, auth.js draws
+     the Apple sidebar instead of the rail, and js/apple.js loads. FlowSettings portalLook 'apple' gives it to
+     everyone who has the skin (cached as hx_lg_look; no row = ledger while Neil previews); ?look=apple previews it
+     for one person (hx_lg_me), and ?look=new goes back to the default. */
   var LG_ROLES = ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'];
   function get(k, ok) { try { var v = localStorage.getItem(k); return ok.indexOf(v) >= 0 ? v : null; } catch (e) { return null; } }
   function put(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
@@ -57,14 +61,17 @@
   try {
     local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var q = new URLSearchParams(location.search), look = q.get('look'), sk = q.get('skin'), mo = q.get('motion');
-    if (look === 'new' || look === 'classic') put('hx_lg_me', look);
+    if (look === 'new' || look === 'classic' || look === 'apple') put('hx_lg_me', look);
     if (mo === 'on' || mo === 'off') put('hx_lg_motion', mo);
     if (sk === 'off' || (sk === 'ledger' && local)) put('hx_lg_pv', sk); else if (sk === 'reset') put('hx_lg_pv', null);
   } catch (e) {}
+  var me = null, appleLook = false;
   if (ok()) {
-    var pv = get('hx_lg_pv', ['ledger', 'off']), me = get('hx_lg_me', ['new', 'classic']);
-    skin = pv === 'off' ? false : (pv === 'ledger' && local) || (allowed() && (sw() === 'on' ? me !== 'classic' : sw() === 'optin' && me === 'new'));
+    var pv = get('hx_lg_pv', ['ledger', 'off']);
+    me = get('hx_lg_me', ['new', 'classic', 'apple']);
+    skin = pv === 'off' ? false : (pv === 'ledger' && local) || (allowed() && (sw() === 'on' ? me !== 'classic' : sw() === 'optin' && (me === 'new' || me === 'apple')));
   }
+  function houseLook() { return get('hx_lg_look', ['ledger', 'apple']) || 'ledger'; }   // A344 — no row = ledger during the preview
   if (skin) {
     still = reduced || get('hx_lg_motion', ['off']) === 'off';
     window.hxSkinOn = true;
@@ -72,9 +79,12 @@
       var h = document.documentElement, hd = document.head;
       h.setAttribute('data-skin', 'ledger');
       h.setAttribute('data-page', (location.pathname.split('/').pop() || 'index').replace(/\.html$/, ''));
+      appleLook = me === 'apple' || houseLook() === 'apple';
+      if (appleLook) h.setAttribute('data-look', 'apple');
       if (still) h.setAttribute('data-motion', 'off');
       else { var vt = document.createElement('style'); vt.textContent = '@view-transition{navigation:auto}'; hd.appendChild(vt); }
       var js = document.createElement('script'); js.src = 'js/ledger.js'; hd.appendChild(js);
+      if (appleLook) { var aj = document.createElement('script'); aj.src = 'js/apple.js'; hd.appendChild(aj); }
     } catch (e) {}
   }
   /* the way in from the classic navbar (only while the director offers it), and the way back out */
@@ -84,7 +94,8 @@
   };
   window.hxSkinLookItems = function () {
     if (!skin) return '';
-    return '<a href="?look=classic">Classic look</a>' + (get('hx_lg_motion', ['off']) === 'off' ? '<a href="?motion=on">Motion on</a>' : '<a href="?motion=off">Motion off</a>');
+    var leave = appleLook && me === 'apple' && houseLook() !== 'apple' ? '<a href="?look=new">Leave the Apple preview</a>' : '';
+    return leave + '<a href="?look=classic">Classic look</a>' + (get('hx_lg_motion', ['off']) === 'off' ? '<a href="?motion=on">Motion on</a>' : '<a href="?motion=off">Motion off</a>');
   };
   /* refresh the cached switch at most every 10 minutes; it applies on the next page load */
   if (typeof document.addEventListener === 'function') document.addEventListener('DOMContentLoaded', function () {
@@ -95,6 +106,7 @@
         var v = String(r.data.portalSkin || '').toLowerCase(), rl = String(r.data.portalSkinRoles || '').toLowerCase().replace(/[^a-z,]/g, '');
         put('hx_lg_mode', v === 'off' || v === 'optin' ? v : 'on');   // only an explicit 'off' turns it off
         put('hx_lg_roles', rl.split(',').filter(function (x) { return LG_ROLES.indexOf(x) >= 0; }).join(',') || null);
+        put('hx_lg_look', String(r.data.portalLook || '').toLowerCase() === 'apple' ? 'apple' : null);   // A344
         put('hx_lg_mode_at', String(Date.now()));
       }).catch(function () {});
     } catch (e) {}

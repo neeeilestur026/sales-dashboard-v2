@@ -32,7 +32,7 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
-eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,daily-reports.css,payslip-card.css,marketing-home.css,ledger.css');
+eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,flow.css,daily-reports.css,payslip-card.css,marketing-home.css,ledger.css,apple.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="mk"> — the scope every rule hangs off', /<body class="mk">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="mk">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));

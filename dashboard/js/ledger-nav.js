@@ -33,6 +33,7 @@ const LEDGER_ICONS = {
   cal: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  sidebar: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/>',   // A344 — the Apple look's drawer button
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
 };
 
@@ -142,6 +143,8 @@ function ledgerPages(role) {
    so auth.js falls back to the classic navbar. */
 function ledgerNavbar(nav, session, initials) {
   if (!LEDGER_NAV[session.role]) return false;
+  const _de = document.documentElement;
+  if (_de && typeof _de.getAttribute === 'function' && _de.getAttribute('data-look') === 'apple') return appleNavbar(nav, session, initials);   // A344
   const role = session.role, secs = LEDGER_NAV[role], here = (location.pathname.split('/').pop() || '').toLowerCase();
   const pages = ledgerPages(role), cur = pages.find(p => p.href === here) || null;
   window.hxSkinPages = pages;
@@ -232,6 +235,113 @@ function _lgWire(nav, secs, here, role) {
     if (!menu.hidden && !menu.contains(e.target) && e.target !== meBtn) { menu.hidden = true; meBtn.setAttribute('aria-expanded', 'false'); }
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !fly.hidden) close(true); });
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   A344 — the APPLE look's sidebar (css/apple.css), drawn from the same LEDGER_NAV / LEDGER_ME, so a
+   role reaches exactly the pages it reaches in the Ledger rail and the classic navbar
+   (tests/flow/apple-contract.js checks that per role).
+   A translucent source list: the logo, then each section as a disclosure group. The current page's
+   section is open; what the person opens or closes is remembered (hx_ap_open_<role>). The sidebar is
+   a sibling of the navbar in <body>, never inside it: the toolbar's backdrop-filter would make it the
+   containing block of anything position:fixed within it. On narrow screens it is a drawer opened from
+   the toolbar's sidebar button, closed by the scrim, Escape or a link.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+const _AP_CHEV = '<svg class="a-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function _apIcon(name) { return _lgIcon(name).replace('<svg ', '<svg class="a-i" '); }
+
+function appleNavbar(nav, session, initials) {
+  const role = session.role, secs = LEDGER_NAV[role], here = (location.pathname.split('/').pop() || '').toLowerCase();
+  const pages = ledgerPages(role), cur = pages.find(p => p.href === here) || null;
+  window.hxSkinPages = pages;
+  const home = (secs[0] && typeof secs[0][2] === 'string') ? secs[0][2] : 'index.html';
+  const openKey = 'hx_ap_open_' + role;
+  let saved = null;
+  try { const v = JSON.parse(localStorage.getItem(openKey) || 'null'); saved = Array.isArray(v) ? v : null; } catch (e) { saved = null; }
+  const side = secs.map(([label, icon, t], i) => {
+    if (typeof t === 'string') {
+      return `<a class="a-item" href="${t}"${t === here ? ' aria-current="page"' : ''}>${_apIcon(icon)}<span>${_lgEsc(label)}</span></a>`;
+    }
+    const inHere = t.some(([h]) => h === here);
+    const open = inHere || (saved ? saved.indexOf(i) >= 0 : false);
+    const items = t.map(([h, l]) => `<a class="a-item a-sub" href="${h}"${h === here ? ' aria-current="page"' : ''}>${_lgLabel(h, l, role)}</a>`).join('');
+    return `<div class="a-grp"><button type="button" class="a-grp-h${inHere ? ' a-here' : ''}" data-a-grp="${i}" aria-expanded="${open}" aria-controls="aG${i}">${_apIcon(icon)}<span>${_lgEsc(label)}</span>${_AP_CHEV}</button>` +
+      `<div class="a-grp-b" id="aG${i}"${open ? '' : ' hidden'}>${items}</div></div>`;
+  }).join('');
+  const crumbs = !cur ? '' : cur.group === cur.label || cur.href === home ? `<b>${_lgEsc(cur.label)}</b>` : `${_lgEsc(cur.group)}<span aria-hidden="true">›</span><b>${_lgEsc(cur.label)}</b>`;
+  const me = (LEDGER_ME[role] || []).map(([h, l]) => `<a role="menuitem" href="${h}"${h === here ? ' aria-current="page"' : ''}>${_lgEsc(l)}</a>`).join('');
+  const looks = typeof hxSkinLookItems === 'function' ? hxSkinLookItems() : '';
+
+  nav.innerHTML = `
+    <button type="button" class="a-menu" aria-controls="aSide" aria-expanded="false" aria-label="Show the pages">${_lgIcon('sidebar')}</button>
+    <nav class="l-crumbs" aria-label="You are here">${crumbs}</nav>
+    <button type="button" class="l-search" data-l-search aria-label="Search pages">${_lgIcon('search')}<span>Search pages</span><kbd>Ctrl K</kbd></button>
+    <div class="navbar-user l-tools">
+      <button type="button" class="theme-toggle nav-theme" id="navThemeToggle" aria-pressed="false" aria-label="Dark theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Dark</span></button>
+      <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()" title="Notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="notif-badge" id="notifBadge" style="display:none;"></span>
+      </div>
+      <div class="notif-dropdown" id="notifDropdown" style="display:none;">
+        <div class="notif-head">Notifications</div>
+        <div class="notif-list" id="notifList"><div class="notif-empty">Loading...</div></div>
+      </div>
+      <div class="l-me">
+        <button type="button" class="l-me-btn" aria-haspopup="menu" aria-expanded="false"><span class="l-av">${_lgEsc(initials)}</span><span class="l-who">${_lgEsc(session.name)}<small>${LEDGER_ROLE_NAMES[role] || ''}</small></span></button>
+        <div class="l-menu" role="menu" hidden>${me}${looks}<button type="button" role="menuitem" class="l-out" onclick="logout()">${_lgIcon('out')}Log out</button></div>
+      </div>
+    </div>`;
+  ['aSide', 'aScrim'].forEach(id => { const old = document.getElementById(id); if (old && old.parentNode) old.parentNode.removeChild(old); });
+  const sideEl = document.createElement('nav');
+  sideEl.className = 'a-side'; sideEl.id = 'aSide'; sideEl.setAttribute('aria-label', 'Pages');
+  sideEl.innerHTML = `<a class="a-brand" href="${home}"><img src="images/logo-nav-2x.png" alt="Hi-Escorp" width="224" height="56"></a>${side}`;
+  const scrim = document.createElement('div');
+  scrim.className = 'a-scrim'; scrim.id = 'aScrim'; scrim.setAttribute('aria-hidden', 'true');
+  if (document.body && typeof document.body.insertBefore === 'function') {
+    document.body.insertBefore(scrim, document.body.firstChild);
+    document.body.insertBefore(sideEl, document.body.firstChild);
+  }
+  _apWire(nav, sideEl, scrim, openKey);
+  return true;
+}
+
+function _apWire(nav, side, scrim, openKey) {
+  const menu = nav.querySelector('.l-menu'), meBtn = nav.querySelector('.l-me-btn'), drawerBtn = nav.querySelector('.a-menu');
+  const remember = () => {
+    try {
+      const open = Array.from(side.querySelectorAll('[data-a-grp][aria-expanded="true"]')).map(b => +b.dataset.aGrp);
+      localStorage.setItem(openKey, JSON.stringify(open));
+    } catch (e) { /* a convenience only */ }
+  };
+  side.querySelectorAll('[data-a-grp]').forEach(btn => btn.addEventListener('click', () => {
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', String(open));
+    const body = side.querySelector('#' + btn.getAttribute('aria-controls'));
+    if (body) body.hidden = !open;
+    remember();
+  }));
+  const setDrawer = (open, back) => {
+    side.classList.toggle('open', open);
+    scrim.classList.toggle('on', open);
+    if (drawerBtn) drawerBtn.setAttribute('aria-expanded', String(open));
+    if (open) { const first = side.querySelector('[aria-current="page"]') || side.querySelector('a, button'); if (first) first.focus({ preventScroll: true }); }
+    else if (back && drawerBtn) drawerBtn.focus();
+  };
+  if (drawerBtn) drawerBtn.addEventListener('click', (e) => { e.stopPropagation(); setDrawer(!side.classList.contains('open'), false); });
+  scrim.addEventListener('click', () => setDrawer(false, true));
+  side.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('a[href]')) setDrawer(false, false); });
+  meBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const show = menu.hidden;
+    menu.hidden = !show;
+    meBtn.setAttribute('aria-expanded', show ? 'true' : 'false');
+  });
+  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { menu.hidden = true; meBtn.setAttribute('aria-expanded', 'false'); meBtn.focus(); } });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && e.target !== meBtn) { menu.hidden = true; meBtn.setAttribute('aria-expanded', 'false'); }
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && side.classList.contains('open')) setDrawer(false, true); });
+  window.hxAppleDrawer = setDrawer;   // js/apple.js drives the drawer with a finger
 }
 
 /* "Needs you" rows in the Ledger look (auth.js flowActionsStrip calls this only while it is on):

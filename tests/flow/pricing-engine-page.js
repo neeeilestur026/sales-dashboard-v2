@@ -23,7 +23,7 @@ const AUTH = read('js/auth.js'), NAV = read('js/ledger-nav.js');
 console.log('\n1 · the page');
 const scripts = (h) => (h.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(',');
 eq('scripts in order', scripts(H), 'theme.js,api.js,auth.js,ledger-nav.js,flow-api.js,pe-engine.js,director-pricing-engine.js');
-ok('its own stylesheet, before ledger.css (last)', /css\/pricing-engine\.css">\s*<link rel="stylesheet" href="css\/ledger\.css">\s*<\/head>/.test(H));
+ok('its own stylesheet, before ledger.css and apple.css (last)', /css\/pricing-engine\.css">\s*<link rel="stylesheet" href="css\/ledger\.css">\s*<link rel="stylesheet" href="css\/apple\.css">\s*<\/head>/.test(H));
 ok('one one-line inline script, no <style>, no style="", no onclick', (H.match(/<script>/g) || []).length === 1 && !/<style[\s>]/.test(H) && !/style="/.test(H) && !/onclick=/.test(H + JS));
 ok('director only: requireDirector, and its own navbar entry', /peSession = requireDirector\(\);/.test(JS) && /renderNavbar\('director-pricing-engine'\)/.test(JS));
 
