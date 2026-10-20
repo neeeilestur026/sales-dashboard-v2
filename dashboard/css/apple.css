@@ -1,0 +1,292 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+   apple.css — A344 · the Apple look for the whole portal.
+
+   Built from Emil Kowalski's apple-design skill and Apple's Human Interface Guidelines: the system
+   font with size-specific tracking, one accent (system blue), grouped panels, a translucent sidebar
+   and toolbar (blur 20px, saturate 180%), springs for anything that moves, press feedback at .97.
+   It rides on the Ledger skin's structure: inert unless js/theme.js sets html[data-look="apple"] on
+   top of html[data-skin="ledger"], so with the switch off every page looks exactly as before.
+
+   Rules every change keeps (tests/flow/apple-contract.js checks them):
+   - every selector starts html[data-skin="ledger"][data-look="apple"], and everything sits in @media
+     screen, so print and the PDFs keep the classic look;
+   - colours are written once, as the --l-p-* primitives ledger.css already re-points the classic
+     --hx-* tokens from, so every page and every inline var(--hx-*) follows without changing;
+   - materials only on chrome (sidebar, toolbar, menus); solid under prefers-reduced-transparency,
+     bordered under prefers-contrast: more; motion is transform/opacity on springs and stops under
+     reduced motion or "Motion off" (data-motion="off", ledger.css's rule).
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+@media screen {
+
+/* ─── 1 · Tokens ────────────────────────────────────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] {
+  --l-p-page:#F5F5F7; --l-p-panel:#FFFFFF; --l-p-inset:#F2F2F7; --l-p-line:#D9D9DE; --l-p-line-2:#EBEBF0;
+  --l-p-ink:#1D1D1F; --l-p-ink-2:#515154; --l-p-ink-3:#6E6E73;
+  --l-p-accent:#0066CC; --l-p-accent-ink:#FFFFFF; --l-p-accent-hover:#0055B3; --l-p-accent-soft:#E8F1FC; --l-p-accent-line:#B5D3F5; --l-p-accent-2:#5AC8FA;
+  --l-p-solid:#0071E3; --l-p-solid-hover:#0062C4;
+  --l-p-late:#D70015; --l-p-late-soft:#FFEFEE; --l-p-late-line:#FFC6C2;
+  --l-p-soon:#C93400; --l-p-soon-soft:#FFF3E3; --l-p-soon-line:#FFD4A3;
+  --l-p-ok:#1E7A35; --l-p-ok-soft:#EAF7EE; --l-p-ok-line:#B3E2C0;
+  --l-p-field:#FFFFFF; --l-p-on-solid:#FFFFFF; --l-p-on-solid-2:#D4E6FB; --l-p-late-on-solid:#FFB4AE; --l-p-ok-on-solid:#A4EBB7;
+  --l-p-scrim:rgba(0,0,0,.32); --l-p-ring:rgba(0,113,227,.28); --l-p-grid:rgba(0,0,0,.06);
+  --l-p-shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
+  --l-p-shadow-pop:0 18px 50px rgba(30,30,40,.16), 0 2px 8px rgba(30,30,40,.06);
+
+  --l-r-panel:12px; --l-r-ctl:10px;
+  --l-sans:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI Variable Text','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --l-display:-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,'Segoe UI Variable Display','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --l-mono:var(--l-sans);                 /* money and figures: the system font with tabular figures, as Apple sets them */
+  --l-code:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --l-ease:cubic-bezier(.2,.8,.2,1); --l-bar:52px; --l-rail:248px;
+  /* the one highlighted figure tile (AR "Outstanding", quotations "With the client"): the system blue, not the brand navy */
+  --hx-slab:var(--l-p-solid); --hx-slab-2:var(--l-p-solid-hover); --hx-slab-ink:var(--l-p-on-solid); --hx-slab-ink-2:var(--l-p-on-solid-2); --hx-slab-line:var(--a-slab-line);
+  --a-slab-line:rgba(255,255,255,.22);
+  --hx-r-sm:10px; --hx-r-md:12px; --hx-r-lg:14px; --hx-display:var(--l-display);
+
+  /* springs from the skill: damping 1.0 / response 0.4 (the house default), and 0.8 / 0.3 after a flick */
+  --a-spring:linear(0, .063, .195, .344, .483, .602, .699, .776, .835, .879, .913, .937, .955, .968, .977, .984, .989, .992, .994, .996, .997, .998, .999, .999, 1);
+  --a-spring-t:620ms;
+  --a-bounce:linear(0, .075, .237, .421, .59, .73, .836, .911, .96, .99, 1.006, 1.013, 1.015, 1.014, 1.012, 1.009, 1.006, 1.004, 1.002, 1.001, 1.001, 1);
+  --a-bounce-t:500ms;
+  --a-fill:rgba(120,120,128,.12); --a-fill-2:rgba(120,120,128,.07); --a-fill-3:rgba(120,120,128,.18);
+  --a-sep:rgba(60,60,67,.16); --a-sep-2:rgba(60,60,67,.09); --a-field-line:#D2D2D7;
+  --a-mat-chrome:rgba(255,255,255,.6); --a-mat-side:rgba(242,242,247,.74); --a-mat-pop:rgba(255,255,255,.8); --a-mat-edge:rgba(255,255,255,.4);
+  --a-blur:blur(20px) saturate(180%);
+  --a-glyph-blue:#0A84FF; --a-glyph-red:#FF3B30; --a-glyph-orange:#FF9500; --a-glyph-green:#34C759; --a-glyph-gray:#8E8E93; --a-on-glyph:#FFFFFF;
+  --a-logo-tile:#F5F5F7; --a-thumb-shadow:0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04);
+}
+html[data-skin="ledger"][data-look="apple"][data-theme="dark"] {
+  --l-p-page:#0E0E10; --l-p-panel:#1C1C1E; --l-p-inset:#2C2C2E; --l-p-line:#3A3A3C; --l-p-line-2:#2C2C2E;
+  --l-p-ink:#F5F5F7; --l-p-ink-2:#AEAEB2; --l-p-ink-3:#98989D;
+  --l-p-accent:#2997FF; --l-p-accent-ink:#00172E; --l-p-accent-hover:#5AB0FF; --l-p-accent-soft:#11263D; --l-p-accent-line:#24508A; --l-p-accent-2:#64D2FF;
+  --l-p-solid:#0071E3; --l-p-solid-hover:#0068D1;
+  --l-p-late:#FF6961; --l-p-late-soft:#3A1D1C; --l-p-late-line:#6E2E2A;
+  --l-p-soon:#FFB340; --l-p-soon-soft:#3A2A10; --l-p-soon-line:#6E5320;
+  --l-p-ok:#30D158; --l-p-ok-soft:#10301F; --l-p-ok-line:#215C3D;
+  --l-p-field:#1C1C1E; --l-p-on-solid:#FFFFFF; --l-p-on-solid-2:#C9E1FB; --l-p-late-on-solid:#FFB4AE; --l-p-ok-on-solid:#A4EBB7;
+  --l-p-scrim:rgba(0,0,0,.55); --l-p-ring:rgba(41,151,255,.32); --l-p-grid:rgba(255,255,255,.07);
+  --l-p-shadow:0 0 0 1px rgba(255,255,255,.04);
+  --l-p-shadow-pop:0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.06);
+  --a-fill:rgba(120,120,128,.24); --a-fill-2:rgba(120,120,128,.14); --a-fill-3:rgba(120,120,128,.32);
+  --a-sep:rgba(84,84,88,.5); --a-sep-2:rgba(84,84,88,.3); --a-field-line:#3A3A3C;
+  --a-mat-chrome:rgba(28,28,30,.62); --a-mat-side:rgba(22,22,24,.78); --a-mat-pop:rgba(40,40,42,.82); --a-mat-edge:rgba(255,255,255,.07);
+}
+
+/* ─── 2 · Base: the system font, figures that line up ──────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] body { font-family: var(--l-sans); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; font-optical-sizing: auto; }
+html[data-skin="ledger"][data-look="apple"] .mono, html[data-skin="ledger"][data-look="apple"] .l-mono, html[data-skin="ledger"][data-look="apple"] code, html[data-skin="ledger"][data-look="apple"] kbd { font-family: var(--l-code); }
+html[data-skin="ledger"][data-look="apple"] :focus-visible { outline: 3px solid var(--l-p-ring); outline-offset: 2px; border-radius: 6px; }
+
+/* ─── 3 · The toolbar: translucent, beside the sidebar ─────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] .navbar {
+  left: var(--l-rail); height: var(--l-bar); padding: 0 16px 0 20px; gap: 12px;
+  background: var(--a-mat-chrome); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
+  border-top: 1px solid var(--a-mat-edge); border-bottom: 1px solid var(--a-sep-2); box-shadow: none;
+}
+html[data-skin="ledger"][data-look="apple"] .a-menu { display: none; width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--l-ink); cursor: pointer; place-items: center; }
+html[data-skin="ledger"][data-look="apple"] .a-menu svg { width: 20px; height: 20px; }
+html[data-skin="ledger"][data-look="apple"] .a-menu:hover { background: var(--a-fill-2); }
+html[data-skin="ledger"][data-look="apple"] .l-crumbs { font: 500 13.5px/1.2 var(--l-sans); color: var(--l-ink-3); }
+html[data-skin="ledger"][data-look="apple"] .l-crumbs b { font: 600 15px/1.2 var(--l-sans); letter-spacing: -.01em; color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .l-search { width: 260px; height: 32px; border: 0; border-radius: 9px; background: var(--a-fill); color: var(--l-ink-3); font: 400 13.5px/1 var(--l-sans); padding: 0 8px 0 10px; }
+html[data-skin="ledger"][data-look="apple"] .l-search:hover { background: var(--a-fill-3); color: var(--l-ink-2); }
+html[data-skin="ledger"][data-look="apple"] .l-search svg { width: 15px; height: 15px; }
+html[data-skin="ledger"][data-look="apple"] .l-search kbd { border: 0; background: transparent; color: var(--l-ink-3); font: 500 11.5px/1 var(--l-sans); padding: 0; }
+html[data-skin="ledger"][data-look="apple"] .theme-toggle.nav-theme, html[data-skin="ledger"][data-look="apple"] .notif-bell { width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: var(--l-ink-2); }
+html[data-skin="ledger"][data-look="apple"] .theme-toggle.nav-theme:hover, html[data-skin="ledger"][data-look="apple"] .notif-bell:hover { background: var(--a-fill-2); color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .l-me-btn { padding: 3px 8px 3px 3px; border-radius: 10px; font: 500 13px/1.2 var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .l-me-btn:hover, html[data-skin="ledger"][data-look="apple"] .l-me-btn[aria-expanded="true"] { background: var(--a-fill-2); }
+html[data-skin="ledger"][data-look="apple"] .l-av { width: 30px; height: 30px; border-radius: 9px; font: 600 12px/1 var(--l-sans); }
+/* menus and the notifications: a light material, highlighted rows in the accent (macOS) */
+html[data-skin="ledger"][data-look="apple"] .l-menu, html[data-skin="ledger"][data-look="apple"] .notif-dropdown {
+  background: var(--a-mat-pop); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid var(--a-sep-2); border-radius: 12px; box-shadow: var(--l-shadow-pop);
+}
+html[data-skin="ledger"][data-look="apple"] .notif-dropdown { top: calc(var(--l-bar) - 4px); }
+html[data-skin="ledger"][data-look="apple"] .l-menu a, html[data-skin="ledger"][data-look="apple"] .l-menu button { border-radius: 7px; padding: 7px 10px; font: 400 13.5px/1.3 var(--l-sans); color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .l-menu a:hover, html[data-skin="ledger"][data-look="apple"] .l-menu button:hover, html[data-skin="ledger"][data-look="apple"] .l-menu a:focus-visible, html[data-skin="ledger"][data-look="apple"] .l-menu button:focus-visible { background: var(--l-p-solid); color: var(--l-p-on-solid); outline: none; }
+html[data-skin="ledger"][data-look="apple"] .l-menu a[aria-current="page"] { background: var(--a-fill); color: var(--l-ink); }
+
+/* ─── 4 · The sidebar: a translucent source list, sections that open and close ─────────── */
+html[data-skin="ledger"][data-look="apple"] .a-side {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 1010; width: var(--l-rail); overflow-y: auto; overscroll-behavior: contain;
+  padding: 10px 10px 28px; display: flex; flex-direction: column; gap: 1px;
+  background: var(--a-mat-side); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
+  border-right: 1px solid var(--a-sep-2); scrollbar-width: thin;
+}
+html[data-skin="ledger"][data-look="apple"] .a-brand { display: flex; align-items: center; height: 42px; padding: 0 8px; margin-bottom: 8px; flex-shrink: 0; }
+html[data-skin="ledger"][data-look="apple"] .a-brand img { height: 30px; width: auto; }
+html[data-skin="ledger"][data-look="apple"][data-theme="dark"] .a-brand img { height: 32px; padding: 3px 7px; border-radius: 8px; background: var(--a-logo-tile); }
+html[data-skin="ledger"][data-look="apple"] .a-item, html[data-skin="ledger"][data-look="apple"] .a-grp-h {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 6px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--l-ink); font: 500 13.5px/1.25 var(--l-sans); letter-spacing: .003em; text-align: left; text-decoration: none; cursor: pointer;
+  transition: background-color 150ms ease-out, transform 100ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"] .a-item svg, html[data-skin="ledger"][data-look="apple"] .a-grp-h svg.a-i { width: 18px; height: 18px; flex-shrink: 0; color: var(--l-accent); }
+html[data-skin="ledger"][data-look="apple"] .a-item:hover, html[data-skin="ledger"][data-look="apple"] .a-grp-h:hover { background: var(--a-fill-2); color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .a-item:active, html[data-skin="ledger"][data-look="apple"] .a-grp-h:active { transform: scale(.97); }
+html[data-skin="ledger"][data-look="apple"] .a-item[aria-current="page"] { background: var(--a-fill); font-weight: 600; color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .a-grp-h .a-chev { margin-left: auto; width: 12px; height: 12px; color: var(--l-ink-3); transition: transform var(--a-spring-t) var(--a-spring); }
+html[data-skin="ledger"][data-look="apple"] .a-grp-h[aria-expanded="true"] .a-chev { transform: rotate(90deg); }
+html[data-skin="ledger"][data-look="apple"] .a-grp-h.a-here { color: var(--l-ink); font-weight: 600; }
+html[data-skin="ledger"][data-look="apple"] .a-grp-b { display: flex; flex-direction: column; gap: 1px; padding: 1px 0 6px 28px; }
+html[data-skin="ledger"][data-look="apple"] .a-grp-b[hidden] { display: none; }
+html[data-skin="ledger"][data-look="apple"] .a-sub { min-height: 30px; padding: 5px 10px; font-weight: 400; color: var(--l-ink-2); }
+html[data-skin="ledger"][data-look="apple"] .a-sub[aria-current="page"] { color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .a-scrim { display: none; }
+
+/* ─── 5 · Page titles and surfaces ─────────────────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] .page-header h1, html[data-skin="ledger"][data-look="apple"] .greeting, html[data-skin="ledger"][data-look="apple"] .hx-mast h1, html[data-skin="ledger"][data-look="apple"] body.flow-screen .hband h1, html[data-skin="ledger"][data-look="apple"] body.bk .bk-top h1, html[data-skin="ledger"][data-look="apple"] body.dh .dh-mast h1 {
+  font: 700 clamp(1.75rem, 1.1vw + 1.25rem, 2.25rem)/1.1 var(--l-display); letter-spacing: -.022em; color: var(--l-ink);
+}
+html[data-skin="ledger"][data-look="apple"] .page-header p, html[data-skin="ledger"][data-look="apple"] .hx-mast p, html[data-skin="ledger"][data-look="apple"] body.flow-screen .hband p { font: 400 15px/1.5 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"][data-look="apple"] .hx-head h2, html[data-skin="ledger"][data-look="apple"] .card-title, html[data-skin="ledger"][data-look="apple"] .chart-card-title, html[data-skin="ledger"][data-look="apple"] .section-title, html[data-skin="ledger"][data-look="apple"] body.flow-screen .chart-card h3, html[data-skin="ledger"][data-look="apple"] .hx-panel-head h3 {
+  font: 600 17px/1.3 var(--l-display); letter-spacing: -.012em; color: var(--l-ink);
+}
+html[data-skin="ledger"][data-look="apple"] .hx-glass, html[data-skin="ledger"][data-look="apple"] .card, html[data-skin="ledger"][data-look="apple"] .chart-card, html[data-skin="ledger"][data-look="apple"] .stat-card, html[data-skin="ledger"][data-look="apple"] .app-card, html[data-skin="ledger"][data-look="apple"] .summary-row, html[data-skin="ledger"][data-look="apple"] .section-card, html[data-skin="ledger"][data-look="apple"] .report-sheet, html[data-skin="ledger"][data-look="apple"] body.flow-screen .chart-card,
+html[data-skin="ledger"][data-look="apple"] body.flow-screen .kpi, html[data-skin="ledger"][data-look="apple"] .hx-deck .hx-slab, html[data-skin="ledger"][data-look="apple"] body.dh .dh-deck .dh-slab, html[data-skin="ledger"][data-look="apple"] .hx-rail-nav {
+  border: 0; border-radius: var(--l-r-panel); box-shadow: var(--l-p-shadow);
+}
+html[data-skin="ledger"][data-look="apple"] .stat-card-value, html[data-skin="ledger"][data-look="apple"] body.flow-screen .kpi .v, html[data-skin="ledger"][data-look="apple"] .hx-deck .hx-slab .v, html[data-skin="ledger"][data-look="apple"] .hx-slab .v { font-family: var(--l-display); font-weight: 600; letter-spacing: -.02em; }
+html[data-skin="ledger"][data-look="apple"] .hx-deck .hx-facts dd, html[data-skin="ledger"][data-look="apple"] .stat-card > .num, html[data-skin="ledger"][data-look="apple"] .mini-stat > .num { font-family: var(--l-display); font-weight: 600; }
+html[data-skin="ledger"][data-look="apple"] .hx-count { font-family: var(--l-sans); }
+
+/* ─── 6 · Buttons: tinted and filled, pressed at .97 ───────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] .btn, html[data-skin="ledger"][data-look="apple"] .hx-btn, html[data-skin="ledger"][data-look="apple"] body.flow-screen .btn, html[data-skin="ledger"][data-look="apple"] body.flow-screen .btn-secondary, html[data-skin="ledger"][data-look="apple"] body.flow-screen .btn-sm {
+  border: 0; border-radius: var(--l-r-ctl); background: var(--a-fill); color: var(--l-ink); font: 500 13.5px/1.2 var(--l-sans);
+  padding: 8px 14px; box-shadow: none; transition: transform 100ms ease-out, background-color 150ms ease-out, color 150ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"] .btn:hover:not(:disabled), html[data-skin="ledger"][data-look="apple"] .hx-btn:hover:not(:disabled) { background: var(--a-fill-3); border-color: transparent; color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .btn:active:not(:disabled), html[data-skin="ledger"][data-look="apple"] .hx-btn:active:not(:disabled) { transform: scale(.97); }
+html[data-skin="ledger"][data-look="apple"] .btn-primary, html[data-skin="ledger"][data-look="apple"] .hx-btn.primary, html[data-skin="ledger"][data-look="apple"] body.flow-screen .btn-primary { background: var(--l-p-solid); border: 0; color: var(--l-p-on-solid); }
+html[data-skin="ledger"][data-look="apple"] .btn-primary:hover:not(:disabled), html[data-skin="ledger"][data-look="apple"] .hx-btn.primary:hover:not(:disabled), html[data-skin="ledger"][data-look="apple"] body.flow-screen .btn-primary:hover { background: var(--l-p-solid-hover); color: var(--l-p-on-solid); }
+html[data-skin="ledger"][data-look="apple"] .btn-ghost { background: transparent; color: var(--l-accent); }
+html[data-skin="ledger"][data-look="apple"] .btn-ghost:hover:not(:disabled) { background: var(--a-fill-2); color: var(--l-accent); }
+html[data-skin="ledger"][data-look="apple"] .btn-danger { background: var(--l-p-late-soft); color: var(--l-late); border: 0; }
+html[data-skin="ledger"][data-look="apple"] .btn-danger:hover:not(:disabled) { background: var(--l-p-late-line); color: var(--l-late); }
+html[data-skin="ledger"][data-look="apple"] .btn-sm, html[data-skin="ledger"][data-look="apple"] body.flow-screen .btn-sm { padding: 6px 11px; font-size: 13px; border-radius: 8px; }
+html[data-skin="ledger"][data-look="apple"] .btn-lg { padding: 11px 20px; font-size: 15px; border-radius: 12px; }
+html[data-skin="ledger"][data-look="apple"] .link-btn { font: 500 13.5px/1.3 var(--l-sans); color: var(--l-accent); }
+html[data-skin="ledger"][data-look="apple"] .filter-bar .btn.active { background: var(--l-p-solid); color: var(--l-p-on-solid); }
+
+/* ─── 7 · Fields: 10px, a soft focus ring ──────────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] .form-label, html[data-skin="ledger"][data-look="apple"] .form-group label, html[data-skin="ledger"][data-look="apple"] .flow-form label, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form label { font: 500 13px/1.3 var(--l-sans); color: var(--l-ink-2); }
+html[data-skin="ledger"][data-look="apple"] .form-input, html[data-skin="ledger"][data-look="apple"] .form-group input, html[data-skin="ledger"][data-look="apple"] .form-group select, html[data-skin="ledger"][data-look="apple"] .form-group textarea, html[data-skin="ledger"][data-look="apple"] .filter-bar input, html[data-skin="ledger"][data-look="apple"] .filter-bar select, html[data-skin="ledger"][data-look="apple"] .hx-field,
+html[data-skin="ledger"][data-look="apple"] .flow-form input, html[data-skin="ledger"][data-look="apple"] .flow-form select, html[data-skin="ledger"][data-look="apple"] .flow-form textarea,
+html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form input, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form select, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form textarea,
+html[data-skin="ledger"][data-look="apple"] .flow-items input, html[data-skin="ledger"][data-look="apple"] .flow-items select {
+  border: 1px solid var(--a-field-line); border-radius: var(--l-r-ctl); background: var(--l-field); padding: 8px 11px; font: 400 14px/1.4 var(--l-sans);
+}
+html[data-skin="ledger"][data-look="apple"] input:focus, html[data-skin="ledger"][data-look="apple"] select:focus, html[data-skin="ledger"][data-look="apple"] textarea:focus,
+html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form input:focus, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form select:focus, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-form textarea:focus {
+  outline: none; border-color: var(--l-accent); box-shadow: 0 0 0 3.5px var(--l-p-ring);
+}
+
+/* ─── 8 · Tables: a quiet header, hairlines, a soft row hover ──────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] :where(thead th) { color: var(--l-ink-2); font: 600 12.5px/1.3 var(--l-sans); border-bottom: 1px solid var(--a-sep); }
+html[data-skin="ledger"][data-look="apple"] :where(tbody td) { border-bottom: 1px solid var(--a-sep-2); }
+html[data-skin="ledger"][data-look="apple"] .flow-table th, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-table th, html[data-skin="ledger"][data-look="apple"] .flow-scroll .flow-table thead th { color: var(--l-ink-2); font: 600 12.5px/1.3 var(--l-sans); border-bottom: 1px solid var(--a-sep); }
+html[data-skin="ledger"][data-look="apple"] .flow-table td, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-table td { border-bottom: 1px solid var(--a-sep-2); }
+html[data-skin="ledger"][data-look="apple"] .flow-table tbody tr:hover td, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-table tbody tr:hover td { background: var(--a-fill-2); }
+html[data-skin="ledger"][data-look="apple"] .flow-table td.num, html[data-skin="ledger"][data-look="apple"] .flow-table th.num, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-table td.num, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-table th.num { font-family: var(--l-sans); font-size: 13.5px; }
+html[data-skin="ledger"][data-look="apple"] .table-wrapper, html[data-skin="ledger"][data-look="apple"] .tracker-table-wrap, html[data-skin="ledger"][data-look="apple"] .hx-scroll, html[data-skin="ledger"][data-look="apple"] .flow-scroll { border: 0; border-radius: var(--l-r-panel); box-shadow: var(--l-p-shadow); }
+
+/* ─── 9 · Badges, segmented controls, the page strip ───────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] .badge, html[data-skin="ledger"][data-look="apple"] .flow-badge, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-badge, html[data-skin="ledger"][data-look="apple"] .status-badge, html[data-skin="ledger"][data-look="apple"] .mod-badge { border: 0; font: 600 11.5px/1.6 var(--l-sans); letter-spacing: .01em; }
+html[data-skin="ledger"][data-look="apple"] .hx-seg { border: 0; border-radius: 9px; background: var(--a-fill); padding: 2px; }
+html[data-skin="ledger"][data-look="apple"] .hx-seg-ind { border-radius: 7px; background: var(--l-panel); box-shadow: var(--a-thumb-shadow); transition: transform var(--a-spring-t) var(--a-spring), width var(--a-spring-t) var(--a-spring); }
+html[data-skin="ledger"][data-look="apple"] .hx-tab { border-radius: 7px; font: 500 13px/1.2 var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .hx-seg:not(.has-ind) .hx-tab.active { background: var(--l-panel); box-shadow: var(--a-thumb-shadow); }
+html[data-skin="ledger"][data-look="apple"] .hx-chip { border: 0; background: var(--a-fill); }
+html[data-skin="ledger"][data-look="apple"] .hx-chip.on { background: var(--l-p-solid); color: var(--l-p-on-solid); }
+html[data-skin="ledger"][data-look="apple"] .flow-nav, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-nav { gap: 4px; border-bottom: 0; margin-bottom: 20px; }
+html[data-skin="ledger"][data-look="apple"] .flow-tab, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-nav a { border: 0; border-radius: 8px; padding: 6px 12px; margin: 0; background: transparent; color: var(--l-ink-2); font: 500 13px/1.2 var(--l-sans); transition: background-color 150ms ease-out, transform 100ms ease-out; }
+html[data-skin="ledger"][data-look="apple"] .flow-tab:hover, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-nav a:hover { background: var(--a-fill-2); color: var(--l-ink); border-color: transparent; }
+html[data-skin="ledger"][data-look="apple"] .flow-tab:active, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-nav a:active { transform: scale(.97); }
+html[data-skin="ledger"][data-look="apple"] .flow-tab.active, html[data-skin="ledger"][data-look="apple"] body.flow-screen .flow-nav a.active { background: var(--a-fill); color: var(--l-ink); font-weight: 600; }
+html[data-skin="ledger"][data-look="apple"] body.flow-screen .step { border: 0; background: var(--a-fill-2); }
+html[data-skin="ledger"][data-look="apple"] body.flow-screen .step.cur { background: var(--l-p-solid); color: var(--l-p-on-solid); }
+
+/* ─── 10 · Dialogs: a scrim, a panel that materializes on a spring ─────────────────────── */
+@keyframes a-materialize { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes a-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes a-sheet { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes a-pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+html[data-skin="ledger"][data-look="apple"] .modal-overlay, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay { background: var(--l-p-scrim); }
+html[data-skin="ledger"][data-look="apple"] .modal-overlay.open, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay.open { animation: a-fade 200ms ease-out both; }
+html[data-skin="ledger"][data-look="apple"] .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal { border: 0; border-radius: 14px; box-shadow: var(--l-p-shadow-pop); }
+html[data-skin="ledger"][data-look="apple"] .modal h3, html[data-skin="ledger"][data-look="apple"] .flow-modal h3 { font: 700 19px/1.3 var(--l-display); letter-spacing: -.012em; }
+html[data-skin="ledger"][data-look="apple"] .modal-overlay.open .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay.open .flow-modal { animation: a-materialize var(--a-spring-t) var(--a-spring) both; }
+html[data-skin="ledger"][data-look="apple"] .l-menu:not([hidden]), html[data-skin="ledger"][data-look="apple"] .l-cmdk:not([hidden]) .l-cmdk-panel { transform-origin: top right; animation: a-pop 400ms var(--a-spring) both; }
+html[data-skin="ledger"][data-look="apple"] .l-cmdk-panel { border: 0; border-radius: 14px; }
+html[data-skin="ledger"][data-look="apple"] .l-cmdk-list li[aria-selected="true"] { background: var(--l-p-solid); color: var(--l-p-on-solid); }
+html[data-skin="ledger"][data-look="apple"] .l-cmdk-list li[aria-selected="true"] small { color: var(--l-p-on-solid-2); }
+html[data-skin="ledger"][data-look="apple"] .alert, html[data-skin="ledger"][data-look="apple"] .flow-banner { border: 0; border-radius: 10px; background: var(--a-fill-2); }
+html[data-skin="ledger"][data-look="apple"] .toast { border: 0; border-radius: 12px; background: var(--a-mat-pop); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur); box-shadow: var(--l-p-shadow-pop); }
+
+/* ─── 11 · The role homes: "Needs you" as a grouped list with tinted glyphs ────────────── */
+html[data-skin="ledger"][data-look="apple"] .fa-row, html[data-skin="ledger"][data-look="apple"] a.fa-row[data-tone] {
+  position: relative; grid-template-columns: 32px minmax(0, 1fr) minmax(0, max-content) auto; gap: 14px; min-height: 56px; padding: 10px 12px;
+  border-radius: 0; transition: background-color 150ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"] .fa-row + .fa-row { border-top: 0; }
+html[data-skin="ledger"][data-look="apple"] .fa-row + .fa-row::before { content: ""; position: absolute; top: 0; left: 58px; right: 0; height: 1px; background: var(--a-sep-2); }
+html[data-skin="ledger"][data-look="apple"] .fa-row:hover, html[data-skin="ledger"][data-look="apple"] a.fa-row[data-tone]:hover { background: var(--a-fill-2); }
+html[data-skin="ledger"][data-look="apple"] .fa-ico { width: 32px; height: 32px; border-radius: 8px; background: var(--a-glyph-blue); color: var(--a-on-glyph); }
+html[data-skin="ledger"][data-look="apple"] .fa-ico svg { width: 16px; height: 16px; }
+html[data-skin="ledger"][data-look="apple"] .fa-ico[data-tone="urgent"] { background: var(--a-glyph-red); color: var(--a-on-glyph); }
+html[data-skin="ledger"][data-look="apple"] .fa-ico[data-tone="warn"] { background: var(--a-glyph-orange); color: var(--a-on-glyph); }
+html[data-skin="ledger"][data-look="apple"] .fa-ico[data-tone="ok"] { background: var(--a-glyph-green); color: var(--a-on-glyph); }
+html[data-skin="ledger"][data-look="apple"] .fa-ico[data-tone="info"], html[data-skin="ledger"][data-look="apple"] .fa-ico[data-tone="neutral"] { background: var(--a-glyph-blue); color: var(--a-on-glyph); }
+html[data-skin="ledger"][data-look="apple"] .fa-text { font: 500 14.5px/1.35 var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .fa-amt { font: 500 14.5px/1 var(--l-sans); color: var(--l-ink); }
+html[data-skin="ledger"][data-look="apple"] .fa-verb { height: auto; padding: 0; border: 0; background: transparent; color: var(--l-accent); font: 500 13.5px/1 var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .fa-verb::after { content: "\203A"; margin-left: 8px; color: var(--l-ink-3); font: 400 20px/1 var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .fa-row:hover .fa-verb { border-color: transparent; }
+html[data-skin="ledger"][data-look="apple"] .fa-list > .fa-row[data-tone="urgent"]:not(.fa-row[data-tone="urgent"] ~ .fa-row) .fa-verb { background: transparent; color: var(--l-accent); }
+
+/* ─── 12 · Narrow screens: the sidebar becomes a drawer ────────────────────────────────── */
+@media (max-width: 899px) {
+  html[data-skin="ledger"][data-look="apple"] body { padding-left: 0; padding-bottom: 0; }
+  html[data-skin="ledger"][data-look="apple"] .navbar { left: 0; padding: 0 10px; }
+  html[data-skin="ledger"][data-look="apple"] .a-menu { display: grid; }
+  html[data-skin="ledger"][data-look="apple"] .l-who { display: none; }
+  html[data-skin="ledger"][data-look="apple"] .l-crumbs { display: flex; font-size: 0; }                 /* the section name is a bare text node: only the page title shows */
+  html[data-skin="ledger"][data-look="apple"] .l-crumbs b { font-size: 15px; }
+  html[data-skin="ledger"][data-look="apple"] .l-search { width: 34px; padding: 0; justify-content: center; background: transparent; }
+  html[data-skin="ledger"][data-look="apple"] .l-search span, html[data-skin="ledger"][data-look="apple"] .l-search kbd { display: none; }
+  html[data-skin="ledger"][data-look="apple"] .a-side { width: min(300px, 86vw); transform: translate3d(-104%, 0, 0); transition: transform var(--a-spring-t) var(--a-spring); box-shadow: var(--l-p-shadow-pop); will-change: transform; }
+  html[data-skin="ledger"][data-look="apple"] .a-side.open { transform: none; }
+  html[data-skin="ledger"][data-look="apple"] .a-scrim { display: block; position: fixed; inset: 0; z-index: 1005; background: var(--l-p-scrim); opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
+  html[data-skin="ledger"][data-look="apple"] .a-scrim.on { opacity: 1; pointer-events: auto; }
+  html[data-skin="ledger"][data-look="apple"] .fa-row, html[data-skin="ledger"][data-look="apple"] a.fa-row[data-tone] { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  html[data-skin="ledger"][data-look="apple"] .fa-amt { grid-column: 2; grid-row: 2; text-align: left; color: var(--l-ink-2); font-size: 13.5px; }
+  html[data-skin="ledger"][data-look="apple"] .fa-verb { grid-column: 3; grid-row: 1 / span 2; }
+}
+/* phones: whole peso figures — the highlighted tile takes the row, the rest pair up at a size that fits */
+@media (max-width: 599px) {
+  html[data-skin="ledger"][data-look="apple"] body.flow-screen .kpi.spot { grid-column: 1 / -1; }
+  html[data-skin="ledger"][data-look="apple"] body.flow-screen .kpi .v { font-size: 18px; }
+  html[data-skin="ledger"][data-look="apple"] body.flow-screen .kpi.spot .v { font-size: 26px; }
+}
+/* phones: dialogs are bottom sheets with a grabber (js/apple.js adds drag to dismiss) */
+@media (max-width: 640px) {
+  html[data-skin="ledger"][data-look="apple"] .modal-overlay.open, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay.open { align-items: flex-end; padding: 0; }
+  html[data-skin="ledger"][data-look="apple"] .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal { position: relative; max-width: 100vw; max-height: 92dvh; overflow-y: auto; margin: 0 auto; border-radius: 16px 16px 0 0; padding-top: 22px; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  html[data-skin="ledger"][data-look="apple"] .modal::before, html[data-skin="ledger"][data-look="apple"] .flow-modal::before { content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--l-ink-3); opacity: .45; }
+  html[data-skin="ledger"][data-look="apple"] .modal-overlay.open .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay.open .flow-modal { animation: a-sheet var(--a-bounce-t) var(--a-bounce) both; }
+}
+
+/* ─── 13 · The person's settings ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-skin="ledger"][data-look="apple"] .navbar, html[data-skin="ledger"][data-look="apple"] .a-side, html[data-skin="ledger"][data-look="apple"] .l-menu, html[data-skin="ledger"][data-look="apple"] .notif-dropdown, html[data-skin="ledger"][data-look="apple"] .toast { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--l-panel); }
+}
+@media (prefers-contrast: more) {
+  html[data-skin="ledger"][data-look="apple"] { --a-sep: rgba(60,60,67,.5); --a-sep-2: rgba(60,60,67,.35); --a-field-line: #8E8E93; }
+  html[data-skin="ledger"][data-look="apple"] .navbar, html[data-skin="ledger"][data-look="apple"] .a-side, html[data-skin="ledger"][data-look="apple"] .l-menu, html[data-skin="ledger"][data-look="apple"] .notif-dropdown { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--l-panel); }
+  html[data-skin="ledger"][data-look="apple"] .card, html[data-skin="ledger"][data-look="apple"] .hx-glass, html[data-skin="ledger"][data-look="apple"] .chart-card, html[data-skin="ledger"][data-look="apple"] .stat-card, html[data-skin="ledger"][data-look="apple"] body.flow-screen .kpi, html[data-skin="ledger"][data-look="apple"] .table-wrapper, html[data-skin="ledger"][data-look="apple"] .flow-scroll, html[data-skin="ledger"][data-look="apple"] .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal { border: 1px solid var(--l-ink-3); }
+}
+html[data-skin="ledger"][data-look="apple"][data-motion="off"] .a-side { transition: none; }
+
+}

@@ -127,13 +127,14 @@ const IN = PAGES.filter(f => !EXCLUDED.includes(f) && !f.startsWith('migrate-'))
     const h = read(f), head = h.split('</head>')[0];
     if ((h.match(/css\/ledger\.css/g) || []).length !== 1) bad.count.push(f);
     const links = head.match(/<link rel="stylesheet" href="[^"]+">/g) || [];
-    if (links[links.length - 1] !== '<link rel="stylesheet" href="css/ledger.css">' || /<link rel="stylesheet"[^>]*>\s*(?=[\s\S]*<link rel="stylesheet")/.test(head.split('css/ledger.css')[1] || '')) bad.last.push(f);
+    // A344 — css/apple.css (the Apple look, inert unless html[data-look="apple"]) follows ledger.css, and nothing else does
+    if (links.slice(-2).join('|') !== '<link rel="stylesheet" href="css/ledger.css">|<link rel="stylesheet" href="css/apple.css">') bad.last.push(f);
     if (!/<script src="js\/auth\.js"><\/script>\s*<script src="js\/ledger-nav\.js"><\/script>/.test(h) || (h.match(/js\/ledger-nav\.js/g) || []).length !== 1) bad.nav.push(f);
   });
   PAGES.filter(f => !IN.includes(f)).forEach(f => { if (/ledger\.css|ledger-nav\.js/.test(read(f))) bad.excluded.push(f); });
   PAGES.forEach(f => { if (/js\/ledger\.js/.test(read(f))) bad.direct.push(f); });
   ok(IN.length + ' pages link ledger.css exactly once', bad.count.length === 0 && IN.length >= 100, bad.count);
-  ok('  as the last stylesheet in <head>', bad.last.length === 0, bad.last);
+  ok('  as the last stylesheet in <head>, followed only by css/apple.css (A344)', bad.last.length === 0, bad.last);
   ok('  and load ledger-nav.js right after auth.js', bad.nav.length === 0, bad.nav);
   ok('the phone apps, the login page and the one-off tools link neither', bad.excluded.length === 0, bad.excluded);
   ok('no page links js/ledger.js (theme.js loads it only while the look is on)', bad.direct.length === 0, bad.direct);

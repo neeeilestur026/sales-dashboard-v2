@@ -35,8 +35,8 @@ const tagAttrs = (id) => { const m = HTML.match(new RegExp('<\\w+[^>]*\\sid="' +
 
 /* ── 1 · the shell ────────────────────────────────────────────────────────────────────────────── */
 sec('1 · the shell');
-ok('head links styles.css, training-mode.css, payslip-card.css, sales-home.css, then ledger.css (A336), in that order and nothing else',
-   (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(',') === 'styles.css,training-mode.css,payslip-card.css,sales-home.css,ledger.css');
+ok('head links styles.css, training-mode.css, payslip-card.css, sales-home.css, then ledger.css (A336) and apple.css (A344), in that order and nothing else',
+   (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(',') === 'styles.css,training-mode.css,payslip-card.css,sales-home.css,ledger.css,apple.css');
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="sl"> — the scope every rule hangs off', /<body class="sl">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="sl">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));

@@ -28,7 +28,7 @@ const JS = fs.readFileSync(D + 'js/my-payslips.js', 'utf8');
 const CSS = fs.readFileSync(D + 'css/my-payslips.css', 'utf8');
 
 console.log('\n1 · the page');
-eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,payslip-card.css,my-payslips.css,ledger.css');
+eq('head links, in order', (HTML.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(','), 'styles.css,payslip-card.css,my-payslips.css,ledger.css,apple.css');
 eq('scripts, in order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), 'theme.js,api.js,auth.js,ledger-nav.js,flow-api.js,payslip.js,my-payslips.js');
 ok('theme.js is the first child of body', /<body[^>]*>\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 ok('no inline style or script', !/<style[\s>]/.test(HTML) && !/<script>/.test(HTML) && !/style="/.test(HTML));
