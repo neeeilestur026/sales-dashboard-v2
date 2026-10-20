@@ -239,5 +239,34 @@ sec('5 · the pages');
   ok('js/apple.js does nothing without html[data-look="apple"]', ctx.hxApple === undefined);
 }
 
+sec('6 · motion: the skill\'s numbers, and the person\'s own close');
+{
+  const SRC_JS = read('js/apple.js');
+  const mk = (motion) => {
+    const attrs = { 'data-look': 'apple', 'data-motion': motion || null };
+    const ctx = { window: {}, performance: { now: () => 0 }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, Math,
+      document: { readyState: 'complete', documentElement: { getAttribute: k => attrs[k] || null }, getElementById: () => null, querySelectorAll: () => [], addEventListener() {} } };
+    ctx.window = ctx; vm.createContext(ctx); vm.runInContext(SRC_JS, ctx); return ctx;
+  };
+  const c = mk('off'), A = c.hxApple;
+  ok('it loads with the look, and exposes the spring, rubber-band and projection', !!A && typeof A.Spring === 'function');
+  ok('  rubber-band: 0.55 resistance (100 px past a 400 px sheet moves 48.9 px)', Math.abs(A.rubber(100, 400) - (100 * 400 * 0.55) / (400 + 55)) < 1e-9 && A.rubber(-100, 400) < 0);
+  ok('  momentum projection with d = 0.998 (a 1000 px/s flick lands 499 px further)', Math.abs(A.project(0, 1000) - 499) < 1e-6);
+  let landed = null; const sp = new A.Spring(x => { landed = x; }); sp.to(250, { velocity: 900, done: () => { landed = 'done@' + landed; } });
+  ok('  with "Motion off" a spring lands at once, and still reports done', landed === 'done@250');
+  ok('the default spring is damping 1.0 / response 0.4; a flick 0.8 / 0.3, with the release velocity',
+    /damping = o\.damping == null \? 1 : o\.damping, response = o\.response \|\| 0\.4/.test(SRC_JS) && (SRC_JS.match(/damping: Math\.abs\(v\) > 300 \? 0\.8 : 1, response: 0\.3, velocity: v/g) || []).length === 2);
+  ok('  drags capture the pointer after a 10 px slop', (SRC_JS.match(/setPointerCapture/g) || []).length === 2 && (SRC_JS.match(/< 10/g) || []).length >= 2);
+  ok('a sheet is dismissed only by clicking the dialog\'s own close / cancel control; none = it springs back',
+    /var dismiss = !!ctl && project\(spring\.x, v\) > hgt \* 0\.4;/.test(SRC_JS) && /if \(dismiss\) \{ ctl\.click\(\); \}/.test(SRC_JS));
+  const closeCtl = (html) => { const m = SRC_JS.match(/function closeControl\(sheet\) \{[\s\S]*?\n  \}/)[0]; const f = vm.runInNewContext('(' + m.replace('function closeControl', 'function') + ')');
+    const btns = html.map(([t, lab, cls]) => ({ textContent: t, getAttribute: () => lab || null, className: cls || '' })); return f({ querySelectorAll: () => btns }); };
+  ok('  it finds Close, Cancel, ×, an aria-label "Close" or a .modal-close, and never "Approve" or "Delete"',
+    closeCtl([['Approve'], ['Close']]).textContent === 'Close' && closeCtl([['Save'], ['Cancel']]).textContent === 'Cancel' && closeCtl([['×']]).textContent === '×'
+    && closeCtl([['', 'Close dialog']]).getAttribute() === 'Close dialog' && closeCtl([['', null, 'btn modal-close']]).className === 'btn modal-close'
+    && closeCtl([['Approve'], ['Delete'], ['Save changes']]) === null && closeCtl([['Closed-won report']]) === null);
+  ok('form fields, buttons and links inside a sheet never start a drag', /closest\('input, select, textarea, button, a, label, \[contenteditable\]'\)/.test(SRC_JS));
+}
+
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
 process.exit(FAIL ? 1 : 0);

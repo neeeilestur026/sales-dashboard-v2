@@ -23,7 +23,7 @@
 html[data-skin="ledger"][data-look="apple"] {
   --l-p-page:#F5F5F7; --l-p-panel:#FFFFFF; --l-p-inset:#F2F2F7; --l-p-line:#D9D9DE; --l-p-line-2:#EBEBF0;
   --l-p-ink:#1D1D1F; --l-p-ink-2:#515154; --l-p-ink-3:#6E6E73;
-  --l-p-accent:#0066CC; --l-p-accent-ink:#FFFFFF; --l-p-accent-hover:#0055B3; --l-p-accent-soft:#E8F1FC; --l-p-accent-line:#B5D3F5; --l-p-accent-2:#5AC8FA;
+  --l-p-accent:#0066CC; --l-p-accent-ink:#FFFFFF; --l-p-accent-hover:#0055B3; --l-p-accent-soft:#E8F1FC; --l-p-accent-line:#B5D3F5; --l-p-accent-2:#0B7285;
   --l-p-solid:#0071E3; --l-p-solid-hover:#0062C4;
   --l-p-late:#D70015; --l-p-late-soft:#FFEFEE; --l-p-late-line:#FFC6C2;
   --l-p-soon:#C93400; --l-p-soon-soft:#FFF3E3; --l-p-soon-line:#FFD4A3;
@@ -54,6 +54,7 @@ html[data-skin="ledger"][data-look="apple"] {
   --a-mat-chrome:rgba(255,255,255,.6); --a-mat-side:rgba(242,242,247,.74); --a-mat-pop:rgba(255,255,255,.8); --a-mat-edge:rgba(255,255,255,.4);
   --a-blur:blur(20px) saturate(180%);
   --a-glyph-blue:#0A84FF; --a-glyph-red:#FF3B30; --a-glyph-orange:#FF9500; --a-glyph-green:#34C759; --a-glyph-gray:#8E8E93; --a-on-glyph:#FFFFFF;
+  --a-ink-on-white:#1D1D1F;   /* text on a surface a page paints white whatever the theme */
   --a-logo-tile:#F5F5F7; --a-thumb-shadow:0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04);
 }
 html[data-skin="ledger"][data-look="apple"][data-theme="dark"] {
@@ -248,10 +249,22 @@ html[data-skin="ledger"][data-look="apple"] .fa-list > .fa-row[data-tone="urgent
 
 /* the director's home: the approvals list (seven columns, three buttons) fits beside a slightly narrower figures rail */
 html[data-skin="ledger"][data-look="apple"] body.dh .dh-deck { grid-template-columns: minmax(0, 1fr) 272px; }
+html[data-skin="ledger"][data-look="apple"] body.dh .dh-facts dd.accent, html[data-skin="ledger"][data-look="apple"] .hx-facts dd.accent { color: var(--l-accent); }   /* the light accent is for chart bars, never for text */
 html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .da-wrap .flow-table th, html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .da-wrap .flow-table td { padding-left: 6px; padding-right: 6px; }
 html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-no { white-space: normal; min-width: 112px; }   /* an ITIN code stays whole; a long name wraps at its spaces */
 html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-type .flow-badge { padding: 1px 7px; }
 html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-act .btn { padding: 5px 9px; font-size: 12.5px; }
+
+/* the sales home's report pill: its page colours it white for the old navy tile; on the white figures panel it takes the tone colours */
+html[data-skin="ledger"][data-look="apple"] body.sl #reportPill[data-tone="warn"] { background: var(--l-p-soon-soft); border-color: var(--l-p-soon-line); color: var(--l-soon); }
+html[data-skin="ledger"][data-look="apple"] body.sl #reportPill[data-tone="ok"] { background: var(--l-p-ok-soft); border-color: var(--l-p-ok-line); color: var(--l-ok); }
+html[data-skin="ledger"][data-look="apple"] body.sl #reportPill[data-tone="ok"]::before { background: var(--l-ok); }
+
+/* lead gen's sticky table headers carry a literal light grey (leadgen.css); the panel colour follows the theme */
+html[data-skin="ledger"][data-look="apple"] body.lg .lg-scroll .flow-table thead th { background: var(--l-panel); }
+
+/* the email page's header button is painted white inline (on the coloured header): a dark label in both themes */
+html[data-skin="ledger"][data-look="apple"] .em-hero .btn { color: var(--a-ink-on-white); }
 
 /* ─── 12 · Narrow screens: the sidebar becomes a drawer ────────────────────────────────── */
 @media (max-width: 899px) {
@@ -270,6 +283,15 @@ html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td
   html[data-skin="ledger"][data-look="apple"] .fa-row, html[data-skin="ledger"][data-look="apple"] a.fa-row[data-tone] { grid-template-columns: 32px minmax(0, 1fr) auto; }
   html[data-skin="ledger"][data-look="apple"] .fa-amt { grid-column: 2; grid-row: 2; text-align: left; color: var(--l-ink-2); font-size: 13.5px; }
   html[data-skin="ledger"][data-look="apple"] .fa-verb { grid-column: 3; grid-row: 1 / span 2; }
+  /* nothing widens the page: a table outside a scroll container scrolls inside itself, a page-tab strip scrolls
+     sideways, and header and button rows wrap (found by the 375 px sweep of all 94 pages) */
+  html[data-skin="ledger"][data-look="apple"] table.flow-table:not(.flow-scroll table):not(.table-wrapper table):not(.hx-scroll table):not(.tracker-table-wrap table):not(.da-wrap table) {
+    display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  html[data-skin="ledger"][data-look="apple"] div:has(> a.flow-tab), html[data-skin="ledger"][data-look="apple"] nav:has(> a.flow-tab) { display: flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  html[data-skin="ledger"][data-look="apple"] .fc-head, html[data-skin="ledger"][data-look="apple"] .flow-actions, html[data-skin="ledger"][data-look="apple"] .flow-actions > div { flex-wrap: wrap; max-width: 100%; }
+  html[data-skin="ledger"][data-look="apple"] details > summary { flex-wrap: wrap; row-gap: 2px; }                  /* a group's total drops under its name rather than off the edge */
+  html[data-skin="ledger"][data-look="apple"] .pr-steps { overflow: hidden; }                                        /* a wrapped step's connector line ends at the edge */
 }
 /* phones: whole peso figures — the highlighted tile takes the row, the rest pair up at a size that fits */
 @media (max-width: 599px) {
