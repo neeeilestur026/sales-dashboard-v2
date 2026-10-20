@@ -246,6 +246,13 @@ html[data-skin="ledger"][data-look="apple"] .fa-verb::after { content: "\203A"; 
 html[data-skin="ledger"][data-look="apple"] .fa-row:hover .fa-verb { border-color: transparent; }
 html[data-skin="ledger"][data-look="apple"] .fa-list > .fa-row[data-tone="urgent"]:not(.fa-row[data-tone="urgent"] ~ .fa-row) .fa-verb { background: transparent; color: var(--l-accent); }
 
+/* the director's home: the approvals list (seven columns, three buttons) fits beside a slightly narrower figures rail */
+html[data-skin="ledger"][data-look="apple"] body.dh .dh-deck { grid-template-columns: minmax(0, 1fr) 272px; }
+html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .da-wrap .flow-table th, html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .da-wrap .flow-table td { padding-left: 6px; padding-right: 6px; }
+html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-no { white-space: normal; min-width: 112px; }   /* an ITIN code stays whole; a long name wraps at its spaces */
+html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-type .flow-badge { padding: 1px 7px; }
+html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-act .btn { padding: 5px 9px; font-size: 12.5px; }
+
 /* ─── 12 · Narrow screens: the sidebar becomes a drawer ────────────────────────────────── */
 @media (max-width: 899px) {
   html[data-skin="ledger"][data-look="apple"] body { padding-left: 0; padding-bottom: 0; }
