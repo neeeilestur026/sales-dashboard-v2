@@ -220,6 +220,10 @@ function collectItems() {
   const items = [];
   document.querySelectorAll('#itemRows tr').forEach((tr, i) => {
     const src = ivCurrent.items[i];
+    /* A343 — a line left at 0 was not delivered on this invoice, so it is not on it. Sending it made
+       Rojan's invoice 126 of 20 Oct 2026 a ₱0 invoice (both lines 0), and a part delivery carried its
+       undelivered lines as ₱0 rows. */
+    if (!(flowNum(tr.querySelector('.qty').value) > 0)) return;
     items.push({ itemId: src.itemId || '', itemNo: src.itemNo, itemName: src.itemName,
       qty: flowNum(tr.querySelector('.qty').value), price: flowNum(tr.querySelector('.price').value),
       /* A282 — THE HIRE SHAPE, carried from the sales order and never rebuilt. Dropping it here
@@ -238,7 +242,10 @@ async function saveInvoice() {
   const items = collectItems();
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
-  if (!items.length) { flowMsg('formMsg', 'Nothing to invoice.', false); return; }
+  if (!items.length) { flowMsg('formMsg', 'Enter the quantity delivered on at least one line. Lines left at 0 are not invoiced.', false); return; }
+  // A343 — never a ₱0 invoice: a receivable of nothing that still takes the number
+  const ivNet = items.reduce((t, it) => t + flowNum(it.qty) * flowNum(it.price) * flowLineSpan(it), 0);
+  if (!(ivNet > 0)) { flowMsg('formMsg', 'This invoice comes to ₱0.00. Check the quantities and prices before issuing it.', false); return; }
   // A145: warn before issuing lines with no landed cost — they book COGS 0 (100% gross profit).
   const noCostLines = items.filter(it => flowNum(it.qty) > 0 && !(landedFor(it) > 0)).length;
   if (noCostLines > 0 &&
