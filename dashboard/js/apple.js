@@ -91,7 +91,7 @@
     var list = sheet.querySelectorAll('button, a, [role="button"]');
     for (var i = 0; i < list.length; i++) {
       var b = list[i], t = (b.textContent || '').replace(/\s+/g, ' ').trim(), lab = b.getAttribute('aria-label') || '', cls = String(b.className || '');
-      if (/^(close|cancel|×|✕|✖|x|done)$/i.test(t) || /close|dismiss/i.test(lab) || /(^|[\s-])close([\s-]|$)/i.test(cls)) return b;
+      if (/^(close|cancel|\u00d7|\u2715|\u2716|x|done)$/i.test(t) || /close|dismiss/i.test(lab) || /(^|[\s-])close([\s-]|$)/i.test(cls)) return b;
     }
     return null;
   }
