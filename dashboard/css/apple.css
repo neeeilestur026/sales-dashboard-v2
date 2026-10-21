@@ -116,9 +116,10 @@ html[data-skin="ledger"][data-look="apple"] .a-side {
   background: var(--a-mat-side); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
   border-right: 1px solid var(--a-sep-2); scrollbar-width: thin;
 }
-html[data-skin="ledger"][data-look="apple"] .a-brand { display: flex; align-items: center; height: 42px; padding: 0 8px; margin-bottom: 8px; flex-shrink: 0; }
-html[data-skin="ledger"][data-look="apple"] .a-brand img { height: 30px; width: auto; }
-html[data-skin="ledger"][data-look="apple"][data-theme="dark"] .a-brand img { height: 32px; padding: 3px 7px; border-radius: 8px; background: var(--a-logo-tile); }
+/* A346 — the logo spans the sidebar (about 212 × 53 px, the 448 × 112 image at 2×) so the tagline reads */
+html[data-skin="ledger"][data-look="apple"] .a-brand { display: flex; align-items: center; padding: 6px 8px 4px; margin-bottom: 10px; flex-shrink: 0; border-radius: 10px; }
+html[data-skin="ledger"][data-look="apple"] .a-brand img { display: block; width: 100%; max-width: 212px; height: auto; }
+html[data-skin="ledger"][data-look="apple"][data-theme="dark"] .a-brand img { padding: 5px 8px; border-radius: 10px; background: var(--a-logo-tile); }
 html[data-skin="ledger"][data-look="apple"] .a-item, html[data-skin="ledger"][data-look="apple"] .a-grp-h {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 6px 10px; border: 0; border-radius: 8px;
   background: transparent; color: var(--l-ink); font: 500 13.5px/1.25 var(--l-sans); letter-spacing: .003em; text-align: left; text-decoration: none; cursor: pointer;
