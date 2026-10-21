@@ -1,0 +1,126 @@
+/* apple-login.css — A345 · the sign-in page in the Apple look (Neil, 2026-10-21: "whenever I log in it should
+   always show the Apple design").
+
+   Linked only by index.html, after styles.css. js/theme.js sets html[data-look="apple"] here unless the director
+   has turned the new look off (FlowSettings portalSkin 'off'), so the classic login stays one switch away.
+   The same type, blue and greys as css/apple.css: a plain page, one white panel, a large title, outlined
+   fields at 3:1 or better, one filled button. Colours live in the token blocks only. One entrance (the panel
+   settles in on a damping-1.0 spring); none under reduced motion or "Motion off". */
+
+@media screen {
+
+/* ─── tokens ──────────────────────────────────────────────────────────────────────────────── */
+html[data-look="apple"] {
+  --al-page:#F5F5F7; --al-panel:#FFFFFF; --al-ink:#1D1D1F; --al-ink-2:#515154; --al-ink-3:#6E6E73;
+  --al-field:#FFFFFF; --al-field-line:#86868B; --al-field-line-hover:#515154;
+  --al-solid:#0071E3; --al-solid-hover:#0062C4; --al-solid-press:#0058B0; --al-on-solid:#FFFFFF;
+  --al-ring:rgba(0,113,227,.32); --al-ring-line:#0071E3;
+  --al-late:#D70015; --al-late-soft:#FFEFEE;
+  --al-fill:rgba(118,118,128,.12); --al-fill-hover:rgba(118,118,128,.2);
+  --al-logo-tile:transparent;
+  --al-shadow:0 1px 2px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.06);
+  --al-spin-track:rgba(255,255,255,.35);
+  --al-sans:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI Variable Text','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --al-display:-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,'Segoe UI Variable Display','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  /* the skill's default spring, damping 1.0 / response 0.4, sampled as linear() (css/apple.css --a-spring) */
+  --al-spring:linear(0, .063, .195, .344, .483, .602, .699, .776, .835, .879, .913, .937, .955, .968, .977, .984, .989, .992, .994, .996, .997, .998, .999, .999, 1);
+}
+html[data-look="apple"][data-theme="dark"] {
+  --al-page:#0E0E10; --al-panel:#1C1C1E; --al-ink:#F5F5F7; --al-ink-2:#AEAEB2; --al-ink-3:#98989D;
+  --al-field:#2C2C2E; --al-field-line:#8E8E93; --al-field-line-hover:#AEAEB2;
+  --al-solid:#0071E3; --al-solid-hover:#0068D1; --al-solid-press:#005BB8; --al-on-solid:#FFFFFF;
+  --al-ring:rgba(41,151,255,.45); --al-ring-line:#2997FF;
+  --al-late:#FF6961; --al-late-soft:#3A1D1C;
+  --al-fill:rgba(118,118,128,.24); --al-fill-hover:rgba(118,118,128,.34);
+  --al-logo-tile:#F5F5F7;   /* the logo's black tagline needs a light ground in dark */
+  --al-shadow:0 0 0 1px rgba(255,255,255,.06);
+}
+
+/* ─── the page ────────────────────────────────────────────────────────────────────────────── */
+html[data-look="apple"], html[data-look="apple"] body { background: var(--al-page); }
+html[data-look="apple"] body { font-family: var(--al-sans); color: var(--al-ink); font-feature-settings: "kern"; }
+html[data-look="apple"] body::before { display: none; }
+html[data-look="apple"] .login-container { min-height: 100vh; min-height: 100dvh; padding: 32px 16px; }
+html[data-look="apple"] .login-card {
+  width: min(400px, 100%); padding: 40px 36px 30px; background: var(--al-panel); border: 0; border-radius: 20px;
+  box-shadow: var(--al-shadow); -webkit-backdrop-filter: none; backdrop-filter: none;
+  animation: al-in 620ms var(--al-spring) both;
+}
+@keyframes al-in { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+html[data-look="apple"] .login-logo { max-width: 196px; margin: 0 auto 22px; padding: 0; border-radius: 14px; background: var(--al-logo-tile); }
+html[data-look="apple"][data-theme="dark"] .login-logo { padding: 10px 16px; max-width: 220px; }
+
+/* the title: "Sign in to your account", set large the way Apple's account pages are */
+html[data-look="apple"] .login-subtitle {
+  margin: 0 0 26px; text-align: center; color: var(--al-ink);
+  font: 600 24px/1.17 var(--al-display); letter-spacing: -.02em;
+}
+
+/* ─── fields ──────────────────────────────────────────────────────────────────────────────── */
+html[data-look="apple"] .form-group { margin-bottom: 16px; }
+html[data-look="apple"] .form-label { margin: 0 0 6px 2px; font: 600 13px/1.3 var(--al-sans); letter-spacing: -.005em; color: var(--al-ink-2); }
+html[data-look="apple"] .form-input-icon svg { display: none; }
+html[data-look="apple"] .form-input-icon .form-input,
+html[data-look="apple"] .form-input {
+  height: 48px; padding: 0 14px; background: var(--al-field); color: var(--al-ink);
+  border: 1px solid var(--al-field-line); border-radius: 12px;
+  font: 400 17px/1.25 var(--al-sans); letter-spacing: -.02em;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+html[data-look="apple"] .form-input::placeholder { color: var(--al-ink-3); letter-spacing: -.01em; }
+html[data-look="apple"] .form-input:hover { border-color: var(--al-field-line-hover); }
+html[data-look="apple"] .form-input:focus { outline: none; border-color: var(--al-ring-line); box-shadow: 0 0 0 4px var(--al-ring); }
+
+/* ─── the error, said plainly above the fields ───────────────────────────────────────────── */
+html[data-look="apple"] .error-message {
+  margin: -6px 0 18px; padding: 11px 14px; border: 0; border-radius: 12px;
+  background: var(--al-late-soft); color: var(--al-late); font: 500 14px/1.4 var(--al-sans); letter-spacing: -.01em;
+}
+html[data-look="apple"] .error-message.visible { animation: al-in 420ms var(--al-spring) both; }
+
+/* ─── the button: one filled action, press feedback at .97 ──────────────────────────────────── */
+html[data-look="apple"] .btn.btn-primary.btn-lg {
+  height: 48px; margin-top: 10px; padding: 0 20px; border: 0; border-radius: 12px;
+  background: var(--al-solid); color: var(--al-on-solid); box-shadow: none;
+  font: 600 17px/1 var(--al-sans); letter-spacing: -.02em;
+  transition: background .2s ease, transform .1s ease-out;
+}
+html[data-look="apple"] .btn.btn-primary.btn-lg:hover:not(:disabled) { background: var(--al-solid-hover); color: var(--al-on-solid); border: 0; }
+html[data-look="apple"] .btn.btn-primary.btn-lg:active:not(:disabled) { background: var(--al-solid-press); transform: scale(.97); }
+html[data-look="apple"] .btn.btn-primary.btn-lg:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--al-ring); }
+html[data-look="apple"] .btn.btn-primary.btn-lg:disabled { opacity: .6; }
+html[data-look="apple"] #loginSpinner { width: 18px; height: 18px; border-color: var(--al-spin-track); border-top-color: var(--al-on-solid); }
+
+html[data-look="apple"] .login-foot { margin-top: 20px; font: 400 13px/1.45 var(--al-sans); color: var(--al-ink-3); letter-spacing: -.005em; }
+
+/* ─── the theme switch: a quiet tinted capsule ─────────────────────────────────────────────── */
+html[data-look="apple"] .theme-toggle.login-theme {
+  top: 18px; right: 18px; padding: 7px 12px 7px 10px; border: 0; border-radius: 999px;
+  background: var(--al-fill); color: var(--al-ink-2); font: 500 13px/1.2 var(--al-sans);
+  transition: background .2s ease, transform .1s ease-out;
+}
+html[data-look="apple"] .theme-toggle.login-theme:hover { background: var(--al-fill-hover); color: var(--al-ink); }
+html[data-look="apple"] .theme-toggle.login-theme:active { transform: scale(.97); }
+html[data-look="apple"] .theme-toggle.login-theme:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--al-ring); }
+
+/* ─── phones: the panel becomes the page ───────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  html[data-look="apple"] .login-container { place-items: start center; padding: 72px 16px 32px; }
+  html[data-look="apple"] .login-card { padding: 30px 22px 24px; border-radius: 18px; }
+  html[data-look="apple"] .login-logo { max-width: 168px; margin-bottom: 18px; }
+  html[data-look="apple"] .login-subtitle { font-size: 22px; margin-bottom: 22px; }
+}
+
+/* ─── accessibility ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  html[data-look="apple"] .login-card, html[data-look="apple"] .error-message.visible { animation: none; }
+  html[data-look="apple"] .btn.btn-primary.btn-lg:active:not(:disabled), html[data-look="apple"] .theme-toggle.login-theme:active { transform: none; }
+}
+html[data-look="apple"][data-motion="off"] .login-card, html[data-look="apple"][data-motion="off"] .error-message.visible { animation: none; }
+@media (prefers-contrast: more) {
+  html[data-look="apple"] .login-card { box-shadow: 0 0 0 1px var(--al-field-line); }
+  html[data-look="apple"] .form-input { border-color: var(--al-ink-2); }
+  html[data-look="apple"] .form-label, html[data-look="apple"] .login-foot { color: var(--al-ink); }
+}
+
+}

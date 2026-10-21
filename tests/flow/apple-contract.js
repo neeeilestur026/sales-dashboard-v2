@@ -8,13 +8,15 @@
  *     !important; blur only on the chrome; keyframes move only transform and opacity; the person's settings
  *     (reduced transparency, more contrast) have their blocks; the drawer and the phone sheets exist.
  * 2 · contrast meets WCAG AA in both themes (the same pairs tests/flow/ledger-contract.js holds Ledger to).
- * 3 · the switch: the Apple look only ever rides on the Ledger skin; no FlowSettings row = Ledger (the preview),
- *     portalLook 'apple' or ?look=apple turns it on, ?look=new goes back, classic and the warehouse never get
- *     it, and js/apple.js loads once, only with it.
+ * 3 · the switch (A345, the Ledger look retired): whenever the new look is on it is the Apple look, no FlowSettings
+ *     row needed; a "classic" or ?skin=off stored in the Ledger period changes nothing; ?look=classic is the way
+ *     out and ?look=new|apple the way back; portalSkin off and the warehouse never get it; js/ledger.js and
+ *     js/apple.js load once each; the login page gets the look with nobody signed in.
  * 4 · the sidebar: every role reaches exactly the pages of its Ledger rail and avatar menu, every page marks
  *     itself current with its section open, and the bell / theme ids survive.
  * 5 · the pages link css/apple.css once, right after css/ledger.css; none links js/apple.js; apple.js is inert
  *     without the look.
+ * 7 · css/apple-login.css (A345): scoped, tokens only, AA in both themes, linked by the login page alone.
  */
 const fs = require('fs');
 const path = require('path');
@@ -108,7 +110,7 @@ sec('2 · contrast meets WCAG AA in both themes');
   });
 }
 
-sec('3 · the switch: Apple only on the Ledger skin, only when chosen');
+sec('3 · the switch: the new look is the Apple look (A345)');
 const THEME = read('js/theme.js');
 function runTheme(o) {
   const store = Object.assign({}, o.store || {});
@@ -124,7 +126,7 @@ function runTheme(o) {
       documentElement: { setAttribute(k, v) { attrs[k] = v; }, getAttribute(k) { return attrs[k] || null; }, classList: { add() {}, remove() {} } },
       body: { setAttribute() {}, classList: { add() {}, remove() {} } },
       head: { appendChild(n) { appended.push(n); } }, createElement: el,
-      querySelector: (s) => (s === 'link[href="css/ledger.css"]' ? {} : null),
+      querySelector: (s) => (s === (o.login ? 'link[href="css/apple-login.css"]' : 'link[href="css/ledger.css"]') ? {} : null),
       querySelectorAll: () => [], getElementById: () => null, addEventListener() {}, dispatchEvent() {}
     }
   };
@@ -137,30 +139,31 @@ function runTheme(o) {
 }
 {
   let cases = 0; const wrong = [], threw = [];
-  [null, 'off', 'optin', 'on'].forEach(sw => [null, 'new', 'classic', 'apple'].forEach(me => [null, 'ledger', 'apple', 'junk'].forEach(lk => ROLES.concat(['warehouse', null]).forEach(role => {
-    const store = {};
-    if (sw) store.hx_lg_mode = sw; if (me) store.hx_lg_me = me; if (lk) store.hx_lg_look = lk;
-    const r = runTheme({ role, store }); cases++;
+  [null, 'off', 'optin', 'on', 'junk'].forEach(sw => [null, 'classic', 'apple', 'junk'].forEach(me => [null, 'on', 'off'].forEach(pv => ['localhost', null].forEach(host => ROLES.concat(['warehouse', null]).forEach(role => {
+    const store = { hx_lg_me: 'classic', hx_lg_pv: 'off', hx_lg_look: 'ledger' };   // the Ledger-period keys, planted every time
+    if (sw) store.hx_lg_mode = sw; if (me) store.hx_look = me; if (pv) store.hx_skin_pv = pv;
+    const r = runTheme({ role, store, host }); cases++;
     if (r.threw) threw.push(r.threw);
-    const swv = sw || 'on', okRole = !!role && role !== 'warehouse';
-    const skin = okRole && (swv === 'on' ? me !== 'classic' : swv === 'optin' && (me === 'new' || me === 'apple'));
-    const apple = skin && (me === 'apple' || lk === 'apple');
-    if (r.skin !== skin || r.apple !== apple || r.ajs !== (apple ? 1 : 0) || (apple && r.ljs !== 1)) wrong.push({ sw, me, lk, role, got: [r.skin, r.apple, r.ajs] });
-  }))));
-  ok(cases + ' cases: Apple exactly when the skin is on and the house or the person chose it; apple.js loads once with it', wrong.length === 0, wrong.slice(0, 4));
+    const swv = ['off', 'optin', 'on'].includes(sw) ? sw : 'on', okRole = !!role && role !== 'warehouse', local = host === 'localhost';
+    const mev = ['classic', 'apple'].includes(me) ? me : null;
+    const skin = okRole && (pv === 'off' ? false : (pv === 'on' && local) || (swv === 'on' ? mev !== 'classic' : swv === 'optin' && mev === 'apple'));
+    if (r.skin !== skin || r.apple !== skin || r.ajs !== (skin ? 1 : 0) || r.ljs !== (skin ? 1 : 0)) wrong.push({ sw, me, pv, host, role, got: [r.skin, r.apple, r.ajs, r.ljs] });
+    if (['hx_lg_me', 'hx_lg_pv', 'hx_lg_look'].some(k => k in r.store)) wrong.push({ kept: 'a Ledger-period key', sw, me, pv, role });
+  })))));
+  ok(cases + ' cases: the Apple look exactly whenever the new look is on, js/ledger.js and js/apple.js once each; the Ledger-period keys change nothing and are removed', wrong.length === 0, wrong.slice(0, 4));
   ok('  theme.js never throws', threw.length === 0, threw.slice(0, 2));
-  ok('no FlowSettings row (nothing cached) = the Ledger preview period: staff are unchanged', runTheme({ role: 'accounting' }).skin && !runTheme({ role: 'accounting' }).apple);
-  ok('portalLook apple (cached hx_lg_look) gives it to everyone on the skin', ROLES.every(role => runTheme({ role, store: { hx_lg_look: 'apple' } }).apple));
-  const pv = runTheme({ role: 'director', search: '?look=apple' });
-  ok('?look=apple previews it for one person, and is remembered', pv.apple && pv.store.hx_lg_me === 'apple' && runTheme({ role: 'director', store: { hx_lg_me: 'apple' } }).apple);
-  ok('  the preview offers the way out; ?look=new goes back to the house look', /href="\?look=new">Leave the Apple preview/.test(pv.looks)
-    && !runTheme({ role: 'director', search: '?look=new', store: { hx_lg_me: 'apple' } }).apple);
-  ok('  once it is the house look the menu no longer calls it a preview', !/Leave the Apple preview/.test(runTheme({ role: 'director', store: { hx_lg_me: 'apple', hx_lg_look: 'apple' } }).looks));
-  ok('classic, portalSkin off and the warehouse never get it, even with ?look=apple asked earlier',
-    !runTheme({ role: 'sales', search: '?look=classic', store: { hx_lg_look: 'apple' } }).apple && !runTheme({ role: 'sales', store: { hx_lg_mode: 'off', hx_lg_me: 'apple' } }).apple
-    && !runTheme({ role: 'warehouse', search: '?look=apple', store: { hx_lg_look: 'apple' } }).apple);
+  ok('no FlowSettings row and nothing chosen = Apple for every office role', ROLES.every(role => runTheme({ role }).apple));
+  ok('  a "classic" or ?skin=off stored in the Ledger period does not stick', ROLES.every(role => runTheme({ role, store: { hx_lg_me: 'classic', hx_lg_pv: 'off' } }).apple));
+  const cl = runTheme({ role: 'sales', search: '?look=classic' });
+  ok('?look=classic (the name menu) is the way out and is remembered; ?look=new or ?look=apple comes back', !cl.skin && cl.store.hx_look === 'classic'
+    && runTheme({ role: 'sales', search: '?look=new', store: { hx_look: 'classic' } }).apple && runTheme({ role: 'sales', search: '?look=apple', store: { hx_look: 'classic' } }).apple);
+  ok('  the name menu offers Classic and Motion and calls nothing a preview', (l => /href="\?look=classic">Classic look/.test(l) && /motion=/.test(l) && !/preview/i.test(l))(runTheme({ role: 'hr' }).looks));
+  ok("portalSkin off (the director's rollback) and the warehouse never get it", !runTheme({ role: 'sales', store: { hx_lg_mode: 'off' } }).apple && !runTheme({ role: 'warehouse', search: '?look=apple' }).apple);
   const fetchSrc = THEME.slice(THEME.indexOf("fetchFlow('getFlowSettings'"));
-  ok('the 10-minute refresh caches portalLook: only the exact value "apple" turns it on', /put\('hx_lg_look', String\(r\.data\.portalLook \|\| ''\)\.toLowerCase\(\) === 'apple' \? 'apple' : null\)/.test(fetchSrc));
+  ok('the 10-minute refresh no longer reads portalLook', fetchSrc.length > 100 && !/portalLook/.test(fetchSrc));
+  ok('the login page (it links css/apple-login.css) gets data-look="apple" with nobody signed in, and loads nothing', (r => r.apple && !r.skin && r.ljs === 0 && r.ajs === 0)(runTheme({ login: true })));
+  ok('  also for a signed-in person on their way through, and not once the director has turned the new look off',
+    runTheme({ login: true, role: 'accounting', store: { hx_look: 'classic' } }).apple && !runTheme({ login: true, store: { hx_lg_mode: 'off' } }).apple);
 }
 
 sec('4 · the sidebar: every role, every page, nothing lost');
@@ -266,6 +269,43 @@ sec('6 · motion: the skill\'s numbers, and the person\'s own close');
     && closeCtl([['', 'Close dialog']]).getAttribute() === 'Close dialog' && closeCtl([['', null, 'btn modal-close']]).className === 'btn modal-close'
     && closeCtl([['Approve'], ['Delete'], ['Save changes']]) === null && closeCtl([['Closed-won report']]) === null);
   ok('form fields, buttons and links inside a sheet never start a drag', /closest\('input, select, textarea, button, a, label, \[contenteditable\]'\)/.test(SRC_JS));
+}
+
+sec('7 · the login page: css/apple-login.css (A345)');
+{
+  const LSCOPE = 'html[data-look="apple"]';
+  const LSRC = read('css/apple-login.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const LTOP = parse(LSRC), LALL = rules(LTOP, [], []), LSTYLE = LALL.filter(r => r.sel !== undefined);
+  ok('one @media screen block holds everything', LTOP.length === 1 && LTOP[0].at === '@media screen', LTOP.map(n => n.at || n.sel));
+  const bad = [];
+  LSTYLE.forEach(r => r.sel.split(',').map(x => x.trim()).forEach(x => { if (!x.startsWith(LSCOPE)) bad.push(x); }));
+  ok('every one of ' + LSTYLE.length + ' rules is scoped to ' + LSCOPE, bad.length === 0 && LSTYLE.length > 20, bad.slice(0, 5));
+  const lit = [];
+  LSTYLE.forEach(r => decls(r.body).forEach(d => { if (/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(d) && !/^--al-[a-z0-9-]+\s*:/.test(d)) lit.push(r.sel.slice(0, 50) + ' → ' + d.slice(0, 60)); }));
+  ok('colours only in the --al-* tokens; no !important, no url(), nothing downloaded', lit.length === 0 && !/!important|url\(|@font-face|@import/.test(LSRC), lit.slice(0, 5));
+  const LKEYF = LALL.filter(r => r.at && r.at.startsWith('@keyframes'));
+  ok('one entrance (al-in) that moves only transform and opacity, never looping',
+    LKEYF.length === 1 && /^@keyframes al-/.test(LKEYF[0].at) && (LKEYF[0].body.match(/[a-z-]+(?=\s*:)/g) || []).every(x => x === 'opacity' || x === 'transform') && !/infinite/.test(LSRC));
+  const inCtx = (re, selRe, bodyRe) => LALL.some(r => r.ctx.some(c => re.test(c)) && selRe.test(r.sel || '') && bodyRe.test(r.body || ''));
+  ok('reduced motion and "Motion off" stop it; more contrast strengthens the fields',
+    inCtx(/prefers-reduced-motion:\s*reduce/, /\.login-card/, /animation:\s*none/) && LSTYLE.some(r => /\[data-motion="off"\] \.login-card/.test(r.sel) && /animation:\s*none/.test(r.body))
+    && inCtx(/prefers-contrast:\s*more/, /\.form-input/, /border-color/));
+  ok('press feedback at .97 on the button', LSTYLE.some(r => /btn-primary\.btn-lg:active/.test(r.sel) && /scale\(\.97\)/.test(r.body)));
+  const tok = (sel) => { const r = LSTYLE.find(x => x.sel.trim() === sel); const o = {}; (r ? r.body : '').replace(/--al-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})/g, (_, k, v) => { o[k] = v; }); return o; };
+  const lum = (h) => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const light = tok(LSCOPE), dark = Object.assign({}, light, tok(LSCOPE + '[data-theme="dark"]'));
+  const TEXT = [['ink', 'panel'], ['ink-2', 'panel'], ['ink-3', 'panel'], ['ink', 'field'], ['ink-3', 'field'], ['ink-2', 'page'], ['ink', 'page'], ['on-solid', 'solid'], ['on-solid', 'solid-hover'], ['on-solid', 'solid-press'], ['late', 'late-soft']];
+  const EDGE = [['field-line', 'field'], ['field-line', 'panel']];
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    const f1 = TEXT.filter(([a, b]) => !(t[a] && t[b]) || ratio(t[a], t[b]) < 4.5).map(([a, b]) => a + ' on ' + b + ' ' + (t[a] && t[b] ? ratio(t[a], t[b]).toFixed(2) : 'missing'));
+    const f2 = EDGE.filter(([a, b]) => !(t[a] && t[b]) || ratio(t[a], t[b]) < 3).map(([a, b]) => a + ' on ' + b + ' ' + (t[a] && t[b] ? ratio(t[a], t[b]).toFixed(2) : 'missing'));
+    ok(name + ': text at 4.5:1 or better (' + TEXT.length + ' pairs), field outlines at 3:1 or better', f1.length === 0 && f2.length === 0, f1.concat(f2));
+  });
+  const pages = fs.readdirSync(D).filter(f => f.endsWith('.html'));
+  const linking = pages.filter(f => /css\/apple-login\.css/.test(read(f)));
+  ok('only the login page links it, once, right after styles.css', linking.length === 1 && linking[0] === 'index.html'
+    && (read('index.html').match(/apple-login\.css/g) || []).length === 1 && /<link rel="stylesheet" href="css\/styles\.css">\s*<link rel="stylesheet" href="css\/apple-login\.css">/.test(read('index.html')), linking);
 }
 
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
