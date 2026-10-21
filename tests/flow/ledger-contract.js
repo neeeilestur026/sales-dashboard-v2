@@ -171,16 +171,16 @@ function runTheme(o) {
 }
 {
   let cases = 0, wrong = [], threw = [], leaks = [];
-  const SW = [null, 'off', 'optin', 'on', 'junk'], ME = [null, 'new', 'classic'], PV = [null, 'ledger', 'off'], HOSTS = ['localhost', 'hi-escorp-portal-wufz.onrender.com'];
+  const SW = [null, 'off', 'optin', 'on', 'junk'], ME = [null, 'apple', 'classic'], PV = [null, 'on', 'off'], HOSTS = ['localhost', 'hi-escorp-portal-wufz.onrender.com'];
   ALL_ROLES.concat([null]).forEach(role => SW.forEach(sw => ME.forEach(me => PV.forEach(pv => [true, false].forEach(linked => HOSTS.forEach(host => [null, 'accounting,hr', 'admin'].forEach(rl => {
     const store = {};
-    if (sw) store.hx_lg_mode = sw; if (me) store.hx_lg_me = me; if (pv) store.hx_lg_pv = pv; if (rl) store.hx_lg_roles = rl;
+    if (sw) store.hx_lg_mode = sw; if (me) store.hx_look = me; if (pv) store.hx_skin_pv = pv; if (rl) store.hx_lg_roles = rl;   // A345 — hx_look / hx_skin_pv, fresh keys
     const r = runTheme({ role, store, linked, host });
     cases++;
     const okRole = !!role && ROLES.includes(role) && linked, local = host === 'localhost';
     const allowed = !rl || rl.split(',').includes(role);
     const swv = ['off', 'optin', 'on'].includes(sw) ? sw : 'on';   // no row, nothing cached or junk = the default, on
-    const want = okRole && (pv === 'off' ? false : (pv === 'ledger' && local) || (allowed && (swv === 'on' ? me !== 'classic' : swv === 'optin' && me === 'new')));
+    const want = okRole && (pv === 'off' ? false : (pv === 'on' && local) || (allowed && (swv === 'on' ? me !== 'classic' : swv === 'optin' && me === 'apple')));
     if (r.threw) threw.push(r.threw);
     if (r.on !== want) wrong.push({ role, sw, me, pv, linked, host, rl, got: r.on });
     if (!r.on && (r.js || r.hx || 'data-page' in r.attrs || 'data-motion' in r.attrs)) leaks.push({ role, sw, me, pv });
@@ -189,11 +189,11 @@ function runTheme(o) {
   ok(cases + ' cases: the look is on exactly when it should be', wrong.length === 0, wrong.slice(0, 3));
   ok('  theme.js never throws', threw.length === 0, threw.slice(0, 2));
   ok('  off sets nothing and loads nothing; on sets data-skin, data-page and loads js/ledger.js once', leaks.length === 0, leaks.slice(0, 3));
-  ok('  the warehouse never gets it, whatever the switch says', ['on', 'optin'].every(sw => !runTheme({ role: 'warehouse', store: { hx_lg_mode: sw, hx_lg_me: 'new', hx_lg_pv: 'ledger' }, host: 'localhost' }).on));
+  ok('  the warehouse never gets it, whatever the switch says', ['on', 'optin'].every(sw => !runTheme({ role: 'warehouse', store: { hx_lg_mode: sw, hx_look: 'apple', hx_skin_pv: 'on' }, host: 'localhost' }).on));
   ok('  ?skin=ledger previews only on localhost; ?skin=off and ?skin=reset work anywhere',
     runTheme({ role: 'admin', search: '?skin=ledger', host: 'localhost', store: { hx_lg_mode: 'off' } }).on && !runTheme({ role: 'admin', search: '?skin=ledger', store: { hx_lg_mode: 'off' } }).on
     && !runTheme({ role: 'admin', search: '?skin=off', store: { hx_lg_mode: 'on' } }).on
-    && runTheme({ role: 'admin', search: '?skin=reset', store: { hx_lg_mode: 'on', hx_lg_pv: 'off' } }).on);
+    && runTheme({ role: 'admin', search: '?skin=reset', store: { hx_lg_mode: 'on', hx_skin_pv: 'off' } }).on);
   ok('  ?look=classic and ?look=new are remembered; ?motion=off sets data-motion="off"',
     !runTheme({ role: 'hr', search: '?look=classic', store: { hx_lg_mode: 'on' } }).on && runTheme({ role: 'hr', search: '?look=new', store: { hx_lg_mode: 'optin' } }).on
     && runTheme({ role: 'hr', search: '?motion=off', store: { hx_lg_mode: 'on' } }).attrs['data-motion'] === 'off');
@@ -204,10 +204,10 @@ function runTheme(o) {
   ok('the classic navbar offers "Try the new look" only while the director offers it, and never while on',
     runTheme({ role: 'sales', store: { hx_lg_mode: 'optin' } }).item === '<a class="lg-try" href="?look=new">Try the new look</a>'
     && runTheme({ role: 'sales', store: { hx_lg_mode: 'off' } }).item === '' && runTheme({ role: 'sales' }).item === ''
-    && runTheme({ role: 'sales', store: { hx_lg_me: 'classic' } }).item === '<a class="lg-try" href="?look=new">Try the new look</a>'
+    && runTheme({ role: 'sales', store: { hx_look: 'classic' } }).item === '<a class="lg-try" href="?look=new">Try the new look</a>'
     && runTheme({ role: 'sales', store: { hx_lg_mode: 'on' } }).item === '' && runTheme({ role: 'warehouse', store: { hx_lg_mode: 'on' } }).item === ''
     && runTheme({ role: 'sales', store: { hx_lg_mode: 'optin', hx_lg_roles: 'admin' } }).item === '');
-  ok('  and the Ledger avatar menu offers the way back', /href="\?look=classic">Classic look/.test(runTheme({ role: 'sales', store: { hx_lg_mode: 'on' } }).looks));
+  ok('  and the avatar menu offers the way back', /href="\?look=classic">Classic look/.test(runTheme({ role: 'sales', store: { hx_lg_mode: 'on' } }).looks));
 }
 
 /* ── 5 · the navbars ───────────────────────────────────────────────────────────────────────── */
