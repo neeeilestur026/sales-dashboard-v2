@@ -1,8 +1,8 @@
 /* sales-report.js — A348 · the Sales Daily Report (redesigned), first on the director's dashboard, a private trial.
  *
  * The report is the count: the portal fills what it already logs (work email, PRs, quotations), the person logs a
- * call, visit or result as one line with a link, and the 8:00 and 4:30 reports are the numbers on this page plus one
- * line of plan and one line of blocker. A desk day is the normal day; the visit form only shows on a visit day.
+ * call, visit or result as one line with a link, and the 4:30 report is the numbers on this page plus one line of
+ * blocker (A349: the 8:00 huddle card is gone, Neil 21 Oct). A desk day is the normal day; the visit form only shows on a visit day.
  *
  * Numbers: js/sales-report-model.js (pure, tested). Saving: saveProofReport / submitProofReport / getProofReports
  * (FlowAPI 177), secured and director-only while it is a trial — nothing here touches the real call log, the client
@@ -119,7 +119,7 @@ function _srSave(opts) {
     const params = { date: day, reportJson: JSON.stringify(report), portalJson: JSON.stringify(_srLiveNumbers()) };
     try {
       if (o.submit) r = await postFlow('submitProofReport', Object.assign(params, { snapshotJson: JSON.stringify(o.snapshot) }));
-      else r = await postFlow('saveProofReport', Object.assign(params, o.giveAm ? { giveAm: true } : {}));
+      else r = await postFlow('saveProofReport', params);
     } catch (e) { r = { success: false, message: String(e && e.message || e) }; }
     if (r && r.success) {
       const prev = SR_UI.saved[day] || {};
@@ -132,8 +132,6 @@ function _srSave(opts) {
         SR_UI.unsaved = false;
         _srDraftDrop(day);
         _srRefresh();
-        // FlowAPI 176 saves the report but knows nothing of the 8:00 stamp (it answers without givenAt)
-        if (o.giveAm && r.givenAt === undefined) _srStatus('Saved — but the 8:00 time is only stamped once the FlowAPI update (177) is pasted.', 'warn');
       }
       return r;
     }
@@ -168,7 +166,7 @@ function _srNums() {
   const ix = SR_UI.ix, me = SR_UI.me, day = SR_UI.day, now = _srNowMin(), st = SR_UI.state;
   const dt = srDayType(ix, me, day, st);
   return { dt, portal: srPortalTiles(ix, me, day, SR_UI.sent, now), mine: srMineTiles(ix, me, day, st, now, dt),
-           fu: srFollowUps(ix, me, day, st), am: srMorningNumbers(ix, me, day, st, dt), linked: srLinked(st, day) };
+           fu: srFollowUps(ix, me, day, st), linked: srLinked(st, day) };
 }
 function _srLiveNumbers() { const n = SR_UI.nums || _srNums(); return srSnapshot(n.portal, n.mine, SR_UI.day, SR_UI.state); }
 
@@ -216,7 +214,7 @@ function _srRenderDay() {
       ['all', 'Emails', 'PRs', 'Quotations'].map(k => '<button type="button" data-feed="' + (k === 'all' ? 'all' : k === 'Emails' ? 'email' : k === 'PRs' ? 'pr' : 'quotation') + '">' + (k === 'all' ? 'All' : k) + '</button>').join('') +
       '</div></div><div id="srFeed"></div><p class="sr-other" id="srOther"></p></section>' +
 
-    '<section class="sr-block sr-two sr-reports"><div class="sr-card" id="srAm"></div><div class="sr-card" id="srPm"></div></section>' +
+    '<section class="sr-block sr-reports"><div class="sr-card" id="srPm"></div></section>' +
 
     '<section class="sr-block"><div class="sr-bar"><h3>This week</h3><div class="sr-weeknav">' +
       '<button type="button" class="sr-step" data-week="-1" aria-label="Previous week">‹</button><span id="srWeekLab"></span>' +
@@ -246,7 +244,6 @@ function _srRefresh() {
   _srId('srChips').innerHTML =
     (n.dt.type === 'desk' ? chip('Desk day — no visit booked (normal)', '')
       : chip(n.dt.planned.length ? 'Visit day — ' + n.dt.planned.length + ' visit' + (n.dt.planned.length === 1 ? '' : 's') + ' booked' : 'Visit day — set by you, none in the plan', 'mine')) +
-    (st.am.givenAt ? chip('8:00 report given ' + srClock(st.am.givenAt), 'ok') : chip('8:00 report due', isToday && now < 9 * 60 ? 'watch' : 'red')) +
     (saved.submittedAt ? chip('4:30 report submitted ' + srClock(saved.submittedAt), 'ok') : chip('4:30 report due', !isToday || now >= 16 * 60 + 30 ? 'red' : '')) +
     chip('Log lines with a link: ' + n.linked.linked + ' of ' + n.linked.total, n.linked.total && n.linked.linked < n.linked.total ? 'watch' : '');
 
@@ -265,7 +262,6 @@ function _srRefresh() {
   const vBox = _srId('srVisits');
   if (vBox.dataset.key !== vKey && !typingIn(vBox)) { vBox.dataset.key = vKey; vBox.innerHTML = _srVisitsHtml(n.dt); }
   _srRenderFeed();
-  if (!typingIn(_srId('srAm'))) _srId('srAm').innerHTML = _srAmHtml(n);
   if (!typingIn(_srId('srPm'))) _srId('srPm').innerHTML = _srPmHtml(n, saved);
   _srRenderWeek();
 }
@@ -394,14 +390,6 @@ function _srRenderFeed() {
 }
 
 /* the two reports */
-function _srAmHtml(n) {
-  const st = SR_UI.state, given = st.am.givenAt;
-  return '<div class="sr-cardhead"><h3>8:00 huddle</h3><span class="sr-chip ' + (given ? 'ok' : '') + '">' + (given ? 'Given ' + _srE(srClock(given)) : 'Due') + '</span></div>' +
-    '<dl class="sr-nums">' + n.am.map(x => '<div><dt>' + _srE(x.label) + '</dt><dd' + (x.nr ? ' class="nr"' : '') + '>' + _srE(x.text) + '</dd></div>').join('') + '</dl>' +
-    '<label class="sr-line">Today\'s plan (one line)<input type="text" class="sr-in" id="srPlan" maxlength="200" value="' + _srE(st.am.plan) + '" placeholder="Desk day: follow-ups first, then 20 calls to the cement list"></label>' +
-    '<div class="sr-formfoot"><span class="sr-help">' + (given ? 'Given at ' + _srE(srClock(given)) + '. You can still change the plan.' : 'Read the four numbers, say the plan, then press Give.') + '</span>' +
-      '<button type="button" class="btn-sm primary" data-giveam>' + (given ? 'Save plan' : 'Give 8:00 report') + '</button></div>';
-}
 function _srPmHtml(n, saved) {
   const st = SR_UI.state, live = {};
   n.portal.concat(n.mine).forEach(t => { live[t.key] = t.text; });
@@ -489,7 +477,6 @@ function _srWire() {
     else if (b.hasAttribute('data-unplanned')) { SR_UI.showVisitForm = true; _srRefresh(); const f = _srId('srVisitForm'); if (f && f.elements.time.focus) f.elements.time.focus(); }
     else if (b.hasAttribute('data-feed')) { SR_UI.feed = b.getAttribute('data-feed'); _srRenderFeed(); }
     else if (b.hasAttribute('data-book')) _srToggleBooking(b.getAttribute('data-book'));
-    else if (b.hasAttribute('data-giveam')) _srGiveAm();
     else if (b.hasAttribute('data-submitpm')) _srSubmitPm();
     else if (b.hasAttribute('data-week')) { SR_UI.weekOffset += Number(b.getAttribute('data-week')); _srRenderWeek(); }
   });
@@ -500,12 +487,11 @@ function _srWire() {
   });
   body.addEventListener('change', ev => {
     const t = ev.target;
-    if (t && (t.id === 'srPlan' || t.id === 'srBlocker')) _srOneLine(t);
+    if (t && t.id === 'srBlocker') _srOneLine(t);
   });
   body.addEventListener('input', ev => {           // the one-line answers live in the report as they are typed; saved on change
     const t = ev.target;
-    if (t && t.id === 'srPlan') { SR_UI.state.am.plan = t.value.trim(); t.removeAttribute('aria-invalid'); }
-    else if (t && t.id === 'srBlocker') { SR_UI.state.pm.blocker = t.value.trim(); t.removeAttribute('aria-invalid'); }
+    if (t && t.id === 'srBlocker') { SR_UI.state.pm.blocker = t.value.trim(); t.removeAttribute('aria-invalid'); }
   });
 }
 
@@ -523,15 +509,8 @@ function _srSetDayType(type) {
   _srSave();
 }
 function _srOneLine(input) {
-  if (input.id === 'srPlan') SR_UI.state.am.plan = input.value.trim();
-  else SR_UI.state.pm.blocker = input.value.trim();
+  SR_UI.state.pm.blocker = input.value.trim();
   _srSave();
-}
-function _srGiveAm() {
-  const plan = _srId('srPlan');
-  if (plan) SR_UI.state.am.plan = plan.value.trim();
-  if (!SR_UI.state.am.plan) { if (plan) { plan.focus(); plan.setAttribute('aria-invalid', 'true'); } _srStatus('Type today\'s plan in one line first.', 'bad'); return; }
-  _srSave({ giveAm: true });
 }
 function _srSubmitPm() {
   const bl = _srId('srBlocker');

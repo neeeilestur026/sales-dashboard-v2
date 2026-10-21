@@ -1,8 +1,8 @@
 /* sales-report-model.js — A348 · the numbers of the Sales Daily Report (redesigned), first on the director's dashboard.
  *
  * Neil's rules (21 Oct 2026): the portal fills what it already logs (work email, PRs, quotations); the person logs a
- * call, visit or result as one line, linked to a quote, PR, DR or email; the report IS the count, plus one line of plan
- * at 8:00 and one of blocker at 4:30; a desk day is the normal day.
+ * call, visit or result as one line, linked to a quote, PR, DR or email; the report IS the count, plus one line of
+ * blocker at 4:30 (A349: no 8:00 huddle card, Neil 21 Oct); a desk day is the normal day.
  *
  * PURE. Everything arrives as arguments; nothing is fetched or drawn, so tests/flow/sales-report.js runs it in node.
  * The shared rules are not copied: flowQuotationOwner / flowQuotationNet / flowQuotationBucket / flowDate / flowToday
@@ -389,18 +389,6 @@ function srMineTiles(ix, me, day, report, nowMin, dayType) {
   ];
 }
 
-/** The four numbers read out at 8:00. */
-function srMorningNumbers(ix, me, day, report, dayType) {
-  const fu = srFollowUps(ix, me, day, report), open = srOpenQuotes(ix, me, day).reduce((s, q) => s + _srNet(q), 0);
-  const dt = dayType || srDayType(ix, me, day, report);
-  return [
-    { key: 'followUpsDue', label: 'Follow-ups due', text: String(fu.length) },
-    { key: 'rfqsWaiting', label: 'RFQs waiting for specs', text: 'not recorded yet', nr: true },
-    { key: 'openQuotes', label: 'Open quotations', text: srMoney(open) },
-    { key: 'visitsBooked', label: 'Visits booked', text: String(dt.planned.length) }
-  ];
-}
-
 /** Every number on the page, as text and value — what the 4:30 report fixes when it is submitted. */
 function srSnapshot(portal, mine, day, report) {
   const out = { day, at: '', linked: srLinked(report, day) };
@@ -480,7 +468,7 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
-                     srPlanned, srDayType, srOpenQuotes, srFollowUps, srQuotesSent, srWithin48, srPortalTiles, srMineTiles, srMorningNumbers,
+                     srPlanned, srDayType, srOpenQuotes, srFollowUps, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srOtherActivity, srLinkOptions, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays };
 }

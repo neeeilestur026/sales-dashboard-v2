@@ -397,7 +397,7 @@ body.dh .sr-rec > p { margin:0 0 8px; }
   body.dh.sr-print .navbar, body.dh.sr-print .a-side, body.dh.sr-print .a-scrim, body.dh.sr-print .dh-rail,
   body.dh.sr-print .dh-col > *:not(#proof), body.dh.sr-print .sr-tools, body.dh.sr-print .sr-form, body.dh.sr-print .sr-quick,
   body.dh.sr-print .sr-pills, body.dh.sr-print .sr-mini, body.dh.sr-print .sr-weeknav, body.dh.sr-print .sr-nolink,
-  body.dh.sr-print .sr-desk .dh-btn, body.dh.sr-print [data-giveam], body.dh.sr-print [data-submitpm] { display:none; }
+  body.dh.sr-print .sr-desk .dh-btn, body.dh.sr-print [data-submitpm] { display:none; }
   body.dh.sr-print .dh-deck { display:block; }
   body.dh.sr-print .dh-sr { border:0; box-shadow:none; padding:0; }
 }
