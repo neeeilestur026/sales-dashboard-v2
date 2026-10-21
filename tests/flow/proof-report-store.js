@@ -2,7 +2,8 @@
  *
  * Run:  node tests/flow/proof-report-store.js
  *
- * Neil, 21 Oct 2026: "save it, but only I can see it, since I'm just testing". So the store is its own tab, both
+ * Neil, 21 Oct 2026: "save it, but only I can see it, since I'm just testing". A348 (FlowAPI 177) adds the 4:30 submit with
+ * its numbers fixed, the 8:00 time stamped by the server, and keeps a day the A347 form saved. So the store is its own tab, both
  * actions are secured, both refuse every role outside FlowSettings 'proofReportRoles' (default director), the name a
  * report is saved under is the one Flask stamps, nothing lands in the ActivityLog, and a read never creates the tab.
  * Runs the real FlowAPI.gs through its dispatcher (gasload), so the secret and the lock are under test too.
@@ -23,7 +24,7 @@ const PORTAL = JSON.stringify({ followDue: '3', openQuotes: '₱3.8M' });
 sec('1 · the version');
 {
   const c = load(GS, {});
-  ok('getVersion = 176', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 176);
+  ok('getVersion = 177', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 177);
 }
 
 sec('2 · the director saves and reads back');
@@ -34,7 +35,7 @@ sec('2 · the director saves and reads back');
   ok('saved, numbered PW-', r.success && /^PW-\d{6}-\d{3}$/.test(r.reportNo), r);
   const row = (store.ProofReports || [])[0] || {};
   ok('  one row, under the stamped name and role, the form and the portal snapshot as given', (store.ProofReports || []).length === 1 &&
-     row['User'] === 'Neil Estur' && row['Role'] === 'director' && row['Report JSON'] === REPORT && row['Portal JSON'] === PORTAL && row.__arity === 9, row);
+     row['User'] === 'Neil Estur' && row['Role'] === 'director' && row['Report JSON'] === REPORT && row['Portal JSON'] === PORTAL && row.__arity === 11, row);
   const again = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT.replace('Plant A 10:00', 'Plant A 9:00'), portalJson: PORTAL }, NEIL));
   ok('saving the same day again replaces it (one row, count 2, same number)', again.success && again.saveCount === 2 && again.reportNo === r.reportNo &&
      store.ProofReports.length === 1 && /Plant A 9:00/.test(store.ProofReports[0]['Report JSON']), again);
@@ -81,6 +82,56 @@ sec('4 · what it refuses');
   ok('nothing was written by any of them', !(store.ProofReports || []).length);
   const empty = call(c, 'getProofReports', NEIL);
   ok('a read before anything is saved answers empty and does not create the tab', empty.success && empty.data.length === 0 && !('ProofReports' in store), empty);
+}
+
+sec('5 · A348: the 8:00 time is the server\'s, stamped once');
+{
+  const store = {};
+  const c = load(GS, store);
+  const v2 = (o) => JSON.stringify(Object.assign({ v: 2, dayType: 'desk', am: { plan: 'Calls to 20 plants' }, pm: { blocker: '' }, lines: [] }, o || {}));
+  const s1 = call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: v2({ am: { plan: 'x', givenAt: '2026-10-21T00:00:00.000Z' } }) }, NEIL));
+  ok('a time the page sends is not taken: no 8:00 report given yet', s1.success && JSON.parse(store.ProofReports[0]['Report JSON']).am.givenAt === '', store.ProofReports[0]);
+  const s2 = call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: v2(), giveAm: true }, NEIL));
+  const given = JSON.parse(store.ProofReports[0]['Report JSON']).am.givenAt;
+  ok('giving the 8:00 report stamps the server time', s2.success && /^\d{4}-\d{2}-\d{2}T/.test(given) && s2.givenAt === given, s2);
+  call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: v2({ am: { plan: 'changed', givenAt: '' } }), giveAm: true }, NEIL));
+  const after = JSON.parse(store.ProofReports[0]['Report JSON']).am;
+  ok('  once: a later save (even with giveAm, even sending a blank time) keeps the first stamp', after.givenAt === given && after.plan === 'changed', after);
+}
+
+sec('6 · A348: the 4:30 report is submitted once, its numbers fixed');
+{
+  const store = {};
+  const c = load(GS, store);
+  const v2 = (lines) => JSON.stringify({ v: 2, dayType: 'desk', am: {}, pm: { blocker: 'no blocker' }, lines: lines || [] });
+  const SNAP = JSON.stringify({ emailsSent: 42, callsLogged: 16, followUps: '3 of 3' });
+  const nope = call(c, 'submitProofReport', Object.assign({ date: '2026-10-21', reportJson: v2(), snapshotJson: '{}' }, NEIL));
+  ok('a submit with no numbers is refused', !nope.success && /no numbers/.test(nope.message));
+  const sub = call(c, 'submitProofReport', Object.assign({ date: '2026-10-21', reportJson: v2([{ id: 'L1', type: 'Call', note: 'first' }]), snapshotJson: SNAP }, NEIL));
+  const row = store.ProofReports[0];
+  ok('submitted: the report saved, the numbers and the time fixed', sub.success && row['Snapshot JSON'] === SNAP && !!row['Submitted At'] && /^\d{4}-/.test(sub.submittedAt) && row.__arity === 11, sub);
+  const at = row['Submitted At'];
+  const later = call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: v2([{ id: 'L1', type: 'Call', note: 'edited after' }]) }, NEIL));
+  ok('editing a line afterwards saves the line and leaves the snapshot and its time alone', later.success && store.ProofReports[0]['Snapshot JSON'] === SNAP &&
+     store.ProofReports[0]['Submitted At'] === at && /edited after/.test(store.ProofReports[0]['Report JSON']), store.ProofReports[0]);
+  const again = call(c, 'submitProofReport', Object.assign({ date: '2026-10-21', reportJson: v2(), snapshotJson: JSON.stringify({ emailsSent: 99 }) }, NEIL));
+  ok('a second submit is refused and changes nothing', !again.success && again.alreadySubmitted && /already submitted/.test(again.message) && store.ProofReports[0]['Snapshot JSON'] === SNAP, again);
+  const g = call(c, 'getProofReports', NEIL);
+  ok('the read returns the submitted time and the fixed numbers', g.success && g.data[0].submittedAt && g.data[0].snapshot && g.data[0].snapshot.callsLogged === 16, g.data[0]);
+  const asSales = call(c, 'submitProofReport', Object.assign({ date: '2026-10-21', reportJson: v2(), snapshotJson: SNAP }, { actorName: 'Gerald Lucena', actorRole: 'sales' }));
+  ok('only the director while it is a trial', !asSales.success && /trial/.test(asSales.message));
+}
+
+sec('7 · A348: a day saved by the A347 form is kept, not lost');
+{
+  const store = {};
+  const c = load(GS, store);
+  call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: REPORT }, NEIL));            // the A347 shape (no v)
+  call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: JSON.stringify({ v: 2, am: {}, lines: [] }) }, NEIL));
+  const kept = JSON.parse(store.ProofReports[0]['Report JSON']);
+  ok('the old form\'s content is kept under legacy', kept.v === 2 && kept.legacy && kept.legacy.huddle.plan === 'Plant A 10:00', kept);
+  call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: JSON.stringify({ v: 2, am: {}, lines: [] }) }, NEIL));
+  ok('  and stays there when the page saves again without it', JSON.parse(store.ProofReports[0]['Report JSON']).legacy.huddle.plan === 'Plant A 10:00');
 }
 
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
