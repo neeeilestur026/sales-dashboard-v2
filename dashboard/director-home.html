@@ -47,6 +47,7 @@
         </section>
 
         <nav class="dh-rail-nav" aria-label="On this page">
+          <a href="#proof">Daily report</a>
           <a href="#inbox">Needs you <span class="dh-count" id="inboxCount">0</span></a>
           <a href="#pulse">Pulse</a>
           <a href="#team">Team</a>
@@ -79,6 +80,16 @@
             Pricing engine
           </a>
         </header>
+
+        <!-- A347 — the sales daily report with proof (Neil's pack, 20 Oct 2026), a private trial: the 8:00, day, 4:30 and
+             Friday lines, each with its reference; the grey lines are the portal's and open the records behind them. -->
+        <section class="dh-glass dh-pow" id="proof">
+          <div class="dh-head">
+            <h2>Sales daily report with proof</h2>
+            <div class="dh-actions" id="powCtl"></div>
+          </div>
+          <div class="dh-pow-body" id="powBody"><div class="dh-empty">Reading your day…</div></div>
+        </section>
 
         <!-- The one inbox. Three loaders write into their own containers; this section only PLACES
              them (A146 action center, A190 approvals queue, the purchase-order strip) and counts. -->
@@ -424,6 +435,8 @@
   <script src="js/itinerary-week-panel.js"></script> <!-- A216 -->
   <script src="js/director-approvals.js"></script>   <!-- A190 -->
   <script src="js/director-pulse.js"></script>       <!-- A288: the Pulse band -->
+  <script src="js/proof-of-work-model.js"></script>  <!-- A347: the numbers -->
+  <script src="js/proof-of-work.js"></script>        <!-- A347: the section and its detail -->
   <script src="js/director-home-inline.js"></script>
 </body>
 </html>

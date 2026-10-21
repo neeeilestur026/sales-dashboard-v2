@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 175;   // A342 — remove one receivable; voiding an imported invoice moves no stock. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 176;   // A347 — the sales daily report with proof (a private trial store for the director). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -561,7 +561,10 @@ var SCHEMA = {
   // A340 — the director's standalone pricing engine. Its own tabs: nothing else reads or writes them.
   PETables:      ['Version', 'Effective Date', 'Tables JSON', 'Note', 'Saved By', 'Saved At'],
   PERecords:     ['Ref', 'Revision', 'Date', 'Client', 'Net Sale', 'COGS', 'Margin', 'Flags', 'Approver Needed', 'Status',
-                  'Approved By', 'Table Version', 'Inputs JSON', 'Result JSON', 'Saved By', 'Saved At']
+                  'Approved By', 'Table Version', 'Inputs JSON', 'Result JSON', 'Saved By', 'Saved At'],
+  // A347 — the sales daily report with proof (Neil's pack, 20 Oct 2026). Its own tab, read and written only by
+  // saveProofReport / getProofReports; nothing else reads it and nothing is written to the ActivityLog.
+  ProofReports:  ['Report No', 'Date', 'User', 'Role', 'Report JSON', 'Portal JSON', 'Created At', 'Updated At', 'Save Count']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -798,6 +801,7 @@ var _SECURED = {
   setOpeningBalance: 1, setPricingRequestSalesperson: 1, setQuotationEmailReply: 1, setQuotationFollowUp: 1, setQuotationSalesperson: 1, setSOSupplierType: 1,
   setTravelFloat: 1, setupFlowDrive: 1, snoozeQuotation: 1, submitCommissionRequest: 1, submitDailyReport: 1, submitForPricing: 1,
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
+  getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
@@ -15563,6 +15567,69 @@ function getDailyReports(p) {
   return { success: true, data: rows.map(_dailyReportOut) };
 }
 
+/* ── A347 · the sales daily report with proof ──────────────────────────────────────────────────────────
+   The form from Neil's pack (Hi-ESCORP_Proof_of_Work_Sales.pdf): the 8:00 huddle lines, the day's log lines, the
+   4:30 lines and the Friday lines, each with the record that proves it. One row per person per day; the form's
+   own fields travel as one JSON object, and so does the snapshot of the numbers the portal filled in.
+   A TRIAL: only the roles in FlowSettings 'proofReportRoles' (default: director) may save or read, so while Neil
+   tries it nobody else can see it — it is not a DailyReports row, it is not in All Daily Reports, and it is not
+   written to the ActivityLog. Secured: the name and role are the ones Flask stamps from the session. */
+var _POW_MAX_REPORT = 40000, _POW_MAX_PORTAL = 20000;
+function _powRoles() {
+  var raw = '';
+  try { raw = String((getFlowSettings().data || {}).proofReportRoles || ''); } catch (e) { raw = ''; }
+  var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  return list.length ? list : ['director'];
+}
+function _powAllowed(p) { return _powRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) >= 0; }
+function _powJson(s, max, label) {
+  var t = String(s == null ? '' : s);
+  if (!t) return { text: '{}' };
+  if (t.length > max) return { error: label + ' is too long (' + t.length + ' characters; the limit is ' + max + ').' };
+  try { var o = JSON.parse(t); if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('x'); }
+  catch (e) { return { error: label + ' is not a valid report.' }; }
+  return { text: t };
+}
+function _powOut(r) {
+  var parse = function (t) { try { return JSON.parse(String(t || '{}')); } catch (e) { return {}; } };
+  return { reportNo: String(r['Report No'] || ''), date: _dateStr(r['Date']), user: String(r['User'] || ''), role: String(r['Role'] || ''),
+           report: parse(r['Report JSON']), portal: parse(r['Portal JSON']),
+           createdAt: _webIso(r['Created At']), updatedAt: _webIso(r['Updated At']), saveCount: _num(r['Save Count']) };
+}
+
+/** saveProofReport({date, reportJson, portalJson}) — the signed-in person's report for one day, created or replaced. */
+function saveProofReport(p) {
+  if (!_powAllowed(p)) return { success: false, message: 'The sales daily report is in a trial; only ' + _powRoles().join(', ') + ' can use it.' };
+  var user = String(p.actorName || '').trim();
+  if (!user) return { success: false, message: 'Sign in again — the report has no name to save under.' };
+  var date = String(p.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { success: false, message: 'A report needs its date (yyyy-mm-dd).' };
+  if (date > _dateStr(new Date(Date.now() + 86400000))) return { success: false, message: 'A report cannot be saved for a day that has not come yet.' };
+  var rep = _powJson(p.reportJson, _POW_MAX_REPORT, 'The report'); if (rep.error) return { success: false, message: rep.error };
+  var por = _powJson(p.portalJson, _POW_MAX_PORTAL, 'The portal numbers'); if (por.error) return { success: false, message: por.error };
+  var sh = _sheet('ProofReports'), now = _now(), hit = null;
+  _rows('ProofReports').forEach(function (r) { if (_dateStr(r['Date']) === date && String(r['User']).trim().toLowerCase() === user.toLowerCase()) hit = r; });
+  var no = hit ? String(hit['Report No']) : _nextNumber('ProofReports', 1, 'PW');
+  var count = hit ? _num(hit['Save Count']) + 1 : 1;
+  var vals = [no, date, user, String(p.actorRole || ''), rep.text, por.text, hit ? hit['Created At'] : now, now, count];
+  if (hit) sh.getRange(hit.rowIndex, 1, 1, SCHEMA.ProofReports.length).setValues([vals]);
+  else _append('ProofReports', vals);
+  return { success: true, reportNo: no, date: date, user: user, saveCount: count, updatedAt: _webIso(now),
+           message: count > 1 ? 'Report updated.' : 'Report saved.' };
+}
+
+/** getProofReports({from?, to?, user?}) — saved reports, newest first. A read never creates the tab. */
+function getProofReports(p) {
+  p = p || {};
+  if (!_powAllowed(p)) return { success: false, message: 'The sales daily report is in a trial; only ' + _powRoles().join(', ') + ' can use it.' };
+  var sh = _ss().getSheetByName('ProofReports');
+  if (!sh || sh.getLastRow() < 2) return { success: true, data: [] };
+  var rows = _rows('ProofReports');
+  if (p.user) rows = rows.filter(function (r) { return String(r['User']).trim().toLowerCase() === String(p.user).trim().toLowerCase(); });
+  if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || '0000-01-01', p.to || '9999-12-31');
+  return { success: true, data: rows.map(_powOut).sort(function (a, b) { return b.date.localeCompare(a.date) || a.user.localeCompare(b.user); }) };
+}
+
 /** Management acknowledges a submitted report (optionally with a comment). */
 function reviewDailyReport(p) {
   if (!p.reportNo) return { success: false, message: 'reportNo required.' };
@@ -18854,6 +18921,7 @@ var HANDLERS = {
   saveQuotationPDF: saveQuotationPDF, savePOPDF: savePOPDF,
   getActivityLog: getActivityLog, getDailyNote: getDailyNote, saveDailyNote: saveDailyNote,
   submitDailyReport: submitDailyReport, getDailyReports: getDailyReports, reviewDailyReport: reviewDailyReport,
+  saveProofReport: saveProofReport, getProofReports: getProofReports,   // A347
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -18960,6 +19028,7 @@ var MUTATIONS = {
   rejectTravelReplenishment: 1, reviseTravelReplenishment: 1,
   setTravelFloat: 1, requestTravelFloatCash: 1,
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
+  saveProofReport: 1,   // A347
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -18988,6 +19057,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A347 THE SALES DAILY REPORT WITH PROOF, A PRIVATE TRIAL (176; A327 takes 177 or later). Neil, 21 Oct 2026: the form from his pack (Hi-ESCORP_Proof_of_Work_Sales.pdf) - the 8:00 huddle lines, the day's log, the 4:30 lines and the Friday lines, each with the record that proves it - first on the director's dashboard, for him to try before anyone else sees it. New tab ProofReports (one row per person per day; the form as Report JSON, the portal's numbers at save time as Portal JSON). saveProofReport and getProofReports are secured and refuse every role not in FlowSettings 'proofReportRoles' (default director); the name saved under is the one Flask stamps. Not a DailyReports row, not in All Daily Reports, not written to the ActivityLog. Reads never create the tab.
 A342 A DIRECTOR CORRECTION ON RECEIVABLES, AND VOIDING AN IMPORTED INVOICE (175; A327 takes 176 or later). Neil, 19 Oct 2026. removeReceivable: one receivable with no payment against it is removed, a full copy in Overrides ('removed-receivable', Expected = its invoice); expectAmount must match; getARAging returns removedInvoices, and the AR page, the Month check and backfillMissingAR then treat that invoice as answered, so it is never offered or re-created. First use: AR-202608-009 (MINCON ENTERPRISES, invoice 121, 38,607.93 before VAT), the receivable kept being DEMO-AR-001 (43,240.88, paid by DEMO-COL-001). voidInvoice puts back no stock for an invoice brought in from the old records (it never took any out; its one '(migrated)' line used to become an Inventory row 'Migrated legacy sales' of 1). First use: invoice 126 (Therma South, SO 150005851, 403,250.88), voided so accounting can re-issue the order as two invoices of 201,625.44, one per delivery. clearCommissionDemo now refuses on the live system (demo data off), because the DEMO- rows hold the real Mincon payment. Director only, secured, with dryRun.
 A341 WEBSITE QUOTE REQUESTS BECOME PURCHASE REQUESTS (174; A327 takes 175 or later). Neil, 18 Oct 2026: a quote request from hiescorp.com creates its purchase request by itself; it is NOT sent to management — it waits for admin's sourcing like any other — and belongs to "Admin" (WEBSITE_PR_OWNER) until admin forwards it to a sales rep (the existing setPricingRequestSalesperson), who makes the quotation. _webAutoConvert runs after each collection (and on later runs while some are still waiting): requests with products received after this version first ran (web_auto_since), at most 5 per run, each under its own short tryLock; requested by "Website (hiescorp.com)"; same rules as the inbox button (shared _webConvertCore: clientRef web:<ref> first, an existing client never patched, a new name a Prospect, every visitor string through _webCell). A failure leaves the request New with a note for a person and is not retried. WEBSITE_AUTO_PR_OFF switches it off; staging never does it. The alert email adds how many became purchase requests (counts only).
 A340 THE PRICING ENGINE (173; A327 takes the next free number, 174 or later, when it merges). A standalone pricing tool on the director's dashboard (director-pricing-engine.html, dashboard/js/pe-engine.js). The calculation runs in the browser; FlowAPI only keeps its own two tabs: PETables (the director's reference tables, every save a new version with an effective date) and PERecords (each priced quotation: inputs, table version, result, revision by revision). It reads and writes nothing else — no quotation, pricing request, inventory or order. Director only, all secured: peGetTables, peSaveTables, peSetApprovalCode (the director's and the president's codes, kept only as salted HMACs in Script Properties pe_code_director / pe_code_president, never returned), peSaveRecord ("Ready" only with no blocking flag and, when approval is needed, the right code; the president's covers the director's), peListRecords, peGetRecord.

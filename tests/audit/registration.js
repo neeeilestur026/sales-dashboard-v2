@@ -82,6 +82,7 @@ const EXCEPTIONS = {
     saveDailyNote:      '_dispatch excludes it by name — the note IS the daily report, not an event in it',
     submitDailyReport:  'documented at FlowAPI.gs — the report is the log, logging it would be circular',
     savePfInquiry:      'documented at FlowAPI.gs — a Product Finder inquiry is not a daily-report task',
+    saveProofReport:    'A347 — the sales daily report is a private trial; an ActivityLog row would show it in everyone\'s daily report',
     uploadScanPhoto:    'A318 — one row per photo would drown the report; the post that cites it is logged',
     ensureItemLabels:   'A318 — making a label code is bookkeeping, not a task',
     logLabelPrint:      'A318 — printing a label is not a task'
@@ -128,6 +129,7 @@ const EXCEPTIONS = {
     getBooksInbox:                 'A320 — a secured READ of the books',
     getBooksCoverage:              'A320 — a secured READ of the books',
     getWebRequests:                'A338 — a secured READ (website visitors\' personal data, admin / director)',
+    getProofReports:               'A347 — a secured READ (the private trial of the sales daily report, director only)',
     collectWebsiteRequestsNow:     'A338 — fetches from the website first, then takes its own short tryLock to file; holding the 20 s mutation lock across a network call would stall every user action',
     peGetTables:                   'A340 — a secured READ (the director\'s pricing tables)',
     peListRecords:                 'A340 — a secured READ (the director\'s priced quotations)',

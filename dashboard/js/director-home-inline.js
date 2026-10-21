@@ -72,6 +72,7 @@
 
   // ── Panel mounts (staggered, so the payroll calls go first) ──
   on(document, 'DOMContentLoaded', function () {
+    if (typeof proofOfWork === 'function') proofOfWork('proof');   // A347 — first on the page, so it loads first
     dhLoadPoStrip();
     if (typeof flowActionsStrip === 'function') later(function () { flowActionsStrip('flowActionCenter'); }, 300);
     if (typeof quotationTeamWorklist === 'function') later(function () { quotationTeamWorklist('qtwPanel'); }, 500);
@@ -171,7 +172,7 @@
         links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + en.target.id); });
       });
     }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
-    ['inbox', 'pulse', 'team', 'payroll'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
+    ['proof', 'inbox', 'pulse', 'team', 'payroll'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
   })();
 
   // ── The tab indicator slides under whichever .dh-tab is active ──
