@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Book</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/client-book.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content cb-main">
+    <!-- A350 — the Client Book, a private trial (Neil, 21 Oct 2026): clients with their contact people, accreditation and
+         sales status, beside their purchase requests and quotations. Only the director can open it; it never changes
+         the real client list, PRs or quotations. js/client-book.js draws it. -->
+    <div class="hband">
+      <div class="left">
+        <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
+        <div><h1>Client Book</h1><p>Every client with its contact people, its accreditation and, once accredited, where the sales stand, read beside its purchase requests and quotations.</p></div>
+      </div>
+      <div class="cb-actions">
+        <span class="cb-trial">Trial — only you can see it</span>
+        <button type="button" class="btn btn-secondary" id="cbExport">Export CSV</button>
+        <button type="button" class="btn btn-primary" id="cbAdd">Add client</button>
+      </div>
+    </div>
+    <div id="cbNotice"></div>
+    <div class="cb-chips" id="cbChips" role="group" aria-label="Show"></div>
+    <div class="cb-filters" id="cbFilters"></div>
+    <div class="cb-scroll"><table class="cb-table" id="cbTable"></table></div>
+    <p class="cb-foot" id="cbFoot"></p>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/client-rollup.js"></script>
+  <script src="js/client-book-model.js"></script>
+  <script src="js/client-book.js"></script>
+</body>
+</html>

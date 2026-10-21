@@ -74,6 +74,7 @@
   on(document, 'DOMContentLoaded', function () {
     if (typeof salesReport === 'function') salesReport('proof');   // A348 — first on the page, so it loads first
     dhLoadPoStrip();
+    if (typeof clientBookCard === 'function') clientBookCard('cbcBody');   // A350 — the Client Book trial's counts
     if (typeof flowActionsStrip === 'function') later(function () { flowActionsStrip('flowActionCenter'); }, 300);
     if (typeof quotationTeamWorklist === 'function') later(function () { quotationTeamWorklist('qtwPanel'); }, 500);
     if (typeof itineraryWeekPanel === 'function') later(function () { itineraryWeekPanel('iwpPanel'); }, 700);

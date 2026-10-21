@@ -148,6 +148,7 @@ const FLOW_SECURED_ACTIONS = [
   'reviseQuotation', 'reviseTravelReplenishment', 'reviseWeeklyItinerary', 'runDriveMigration', 'runDriveMigrationAll',
   'runPricingRequestOwnerBackfill', 'runQuotationOwnerBackfill', 'runQuotationSentAtBackfill', 'saveClient', 'saveDailyNote',
   'getProofReports', 'saveProofReport', 'submitProofReport',   // A347 / A348 — the private sales daily report (a trial)
+  'archiveClientBookClient', 'getClientBook', 'saveClientBookClient', 'setClientBookStatus',   // A350 — the Client Book trial
   'saveLeadgenRecord', 'saveMarketingRecord', 'savePOPDF', 'savePRPDF', 'savePaymentRequestPDF',
   'savePfInquiry', 'saveQuotationPDF', 'saveSOCostDetails', 'saveSONotes', 'saveSupplier',
   'saveTravelPDF', 'saveTravelReplenishment', 'saveWeeklyItinerary', 'seedClientAliases', 'seedCommissionDemo',

@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 177;   // A348 — the sales daily report: the 4:30 snapshot fixed at submit, the 8:00 time stamped. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 178;   // A350 — the Client Book, a private trial for the director. History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -565,7 +565,14 @@ var SCHEMA = {
   // A347 — the sales daily report with proof (Neil's pack, 20 Oct 2026). Its own tab, read and written only by
   // saveProofReport / getProofReports; nothing else reads it and nothing is written to the ActivityLog.
   ProofReports:  ['Report No', 'Date', 'User', 'Role', 'Report JSON', 'Portal JSON', 'Created At', 'Updated At', 'Save Count',
-                  'Submitted At', 'Snapshot JSON']   // A348 — the 4:30 report, fixed once submitted
+                  'Submitted At', 'Snapshot JSON'],   // A348 — the 4:30 report, fixed once submitted
+  // A350 — the Client Book (a private trial): one row per client, and a log that is only ever appended to. Read and
+  // written only by getClientBook / saveClientBookClient / setClientBookStatus / archiveClientBookClient.
+  ClientBook:    ['Client No', 'Company', 'Key', 'Owner', 'Accreditation', 'Accreditation Step', 'Accreditation Note',
+                  'Accredited Until', 'Accreditation Updated At', 'Status', 'Status Note', 'Status Ref', 'Status Updated At',
+                  'Next Step', 'Next Step Date', 'Contacts JSON', 'Notes', 'Created By', 'Created At', 'Updated By', 'Updated At',
+                  'Archived At', 'Archive Reason'],
+  ClientBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -804,6 +811,7 @@ var _SECURED = {
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
+  getClientBook: 1, saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350 — the Client Book trial; its read is private too
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
@@ -15676,6 +15684,191 @@ function getProofReports(p) {
   return { success: true, data: rows.map(_powOut).sort(function (a, b) { return b.date.localeCompare(a.date) || a.user.localeCompare(b.user); }) };
 }
 
+/* ── A350 · the Client Book, a private trial ────────────────────────────────────────────────────────────
+   Neil, 21 Oct 2026: a client list with several contact people (each with several emails and phones), the
+   accreditation (Accredited / On process / Not accredited, with its last update) and, once accredited, the sales
+   status — read beside the client's purchase requests and quotations. A trial: only the roles in FlowSettings
+   'clientBookRoles' (default director) may read or write it, it never touches the real Clients sheet, LgAccred,
+   PRs or quotations, and nothing goes to the ActivityLog. Every change is a ClientBookLog row; nothing is deleted. */
+var CB_ACCRED = ['Accredited', 'On process', 'Not accredited'];
+var CB_STEPS = ['Requirements received', 'Documents submitted', 'Under evaluation', 'Site audit'];
+var CB_STATUS = ['Pending RFQ', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];
+var _CB_MAX_CONTACTS = 20000;
+function _cbRoles() {
+  var raw = '';
+  try { raw = String((getFlowSettings().data || {}).clientBookRoles || ''); } catch (e) { raw = ''; }
+  var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  return list.length ? list : ['director'];
+}
+function _cbDenied(p) {
+  if (_cbRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) < 0) return 'The Client Book is in a trial; only ' + _cbRoles().join(', ') + ' can use it.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save the change under.';
+  return '';
+}
+function _cbDate(v) { var s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
+/** The contact people as JSON: at most 30 people, each with up to 10 emails and 10 phones; every email checked. */
+function _cbContacts(json) {
+  var t = String(json == null ? '' : json).trim();
+  if (!t) return { text: '[]', list: [] };
+  if (t.length > _CB_MAX_CONTACTS) return { error: 'The contacts are too long (' + t.length + ' characters; the limit is ' + _CB_MAX_CONTACTS + ').' };
+  var list;
+  try { list = JSON.parse(t); } catch (e) { return { error: 'The contacts could not be read.' }; }
+  if (!Array.isArray(list)) return { error: 'The contacts could not be read.' };
+  if (list.length > 30) return { error: 'A client can have up to 30 contact people.' };
+  var out = [], bad = '';
+  list.forEach(function (c, i) {
+    if (!c || typeof c !== 'object') return;
+    var emails = (Array.isArray(c.emails) ? c.emails : []).map(function (e) { return _webCell(e).toLowerCase(); }).filter(Boolean).slice(0, 10);
+    var phones = (Array.isArray(c.phones) ? c.phones : []).map(function (x) { return _webCell(x).slice(0, 40); }).filter(Boolean).slice(0, 10);
+    emails.forEach(function (e) { if (!bad && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) bad = '"' + e + '" is not an email address.'; });
+    var name = _webCell(c.name).slice(0, 120);
+    if (!name && !emails.length && !phones.length) return;
+    out.push({ id: _webCell(c.id).slice(0, 24) || ('P' + (i + 1)), name: name, position: _webCell(c.position).slice(0, 120), emails: emails, phones: phones,
+               primary: c.primary === true, note: _webCell(c.note).slice(0, 190) });
+  });
+  if (bad) return { error: bad };
+  if (out.length && !out.some(function (c) { return c.primary; })) out[0].primary = true;
+  return { text: JSON.stringify(out), list: out };
+}
+function _cbRow(no) {
+  var hit = null;
+  _rows('ClientBook').forEach(function (r) { if (String(r['Client No']) === String(no)) hit = r; });
+  return hit;
+}
+/** Write a whole client row in SCHEMA order, so the width always matches. */
+function _cbPut(row, obj) {
+  var vals = SCHEMA.ClientBook.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('ClientBook').getRange(row.rowIndex, 1, 1, SCHEMA.ClientBook.length).setValues([vals]);
+  else _append('ClientBook', vals);
+}
+function _cbLog(clientNo, kind, from, to, note, ref, by) {
+  var no = _nextNumber('ClientBookLog', 1, 'CBL');
+  _append('ClientBookLog', [no, clientNo, kind, _webCell(from), _webCell(to), _webCell(note, true).slice(0, 500), _webCell(ref).slice(0, 60), by, _now()]);
+}
+function _cbOut(r) {
+  var contacts = [];
+  try { contacts = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { contacts = []; }
+  return { clientNo: String(r['Client No']), company: String(r['Company'] || ''), key: String(r['Key'] || ''), owner: String(r['Owner'] || ''),
+           accreditation: String(r['Accreditation'] || ''), accreditationStep: String(r['Accreditation Step'] || ''),
+           accreditationNote: String(r['Accreditation Note'] || ''), accreditedUntil: r['Accredited Until'] ? _dateStr(r['Accredited Until']) : '',
+           accreditationUpdatedAt: _webIso(r['Accreditation Updated At']), status: String(r['Status'] || ''), statusNote: String(r['Status Note'] || ''),
+           statusRef: String(r['Status Ref'] || ''), statusUpdatedAt: _webIso(r['Status Updated At']), nextStep: String(r['Next Step'] || ''),
+           nextStepDate: r['Next Step Date'] ? _dateStr(r['Next Step Date']) : '', contacts: contacts, notes: String(r['Notes'] || ''),
+           createdBy: String(r['Created By'] || ''), createdAt: _webIso(r['Created At']), updatedBy: String(r['Updated By'] || ''),
+           updatedAt: _webIso(r['Updated At']), archivedAt: _webIso(r['Archived At']), archiveReason: String(r['Archive Reason'] || '') };
+}
+
+/** getClientBook() — every client (archived ones too) and the whole log. A read never creates the tabs. */
+function getClientBook(p) {
+  var no = _cbDenied(p || {});
+  if (no) return { success: false, message: no };
+  var sh = _ss().getSheetByName('ClientBook'), lg = _ss().getSheetByName('ClientBookLog');
+  var clients = sh && sh.getLastRow() >= 2 ? _rows('ClientBook').map(_cbOut) : [];
+  var log = lg && lg.getLastRow() >= 2 ? _rows('ClientBookLog').map(function (r) {
+    return { logNo: String(r['Log No']), clientNo: String(r['Client No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
+             to: String(r['To'] || ''), note: String(r['Note'] || ''), ref: String(r['Ref'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
+  }) : [];
+  return { success: true, clients: clients, log: log, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS } };
+}
+
+/** saveClientBookClient({clientNo?, company, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?}) */
+function saveClientBookClient(p) {
+  var no = _cbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), company = _webCell(p.company).slice(0, 160), key = company ? _canonKey(company) : '';
+  if (!company || !key) return { success: false, message: 'A client needs its company name.' };
+  var ct = _cbContacts(p.contactsJson);
+  if (ct.error) return { success: false, message: ct.error };
+  var nextDate = String(p.nextStepDate || '').trim();
+  if (nextDate && !_cbDate(nextDate)) return { success: false, message: 'The next step date must be a date (yyyy-mm-dd).' };
+  var row = p.clientNo ? _cbRow(p.clientNo) : null;
+  if (p.clientNo && !row) return { success: false, message: 'Client ' + p.clientNo + ' is not in the Client Book.' };
+  if (row && row['Archived At']) return { success: false, message: 'This client is archived; restore it first.' };
+  var accred = String(p.accreditation || '').trim();
+  if (!row && accred && CB_ACCRED.indexOf(accred) < 0) return { success: false, message: 'Accreditation must be one of: ' + CB_ACCRED.join(', ') + '.' };
+  var allow = p.allowDuplicate === true || String(p.allowDuplicate) === 'true';
+  if (!allow) {
+    var twin = null;
+    _rows('ClientBook').forEach(function (r) { if (!r['Archived At'] && String(r['Key']) === key && (!row || String(r['Client No']) !== String(row['Client No']))) twin = r; });
+    if (twin) return { success: false, duplicate: String(twin['Client No']), message: '"' + twin['Company'] + '" (' + twin['Client No'] + ') is already in the Client Book.' };
+  }
+  var now = _now(), owner = _webCell(p.owner).slice(0, 80);
+  var obj = {};
+  if (row) SCHEMA.ClientBook.forEach(function (h) { obj[h] = row[h]; });
+  else Object.assign(obj, { 'Created By': by, 'Created At': now, 'Accreditation': accred || 'Not accredited', 'Accreditation Updated At': now });
+  Object.assign(obj, { 'Company': company, 'Key': key, 'Owner': owner, 'Contacts JSON': ct.text, 'Notes': _webCell(p.notes, true).slice(0, 2000),
+                       'Next Step': _webCell(p.nextStep).slice(0, 190), 'Next Step Date': nextDate, 'Updated By': by, 'Updated At': now });
+  var clientNo = row ? String(row['Client No']) : _nextNumber('ClientBook', 1, 'CB');
+  obj['Client No'] = clientNo;
+  _cbPut(row, obj);
+  if (!row) {
+    _cbLog(clientNo, 'created', '', company, owner ? 'Owner: ' + owner + '. ' + obj['Accreditation'] + '.' : obj['Accreditation'] + '.', '', by);
+  } else {
+    var changed = [];
+    if (String(row['Company']) !== company) changed.push('company "' + row['Company'] + '" to "' + company + '"');
+    if (String(row['Owner']) !== owner) changed.push('owner ' + (row['Owner'] || '—') + ' to ' + (owner || '—'));
+    if (String(row['Next Step']) !== obj['Next Step'] || (row['Next Step Date'] ? _dateStr(row['Next Step Date']) : '') !== nextDate) changed.push('next step');
+    if (String(row['Notes']) !== obj['Notes']) changed.push('notes');
+    if (changed.length) _cbLog(clientNo, 'details', '', '', 'Changed ' + changed.join(', ') + '.', '', by);
+    var before = []; try { before = JSON.parse(String(row['Contacts JSON'] || '[]')); } catch (e) { before = []; }
+    if (JSON.stringify(before) !== ct.text) {
+      var names = function (l) { return l.map(function (c) { return c.name || (c.emails || [])[0] || (c.phones || [])[0] || ''; }); };
+      var was = names(before), is = names(ct.list);
+      var added = is.filter(function (n) { return was.indexOf(n) < 0; }), gone = was.filter(function (n) { return is.indexOf(n) < 0; });
+      _cbLog(clientNo, 'contacts', String(before.length), String(ct.list.length),
+             [added.length ? 'Added ' + added.join(', ') : '', gone.length ? 'Removed ' + gone.join(', ') : '', !added.length && !gone.length ? 'Details changed' : ''].filter(Boolean).join('. ') + '.', '', by);
+    }
+  }
+  return { success: true, clientNo: clientNo, client: _cbOut(obj), message: row ? 'Client updated.' : 'Client added.' };
+}
+
+/** setClientBookStatus({clientNo, kind: 'accreditation'|'status', value, step?, until?, note, ref?}) */
+function setClientBookStatus(p) {
+  var no = _cbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), row = _cbRow(p.clientNo);
+  if (!row) return { success: false, message: 'Client ' + (p.clientNo || '') + ' is not in the Client Book.' };
+  if (row['Archived At']) return { success: false, message: 'This client is archived; restore it first.' };
+  var kind = String(p.kind || ''), value = String(p.value || '').trim(), note = _webCell(p.note, true).slice(0, 500), now = _now();
+  var obj = {}; SCHEMA.ClientBook.forEach(function (h) { obj[h] = row[h]; });
+  var from;
+  if (kind === 'accreditation') {
+    if (CB_ACCRED.indexOf(value) < 0) return { success: false, message: 'Accreditation must be one of: ' + CB_ACCRED.join(', ') + '.' };
+    var step = String(p.step || '').trim(), until = String(p.until || '').trim();
+    if (step && (value !== 'On process' || CB_STEPS.indexOf(step) < 0)) return { success: false, message: 'A step only goes with On process, and must be one of: ' + CB_STEPS.join(', ') + '.' };
+    if (until && (value !== 'Accredited' || !_cbDate(until))) return { success: false, message: 'An accredited-until date only goes with Accredited, as a date.' };
+    from = String(row['Accreditation'] || '') + (row['Accreditation Step'] ? ' (' + row['Accreditation Step'] + ')' : '');
+    Object.assign(obj, { 'Accreditation': value, 'Accreditation Step': step, 'Accreditation Note': note, 'Accredited Until': until, 'Accreditation Updated At': now });
+    _cbPut(row, Object.assign(obj, { 'Updated By': by, 'Updated At': now }));
+    _cbLog(String(row['Client No']), 'accreditation', from, value + (step ? ' (' + step + ')' : '') + (until ? ' until ' + until : ''), note, '', by);
+  } else if (kind === 'status') {
+    if (String(row['Accreditation']) !== 'Accredited') return { success: false, message: 'The sales status is for an accredited client; this one is ' + (row['Accreditation'] || 'not accredited') + '.' };
+    if (CB_STATUS.indexOf(value) < 0) return { success: false, message: 'The status must be one of: ' + CB_STATUS.join(', ') + '.' };
+    var ref = _webCell(p.ref).slice(0, 60);
+    from = String(row['Status'] || '');
+    Object.assign(obj, { 'Status': value, 'Status Note': note, 'Status Ref': ref, 'Status Updated At': now });
+    _cbPut(row, Object.assign(obj, { 'Updated By': by, 'Updated At': now }));
+    _cbLog(String(row['Client No']), 'status', from, value, note, ref, by);
+  } else return { success: false, message: 'Say whether this is the accreditation or the sales status.' };
+  return { success: true, clientNo: String(row['Client No']), client: _cbOut(obj), at: _webIso(now) };
+}
+
+/** archiveClientBookClient({clientNo, reason, restore?}) — set aside with a reason, or brought back. Never a delete. */
+function archiveClientBookClient(p) {
+  var no = _cbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), row = _cbRow(p.clientNo);
+  if (!row) return { success: false, message: 'Client ' + (p.clientNo || '') + ' is not in the Client Book.' };
+  var restore = p.restore === true || String(p.restore) === 'true', reason = _webCell(p.reason).slice(0, 190), now = _now();
+  if (!restore && !reason) return { success: false, message: 'Say why the client is being archived.' };
+  if (restore === !row['Archived At']) return { success: false, message: restore ? 'This client is not archived.' : 'This client is already archived.' };
+  var obj = {}; SCHEMA.ClientBook.forEach(function (h) { obj[h] = row[h]; });
+  Object.assign(obj, { 'Archived At': restore ? '' : now, 'Archive Reason': restore ? '' : reason, 'Updated By': by, 'Updated At': now });
+  _cbPut(row, obj);
+  _cbLog(String(row['Client No']), restore ? 'restored' : 'archived', '', '', restore ? '' : reason, '', by);
+  return { success: true, clientNo: String(row['Client No']), client: _cbOut(obj) };
+}
+
 /** Management acknowledges a submitted report (optionally with a comment). */
 function reviewDailyReport(p) {
   if (!p.reportNo) return { success: false, message: 'reportNo required.' };
@@ -18969,6 +19162,8 @@ var HANDLERS = {
   submitDailyReport: submitDailyReport, getDailyReports: getDailyReports, reviewDailyReport: reviewDailyReport,
   saveProofReport: saveProofReport, getProofReports: getProofReports,   // A347
   submitProofReport: submitProofReport,   // A348
+  getClientBook: getClientBook, saveClientBookClient: saveClientBookClient, setClientBookStatus: setClientBookStatus,
+  archiveClientBookClient: archiveClientBookClient,   // A350
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -19077,6 +19272,7 @@ var MUTATIONS = {
   saveQuotationPDF: 1, savePOPDF: 1, saveDailyNote: 1, submitDailyReport: 1, reviewDailyReport: 1,
   saveProofReport: 1,   // A347
   submitProofReport: 1,   // A348
+  saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -19105,6 +19301,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A350 THE CLIENT BOOK, A PRIVATE TRIAL (178; A327 takes 179 or later). Neil, 21 Oct 2026: a client list with several contact people (each with several emails and phones), the accreditation (Accredited / On process / Not accredited, with its last update) and, once accredited, the sales status, read beside the client's purchase requests and quotations, and tracked in the Sales Daily Report trial. New tabs ClientBook (one row per client; contacts as JSON) and ClientBookLog (every change, appended only). getClientBook, saveClientBookClient (duplicates by _canonKey refused unless allowed), setClientBookStatus (the lists enforced; a sales status only for an accredited client) and archiveClientBookClient (archive or restore, never a delete) are secured and refuse every role not in FlowSettings 'clientBookRoles' (default director). It never writes Clients, LgAccred, PRs or quotations, and nothing goes to the ActivityLog. Reads never create the tabs.
 A348 THE SALES DAILY REPORT, REDESIGNED (177; A327 takes 178 or later). Neil, 21 Oct 2026: the report is the count - the portal's numbers, one-line log lines with links, one line of plan at 8:00 and one of blocker at 4:30 - still a private trial on the director's dashboard. ProofReports gains Submitted At and Snapshot JSON. submitProofReport saves the day and fixes the 4:30 numbers for good (a second submit is refused; later saves carry the snapshot over untouched). saveProofReport stamps the 8:00 report's givenAt with the server time once (giveAm) and keeps the stored time over whatever the page sends. A day saved by the A347 form is kept under 'legacy' the first time the new form saves it. Still director-only (proofReportRoles), still no ActivityLog row.
 A347 THE SALES DAILY REPORT WITH PROOF, A PRIVATE TRIAL (176; A327 takes 177 or later). Neil, 21 Oct 2026: the form from his pack (Hi-ESCORP_Proof_of_Work_Sales.pdf) - the 8:00 huddle lines, the day's log, the 4:30 lines and the Friday lines, each with the record that proves it - first on the director's dashboard, for him to try before anyone else sees it. New tab ProofReports (one row per person per day; the form as Report JSON, the portal's numbers at save time as Portal JSON). saveProofReport and getProofReports are secured and refuse every role not in FlowSettings 'proofReportRoles' (default director); the name saved under is the one Flask stamps. Not a DailyReports row, not in All Daily Reports, not written to the ActivityLog. Reads never create the tab.
 A342 A DIRECTOR CORRECTION ON RECEIVABLES, AND VOIDING AN IMPORTED INVOICE (175; A327 takes 176 or later). Neil, 19 Oct 2026. removeReceivable: one receivable with no payment against it is removed, a full copy in Overrides ('removed-receivable', Expected = its invoice); expectAmount must match; getARAging returns removedInvoices, and the AR page, the Month check and backfillMissingAR then treat that invoice as answered, so it is never offered or re-created. First use: AR-202608-009 (MINCON ENTERPRISES, invoice 121, 38,607.93 before VAT), the receivable kept being DEMO-AR-001 (43,240.88, paid by DEMO-COL-001). voidInvoice puts back no stock for an invoice brought in from the old records (it never took any out; its one '(migrated)' line used to become an Inventory row 'Migrated legacy sales' of 1). First use: invoice 126 (Therma South, SO 150005851, 403,250.88), voided so accounting can re-issue the order as two invoices of 201,625.44, one per delivery. clearCommissionDemo now refuses on the live system (demo data off), because the DEMO- rows hold the real Mincon payment. Director only, secured, with dryRun.

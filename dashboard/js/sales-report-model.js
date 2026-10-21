@@ -109,7 +109,8 @@ function srIndex(raw) {
     quotations: (r.quotations || []).filter(q => q && !_srDemo(q.quotationNo)),
     sos: (r.salesOrders || []).filter(s => s && !_srDemo(s.soNo)),
     activity: r.activity || [], calls: r.calls || [], visits: r.visits || [], itins: r.itineraries || [],
-    hasSO: {}, links: {}, qByNo: {}, prs: {}, prCreated: {}, qSent: {}
+    hasSO: {}, links: {}, qByNo: {}, prs: {}, prCreated: {}, qSent: {},
+    book: { clients: (r.book && r.book.clients) || [], log: (r.book && r.book.log) || [] }   // A350 — the Client Book trial, when FlowAPI 178 is in
   };
   ix.sos.forEach(s => { if (s.quotationNo) ix.hasSO[_srS(s.quotationNo)] = true; });
   ix.quotations.forEach(q => { ix.qByNo[_srS(q.quotationNo)] = q; });
@@ -412,7 +413,19 @@ function srPortalFeed(ix, me, day, sent, received) {
         text: (pr ? 'PR ' : 'Quotation ') + _srS(a.action).toLowerCase() + ((p && p.customer) || (q && q.customer) ? ' — ' + _srS((p && p.customer) || q.customer) : '') +
               (q && _srNet(q) ? ', ' + srMoney(_srNet(q)) : '') });
     });
+  /* A350 — the person's Client Book changes that day */
+  const co = {};
+  ix.book.clients.forEach(c => { co[c.clientNo] = _srS(c.company); });
+  ix.book.log.filter(l => _srSame(l.by, me.name) && _srDate(l.at) === day).forEach(l => items.push({ kind: 'client', sort: srMinutes(l.at), time: srClock(l.at), ref: '',
+    text: srClientBookText(l) + (co[l.clientNo] ? ' — ' + co[l.clientNo] : '') }));
   return items.sort((a, b) => a.sort - b.sort);
+}
+/** One Client Book log row as a feed line. */
+function srClientBookText(l) {
+  const ch = (what) => what + (l.from ? ' ' + _srS(l.from) + ' → ' : ' ') + _srS(l.to) + (l.ref ? ' (' + _srS(l.ref) + ')' : '');
+  return l.kind === 'created' ? 'Added to the Client Book' : l.kind === 'accreditation' ? ch('Accreditation') : l.kind === 'status' ? ch('Status')
+    : l.kind === 'contacts' ? 'Contacts updated' : l.kind === 'archived' ? 'Archived from the Client Book' : l.kind === 'restored' ? 'Restored to the Client Book'
+    : 'Client details updated';
 }
 /** "Other portal activity today" — the rest of the person's log, not part of the sales report. */
 function srOtherActivity(ix, me, day) {
@@ -430,6 +443,9 @@ function srLinkOptions(ix, me, day, sent, received) {
     quotation: srOpenQuotes(ix, me, day).map(q => ({ id: _srS(q.quotationNo), label: _srS(q.quotationNo) + ' — ' + _srS(q.customer) + ', ' + srMoney(_srNet(q)), company: _srS(q.customer) })),
     pr: Object.keys(ix.prs).filter(no => { const p = ix.prs[no], c = ix.prCreated[no]; const d = c ? _srDate(c.ts) : _srDate(p.date); return _srSame(p.salesperson || p.requestedBy, me.name) && d >= from && d <= day; })
       .map(no => ({ id: no, label: no + ' — ' + _srS(ix.prs[no].customer), company: _srS(ix.prs[no].customer) })),
+    /* A350 — the Client Book's clients, the person's own first (in the trial the director links to anyone's) */
+    client: ix.book.clients.filter(c => !c.archivedAt).sort((a, b) => (_srSame(b.owner, me.name) - _srSame(a.owner, me.name)) || _srS(a.company).localeCompare(_srS(b.company)))
+      .map(c => ({ id: _srS(c.clientNo), label: _srS(c.company) + (c.owner && !_srSame(c.owner, me.name) ? ' — ' + _srS(c.owner) : '') + ' (' + (_srS(c.status) || _srS(c.accreditation)) + ')', company: _srS(c.company) })),
     email: (sent || []).map(e => ({ id: _srS(e.messageId), label: 'Sent ' + srClock(e.sentAt) + ' — ' + (_srS(e.subject) || '(no subject)'), company: _srS(e.company) }))
       .concat((received || []).filter(e => _srDate(e.date || e.sentAt) === day).map(e => ({ id: _srS(e.messageId), label: 'Received ' + srClock(e.date || e.sentAt) + ' — ' + (_srS(e.subject) || '(no subject)'), company: _srS(e.company) })))
   };
@@ -469,6 +485,6 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
                      srPlanned, srDayType, srOpenQuotes, srFollowUps, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
-                     srSnapshot, srPortalFeed, srOtherActivity, srLinkOptions, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
+                     srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays };
 }

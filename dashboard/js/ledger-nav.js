@@ -53,6 +53,7 @@ const LEDGER_NAV = {
   director: [
     ['Home', 'home', 'director-home.html'],
     ['Pricing', 'tag', 'director-pricing-engine.html'],   // A340 — the standalone pricing engine
+    ['Client Book', 'book', 'director-client-book.html'],   // A350 — the Client Book trial
     ['Quotes', 'file', [['website-requests.html', 'Website requests'], ['flow-quotations.html', 'All quotations'], ['quotation-board.html', 'Quotation board'], ['client-tracker.html', 'Client tracker'], ['flow-purchase-orders.html', 'Purchase orders'], ['product-finder.html', 'Product finder']]],
     ['Payables', 'card', [['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-payments.html', 'Payment register'], ['director-expenses.html', 'Expenses'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Commissions for payroll'], ['commission-rates.html', 'Commission rates']]],
     ['Reports', 'chart', [['director-sales-orders.html', 'Sales orders'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['month-check.html', 'Month check']]],
