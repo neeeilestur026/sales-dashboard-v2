@@ -642,6 +642,7 @@ SECURED_ACTIONS = [
     "deleteLeadgenRecord", "deleteMarketingRecord", "deleteMigratedRecords", "deletePaymentRequest", "deletePurchaseOrder",
     "deleteQuotation", "deleteSalesCall", "deleteSalesOrder", "deleteSupplier", "deleteTravelReplenishment",
     "deleteWeeklyItinerary", "dismissQuotationEmail", "dispatchHireUnit", "getCommissionClaimable", "getCommissionRequests",
+    "getProofReports", "saveProofReport",   # A347 — the private sales daily report (a trial)
     "getTravelFloats", "getTravelReceipts", "getTravelReplenishments", "importCollections", "importExpenses",
     "importInventory", "importPricingSubmissions", "importSOCostDetails", "importSalesOrders", "linkQuotationEmail",
     "logClientVisit", "logSalesCall", "markCommissionReleased", "markPaymentRequestPaid", "matchSupplierTypes",

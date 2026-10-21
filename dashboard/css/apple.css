@@ -215,6 +215,9 @@ html[data-skin="ledger"][data-look="apple"] body.flow-screen .step.cur { backgro
 @keyframes a-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes a-sheet { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes a-pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+/* A347 — the standard dialogs sit above the sidebar (1010) and the toolbar, so the scrim covers the whole window and a
+   wide dialog is never clipped under the sidebar. Pages that stack a dialog higher (#flowDocsModal) keep their own level. */
+html[data-skin="ledger"][data-look="apple"] .modal-overlay, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay, html[data-skin="ledger"][data-look="apple"] .dh-overlay { z-index: 1020; }
 html[data-skin="ledger"][data-look="apple"] .modal-overlay, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay { background: var(--l-p-scrim); }
 html[data-skin="ledger"][data-look="apple"] .modal-overlay.open, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay.open { animation: a-fade 200ms ease-out both; }
 html[data-skin="ledger"][data-look="apple"] .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal { border: 0; border-radius: 14px; box-shadow: var(--l-p-shadow-pop); }
@@ -250,6 +253,9 @@ html[data-skin="ledger"][data-look="apple"] .fa-list > .fa-row[data-tone="urgent
 
 /* the director's home: the approvals list (seven columns, three buttons) fits beside a slightly narrower figures rail */
 html[data-skin="ledger"][data-look="apple"] body.dh .dh-deck { grid-template-columns: minmax(0, 1fr) 272px; }
+/* A347 — with the sidebar and the rail, the column is narrow up to about 1100 px: the payroll tab strip scrolls inside
+   itself there instead of pushing the page sideways (director-home.css does the same below 760 px). */
+html[data-skin="ledger"][data-look="apple"] body.dh .dh-seg { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
 html[data-skin="ledger"][data-look="apple"] body.dh .dh-facts dd.accent, html[data-skin="ledger"][data-look="apple"] .hx-facts dd.accent { color: var(--l-accent); }   /* the light accent is for chart bars, never for text */
 html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .da-wrap .flow-table th, html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .da-wrap .flow-table td { padding-left: 6px; padding-right: 6px; }
 html[data-skin="ledger"][data-look="apple"] body.dh #dirApprovals .flow-table td.da-no { white-space: normal; min-width: 112px; }   /* an ITIN code stays whole; a long name wraps at its spaces */
@@ -272,6 +278,7 @@ html[data-skin="ledger"][data-look="apple"] .em-hero .btn { color: var(--a-ink-o
   html[data-skin="ledger"][data-look="apple"] body { padding-left: 0; padding-bottom: 0; }
   html[data-skin="ledger"][data-look="apple"] .navbar { left: 0; padding: 0 10px; }
   html[data-skin="ledger"][data-look="apple"] .a-menu { display: grid; }
+  html[data-skin="ledger"][data-look="apple"] body.dh .dh-deck { grid-template-columns: 1fr; }   /* A347 — stack the director's column and rail, as ledger.css does */
   html[data-skin="ledger"][data-look="apple"] .l-who { display: none; }
   html[data-skin="ledger"][data-look="apple"] .l-crumbs { display: flex; font-size: 0; }                 /* the section name is a bare text node: only the page title shows */
   html[data-skin="ledger"][data-look="apple"] .l-crumbs b { font-size: 15px; }

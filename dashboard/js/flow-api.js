@@ -147,6 +147,7 @@ const FLOW_SECURED_ACTIONS = [
   'returnHireUnit', 'reverseReceiving', 'reviewDailyReport', 'reviseCommissionRequest', 'revisePaymentRequest',
   'reviseQuotation', 'reviseTravelReplenishment', 'reviseWeeklyItinerary', 'runDriveMigration', 'runDriveMigrationAll',
   'runPricingRequestOwnerBackfill', 'runQuotationOwnerBackfill', 'runQuotationSentAtBackfill', 'saveClient', 'saveDailyNote',
+  'getProofReports', 'saveProofReport',   // A347 — the private sales daily report (a trial)
   'saveLeadgenRecord', 'saveMarketingRecord', 'savePOPDF', 'savePRPDF', 'savePaymentRequestPDF',
   'savePfInquiry', 'saveQuotationPDF', 'saveSOCostDetails', 'saveSONotes', 'saveSupplier',
   'saveTravelPDF', 'saveTravelReplenishment', 'saveWeeklyItinerary', 'seedClientAliases', 'seedCommissionDemo',
@@ -1299,6 +1300,7 @@ function flowDaysBetween(from, to) {
 }
 
 /** q + its email links -> { state, days, sentAt, lastContactAt, threshold, label, reason }
+ *  `asOf` ('yyyy-MM-dd', optional, A347) judges it as of that day instead of today.
  *
  *  state:  'not-applicable' — draft/in-approval/closed/won: nothing to chase
  *          'not-sent'       — approved and sitting unsent
@@ -1308,8 +1310,9 @@ function flowDaysBetween(from, to) {
  *          'replied'        — the client came back; it is the rep's move, not a chase
  *          'unknown'        — we cannot see the mailbox, so we will not claim there was no reply
  */
-function flowFollowUp(q, links, cfg, hasSO) {
+function flowFollowUp(q, links, cfg, hasSO, asOf) {
   const c = Object.assign({}, FLOW_FOLLOWUP_DEFAULTS, cfg || {});
+  const today = flowDate(asOf) || flowToday();   // A347 — the Proof of Work judges a morning or a past day as of that date
   const bucket = flowQuotationBucket(q, hasSO);
   const out = { state: 'not-applicable', days: null, sentAt: '', lastContactAt: '',
                 threshold: flowNum((q || {}).followUpDays) || c.quotationFollowUpDays,
@@ -1318,7 +1321,7 @@ function flowFollowUp(q, links, cfg, hasSO) {
   if (bucket === 'closed' || bucket === 'won') return out;
 
   if (bucket === 'approved') {
-    const age = flowDaysBetween(q.approvedAt || q.date, flowToday());
+    const age = flowDaysBetween(q.approvedAt || q.date, today);
     if (age !== null && age >= c.approvedNotSentDays) {
       out.state = 'not-sent'; out.days = age;
       out.label = `approved ${age}d ago, not sent`;
@@ -1353,7 +1356,7 @@ function flowFollowUp(q, links, cfg, hasSO) {
 
   if (replied) {
     out.state = 'replied';
-    out.days = flowDaysBetween(replied, flowToday());
+    out.days = flowDaysBetween(replied, today);
     out.label = `client replied ${out.days}d ago`;
     out.reason = 'The client has come back — this needs your answer, not a chase.';
     return out;
@@ -1364,16 +1367,16 @@ function flowFollowUp(q, links, cfg, hasSO) {
      cannot see is how a tracker loses trust. */
   const checked = live.map(l => flowDate(l.replyCheckedAt)).filter(Boolean).sort();
   if (live.length && checked.length) {
-    const since = flowDaysBetween(checked[checked.length - 1], flowToday());
+    const since = flowDaysBetween(checked[checked.length - 1], today);
     if (since !== null && since > 3) {
-      out.state = 'unknown'; out.days = flowDaysBetween(out.lastContactAt, flowToday());
+      out.state = 'unknown'; out.days = flowDaysBetween(out.lastContactAt, today);
       out.label = 'reply state unknown';
       out.reason = 'We have not been able to read the mailbox recently, so we cannot tell whether the client replied.';
       return out;
     }
   }
 
-  out.days = flowDaysBetween(out.lastContactAt, flowToday());
+  out.days = flowDaysBetween(out.lastContactAt, today);
   if (out.days === null) { out.state = 'unknown'; return out; }
   if (out.days < out.threshold) {
     out.state = 'ok';
