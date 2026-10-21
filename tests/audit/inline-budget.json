@@ -20,7 +20,7 @@
   "scriptLines": 0
  },
  "admin-daily-report.html": {
-  "styleBytes": 3746,
+  "styleBytes": 3731,
   "scriptLines": 3
  },
  "admin-hr-reports.html": {
@@ -80,7 +80,7 @@
   "scriptLines": 56
  },
  "client-tracker.html": {
-  "styleBytes": 5031,
+  "styleBytes": 5011,
   "scriptLines": 8
  },
  "clients.html": {
@@ -92,11 +92,11 @@
   "scriptLines": 0
  },
  "commission-payout-report.html": {
-  "styleBytes": 4118,
+  "styleBytes": 4044,
   "scriptLines": 0
  },
  "commission-rates.html": {
-  "styleBytes": 3463,
+  "styleBytes": 3401,
   "scriptLines": 0
  },
  "dashboard.html": {
@@ -105,6 +105,10 @@
  },
  "director-banks.html": {
   "styleBytes": 3646,
+  "scriptLines": 0
+ },
+ "director-client-book.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "director-duties.html": {
@@ -125,6 +129,10 @@
  },
  "director-payables.html": {
   "styleBytes": 4296,
+  "scriptLines": 0
+ },
+ "director-pricing-engine.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "director-recommender.html": {
@@ -164,7 +172,7 @@
   "scriptLines": 3
  },
  "flow-commissions.html": {
-  "styleBytes": 7257,
+  "styleBytes": 7151,
   "scriptLines": 3
  },
  "flow-expenses.html": {
@@ -200,7 +208,7 @@
   "scriptLines": 6
  },
  "flow-payment-requests.html": {
-  "styleBytes": 4598,
+  "styleBytes": 4544,
   "scriptLines": 6
  },
  "flow-payments.html": {
@@ -216,7 +224,7 @@
   "scriptLines": 24
  },
  "flow-quotations.html": {
-  "styleBytes": 9980,
+  "styleBytes": 9939,
   "scriptLines": 16
  },
  "flow-receiving.html": {
@@ -236,7 +244,7 @@
   "scriptLines": 8
  },
  "flow-travel.html": {
-  "styleBytes": 6766,
+  "styleBytes": 6751,
   "scriptLines": 8
  },
  "hr-accreditations.html": {
@@ -320,7 +328,7 @@
   "scriptLines": 0
  },
  "management-itinerary.html": {
-  "styleBytes": 6774,
+  "styleBytes": 6734,
   "scriptLines": 8
  },
  "management-leave.html": {
@@ -396,7 +404,7 @@
   "scriptLines": 0
  },
  "pf-admin.html": {
-  "styleBytes": 1526,
+  "styleBytes": 1498,
   "scriptLines": 0
  },
  "po-approvals.html": {
@@ -420,7 +428,7 @@
   "scriptLines": 0
  },
  "purchase-request-tracker.html": {
-  "styleBytes": 17446,
+  "styleBytes": 17402,
   "scriptLines": 8
  },
  "quotation-approvals.html": {
@@ -428,7 +436,7 @@
   "scriptLines": 0
  },
  "quotation-board.html": {
-  "styleBytes": 4094,
+  "styleBytes": 4069,
   "scriptLines": 8
  },
  "quotation-summary.html": {
@@ -448,7 +456,7 @@
   "scriptLines": 0
  },
  "sales-emails.html": {
-  "styleBytes": 11669,
+  "styleBytes": 11654,
   "scriptLines": 0
  },
  "sales-orders.html": {
@@ -469,6 +477,10 @@
  },
  "update-2025-costs.html": {
   "styleBytes": 3526,
+  "scriptLines": 0
+ },
+ "website-requests.html": {
+  "styleBytes": 0,
   "scriptLines": 0
  },
  "weekly-itinerary.html": {

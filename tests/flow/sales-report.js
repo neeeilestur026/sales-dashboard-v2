@@ -172,6 +172,24 @@ eq('the rest of the portal\'s day is one grey line', run('JSON.stringify(srOther
 const links = JSON.parse(run('JSON.stringify(srLinkOptions(IX, ME, "2026-10-20", __emails45.slice(0, 1), __in))'));
 ok('link to: his open quotations, his recent PRs, today\'s emails', links.quotation.some(x => x.id === 'Q-D7') && !links.quotation.some(x => x.id === 'Q-KIM') &&
    links.pr.some(x => x.id === 'PR-B') && links.email.length === 2);
+/* A350 — the Client Book trial: its clients to link to, and the person's own changes in the feed */
+C.__book = { clients: [
+    { clientNo: 'CB-0002', company: 'Zeta Mining', owner: 'Kim Reyes', accreditation: 'On process', status: '' },
+    { clientNo: 'CB-0001', company: 'Philcement Corp.', owner: 'Gerald Lucena', accreditation: 'Accredited', status: 'Quotation sent' },
+    { clientNo: 'CB-0003', company: 'Gone Co', owner: 'Gerald Lucena', accreditation: 'Not accredited', archivedAt: '2026-10-19T01:00:00.000Z' }],
+  log: [
+    { logNo: 'CBL-1', clientNo: 'CB-0001', kind: 'status', from: 'RFQ received', to: 'Quotation sent', ref: 'Q-NEW', by: 'Gerald Lucena', at: '2026-10-20T04:15:00.000Z' },
+    { logNo: 'CBL-2', clientNo: 'CB-0002', kind: 'created', to: 'Zeta Mining', by: 'Kim Reyes', at: '2026-10-20T04:20:00.000Z' },
+    { logNo: 'CBL-3', clientNo: 'CB-0001', kind: 'accreditation', from: 'On process', to: 'Accredited', by: 'Gerald Lucena', at: '2026-10-19T04:20:00.000Z' }] };
+run('var IXB = srIndex(Object.assign({}, __raw, { book: __book }));');
+const bl = JSON.parse(run('JSON.stringify(srLinkOptions(IXB, ME, "2026-10-20", [], []).client)'));
+eq('A350: link to the Client Book\'s clients, his own first, archived ones left out', bl.map(x => x.id), ['CB-0001', 'CB-0002']);
+ok('  each labelled with its stage, and with the owner when it is someone else\'s', bl[0].label === 'Philcement Corp. (Quotation sent)' && bl[1].label === 'Zeta Mining — Kim Reyes (On process)', bl);
+const bf = JSON.parse(run('JSON.stringify(srPortalFeed(IXB, ME, "2026-10-20", [], []).filter(function (x) { return x.kind === "client"; }))'));
+ok('  the feed shows his own Client Book changes that day, not someone else\'s or another day\'s', bf.length === 1 && bf[0].text === 'Status RFQ received → Quotation sent (Q-NEW) — Philcement Corp.' && bf[0].time === '12:15 PM', bf);
+eq('  each kind of change reads plainly', ['created', 'accreditation', 'contacts', 'details', 'archived', 'restored'].map(k => run('srClientBookText(' + JSON.stringify({ kind: k, from: k === 'accreditation' ? 'On process' : '', to: k === 'accreditation' ? 'Accredited' : '' }) + ')')),
+   ['Added to the Client Book', 'Accreditation On process → Accredited', 'Contacts updated', 'Client details updated', 'Archived from the Client Book', 'Restored to the Client Book']);
+ok('  without FlowAPI 178 there are no clients to link and no client feed', links.client.length === 0 && !feed.some(x => x.kind === 'client'));
 
 sec('7 · the week');
 C.__reports = { '2026-10-19': { report: srBlankWith(14), submittedAt: '2026-10-19T08:31:00.000Z' }, '2026-10-20': { report: srBlankWith(20) } };
@@ -196,6 +214,12 @@ ok('  the old page\'s call is grey, marked as in the portal\'s log', /CALL-1 · 
 ok('  edit and void on each live line, never delete', /data-edit=/.test(log) && /data-void=/.test(log) && !/data-del/.test(log));
 const keepLink = run('_srLinkOptionsHtml("dr|DR-0207", "DR-0207")');
 ok('editing a line keeps its own link on offer, chosen, even when it is not in today\'s lists (a DR number)', /<option value="dr\|DR-0207" selected>Keep: DR-0207<\/option>/.test(keepLink), keepLink.slice(0, 200));
+{
+  const h = run('(function () { var k = SR_UI.ix; SR_UI.ix = IXB; var h = _srLinkOptionsHtml(""); SR_UI.ix = k; return h; })()');
+  ok('A350: Link to has a "Clients (Client Book)" group', /<optgroup label="Clients \(Client Book\)"><option value="client\|CB-0001">Philcement Corp\. \(Quotation sent\)<\/option>/.test(h), h.slice(-400));
+  const cl = run('(function () { var k = SR_UI.state; SR_UI.state = srBlank(); SR_UI.state.lines.push(srNewLine({ type: "Call", company: "Philcement Corp.", linkType: "client", linkId: "CB-0001", linkLabel: "Philcement Corp. (Quotation sent)" }, "Gerald Lucena", "2026-10-20T05:00:00.000Z")); var h = _srLogRows(); SR_UI.state = k; return h; })()');
+  ok('  a line linked to a client opens that client in the Client Book', /<a href="director-client-book\.html\?client=CB-0001">Philcement Corp\. \(Quotation sent\)<\/a>/.test(cl), cl.slice(0, 600));
+}
 const desk = run('_srVisitsHtml(srDayType(IX, ME, "2026-10-20", srBlank()))');
 ok('a desk day: the slim card, no visit form', /none booked today/.test(desk) && /Log an unplanned visit/.test(desk) && !/srVisitForm/.test(desk));
 const visit = run('SR_UI.day = "2026-10-22"; (function(){ var h = _srVisitsHtml(srDayType(IX, ME, "2026-10-22", srBlank())); SR_UI.day = "2026-10-20"; return h; })()');
@@ -208,7 +232,7 @@ ok('  once submitted: the submitted numbers, fixed, and no Submit', /Submitted 4
 {
   const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8') + fs.readFileSync(path.join(DASH, 'sales-report-model.js'), 'utf8');
   const posts = Array.from(new Set((SRC.match(/postFlow\('(\w+)'/g) || []).map(x => x.slice(10, -1)))).sort();
-  eq('the only writes and private reads are the trial\'s own', posts, ['getProofReports', 'saveProofReport', 'submitProofReport']);
+  eq('the only writes and private reads are the trial\'s own (A350: and the Client Book, read only)', posts, ['getClientBook', 'getProofReports', 'saveProofReport', 'submitProofReport']);
   ok('  nothing touches the real call log, visits or quotations', !/logSalesCall|logClientVisit|closeQuotation|deleteSalesCall/.test(SRC));
   ok('no emoji, no hex colour, no inline style', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u.test(SRC) && !/#[0-9a-fA-F]{6}\b/.test(SRC) && !/style="/.test(SRC));
   ok('no location is asked for', !/geolocation|latitude|longitude/i.test(SRC));

@@ -46,14 +46,16 @@ async function _srLoad(fresh) {
   const saved = (typeof postFlow === 'function' ? postFlow('getProofReports', { from: srAddDays(today, -42), to: today }) : Promise.reject(new Error('no')))
     .then(r => (r && r.success ? { ok: true, data: r.data || [] } : { ok: false, message: (r && r.message) || '' }))
     .catch(e => ({ ok: false, message: String(e && e.message || '') }));
-  const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine] = await Promise.all([
+  /* A350 — the Client Book trial: its clients to link to and the day's changes. Quiet without FlowAPI 178. */
+  const book = (typeof postFlow === 'function' ? postFlow('getClientBook', {}) : Promise.reject(new Error('no'))).then(r => (r && r.success ? r : null)).catch(() => null);
+  const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine, clientBook] = await Promise.all([
     get('quotations', 'getQuotations'), get('sales orders', 'getSalesOrders'), get('quotation emails', 'getQuotationEmails'),
     get('settings', 'getFlowSettings'), get('purchase requests', 'getPricingRequests'),
     get('activity log', 'getActivityLog', { from, to: today }), get('call log', 'getSalesCalls', { from, to: today }),
-    get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved
+    get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved, book
   ]);
   SR_UI.failed = failed;
-  SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries });
+  SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, book: clientBook });
   SR_UI.saved = {};
   SR_UI.backend = mine.ok;
   SR_UI.backendMsg = mine.ok ? '' : mine.message;
@@ -211,7 +213,7 @@ function _srRenderDay() {
     '<section class="sr-block" id="srVisits"></section>' +
 
     '<section class="sr-block"><div class="sr-bar"><h3>Logged by the portal — you typed none of this</h3><div class="sr-pills" role="group" aria-label="Show">' +
-      ['all', 'Emails', 'PRs', 'Quotations'].map(k => '<button type="button" data-feed="' + (k === 'all' ? 'all' : k === 'Emails' ? 'email' : k === 'PRs' ? 'pr' : 'quotation') + '">' + (k === 'all' ? 'All' : k) + '</button>').join('') +
+      ['all', 'Emails', 'PRs', 'Quotations', 'Clients'].map(k => '<button type="button" data-feed="' + (k === 'all' ? 'all' : k === 'Emails' ? 'email' : k === 'PRs' ? 'pr' : k === 'Clients' ? 'client' : 'quotation') + '">' + (k === 'all' ? 'All' : k) + '</button>').join('') +
       '</div></div><div id="srFeed"></div><p class="sr-other" id="srOther"></p></section>' +
 
     '<section class="sr-block sr-reports"><div class="sr-card" id="srPm"></div></section>' +
@@ -306,6 +308,7 @@ function _srLinkOptionsHtml(selected, selectedLabel) {
   return own + '<option value="none|">No link (new contact)</option>' +
     (o.quotation.length ? '<optgroup label="My open quotations">' + o.quotation.map(x => opt('quotation', x)).join('') + '</optgroup>' : '') +
     (o.pr.length ? '<optgroup label="My recent PRs">' + o.pr.map(x => opt('pr', x)).join('') + '</optgroup>' : '') +
+    (o.client.length ? '<optgroup label="Clients (Client Book)">' + o.client.map(x => opt('client', x)).join('') + '</optgroup>' : '') +
     (o.email.length ? '<optgroup label="Today\'s emails">' + o.email.map(x => opt('email', x)).join('') + '</optgroup>' : '');
 }
 function _srRefreshLinkSelect() {
@@ -328,7 +331,8 @@ function _srLogRows() {
   const day = SR_UI.day, lines = (SR_UI.state.lines || []).filter(l => flowDate(l.loggedAt) === day).sort((a, b) => a.loggedAt.localeCompare(b.loggedAt));
   const rows = lines.map(l => {
     const link = l.linkType && l.linkType !== 'none' && l.linkId
-      ? '<span class="sr-link">' + (l.linkType === 'quotation' || l.linkType === 'pr' ? _srRef(l.linkId) : _srE(l.linkLabel || l.linkId)) + '</span>'
+      ? '<span class="sr-link">' + (l.linkType === 'quotation' || l.linkType === 'pr' ? _srRef(l.linkId)
+          : l.linkType === 'client' ? '<a href="director-client-book.html?client=' + encodeURIComponent(l.linkId) + '">' + _srE(l.linkLabel || l.linkId) + '</a>' : _srE(l.linkLabel || l.linkId)) + '</span>'
       : (l.voidedAt ? '—' : '<button type="button" class="sr-nolink" data-addlink="' + l.id + '">No link — add one</button>');
     return '<tr class="' + (l.voidedAt ? 'void' : '') + '"><td class="tm">' + _srE(srClock(l.loggedAt)) + '</td><td>' + _srE(l.type) + '</td>' +
       '<td><b>' + _srE(l.company || '—') + '</b>' + (l.person ? ' · ' + _srE(l.person) : '') + (l.note ? '<span class="sr-sub">' + _srE(l.note) + '</span>' : '') +
@@ -382,7 +386,7 @@ function _srRenderFeed() {
     : SR_UI.receivedState === 'ok' ? '' : SR_UI.receivedState === 'loading' ? 'Reading received mail…'
     : SR_UI.receivedState === 'old' ? 'Received mail is only read for the last 60 days.' : 'Received mail could not be read; only sent mail is shown.';
   box.innerHTML = (items.length ? '<ul class="sr-feed">' + items.map(x => '<li><span class="tm">' + _srE(x.time || '—') + '</span><span class="sr-type t-' + x.kind + '">' +
-      (x.kind === 'email' ? 'Email' : x.kind === 'pr' ? 'PR' : 'Quotation') + '</span><span class="x">' + (x.ref ? _srRef(x.ref) + ' ' : '') + _srE(x.text) + '</span>' +
+      (x.kind === 'email' ? 'Email' : x.kind === 'pr' ? 'PR' : x.kind === 'client' ? 'Client' : 'Quotation') + '</span><span class="x">' + (x.ref ? _srRef(x.ref) + ' ' : '') + _srE(x.text) + '</span>' +
       (x.kind === 'email' && x.sent && x.id ? '<button type="button" class="sr-mini' + (booked.indexOf(x.id) >= 0 ? ' on' : '') + '" data-book="' + _srE(x.id) + '">' + (booked.indexOf(x.id) >= 0 ? 'Booking ✓' : 'Mark as a booking') + '</button>' : '<span></span>') +
       '</li>').join('') + '</ul>' : '<p class="dh-empty">Nothing for this filter on this day.</p>') + (mailNote ? '<p class="dh-meta">' + _srE(mailNote) + '</p>' : '');
   const o = srOtherActivity(SR_UI.ix, SR_UI.me, SR_UI.day);

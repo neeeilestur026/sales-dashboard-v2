@@ -81,6 +81,13 @@
           </a>
         </header>
 
+        <!-- A350 — the Client Book (Neil, 21 Oct 2026), a private trial: its counts and the way in. js/client-book-card.js fills
+             it from the trial's own store; the page is director-client-book.html. -->
+        <section class="dh-glass dh-cbc" id="clientBook">
+          <div class="dh-head"><h2>Client Book</h2><span class="cbc-trial">Trial</span><div class="dh-actions"><a href="director-client-book.html" class="dh-btn">Open the Client Book</a></div></div>
+          <div class="cbc-body" id="cbcBody"><div class="dh-empty">Reading the Client Book…</div></div>
+        </section>
+
         <!-- A348 — the Sales Daily Report (Neil, 21 Oct 2026), a private trial: the portal's numbers, one-line log lines with
              links, the 8:00 plan and the 4:30 blocker. js/sales-report.js draws it; nothing here touches the real records. -->
         <section class="dh-glass dh-sr" id="proof">
@@ -434,6 +441,8 @@
   <script src="js/director-pulse.js"></script>       <!-- A288: the Pulse band -->
   <script src="js/sales-report-model.js"></script>  <!-- A348: the numbers -->
   <script src="js/sales-report.js"></script>        <!-- A348: the Sales Daily Report -->
+  <script src="js/client-book-model.js"></script>   <!-- A350: the Client Book's counts -->
+  <script src="js/client-book-card.js"></script>    <!-- A350: its card -->
   <script src="js/director-home-inline.js"></script>
 </body>
 </html>
