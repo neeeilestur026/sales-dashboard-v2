@@ -83,6 +83,7 @@ const EXCEPTIONS = {
     submitDailyReport:  'documented at FlowAPI.gs — the report is the log, logging it would be circular',
     savePfInquiry:      'documented at FlowAPI.gs — a Product Finder inquiry is not a daily-report task',
     saveProofReport:    'A347 — the sales daily report is a private trial; an ActivityLog row would show it in everyone\'s daily report',
+    submitProofReport:  'A348 — the same private trial: the 4:30 report of the sales daily report',
     uploadScanPhoto:    'A318 — one row per photo would drown the report; the post that cites it is logged',
     ensureItemLabels:   'A318 — making a label code is bookkeeping, not a task',
     logLabelPrint:      'A318 — printing a label is not a task'

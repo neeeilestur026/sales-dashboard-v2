@@ -72,7 +72,7 @@
 
   // ── Panel mounts (staggered, so the payroll calls go first) ──
   on(document, 'DOMContentLoaded', function () {
-    if (typeof proofOfWork === 'function') proofOfWork('proof');   // A347 — first on the page, so it loads first
+    if (typeof salesReport === 'function') salesReport('proof');   // A348 — first on the page, so it loads first
     dhLoadPoStrip();
     if (typeof flowActionsStrip === 'function') later(function () { flowActionsStrip('flowActionCenter'); }, 300);
     if (typeof quotationTeamWorklist === 'function') later(function () { quotationTeamWorklist('qtwPanel'); }, 500);

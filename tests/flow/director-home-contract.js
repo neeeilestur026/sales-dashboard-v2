@@ -94,15 +94,15 @@ ok('the theme script is the FIRST child of <body> (no flash, and it is a src scr
    /<body class="dh">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 ok('director-pulse.js loads after director-approvals.js', /director-approvals\.js[\s\S]*director-pulse\.js/.test(HTML));
 eq('the exact script list (A305: the page script last, where its inline block was)', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,payslip.js,auth.js,ledger-nav.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,proof-of-work-model.js,proof-of-work.js,director-home-inline.js');
-/* A347 — Sales proof of work: first in the column, its own rail link, the two scripts after itinerary-week.js (it uses
-   iwSameCompany) and before the page script that mounts it first. */
-ok('A347: #proof is the first section of the column, right under the header', /<div class="dh-col">\s*<header class="dh-mast">[\s\S]*?<\/header>\s*(<!--[\s\S]*?-->\s*)?<section class="dh-glass dh-pow" id="proof">/.test(HTML));
-ok('  it is the first rail link', /<nav class="dh-rail-nav"[^>]*>\s*<a href="#proof">Daily report<\/a>/.test(HTML));
-ok('  #powCtl and #powBody exist', tagOf('powCtl') === 'div' && tagOf('powBody') === 'div');
-ok('  the page script mounts it first and watches it for the rail', /if \(typeof proofOfWork === 'function'\) proofOfWork\('proof'\);\s*\/\/[^\n]*\n\s*dhLoadPoStrip\(\);/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')) &&
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,auth.js,ledger-nav.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,sales-report-model.js,sales-report.js,director-home-inline.js');
+/* A347/A348 — the Sales Daily Report: first in the column, its own rail link, the two scripts after itinerary-week.js (it
+   uses iwSameCompany) and before the page script that mounts it first. */
+ok('A348: #proof is the first section of the column, right under the header', /<div class="dh-col">\s*<header class="dh-mast">[\s\S]*?<\/header>\s*(<!--[\s\S]*?-->\s*)?<section class="dh-glass dh-sr" id="proof">/.test(HTML));
+ok('  it is the first rail link', /<nav class="dh-rail-nav"[^>]*>\s*<a href="#proof">Sales report<\/a>/.test(HTML));
+ok('  #srHead and #srBody exist', tagOf('srHead') === 'div' && tagOf('srBody') === 'div');
+ok('  the page script mounts it first and watches it for the rail', /if \(typeof salesReport === 'function'\) salesReport\('proof'\);\s*\/\/[^\n]*\n\s*dhLoadPoStrip\(\);/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')) &&
    /\['proof', 'inbox', 'pulse', 'team', 'payroll'\]/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
-ok('  its scripts load after itinerary-week.js', /itinerary-week\.js[\s\S]*proof-of-work-model\.js[\s\S]*proof-of-work\.js[\s\S]*director-home-inline\.js/.test(HTML));
+ok('  its scripts load after itinerary-week.js', /itinerary-week\.js[\s\S]*sales-report-model\.js[\s\S]*sales-report\.js[\s\S]*director-home-inline\.js/.test(HTML));
 const TAGS2 = { button: ['themeToggle'], canvas: ['pulseCost'], aside: ['rail'], section: ['pulse', 'team', 'payroll'],
                 div: ['pulseAccrual', 'pulseHeads', 'pulseDed', 'pulseCostBox', 'pulseCostFallback', 'spotTotal'], dd: ['kpiNet', 'kpiShare', 'kpi13', 'kpiActive', 'spotGross', 'spotDed'] };
 Object.keys(TAGS2).forEach(tag => TAGS2[tag].forEach(id => eq('#' + id, tagOf(id), tag)));

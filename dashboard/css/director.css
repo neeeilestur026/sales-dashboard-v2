@@ -18,6 +18,9 @@ body.dh {
   --dh-navy:#2E3192; --dh-navy-ink:#1B2461; --dh-navy-text:#2E3192; --dh-navy-soft:#E8E9F6; --dh-navy-line:#B9BCE3;
   --dh-cyan:#00AEEF; --dh-cyan-ink:#0B7FAF; --dh-cyan-soft:#E0F5FD; --dh-cyan-ring:rgba(0,174,239,.32);
   --dh-red:#BE1E2D; --dh-red-soft:#FBEAEC; --dh-red-line:#EBB3B9;
+  /* A348 — the sales report's status and source colours (text on its soft fill is AA in both themes) */
+  --dh-green:#1E7A35; --dh-green-soft:#EAF7EE; --dh-amber:#9A5B00; --dh-amber-soft:#FFF3E3;
+  --dh-blue:#0B62C4; --dh-blue-soft:#E8F1FC; --dh-purple:#6B3FA0; --dh-purple-soft:#F1EAFB;
   --dh-page:#E4E8F0; --dh-inset:#F3F5F9; --dh-hair:#C6CEDA; --dh-hair-2:#DCE2EA;
   --dh-ink:#0F1730; --dh-ink-2:#465067; --dh-ink-3:#8E98AC;
   --dh-glass:rgba(255,255,255,.66); --dh-glass-line:rgba(255,255,255,.8); --dh-glass-solid:rgba(255,255,255,.94);
@@ -44,6 +47,8 @@ body.dh[data-theme="dark"] {
   --dh-navy-text:#8F95E8; --dh-navy-soft:rgba(46,49,146,.30); --dh-navy-line:rgba(143,149,232,.45);
   --dh-cyan-ink:#5CCBF7; --dh-cyan-soft:rgba(0,174,239,.16);
   --dh-red-soft:rgba(190,30,45,.22); --dh-red-line:rgba(190,30,45,.5);
+  --dh-green:#30D158; --dh-green-soft:rgba(48,209,88,.16); --dh-amber:#FFB340; --dh-amber-soft:rgba(255,179,64,.16);
+  --dh-blue:#5AB0FF; --dh-blue-soft:rgba(41,151,255,.16); --dh-purple:#C4A2FF; --dh-purple-soft:rgba(191,155,255,.16);
   --dh-page:#0B1020; --dh-inset:#141A33; --dh-hair:#2A3356; --dh-hair-2:#1F2745;
   --dh-ink:#EEF1FA; --dh-ink-2:#B7BFD6; --dh-ink-3:#7E88A6;
   --dh-glass:rgba(20,24,48,.6); --dh-glass-line:rgba(255,255,255,.08); --dh-glass-solid:rgba(22,27,54,.96);
