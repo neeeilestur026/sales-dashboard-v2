@@ -88,6 +88,7 @@ function cbRender() {
   const chip = (key, label, count) => '<button type="button" class="cb-chip' + (cbChipOn(key) ? ' on' : '') + '" data-chip="' + key + '" aria-pressed="' + cbChipOn(key) + '">' +
     _cbE(label) + ' <span class="n">' + count + '</span></button>';
   _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('t:Major', 'Major', sum.major) + chip('t:Minor', 'Minor', sum.minor) +
+    (sum.noLabel ? chip('t:none', 'No label', sum.noLabel) : '') +   // A361 — imported clients wait for their Major / Minor label
     chip('a:Accredited', 'Accredited', sum.accredited) + chip('a:On process', 'On process', sum.onProcess) +
     chip('a:Not accredited', 'Not accredited', sum.notAccredited) + chip('f:needsUpdate', 'Needs an update', sum.needsUpdate) +
     chip('f:expiring', 'Accreditation expiring', sum.expiring) + chip('f:nextOverdue', 'Next step overdue', sum.nextOverdue) + chip('archived', 'Archived', sum.archived);

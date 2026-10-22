@@ -125,7 +125,7 @@ ok('an accreditation past its date is expired, not expiring', (f => f.expired &&
 eq('each log row reads in words', ['created', 'accreditation', 'status', 'contacts', 'details', 'archived', 'restored'].map(k => run('cbLogText(' + JSON.stringify({ kind: k, from: k === 'contacts' ? '1' : '', to: k === 'contacts' ? '2' : k === 'status' ? 'Quotation sent' : 'X' }) + ')')),
    ['Added to the Client Book', 'Accreditation: X', 'Status: Quotation sent', 'Contact people: 1 → 2', 'Details changed', 'Archived', 'Restored']);
 eq('an accreditation update shows its own last update', J('cbAccredLast(byNo("CB-0001"), LOG)'), { at: '2026-10-05T02:00:00.000Z', note: 'Vendor number issued' });
-eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, major: 1, minor: 1, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
+eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, major: 1, minor: 1, noLabel: 1, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
 const ids = (f) => J('cbFilter(CL, LOG, IX, ' + JSON.stringify(f) + ').map(function (c) { return c.clientNo; })');
 eq('newest update first by default', ids({}), ['CB-0003', 'CB-0001', 'CB-0002']);
 eq('search finds a contact\'s second email', ids({ q: 'ana.cruz@gmail' }), ['CB-0001']);
@@ -361,6 +361,17 @@ async function boot(o) {
        && /send\(b, 'linkClientBookRecords', \{ clientNo: no, records: JSON\.stringify\(\[\{ kind, no: ref \}\]\) \}/.test(CBJS) && /send\(b, 'unlinkClientBookRecord', \{ kind, no: ref \}/.test(CBJS)
        && /const res = await cbPost\(recs, action, params\);/.test(CBJS));
     ok('  and the book\'s links are indexed every time it is read', /CB\.ix = cbIndex\(Object\.assign\(\{\}, CB\.raw \|\| \{\}, \{ links: CB\.ok \? book\.links \|\| \[\] : \[\] \}\)\);/.test(CBJS));
+  }
+
+  sec('5e · A361: clients imported without a label');
+  {
+    C.__nl = [{ clientNo: 'N1', company: 'A', tier: '' }, { clientNo: 'N2', company: 'B', tier: 'Major' }, { clientNo: 'N3', company: 'C' }, { clientNo: 'N4', company: 'D', archivedAt: '2026-10-01' }];
+    eq('the summary counts the live clients with no Major / Minor label', J('cbSummary(__nl, [], "2026-10-21").noLabel'), 2);
+    eq('  and the "No label" filter lists just those', J('cbFilter(__nl, [], cbIndex({ today: "2026-10-21" }), { tier: "none" }).map(function (c) { return c.clientNo; })').sort(), ['N1', 'N3']);
+    const p5 = await boot({ v: 183, book: Object.assign({}, BOOK, { clients: BOOK.clients.concat([{ clientNo: 'CB-0009', company: 'Imported Co', owner: G, accreditation: 'Not accredited', contacts: [], createdAt: '2026-10-22T01:00:00.000Z', archivedAt: '' }]) }) });
+    ok('  a "No label" chip appears while any client has none', /data-chip="t:none" aria-pressed="false">No label <span class="n">2<\/span>/.test(p5.els.cbChips.innerHTML), p5.els.cbChips.innerHTML.slice(0, 400));
+    const p6 = await boot({ v: 183 });
+    ok('  and goes once every client has one', /data-chip="t:none"/.test(p6.els.cbChips.innerHTML) === (J('cbSummary(' + JSON.stringify(BOOK.clients) + ', [], "2026-10-21").noLabel') > 0));
   }
 
   sec('6 · the card, who sees it, the site rules');
