@@ -12,7 +12,7 @@
 .cb-chip.on .n { color: var(--hx-card); }
 .cb-chip:focus-visible, .cb-open:focus-visible, .cb-link:focus-visible, .cb-mini:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
 
-.cb-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(140px, 1fr)); gap: 10px; margin: 0 0 12px; }
+.cb-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(130px, 1fr)); gap: 10px; margin: 0 0 12px; }
 .cb-filters label { display: flex; flex-direction: column; gap: 4px; font: 600 11.5px/1.3 var(--hx-text); color: var(--hx-ink-2); min-width: 0; }
 .cb-filters input, .cb-filters select, .cb-in { width: 100%; box-sizing: border-box; padding: 8px 10px; font: 400 13px/1.35 var(--hx-text); color: var(--hx-ink); background: var(--hx-glass-solid); border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
 .cb-filters input:focus, .cb-filters select:focus, .cb-in:focus { outline: none; border-color: var(--hx-cyan); box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
@@ -42,6 +42,17 @@ textarea.cb-in { resize: vertical; min-height: 54px; }
 .cb-badge.ok { background: var(--hx-ok-soft); border-color: var(--hx-ok-line); color: var(--hx-ok); }
 .cb-badge.mid { background: var(--hx-cyan-soft); border-color: var(--hx-cyan-ring); color: var(--hx-cyan-ink); }
 .cb-badge.off { background: var(--hx-inset); color: var(--hx-ink-2); }
+/* A354 — Major / Minor: Major stands out, Minor stays quiet, a missing label asks to be set */
+.cb-badge.tier-major { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-card); }
+.cb-badge.tier-minor { background: var(--hx-inset); color: var(--hx-ink-2); }
+.cb-badge.tier-none { background: var(--hx-warn-soft); border-color: var(--hx-warn-line); color: var(--hx-ink); }
+.cb-labels { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cb-mhead .cb-sub .cb-labels { display: inline-flex; margin-top: 0; vertical-align: middle; }
+.cb-badge.sector { background: var(--hx-card); border-color: var(--hx-hair); color: var(--hx-ink); }   /* the industry: outlined, so it never reads as a status */
+.cb-other[hidden] { display: none; }
+.cb-mhead .cb-sub .cb-badge[class*="tier-"] { margin-right: 2px; }
+.cb-tier { flex-direction: row; align-items: center; }
+.cb-tier legend { float: left; margin-right: 10px; padding: 0; font: 600 12px/1.3 var(--hx-text); color: var(--hx-ink-2); }
 
 /* the dialog (a bottom sheet on phones, from apple.css) */
 .cb-overlay .cb-modal { width: min(780px, 100%); padding: 22px 24px 26px; }

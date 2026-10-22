@@ -6,12 +6,12 @@
  * whole timeline. The numbers and matching are js/client-book-model.js (pure, tested). Saving is the trial's own four
  * actions (FlowAPI 178): nothing here writes the real client list, PRs or quotations. */
 
-const CB = { me: null, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false,
-             f: { q: '', accreditation: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
+const CB = { me: null, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false,
+             f: { q: '', accreditation: '', tier: '', sector: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
 
 function _cbE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
 function _cbId(id) { return document.getElementById(id); }
-function _cbLists() { return CB.lists || { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS }; }
+function _cbLists() { return CB.lists || { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS }; }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const s = typeof requireDirector === 'function' ? requireDirector() : null;
@@ -32,6 +32,7 @@ async function cbLoad() {
   _cbId('cbTable').innerHTML = '<tbody><tr><td class="cb-empty">Reading the Client Book…</td></tr></tbody>';
   const today = flowToday(), from = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 120); return d.toISOString().slice(0, 10); })();
   const read = (a, p) => fetchFlow(a, p || {}).then(r => (r && r.success !== false ? r.data : null)).catch(() => null);
+  CB.v180 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(180).catch(() => false) : false;   // A354 — the Major / Minor label saves from 180
   const [book, quotations, prs, salesOrders, clients, activity, users, reports] = await Promise.all([
     postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })),
     read('getQuotations'), read('getPricingRequests'), read('getSalesOrders'), read('getClients'),
@@ -72,7 +73,8 @@ function cbRender() {
   const sum = cbSummary(CB.clients, CB.log, CB.ix.today), f = CB.f;
   const chip = (key, label, count) => '<button type="button" class="cb-chip' + (cbChipOn(key) ? ' on' : '') + '" data-chip="' + key + '" aria-pressed="' + cbChipOn(key) + '">' +
     _cbE(label) + ' <span class="n">' + count + '</span></button>';
-  _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('a:Accredited', 'Accredited', sum.accredited) + chip('a:On process', 'On process', sum.onProcess) +
+  _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('t:Major', 'Major', sum.major) + chip('t:Minor', 'Minor', sum.minor) +
+    chip('a:Accredited', 'Accredited', sum.accredited) + chip('a:On process', 'On process', sum.onProcess) +
     chip('a:Not accredited', 'Not accredited', sum.notAccredited) + chip('f:needsUpdate', 'Needs an update', sum.needsUpdate) +
     chip('f:expiring', 'Accreditation expiring', sum.expiring) + chip('f:nextOverdue', 'Next step overdue', sum.nextOverdue) + chip('archived', 'Archived', sum.archived);
   const owners = Array.from(new Set(CB.roster.concat(CB.clients.map(c => c.owner).filter(Boolean)))).sort();
@@ -81,29 +83,33 @@ function cbRender() {
     CB.built = true;
     _cbId('cbFilters').innerHTML =
       '<label class="cb-search"><span>Search</span><input type="search" id="cbQ" placeholder="Company, contact, email or phone" autocomplete="off"></label>' +
+      '<label><span>Sector</span><select id="cbSector"></select></label>' +
       '<label><span>Status</span><select id="cbStatus"></select></label><label><span>Owner</span><select id="cbOwner"></select></label>' +
       '<label><span>Sort</span><select id="cbSort">' + [['updated', 'Last update'], ['company', 'Company'], ['next', 'Next step date'], ['open', 'Open quotations']].map(x => opt(x[0], f.sort, x[1])).join('') + '</select></label>';
     _cbId('cbQ').addEventListener('input', (e) => { f.q = e.target.value; cbRenderTable(); });
-    ['cbStatus', 'cbOwner', 'cbSort'].forEach(id => _cbId(id).addEventListener('change', (e) => {
-      f[{ cbStatus: 'status', cbOwner: 'owner', cbSort: 'sort' }[id]] = e.target.value; cbRenderTable();
+    ['cbSector', 'cbStatus', 'cbOwner', 'cbSort'].forEach(id => _cbId(id).addEventListener('change', (e) => {
+      f[{ cbSector: 'sector', cbStatus: 'status', cbOwner: 'owner', cbSort: 'sort' }[id]] = e.target.value; cbRenderTable();
     }));
   }
+  _cbId('cbSector').innerHTML = opt('', f.sector, 'Any sector') + CB_SECTORS.map(s => opt(s, f.sector)).join('');
   _cbId('cbStatus').innerHTML = opt('', f.status, 'Any status') + _cbLists().status.map(s => opt(s, f.status)).join('');
   _cbId('cbOwner').innerHTML = opt('', f.owner, 'Any owner') + owners.map(o => opt(o, f.owner)).join('');
   cbRenderTable();
 }
 function cbChipOn(key) {
   const f = CB.f;
-  if (key === 'all') return !f.accreditation && !f.flag && !f.archived;
+  if (key === 'all') return !f.accreditation && !f.tier && !f.flag && !f.archived;
   if (key === 'archived') return f.archived;
   if (key.indexOf('a:') === 0) return !f.archived && f.accreditation === key.slice(2);
+  if (key.indexOf('t:') === 0) return !f.archived && f.tier === key.slice(2);
   return !f.archived && f.flag === key.slice(2);
 }
 function cbChip(key) {
   const f = CB.f;
-  f.accreditation = ''; f.flag = ''; f.archived = false;
+  f.accreditation = ''; f.tier = ''; f.flag = ''; f.archived = false;
   if (key === 'archived') f.archived = true;
   else if (key.indexOf('a:') === 0) f.accreditation = key.slice(2);
+  else if (key.indexOf('t:') === 0) f.tier = key.slice(2);
   else if (key.indexOf('f:') === 0) f.flag = key.slice(2);
   cbRender();
 }
@@ -123,21 +129,50 @@ function cbRenderTable() {
 }
 
 function cbBadge(text, tone) { return '<span class="cb-badge ' + (tone || '') + '">' + _cbE(text) + '</span>'; }
+/* A354 — Major / Minor */
+function cbTierBadge(t) { return t ? '<span class="cb-badge tier-' + _cbE(t.toLowerCase()) + '">' + _cbE(t) + '</span>' : '<span class="cb-badge tier-none">No label</span>'; }
+function cbTierPills(cur, required) {
+  return '<fieldset class="cb-pills cb-tier"><legend>Major or minor client</legend>' + CB_TIERS.map(t => '<label class="cb-pill"><input type="radio" name="tier" value="' + t + '"' +
+      (cur === t ? ' checked' : '') + (required && CB.v180 ? ' required' : '') + (CB.v180 ? '' : ' disabled') + '><span>' + t + '</span></label>').join('') +
+    (CB.v180 ? '' : '<span class="cb-sub">The label is saved once the FlowAPI update (180) is pasted.</span>') + '</fieldset>';
+}
+function cbTierOf(form) { const r = Array.prototype.find.call(form.querySelectorAll('input[name="tier"]'), x => x.checked); return r ? r.value : ''; }
+/* A354 — the industry, and the site's address */
+function cbSectorBadge(s) { return s ? '<span class="cb-badge sector">' + _cbE(s) + '</span>' : '<span class="cb-badge tier-none">No sector</span>'; }
+function cbLabels(c) { return '<span class="cb-labels">' + cbTierBadge(c.tier) + cbSectorBadge(c.sector) + '</span>'; }
+function cbSectorFields(cur, required) {
+  const listed = CB_SECTORS.indexOf(cur) >= 0, pick = !cur ? '' : listed ? cur : 'Others', off = CB.v180 ? '' : ' disabled';
+  return '<div class="cb-grid2"><label>Industry or sector<select class="cb-in" name="sector"' + (required && CB.v180 ? ' required' : '') + off + '>' +
+      (required ? '<option value="">Choose…</option>' : '') + CB_SECTORS.map(x => '<option' + (x === pick ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
+    '<label class="cb-other"' + (pick === 'Others' ? '' : ' hidden') + '>Which industry?<input type="text" class="cb-in" name="sectorOther" maxlength="60" value="' + _cbE(listed || cur === 'Others' ? '' : cur) + '" placeholder="Shipbuilding"' + off + '></label></div>' +
+    '<label>Site address<textarea class="cb-in" name="siteAddress" rows="2" maxlength="300" placeholder="Plant / site, barangay, city, province"' + off + '></textarea></label>';
+}
+function cbWireSector(form, site) {
+  const sel = form.querySelector('select[name="sector"]'), other = form.querySelector('.cb-other'), ta = form.querySelector('textarea[name="siteAddress"]');
+  if (ta && site) ta.value = site;
+  if (sel && other) sel.addEventListener('change', () => { other.hidden = sel.value !== 'Others'; });
+}
+function cbSectorOf(form) {
+  const sel = form.querySelector('select[name="sector"]'), other = form.querySelector('input[name="sectorOther"]');
+  const v = sel ? sel.value : '';
+  return v === 'Others' && other && other.value.trim() ? other.value.trim() : v;
+}
 function cbAccTone(a) { return a === 'Accredited' ? 'ok' : a === 'On process' ? 'mid' : 'off'; }
 function cbStatusTone(s) { return s === 'PO received' ? 'ok' : s === 'Lost' || s === 'No requirement now' ? 'off' : s ? 'mid' : ''; }
 
 function cbRow(c) {
   const p = cbPrimary(c), fl = cbFlags(c, CB.log, CB.clients, CB.ix.today), r = cbRecords(CB.ix, c), say = cbRecordsSay(r, c);
   const acc = cbAccredLast(c, CB.log);
-  return '<tr class="' + (c.archivedAt ? 'archived' : '') + '"><td><button type="button" class="cb-open" data-open="' + _cbE(c.clientNo) + '">' + _cbE(c.company) + '</button>' +
+  return '<tr class="' + (c.archivedAt ? 'archived' : '') + '"><td><button type="button" class="cb-open" data-open="' + _cbE(c.clientNo) + '">' + _cbE(c.company) + '</button>' + cbLabels(c) +
+      (c.siteAddress ? '<span class="cb-sub">' + _cbE(c.siteAddress) + '</span>' : '') +
       (p ? '<span class="cb-sub">' + _cbE([p.name, p.position].filter(Boolean).join(', ')) + ((c.contacts || []).length > 1 ? ' + ' + ((c.contacts || []).length - 1) + ' more' : '') + '</span>' : '<span class="cb-sub">No contact yet</span>') +
       (fl.twins.length ? '<span class="cb-flag">Possible duplicate</span>' : '') + '</td>' +
     '<td>' + _cbE(c.owner || '—') + '</td>' +
     '<td>' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.accreditationStep ? '<span class="cb-sub">' + _cbE(c.accreditationStep) + '</span>' : '') +
       (c.accreditation === 'Accredited' ? (c.accreditedUntil ? '<span class="cb-sub' + (fl.expired || fl.expiring ? ' warn' : '') + '">' + (fl.expired ? 'Expired ' : 'Until ') + _cbE(cbDay(c.accreditedUntil)) + '</span>' : '')
         : '<span class="cb-sub">Last update ' + _cbE(cbDay(acc.at) || '—') + '</span>') + '</td>' +
-    '<td>' + (c.accreditation === 'Accredited' ? (c.status ? cbBadge(c.status, cbStatusTone(c.status)) + '<span class="cb-sub">since ' + _cbE(cbDay(c.statusUpdatedAt)) + '</span>' : '<span class="cb-dim">No status yet</span>') +
-      (say && say.suggest ? '<span class="cb-say">Records say: ' + _cbE(say.status) + '</span>' : '') : '<span class="cb-dim">—</span>') + '</td>' +
+    '<td>' + (c.status ? cbBadge(c.status, cbStatusTone(c.status)) + '<span class="cb-sub">since ' + _cbE(cbDay(c.statusUpdatedAt)) + '</span>' : '<span class="cb-dim">No status yet</span>') +
+      (say && say.suggest ? '<span class="cb-say">Records say: ' + _cbE(say.status) + '</span>' : '') + '</td>' +
     '<td>' + (r.total ? _cbE(r.prs.length + ' PR' + (r.prs.length === 1 ? '' : 's') + ' · ' + r.quotes.length + ' quotation' + (r.quotes.length === 1 ? '' : 's')) +
       (r.openValue ? '<span class="cb-sub">' + _cbE(cbMoney(r.openValue)) + ' open</span>' : '') : '<span class="cb-dim">None yet</span>') + '</td>' +
     '<td>' + (c.nextStep ? _cbE(c.nextStep) : '<span class="cb-dim">—</span>') + (c.nextStepDate ? '<span class="cb-sub' + (fl.nextOverdue ? ' warn' : '') + '">' + _cbE(cbDay(c.nextStepDate)) + '</span>' : '') + '</td>' +
@@ -242,7 +277,7 @@ function cbAddDialog(back) {
     '<button type="button" class="btn btn-secondary" data-close>Close</button></header>' +
     '<form class="cb-form" id="cbAddForm" autocomplete="off">' +
       '<label>Company<input type="text" class="cb-in" name="company" list="cbNames" required maxlength="160" placeholder="As the portal names it"><datalist id="cbNames">' + names + '</datalist></label>' +
-      '<p class="cb-warn" id="cbDup" hidden></p>' +
+      '<p class="cb-warn" id="cbDup" hidden></p>' + cbTierPills('', true) + cbSectorFields('', true) +
       '<div class="cb-grid2"><label>Owner (sales rep)<span id="cbOwnerBox">' + cbOwnerSelect('', '') + '</span></label>' +
       '<label>Accreditation<select class="cb-in" name="accreditation">' + _cbLists().accreditation.map(a => '<option' + (a === 'Not accredited' ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></label></div>' +
       '<div class="cb-people">' + cbPersonHtml({ primary: true }, 0) + '</div>' +
@@ -253,6 +288,7 @@ function cbAddDialog(back) {
       '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Add the client</button></div></form>', back);
   cbWirePeople(box);
   const form = box.querySelector('#cbAddForm');
+  cbWireSector(form, '');
   const company = form.elements.company;
   company.addEventListener('input', () => {
     const v = company.value.trim(), twin = cbTwinOf(v);
@@ -271,6 +307,13 @@ function cbAddDialog(back) {
                      contactsJson: JSON.stringify(cbReadPeople(box)), nextStep: form.elements.nextStep.value.trim(), nextStepDate: form.elements.nextStepDate.value,
                      notes: form.elements.notes.value.trim() };
     if (form.dataset.allow === '1') params.allowDuplicate = true;
+    if (CB.v180) {
+      params.tier = cbTierOf(form);
+      if (!params.tier) { cbMsg(box, 'Choose Major or Minor first.', true); return; }
+      params.sector = cbSectorOf(form);
+      if (!params.sector) { cbMsg(box, 'Choose the industry first.', true); return; }
+      params.siteAddress = form.elements.siteAddress.value.trim();
+    }
     btn.disabled = true; cbMsg(box, 'Saving…');
     const r = await postFlow('saveClientBookClient', params).catch(e => ({ success: false, message: String(e && e.message || e) }));
     btn.disabled = false;
@@ -302,11 +345,12 @@ function cbDetail(no, back) {
   const recRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + ' <span class="cb-sub">' + _cbE(x.status || '') +
     (x.owner ? ' · ' + _cbE(x.owner) : '') + (x.followUpDue ? ' · day-' + x.followUpDue + ' follow-up due today' : '') + '</span></span><span class="amt">' + (x.value ? _cbE(cbMoney(x.value)) : '') + '</span></li>';
   const box = cbShow(
-    '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + _cbE(c.clientNo) + ' · ' + _cbE(c.owner || 'no owner') + ' · ' +
-      cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status && c.accreditation === 'Accredited' ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
+    '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + cbLabels(c) + ' ' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
+      ' ' + _cbE(c.clientNo) + ' · ' + _cbE(c.owner || 'no owner') +
       (c.archivedAt ? ' ' + cbBadge('Archived', 'off') : '') + '</p></div><button type="button" class="btn btn-secondary" data-close>Close</button></header>' +
     (fl.twins.length ? '<p class="cb-warn">Possible duplicate of ' + _cbE(fl.twins.join(', ')) + ' (the same company).</p>' : '') +
     (c.archivedAt ? '<p class="cb-warn">Archived ' + _cbE(cbDay(c.archivedAt)) + ': ' + _cbE(c.archiveReason) + '</p>' : '') +
+    (c.siteAddress ? '<p class="cb-sub">Site: ' + _cbE(c.siteAddress) + '</p>' : '') +
 
     '<section class="cb-sec"><h4>Accreditation</h4>' +
       '<p class="cb-sub">' + (c.accreditation === 'Accredited' ? (c.accreditedUntil ? 'Accredited until ' + _cbE(cbDay(c.accreditedUntil)) + (fl.expired ? ' — expired' : fl.expiring ? ' — expiring soon' : '') : 'Accredited')
@@ -320,8 +364,7 @@ function cbDetail(no, back) {
       (hist(['accreditation', 'created']) ? '<ul class="cb-hist">' + hist(['accreditation', 'created']) + '</ul>' : '') + '</section>' +
 
     '<section class="cb-sec"><h4>Sales status</h4>' +
-      (c.accreditation !== 'Accredited' ? '<p class="cb-sub">The sales status starts once the client is accredited. Its purchase requests and quotations still show below.</p>'
-      : (say && say.status !== c.status ? '<div class="cb-sayline' + (say.suggest ? ' on' : '') + '"><span>The records say: <b>' + _cbE(say.status) + '</b> — ' + _cbE(say.why) + ' (' + _cbE(cbDay(say.date)) + ').</span>' +
+      ((say && say.status !== c.status ? '<div class="cb-sayline' + (say.suggest ? ' on' : '') + '"><span>The records say: <b>' + _cbE(say.status) + '</b> — ' + _cbE(say.why) + ' (' + _cbE(cbDay(say.date)) + ').</span>' +
           (say.suggest && live ? '<button type="button" class="btn btn-secondary" data-usesay>Use it</button>' : '') + '</div>' : '') +
         (c.status ? '<p class="cb-sub">' + cbBadge(c.status, cbStatusTone(c.status)) + ' since ' + _cbE(cbDay(c.statusUpdatedAt)) + (c.statusRef ? ' · ' + _cbE(c.statusRef) : '') + (c.statusNote ? ' — ' + _cbE(c.statusNote) : '') + '</p>' : '') +
         (live ? '<form class="cb-form" data-kind="status"><div class="cb-grid2"><label>Status<select class="cb-in" name="pick">' + lists.status.map(s => '<option' + (s === c.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
@@ -341,7 +384,7 @@ function cbDetail(no, back) {
 
     '<section class="cb-sec"><h4>Contacts and details</h4>' +
       (live ? '<form class="cb-form" id="cbEdit" autocomplete="off"><div class="cb-grid2"><label>Company<input type="text" class="cb-in" name="company" required maxlength="160" value="' + _cbE(c.company) + '"></label>' +
-          '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label></div>' +
+          '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label></div>' + cbTierPills(c.tier, false) + cbSectorFields(c.sector, false) +
           '<div class="cb-people">' + ((c.contacts || []).length ? c.contacts.map(cbPersonHtml).join('') : cbPersonHtml({ primary: true }, 0)) + '</div>' +
           '<button type="button" class="btn btn-secondary cb-addperson" data-addperson>Add another person</button>' +
           '<div class="cb-grid2"><label>Next step<input type="text" class="cb-in" name="nextStep" maxlength="190" value="' + _cbE(c.nextStep) + '"></label>' +
@@ -357,6 +400,7 @@ function cbDetail(no, back) {
         : '<label>Archive this client — why?<input type="text" class="cb-in" name="reason" maxlength="190" placeholder="Plant closed"></label><div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-secondary">Archive</button></div>') +
       '</form></section>' : ''), back);
   cbWirePeople(box);
+  if (box.querySelector('#cbEdit')) cbWireSector(box.querySelector('#cbEdit'), c.siteAddress);
   box.querySelectorAll('form[data-kind]').forEach(form => form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const el = form.elements, kind = form.getAttribute('data-kind');
@@ -373,8 +417,11 @@ function cbDetail(no, back) {
   if (edit) edit.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const el = edit.elements;
-    cbPost(edit, 'saveClientBookClient', { clientNo: no, company: el.company.value.trim(), owner: el.owner.value, contactsJson: JSON.stringify(cbReadPeople(edit)),
-      nextStep: el.nextStep.value.trim(), nextStepDate: el.nextStepDate.value, notes: el.notes.value.trim() });
+    const params = { clientNo: no, company: el.company.value.trim(), owner: el.owner.value, contactsJson: JSON.stringify(cbReadPeople(edit)),
+      nextStep: el.nextStep.value.trim(), nextStepDate: el.nextStepDate.value, notes: el.notes.value.trim() };
+    if (CB.v180 && cbTierOf(edit)) params.tier = cbTierOf(edit);
+    if (CB.v180) { if (cbSectorOf(edit)) params.sector = cbSectorOf(edit); params.siteAddress = el.siteAddress.value.trim(); }
+    cbPost(edit, 'saveClientBookClient', params);
   });
   const arch = box.querySelector('#cbArchive');
   if (arch) arch.addEventListener('submit', (ev) => {

@@ -12,7 +12,11 @@
 /* The page shows the server's lists when it has them (getClientBook returns them); these are the same lists. */
 const CB_ACCRED = ['Accredited', 'On process', 'Not accredited'];
 const CB_STEPS = ['Requirements received', 'Documents submitted', 'Under evaluation', 'Site audit'];
-const CB_STATUS = ['Pending RFQ', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];
+const CB_STATUS = ['RFQ pending', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];
+const CB_TIERS = ['Major', 'Minor'];   // A354 — every client is labelled Major or Minor
+const CB_SECTORS = ['Oil and gas', 'Cement', 'Power', 'Aviation', 'Automotive', 'Construction', 'Mining', 'Others'];   // A354 — and its industry
+/** A sector off the list (typed for "Others") counts as Others. */
+function cbSectorGroup(sector) { const s = _cbS(sector); return !s ? '' : CB_SECTORS.indexOf(s) >= 0 ? s : 'Others'; }
 const CB_STALE_DAYS = 14, CB_EXPIRY_DAYS = 30;
 const CB_PR_DONE = { 'Quoted': 1, 'Partly Quoted': 1, 'Migrated': 1 };   // a PR in these states is no longer an open RFQ
 const CB_FOLLOW_DAYS = [3, 7, 14];                                       // the Sales Daily Report's follow-up rule
@@ -101,7 +105,7 @@ function cbRecords(ix, client) {
 
 /** What the records say the sales stage is — the latest event wins (a sales order before a quotation before a PR on
  *  the same day). Returned as a suggestion when it differs from the client's status and is newer than its last update;
- *  it is never applied by itself. */
+ *  it is never applied by itself. A354: offered whatever the accreditation — the two are separate labels. */
 function cbRecordsSay(recs, client) {
   const c = [];
   recs.sos.forEach(s => c.push({ status: 'PO received', ref: s.ref, date: s.date, rank: 4, why: 'Sales order ' + s.ref }));
@@ -114,7 +118,7 @@ function cbRecordsSay(recs, client) {
   const best = c[0];
   const since = _cbDate(client.statusUpdatedAt);
   const fresh = best.status !== client.status && (!since || best.date >= since);
-  return Object.assign({}, best, { suggest: fresh && client.accreditation === 'Accredited' });
+  return Object.assign({}, best, { suggest: fresh });   // A354 — the status no longer waits for the accreditation
 }
 
 /** The owner a new client is given by default: whoever owns its latest quotation or PR. */
@@ -169,11 +173,13 @@ function cbFilter(clients, log, ix, f) {
   const rows = (clients || []).filter(c => {
     if (!!c.archivedAt !== !!o.archived) return false;
     if (o.accreditation && c.accreditation !== o.accreditation) return false;
+    if (o.tier && (c.tier || '') !== o.tier) return false;
+    if (o.sector && cbSectorGroup(c.sector) !== o.sector) return false;
     if (o.status && c.status !== o.status) return false;
     if (o.owner && c.owner !== o.owner) return false;
     if (o.flag) { const fl = cbFlags(c, log, clients, ix.today); if (o.flag === 'expiring' ? !(fl.expiring || fl.expired) : !fl[o.flag]) return false; }
     if (!q) return true;
-    const hay = [c.company, c.owner, c.status, c.accreditation, c.notes, c.nextStep].concat((c.contacts || []).reduce((a, p) =>
+    const hay = [c.company, c.tier, c.sector, c.siteAddress, c.owner, c.status, c.accreditation, c.notes, c.nextStep].concat((c.contacts || []).reduce((a, p) =>
       a.concat([p.name, p.position, p.note]).concat(p.emails || []).concat(p.phones || []).concat((p.phones || []).map(x => String(x).replace(/\D/g, ''))), [])).join(' ').toLowerCase();
     return hay.indexOf(q) >= 0 || (q.replace(/\D/g, '').length >= 4 && hay.indexOf(q.replace(/\D/g, '')) >= 0);
   });
@@ -190,7 +196,8 @@ function cbFilter(clients, log, ix, f) {
 function cbSummary(clients, log, today) {
   const live = (clients || []).filter(c => !c.archivedAt);
   const fl = live.map(c => cbFlags(c, log, clients, today));
-  return { total: live.length, accredited: live.filter(c => c.accreditation === 'Accredited').length,
+  return { total: live.length, major: live.filter(c => c.tier === 'Major').length, minor: live.filter(c => c.tier === 'Minor').length,
+           accredited: live.filter(c => c.accreditation === 'Accredited').length,
            onProcess: live.filter(c => c.accreditation === 'On process').length, notAccredited: live.filter(c => c.accreditation === 'Not accredited').length,
            needsUpdate: fl.filter(x => x.needsUpdate).length, expiring: fl.filter(x => x.expiring || x.expired).length,
            nextOverdue: fl.filter(x => x.nextOverdue).length, archived: (clients || []).length - live.length };
@@ -199,11 +206,11 @@ function cbSummary(clients, log, today) {
 /** The filtered list as CSV (one row per client, every contact person in one cell). */
 function cbCsv(rows, log, ix) {
   const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['Client No', 'Company', 'Owner', 'Accreditation', 'Step', 'Accredited until', 'Accreditation last update', 'Status', 'Status since', 'Status ref',
+  const head = ['Client No', 'Company', 'Major or minor', 'Sector', 'Site address', 'Owner', 'Accreditation', 'Step', 'Accredited until', 'Accreditation last update', 'Status', 'Status since', 'Status ref',
                 'Primary contact', 'Position', 'Emails', 'Phones', 'Other contacts', 'Open PRs', 'Open quotations', 'Open quotations value', 'Next step', 'Next step date', 'Last update'];
   const lines = rows.map(c => {
     const p = cbPrimary(c) || {}, others = (c.contacts || []).filter(x => x !== p), r = cbRecords(ix, c), fl = cbFlags(c, log, rows, ix.today);
-    return [c.clientNo, c.company, c.owner, c.accreditation, c.accreditationStep, c.accreditedUntil, _cbDate(cbAccredLast(c, log).at), c.status, _cbDate(c.statusUpdatedAt), c.statusRef,
+    return [c.clientNo, c.company, c.tier, c.sector, c.siteAddress, c.owner, c.accreditation, c.accreditationStep, c.accreditedUntil, _cbDate(cbAccredLast(c, log).at), c.status, _cbDate(c.statusUpdatedAt), c.statusRef,
             p.name || '', p.position || '', (p.emails || []).join('; '), (p.phones || []).join('; '),
             others.map(o => [o.name, o.position, (o.emails || []).join(' / '), (o.phones || []).join(' / ')].filter(Boolean).join(', ')).join(' | '),
             r.openPrs, r.openQuotes, Math.round(r.openValue), c.nextStep, c.nextStepDate, fl.lastUpdate].map(q).join(',');
@@ -226,6 +233,6 @@ function cbDayLines(reports, client) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { CB_ACCRED, CB_STEPS, CB_STATUS, cbIndex, cbNames, cbRecords, cbRecordsSay, cbOwnerSuggest, cbLogText, cbLogFor, cbFlags, cbAccredLast,
+  module.exports = { CB_ACCRED, CB_STEPS, CB_STATUS, CB_TIERS, CB_SECTORS, cbSectorGroup, cbIndex, cbNames, cbRecords, cbRecordsSay, cbOwnerSuggest, cbLogText, cbLogFor, cbFlags, cbAccredLast,
                      cbPrimary, cbFilter, cbSummary, cbCsv, cbDayLines, cbMoney, cbDay };
 }

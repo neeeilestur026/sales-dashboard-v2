@@ -26,16 +26,16 @@ const G = 'Gerald Lucena', K = 'Kim Reyes';
 const BOOK = {
   success: true,
   clients: [
-    { clientNo: 'CB-0001', company: 'Philcement Corporation', key: 'philcement', owner: G, accreditation: 'Accredited', accreditationStep: '', accreditedUntil: '2026-11-10',
+    { clientNo: 'CB-0001', company: 'Philcement Corporation', key: 'philcement', tier: 'Major', sector: 'Cement', siteAddress: 'Brgy. Bigte, Norzagaray, Bulacan', owner: G, accreditation: 'Accredited', accreditationStep: '', accreditedUntil: '2026-11-10',
       accreditationUpdatedAt: '2026-10-05T02:00:00.000Z', status: 'RFQ received', statusUpdatedAt: '2026-10-10T02:00:00.000Z', statusRef: 'PR-1', nextStep: '', nextStepDate: '',
       contacts: [{ id: 'P1', name: 'Ana Cruz', position: 'Purchasing', emails: ['ana@philcement.ph', 'ana.cruz@gmail.com'], phones: ['0917 123 4567'], primary: true },
                  { id: 'P2', name: 'Ben', position: '', emails: [], phones: ['(02) 8555-1212'], primary: false }],
       notes: '', createdAt: '2026-10-01T01:00:00.000Z', updatedAt: '2026-10-10T02:00:00.000Z', archivedAt: '' },
-    { clientNo: 'CB-0002', company: 'Zeta Mining', key: 'zeta mining', owner: K, accreditation: 'On process', accreditationStep: 'Documents submitted', accreditedUntil: '',
+    { clientNo: 'CB-0002', company: 'Zeta Mining', key: 'zeta mining', tier: 'Minor', sector: 'Geothermal drilling', owner: K, accreditation: 'On process', accreditationStep: 'Documents submitted', accreditedUntil: '',
       status: '', nextStep: 'Call purchasing about the forms', nextStepDate: '2026-10-20', contacts: [], createdAt: '2026-10-01T01:00:00.000Z', updatedAt: '2026-10-01T01:00:00.000Z', archivedAt: '' },
     { clientNo: 'CB-0003', company: 'PHILCEMENT CORP.', key: 'philcement', owner: '', accreditation: 'Not accredited', status: '', contacts: [],
       createdAt: '2026-10-21T01:00:00.000Z', updatedAt: '2026-10-21T01:00:00.000Z', archivedAt: '' },
-    { clientNo: 'CB-0004', company: 'Gone Co', key: 'gone', owner: G, accreditation: 'Not accredited', status: '', contacts: [],
+    { clientNo: 'CB-0004', company: 'Gone Co', key: 'gone', tier: 'Minor', owner: G, accreditation: 'Not accredited', status: '', contacts: [],
       createdAt: '2026-10-01T01:00:00.000Z', archivedAt: '2026-10-02T01:00:00.000Z', archiveReason: 'Plant closed' }
   ],
   log: [
@@ -48,7 +48,7 @@ const BOOK = {
     { logNo: 'CBL-7', clientNo: 'CB-0004', kind: 'archived', note: 'Plant closed', by: 'Neil Estur', at: '2026-10-02T01:00:00.000Z' }
   ],
   lists: { accreditation: ['Accredited', 'On process', 'Not accredited'], steps: ['Requirements received', 'Documents submitted', 'Under evaluation', 'Site audit'],
-           status: ['Pending RFQ', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'] }
+           status: ['RFQ pending', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'] }
 };
 const RAW = {
   today: '2026-10-21',
@@ -109,7 +109,7 @@ eq('Philcement: the sent quotation is the latest event, with its follow-up due',
 ok('  offered, because it is newer than the last status update and the client is accredited', S1.suggest === true);
 const S2 = J('cbRecordsSay(cbRecords(IX, byNo("CB-0002")), byNo("CB-0002"))');
 eq('Zeta: the open PR of 18 Oct is newer than the quotation lost on 2 Oct', [S2.status, S2.ref], ['RFQ received', 'PR-2']);
-ok('  but it is not offered: the sales status waits for accreditation', S2.suggest === false);
+ok('  and, A354, it is offered though the client is still on process (the status is its own label)', S2.suggest === true);
 ok('the records are not offered when the status already says so', J('cbRecordsSay(cbRecords(IX, byNo("CB-0001")), Object.assign({}, byNo("CB-0001"), { status: "Following up" }))').suggest === false);
 ok('  nor when the status was set after the records\' latest event', J('cbRecordsSay(cbRecords(IX, byNo("CB-0001")), Object.assign({}, byNo("CB-0001"), { status: "Negotiating", statusUpdatedAt: "2026-10-16T02:00:00.000Z" }))').suggest === false);
 eq('a sales order alone reads as PO received', J('cbRecordsSay(cbRecords(cbIndex({ today: "2026-10-21", salesOrders: [{ soNo: "SO-9", customer: "Solo", date: "2026-10-01", total: 5 }] }), { company: "Solo" }), { company: "Solo", accreditation: "Accredited" }).status'), 'PO received');
@@ -125,7 +125,7 @@ ok('an accreditation past its date is expired, not expiring', (f => f.expired &&
 eq('each log row reads in words', ['created', 'accreditation', 'status', 'contacts', 'details', 'archived', 'restored'].map(k => run('cbLogText(' + JSON.stringify({ kind: k, from: k === 'contacts' ? '1' : '', to: k === 'contacts' ? '2' : k === 'status' ? 'Quotation sent' : 'X' }) + ')')),
    ['Added to the Client Book', 'Accreditation: X', 'Status: Quotation sent', 'Contact people: 1 → 2', 'Details changed', 'Archived', 'Restored']);
 eq('an accreditation update shows its own last update', J('cbAccredLast(byNo("CB-0001"), LOG)'), { at: '2026-10-05T02:00:00.000Z', note: 'Vendor number issued' });
-eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
+eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, major: 1, minor: 1, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
 const ids = (f) => J('cbFilter(CL, LOG, IX, ' + JSON.stringify(f) + ').map(function (c) { return c.clientNo; })');
 eq('newest update first by default', ids({}), ['CB-0003', 'CB-0001', 'CB-0002']);
 eq('search finds a contact\'s second email', ids({ q: 'ana.cruz@gmail' }), ['CB-0001']);
@@ -135,7 +135,7 @@ eq('accreditation, needs an update, expiring, next step', [ids({ accreditation: 
 eq('archived clients only when asked for', ids({ archived: true }), ['CB-0004']);
 {
   const csv = run('cbCsv(cbFilter(CL, LOG, IX, {}), LOG, IX)').split('\n');
-  ok('CSV: a header and one row per client', csv.length === 4 && /^Client No,Company,Owner,Accreditation/.test(csv[0]));
+  ok('CSV: a header and one row per client', csv.length === 4 && /^Client No,Company,Major or minor,Sector,Site address,Owner,Accreditation/.test(csv[0]) && /^CB-0001,Philcement Corporation,Major,Cement,"Brgy\. Bigte, Norzagaray, Bulacan",/.test(csv.find(l => /^CB-0001,/.test(l))));
   const row = csv.find(l => /^CB-0001,/.test(l));
   ok('  every contact person kept; a cell with a comma is quoted', /Ana Cruz,Purchasing,ana@philcement\.ph; ana\.cruz@gmail\.com,0917 123 4567,"Ben, \(02\) 8555-1212"/.test(row), row);
   ok('  with its open quotations and their value', /,0,1,186400,/.test(row), row);
@@ -156,10 +156,12 @@ async function boot(o) {
   o = o || {};
   const p = page(['js/client-rollup.js', 'js/client-book-model.js', 'js/client-book.js'], 'director-client-book.html', { username: 'neil', name: 'Neil Estur', role: 'director' },
     { data: { getQuotations: RAW.quotations, getPricingRequests: RAW.prs, getSalesOrders: RAW.salesOrders, getClients: RAW.clients, getActivityLog: [] } });
-  ['cbQ', 'cbStatus', 'cbOwner', 'cbSort'].forEach(id => { p.els[id] = Object.assign(stubEl(), { id }); });
+  ['cbQ', 'cbSector', 'cbStatus', 'cbOwner', 'cbSort'].forEach(id => { p.els[id] = Object.assign(stubEl(), { id }); });
   p.ctx.__book = o.book || BOOK; p.ctx.__reports = REPORTS; p.ctx.__stub = stubEl;
   p.ctx.__ask = o.ask || null;
+  p.ctx.__v = o.v || 180;
   p.run(`flowToday = function () { return "2026-10-21"; };
+    flowVersionAtLeast = function (n) { return Promise.resolve(n <= __v); };
     URLSearchParams = function () { return { get: function (k) { return k === 'client' ? __ask : null; } }; };
     apiGetUsers = function () { return Promise.resolve({ data: [{ username: 'gerald', fullName: 'Gerald Lucena', role: 'sales' }, { username: 'kim', fullName: 'Kim Reyes', role: 'sales' }, { username: 'neil', fullName: 'Neil Estur', role: 'director' }] }); };
     var __posted = [], __shown = '';
@@ -179,7 +181,7 @@ async function boot(o) {
      [['getClientBook', 'getProofReports'], ['getActivityLog', 'getClients', 'getPricingRequests', 'getQuotations', 'getSalesOrders']]);
   ok('one row per live client, newest update first', (T.match(/data-open="/g) || []).length === 3 && T.indexOf('CB-0003') < T.indexOf('CB-0001') && T.indexOf('CB-0001') < T.indexOf('CB-0002'));
   ok('  a row: company with its main contact, owner, accreditation, status since, records, next step, last update',
-     /Philcement Corporation<\/button><span class="cb-sub">Ana Cruz, Purchasing \+ 1 more<\/span>/.test(T) && /RFQ received<\/span><span class="cb-sub">since 10 Oct 2026/.test(T) &&
+     /Philcement Corporation<\/button><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span><\/span><span class="cb-sub">Brgy\. Bigte, Norzagaray, Bulacan<\/span><span class="cb-sub">Ana Cruz, Purchasing \+ 1 more<\/span>/.test(T) && /RFQ received<\/span><span class="cb-sub">since 10 Oct 2026/.test(T) &&
      /1 PR · 1 quotation<span class="cb-sub">₱186,400 open/.test(T) && /Until 10 Nov 2026/.test(T), T.slice(0, 1200));
   ok('  the records\' suggestion shows on the row', /Records say: Following up/.test(T));
   ok('  not accredited or on process: no sales status, and the accreditation\'s last update', /Documents submitted<\/span><span class="cb-sub">Last update 1 Oct 2026/.test(T));
@@ -206,7 +208,7 @@ async function boot(o) {
   ok('  once the status says what the records say, the suggestion line goes', !/The records say/.test(p.run('__shown')));
   p.run('cbDetail("CB-0003", null)');
   const d3 = p.run('__shown');
-  ok('a client not yet accredited: no status form, a plain line instead', /The sales status starts once the client is accredited/.test(d3) && !/data-kind="status"/.test(d3) && /data-kind="accreditation"/.test(d3));
+  ok('A354: a client not yet accredited has both forms — the accreditation and the sales status are separate labels', !/The sales status starts once/.test(d3) && /data-kind="status"/.test(d3) && /data-kind="accreditation"/.test(d3));
   p.run('cbDetail("CB-0004", null)');
   const d4 = p.run('__shown');
   ok('an archived client: read only, with Restore', /Restore this client/.test(d4) && !/data-kind=/.test(d4) && !/id="cbEdit"/.test(d4) && /Archived 2 Oct 2026: Plant closed/.test(d4));
@@ -230,6 +232,36 @@ async function boot(o) {
   const all = px.els.cbTable.innerHTML + px.run('__shown');
   ok('what is typed is shown as text, never markup', !/<img src=x|<script>alert/.test(all) && /&lt;img src=x onerror=alert\(1\)&gt;/.test(px.els.cbTable.innerHTML));
 
+  sec('5b · A354: Major or Minor, the sector, the site; accreditation and status apart');
+  const pt = await boot();
+  const PT = pt.els.cbTable.innerHTML;
+  ok('every row shows its label; a client without one says so', /tier-major">Major</.test(PT) && /tier-minor">Minor</.test(PT) && /tier-none">No label</.test(PT));
+  ok('Major and Minor are chips with their counts', /data-chip="t:Major" aria-pressed="false">Major <span class="n">1<\/span>/.test(pt.els.cbChips.innerHTML) &&
+     /data-chip="t:Minor" aria-pressed="false">Minor <span class="n">1<\/span>/.test(pt.els.cbChips.innerHTML));
+  pt.run('cbChip("t:Major")');
+  ok('  a chip shows only those clients', (pt.els.cbTable.innerHTML.match(/data-open="/g) || []).length === 1 && /Philcement Corporation/.test(pt.els.cbTable.innerHTML) &&
+     /data-chip="t:Major" aria-pressed="true"/.test(pt.els.cbChips.innerHTML));
+  eq('  and the model filters the same way', J('cbFilter(CL, LOG, IX, { tier: "Minor" }).map(function (c) { return c.clientNo; })'), ['CB-0002']);
+  pt.run('cbAddDialog(null)');
+  const ta = pt.run('__shown');
+  ok('adding a client asks Major or Minor, and requires it', /<legend>Major or minor client<\/legend>/.test(ta) && /name="tier" value="Major" required>/.test(ta) && /name="tier" value="Minor" required>/.test(ta));
+  pt.run('cbDetail("CB-0001", null)');
+  const td = pt.run('__shown');
+  ok('the detail shows the label, and the details form can change it', /<p class="cb-sub"><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span>/.test(td) && /Site: Brgy\. Bigte/.test(td) && /name="tier" value="Major" checked>/.test(td) && !/value="Major" checked required/.test(td));
+  ok('every row shows its sector too ("No sector" when missing), and a typed industry as typed', /cb-badge sector">Cement</.test(PT) && /cb-badge sector">Geothermal drilling</.test(PT) && /tier-none">No sector</.test(PT));
+  eq('the Sector filter: a listed one, and Others for a typed industry', [J('cbFilter(CL, LOG, IX, { sector: "Cement" }).map(function (c) { return c.clientNo; })'), J('cbFilter(CL, LOG, IX, { sector: "Others" }).map(function (c) { return c.clientNo; })')], [['CB-0001'], ['CB-0002']]);
+  ok('  the search finds a site address', J('cbFilter(CL, LOG, IX, { q: "norzagaray" }).map(function (c) { return c.clientNo; })').join() === 'CB-0001');
+  ok('adding a client asks the industry (required) and the site address', /<select class="cb-in" name="sector" required><option value="">Choose…<\/option><option>Oil and gas<\/option>/.test(ta) && /<option>Others<\/option>/.test(ta) &&
+     /name="sectorOther"/.test(ta) && /name="siteAddress"/.test(ta));
+  pt.run('cbDetail("CB-0002", null)');
+  const t2 = pt.run('__shown');
+  ok('a typed industry opens as Others with its name filled in', /<option selected>Others<\/option>/.test(t2) && /name="sectorOther" maxlength="60" value="Geothermal drilling"/.test(t2) && !/class="cb-other" hidden/.test(t2));
+  ok('the detail header carries the labels apart: Major/Minor, sector, accreditation, status', /<p class="cb-sub"><span class="cb-labels"><span class="cb-badge tier-minor">Minor<\/span><span class="cb-badge sector">Geothermal drilling<\/span><\/span> <span class="cb-badge mid">On process<\/span>/.test(t2), t2.slice(0, 500));
+  const pv = await boot({ v: 179 });
+  pv.run('cbAddDialog(null)');
+  ok('before FlowAPI 180 the choices are shown but switched off, and say why', /name="tier" value="Major" disabled>/.test(pv.run('__shown')) && /saved once the FlowAPI update \(180\)/.test(pv.run('__shown')) &&
+     /name="sector" disabled>/.test(pv.run('__shown')) && /name="siteAddress"[^>]*disabled>/.test(pv.run('__shown')));
+
   const pd = await boot({ ask: 'CB-0002' });
   ok('a Sales Daily Report link (?client=CB-0002) opens that client', /<h3 id="cbTitle">Zeta Mining<\/h3>/.test(pd.run('__shown')));
 
@@ -250,7 +282,7 @@ async function boot(o) {
     return box.innerHTML;
   };
   const cd = await card(BOOK);
-  ok('the card: clients, accredited, on process, not accredited, needing an update (amber when any)', /<span class="v">3<\/span><span class="l">Clients<\/span>/.test(cd) && /<span class="v">1<\/span><span class="l">Accredited<\/span>/.test(cd) && /cbc-tile warn"><span class="v">1<\/span><span class="l">Needs an update/.test(cd), cd);
+  ok('the card: clients, Major, accredited, on process, not accredited, needing an update (amber when any)', /<span class="v">3<\/span><span class="l">Clients<\/span>/.test(cd) && /<span class="v">1<\/span><span class="l">Major<\/span>/.test(cd) && /<span class="v">1<\/span><span class="l">Accredited<\/span>/.test(cd) && /cbc-tile warn"><span class="v">1<\/span><span class="l">Needs an update/.test(cd), cd);
   ok('  an empty book invites the first client; without 178 it says so', /No clients yet/.test(await card({ success: true, clients: [], log: [] })) && /version 178/.test(await card({ success: false, message: 'Unknown action: getClientBook' })));
 
   const AUTH = read('js/auth.js'), NAV = read('js/ledger-nav.js');
