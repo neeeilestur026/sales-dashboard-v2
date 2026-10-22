@@ -21,6 +21,8 @@
  *     contact messages and requests from before the switch stay in the inbox; at most 5 a run, each under
  *     its own short lock; a failure leaves the request New with a note and is not retried; never twice;
  *     WEBSITE_AUTO_PR_OFF and staging stop it.
+ *   • A355: the delivery region decides the owner — Luzon → Gerald Lucena, Visayas or Mindanao → Kimberlyn
+ *     Blones (Script Properties can name others); no region keeps WEBSITE_PR_OWNER / "Admin".
  * The A338 sections run with WEBSITE_AUTO_PR_OFF so they still pin the inbox's own buttons.
  */
 const fs = require('fs');
@@ -61,6 +63,13 @@ function boot(opts) {
   return c;
 }
 const rows = (c) => c.__store.WebRequests || [];
+/** A355 — the sample feed with the quote's delivery region set to `region` (GET), and normal acks (POST). */
+const feedWith = (region) => (url, o) => {
+  if (o.method === 'post') return { code: 200, body: { ok: true, acked: JSON.parse(o.payload).ack.length } };
+  const feed = JSON.parse(JSON.stringify(FEED));
+  feed.requests[0].region = region;
+  return { code: 200, body: feed };
+};
 const gets = (c) => c.__calls.filter(x => x.o.method === 'get');
 const posts = (c) => c.__calls.filter(x => x.o.method === 'post');
 
@@ -222,7 +231,7 @@ section('make a pricing request');
     pr['Client Ref'] === 'web:Q-261016-4821' && pr['Salesperson'] === 'Kimberlyn Blones' && pr['Requested By'] === 'Neil Estur'
     && /Website request Q-261016-4821: Needed by November/.test(pr['Notes']), pr);
   const doc = JSON.parse(pr['Doc JSON']);
-  ok('  the visitor\'s contact details live on the pricing request only', doc.contactPerson === 'Juan Dela Cruz' && doc.contactEmail === 'juan@acme.ph' && pr['Client Location'] === 'Surigao del Norte', doc);
+  ok('  the visitor\'s contact details live on the pricing request only', doc.contactPerson === 'Juan Dela Cruz' && doc.contactEmail === 'juan@acme.ph' && pr['Client Location'] === 'Surigao del Norte (Mindanao)', doc);
   ok('  the line keeps the HE number as the requested code, brand + name, category / range',
     items.length === 1 && items[0]['Item No'] === 'HE-01323' && items[0]['Item Name'] === 'Hydraulic Technologies Synchronous Hydraulic Power Unit ( Shpu) Series'
     && items[0]['Qty'] === 2 && items[0]['Remarks'] === 'category name / range name', items[0]);
@@ -271,12 +280,12 @@ section('A341 — a quote request becomes a purchase request by itself');
     && /1 purchase request made, waiting for sourcing/.test(r.message), r);
   const pr = c.__store.PricingRequests[0], q = rows(c)[0], m = rows(c)[1];
   ok('  status Requested: waiting for admin\'s sourcing, NOT sent to management', c.__store.PricingRequests.length === 1 && pr['Status'] === 'Requested', pr);
-  ok('  owner "Admin", requested by "Website (hiescorp.com)", clientRef web:<ref>',
-    pr['Salesperson'] === 'Admin' && pr['Requested By'] === 'Website (hiescorp.com)' && pr['Client Ref'] === 'web:Q-261016-4821', pr);
+  ok('  owner from the delivery region (Mindanao: Kimberlyn Blones), requested by "Website (hiescorp.com)", clientRef web:<ref>',
+    pr['Salesperson'] === 'Kimberlyn Blones' && pr['Requested By'] === 'Website (hiescorp.com)' && pr['Client Ref'] === 'web:Q-261016-4821', pr);
   ok('  the customer is the company; a new one becomes a Prospect', pr['Customer'] === 'Acme Mining Corp.' && c.__store.Clients.length === 1 && c.__store.Clients[0]['Stage'] === 'Prospect', pr['Customer']);
   ok('  the line keeps the HE number, no inventory added', c.__store.PricingRequestItems.length === 1 && c.__store.PricingRequestItems[0]['Item No'] === 'HE-01323' && c.__store.Inventory.length === 0);
   ok('  "Prepared by" is left for the person who prints it', JSON.parse(pr['Doc JSON']).preparedByName === '' && JSON.parse(pr['Doc JSON']).contactPerson === 'Juan Dela Cruz');
-  ok('  the request is Converted with the PR, handled by "Website"', q['Status'] === 'Converted' && q['PR No'] === pr['PR No'] && q['Handled By'] === 'Website' && q['Salesperson'] === 'Admin', q);
+  ok('  the request is Converted with the PR, handled by "Website"', q['Status'] === 'Converted' && q['PR No'] === pr['PR No'] && q['Handled By'] === 'Website' && q['Salesperson'] === 'Kimberlyn Blones', q);
   ok('  the contact message stays New in the inbox', m['Status'] === 'New' && !m['PR No'], m);
   ok('  the purchase request\'s history says the website made it', c.__store.ActivityLog.some(a => JSON.stringify(a).indexOf(pr['PR No']) >= 0 && JSON.stringify(a).indexOf('Website') >= 0));
   ok('  the alert email counts it (no names)', c.__mail.length === 1 && /1 became purchase request, waiting for sourcing/.test(c.__mail[0].body) && !/Juan|acme/i.test(c.__mail[0].subject + c.__mail[0].body), c.__mail[0]);
@@ -359,12 +368,39 @@ section('A341 — a quote request becomes a purchase request by itself');
   const off = boot({ auto: true, props: { WEBSITE_AUTO_PR_OFF: '1' } });
   call(off, 'collectWebsiteRequestsNow', ADMIN);
   ok('WEBSITE_AUTO_PR_OFF: back to clicking in the inbox', rows(off)[0]['Status'] === 'New' && off.__store.PricingRequests.length === 0);
-  const own = boot({ auto: true, props: { WEBSITE_PR_OWNER: 'Kimberlyn Blones' } });
+  const own = boot({ auto: true, props: { WEBSITE_PR_OWNER: 'Ana Admin' }, handler: feedWith('') });
   call(own, 'collectWebsiteRequestsNow', ADMIN);
-  ok('WEBSITE_PR_OWNER names a different owner', own.__store.PricingRequests[0]['Salesperson'] === 'Kimberlyn Blones');
+  ok('a request with no region keeps WEBSITE_PR_OWNER', own.__store.PricingRequests[0]['Salesperson'] === 'Ana Admin');
   const tick = boot({ auto: true });
   tick.websiteCollectTick();
   ok('the 5-minute trigger makes it too', tick.__store.PricingRequests.length === 1 && rows(tick)[0]['Status'] === 'Converted');
+}
+
+section('A355 — the delivery region decides who takes it');
+{
+  const owner = (region, props) => {
+    const c = boot({ auto: true, props, handler: feedWith(region) });
+    call(c, 'collectWebsiteRequestsNow', ADMIN);
+    return { pr: c.__store.PricingRequests[0] || {}, q: rows(c)[0] || {}, m: rows(c)[1] || {} };
+  };
+  const lz = owner('Luzon');
+  ok('Luzon → Gerald Lucena, in his own requests', lz.pr['Salesperson'] === 'Gerald Lucena' && lz.q['Salesperson'] === 'Gerald Lucena', lz.pr);
+  ok('  the region is written beside the location', lz.q['Location'] === 'Surigao del Norte (Luzon)' && lz.pr['Client Location'] === 'Surigao del Norte (Luzon)', lz.q['Location']);
+  ok('Visayas → Kimberlyn Blones', owner('Visayas').pr['Salesperson'] === 'Kimberlyn Blones');
+  ok('Mindanao → Kimberlyn Blones', owner('Mindanao').pr['Salesperson'] === 'Kimberlyn Blones');
+  ok('the spelling of the region does not matter', owner(' luzon ').pr['Salesperson'] === 'Gerald Lucena');
+  const none = owner('');
+  ok('no region (an older page): "Admin" as before, location unchanged', none.pr['Salesperson'] === 'Admin' && none.q['Location'] === 'Surigao del Norte', none.pr);
+  ok('an unknown region counts as none', owner('Mars').pr['Salesperson'] === 'Admin');
+  ok('a contact message never gets an owner', none.m['Kind'] === 'contact' && !none.m['Salesperson']);
+  const other = owner('Luzon', { WEBSITE_PR_OWNER_LUZON: 'Ana Reyes', WEBSITE_PR_OWNER_VISMIN: 'Ben Cruz' });
+  ok('WEBSITE_PR_OWNER_LUZON names someone else for Luzon', other.pr['Salesperson'] === 'Ana Reyes');
+  ok('WEBSITE_PR_OWNER_VISMIN names someone else for Visayas and Mindanao', owner('Mindanao', { WEBSITE_PR_OWNER_VISMIN: 'Ben Cruz' }).pr['Salesperson'] === 'Ben Cruz');
+  // the inbox button (auto off): the form starts with the region's person, and the admin can change it
+  const c = boot({ handler: feedWith('Luzon') });
+  call(c, 'collectWebsiteRequestsNow', ADMIN);
+  const list = call(c, 'getWebRequests', ADMIN);
+  ok('the inbox tells the admin who takes it', list.success && list.data.find(x => x.ref === 'Q-261016-4821').salesperson === 'Gerald Lucena', list.data);
 }
 
 section('privacy: erase, and spam after 30 days');

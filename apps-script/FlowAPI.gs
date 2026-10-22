@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 179;   // A351 — the accounting, lead gen and admin daily reports (a trial; ProofReports gains Kind). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 181;   // A355 — website quote requests go to the salesperson for the delivery region (Luzon / Visayas and Mindanao). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -18598,6 +18598,20 @@ function _webFetch(method, payload) {
 }
 
 /** A feed entry as a WebRequests row, or null when it is not one. */
+/* A355 — the delivery region picked on hiescorp.com decides who takes the quotation. Script Properties can
+   name someone else; the defaults are the people who cover each region. */
+var _WEB_REGIONS = ['Luzon', 'Visayas', 'Mindanao'];
+var _WEB_REGION_OWNER = { Luzon: ['WEBSITE_PR_OWNER_LUZON', 'Gerald Lucena'], Visayas: ['WEBSITE_PR_OWNER_VISMIN', 'Kimberlyn Blones'],
+                          Mindanao: ['WEBSITE_PR_OWNER_VISMIN', 'Kimberlyn Blones'] };
+function _webRegion(v) {
+  var s = String(v || '').trim().toLowerCase();
+  return _WEB_REGIONS.filter(function (r) { return r.toLowerCase() === s; })[0] || '';
+}
+function _webRegionOwner(region) {
+  var o = _WEB_REGION_OWNER[region];
+  return o ? (String(_fprop(o[0]) || '').trim() || o[1]) : '';
+}
+
 function _webRecord(q) {
   if (!q || typeof q !== 'object') return null;
   var ref = String(q.ref || '').trim();
@@ -18608,13 +18622,15 @@ function _webRecord(q) {
     return { id: parseInt(it.id, 10) || 0, sku: _webCell(it.sku), name: _webCell(it.name), brand: _webCell(it.brand),
              category: _webCell(it.category), range: _webCell(it.range), qty: Math.max(1, Math.min(999, parseInt(it.qty, 10) || 1)) };
   }).filter(function (it) { return it.sku || it.name; });
+  var region = q.kind === 'contact' ? '' : _webRegion(q.region), loc = String(q.location || '').trim();
   return {
     'Ref': ref, 'Key': String(q.key || (ref + '@' + String(q.createdAt || ''))).slice(0, 80),
     'Kind': q.kind === 'contact' ? 'contact' : 'quote', 'Received At': _now(), 'Sent At': isNaN(sent.getTime()) ? '' : sent,
     'Name': _webCell(q.name), 'Company': _webCell(q.company), 'Email': _webCell(q.email), 'Phone': _webCell(q.phone),
-    'Location': _webCell(q.location), 'Subject': _webCell(q.subject), 'Message': _webCell(q.message, true),
+    'Location': _webCell(region ? (loc ? loc + ' (' + region + ')' : region) : loc), 'Subject': _webCell(q.subject), 'Message': _webCell(q.message, true),
     'Items JSON': JSON.stringify(items), 'Item Count': items.length,
-    'Unit Count': items.reduce(function (s, it) { return s + it.qty; }, 0), 'Status': 'New'
+    'Unit Count': items.reduce(function (s, it) { return s + it.qty; }, 0), 'Status': 'New',
+    'Salesperson': _webRegionOwner(region)            // A355 — who takes it; blank = WEBSITE_PR_OWNER
   };
 }
 
@@ -18757,7 +18773,7 @@ function _webAutoConvert() {
       var r = _webRow(refs[i]);                        // read again under the lock
       if (!r || r['Status'] !== 'New' || r['PR No']) continue;
       var res;
-      try { res = _webConvertCore(r, { customer: r['Company'] || r['Name'], salesperson: owner, requestedBy: _WEB_AUTO_BY, actorName: 'Website', actorRole: 'system', preparedBy: '' }); }
+      try { res = _webConvertCore(r, { customer: r['Company'] || r['Name'], salesperson: String(r['Salesperson'] || '').trim() || owner, requestedBy: _WEB_AUTO_BY, actorName: 'Website', actorRole: 'system', preparedBy: '' }); }
       catch (e) { res = { success: false, message: String(e && e.message || e) }; }
       if (res && res.success) {
         out.made++; out.prs.push(res.prNo);
@@ -19316,6 +19332,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A355 WEBSITE QUOTE REQUESTS GO TO THE SALESPERSON FOR THE DELIVERY REGION (181; A354 takes 180, A327 takes 182 or later). Neil, 22 Oct 2026: hiescorp.com's quote form now asks for the delivery region (Luzon, Visayas or Mindanao) and its feed carries it as "region". When a request is collected, _webRecord adds the region to Location ("Surigao del Norte (Mindanao)") and fills Salesperson with the owner for that region: Luzon → WEBSITE_PR_OWNER_LUZON (default "Gerald Lucena"), Visayas or Mindanao → WEBSITE_PR_OWNER_VISMIN (default "Kimberlyn Blones"). _webAutoConvert makes the purchase request for that person (so it is in their My Requests at once; admin still sources it); a request with no region (a contact message, or a page opened before the website update) keeps WEBSITE_PR_OWNER / "Admin" as before. The inbox's "Make pricing request" form starts with that name. No new actions, no new columns.
 A351 THE ACCOUNTING, LEAD GEN AND ADMIN DAILY REPORTS (179; A327 takes 180 or later). Neil, 22 Oct 2026: daily reports like the sales one for the other three roles, first on the director's dashboard, still a private trial (proofReportRoles, default director; no ActivityLog, not DailyReports). ProofReports gains Kind (appended): one row per person per day per kind; a blank Kind is the sales report, so every row saved before 179 and every call that names no kind (the sales report, the Client Book's report lines) reads exactly what it read before. saveProofReport / submitProofReport / getProofReports take kind = sales | accounting | leadgen | admin; anything else is refused. No new actions.
 A350 THE CLIENT BOOK, A PRIVATE TRIAL (178; A327 takes 179 or later). Neil, 21 Oct 2026: a client list with several contact people (each with several emails and phones), the accreditation (Accredited / On process / Not accredited, with its last update) and, once accredited, the sales status, read beside the client's purchase requests and quotations, and tracked in the Sales Daily Report trial. New tabs ClientBook (one row per client; contacts as JSON) and ClientBookLog (every change, appended only). getClientBook, saveClientBookClient (duplicates by _canonKey refused unless allowed), setClientBookStatus (the lists enforced; a sales status only for an accredited client) and archiveClientBookClient (archive or restore, never a delete) are secured and refuse every role not in FlowSettings 'clientBookRoles' (default director). It never writes Clients, LgAccred, PRs or quotations, and nothing goes to the ActivityLog. Reads never create the tabs.
 A348 THE SALES DAILY REPORT, REDESIGNED (177; A327 takes 178 or later). Neil, 21 Oct 2026: the report is the count - the portal's numbers, one-line log lines with links, one line of plan at 8:00 and one of blocker at 4:30 - still a private trial on the director's dashboard. ProofReports gains Submitted At and Snapshot JSON. submitProofReport saves the day and fixes the 4:30 numbers for good (a second submit is refused; later saves carry the snapshot over untouched). saveProofReport stamps the 8:00 report's givenAt with the server time once (giveAm) and keeps the stored time over whatever the page sends. A day saved by the A347 form is kept under 'legacy' the first time the new form saves it. Still director-only (proofReportRoles), still no ActivityLog row.
