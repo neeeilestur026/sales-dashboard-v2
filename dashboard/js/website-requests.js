@@ -115,7 +115,8 @@ function wrCard(q) {
   const text = [q.subject, q.message].filter(Boolean).join('\n');
   let state = '';
   const prLink = `<a href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}">${flowEsc(q.prNo)}</a>`;
-  if (q.status === 'Converted' && q.handledBy === 'Website') state = `Purchase request ${prLink} for ${flowEsc(q.customer)}, made automatically ${flowEsc(wrWhen(q.handledAt))}. Admin sources it and forwards it to a sales rep for the quotation.`;   // A341
+  const rep = q.salesperson && q.salesperson !== 'Admin' ? q.salesperson : '';   // A355: the rep for the delivery region
+  if (q.status === 'Converted' && q.handledBy === 'Website') state = `Purchase request ${prLink} for ${flowEsc(q.customer)}, made automatically ${flowEsc(wrWhen(q.handledAt))}${rep ? ' for ' + flowEsc(rep) : ''}. Admin sources it${rep ? '' : ' and forwards it to a sales rep'} for the quotation.`;   // A341
   else if (q.status === 'Converted') state = `Purchase request ${prLink} for ${flowEsc(q.customer)}${q.salesperson ? ', quoted by ' + flowEsc(q.salesperson) : ''} · by ${flowEsc(q.handledBy)}`;
   else if (q.status !== 'New') state = `${flowEsc(q.status)} by ${flowEsc(q.handledBy)} ${flowEsc(wrWhen(q.handledAt))}${q.note ? ' · ' + flowEsc(q.note) : ''}`;
   else if (q.note) state = flowEsc(q.note);
@@ -128,7 +129,7 @@ function wrCard(q) {
   if (!erased) acts.push(`<button type="button" class="btn btn-sm btn-secondary" data-act="erase" data-ref="${flowEsc(q.ref)}">Erase personal data</button>`);
   const form = wrOpen === q.ref ? `<div class="flow-form wr-form">
       <div><label for="wrCust">Customer</label><input id="wrCust" type="text" maxlength="160" value="${flowEsc(q.company || q.name)}"></div>
-      <div><label for="wrSales">Salesperson who quotes it</label><input id="wrSales" type="text" maxlength="80" list="wrPeople" placeholder="Optional"></div>
+      <div><label for="wrSales">Salesperson who quotes it</label><input id="wrSales" type="text" maxlength="80" list="wrPeople" placeholder="Optional" value="${flowEsc(q.salesperson || '')}"></div>
       <div class="full wr-act"><button type="button" class="btn btn-sm btn-primary" data-act="convert-go" data-ref="${flowEsc(q.ref)}">Make it</button>
         <button type="button" class="btn btn-sm btn-secondary" data-act="convert-cancel">Cancel</button>
         <span class="fc-dim">An existing client with this name is used as it is; a new name becomes a prospect.</span></div>

@@ -137,6 +137,9 @@ the WebRequests tab, and the admin and director answer them on `website-requests
 4. Deploy → Manage deployments → Edit → New version → Deploy (same deployment). Smoke: `getVersion` → 172.
 5. Script properties: `WEBSITE_FEED_URL` = `https://hiescorp.com/api/requests-feed.php` (exactly; no
    www), `WEBSITE_FEED_KEY` = the website's `portal_key`, optionally `WEBSITE_ALERT_EMAIL`.
+   A355: a quote's delivery region picks its owner (Luzon → Gerald Lucena, Visayas or Mindanao →
+   Kimberlyn Blones). To name someone else, set `WEBSITE_PR_OWNER_LUZON` / `WEBSITE_PR_OWNER_VISMIN` to
+   the person's full name exactly as the portal shows it. No region keeps `WEBSITE_PR_OWNER` (default Admin).
 6. Run `websiteFeedSelfTest` (Executions → its log says OK and how many are waiting; it never logs a
    name). Then Triggers → Add trigger → `websiteCollectTick`, time-driven, every 5 minutes. Add it
    once, from one account: a second account's trigger would collect twice as often.
