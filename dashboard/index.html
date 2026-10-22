@@ -59,58 +59,16 @@
     </div>
   </div>
 
+  <!-- A359 — the dot-matrix pulse after Sign In (js/login-loader.js draws it) -->
+  <div id="loginLoader" class="login-loader" hidden>
+    <canvas class="ll-dots" aria-hidden="true"></canvas>
+    <canvas class="ll-glow" aria-hidden="true"></canvas>
+    <p class="ll-label" role="status"></p>
+  </div>
+
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
-  <script>
-    // Auto-redirect if already logged in
-    (function() {
-      const session = getSession();
-      /* A277 — was a hand-rolled copy of _homeForRole that had drifted: it had no 'marketing'
-         branch, so a marketing user reopening the tab landed on the sales dashboard and was
-         bounced. The fresh-login path below already used the real one. */
-      if (session) window.location.href = flowAfterLogin(session.role);
-      else if (typeof hxClearCaches === 'function') hxClearCaches();   // A304: no stale rows for the next sign-in
-    })();
-
-    async function handleLogin(e) {
-      e.preventDefault();
-
-      const user = document.getElementById('username').value.trim();
-      const pass = document.getElementById('password').value;
-      const errorMsg = document.getElementById('errorMsg');
-      const errorText = document.getElementById('errorText');
-      const loginBtn = document.getElementById('loginBtn');
-      const loginBtnText = document.getElementById('loginBtnText');
-      const loginSpinner = document.getElementById('loginSpinner');
-
-      // Hide previous error
-      errorMsg.classList.remove('visible');
-
-      // Show loading state
-      loginBtn.disabled = true;
-      loginBtnText.textContent = 'Signing in...';
-      loginSpinner.style.display = 'block';
-
-      try {
-        const result = await apiLogin(user, pass);
-
-        if (result.success) {
-          saveSession(result);
-          // Single source of truth for role→home (covers marketing etc. — auth.js)
-          window.location.href = flowAfterLogin(result.role);
-        } else {
-          errorText.textContent = result.message || 'Invalid username or password';
-          errorMsg.classList.add('visible');
-        }
-      } catch (err) {
-        errorText.textContent = 'Unable to connect to server. Please try again.';
-        errorMsg.classList.add('visible');
-      } finally {
-        loginBtn.disabled = false;
-        loginBtnText.textContent = 'Sign In';
-        loginSpinner.style.display = 'none';
-      }
-    }
-  </script>
+  <script src="js/login-loader.js"></script>
+  <script src="js/index-inline.js"></script>
 </body>
 </html>
