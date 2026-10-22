@@ -47,6 +47,9 @@
         </section>
 
         <nav class="dh-rail-nav" aria-label="On this page">
+          <a href="#acctReport">Accounting report</a>
+          <a href="#lgReport">Lead gen report</a>
+          <a href="#adminReport">Admin report</a>
           <a href="#proof">Sales report</a>
           <a href="#inbox">Needs you <span class="dh-count" id="inboxCount">0</span></a>
           <a href="#pulse">Pulse</a>
@@ -80,6 +83,22 @@
             Pricing engine
           </a>
         </header>
+
+        <!-- A351 — the accounting, lead gen and admin daily reports (Neil, 22 Oct 2026), a private trial like the sales one: each
+             reads the day of the person picked in "Whose records" and saves what the director types under his own name.
+             js/team-report.js draws them; nothing here touches the real records. -->
+        <section class="dh-glass dh-sr dh-tr" id="acctReport">
+          <div class="dh-head sr-head" data-tr="head"></div>
+          <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the day…</div></div>
+        </section>
+        <section class="dh-glass dh-sr dh-tr" id="lgReport">
+          <div class="dh-head sr-head" data-tr="head"></div>
+          <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the day…</div></div>
+        </section>
+        <section class="dh-glass dh-sr dh-tr" id="adminReport">
+          <div class="dh-head sr-head" data-tr="head"></div>
+          <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the day…</div></div>
+        </section>
 
         <!-- A350 — the Client Book (Neil, 21 Oct 2026), a private trial: its counts and the way in. js/client-book-card.js fills
              it from the trial's own store; the page is director-client-book.html. -->
@@ -443,6 +462,8 @@
   <script src="js/sales-report.js"></script>        <!-- A348: the Sales Daily Report -->
   <script src="js/client-book-model.js"></script>   <!-- A350: the Client Book's counts -->
   <script src="js/client-book-card.js"></script>    <!-- A350: its card -->
+  <script src="js/team-report-model.js"></script>   <!-- A351: what the three role reports count -->
+  <script src="js/team-report.js"></script>         <!-- A351: the accounting, lead gen and admin reports -->
   <script src="js/director-home-inline.js"></script>
 </body>
 </html>
