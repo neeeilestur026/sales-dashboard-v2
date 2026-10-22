@@ -293,6 +293,21 @@ function requireWebRequestsAccess() {
 }
 
 /** A358 — the Client Book: the director (every client) and the sales reps (their own; the server scopes the rows). */
+/* A363 — the new daily report (my-daily-report.html): each person's own, for the roles that have one. The director has
+   the same reports on his dashboard (and reads everyone's there), so he is sent home. */
+function requireNewDailyReportAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['sales', 'accounting', 'leadgen', 'admin'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 function requireClientBookAccess() {
   const session = getSession();
   if (!session) {
@@ -567,7 +582,7 @@ function renderNavbar(activePage) {
 
   let navLinks = '';
   if (session.role === 'admin') {
-    const salesPages = ['admin-clients', 'admin-targets', 'admin-daily-report'];   // A272
+    const salesPages = ['admin-clients', 'admin-targets', 'admin-daily-report', 'my-daily-report'];   // A272; A363 the new daily report
     const sysPages = ['admin-users', 'admin-login-log', 'change-password'];
     const salesActive = salesPages.includes(activePage);
     const sysActive = sysPages.includes(activePage);
@@ -588,6 +603,7 @@ function renderNavbar(activePage) {
                from the nav. Team Performance and All Daily Reports under Process Flow cover both. -->
           <a href="clients.html" class="${activePage === 'admin-clients' ? 'active' : ''}">Client List</a>
           <a href="admin-daily-report.html" class="${activePage === 'admin-daily-report' ? 'active' : ''}">Admin Daily Report</a>
+          <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">New Daily Report</a>
           <a href="admin-targets.html" class="${activePage === 'admin-targets' ? 'active' : ''}">Sales Targets</a>
         </div>
       </div>
@@ -695,7 +711,7 @@ function renderNavbar(activePage) {
       </div>`;
   } else if (session.role === 'accounting') {
     const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders';
-    const reportsActive = ['accounting-daily-report', 'payment-requests', 'financial-reports'].includes(activePage);
+    const reportsActive = ['accounting-daily-report', 'my-daily-report', 'payment-requests', 'financial-reports'].includes(activePage);
     const acctMenuActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
       <a href="accounting-home.html" class="${activePage === 'accounting-home' ? 'active' : ''}">
@@ -747,6 +763,7 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="accounting-daily-report.html" class="${activePage === 'accounting-daily-report' ? 'active' : ''}">My Daily Report</a>
+          <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">New Daily Report</a>
           <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">All Daily Reports</a>
           <a href="accounting-summary.html" class="${activePage === 'accounting-summary' ? 'active' : ''}">Accounting Summary</a>
           <a href="financial-reports.html" class="${activePage === 'financial-reports' ? 'active' : ''}">Financial Reports</a>
@@ -1000,6 +1017,10 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Daily Report
       </a>
+      <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        New Daily Report
+      </a>
       <div class="nav-dropdown">
         <button class="nav-dropdown-btn ${workActive ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
@@ -1126,7 +1147,7 @@ function renderNavbar(activePage) {
   } else {
     const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226
     const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
-    const reportsActive = ['report', 'my-reports'].includes(activePage);
+    const reportsActive = ['report', 'my-reports', 'my-daily-report'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
       <a href="dashboard.html" class="${activePage === 'dashboard' ? 'active' : ''}">
@@ -1176,6 +1197,7 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="report.html" class="${activePage === 'report' ? 'active' : ''}">Daily Report</a>
+          <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">New Daily Report</a>
           <a href="my-reports.html" class="${activePage === 'my-reports' ? 'active' : ''}">My Reports</a>
         </div>
       </div>

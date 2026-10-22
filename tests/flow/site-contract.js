@@ -58,6 +58,8 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'month-check.html',
   // A338 — the website requests inbox
   'website-requests.html',
+  // A363 — each person's new daily report
+  'my-daily-report.html',
   // A340 — the director's pricing engine
   'director-pricing-engine.html',
   // A350 — the Client Book trial

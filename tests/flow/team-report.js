@@ -206,19 +206,22 @@ function fakeSection() {
     contains: () => false, focus() {}, setAttribute() {}, removeAttribute() {}, querySelector: () => null, querySelectorAll: () => [] });
   return { parts, dataset: {}, addEventListener() {}, querySelector: (sel) => part(sel), querySelectorAll: () => [] };
 }
+const WHO = { accounting: { name: 'Rojan Leo Francisco', username: 'acct2' }, leadgen: { name: 'Lea Gen', username: 'lea' }, admin: { name: 'Ana Admin', username: 'ana' } };
 async function boot(roleKey, o) {
   o = o || {};
-  const P = world();
+  const P = world(), me = o.own ? Object.assign({ role: roleKey }, WHO[roleKey]) : { name: 'Neil Estur', username: 'neil', role: 'director' };
   const id = { accounting: 'acctReport', leadgen: 'lgReport', admin: 'adminReport' }[roleKey];
   P.__els[id] = fakeSection();
   Object.assign(P, { __act: ACT, __ar: AR, __prs: PRS, __pos: POS, __sos: SOS, __lgc: LGC, __lgdata: LGDATA, __has179: o.v179 !== false, __mailMode: o.mail || 'ok',
     __mailToday: o.mailToday || [{ messageId: 'm1', subject: 'SOA as of October', recipient: 'ap@zetamining.com', name: 'Zeta AP', sentAt: '2026-10-22T09:15:00+08:00' },
                                  { messageId: 'm2', subject: 'Lunch', recipient: 'friend@gmail.com', name: 'Friend', sentAt: '2026-10-22T12:00:00+08:00' }],
-    __saved: o.saved || [{ date: '2026-10-21', user: 'Neil Estur', kind: roleKey, submittedAt: '2026-10-21T08:31:00.000Z', updatedAt: '2026-10-21T08:31:00.000Z', report: { v: 1, kind: roleKey, lines: [] } },
-                          { date: '2026-10-20', user: 'Neil Estur', kind: 'sales', submittedAt: '2026-10-20T08:31:00.000Z', report: { v: 2, lines: [] } }] });
+    __me: me, __usersRead: 0,
+    __saved: o.saved || [{ date: '2026-10-21', user: WHO[roleKey].name, kind: roleKey, submittedAt: '2026-10-21T08:31:00.000Z', updatedAt: '2026-10-21T08:31:00.000Z', report: { v: 1, kind: roleKey, lines: [] } },
+                          { date: '2026-10-19', user: 'Neil Estur', kind: roleKey, updatedAt: '2026-10-19T08:31:00.000Z', report: { v: 1, kind: roleKey, lines: [] } },
+                          { date: '2026-10-20', user: WHO[roleKey].name, kind: 'sales', submittedAt: '2026-10-20T08:31:00.000Z', report: { v: 2, lines: [] } }] });
   vm.runInContext(`
-    getSession = function () { return { name: 'Neil Estur', username: 'neil', role: 'director' }; };
-    apiGetUsers = function () { return Promise.resolve({ data: [{ username: 'acct2', fullName: 'Rojan Leo Francisco', role: 'accounting' }, { username: 'kim', fullName: 'Kim Reyes', role: 'sales' },
+    getSession = function () { return __me; };
+    apiGetUsers = function () { __usersRead++; return Promise.resolve({ data: [{ username: 'acct2', fullName: 'Rojan Leo Francisco', role: 'accounting' }, { username: 'kim', fullName: 'Kim Reyes', role: 'sales' },
       { username: 'ana', fullName: 'Ana Admin', role: 'admin' }, { username: 'lea', fullName: 'Lea Gen', role: 'leadgen' }, { username: 'neil', fullName: 'Neil Estur', role: 'director' }] }); };
     flowVersionAtLeast = function (n) { return Promise.resolve(__has179 && n <= 179); };
     var __reads = [], __posts = [], __queueFor = [];
@@ -237,7 +240,7 @@ async function boot(roleKey, o) {
       return Promise.resolve({ success: true, emails: date === '2026-10-22' ? __mailToday : [] }); };
     flowComputeActions = function (s) { __queueFor.push(s); return Promise.resolve([{ icon: 'report', tone: 'info', text: '2 receivable(s) past due — collect', link: 'flow-ar-aging.html', amt: 120000 },
       { icon: 'urgent', tone: 'urgent', text: '1 approved transfer to pay', link: 'flow-payment-requests.html' }]); };`, P);
-  await vm.runInContext('teamReport(' + JSON.stringify(id) + ', ' + JSON.stringify(roleKey) + ')', P);
+  await vm.runInContext('teamReport(' + JSON.stringify(id) + ', ' + JSON.stringify(roleKey) + (o.own ? ', { own: true }' : '') + ')', P);
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   return { P, el: P.__els[id], run: (c) => vm.runInContext(c, P), part: (sel) => P.__els[id].parts[sel] || { innerHTML: '' } };
 }
@@ -249,7 +252,7 @@ async function boot(roleKey, o) {
   ok('it reads the activity log with the sales report\'s exact parameters (one read for both), settings and receivables',
      reads.indexOf('getActivityLog') >= 0 && JSON.stringify(a.run('__reads.filter(function (r) { return r.a === "getActivityLog"; })[0].p')) === JSON.stringify({ from: '2026-09-10', to: '2026-10-22' }) &&
      reads.indexOf('getARAging') >= 0, reads);
-  eq('its saved days come from the store with its kind; another kind\'s row is ignored', [a.run('JSON.stringify(__posts[0])') && a.run('__posts[0].p.kind'), Object.keys(S('saved'))], ['accounting', ['2026-10-21']]);
+  eq('A363: its saved days are the chosen person\'s own, from the store with its kind (the director\'s old trial rows and another kind ignored)', [a.run('JSON.stringify(__posts[0])') && a.run('__posts[0].p.kind'), Object.keys(S('saved'))], ['accounting', ['2026-10-21']]);
   eq('the queue is the chosen person\'s own home-page list', a.run('JSON.stringify(__queueFor[0])'), JSON.stringify({ role: 'accounting', name: R, username: 'acct2' }));
   const tiles = a.part('[data-tiles="portal"]').innerHTML;
   ok('the tiles are drawn like the sales report\'s, each opening its records', /data-rec="invoices"/.test(tiles) && /<span class="v">2 · ₱150,000<\/span>/.test(tiles) && /sr-tile s-none/.test(tiles), tiles.slice(0, 300));
@@ -259,27 +262,49 @@ async function boot(roleKey, o) {
   ok('logged by the portal: his rows that day only, with filter pills by module', /INV-126/.test(feed) && !/INV-200/.test(feed) && !/INV-120/.test(feed) &&
      /data-feed="Invoice"/.test(a.part('[data-pills]').innerHTML) && /data-feed="Books"/.test(a.part('[data-pills]').innerHTML), feed.slice(0, 300));
   const head = a.run('_trHeadHtml(TR_UI.accounting)');
-  ok('  the head: the title, Trial, the person picker and the day', /<h2>Accounting Daily Report<\/h2>/.test(head) && /Trial/.test(head) && /<option selected>Rojan Leo Francisco<\/option>/.test(head) && /data-date value="2026-10-22"/.test(head));
+  ok('  the head: the title, Read only, "Whose report" and the day', /<h2>Accounting Daily Report<\/h2>/.test(head) && /<span class="sr-chip">Read only<\/span>/.test(head) && /<span>Whose report<\/span>/.test(head) &&
+     /<option selected>Rojan Leo Francisco<\/option>/.test(head) && /data-date value="2026-10-22"/.test(head) && !/Trial/.test(head), head);
   const body = a.run('_trBodyHtml(TR_UI.accounting)');
-  ok('  the body: the numbers, the queue, my log with the role\'s line types, the portal feed, the 4:30 report, the week',
-     ['data-tiles="portal"', 'data-queue', 'data-new="Collection call"', 'data-new="Bank reconciliation"', 'data-feedlist', 'data-pm', 'data-week'].every(s => body.includes(s)) && !/data-new="Call"/.test(body));
-  a.run(`TR_UI.accounting.state.lines.push(trNewLine('accounting', { type: 'Other task', what: '<img src=x onerror=alert(1)>' }, 'Neil Estur', '2026-10-22T02:00:00.000Z'));`);
+  ok('  the body: the numbers, the queue, their log, the portal feed, the 4:30 report, the week — and nothing to type', ['data-tiles="portal"', 'data-queue', 'data-feedlist', 'data-pm', 'data-week'].every(s => body.includes(s)) &&
+     !/data-new=/.test(body) && /Read only — Rojan Leo Francisco&#39;s own report|Read only — Rojan Leo Francisco's own report/.test(body) && /Rojan's log/.test(body), body.slice(0, 600));
+  a.run(`TR_UI.accounting.state.lines.push(trNewLine('accounting', { type: 'Other task', what: '<img src=x onerror=alert(1)>' }, 'Rojan Leo Francisco', '2026-10-22T02:00:00.000Z'));`);
   const log = a.run('_trLogRows(TR_UI.accounting)');
-  ok('what is typed is shown as text, never markup', !/<img src=x/.test(log) && /&lt;img src=x onerror=alert\(1\)&gt;/.test(log));
+  ok('what was typed is shown as text, never markup, and cannot be edited or voided from here', !/<img src=x/.test(log) && /&lt;img src=x onerror=alert\(1\)&gt;/.test(log) && !/data-edit|data-void/.test(log));
   await a.run('_trSave(TR_UI.accounting)');
-  const save = a.run('__posts.filter(function (x) { return x.a === "saveProofReport"; })[0]');
+  a.run('_trSubmitPm(TR_UI.accounting)');
+  ok('  and nothing is ever saved or submitted from the director\'s view', !a.run('__posts.some(function (x) { return x.a === "saveProofReport" || x.a === "submitProofReport"; })'));
+  const pmRo = a.run('_trPmHtml(TR_UI.accounting, TR_UI.accounting.nums, {})');
+  ok('  a 4:30 report not yet in says so, with no Submit', /Not submitted yet/.test(pmRo) && !/data-submitpm|data-blocker/.test(pmRo));
+  const pmIn = a.run('_trPmHtml(TR_UI.accounting, TR_UI.accounting.nums, TR_UI.accounting.saved["2026-10-21"])');
+  ok('  a submitted one shows its time', /Submitted/.test(pmIn) && !/data-submitpm/.test(pmIn));
+
+  sec('5a · A363: the person\'s own report on their own page');
+  const own = await boot('accounting', { own: true });
+  const O = (x) => own.run('TR_UI.accounting.' + x);
+  ok('their own day: no roster read, no picker, their name in the head', O('own') === true && O('ro') === false && O('person') === R && own.run('__usersRead') === 0 &&
+     /<h2>My daily report<\/h2><span class="sr-who">Rojan Leo Francisco<\/span>/.test(own.run('_trHeadHtml(TR_UI.accounting)')) && !/data-person/.test(own.run('_trHeadHtml(TR_UI.accounting)')));
+  ok('  their queue and mail are read with their own login', own.run('JSON.stringify(__queueFor[0])') === JSON.stringify({ role: 'accounting', name: R, username: 'acct2' }) &&
+     own.run('__mailReads[0].user') === 'acct2');
+  const ob = own.run('_trBodyHtml(TR_UI.accounting)');
+  ok('  my log with the role\'s line types, and the words for their own report', ['data-new="Collection call"', 'data-new="Bank reconciliation"'].every(s => ob.includes(s)) && !/data-new="Call"/.test(ob) &&
+     /Your new daily report\. Only you and the director see it, and your old daily report still works as before\./.test(ob));
+  own.run(`TR_UI.accounting.state.lines.push(trNewLine('accounting', { type: 'Other task', what: 'Filed the 2307s' }, 'Rojan Leo Francisco', '2026-10-22T02:00:00.000Z'));`);
+  ok('  their own lines can be edited and voided', /data-edit=/.test(own.run('_trLogRows(TR_UI.accounting)')));
+  await own.run('_trSave(TR_UI.accounting)');
+  const save = own.run('__posts.filter(function (x) { return x.a === "saveProofReport"; })[0]');
   ok('saving sends the kind, the day, the report with whose records, and the numbers', save && save.p.kind === 'accounting' && save.p.date === '2026-10-22' &&
      JSON.parse(save.p.reportJson).person === R && JSON.parse(save.p.portalJson).invoices.text === '2 · ₱150,000', save && save.p);
-  a.run('_trSubmitPm(TR_UI.accounting)');
-  ok('the 4:30 report needs one line of blocker first', !a.run('__posts.some(function (x) { return x.a === "submitProofReport"; })') && /blocker/.test(a.part('[data-state]').textContent));
-  a.el.querySelector('[data-blocker]').value = 'no blocker';
-  a.run('_trSubmitPm(TR_UI.accounting)');
-  await a.run('TR_UI.accounting.chain');
-  const sub = a.run('__posts.filter(function (x) { return x.a === "submitProofReport"; })[0]');
+  own.run('_trSubmitPm(TR_UI.accounting)');
+  ok('the 4:30 report needs one line of blocker first', !own.run('__posts.some(function (x) { return x.a === "submitProofReport"; })') && /blocker/.test(own.part('[data-state]').textContent));
+  own.el.querySelector('[data-blocker]').value = 'no blocker';
+  own.run('_trSubmitPm(TR_UI.accounting)');
+  await own.run('TR_UI.accounting.chain');
+  const sub = own.run('__posts.filter(function (x) { return x.a === "submitProofReport"; })[0]');
   ok('the 4:30 report submits the numbers once, with whose records they were', sub && sub.p.kind === 'accounting' && JSON.parse(sub.p.snapshotJson).person === R &&
-     JSON.parse(sub.p.snapshotJson).paid.text === '1 · ₱75,000' && !!a.run('TR_UI.accounting.saved["2026-10-22"].submittedAt'), sub && sub.p);
-  const pm = a.run('_trPmHtml(TR_UI.accounting, TR_UI.accounting.nums, TR_UI.accounting.saved["2026-10-22"])');
+     JSON.parse(sub.p.snapshotJson).paid.text === '1 · ₱75,000' && !!own.run('TR_UI.accounting.saved["2026-10-22"].submittedAt'), sub && sub.p);
+  const pm = own.run('_trPmHtml(TR_UI.accounting, TR_UI.accounting.nums, TR_UI.accounting.saved["2026-10-22"])');
   ok('  and afterwards shows them as submitted, with no Submit', /Submitted/.test(pm) && !/data-submitpm/.test(pm) && /Rojan Leo Francisco&#39;s records|Rojan Leo Francisco's records/.test(pm), pm.slice(0, 400));
+
   a.run('TR_UI.accounting.person = "Someone Else";');
   await a.run('_trOpenDay(TR_UI.accounting, "2026-10-22")');
   ok('choosing another person reads their queue', a.run('__queueFor[__queueFor.length - 1].name') === 'Someone Else');
@@ -289,13 +314,16 @@ async function boot(roleKey, o) {
   sec('5b · A352: the mail on the page');
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   ok('it reads the chosen person\'s sent mail by their login, for the day', a.run('JSON.stringify(__mailReads[0])') === JSON.stringify({ user: 'acct2', date: '2026-10-22' }));
-  const m0 = await boot('accounting');
+  const m0 = await boot('accounting', { own: true });
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   const mt = m0.part('[data-tiles="portal"]').innerHTML;
   ok('the collection follow-up and emails-sent tiles come first', mt.indexOf('data-rec="mailCollect"') >= 0 && mt.indexOf('data-rec="mailCollect"') < mt.indexOf('data-rec="invoices"') &&
      /Collection follow-up emails<\/span><span class="v">1<\/span>/.test(mt) && /Emails sent<\/span><span class="v">2<\/span>/.test(mt), mt.slice(0, 500));
   const ml = m0.part('[data-mail]').innerHTML;
-  ok('the mail list: each email, its tag and why, and a button to correct it', /SOA as of October/.test(ml) && /Collection follow-up<\/span> the subject is about payment/.test(ml) &&
+  const md = await boot('accounting');
+  for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  ok('A363: on the director\'s view the same list has no buttons', /SOA as of October/.test(md.part('[data-mail]').innerHTML) && !/data-mailmark/.test(md.part('[data-mail]').innerHTML), md.part('[data-mail]').innerHTML.slice(0, 300));
+  ok('the mail list on their own page: each email, its tag and why, and a button to correct it', /SOA as of October/.test(ml) && /Collection follow-up<\/span> the subject is about payment/.test(ml) &&
      /data-mailmark="m1">Not a collection follow-up/.test(ml) && /data-mailmark="m2">Count as collection follow-up/.test(ml), ml.slice(0, 800));
   m0.run('_trMailMark(TR_UI.accounting, "m2")');
   await m0.run('TR_UI.accounting.chain');
@@ -308,7 +336,7 @@ async function boot(roleKey, o) {
   const ms2 = await boot('accounting', { mail: 'setup' });
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   ok('a mailbox that is not connected says so, and the tiles show "—"', /mailbox is not connected/.test(ms2.part('[data-mail]').innerHTML) && /Collection follow-up emails<\/span><span class="v">—<\/span>/.test(ms2.part('[data-tiles="portal"]').innerHTML));
-  const ma = await boot('admin', { mailToday: [{ messageId: 'q1', subject: 'RFQ: torque wrench', recipient: 'sales@enerpac.com', name: 'Enerpac', sentAt: '2026-10-22T09:00:00+08:00' }] });
+  const ma = await boot('admin', { own: true, mailToday: [{ messageId: 'q1', subject: 'RFQ: torque wrench', recipient: 'sales@enerpac.com', name: 'Enerpac', sentAt: '2026-10-22T09:00:00+08:00' }] });
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   ok('admin: reads the supplier list, and counts the price request to a supplier', ma.run('__reads.map(function (r) { return r.a; })').indexOf('getSuppliers') >= 0 &&
      /Price requests to suppliers<\/span><span class="v">1<\/span>/.test(ma.part('[data-tiles="portal"]').innerHTML) && /data-new="Price request email"/.test(ma.run('_trBodyHtml(TR_UI.admin)')));
@@ -329,11 +357,13 @@ async function boot(roleKey, o) {
   eq('  an empty "what" takes the PO\'s supplier on a PO line, but never the PR\'s client on a supplier follow-up', [fillFor('PO status', 'po|PO-7'), fillFor('Supplier follow-up', 'pr|PR-20')], ['Enerpac', '']);
   ok('  a Shipment line: international or local, linked to an open PO, with its results', /<option>International<\/option><option>Local<\/option>/.test(dlg) && /value="po\|PO-7"/.test(dlg) && !/PO-6/.test(dlg) && /value="Cleared"/.test(dlg), dlg.slice(0, 600));
 
-  const old = await boot('accounting', { v179: false });
+  const old = await boot('accounting', { v179: false, own: true });
   ok('before FlowAPI 179: the store is not read at all (178 would hand back the sales report\'s days)', !old.run('__posts.some(function (x) { return x.a === "getProofReports"; })'));
   await old.run('_trSave(TR_UI.accounting)');
-  ok('  nothing is sent to it (178 would replace the sales report of that day), and the page says so', !old.run('__posts.some(function (x) { return /ProofReport/.test(x.a); })') &&
-     /179/.test(old.part('[data-state]').textContent) && /version 179/.test(old.run('_trBodyHtml(TR_UI.accounting)')), old.part('[data-state]').textContent);
+  ok('  nothing is sent to it (178 would replace the sales report of that day), and the page names the update it needs (184 for their own report)', !old.run('__posts.some(function (x) { return /ProofReport/.test(x.a); })') &&
+     /184/.test(old.part('[data-state]').textContent) && /version 184/.test(old.run('_trBodyHtml(TR_UI.accounting)')), old.part('[data-state]').textContent);
+  const oldD = await boot('accounting', { v179: false });
+  ok('  the director\'s view says the saved reports need 184 to be read', /version 184\) before it can be read here/.test(oldD.run('_trBodyHtml(TR_UI.accounting)')));
   ok('  what was typed is kept on this computer', !!old.P.__store['hx_tr_draft:accounting:2026-10-22']);
 
   sec('6 · the site rules');

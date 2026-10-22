@@ -1,0 +1,8 @@
+/* new-daily-report-card.css — A363 · the "New daily report" card (js/new-daily-report-card.js) on the sales, accounting,
+   lead gen and admin homes: one line of where today stands and the way in. Tokens only, so it follows each home's theme. */
+.hx-ndr .hx-ndr-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 16px; }
+.hx-ndr .hx-ndr-t { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.hx-ndr .hx-ndr-t b { font:700 15px/1.3 var(--hx-text); color:var(--hx-ink); }
+.hx-ndr .hx-ndr-t span { font:400 13px/1.4 var(--hx-text); color:var(--hx-ink-2); }
+.hx-ndr .hx-ndr-t span.ok { color:var(--hx-ok); font-weight:600; }
+.hx-ndr .hx-ndr-t span.due { color:var(--hx-warn); font-weight:600; }

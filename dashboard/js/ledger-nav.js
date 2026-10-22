@@ -46,7 +46,7 @@ const LEDGER_NAV = {
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['flow-shipments.html', 'Shipments'], ['scan.html', 'Scanner']]],
     ['Collect', 'inbox', [['flow-invoices.html', 'Invoices'], ['flow-ar-aging.html', 'AR aging'], ['flow-collections.html', 'Collections'], ['month-check.html', 'Month check']]],
     ['Books', 'book', [['flow-accounting.html', 'Accounting'], ['flow-expenses.html', 'Expenses'], ['flow-ledger.html', 'General ledger'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet']]],
-    ['Team', 'chart', [['admin-summary.html', 'Summary'], ['admin-team.html', 'Team'], ['admin-reports.html', 'Reports'], ['all-daily-reports.html', 'All daily reports'], ['admin-daily-report.html', 'Admin daily report'], ['team-performance.html', 'Team performance']]],
+    ['Team', 'chart', [['admin-summary.html', 'Summary'], ['admin-team.html', 'Team'], ['admin-reports.html', 'Reports'], ['all-daily-reports.html', 'All daily reports'], ['admin-daily-report.html', 'Admin daily report'], ['my-daily-report.html', 'New daily report'], ['team-performance.html', 'Team performance']]],
     ['Guide', 'compass', [['flow-home.html', 'Process overview'], ['flow-guide.html', 'Process guide']]],
     ['System', 'sliders', [['admin-users.html', 'User management'], ['admin-login-log.html', 'Login log']]]
   ],
@@ -67,7 +67,7 @@ const LEDGER_NAV = {
     ['Books', 'book', [['flow-accounting.html', 'Accounting'], ['flow-expenses.html', 'Expenses'], ['flow-ledger.html', 'General ledger'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['accounting-summary.html', 'Accounting summary'], ['financial-reports.html', 'Financial reports'], ['balance-sheet.html', 'Balance sheet']]],
     ['Orders', 'cart', [['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['client-tracker.html', 'Client tracker'], ['flow-sales-orders.html', 'Sales orders'], ['management-sales-orders.html', 'All sales orders'], ['flow-lifecycle.html', 'SO lifecycle']]],
     ['Stock', 'box', [['flow-receiving.html', 'Receiving'], ['flow-inventory.html', 'Inventory'], ['flow-shipments.html', 'Shipments'], ['scan.html', 'Scanner']]],
-    ['Reports', 'clip', [['accounting-daily-report.html', 'My daily report'], ['all-daily-reports.html', 'All daily reports'], ['flow-guide.html', 'Process guide']]]
+    ['Reports', 'clip', [['accounting-daily-report.html', 'My daily report'], ['my-daily-report.html', 'New daily report'], ['all-daily-reports.html', 'All daily reports'], ['flow-guide.html', 'Process guide']]]
   ],
   management: [
     ['Home', 'home', 'management-home.html'],
@@ -84,7 +84,7 @@ const LEDGER_NAV = {
     ['Quote', 'file', [['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['flow-inventory.html', 'Inventory']]],
     ['Clients', 'users', [['clients.html', 'Client list'], ['director-client-book.html', 'Client Book'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],   // A358 — the Client Book
     ['Field', 'pin', [['weekly-itinerary.html', 'Weekly itinerary'], ['flow-travel.html', 'Travel allowance'], ['flow-commissions.html', 'Commission requests'], ['sales-emails.html', 'My emails']]],
-    ['Reports', 'clip', [['report.html', 'Daily report'], ['my-reports.html', 'My reports']]],
+    ['Reports', 'clip', [['report.html', 'Daily report'], ['my-daily-report.html', 'New daily report'], ['my-reports.html', 'My reports']]],
     ['Guide', 'compass', 'flow-guide.html']
   ],
   marketing: [
@@ -94,6 +94,7 @@ const LEDGER_NAV = {
   leadgen: [
     ['Home', 'home', 'leadgen-home.html'],
     ['Report', 'clip', 'leadgen-daily-report.html'],
+    ['New report', 'clip', 'my-daily-report.html'],   // A363 — the new daily report, beside the old one
     ['Quotes', 'file', [['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board']]]
   ],
   hr: [

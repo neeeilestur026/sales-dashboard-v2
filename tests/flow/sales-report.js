@@ -274,6 +274,33 @@ ok('A349: no 8:00 huddle card, no plan line, no 8:00 chip', !/8:00|srAm|srPlan|g
 ok('the 4:30 card: one line of blocker and Submit', /id="srBlocker"/.test(pm) && /Submit 4:30 report/.test(pm));
 const pmDone = run('_srPmHtml(SR_UI.nums, { submittedAt: "2026-10-20T08:31:00.000Z", snapshot: __snap, report: { pm: { blocker: "no blocker" } } })');
 ok('  once submitted: the submitted numbers, fixed, and no Submit', /Submitted 4:31 PM/.test(pmDone) && !/Submit 4:30 report/.test(pmDone) && /does not change them/.test(pmDone));
+sec('8b · A363: the director reads a rep\'s own report; a rep keeps their own');
+{
+  const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
+  run('SR_UI.self = { name: "Neil Estur", username: "neil", first: "Neil" }; SR_UI.people = [{ name: "Gerald Lucena", username: "gerald" }, { name: "Kim Reyes", username: "kim" }];');
+  run('_srPick("Kim Reyes", true)');
+  ok('picking a rep reads their day (their name, their login), read only', run('SR_UI.me.name') === 'Kim Reyes' && run('SR_UI.me.username') === 'kim' && run('SR_UI.ro') === true);
+  run('_srPick("", true)');
+  ok('  "Me" goes back to the director\'s own trial day, which he can still type in', run('SR_UI.me.name') === 'Neil Estur' && run('SR_UI.ro') === false);
+  run('SR_UI.me = ME; SR_UI.ro = true; SR_UI.nums = _srNums();');
+  const roFu = run('SR_UI.nums.fu.map(_srFuHtml).join("")'), roLog = run('_srLogRows()');
+  ok('read only: follow-ups show "Not yet" instead of Log call', /Called ✓ — Reached/.test(roFu) && /Not yet/.test(roFu) && !/data-logcall/.test(roFu));
+  ok('  their lines show, with no add-link, edit or void', /No link/.test(roLog) && !/data-addlink|data-edit|data-void/.test(roLog));
+  const roDesk = run('_srVisitsHtml(srDayType(IX, ME, "2026-10-20", srBlank()))');
+  ok('  visits: the list only, no form and no "unplanned visit" button', /A desk day — no visit booked or logged/.test(roDesk) && !/data-unplanned|srVisitForm/.test(roDesk));
+  const roPm = run('_srPmHtml(SR_UI.nums, {})');
+  ok('  the 4:30 card says it is not in yet, with no blocker field and no Submit', /Not submitted yet/.test(roPm) && !/srBlocker|data-submitpm/.test(roPm));
+  run('SR_UI.unsaved = false; _srSave();');
+  ok('  and saving does nothing at all', run('SR_UI.unsaved') === false);
+  run('SR_UI.ro = false;');
+  ok('the head carries "Whose report" for the director (Me first), a Read only chip, and no picker on a rep\'s own page',
+     /<option value="">Me \(my trial\)<\/option>/.test(SRC) && /id="srWho" aria-label="Whose report to read"/.test(SRC) && /SR_UI\.own \|\| !SR_UI\.people\.length \? ''/.test(SRC) && /<span class="sr-chip">Read only<\/span>/.test(SRC));
+  ok('  the director reads their sent mail by their login; their received mail stays theirs', /apiFetchEmailLogToday\(SR_UI\.ro \? SR_UI\.me\.username : undefined, day\)/.test(SRC) && /if \(SR_UI\.ro\) receivedState = 'private';/.test(SRC) &&
+     /received mail stays private to/.test(SRC));
+  ok('  a click that would write is ignored while reading (only the records, the filters and the week answer)', /if \(SR_UI\.ro && !b\.hasAttribute\('data-rec'\) && !b\.hasAttribute\('data-feed'\) && !b\.hasAttribute\('data-week'\)\) return;/.test(SRC));
+  ok('a rep\'s own page: "My daily report", in their own words, needing FlowAPI 184', /SR_UI\.own \? 'My daily report'/.test(SRC) && /Your new daily report\. Only you and the director see it, and your old daily report still works as before\./.test(SRC) &&
+     /SR_UI\.own \? '184' : '177'/.test(SRC));
+}
 {
   const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8') + fs.readFileSync(path.join(DASH, 'sales-report-model.js'), 'utf8');
   const posts = Array.from(new Set((SRC.match(/postFlow\('(\w+)'/g) || []).map(x => x.slice(10, -1)))).sort();

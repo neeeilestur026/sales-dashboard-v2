@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 183;   // A360 — old purchase requests and quotations can be connected to a Client Book client. History: see CHANGELOG.
+var FLOW_VERSION = 184;   // A363 — each person's own new daily report: they save and read only their own. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -15596,9 +15596,22 @@ function _powRoles() {
   var raw = '';
   try { raw = String((getFlowSettings().data || {}).proofReportRoles || ''); } catch (e) { raw = ''; }
   var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-  return list.length ? list : ['director'];
+  return list.length ? list : ['director', 'sales', 'accounting', 'leadgen', 'admin'];   // A363 — each role its own report
 }
 function _powAllowed(p) { return _powRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) >= 0; }
+/* A363 — Neil, 22 Oct 2026: the new daily report on each person's own dashboard. The director reads every report (and
+   still tries any kind under his own name on his dashboard); everyone else writes and reads only their own report, of
+   the one kind their role has — a rep the sales report, accounting the accounting one, and so on. A role with no report
+   of its own (management, hr, marketing…) gets none, even when proofReportRoles names it. */
+var _POW_ROLE_KIND = { sales: 'sales', accounting: 'accounting', leadgen: 'leadgen', admin: 'admin' };
+function _powIsDirector(p) { return String((p && p.actorRole) || '').trim().toLowerCase() === 'director'; }
+function _powOwnKind(p) { return _POW_ROLE_KIND[String((p && p.actorRole) || '').trim().toLowerCase()] || ''; }
+function _powKindDenied(p, kind) {
+  if (_powIsDirector(p)) return '';
+  var own = _powOwnKind(p);
+  if (!own) return 'There is no daily report for your role yet.';
+  return kind === own ? '' : 'Your daily report is the ' + own + ' one.';
+}
 /* A351 — one row per person per day PER KIND: the sales report (a blank Kind, every row saved before 179), and the
    accounting, lead gen and admin reports. A call that names no kind is the sales report, so it reads what it always read. */
 var _POW_KINDS = ['sales', 'accounting', 'leadgen', 'admin'];
@@ -15629,6 +15642,8 @@ function _powCheck(p) {
   if (!_powAllowed(p)) return { error: _powDenied() };
   var kind = _powKind(p.kind);
   if (_POW_KINDS.indexOf(kind) < 0) return { error: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
+  var mine = _powKindDenied(p, kind);
+  if (mine) return { error: mine };
   var user = String(p.actorName || '').trim();
   if (!user) return { error: 'Sign in again — the report has no name to save under.' };
   var date = String(p.date || '').trim();
@@ -15691,16 +15706,21 @@ function submitProofReport(p) {
 }
 
 /** getProofReports({from?, to?, user?, kind?}) — saved reports of one kind (sales when none is named), newest first.
+ *  A363: the director reads anyone's (user narrows it); everyone else only their own, of their own kind.
  *  A read never creates the tab. */
 function getProofReports(p) {
   p = p || {};
   if (!_powAllowed(p)) return { success: false, message: _powDenied() };
   var kind = _powKind(p.kind);
   if (_POW_KINDS.indexOf(kind) < 0) return { success: false, message: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
+  var mine = _powKindDenied(p, kind);
+  if (mine) return { success: false, message: mine };
+  var who = _powIsDirector(p) ? String(p.user || '').trim() : String(p.actorName || '').trim();
+  if (!_powIsDirector(p) && !who) return { success: false, message: 'Sign in again — there is no name to read the report under.' };
   var sh = _ss().getSheetByName('ProofReports');
   if (!sh || sh.getLastRow() < 2) return { success: true, data: [] };
   var rows = _rows('ProofReports').filter(function (r) { return _powKind(r['Kind']) === kind; });
-  if (p.user) rows = rows.filter(function (r) { return String(r['User']).trim().toLowerCase() === String(p.user).trim().toLowerCase(); });
+  if (who) rows = rows.filter(function (r) { return String(r['User']).trim().toLowerCase() === who.toLowerCase(); });
   if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || '0000-01-01', p.to || '9999-12-31');
   return { success: true, data: rows.map(_powOut).sort(function (a, b) { return b.date.localeCompare(a.date) || a.user.localeCompare(b.user); }) };
 }
@@ -19481,6 +19501,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A363 EACH PERSON'S OWN NEW DAILY REPORT (184; A327 takes 185 or later). Neil, 22 Oct 2026: "put the daily report on each of the dashboard user, but put it as a new daily report" (the old DailyReports flow is not touched, and there is no summary for management). proofReportRoles now defaults to director, sales, accounting, leadgen, admin (FlowSettings can still narrow it). The director reads every report and may still save any kind under his own name; everyone else saves, submits and reads only their own report (the name Flask stamps), of the one kind their role has (sales -> sales, accounting -> accounting, leadgen -> leadgen, admin -> admin); another kind is refused, and a role with no report of its own gets none. getProofReports ignores `user` for them. No new actions, no new columns.
 A360 OLD PURCHASE REQUESTS AND QUOTATIONS CAN BE CONNECTED TO A CLIENT (183; A327 takes 184 or later). Neil, 22 Oct 2026: "can we do it so that even old quotation and prs can be connected to the client?" New tab ClientBookLinks (Kind, Record No, Client No, By, At): one row per PR or quotation, the latest decision — a Client No, or blank once taken off a client (then it is no client's, not even by its company name). A row beats the PR's own Client Book No (A358), and a quotation's own row beats its PR's. Two secured actions: linkClientBookRecords({clientNo, records}) connects up to 100 at once, all checked before any write (a rep: their own records — the PR's Salesperson or Requested By, the quotation's owner or creator — to their own live clients; a record with another rep's client is refused; the director anything) and unlinkClientBookRecord({kind, no}) takes one off (the rep must own its client). Each writes ClientBookLog rows ('linked' / 'unlinked', Ref = the record) on every client it touches. getClientBook returns links (a rep: those on their clients, plus the blank ones). PR and quotation rows are never written.
 A358 THE CLIENT BOOK FOR EVERY SALES REP; A PR CAN NAME ITS CLIENT (182; A327 takes 183 or later). Neil, 22 Oct 2026: the client list is for each sales user, and a purchase request should be connected to it — optional for now. clientBookRoles defaults to director, sales. The director sees and changes every client; any other role only the clients it owns (Owner = actorName, any case): getClientBook returns a rep's own clients and their log, a rep's new client is theirs and stays theirs, another rep's client cannot be edited, re-statused, archived or added again (even with allowDuplicate). PricingRequests gains Client Book No (appended; 21 wide; createPricingRequest is its only whole-row writer, the import still writes 18): createPricingRequest takes an optional clientNo — a live client the person may use, refused before anything is written — and getPricingRequests returns clientNo. A quotation made from the PR reaches the client through its PR No; nothing on Quotations changes.
 A355 WEBSITE QUOTE REQUESTS GO TO THE SALESPERSON FOR THE DELIVERY REGION (181; A327 takes 182 or later). Neil, 22 Oct 2026: hiescorp.com's quote form now asks for the delivery region (Luzon, Visayas or Mindanao) and its feed carries it as "region". When a request is collected, _webRecord adds the region to Location ("Surigao del Norte (Mindanao)") and fills Salesperson with the owner for that region: Luzon → WEBSITE_PR_OWNER_LUZON (default "Gerald Lucena"), Visayas or Mindanao → WEBSITE_PR_OWNER_VISMIN (default "Kimberlyn Blones"). _webAutoConvert makes the purchase request for that person (so it is in their My Requests at once; admin still sources it); a request with no region (a contact message, or a page opened before the website update) keeps WEBSITE_PR_OWNER / "Admin" as before. The inbox's "Make pricing request" form starts with that name. No new actions, no new columns.
