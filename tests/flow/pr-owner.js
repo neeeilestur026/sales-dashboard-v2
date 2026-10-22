@@ -111,10 +111,10 @@ const COLS = schemaCols('PricingRequests');
 
 console.log('== THE WIDTH TRAP — asserted before any behaviour ==');
 {
-  eq('SCHEMA.PricingRequests is 20 wide', COLS.length, 20);
-  eq('and the new column is the LAST one, appended', COLS[COLS.length - 1], 'Salesperson');
+  eq('SCHEMA.PricingRequests is 21 wide (A358 appended Client Book No)', COLS.length, 21);
+  eq('and the newest column is the LAST one, appended', COLS[COLS.length - 1], 'Client Book No');
   eq('createPricingRequest writes exactly that many values',
-    countRow('createPricingRequest', "_append('PricingRequests', ["), 20);
+    countRow('createPricingRequest', "_append('PricingRequests', ["), 21);
 
   /* importPricingSubmissions deliberately writes 18 and always has. It is an import path for records
      from the old system: it fills the first 18 columns and leaves Plant Site and Salesperson unset,

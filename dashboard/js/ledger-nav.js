@@ -82,7 +82,7 @@ const LEDGER_NAV = {
   sales: [
     ['Home', 'home', 'dashboard.html'],
     ['Quote', 'file', [['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['flow-inventory.html', 'Inventory']]],
-    ['Clients', 'users', [['clients.html', 'Client list'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],
+    ['Clients', 'users', [['clients.html', 'Client list'], ['director-client-book.html', 'Client Book'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],   // A358 — the Client Book
     ['Field', 'pin', [['weekly-itinerary.html', 'Weekly itinerary'], ['flow-travel.html', 'Travel allowance'], ['flow-commissions.html', 'Commission requests'], ['sales-emails.html', 'My emails']]],
     ['Reports', 'clip', [['report.html', 'Daily report'], ['my-reports.html', 'My reports']]],
     ['Guide', 'compass', 'flow-guide.html']

@@ -207,6 +207,10 @@ sec('6b · A356: the call form picks the company and the person from the Client 
   ok('a company not in the book is no client, and the call is not linked', J('srCallLookup(IXC, ME, "Some New Plant", "")').client === null && J('srCallLookup(IXC, ME, "Some New Plant", "")').link === null);
   ok('an archived client is not offered', J('srCallLookup(IXC, ME, "Gone Co", "")').client === null);
   eq('a contact reads "Name, Position"', run('srContactLabel({ name: "Ana Cruz", position: "Purchasing officer" })'), 'Ana Cruz, Purchasing officer');
+  C.__rawL = Object.assign({}, C.__raw, { prs: C.__raw.prs.map(p => p.prNo === 'PR-C' ? Object.assign({}, p, { clientNo: 'CB-0001' }) : p), book: C.__book });
+  const fl = J('srPortalFeed(srIndex(__rawL), ME, "2026-10-20", [], []).filter(function (x) { return x.kind === "pr"; })');
+  ok('A358: a PR made for a Client Book client names that client in the portal feed', fl.some(x => x.ref === 'PR-C' && x.client && x.client.no === 'CB-0001' && x.client.company === 'Philcement Corp.'), fl);
+  ok('  and the feed links it to the client\'s page', /director-client-book\.html\?client=' \+ encodeURIComponent\(x\.client\.no\)/.test(fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8')));
 }
 
 sec('7 · the week');

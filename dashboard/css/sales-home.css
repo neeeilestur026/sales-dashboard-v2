@@ -107,6 +107,16 @@ body.sl #leadsForYou .lfy-card { border: 1px solid var(--hx-hair-2); border-radi
 body.sl #leadsForYou .lfy-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 body.sl #leadsForYou .lfy-co { font: 700 13.5px/1.3 var(--hx-text); color: var(--hx-ink); }
 body.sl #leadsForYou .lfy-card b { color: var(--hx-ink); font-weight: 600; }
+/* A358 — My clients (js/my-clients-card.js) */
+body.sl #myClients .mc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+body.sl #myClients .mc-head h3 { margin: 0; font: 700 15px/1.3 var(--hx-text); color: var(--hx-ink); }
+body.sl #myClients .mc-head span { flex: 1 1 220px; font: 500 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+body.sl #myClients .mc-tiles { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+body.sl #myClients .mc-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--hx-r-md); background: var(--hx-inset); min-width: 0; }
+body.sl #myClients .mc-tile .v { font: 700 20px/1.15 var(--hx-display); color: var(--hx-ink); font-variant-numeric: tabular-nums; }
+body.sl #myClients .mc-tile .l { font: 600 12px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+body.sl #myClients .mc-tile.warn { background: var(--hx-warn-soft); }
+body.sl #myClients .mc-empty { margin: 0; font: 400 13px/1.5 var(--hx-text); color: var(--hx-ink-2); }
 body.sl #leadsForYou .lfy-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; flex-wrap: wrap; }
 /* salary-deduction-card.js — shared, inline; hooked the same way the director and lead-gen pages do */
 body.sl #myDeductionCard h3 { font: 700 15px/1.3 var(--hx-text) !important; margin: 0 0 12px !important; color: var(--hx-ink); }

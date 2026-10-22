@@ -292,6 +292,20 @@ function requireWebRequestsAccess() {
   return session;
 }
 
+/** A358 — the Client Book: the director (every client) and the sales reps (their own; the server scopes the rows). */
+function requireClientBookAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['sales', 'director'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 function requireProductFinderAccess() {
   const session = getSession();
   if (!session) {
@@ -1111,7 +1125,7 @@ function renderNavbar(activePage) {
       </a>`;
   } else {
     const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226
-    const clientsActive = ['clients', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
+    const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
@@ -1148,6 +1162,7 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="clients.html" class="${activePage === 'clients' ? 'active' : ''}">Client List</a>
+          <a href="director-client-book.html" class="${activePage === 'director-client-book' ? 'active' : ''}">Client Book</a>
           <a href="performance.html" class="${activePage === 'performance' ? 'active' : ''}">Client Tracker</a>
           <a href="pending-items.html" class="${activePage === 'pending-items' ? 'active' : ''}">Pending Items</a>
           <a href="quotation-summary.html" class="${activePage === 'quotation-summary' ? 'active' : ''}">Quotation Summary</a>

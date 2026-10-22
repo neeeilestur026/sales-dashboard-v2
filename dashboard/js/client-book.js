@@ -6,7 +6,7 @@
  * whole timeline. The numbers and matching are js/client-book-model.js (pure, tested). Saving is the trial's own four
  * actions (FlowAPI 178): nothing here writes the real client list, PRs or quotations. */
 
-const CB = { me: null, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false,
+const CB = { me: null, all: true, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false,
              f: { q: '', accreditation: '', tier: '', sector: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
 
 function _cbE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
@@ -14,11 +14,13 @@ function _cbId(id) { return document.getElementById(id); }
 function _cbLists() { return CB.lists || { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS }; }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const s = typeof requireDirector === 'function' ? requireDirector() : null;
+  const s = typeof requireClientBookAccess === 'function' ? requireClientBookAccess() : null;   // A358 — the director and the sales reps
   if (!s) return;
   if (typeof renderNavbar === 'function') renderNavbar('director-client-book');
   if (typeof hxDatePill === 'function') hxDatePill('long');
   CB.me = String(s.name || s.username || '').trim();
+  CB.all = s.role === 'director';   // a rep sees their own clients (the server scopes the rows) and owns every client they add
+  if (!CB.all) cbRepHeader();
   _cbId('cbAdd').addEventListener('click', (e) => cbAddDialog(e.currentTarget));
   _cbId('cbExport').addEventListener('click', cbExport);
   _cbId('cbChips').addEventListener('click', (e) => { const b = e.target.closest('[data-chip]'); if (b) cbChip(b.getAttribute('data-chip')); });
@@ -37,8 +39,9 @@ async function cbLoad() {
     postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })),
     read('getQuotations'), read('getPricingRequests'), read('getSalesOrders'), read('getClients'),
     read('getActivityLog', { from, to: today }),
-    typeof apiGetUsers === 'function' ? apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []) : Promise.resolve([]),
-    postFlow('getProofReports', { from, to: today }).then(r => (r && r.success ? r.data || [] : [])).catch(() => [])
+    // A358 — the owner list and the Sales Daily Report trial are the director's; a rep reads neither
+    CB.all && typeof apiGetUsers === 'function' ? apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []) : Promise.resolve([]),
+    CB.all ? postFlow('getProofReports', { from, to: today }).then(r => (r && r.success ? r.data || [] : [])).catch(() => []) : Promise.resolve([])
   ]);
   CB.ix = cbIndex({ today, quotations, prs, salesOrders, clients, activity });
   CB.reports = reports;
@@ -62,12 +65,21 @@ async function cbReload() {
   if (CB.open) cbDetail(CB.open, CB.back);
 }
 
+/** A358 — a rep's page: their own clients. */
+function cbRepHeader() {
+  const h = document.querySelector('.hband h1'), p = document.querySelector('.hband h1 + p'), t = document.querySelector('.cb-trial');
+  if (h) h.textContent = 'My clients';
+  if (p) p.textContent = 'Your clients with their contact people, accreditation and where the sales stand, beside your purchase requests and quotations. Pick a client on a new purchase request to keep it with them.';
+  if (t) t.textContent = 'Only you and the director see these';
+}
+
 /* ── the list ─────────────────────────────────────────────────────────────────────────────────── */
 
 function cbRender() {
   const n = _cbId('cbNotice');
   n.innerHTML = CB.ok ? '' : '<div class="cb-notice' + (/Unknown action|not a secured action/i.test(CB.okMsg) ? '' : ' bad') + '">' + (/Unknown action|not a secured action/i.test(CB.okMsg)
     ? 'The Client Book needs the FlowAPI update (version 178). Until it is pasted nothing can be saved here.'
+    : !CB.all && /trial/i.test(CB.okMsg) ? 'Your Client Book opens with the next FlowAPI update (version 182). Nothing is lost meanwhile.'
     : 'Could not read the Client Book: ' + _cbE(CB.okMsg)) + '</div>';
   _cbId('cbAdd').disabled = !CB.ok;
   const sum = cbSummary(CB.clients, CB.log, CB.ix.today), f = CB.f;
@@ -84,16 +96,16 @@ function cbRender() {
     _cbId('cbFilters').innerHTML =
       '<label class="cb-search"><span>Search</span><input type="search" id="cbQ" placeholder="Company, contact, email or phone" autocomplete="off"></label>' +
       '<label><span>Sector</span><select id="cbSector"></select></label>' +
-      '<label><span>Status</span><select id="cbStatus"></select></label><label><span>Owner</span><select id="cbOwner"></select></label>' +
+      '<label><span>Status</span><select id="cbStatus"></select></label>' + (CB.all ? '<label><span>Owner</span><select id="cbOwner"></select></label>' : '') +
       '<label><span>Sort</span><select id="cbSort">' + [['updated', 'Last update'], ['company', 'Company'], ['next', 'Next step date'], ['open', 'Open quotations']].map(x => opt(x[0], f.sort, x[1])).join('') + '</select></label>';
     _cbId('cbQ').addEventListener('input', (e) => { f.q = e.target.value; cbRenderTable(); });
-    ['cbSector', 'cbStatus', 'cbOwner', 'cbSort'].forEach(id => _cbId(id).addEventListener('change', (e) => {
+    ['cbSector', 'cbStatus', 'cbOwner', 'cbSort'].filter(id => _cbId(id)).forEach(id => _cbId(id).addEventListener('change', (e) => {
       f[{ cbSector: 'sector', cbStatus: 'status', cbOwner: 'owner', cbSort: 'sort' }[id]] = e.target.value; cbRenderTable();
     }));
   }
   _cbId('cbSector').innerHTML = opt('', f.sector, 'Any sector') + CB_SECTORS.map(s => opt(s, f.sector)).join('');
   _cbId('cbStatus').innerHTML = opt('', f.status, 'Any status') + _cbLists().status.map(s => opt(s, f.status)).join('');
-  _cbId('cbOwner').innerHTML = opt('', f.owner, 'Any owner') + owners.map(o => opt(o, f.owner)).join('');
+  if (_cbId('cbOwner')) _cbId('cbOwner').innerHTML = opt('', f.owner, 'Any owner') + owners.map(o => opt(o, f.owner)).join('');
   cbRenderTable();
 }
 function cbChipOn(key) {
@@ -278,7 +290,7 @@ function cbAddDialog(back) {
     '<form class="cb-form" id="cbAddForm" autocomplete="off">' +
       '<label>Company<input type="text" class="cb-in" name="company" list="cbNames" required maxlength="160" placeholder="As the portal names it"><datalist id="cbNames">' + names + '</datalist></label>' +
       '<p class="cb-warn" id="cbDup" hidden></p>' + cbTierPills('', true) + cbSectorFields('', true) +
-      '<div class="cb-grid2"><label>Owner (sales rep)<span id="cbOwnerBox">' + cbOwnerSelect('', '') + '</span></label>' +
+      '<div class="cb-grid2">' + (CB.all ? '<label>Owner (sales rep)<span id="cbOwnerBox">' + cbOwnerSelect('', '') + '</span></label>' : '') +
       '<label>Accreditation<select class="cb-in" name="accreditation">' + _cbLists().accreditation.map(a => '<option' + (a === 'Not accredited' ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></label></div>' +
       '<div class="cb-people">' + cbPersonHtml({ primary: true }, 0) + '</div>' +
       '<button type="button" class="btn btn-secondary cb-addperson" data-addperson>Add another person</button>' +
@@ -295,6 +307,7 @@ function cbAddDialog(back) {
     const dup = _cbId('cbDup');
     dup.hidden = !twin;
     if (twin) dup.innerHTML = '"' + _cbE(twin.company) + '" is already in the book. <button type="button" class="cb-link" data-open-twin="' + _cbE(twin.clientNo) + '">Open it</button>';
+    if (!_cbId('cbOwnerBox')) return;                    // a rep owns what they add
     const sug = v ? cbOwnerSuggest(CB.ix, v) : '';
     const cur = form.elements.owner.value;
     _cbId('cbOwnerBox').innerHTML = cbOwnerSelect(cur, sug);
@@ -303,7 +316,7 @@ function cbAddDialog(back) {
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const btn = form.querySelector('[type="submit"]');
-    const params = { company: company.value.trim(), owner: form.elements.owner.value, accreditation: form.elements.accreditation.value,
+    const params = { company: company.value.trim(), owner: form.elements.owner ? form.elements.owner.value : '', accreditation: form.elements.accreditation.value,
                      contactsJson: JSON.stringify(cbReadPeople(box)), nextStep: form.elements.nextStep.value.trim(), nextStepDate: form.elements.nextStepDate.value,
                      notes: form.elements.notes.value.trim() };
     if (form.dataset.allow === '1') params.allowDuplicate = true;
@@ -342,7 +355,7 @@ function cbDetail(no, back) {
   const hist = (kinds) => log.filter(l => kinds.indexOf(l.kind) >= 0).map(cbLogLi).join('');
   const link = (kind, ref) => kind === 'pr' ? '<a href="flow-pricing-request.html?pr=' + encodeURIComponent(ref) + '">' + _cbE(ref) + '</a>'
     : kind === 'quotation' ? '<a href="flow-quotations.html?review=' + encodeURIComponent(ref) + '">' + _cbE(ref) + '</a>' : '<b>' + _cbE(ref) + '</b>';
-  const recRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + ' <span class="cb-sub">' + _cbE(x.status || '') +
+  const recRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + (x.linked ? ' <span class="cb-badge ok">Linked on the PR</span>' : '') + ' <span class="cb-sub">' + _cbE(x.status || '') +
     (x.owner ? ' · ' + _cbE(x.owner) : '') + (x.followUpDue ? ' · day-' + x.followUpDue + ' follow-up due today' : '') + '</span></span><span class="amt">' + (x.value ? _cbE(cbMoney(x.value)) : '') + '</span></li>';
   const box = cbShow(
     '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + cbLabels(c) + ' ' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
@@ -374,17 +387,18 @@ function cbDetail(no, back) {
         (hist(['status']) ? '<ul class="cb-hist">' + hist(['status']) + '</ul>' : '')) + '</section>' +
 
     '<section class="cb-sec"><h4>From the portal <span class="cb-sub">read only</span></h4>' +
-      (r.total ? '<ul class="cb-recs">' + r.sos.map(recRow).join('') + r.quotes.map(recRow).join('') + r.prs.map(recRow).join('') + '</ul>'
+      (r.total ? '<p class="cb-sub">Records linked on a PR made for this client are marked; the rest are matched by the company name.</p>' +
+        '<ul class="cb-recs">' + r.sos.map(recRow).join('') + r.quotes.map(recRow).join('') + r.prs.map(recRow).join('') + '</ul>'
                : '<p class="cb-sub">No purchase requests, quotations or sales orders under this company name yet.</p>') + '</section>' +
 
-    '<section class="cb-sec"><h4>From the Sales Daily Report</h4>' +
+    (!CB.all ? '' : '<section class="cb-sec"><h4>From the Sales Daily Report</h4>' +
       (lines.length ? '<ul class="cb-hist">' + lines.map(l => '<li><span class="tm">' + _cbE(cbDay(l.day)) + '</span><span>' + _cbE(l.type) + ' — ' + _cbE([l.person, l.note].filter(Boolean).join(', ') || l.company) +
         (l.result ? '<span class="cb-sub">' + _cbE(l.result) + '</span>' : '') + '<span class="cb-sub">' + _cbE(l.user) + '</span></span></li>').join('') + '</ul>'
-        : '<p class="cb-sub">No lines about this client in the Sales Daily Report yet.</p>') + '</section>' +
+        : '<p class="cb-sub">No lines about this client in the Sales Daily Report yet.</p>') + '</section>') +
 
     '<section class="cb-sec"><h4>Contacts and details</h4>' +
       (live ? '<form class="cb-form" id="cbEdit" autocomplete="off"><div class="cb-grid2"><label>Company<input type="text" class="cb-in" name="company" required maxlength="160" value="' + _cbE(c.company) + '"></label>' +
-          '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label></div>' + cbTierPills(c.tier, false) + cbSectorFields(c.sector, false) +
+          (CB.all ? '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label>' : '') + '</div>' + cbTierPills(c.tier, false) + cbSectorFields(c.sector, false) +
           '<div class="cb-people">' + ((c.contacts || []).length ? c.contacts.map(cbPersonHtml).join('') : cbPersonHtml({ primary: true }, 0)) + '</div>' +
           '<button type="button" class="btn btn-secondary cb-addperson" data-addperson>Add another person</button>' +
           '<div class="cb-grid2"><label>Next step<input type="text" class="cb-in" name="nextStep" maxlength="190" value="' + _cbE(c.nextStep) + '"></label>' +
@@ -417,7 +431,7 @@ function cbDetail(no, back) {
   if (edit) edit.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const el = edit.elements;
-    const params = { clientNo: no, company: el.company.value.trim(), owner: el.owner.value, contactsJson: JSON.stringify(cbReadPeople(edit)),
+    const params = { clientNo: no, company: el.company.value.trim(), owner: el.owner ? el.owner.value : '', contactsJson: JSON.stringify(cbReadPeople(edit)),
       nextStep: el.nextStep.value.trim(), nextStepDate: el.nextStepDate.value, notes: el.notes.value.trim() };
     if (CB.v180 && cbTierOf(edit)) params.tier = cbTierOf(edit);
     if (CB.v180) { if (cbSectorOf(edit)) params.sector = cbSectorOf(edit); params.siteAddress = el.siteAddress.value.trim(); }

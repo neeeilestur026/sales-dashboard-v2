@@ -181,6 +181,8 @@
       <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;" id="formTitle">New Purchase Request</h3>
       <input type="hidden" id="prNo" value="">
       <div class="flow-form">
+        <!-- A358 — optional: the Client Book client this request is for (js/flow-pricing-request.js fills it, shown when there are any) -->
+        <div class="full" id="prClientBookRow" hidden><label for="prClientBook">Client (Client Book) — optional</label><select id="prClientBook"></select></div>
         <div><label>Customer *</label><input type="text" id="customer" required></div>
         <div><label>Date</label><input type="date" id="date"></div>
         <div class="full"><label>Notes (optional)</label><input type="text" id="notes" placeholder="Context for admin / management"></div>

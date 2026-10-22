@@ -59,9 +59,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRoleUI();
   if (prIsRequester || prRole === 'admin') {
     document.getElementById('date').value = flowToday();
-    await Promise.all([loadInventory(), loadClients()]);
+    await Promise.all([loadInventory(), loadClients(), loadClientBook()]);
     const cust = document.getElementById('customer');
     if (cust) cust.addEventListener('change', prFillContacts);   // A145: client-master prefill
+    const book = document.getElementById('prClientBook');
+    if (book) book.addEventListener('change', prPickClientBook);   // A358
     addRow();
   }
   await loadRequests();
@@ -284,6 +286,40 @@ function prFillContacts() {
   fill('prEmail', c.email); fill('prPhone', c.phone); fill('prClientNo', c.rfqRef);
 }
 
+/* A358 — the Client Book client this request is for: optional. The select lists the person's own live clients (the
+   director's: all); picking one fills the customer as the book spells it and the empty contact fields from its main
+   contact and site, and the request carries its Client No so the PR, and the quotation made from it, stay with the
+   client. Hidden before FlowAPI 182, when the book cannot be read, or when there is no client in it. */
+let prBook = [];
+async function loadClientBook() {
+  prBook = [];
+  const row = document.getElementById('prClientBookRow'), sel = document.getElementById('prClientBook');
+  if (!row || !sel || typeof postFlow !== 'function') return;
+  try {
+    if (typeof flowVersionAtLeast === 'function' && !(await flowVersionAtLeast(182))) return;
+    const r = await postFlow('getClientBook', {});
+    if (!r || !r.success) return;
+    prBook = (r.clients || []).filter(c => !c.archivedAt && c.company).sort((a, b) => String(a.company).localeCompare(String(b.company)));
+  } catch (e) { return; }
+  if (!prBook.length) return;
+  sel.innerHTML = '<option value="">— not linked —</option>' + prBook.map(c => '<option value="' + flowEsc(c.clientNo) + '">' +
+    flowEsc(c.company + (c.siteAddress ? ' — ' + c.siteAddress : '') + (c.tier ? ' · ' + c.tier : '')) + '</option>').join('');
+  row.hidden = false;
+}
+function prPickClientBook() {
+  const sel = document.getElementById('prClientBook'), c = prBook.find(x => x.clientNo === (sel && sel.value));
+  if (!c) return;
+  const cust = document.getElementById('customer');
+  if (cust) cust.value = c.company;
+  /* The rep's own book first — its main contact and the site — into fields that are empty or that an earlier pick
+     filled (a field the rep typed in is never touched); then the client master fills whatever is still blank. */
+  const p = (c.contacts || []).find(x => x.primary) || (c.contacts || [])[0] || {};
+  const fill = (id, v) => { const el = document.getElementById(id); if (!el || (el.value && el.dataset.cbfill !== '1')) return; el.value = v || ''; el.dataset.cbfill = v ? '1' : ''; };
+  fill('prContact', p.name); fill('prDesignation', p.position); fill('prEmail', (p.emails || [])[0]); fill('prPhone', (p.phones || [])[0]);
+  fill('prAddress', c.siteAddress);
+  prFillContacts();
+}
+
 // ─── Sales: request form ─────────────────────────
 // A146: free-type item entry with an inventory autocomplete (datalist), mirroring the admin quotation
 // (A63). A brand-new item is added to inventory (Catalog, balance 0) on submit — no separate step. The
@@ -421,6 +457,8 @@ async function saveRequest() {
     // already-created PR instead of writing a duplicate.
     clientRef: 'CR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
   };
+  const bookNo = gv('prClientBook');                    // A358 — only when a Client Book client was picked
+  if (bookNo) payload.clientNo = bookNo;
   btn.disabled = true; btn.textContent = 'Submitting...';
   try {
     const res = await postFlow('createPricingRequest', payload);
@@ -517,8 +555,8 @@ function resetForm() {
   document.getElementById('customer').value = '';
   document.getElementById('notes').value = '';
   document.getElementById('date').value = flowToday();
-  ['prContact', 'prDesignation', 'prEmail', 'prPhone', 'prAddress', 'prDateNeeded', 'prUrgency', 'prClientNo']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['prContact', 'prDesignation', 'prEmail', 'prPhone', 'prAddress', 'prDateNeeded', 'prUrgency', 'prClientNo', 'prClientBook']
+    .forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; if (el.dataset) el.dataset.cbfill = ''; } });
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formMsg').style.display = 'none';
   prFromInquiry = '';                                   // A169: a second Save must not re-stamp the inquiry

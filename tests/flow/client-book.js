@@ -154,13 +154,14 @@ const stubEl = () => ({ id: '', value: '', textContent: '', innerHTML: '', disab
   elements: new Proxy({}, { get: () => stubEl() }) });
 async function boot(o) {
   o = o || {};
-  const p = page(['js/client-rollup.js', 'js/client-book-model.js', 'js/client-book.js'], 'director-client-book.html', { username: 'neil', name: 'Neil Estur', role: 'director' },
+  const p = page(['js/client-rollup.js', 'js/client-book-model.js', 'js/client-book.js'], 'director-client-book.html', o.session || { username: 'neil', name: 'Neil Estur', role: 'director' },
     { data: { getQuotations: RAW.quotations, getPricingRequests: RAW.prs, getSalesOrders: RAW.salesOrders, getClients: RAW.clients, getActivityLog: [] } });
   ['cbQ', 'cbSector', 'cbStatus', 'cbOwner', 'cbSort'].forEach(id => { p.els[id] = Object.assign(stubEl(), { id }); });
   p.ctx.__book = o.book || BOOK; p.ctx.__reports = REPORTS; p.ctx.__stub = stubEl;
   p.ctx.__ask = o.ask || null;
   p.ctx.__v = o.v || 180;
-  p.run(`flowToday = function () { return "2026-10-21"; };
+  p.run(`requireClientBookAccess = function () { return __session; };
+    flowToday = function () { return "2026-10-21"; };
     flowVersionAtLeast = function (n) { return Promise.resolve(n <= __v); };
     URLSearchParams = function () { return { get: function (k) { return k === 'client' ? __ask : null; } }; };
     apiGetUsers = function () { return Promise.resolve({ data: [{ username: 'gerald', fullName: 'Gerald Lucena', role: 'sales' }, { username: 'kim', fullName: 'Kim Reyes', role: 'sales' }, { username: 'neil', fullName: 'Neil Estur', role: 'director' }] }); };
@@ -270,6 +271,36 @@ async function boot(o) {
   const pe = await boot({ book: { success: true, clients: [], log: [] } });
   ok('an empty book says how to start', /No clients yet\. Press Add client to start the book\./.test(pe.els.cbTable.innerHTML) && pe.els.cbAdd.disabled === false);
 
+  sec('5c · A358: a rep\'s own Client Book, and records linked on the PR');
+  {
+    const rep = await boot({ session: { username: 'sales2', name: 'Gerald Lucena', role: 'sales' } });
+    const posted = rep.run('__posted.map(function (x) { return x.a; })');
+    ok('a rep reads only the book (the server scopes it) — no roster, no daily reports', posted.join() === 'getClientBook' && rep.run('CB.all') === false && rep.run('CB.roster.length') === 0, posted);
+    ok('  no Owner filter', !/id="cbOwner"/.test(rep.els.cbFilters.innerHTML));
+    rep.run('cbAddDialog(null)');
+    const ra = rep.run('__shown');
+    ok('  adding a client asks no owner (the rep owns it)', !/Owner \(sales rep\)/.test(ra) && !/cbOwnerBox/.test(ra) && /name="tier"/.test(ra));
+    rep.run('cbDetail("CB-0001", null)');
+    const rd = rep.run('__shown');
+    ok('  the detail has no owner field and no Sales Daily Report section', !/Owner \(sales rep\)/.test(rd) && !/From the Sales Daily Report/.test(rd) && /Contacts and details/.test(rd));
+    const before = await boot({ session: { username: 'sales2', name: 'Gerald Lucena', role: 'sales' }, book: { success: false, message: 'The Client Book is in a trial; only director can use it.' } });
+    ok('  before FlowAPI 182 a rep is told it opens with the update', /opens with the next FlowAPI update \(version 182\)/.test(before.els.cbNotice.innerHTML), before.els.cbNotice.innerHTML);
+  }
+  {
+    C.__lraw = { today: '2026-10-21', prs: [{ prNo: 'PR-L1', customer: 'Totally Different Spelling Ltd', status: 'Quoted', salesperson: 'Gerald Lucena', date: '2026-10-19', clientNo: 'CB-0002' },
+                                            { prNo: 'PR-L2', customer: 'Zeta Mining', status: 'Requested', salesperson: 'Kim Reyes', date: '2026-10-20', clientNo: 'CB-0001' }],
+                 quotations: [{ quotationNo: 'Q-L1', customer: 'Totally Different Spelling Ltd', status: 'Sent', sentAt: '2026-10-20T02:00:00.000Z', total: 1000, prNo: 'PR-L1' }],
+                 salesOrders: [{ soNo: 'SO-L1', customer: 'Somebody Else', quotationNo: 'Q-L1', date: '2026-10-21', total: 900 }] };
+    run('var IXL = cbIndex(__lraw);');
+    const Z = J('cbRecords(IXL, byNo("CB-0002"))');
+    ok('A358: a PR made for a client belongs to it whatever the customer is spelled', Z.prs.some(x => x.ref === 'PR-L1' && x.linked), Z.prs);
+    ok('  and so do the quotation made from it (through its PR No) and that quotation\'s sales order', Z.quotes.some(x => x.ref === 'Q-L1' && x.linked) && Z.sos.some(x => x.ref === 'SO-L1' && x.linked), [Z.quotes, Z.sos]);
+    ok('  a record linked to another client is not matched to this one by name', !Z.prs.some(x => x.ref === 'PR-L2'), Z.prs);
+    const P = J('cbRecords(IXL, byNo("CB-0001"))');
+    ok('  it shows under the client it was made for instead', P.prs.some(x => x.ref === 'PR-L2' && x.linked));
+    ok('  a record matched only by name says so', J('cbRecords(IX, byNo("CB-0001"))').prs.every(x => x.linked === false));
+  }
+
   sec('6 · the card, who sees it, the site rules');
   const card = async (resp) => {
     const box = { innerHTML: '' };
@@ -300,9 +331,18 @@ async function boot(o) {
     return { classic: /href="director-client-book\.html"/.test(html), rail: vm.runInContext('ledgerPages(' + JSON.stringify(role) + ').map(p => p.href)', c).indexOf('director-client-book.html') >= 0 };
   };
   const seen = ['director', 'admin', 'management', 'accounting', 'sales', 'leadgen', 'hr', 'marketing'].filter(r => { const n = navFor(r); return n.classic || n.rail; });
-  eq('only the director\'s navbar and rail link it', seen, ['director']);
+  eq('A358: the director\'s and the sales reps\' navbar and rail link it, nobody else\'s', seen, ['director', 'sales']);
   const H = read('director-client-book.html'), JS = read('js/client-book.js'), M = read('js/client-book-model.js'), CARD = read('js/client-book-card.js'), CSS = read('css/client-book.css');
-  ok('director only: requireDirector, and its own navbar entry', /requireDirector\(\)/.test(JS) && /renderNavbar\('director-client-book'\)/.test(JS));
+  ok('A358: guarded by requireClientBookAccess (director and sales), its own navbar entry', /requireClientBookAccess\(\)/.test(JS) && /renderNavbar\('director-client-book'\)/.test(JS));
+  {
+    const AUTHJS = read('js/auth.js'), ctx = { window: {}, localStorage: { getItem: () => ctx.__s, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+      location: { href: '', pathname: '/x.html', search: '' }, navigator: { userAgent: 'node' }, fetch: () => new Promise(() => {}), setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
+      document: { addEventListener() {}, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ setAttribute() {}, appendChild() {}, style: {} }), head: { appendChild() {} }, body: { appendChild() {} } },
+      console, Date, JSON, Math, Object, Array, String, Number, Promise };
+    ctx.window = ctx; vm.createContext(ctx); vm.runInContext(AUTHJS, ctx);
+    const admits = (role) => { ctx.__s = JSON.stringify({ username: 'u', name: 'U', role, token: 't', loginTime: Date.now() }); ctx.location.href = ''; return !!vm.runInContext('requireClientBookAccess()', ctx); };
+    eq('  the guard admits the director and sales only', ['director', 'sales', 'admin', 'management', 'accounting', 'leadgen'].filter(admits), ['director', 'sales']);
+  }
   eq('scripts in order', (H.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','), 'theme.js,api.js,auth.js,ledger-nav.js,flow-api.js,client-rollup.js,client-book-model.js,client-book.js');
   ok('its own stylesheet, before ledger.css and apple.css (last)', /css\/client-book\.css">\s*<link rel="stylesheet" href="css\/ledger\.css">\s*<link rel="stylesheet" href="css\/apple\.css">\s*<\/head>/.test(H));
   const GS = fs.readFileSync(path.join(__dirname, '../../apps-script/FlowAPI.gs'), 'utf8');

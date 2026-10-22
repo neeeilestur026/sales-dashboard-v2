@@ -422,7 +422,8 @@ function _srRenderFeed() {
     : SR_UI.receivedState === 'ok' ? '' : SR_UI.receivedState === 'loading' ? 'Reading received mail…'
     : SR_UI.receivedState === 'old' ? 'Received mail is only read for the last 60 days.' : 'Received mail could not be read; only sent mail is shown.';
   box.innerHTML = (items.length ? '<ul class="sr-feed">' + items.map(x => '<li><span class="tm">' + _srE(x.time || '—') + '</span><span class="sr-type t-' + x.kind + '">' +
-      (x.kind === 'email' ? 'Email' : x.kind === 'pr' ? 'PR' : x.kind === 'client' ? 'Client' : 'Quotation') + '</span><span class="x">' + (x.ref ? _srRef(x.ref) + ' ' : '') + _srE(x.text) + '</span>' +
+      (x.kind === 'email' ? 'Email' : x.kind === 'pr' ? 'PR' : x.kind === 'client' ? 'Client' : 'Quotation') + '</span><span class="x">' + (x.ref ? _srRef(x.ref) + ' ' : '') + _srE(x.text) +
+      (x.client ? ' · <a href="director-client-book.html?client=' + encodeURIComponent(x.client.no) + '">' + _srE(x.client.company) + '</a>' : '') + '</span>' +   // A358
       (x.kind === 'email' && x.sent && x.id ? '<button type="button" class="sr-mini' + (booked.indexOf(x.id) >= 0 ? ' on' : '') + '" data-book="' + _srE(x.id) + '">' + (booked.indexOf(x.id) >= 0 ? 'Booking ✓' : 'Mark as a booking') + '</button>' : '<span></span>') +
       '</li>').join('') + '</ul>' : '<p class="dh-empty">Nothing for this filter on this day.</p>') + (mailNote ? '<p class="dh-meta">' + _srE(mailNote) + '</p>' : '');
   const o = srOtherActivity(SR_UI.ix, SR_UI.me, SR_UI.day);

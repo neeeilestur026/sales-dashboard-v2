@@ -25,7 +25,7 @@ sec('1 · the version, and nothing else is touched');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 181', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 181);
+  ok('getVersion = 182', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 182);
   const g = call(c, 'getClientBook', NEIL);
   ok('a read of an empty book answers empty and creates no tab', g.success && g.clients.length === 0 && g.log.length === 0 && !('ClientBook' in store) && !('ClientBookLog' in store), g);
   ok('  and gives the page the server\'s lists', g.lists.accreditation.join() === 'Accredited,On process,Not accredited' && g.lists.status.length === 9 && g.lists.steps.length === 4);
@@ -120,19 +120,52 @@ sec('5 · editing, contacts, archive and restore');
   ok('the read returns every client and the whole log, contacts parsed', g.success && g.clients.length === 2 && g.clients[0].contacts.length === 2 && g.log.length === store.ClientBookLog.length, g.clients[0]);
 }
 
-sec('6 · only the director while it is a trial');
+sec('6 · A358: the director and the sales reps by default; every other role refused');
 {
   const store = { FlowSettings: [] };
   const c = load(GS, store);
-  const sales = { actorName: 'Gerald Lucena', actorRole: 'sales' };
+  const sales = { actorName: 'Gerald Lucena', actorRole: 'sales' }, acct = { actorName: 'Rojan Leo Francisco', actorRole: 'accounting' };
   ['getClientBook', 'saveClientBookClient', 'setClientBookStatus', 'archiveClientBookClient'].forEach(a => {
-    const r = call(c, a, Object.assign({ company: 'X', clientNo: 'CB-1', reason: 'r' }, sales));
-    ok(a + ' refuses a sales login', !r.success && /trial/.test(r.message));
+    const r = call(c, a, Object.assign({ company: 'X', clientNo: 'CB-1', reason: 'r' }, acct));
+    ok(a + ' refuses an accounting login', !r.success && /only director, sales/.test(r.message), r);
   });
   const direct = JSON.parse(c._dispatch({ action: 'getClientBook', actorName: 'Neil Estur', actorRole: 'director' }).getContent());
   ok('without the app\'s secret even the director\'s read is refused (contact details are private)', !direct.success);
-  store.FlowSettings.push({ Key: 'clientBookRoles', Value: 'director, sales', 'Updated By': 'Neil', 'Updated At': '' });
-  ok('when Neil opens it to sales (FlowSettings clientBookRoles), a rep can use it', call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', sector: 'Cement', company: 'Rep Client' }, sales)).success);
+  ok('a rep can use it from the start', call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', sector: 'Cement', company: 'Rep Client' }, sales)).success);
+  store.FlowSettings.push({ Key: 'clientBookRoles', Value: 'director', 'Updated By': 'Neil', 'Updated At': '' });
+  ok('and Neil can close it to them again (FlowSettings clientBookRoles = director)', !call(c, 'getClientBook', sales).success);
+}
+
+sec('10 · A358: each rep keeps their own clients; the director sees and changes all');
+{
+  const store = { FlowSettings: [] };
+  const c = load(GS, store);
+  const gerald = { actorName: 'Gerald Lucena', actorRole: 'sales' }, kim = { actorName: 'Kimberlyn Blones', actorRole: 'sales' };
+  const add = (who, company, extra) => call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', sector: 'Cement', company }, extra || {}, who));
+  const g1 = add(gerald, 'Plant G One', { owner: 'Kimberlyn Blones' });
+  const k1 = add(kim, 'Plant K One');
+  ok('a rep\'s new client is theirs, whatever owner is sent', g1.success && g1.client.owner === 'Gerald Lucena' && k1.client.owner === 'Kimberlyn Blones', g1.client);
+  const gRead = call(c, 'getClientBook', gerald), kRead = call(c, 'getClientBook', { actorName: 'kimberlyn blones', actorRole: 'sales' });
+  ok('each rep reads only their own clients, and only their log (any case of the name)', gRead.clients.map(x => x.company).join() === 'Plant G One' && gRead.log.every(l => l.clientNo === g1.clientNo) &&
+     kRead.clients.map(x => x.company).join() === 'Plant K One' && kRead.log.every(l => l.clientNo === k1.clientNo), [gRead.clients.map(x => x.company), kRead.clients.map(x => x.company)]);
+  const n0 = store.ClientBookLog.length;
+  const edit = call(c, 'saveClientBookClient', Object.assign({ clientNo: k1.clientNo, company: 'Plant K One', notes: 'mine now' }, gerald));
+  const st = call(c, 'setClientBookStatus', Object.assign({ clientNo: k1.clientNo, kind: 'status', value: 'RFQ pending' }, gerald));
+  const ar = call(c, 'archiveClientBookClient', Object.assign({ clientNo: k1.clientNo, reason: 'x' }, gerald));
+  ok('another rep\'s client cannot be edited, re-statused or archived, and nothing is written', !edit.success && !st.success && !ar.success && /not in your Client Book/.test(edit.message) &&
+     store.ClientBookLog.length === n0 && !store.ClientBook.find(r => r['Client No'] === k1.clientNo)['Notes'], [edit.message, st.message, ar.message]);
+  const give = call(c, 'saveClientBookClient', Object.assign({ clientNo: g1.clientNo, company: 'Plant G One', owner: 'Kimberlyn Blones' }, gerald));
+  ok('a rep cannot hand their client to someone else', give.success && store.ClientBook.find(r => r['Client No'] === g1.clientNo)['Owner'] === 'Gerald Lucena');
+  const twin = add(gerald, 'PLANT K ONE INC.', { allowDuplicate: true });
+  ok('a company already under another rep is refused, even with allowDuplicate, naming who has it', !twin.success && /already in the Client Book under Kimberlyn Blones — ask the director/.test(twin.message) && !twin.duplicate, twin);
+  const own = add(gerald, 'PLANT G ONE CORP.', { allowDuplicate: true });
+  ok('  while a rep may add a second site of their own client', own.success);
+  const dir = { actorName: 'Neil Estur', actorRole: 'director' };
+  const all = call(c, 'getClientBook', dir);
+  ok('the director reads every client', all.clients.length === 3);
+  const move = call(c, 'saveClientBookClient', Object.assign({ clientNo: k1.clientNo, company: 'Plant K One', owner: 'Gerald Lucena' }, dir));
+  ok('  and can move a client to another rep, which then reads it', move.success && call(c, 'getClientBook', gerald).clients.some(x => x.clientNo === k1.clientNo) &&
+     !call(c, 'getClientBook', kim).clients.some(x => x.clientNo === k1.clientNo));
 }
 
 sec('9 · A354: every client is Major or Minor, with its industry and site address');

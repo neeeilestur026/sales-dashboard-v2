@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 181;   // A355 — website quote requests go to the salesperson for the delivery region (Luzon / Visayas and Mindanao). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 182;   // A358 — the Client Book opens to the sales reps (each sees their own) and a PR can name its client. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -243,7 +243,8 @@ var SCHEMA = {
   PricingRequests: ['PR No', 'Date', 'Requested By', 'Customer', 'Destination', 'Commission %', 'Margin %',
                     'Status', 'PDF Link', 'Notes', 'Created At', 'Updated At', 'Legacy ID', 'Legacy Items JSON',
                     'Priced Items JSON', 'Client Location', 'Doc JSON', 'Client Ref', 'Plant Site',
-                    'Salesperson'],
+                    'Salesperson',
+                    'Client Book No'],   // A358 — the Client Book client the rep linked when making it (optional)
   //    A144: 'Supplier Price VAT' (Inclusive|Exclusive note — display only, no costing-math effect).
   /*    A242: 'Quoted On' — WHICH QUOTATION THIS LINE WENT OUT ON, blank until it does. It is what
         makes a partial quotation possible: quote the 3 lines management has priced, leave the other
@@ -15722,8 +15723,13 @@ function _cbRoles() {
   var raw = '';
   try { raw = String((getFlowSettings().data || {}).clientBookRoles || ''); } catch (e) { raw = ''; }
   var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-  return list.length ? list : ['director'];
+  return list.length ? list : ['director', 'sales'];   // A358 — the reps use it too (FlowSettings clientBookRoles can narrow it)
 }
+/* A358 — the director sees and changes every client; every other role in clientBookRoles only its own: the clients
+   whose Owner is the signed-in name (trimmed, any case). A rep's new client is theirs, and stays theirs. */
+function _cbSame(a, b) { var x = String(a == null ? '' : a).trim().toLowerCase(); return !!x && x === String(b == null ? '' : b).trim().toLowerCase(); }
+function _cbAll(p) { return String((p && p.actorRole) || '').trim().toLowerCase() === 'director'; }
+function _cbOwns(p, row) { return _cbAll(p) || _cbSame(row && row['Owner'], p && p.actorName); }
 function _cbDenied(p) {
   if (_cbRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) < 0) return 'The Client Book is in a trial; only ' + _cbRoles().join(', ') + ' can use it.';
   if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save the change under.';
@@ -15789,7 +15795,9 @@ function getClientBook(p) {
   if (no) return { success: false, message: no };
   var sh = _ss().getSheetByName('ClientBook'), lg = _ss().getSheetByName('ClientBookLog');
   var clients = sh && sh.getLastRow() >= 2 ? _rows('ClientBook').map(_cbOut) : [];
-  var log = lg && lg.getLastRow() >= 2 ? _rows('ClientBookLog').map(function (r) {
+  if (!_cbAll(p)) clients = clients.filter(function (c) { return _cbSame(c.owner, p.actorName); });   // A358 — a rep reads their own
+  var mine = {}; clients.forEach(function (c) { mine[c.clientNo] = 1; });
+  var log = lg && lg.getLastRow() >= 2 ? _rows('ClientBookLog').filter(function (r) { return mine[String(r['Client No'])]; }).map(function (r) {
     return { logNo: String(r['Log No']), clientNo: String(r['Client No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
              to: String(r['To'] || ''), note: String(r['Note'] || ''), ref: String(r['Ref'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
   }) : [];
@@ -15809,6 +15817,7 @@ function saveClientBookClient(p) {
   if (nextDate && !_cbDate(nextDate)) return { success: false, message: 'The next step date must be a date (yyyy-mm-dd).' };
   var row = p.clientNo ? _cbRow(p.clientNo) : null;
   if (p.clientNo && !row) return { success: false, message: 'Client ' + p.clientNo + ' is not in the Client Book.' };
+  if (row && !_cbOwns(p, row)) return { success: false, message: 'Client ' + p.clientNo + ' is not in your Client Book.' };
   if (row && row['Archived At']) return { success: false, message: 'This client is archived; restore it first.' };
   var accred = String(p.accreditation || '').trim();
   if (!row && accred && CB_ACCRED.indexOf(accred) < 0) return { success: false, message: 'Accreditation must be one of: ' + CB_ACCRED.join(', ') + '.' };
@@ -15819,12 +15828,12 @@ function saveClientBookClient(p) {
   if (!row && !sector) return { success: false, message: 'Say which industry the client is in.' };
   var site = p.siteAddress === undefined || p.siteAddress === null ? null : _webCell(p.siteAddress, true).slice(0, 300);
   var allow = p.allowDuplicate === true || String(p.allowDuplicate) === 'true';
-  if (!allow) {
-    var twin = null;
-    _rows('ClientBook').forEach(function (r) { if (!r['Archived At'] && String(r['Key']) === key && (!row || String(r['Client No']) !== String(row['Client No']))) twin = r; });
-    if (twin) return { success: false, duplicate: String(twin['Client No']), message: '"' + twin['Company'] + '" (' + twin['Client No'] + ') is already in the Client Book.' };
-  }
-  var now = _now(), owner = _webCell(p.owner).slice(0, 80);
+  var twin = null;
+  _rows('ClientBook').forEach(function (r) { if (!r['Archived At'] && String(r['Key']) === key && (!row || String(r['Client No']) !== String(row['Client No']))) twin = r; });
+  /* A358 — another rep's client is never added twice (two reps chasing one plant), whatever allowDuplicate says. */
+  if (twin && !_cbOwns(p, twin)) return { success: false, message: '"' + twin['Company'] + '" is already in the Client Book under ' + (twin['Owner'] || 'another rep') + ' — ask the director.' };
+  if (twin && !allow) return { success: false, duplicate: String(twin['Client No']), message: '"' + twin['Company'] + '" (' + twin['Client No'] + ') is already in the Client Book.' };
+  var now = _now(), owner = _cbAll(p) ? _webCell(p.owner).slice(0, 80) : (row ? String(row['Owner'] || '') : String(p.actorName).trim().slice(0, 80));
   var obj = {};
   if (row) SCHEMA.ClientBook.forEach(function (h) { obj[h] = row[h]; });
   else Object.assign(obj, { 'Created By': by, 'Created At': now, 'Accreditation': accred || 'Not accredited', 'Accreditation Updated At': now });
@@ -15866,6 +15875,7 @@ function setClientBookStatus(p) {
   if (no) return { success: false, message: no };
   var by = String(p.actorName).trim(), row = _cbRow(p.clientNo);
   if (!row) return { success: false, message: 'Client ' + (p.clientNo || '') + ' is not in the Client Book.' };
+  if (!_cbOwns(p, row)) return { success: false, message: 'Client ' + p.clientNo + ' is not in your Client Book.' };
   if (row['Archived At']) return { success: false, message: 'This client is archived; restore it first.' };
   var kind = String(p.kind || ''), value = String(p.value || '').trim(), note = _webCell(p.note, true).slice(0, 500), now = _now();
   var obj = {}; SCHEMA.ClientBook.forEach(function (h) { obj[h] = row[h]; });
@@ -15897,6 +15907,7 @@ function archiveClientBookClient(p) {
   if (no) return { success: false, message: no };
   var by = String(p.actorName).trim(), row = _cbRow(p.clientNo);
   if (!row) return { success: false, message: 'Client ' + (p.clientNo || '') + ' is not in the Client Book.' };
+  if (!_cbOwns(p, row)) return { success: false, message: 'Client ' + p.clientNo + ' is not in your Client Book.' };
   var restore = p.restore === true || String(p.restore) === 'true', reason = _webCell(p.reason).slice(0, 190), now = _now();
   if (!restore && !reason) return { success: false, message: 'Say why the client is being archived.' };
   if (restore === !row['Archived At']) return { success: false, message: restore ? 'This client is not archived.' : 'This client is already archived.' };
@@ -16006,6 +16017,7 @@ function getPricingRequests(p) {
          single pick and still what most surfaces read; this is what a partly-quoted request needs to
          show honestly. Empty for the 297 requests that became nothing. */
       quotationNos: quoNosByPR[String(h['PR No'])] || [],
+      clientNo: String(h['Client Book No'] || ''),   // A358 — the Client Book client, when the rep linked one
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
       clientLocation: h['Client Location'] || '', docJson: h['Doc JSON'] || '',
@@ -16210,6 +16222,15 @@ function createPricingRequest(p) {
   var items = JSON.parse(p.items || '[]');
   if (!p.customer) return { success: false, message: 'Customer is required.' };
   if (!items.length) return { success: false, message: 'At least one item is required.' };
+  /* A358 — the Client Book client the request is for, when the rep picks one (optional). It must be a live client the
+     person may use: the director any, a rep their own. Refused before anything is written. */
+  var cbNo = String(p.clientNo || '').trim();
+  if (cbNo) {
+    if (_cbRoles().indexOf(String(p.actorRole || '').trim().toLowerCase()) < 0) return { success: false, message: 'Only the Client Book\'s users can link a purchase request to a client.' };
+    var cbRow = _cbRow(cbNo);
+    if (!cbRow || cbRow['Archived At']) return { success: false, message: 'Client ' + cbNo + ' is not a live client in the Client Book.' };
+    if (!_cbOwns(p, cbRow)) return { success: false, message: 'Client ' + cbNo + ' is not in your Client Book.' };
+  }
   // Idempotency: a retried submission (transport bounce → the client re-POSTs) carries the same
   // clientRef — return the already-created PR instead of writing a duplicate. The ScriptProperties
   // check is authoritative (strongly consistent, immune to the Sheets read-after-write staleness that
@@ -16236,8 +16257,8 @@ function createPricingRequest(p) {
   _append('PricingRequests', [no, p.date || _now(), p.requestedBy || p.actorName || '', p.customer,
     '', '', '', 'Requested', '', p.notes || '', _now(), _now(), '', '', '', p.clientLocation || '',
     p.docJson || '', p.clientRef || '', p.plantSite || '',
-    p.salesperson || p.requestedBy || p.actorName || '']);
-    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref / Plant Site / Salesperson
+    p.salesperson || p.requestedBy || p.actorName || '', cbNo]);
+    // trailing: Legacy ID / Legacy Items JSON / Priced Items JSON / Client Location / Doc JSON / Client Ref / Plant Site / Salesperson / A358 Client Book No
   var sh = _sheet('PricingRequestItems');
   items.forEach(function (it, i) {
     sh.appendRow([no, i + 1, it.itemNo, it.itemName, _num(it.qty), it.uom || '', it.remarks || '',
@@ -19355,6 +19376,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A358 THE CLIENT BOOK FOR EVERY SALES REP; A PR CAN NAME ITS CLIENT (182; A327 takes 183 or later). Neil, 22 Oct 2026: the client list is for each sales user, and a purchase request should be connected to it — optional for now. clientBookRoles defaults to director, sales. The director sees and changes every client; any other role only the clients it owns (Owner = actorName, any case): getClientBook returns a rep's own clients and their log, a rep's new client is theirs and stays theirs, another rep's client cannot be edited, re-statused, archived or added again (even with allowDuplicate). PricingRequests gains Client Book No (appended; 21 wide; createPricingRequest is its only whole-row writer, the import still writes 18): createPricingRequest takes an optional clientNo — a live client the person may use, refused before anything is written — and getPricingRequests returns clientNo. A quotation made from the PR reaches the client through its PR No; nothing on Quotations changes.
 A355 WEBSITE QUOTE REQUESTS GO TO THE SALESPERSON FOR THE DELIVERY REGION (181; A327 takes 182 or later). Neil, 22 Oct 2026: hiescorp.com's quote form now asks for the delivery region (Luzon, Visayas or Mindanao) and its feed carries it as "region". When a request is collected, _webRecord adds the region to Location ("Surigao del Norte (Mindanao)") and fills Salesperson with the owner for that region: Luzon → WEBSITE_PR_OWNER_LUZON (default "Gerald Lucena"), Visayas or Mindanao → WEBSITE_PR_OWNER_VISMIN (default "Kimberlyn Blones"). _webAutoConvert makes the purchase request for that person (so it is in their My Requests at once; admin still sources it); a request with no region (a contact message, or a page opened before the website update) keeps WEBSITE_PR_OWNER / "Admin" as before. The inbox's "Make pricing request" form starts with that name. No new actions, no new columns.
 A354 THE CLIENT BOOK'S LABELS (180; A327 takes 181 or later). Neil, 22 Oct 2026: "add label on each client if major or minor", then "add industry or sector … also site address, also separate the accreditation as a separate label … then status". ClientBook gains Tier, Sector and Site Address (appended; _cbPut and the status/archive writers copy whole rows by header, so every write stays 26 wide). saveClientBookClient takes tier = Major | Minor and sector = Oil and gas | Cement | Power | Aviation | Automotive | Construction | Mining | Others (or the name typed for Others): a new client must have both; an edit that sends neither keeps what it has; siteAddress is optional; every change is logged under details. The sales status is no longer held back until the client is accredited — the two are separate labels — and "Pending RFQ" reads "RFQ pending". getClientBook returns tier, sector, siteAddress and lists.tiers / lists.sectors.
 A351 THE ACCOUNTING, LEAD GEN AND ADMIN DAILY REPORTS (179; A327 takes 180 or later). Neil, 22 Oct 2026: daily reports like the sales one for the other three roles, first on the director's dashboard, still a private trial (proofReportRoles, default director; no ActivityLog, not DailyReports). ProofReports gains Kind (appended): one row per person per day per kind; a blank Kind is the sales report, so every row saved before 179 and every call that names no kind (the sales report, the Client Book's report lines) reads exactly what it read before. saveProofReport / submitProofReport / getProofReports take kind = sales | accounting | leadgen | admin; anything else is refused. No new actions.

@@ -41,7 +41,7 @@ ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="sl"> — the scope every rule hangs off', /<body class="sl">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="sl">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,flow-api.js,leads-for-you.js,auth.js,ledger-nav.js,dashboard.js,training-mode.js,sales-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,flow-api.js,leads-for-you.js,client-book-model.js,my-clients-card.js,auth.js,ledger-nav.js,dashboard.js,training-mode.js,sales-home-page.js');
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
 ok('the deck: a sticky rail with the slab and the nav, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && /<nav class="hx-rail-nav"/.test(HTML) && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class (js/theme.js wires it by delegation)', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));
@@ -55,7 +55,7 @@ const TAGS = {
   span: ['dateMon', 'reportPill', 'reportStatus', 'targetDonutNote', 'inboxCount', 'overdueCount', 'navOverdueCount'],
   dd: ['monthPRs', 'quotationToday', 'prToday', 'clientCount', 'pendingCount'],
   div: ['monthQuotations', 'flowActionCenter', 'targetBars', 'overdueList'],
-  section: ['spot', 'inbox', 'leadsForYou', 'myDeductionCard', 'myPayslipCard', 'today', 'targetSection', 'overdueSection', 'quietState'],
+  section: ['spot', 'inbox', 'leadsForYou', 'myClients', 'myDeductionCard', 'myPayslipCard', 'today', 'targetSection', 'overdueSection', 'quietState'],
   circle: ['targetDonutRing'],
   text: ['targetDonutPct'],
   a: ['prLink', 'quotationLink', 'navTargets', 'navOverdue', 'navLeads'],
@@ -68,7 +68,7 @@ Object.keys(TAGS).forEach(tag => TAGS[tag].forEach(id => eq('#' + id, tagOf(id),
 const REACHED = Array.from(new Set(JS.match(/getElementById\('([^']+)'\)/g).map(s => s.match(/'([^']+)'/)[1]))).concat(['prLink']);
 REACHED.forEach(id => ok('dashboard.js reaches #' + id + ' and it exists', !!tagOf(id)));
 ok('#leadsForYou, #myDeductionCard, #targetSection, #overdueSection start hidden (each loader reveals its own)',
-   ['leadsForYou', 'myDeductionCard', 'myPayslipCard', 'targetSection', 'overdueSection'].every(id => /style="display:none;"/.test(tagAttrs(id))));
+   ['leadsForYou', 'myClients', 'myDeductionCard', 'myPayslipCard', 'targetSection', 'overdueSection'].every(id => /style="display:none;"/.test(tagAttrs(id))));
 ok('#quietState starts shown', !/display:none/.test(tagAttrs('quietState')));
 ok('the three rail links that follow a section start hidden', ['navTargets', 'navOverdue', 'navLeads'].every(id => /\shidden>/.test(tagAttrs(id))));
 ok('#reportStatus sits inside the slab tag #reportPill', /<span class="tag" id="reportPill"><span id="reportStatus">/.test(HTML));
