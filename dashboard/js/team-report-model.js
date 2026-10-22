@@ -37,14 +37,18 @@ const TR_ROLES = {
       { key: 'travel', label: 'Travel reports signed', acts: { 'Travel Allowance': ['Approved'] } }
     ],
     week: ['invoices', 'collections', 'paid'],
+    /* A352 — Neil, 22 Oct: "it has emails, for follow up collections". Counted from the person's sent mail. */
+    mail: { key: 'mailCollect', label: 'Collection follow-up emails', short: 'Collection emails', tag: 'Collection follow-up', on: 'collection',
+            none: 'Not a collection follow-up', help: 'An email counts when its subject is about payment (SOA, reminder, overdue…) or it went to a customer with a past-due receivable.' },
     lines: [
       { type: 'Collection call', results: ['Promised to pay', 'Paid already', 'No answer', 'Disputed'], link: 'ar', what: 'Customer', fill: true, next: true },
+      { type: 'Collection email', results: ['SOA sent', 'Reminder sent', 'Reply received', 'Promised to pay'], link: 'ar', what: 'Customer', fill: true, next: true },
       { type: 'Billing', results: ['Payment slip', 'Cash voucher', 'Marked paid', 'Sales payment request paid'], what: 'Reference no.' },
       { type: 'Bank reconciliation', results: ['Balanced', 'Differences found'], what: 'Account and period' },
       { type: 'Month check', results: ['Done, no issues', 'Issues found'], what: 'Month' },
       { type: 'Other task', results: [], what: 'What' }
     ],
-    typedNote: 'Billing, sales payment requests and bank work run outside the portal\'s log, so they are typed here.'
+    typedNote: 'Billing, sales payment requests and bank work run outside the portal\'s log, so they are typed here. A collection email is counted from the mailbox; type one only when it went from another mailbox.'
   },
   leadgen: {
     title: 'Lead Gen Daily Report', role: 'leadgen', noun: 'Lead gen',
@@ -78,7 +82,11 @@ const TR_ROLES = {
     ],
     stuck: true,
     week: ['sourced', 'quotesSent', 'pos'],
+    /* A352 — Neil, 22 Oct: "it has emails for request of price to supplier". Counted from the person's sent mail. */
+    mail: { key: 'mailPrice', label: 'Price requests to suppliers', short: 'Price requests', tag: 'Price request', on: 'price',
+            none: 'Not a price request', help: 'An email counts when it asks for a quotation, price or stock and did not go to a customer; our own quotations and order emails do not count.' },
     lines: [
+      { type: 'Price request email', results: ['Sent', 'Quote received', 'No reply yet'], link: 'pr', what: 'Supplier' },
       { type: 'Supplier follow-up', results: ['Quote received', 'Waiting', 'No stock', 'Declined'], link: 'pr', what: 'Supplier' },
       { type: 'PO status', results: ['On schedule', 'Delayed', 'Shipped'], link: 'po', what: 'Supplier', fill: true },
       { type: 'Shipment', results: ['In transit', 'Arrived', 'Cleared', 'Delayed'], link: 'po', what: 'International or local', whatChoices: ['International', 'Local'] },
@@ -86,7 +94,7 @@ const TR_ROLES = {
       { type: 'Inquiry', results: ['Answered', 'Forwarded to a rep', 'Waiting'], what: 'Company' },
       { type: 'Other task', results: [], what: 'What' }
     ],
-    typedNote: 'Supplier, PO, shipment and delivery follow-ups happen by phone and email, so they are typed here.'
+    typedNote: 'Supplier, PO, shipment and delivery follow-ups happen by phone and email, so they are typed here. A price request email is counted from the mailbox; type one only when it went from another mailbox.'
   }
 };
 const TR_LINE_FIELDS = ['type', 'what', 'result', 'note', 'nextDate', 'linkType', 'linkId', 'linkLabel'];
@@ -100,14 +108,14 @@ function _trOpenStatus(s) { return !/deliver|closed|complete|cancel|void|paid|re
 
 /* ── the person's day, from the portal ─────────────────────────────────────────────────────── */
 
-/** raw = { today, activity, settings, ar, prs, pos, sos, lgCounts, lgFollowups, lgData } — whatever the role reads. */
+/** raw = { today, activity, settings, ar, prs, pos, sos, clients, suppliers, lgCounts, lgFollowups, lgData } — whatever the role reads. */
 function trIndex(raw) {
   const r = raw || {};
   const cfg = Object.assign({}, TR_PR_LIMITS);
   Object.keys(TR_PR_LIMITS).forEach(k => { const n = Number((r.settings || {})[k]); if ((r.settings || {})[k] !== '' && (r.settings || {})[k] != null && isFinite(n) && n >= 0) cfg[k] = n; });
   return {
     today: _srS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)),
-    cfg, activity: r.activity || [], ar: r.ar || [], prs: r.prs || [], pos: r.pos || [], sos: r.sos || [],
+    cfg, activity: r.activity || [], ar: r.ar || [], prs: r.prs || [], pos: r.pos || [], sos: r.sos || [], clients: r.clients || [], suppliers: r.suppliers || [],
     lg: { counts: r.lgCounts && r.lgCounts.success !== false ? r.lgCounts : null, followups: r.lgFollowups || [], data: r.lgData || {} }
   };
 }
@@ -182,12 +190,13 @@ function trTiles(roleKey, ix, person, day, nowMin) {
 
 /* ── the report the person keeps ───────────────────────────────────────────────────────────── */
 
-function trBlank(roleKey, person) { return { v: 1, kind: roleKey, person: _srS(person), lines: [], pm: { blocker: '' } }; }
+function trBlank(roleKey, person) { return { v: 1, kind: roleKey, person: _srS(person), lines: [], pm: { blocker: '' }, mailMarks: {} }; }
 /** A saved report made safe to read. */
 function trFill(saved, roleKey, person) {
   const o = saved && typeof saved === 'object' ? saved : {}, b = trBlank(roleKey, o.person || person);
   b.lines = Array.isArray(o.lines) ? o.lines.filter(l => l && l.id) : [];
   b.pm = { blocker: _srS(o.pm && o.pm.blocker) };
+  if (o.mailMarks && typeof o.mailMarks === 'object') Object.keys(o.mailMarks).forEach(k => { if (o.mailMarks[k] === true || o.mailMarks[k] === false) b.mailMarks[k] = o.mailMarks[k]; });
   return b;
 }
 /** A new typed line, stamped now. The type must be one of the role's. */
@@ -245,6 +254,93 @@ function trSnapshot(portal, mine, day, person) {
   return out;
 }
 
+/* ── A352 · the person's sent mail: collection follow-ups (accounting), price requests to suppliers (admin) ── */
+
+const TR_COLLECT_RE = /\b(SOA|statements? of accounts?|collections?|payments?|overdue|past due|remittances?|reminders?|outstanding|unpaid|balance due|due date|settlement|check pick ?up|cheque)\b/i;
+const TR_RFQ_RE = /\b(RFQ|request(ing)? (a |for )?(quotation|quote|price|pricing|offer|proposal)|quotation request|price request|pricing request|price (inquiry|enquiry))\b/i;
+const TR_PRICE_RE = /\b(quot(e|es|ation|ations)|prices?|pricing|inquiry|enquiry|availability|lead ?time|offer|stocks?)\b/i;
+const TR_ORDER_RE = /\b(purchase order|P\.?O\.? ?(no|#|\d)|order confirmation|invoices?|payments?|deliver(y|ies))\b/i;
+const TR_OUR_QUOTE_RE = /\b(\d{4}-\d{3,}-[A-Z]{2,}|quotation\s*(no\.?|#)\s*\d)/i;   // our own quotation going out (2026-560-ADM), not a request
+const TR_PUBLIC_MAIL = { 'gmail.com': 1, 'yahoo.com': 1, 'outlook.com': 1, 'hotmail.com': 1, 'icloud.com': 1, 'live.com': 1, 'ymail.com': 1 };
+const TR_SUFFIX_RE = /\b(corporation|corp|incorporated|inc|company|co|ltd|limited|enterprises|enterprise|ent|philippines|phils|phil|international|intl|group|holdings|resources|pte|sdn|bhd|llc|gmbh)\b/g;
+
+/** 'Philcement Corp.' → 'philcement'; 'FIRST FARMERS HOLDING CORPORATION' → 'firstfarmers' — the name, joined, as a domain would spell it. */
+function _trCompact(name) {
+  return _srS(name).toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/\s*[-–—]\s+.*$/, '').replace(/[.,&]/g, ' ').replace(TR_SUFFIX_RE, ' ').replace(/[^a-z0-9]/g, '');
+}
+function _trDomain(addr) {
+  const a = _srS(addr).toLowerCase(), at = a.indexOf('@');
+  if (at < 0) return '';
+  const d = a.slice(at + 1);
+  return TR_PUBLIC_MAIL[d] ? '' : d.split('.')[0].replace(/[^a-z0-9]/g, '');
+}
+function _trOrgs(list) {
+  const seen = {}, out = [];
+  list.forEach(o => {
+    const c = _trCompact(o.name);
+    if (!c || c.length < 3) return;
+    if (!seen[c]) { seen[c] = { name: _srS(o.name), compact: c, emails: {} }; out.push(seen[c]); }
+    _srS(o.email).toLowerCase().split(/[\s,;\/]+/).filter(x => x.indexOf('@') > 0).forEach(x => { seen[c].emails[x] = 1; });
+  });
+  return out;
+}
+/** The organisation an email went to: its exact address on file, or its domain spelling the name (4+ letters). */
+function _trOrgOf(orgs, addr) {
+  const a = _srS(addr).toLowerCase(), d = _trDomain(a);
+  const byMail = orgs.find(o => o.emails[a]);
+  if (byMail) return byMail;
+  if (!d || d.length < 4) return null;
+  return orgs.find(o => o.compact === d) || orgs.find(o => o.compact.indexOf(d) === 0 || (o.compact.length >= 4 && d.indexOf(o.compact) === 0)) || null;
+}
+
+/** The day's sent mail, each email marked when it counts, and why. marks = { messageId: true | false } — the director's
+ *  own correction, which always wins over the guess. */
+function trMail(roleKey, ix, emails, marks) {
+  const cfg = TR_ROLES[roleKey].mail;
+  if (!cfg) return [];
+  const m = marks || {};
+  const customers = _trOrgs(ix.clients.map(c => ({ name: c.customer, email: c.email })).concat(ix.ar.map(a => ({ name: a.customer }))).concat(ix.sos.map(x => ({ name: x.customer }))));
+  const suppliers = _trOrgs(ix.suppliers.map(x => ({ name: x.supplier })).concat(ix.pos.map(p => ({ name: p.supplier }))));
+  const pastDue = {};
+  ix.ar.forEach(a => {
+    if (_srS(a.status).toLowerCase() === 'paid' || _srNum(a.outstanding) <= 0) return;
+    const due = _srDate(a.dueDate), c = _trCompact(a.customer);
+    if (!c || !/^\d{4}-/.test(due) || due >= ix.today) return;
+    if (!pastDue[c] || due < pastDue[c].due) pastDue[c] = { arNo: _srS(a.arNo), due };
+  });
+  return (emails || []).map(e => {
+    const subj = _srS(e.subject), cust = _trOrgOf(customers, e.recipient), sup = cust ? null : _trOrgOf(suppliers, e.recipient);
+    let why = '', ref = '';
+    if (cfg.on === 'collection') {
+      const due = cust ? pastDue[cust.compact] : null;
+      if (TR_COLLECT_RE.test(subj)) why = 'the subject is about payment';
+      else if (due) why = 'to ' + cust.name + ', who has a past-due receivable';
+      ref = due ? due.arNo : '';
+    } else {
+      if (TR_RFQ_RE.test(subj) && !cust) why = 'the subject asks for a price';
+      else if (!cust && TR_PRICE_RE.test(subj) && !TR_ORDER_RE.test(subj) && !TR_OUR_QUOTE_RE.test(subj)) why = sup ? 'to supplier ' + sup.name + ', about price or stock' : 'asks about price or stock, not to a customer';
+      ref = (subj.match(/PR-\d{6}-\d{3}/i) || [''])[0].toUpperCase();
+    }
+    const id = _srS(e.messageId), mark = m[id], counted = mark === true ? true : mark === false ? false : !!why;
+    return { id, time: srClock(e.sentAt), sort: srMinutes(e.sentAt), to: _srS(e.name || e.recipient), recipient: _srS(e.recipient), subject: subj,
+             org: (cust || sup || {}).name || '', why, counted, marked: mark === true || mark === false, ref };
+  }).sort((a, b) => a.sort - b.sort);
+}
+
+/** The mail tiles: the role's own (collection follow-ups / price requests), then everything sent.
+ *  state: 'ok' | 'loading' | 'setup' (the mailbox is not connected) | 'error' | 'none' (no login to read). */
+function trMailTiles(roleKey, rows, state) {
+  const cfg = TR_ROLES[roleKey].mail;
+  if (!cfg) return [];
+  const ok = state === 'ok', why = { loading: 'reading the mailbox…', setup: 'the mailbox is not connected', error: 'the mailbox could not be read', none: 'no login to read' }[state] || '';
+  const counted = (rows || []).filter(r => r.counted);
+  const item = (r) => ({ time: r.time, ref: r.ref, what: r.subject + ' — to ' + r.to + (r.org ? ' (' + r.org + ')' : ''), result: r.marked ? (r.counted ? 'counted by you' : 'not counted, by you') : r.why });
+  return [
+    { key: cfg.key, label: cfg.label, value: ok ? counted.length : null, text: ok ? String(counted.length) : '—', target: ok ? 'from the sent mail' : why, bar: null, status: ok ? 'none' : 'nr', items: ok ? counted.map(item) : [] },
+    { key: 'mailSent', label: 'Emails sent', value: ok ? rows.length : null, text: ok ? String(rows.length) : '—', target: ok ? 'from the sent mail' : why, bar: null, status: ok ? 'none' : 'nr', items: ok ? rows.map(item) : [] }
+  ];
+}
+
 /* ── the person's feed, links, queue and week ──────────────────────────────────────────────── */
 
 /** Everything the portal logged for the person that day — they typed none of this. */
@@ -283,8 +379,10 @@ function trQueue(items) {
     .sort((a, b) => (rank[a.tone] === undefined ? 4 : rank[a.tone]) - (rank[b.tone] === undefined ? 4 : rank[b.tone]));
 }
 
-/** Mon–Sun: three key counts a day and whether the 4:30 report went in. saved = { 'yyyy-mm-dd': {submittedAt} }. */
-function trWeek(roleKey, ix, person, day, saved) {
+/** Mon–Sun: three key counts a day (and the mail count, A352) and whether the 4:30 report went in.
+ *  saved = { 'yyyy-mm-dd': {submittedAt, report} }; mailByDay = { 'yyyy-mm-dd': emails | null (unreadable) } — a day
+ *  not read yet is 'loading'. */
+function trWeek(roleKey, ix, person, day, saved, mailByDay) {
   const cfg = TR_ROLES[roleKey], days = srWeekDays(day);
   const label = (key) => { const c = (cfg.tiles || []).find(t => t.key === key); if (c) return c.label; const k = (cfg.counts || []).find(x => x[0] === key); return k ? k[1] : key; };
   const byDay = ix.lg.counts && ix.lg.counts.week && ix.lg.counts.week.byDay;
@@ -294,15 +392,20 @@ function trWeek(roleKey, ix, person, day, saved) {
     if (cfg.counts) vals = cfg.week.map(k => (byDay && byDay[d] ? _srNum(byDay[d][k]) : null));
     else { const rs = trRows(ix, person, d); vals = cfg.week.map(k => _trActTile(cfg.tiles.find(t => t.key === k), rs).value); }
     const s = (saved || {})[d], weekend = srDow(d) === 'Sat' || srDow(d) === 'Sun';
+    if (cfg.mail) {
+      const em = (mailByDay || {})[d];
+      vals.push(Array.isArray(em) ? trMail(roleKey, ix, em, s && s.report && s.report.mailMarks).filter(r => r.counted).length : em === null ? null : 'loading');
+    }
     return { day: d, vals, report: s && s.submittedAt ? { state: 'done', time: srClock(s.submittedAt) } : weekend ? { state: 'none' } : { state: 'due' } };
   });
   const past = rows.filter(r => !r.future);
-  const totals = cfg.week.map((k, i) => past.some(r => r.vals[i] !== null) ? past.reduce((s, r) => s + (r.vals[i] || 0), 0) : null);
+  const cols = cfg.week.length + (cfg.mail ? 1 : 0);
+  const totals = Array.from({ length: cols }, (_, i) => past.some(r => typeof r.vals[i] === 'number') ? past.reduce((s, r) => s + (typeof r.vals[i] === 'number' ? r.vals[i] : 0), 0) : null);
   const work = past.filter(r => srDow(r.day) !== 'Sat' && srDow(r.day) !== 'Sun');
-  return { days, heads: cfg.week.map(label), rows, totals, reports: work.filter(r => r.report.state === 'done').length, reportDays: work.length };
+  return { days, heads: cfg.week.map(label).concat(cfg.mail ? [cfg.mail.short] : []), rows, totals, reports: work.filter(r => r.report.state === 'done').length, reportDays: work.length };
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { TR_ROLES, TR_LINE_FIELDS, trIndex, trRows, trTiles, trStuckPrs, trEnded, trBlank, trFill, trNewLine, trEditLine, trVoidLine,
+  module.exports = { TR_ROLES, TR_LINE_FIELDS, trIndex, trRows, trTiles, trStuckPrs, trEnded, trBlank, trFill, trNewLine, trEditLine, trVoidLine, trMail, trMailTiles,
                      trDayLines, trMineTiles, trLinked, trSnapshot, trFeed, trLinkOptions, trQueue, trWeek };
 }
