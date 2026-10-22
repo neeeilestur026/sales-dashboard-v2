@@ -39,7 +39,8 @@ async function teamReport(id, roleKey) {
   if (!el || !cfg) return;
   const S = TR_UI[roleKey] = { role: roleKey, cfg, el, head: el.querySelector('[data-tr="head"]'), body: el.querySelector('[data-tr="body"]'),
     me: '', today: '', day: '', person: '', people: [], saved: {}, state: null, chain: Promise.resolve(), feed: 'all', backend: true, backendMsg: '',
-    failed: [], queue: null, unsaved: false, nums: null, shared: null, raw: null, ix: null };
+    failed: [], queue: null, unsaved: false, nums: null, shared: null, raw: null, ix: null,
+    mail: { state: 'none', emails: [] }, weekMail: {}, weekMailFor: '' };
   if (!S.head || !S.body) return;
   S.body.innerHTML = '<div class="dh-empty">Reading the day…</div>';
   const s = (typeof getSession === 'function' && getSession()) || {};
@@ -69,14 +70,16 @@ async function _trLoad(S) {
   const jobs = { saved: !S.v179 ? Promise.resolve({ ok: false, message: '' }) : postFlow('getProofReports', { kind: S.role, from: srAddDays(S.today, -42), to: S.today })
     .then(r => (r && r.success ? { ok: true, data: r.data || [] } : { ok: false, message: (r && r.message) || '' }))
     .catch(e => ({ ok: false, message: String(e && e.message || '') })) };
-  if (S.role === 'accounting') jobs.ar = get('receivables', 'getARAging');
+  if (S.role === 'accounting') { jobs.ar = get('receivables', 'getARAging'); jobs.clients = get('clients', 'getClients'); }
   if (S.role === 'leadgen') jobs.lgData = get('lead gen records', 'getLeadgen');
-  if (S.role === 'admin') { jobs.prs = get('purchase requests', 'getPricingRequests'); jobs.pos = get('purchase orders', 'getPurchaseOrders'); jobs.sos = get('sales orders', 'getSalesOrders'); }
+  if (S.role === 'admin') { jobs.prs = get('purchase requests', 'getPricingRequests'); jobs.pos = get('purchase orders', 'getPurchaseOrders'); jobs.sos = get('sales orders', 'getSalesOrders');
+                            jobs.suppliers = get('suppliers', 'getSuppliers'); }
   const keys = Object.keys(jobs), vals = await Promise.all(keys.map(k => jobs[k])), got = {};
   keys.forEach((k, i) => { got[k] = vals[i]; });
   if (S.shared.activity === null && S.role !== 'leadgen') failed.push('activity log');
   S.failed = failed;
-  S.raw = { today: S.today, activity: S.shared.activity || [], settings: S.shared.settings, ar: got.ar, prs: got.prs, pos: got.pos, sos: got.sos, lgData: got.lgData };
+  S.raw = { today: S.today, activity: S.shared.activity || [], settings: S.shared.settings, ar: got.ar, prs: got.prs, pos: got.pos, sos: got.sos,
+            clients: got.clients, suppliers: got.suppliers, lgData: got.lgData };
   S.backend = got.saved.ok;
   S.backendMsg = got.saved.ok ? '' : got.saved.message;
   S.saved = {};
@@ -97,6 +100,38 @@ async function _trPersonLoad(S) {
   }
   S.ix = trIndex(Object.assign({}, S.raw, { lgCounts: counts, lgFollowups: follow }));
   _trQueueLoad(S);
+  _trMailLoad(S);
+}
+
+/* A352 — the person's sent mail for the day (a director may read another login's sent mail; /api/email/today). */
+function _trUsername(S, who) { const u = S.shared.roster.find(x => _trName(x) === who); return (u && u.username) || ''; }
+function _trMailRead(S, who, day) {
+  const un = _trUsername(S, who);
+  if (!un || typeof apiFetchEmailLogToday !== 'function') return Promise.resolve({ state: 'none', emails: [] });
+  return apiFetchEmailLogToday(un, day).then(r => (r && r.needsSetup ? { state: 'setup', emails: [] } : r && r.success !== false ? { state: 'ok', emails: r.emails || [] } : { state: 'error', emails: [] }))
+    .catch(() => ({ state: 'error', emails: [] }));
+}
+async function _trMailLoad(S) {
+  if (!S.cfg.mail) return;
+  const who = S.person, day = S.day;
+  S.mail = { state: 'loading', emails: [] };
+  const m = await _trMailRead(S, who, day);
+  if (S.person !== who || S.day !== day) return;
+  S.mail = m;
+  if (S.weekMailFor === who && m.state === 'ok') S.weekMail[day] = m.emails;
+  _trRefresh(S);
+}
+/** The week's mail column: one read per past day of the week, three at a time; an unreadable day shows "—". */
+async function _trWeekMail(S, days) {
+  if (!S.cfg.mail || S.weekBusy || !days.length) return;
+  if (S.mail.state === 'setup' || S.mail.state === 'none') { days.forEach(d => { S.weekMail[d] = null; }); _trRenderWeek(S); return; }
+  S.weekBusy = true;
+  const who = S.person;
+  for (let i = 0; i < days.length; i += 3) {
+    await Promise.all(days.slice(i, i + 3).map(d => _trMailRead(S, who, d).then(m => { if (S.person === who) S.weekMail[d] = m.state === 'ok' ? m.emails : null; })));
+  }
+  S.weekBusy = false;
+  if (S.person === who) _trRenderWeek(S);
 }
 async function _trQueueLoad(S) {
   const who = S.person, day = S.day;
@@ -112,6 +147,7 @@ async function _trQueueLoad(S) {
 
 async function _trOpenDay(S, day) {
   S.day = day;
+  if (S.weekMailFor !== S.person) { S.weekMail = {}; S.weekMailFor = S.person; }
   const saved = S.saved[day], draft = _trDraftGet(S, day);
   const savedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) || 0 : 0;
   S.state = trFill(draft && draft.t > savedAt ? draft.report : saved ? saved.report : null, S.role, S.person);
@@ -174,7 +210,9 @@ function _trSetState(S) {
 
 function _trNums(S) {
   const t = trTiles(S.role, S.ix, S.person, S.day, _trNowMin());
-  return { portal: t.portal, weekly: t.weekly, mine: trMineTiles(S.role, S.state, S.day), linked: trLinked(S.role, S.state, S.day) };
+  const mail = S.cfg.mail ? trMail(S.role, S.ix, S.mail.emails, S.state.mailMarks) : [];
+  return { portal: (S.cfg.mail ? trMailTiles(S.role, mail, S.mail.state) : []).concat(t.portal), weekly: t.weekly, mail,
+           mine: trMineTiles(S.role, S.state, S.day), linked: trLinked(S.role, S.state, S.day) };
 }
 function _trLiveNumbers(S) { const n = S.nums || _trNums(S); return trSnapshot(n.portal.concat(n.weekly), n.mine, S.day, S.person); }
 
@@ -205,6 +243,8 @@ function _trBodyHtml(S) {
       (S.cfg.weekly ? '<p class="sr-rowlab ok">This week so far</p><div class="sr-tiles" data-tiles="weekly"></div>' : '') +
       '<p class="sr-rowlab mine">From the typed lines</p><div class="sr-tiles" data-tiles="mine"></div></section>' +
     (S.day === S.today ? '<section class="sr-block"><h3>Waiting on ' + _trE(who) + ' now</h3><p class="dh-meta">' + _trE(who) + '\'s own home-page list, read live.</p><div data-queue></div></section>' : '') +
+    (S.cfg.mail ? '<section class="sr-block"><h3>Emails sent — ' + _trE(who) + '\'s mailbox</h3><p class="dh-meta">' + _trE(S.cfg.mail.help) +
+      ' Press a button to correct one; your choice is kept with the report.</p><div data-mail></div></section>' : '') +
     '<section class="sr-block"><div class="sr-bar"><h3>My log</h3><div class="sr-quick">' +
       S.cfg.lines.map(x => '<button type="button" class="dh-btn" data-new="' + _trE(x.type) + '">+ ' + _trE(x.type) + '</button>').join('') + '</div></div>' +
       '<p class="sr-help">' + _trE(S.cfg.typedNote) + '</p>' +
@@ -242,6 +282,7 @@ function _trRefresh(S) {
   _trQ(S, '[data-tiles="mine"]').innerHTML = n.mine.map(tile).join('');
   S.el.querySelectorAll('.sr-bar-track > i[data-w]').forEach(i => { if (i.style && i.style.setProperty) i.style.setProperty('--sr-w', i.getAttribute('data-w')); });
   _trQ(S, '[data-log]').innerHTML = _trLogRows(S);
+  if (_trQ(S, '[data-mail]')) _trQ(S, '[data-mail]').innerHTML = _trMailHtml(S, n.mail);
   _trRenderFeed(S);
   /* Never redrawn under a field being typed in; a focused button (Submit, just clicked) is no reason to wait. */
   const pm = _trQ(S, '[data-pm]'), a = document.activeElement;
@@ -264,6 +305,20 @@ function _trQueueHtml(S) {
     (fu.length ? '<h4 class="tr-sub">Follow-ups due today' + (S.ix.lg.followups.length > fu.length ? ' (first ' + fu.length + ' of ' + S.ix.lg.followups.length + ')' : '') + '</h4><ul class="tr-queue">' +
       fu.map(f => '<li><span class="sr-chip">' + _trE(f.stage || 'Follow-up') + '</span><span>' + _trE([f.name, f.company].filter(Boolean).join(', ')) +
         '<span class="sr-sub">' + _trE(f.action || '') + (f.overdue > 0 ? ' — ' + f.overdue + ' day' + (f.overdue === 1 ? '' : 's') + ' late' : '') + '</span></span><span></span></li>').join('') + '</ul>' : '');
+}
+
+/** A352 — the day's sent mail: each email, whether it counts and why, and a button to correct it. */
+function _trMailHtml(S, rows) {
+  const who = _trFirst(S.person), st = S.mail.state, cfg = S.cfg.mail;
+  if (st === 'loading') return '<p class="dh-empty">Reading ' + _trE(who) + '\'s sent mail…</p>';
+  if (st === 'setup') return '<p class="dh-empty">' + _trE(who) + '\'s mailbox is not connected to the portal, so their emails cannot be counted. Type them in My log meanwhile.</p>';
+  if (st === 'none') return '<p class="dh-empty">There is no login to read a mailbox for.</p>';
+  if (st === 'error') return '<p class="dh-empty">Could not read ' + _trE(who) + '\'s sent mail just now.</p>';
+  if (!rows.length) return '<p class="dh-empty">No emails sent on this day.</p>';
+  return '<ul class="sr-feed tr-mail">' + rows.map(r => '<li class="' + (r.counted ? 'on' : '') + '"><span class="tm">' + _trE(r.time || '—') + '</span>' +
+    '<span class="x"><b>' + _trE(r.subject || '(no subject)') + '</b><span class="sr-sub">to ' + _trE(r.to) + (r.org ? ' — ' + _trE(r.org) : '') + (r.ref ? ' · ' + _trE(r.ref) : '') + '</span>' +
+      '<span class="sr-sub">' + (r.counted ? '<span class="sr-chip ok">' + _trE(cfg.tag) + '</span> ' : '') + _trE(r.marked ? (r.counted ? 'counted by you' : 'not counted, by you') : r.why) + '</span></span>' +
+    (r.id ? '<button type="button" class="sr-mini' + (r.counted ? ' on' : '') + '" data-mailmark="' + _trE(r.id) + '">' + _trE(r.counted ? cfg.none : 'Count as ' + cfg.tag.toLowerCase()) + '</button>' : '<span></span>') + '</li>').join('') + '</ul>';
 }
 
 /** A line's link: the record's own page when it has one. */
@@ -313,15 +368,17 @@ function _trPmHtml(S, n, saved) {
 }
 
 function _trRenderWeek(S) {
-  const w = trWeek(S.role, S.ix, S.person, S.day, Object.assign({}, S.saved));
+  const saved = Object.assign({}, S.saved, { [S.day]: Object.assign({}, S.saved[S.day] || {}, { report: S.state }) });
+  const w = trWeek(S.role, S.ix, S.person, S.day, saved, S.weekMail);
   _trQ(S, '[data-weekhead]').innerHTML = '<tr><th scope="col">Day</th>' + w.heads.map(h => '<th scope="col">' + _trE(h) + '</th>').join('') + '<th scope="col">Report</th></tr>';
   const td = (v, tone) => '<td class="' + (tone || '') + '">' + v + '</td>';
   _trQ(S, '[data-week]').innerHTML = w.rows.map(r => {
     const lab = '<th scope="row"' + (r.day === S.day ? ' class="cur"' : '') + '>' + srDow(r.day) + ' ' + Number(r.day.slice(8)) + '</th>';
     if (r.future) return '<tr class="future">' + lab + '<td colspan="' + (w.heads.length + 1) + '">—</td></tr>';
-    return '<tr>' + lab + r.vals.map(v => td(v === null ? '—' : v)).join('') +
+    return '<tr>' + lab + r.vals.map(v => td(v === null ? '—' : v === 'loading' ? '<span class="sr-dim">…</span>' : v)).join('') +
       td(r.report.state === 'done' ? '✓ ' + _trE(r.report.time) : r.report.state === 'due' ? 'due' : '—', r.report.state === 'done' ? 'ok' : r.report.state === 'due' ? 'watch' : '') + '</tr>';
   }).join('') + '<tr class="total"><th scope="row">Week</th>' + w.totals.map(v => td(v === null ? '—' : v)).join('') + td(w.reports + ' of ' + w.reportDays) + '</tr>';
+  if (S.cfg.mail && S.mail.state !== 'loading') _trWeekMail(S, w.days.filter(d => d <= S.today && S.weekMail[d] === undefined));
 }
 
 /* ── what the director does ───────────────────────────────────────────────────────────────────── */
@@ -339,6 +396,7 @@ function _trWire(S) {
     else if (b.hasAttribute('data-void')) _trVoidDialog(S, b.getAttribute('data-void'), b);
     else if (b.hasAttribute('data-feed')) { S.feed = b.getAttribute('data-feed'); _trRenderFeed(S); }
     else if (b.hasAttribute('data-submitpm')) _trSubmitPm(S);
+    else if (b.hasAttribute('data-mailmark')) _trMailMark(S, b.getAttribute('data-mailmark'));
   });
   S.el.addEventListener('change', ev => {
     const t = ev.target;
@@ -353,6 +411,15 @@ function _trWire(S) {
     const t = ev.target;
     if (t && t.hasAttribute && t.hasAttribute('data-blocker')) { S.state.pm.blocker = t.value.trim(); t.removeAttribute('aria-invalid'); }
   });
+}
+/** Count an email the guess missed, or stop counting one it got wrong. Kept with the day's report. */
+function _trMailMark(S, id) {
+  const row = ((S.nums && S.nums.mail) || []).find(r => r.id === id);
+  if (!row) return;
+  S.state.mailMarks = S.state.mailMarks || {};
+  S.state.mailMarks[id] = !row.counted;
+  _trRefresh(S);
+  _trSave(S);
 }
 function _trStep(S, dir) {
   const d = srAddDays(S.day, dir);
