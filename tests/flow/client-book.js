@@ -181,24 +181,37 @@ async function boot(o) {
   eq('reads the book and the daily reports privately, and the records plainly', [p.run('__posted.map(function (x) { return x.a; }).sort()'), p.calls.filter(c => !/^POST:/.test(c)).sort()],
      [['getClientBook', 'getProofReports'], ['getActivityLog', 'getClients', 'getPricingRequests', 'getQuotations', 'getSalesOrders']]);
   ok('one row per live client, newest update first', (T.match(/data-open="/g) || []).length === 3 && T.indexOf('CB-0003') < T.indexOf('CB-0001') && T.indexOf('CB-0001') < T.indexOf('CB-0002'));
-  ok('  a row: company with its main contact, owner, accreditation, status since, records, next step, last update',
-     /Philcement Corporation<\/button><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span><\/span><span class="cb-sub">Brgy\. Bigte, Norzagaray, Bulacan<\/span><span class="cb-sub">Ana Cruz, Purchasing \+ 1 more<\/span>/.test(T) && /RFQ received<\/span><span class="cb-sub">since 10 Oct 2026/.test(T) &&
-     /1 PR · 1 quotation<span class="cb-sub">₱186,400 open/.test(T) && /Until 10 Nov 2026/.test(T), T.slice(0, 1200));
+  ok('  a row, three short lines: the company and its last update; label, sector, town, owner; accreditation (until), status, records',
+     /<span class="cb-name">Philcement Corporation<\/span><span class="cb-when">10 Oct<\/span><\/span><span class="cb-r2">Major · Cement · Norzagaray, Bulacan · Gerald Lucena<\/span><span class="cb-r3"><span class="cb-badge ok">Accredited<\/span> <span class="cb-warnt">until 10 Nov 2026<\/span> <span class="cb-badge mid">RFQ received<\/span> <span>1 PR · 1 quotation · ₱186,400 open<\/span>/.test(T), T.slice(0, 1200));
   ok('  the records\' suggestion shows on the row', /Records say: Following up/.test(T));
-  ok('  not accredited or on process: no sales status, and the accreditation\'s last update', /Documents submitted<\/span><span class="cb-sub">Last update 1 Oct 2026/.test(T));
-  ok('  flags: a possible duplicate, a stale client, an overdue next step', /Possible duplicate/.test(T) && /20 days ago/.test(T) && /cb-sub warn">20 Oct 2026/.test(T));
+  ok('  on process: the step beside the badge, and no sales status', /<span class="cb-badge mid">On process<\/span> Documents submitted <span>1 PR · 1 quotation<\/span><\/span>/.test(T));
+  ok('  flags on a fourth line: a possible duplicate, a stale client, an overdue next step', /<span class="cb-flag">Possible duplicate<\/span>/.test(T) && /<span class="cb-flag">Not updated in 20 days<\/span>/.test(T) && /<span class="cb-flag">Next step overdue \(20 Oct 2026\)<\/span>/.test(T));
   ok('the chips count, and All is on', /data-chip="all" aria-pressed="true">All clients <span class="n">3<\/span>/.test(p.els.cbChips.innerHTML) && /Needs an update <span class="n">1<\/span>/.test(p.els.cbChips.innerHTML) && /Archived <span class="n">1<\/span>/.test(p.els.cbChips.innerHTML));
-  eq('the foot says how many are shown', p.els.cbFoot.textContent, '3 of 3 shown.');
+  eq('the list says how many clients it holds', p.els.cbFoot.textContent, '3 clients');
   ok('the filters are drawn once, with the owners from the roster (sales only) and the book', /id="cbQ"/.test(p.els.cbFilters.innerHTML) && /Gerald Lucena/.test(p.els.cbOwner.innerHTML) && /Kim Reyes/.test(p.els.cbOwner.innerHTML) && !/Neil Estur/.test(p.els.cbOwner.innerHTML));
   p.run('cbChip("a:On process")');
-  ok('a chip filters the list', (p.els.cbTable.innerHTML.match(/data-open="/g) || []).length === 1 && /Zeta Mining/.test(p.els.cbTable.innerHTML) && /data-chip="a:On process" aria-pressed="true"/.test(p.els.cbChips.innerHTML));
+  ok('a chip filters the list', (p.els.cbTable.innerHTML.match(/data-open="/g) || []).length === 1 && /Zeta Mining/.test(p.els.cbTable.innerHTML) && /data-chip="a:On process" aria-pressed="true"/.test(p.els.cbChips.innerHTML) && p.els.cbFoot.textContent === '1 of 3 clients');
   p.run('cbChip("archived")');
-  ok('  Archived shows only the archived', /Gone Co/.test(p.els.cbTable.innerHTML) && (p.els.cbTable.innerHTML.match(/data-open="/g) || []).length === 1 && /class="archived"/.test(p.els.cbTable.innerHTML));
+  ok('  Archived shows only the archived', /Gone Co/.test(p.els.cbTable.innerHTML) && (p.els.cbTable.innerHTML.match(/data-open="/g) || []).length === 1 && /class="cb-open archived"/.test(p.els.cbTable.innerHTML) && p.els.cbFoot.textContent === '1 client, archived');
   p.run('cbChip("all")');
 
   p.run('cbDetail("CB-0001", null)');
   const d1 = p.run('__shown');
-  ok('the detail: accreditation, sales status, the portal\'s records, the daily report, contacts, timeline, archive', ['<h4>Accreditation</h4>', '<h4>Sales status</h4>', '<h4>From the portal', '<h4>From the Sales Daily Report</h4>', '<h4>Contacts and details</h4>', '<h4>Timeline</h4>', 'Archive this client'].every(s => d1.includes(s)));
+  ok('the detail: four tabs — the overview (accreditation, sales status, next step, records, main contact, the daily report), the records, contacts and details, the timeline with archive',
+     ['role="tablist"', 'data-tab="overview"', 'data-tab="records"', 'data-tab="contacts"', 'data-tab="timeline"', '<span class="cb-fk">Accreditation</span>', '<span class="cb-fk">Sales status</span>', '<span class="cb-fk">Next step</span>',
+      '<span class="cb-fk">Portal records</span>', '<span class="cb-fk">Main contact</span>', 'id="cbRecs"', '<h4>From the Sales Daily Report</h4>', '<h4>Contacts and details</h4>', '<h4>Timeline</h4>', 'Archive this client'].every(s => d1.includes(s)));
+  ok('  only the Overview shows; the other tabs wait, and every form waits behind its own button',
+     /id="cbPanel-overview" aria-labelledby="cbTab-overview">/.test(d1) && ['records', 'contacts', 'timeline'].every(t => new RegExp('id="cbPanel-' + t + '" aria-labelledby="cbTab-' + t + '" hidden>').test(d1)) &&
+     /data-kind="accreditation" id="cbAccForm" hidden>/.test(d1) && /data-kind="status" id="cbStatusForm" hidden>/.test(d1) && /<form class="cb-form" id="cbEdit" autocomplete="off" hidden>/.test(d1) &&
+     /data-reveal="cbAccForm" aria-expanded="false" aria-controls="cbAccForm">Update</.test(d1) && /data-reveal="cbEdit" aria-expanded="false" aria-controls="cbEdit">Edit details and contacts</.test(d1));
+  ok('  the tabs are a tab list: one selected and in the tab order, each naming its panel, with counts',
+     /id="cbTab-overview" aria-controls="cbPanel-overview" aria-selected="true" tabindex="0"/.test(d1) && /id="cbTab-timeline" aria-controls="cbPanel-timeline" aria-selected="false" tabindex="-1"/.test(d1) &&
+     /data-tab="records">Records <span class="n">3<\/span>/.test(d1) && /data-tab="contacts">Contacts <span class="n">2<\/span>/.test(d1));
+  ok('  the people read at a glance, their emails and phones ready to tap', /<a href="mailto:ana@philcement\.ph">ana@philcement\.ph<\/a>/.test(d1) && /<a href="tel:09171234567">0917 123 4567<\/a>/.test(d1) &&
+     /<span class="cb-pname">Ana Cruz <span class="cb-badge mid">Main<\/span><\/span>/.test(d1) && /data-goto="contacts">All 2</.test(d1) && /data-goto="records">See them</.test(d1));
+  p.run('CB.tab = "contacts"; cbDetail("CB-0002", null)');
+  ok('  the tab you are on is kept when you open another client', /id="cbPanel-contacts" aria-labelledby="cbTab-contacts">/.test(p.run('__shown')) && /id="cbPanel-overview" aria-labelledby="cbTab-overview" hidden>/.test(p.run('__shown')));
+  p.run('CB.tab = "overview"');
   ok('  the records say, with Use it', /The records say: <b>Following up<\/b> — Quotation Q-1 sent, day-7 follow-up due today \(14 Oct 2026\)\./.test(d1) && /data-usesay/.test(d1));
   ok('  the records link to their pages, with the follow-up marked', /<a href="flow-quotations\.html\?review=Q-1">Q-1<\/a>/.test(d1) && /<a href="flow-pricing-request\.html\?pr=PR-1">PR-1<\/a>/.test(d1) && /day-7 follow-up due today/.test(d1) && /<b>SO-1<\/b>/.test(d1));
   ok('  the status can be linked to one of the client\'s own records', /<option value="Q-1">Quotation Q-1 — Sent<\/option>/.test(d1) && /<option value="PR-1" selected>PR PR-1 — Quoted<\/option>/.test(d1));
@@ -236,7 +249,7 @@ async function boot(o) {
   sec('5b · A354: Major or Minor, the sector, the site; accreditation and status apart');
   const pt = await boot();
   const PT = pt.els.cbTable.innerHTML;
-  ok('every row shows its label; a client without one says so', /tier-major">Major</.test(PT) && /tier-minor">Minor</.test(PT) && /tier-none">No label</.test(PT));
+  ok('every row shows its label; a client without one says so (quietly)', /<span class="cb-r2">Major · /.test(PT) && /<span class="cb-r2">Minor · /.test(PT) && /<span class="cb-nolabel">No label<\/span>/.test(PT));
   ok('Major and Minor are chips with their counts', /data-chip="t:Major" aria-pressed="false">Major <span class="n">1<\/span>/.test(pt.els.cbChips.innerHTML) &&
      /data-chip="t:Minor" aria-pressed="false">Minor <span class="n">1<\/span>/.test(pt.els.cbChips.innerHTML));
   pt.run('cbChip("t:Major")');
@@ -249,7 +262,7 @@ async function boot(o) {
   pt.run('cbDetail("CB-0001", null)');
   const td = pt.run('__shown');
   ok('the detail shows the label, and the details form can change it', /<p class="cb-sub"><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span>/.test(td) && /Site: Brgy\. Bigte/.test(td) && /name="tier" value="Major" checked>/.test(td) && !/value="Major" checked required/.test(td));
-  ok('every row shows its sector too ("No sector" when missing), and a typed industry as typed', /cb-badge sector">Cement</.test(PT) && /cb-badge sector">Geothermal drilling</.test(PT) && /tier-none">No sector</.test(PT));
+  ok('every row shows its sector too ("No sector" when missing), and a typed industry as typed', /Major · Cement · /.test(PT) && /Minor · Geothermal drilling · /.test(PT) && /<span class="cb-nolabel">No sector<\/span>/.test(PT));
   eq('the Sector filter: a listed one, and Others for a typed industry', [J('cbFilter(CL, LOG, IX, { sector: "Cement" }).map(function (c) { return c.clientNo; })'), J('cbFilter(CL, LOG, IX, { sector: "Others" }).map(function (c) { return c.clientNo; })')], [['CB-0001'], ['CB-0002']]);
   ok('  the search finds a site address', J('cbFilter(CL, LOG, IX, { q: "norzagaray" }).map(function (c) { return c.clientNo; })').join() === 'CB-0001');
   ok('adding a client asks the industry (required) and the site address', /<select class="cb-in" name="sector" required><option value="">Choose…<\/option><option>Oil and gas<\/option>/.test(ta) && /<option>Others<\/option>/.test(ta) &&
@@ -349,7 +362,7 @@ async function boot(o) {
     ok('  a connected record says so and offers Take off', /PR-1<\/a> <span class="cb-badge ok">Linked<\/span>/.test(dl) && /data-unlink="pr\|PR-1">Take off</.test(dl) && !/data-linkall/.test(dl));
     const old = await boot({ v: 182 });
     old.run('cbDetail("CB-0001", null)');
-    ok('  before 183: read only, no buttons', /From the portal <span class="cb-sub">read only<\/span>/.test(old.run('__shown')) && !/data-link|data-find/.test(old.run('__shown')));
+    ok('  before 183: read only, no buttons', /<p class="cb-sub cb-ro">Read only\.<\/p>/.test(old.run('__shown')) && !/data-link|data-find/.test(old.run('__shown')));
     const kim = await boot({ v: 183, session: { username: 'kim', name: K, role: 'sales' } });
     kim.run('cbDetail("CB-0002", null)');
     const dk = kim.run('__shown');
@@ -372,6 +385,29 @@ async function boot(o) {
     ok('  a "No label" chip appears while any client has none', /data-chip="t:none" aria-pressed="false">No label <span class="n">2<\/span>/.test(p5.els.cbChips.innerHTML), p5.els.cbChips.innerHTML.slice(0, 400));
     const p6 = await boot({ v: 183 });
     ok('  and goes once every client has one', /data-chip="t:none"/.test(p6.els.cbChips.innerHTML) === (J('cbSummary(' + JSON.stringify(BOOK.clients) + ', [], "2026-10-21").noLabel') > 0));
+  }
+
+  sec('5f · A362: the page fits the window — a list beside the client, the client in tabs');
+  {
+    const H = read('director-client-book.html'), CSS = read('css/client-book.css'), JS = read('js/client-book.js');
+    ok('the page: a header, the one-line toolbar, the chips, then the list and the client side by side (no table)',
+       /<header class="cb-head">[\s\S]*<h1 id="cbH1">Client Book<\/h1>[\s\S]*id="cbFilters" role="search"[\s\S]*id="cbChips"[\s\S]*<div class="cb-split" id="cbSplit">\s*<section class="cb-listcol" aria-label="Clients">\s*<p class="cb-count" id="cbFoot" aria-live="polite"><\/p>\s*<div class="cb-list" id="cbTable" role="list"><\/div>\s*<\/section>\s*<section class="cb-pane" id="cbPane"/.test(H) && !/<table/.test(H));
+    ok('  the toolbar names its fields for screen readers without printing them', /<span class="cb-sr">Search<\/span>/.test(JS) && /<span class="cb-sr">Sector<\/span>/.test(JS) && /'Sort: last update'/.test(JS));
+    ok('  side by side from 1180px, each side scrolling on its own, the height set to fit the window',
+       /@media \(min-width: 1180px\) \{\s*\.cb-split \{ display: grid; grid-template-columns: minmax\(320px, 380px\) minmax\(0, 1fr\); gap: 16px; height: var\(--cb-h/.test(CSS) && /\.cb-listcol, \.cb-pane \{ display: block; min-height: 0; overflow-y: auto; overscroll-behavior: contain;/.test(CSS)
+       && /const CB_SPLIT_MQ = '\(min-width: 1180px\)';/.test(JS) && /sp\.style\.setProperty\('--cb-h'/.test(JS));
+    ok('  narrower, the client opens as a sheet over the list', /\.cb-pane \{ display: none; \}/.test(CSS) && /if \(o && o\.pane && cbSplit\(\)\)/.test(JS));
+    ok('  the client\'s header stays put, translucent over what scrolls under it; solid when transparency is reduced',
+       /\.cb-dhead \{ position: sticky; top: 0;[\s\S]{0,260}backdrop-filter: blur\(20px\) saturate\(180%\);/.test(CSS) && /@media \(prefers-reduced-transparency: reduce\) \{ \.cb-dhead, \.cb-count \{ background: var\(--hx-card\); -webkit-backdrop-filter: none; backdrop-filter: none; \} \}/.test(CSS));
+    ok('  a short settle when another client opens; a fade under reduced motion; nothing with Motion off',
+       /\.cb-sheet\.cb-enter \{ animation: cb-in \.24s/.test(CSS) && /@media \(prefers-reduced-motion: reduce\) \{ \.cb-sheet\.cb-enter \{ animation: cb-fade/.test(CSS) && /html\[data-motion="off"\] \.cb-sheet\.cb-enter \{ animation: none; \}/.test(CSS));
+    ok('  each showing is a fresh element, so listeners never pile up', /pane\.innerHTML = '<div class="cb-sheet cb-detail'/.test(JS) && /return pane\.firstChild;/.test(JS) && /return box\.firstChild;/.test(JS));
+    ok('  the tabs answer the arrow keys, Home and End; the list answers up and down', /e\.key === 'ArrowRight' \? 1 : e\.key === 'ArrowLeft' \? -1 : 0/.test(JS) && /e\.key === 'Home' \? 0 : e\.key === 'End'/.test(JS) && /function cbListKeys\(e\)/.test(JS));
+    const sp = await boot();
+    eq('without a wide window the client is a sheet; with one, beside the list', [sp.run('cbSplit()'), sp.run('matchMedia = function (q) { return { matches: /min-width: 1180px/.test(q) }; }; cbSplit()')], [false, true]);
+    eq('a day this year reads short; another year in full; a town is the last two parts of the address',
+       [sp.run('cbShortDay("2026-10-05")'), sp.run('cbShortDay("2025-12-30")'), sp.run('cbPlace("Brgy. Bigte, Norzagaray, Bulacan")'), sp.run('cbPlace("")')], ['5 Oct', '30 Dec 2025', 'Norzagaray, Bulacan', '']);
+    ok('a chip with nothing in it is left out (All stays)', !/data-chip="f:expiring"/.test(sp.els.cbChips.innerHTML) || /Accreditation expiring <span class="n">[1-9]/.test(sp.els.cbChips.innerHTML));
   }
 
   sec('6 · the card, who sees it, the site rules');
