@@ -284,11 +284,13 @@ function _srFuHtml(x) {
             : '<button type="button" class="btn-sm primary" data-logcall="' + _srE(x.ref) + '">Log call</button>') + '</li>';
 }
 
-/* the call form: one line, right after the call */
+/* the call form: one line, right after the call. A356 — the company and the person can be picked from the Client Book. */
 function _srCallForm() {
   return '<form class="sr-form" id="srCallForm" autocomplete="off">' +
-    '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" required></label>' +
-      '<label>Person and position<input type="text" class="sr-in" name="person" placeholder="R. Cruz, maintenance planner"></label></div>' +
+    '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" list="srBookCos" required placeholder="Type, or pick from the Client Book"></label>' +
+      '<label>Person and position<input type="text" class="sr-in" name="person" list="srBookPeople" placeholder="R. Cruz, maintenance planner"></label></div>' +
+    '<datalist id="srBookCos">' + _srBookCosHtml() + '</datalist><datalist id="srBookPeople"></datalist>' +
+    '<p class="sr-help sr-callhint" id="srCallHint" aria-live="polite"></p>' +
     '<fieldset class="sr-results"><legend>Result</legend>' +
       SR_CALL_RESULTS.map(r => '<label class="sr-pill' + (r === 'Booked' ? ' goal' : '') + '"><input type="radio" name="result" value="' + r + '"' + (r === 'Reached' ? ' checked' : '') + '>' +
         '<span>' + (r === 'Call back' ? 'Call back on…' : r) + '</span></label>').join('') + '</fieldset>' +
@@ -297,6 +299,37 @@ function _srCallForm() {
     '<label>What happened (one line)<input type="text" class="sr-in" name="note" maxlength="200" placeholder="Decision on 3 Nov"></label>' +
     '<div class="sr-formfoot"><span class="sr-help">Log within 15 minutes of the call. The time is set when you save.</span>' +
       '<button type="submit" class="btn-sm primary">Log call</button></div></form>';
+}
+/** A356 — the Client Book's companies to pick from, the person's own first; each shows its labels. */
+function _srBookCosHtml() {
+  if (!SR_UI.ix || !SR_UI.ix.book) return '';
+  return srBookClients(SR_UI.ix, SR_UI.me).map(c => '<option value="' + _srE(c.company) + '">' +
+    _srE([c.tier, c.sector, c.accreditation, c.status, c.owner && !_srSame(c.owner, SR_UI.me.name) ? c.owner + '\'s client' : ''].filter(Boolean).join(' · ')) + '</option>').join('');
+}
+/** What the Client Book says about the company and person typed: the client's labels, and the contact's numbers. */
+function _srCallHintHtml(r, company) {
+  if (!r.client) return _srS(company).length >= 3 && SR_UI.ix.book.clients.length ? 'Not in the Client Book.' : '';
+  const c = r.client, p = r.contact;
+  return '<span class="sr-chip mine">Client Book</span> ' + _srE([c.tier, c.sector, c.accreditation, c.status].filter(Boolean).join(' · ')) +
+    (r.people.length && !p ? ' — ' + r.people.length + ' contact' + (r.people.length === 1 ? '' : 's') + ' to pick from' : '') +
+    (p ? '<span class="sr-sub">' + _srE(srContactLabel(p)) + ': ' + _srE((p.phones || []).concat(p.emails || []).join(' · ') || 'no number on file') + '</span>' : '');
+}
+/** Typing or picking the company or the person: fill the person list, link the call to the client, show what is on file. */
+function _srCallLookup(f, changed) {
+  if (!f || !SR_UI.ix) return;
+  const r = srCallLookup(SR_UI.ix, SR_UI.me, f.elements.company.value, f.elements.person.value);
+  if (changed === 'company') {
+    const dl = _srId('srBookPeople');
+    if (dl) dl.innerHTML = r.people.map(p => '<option value="' + _srE(srContactLabel(p) || (p.emails || [])[0] || (p.phones || [])[0]) + '">' +
+      _srE((p.primary ? 'Main contact · ' : '') + ((p.phones || [])[0] || (p.emails || [])[0] || '')) + '</option>').join('');
+    const sel = f.elements.link, cur = sel ? sel.value : '';
+    if (r.link && sel && (!cur || cur === 'none|' || f.dataset.autolink)) {
+      const v = 'client|' + r.link.linkId;
+      if (Array.prototype.some.call(sel.options, o => o.value === v)) { sel.value = v; f.dataset.autolink = '1'; }
+    } else if (!r.link && sel && f.dataset.autolink) { sel.value = 'none|'; delete f.dataset.autolink; }
+  }
+  const hint = _srId('srCallHint');
+  if (hint) hint.innerHTML = _srCallHintHtml(r, f.elements.company.value);
 }
 function _srLinkOptionsHtml(selected, selectedLabel) {
   const o = srLinkOptions(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.sent, SR_UI.received);
@@ -313,6 +346,8 @@ function _srLinkOptionsHtml(selected, selectedLabel) {
     (o.email.length ? '<optgroup label="Today\'s emails">' + o.email.map(x => opt('email', x)).join('') + '</optgroup>' : '');
 }
 function _srRefreshLinkSelect() {
+  const cos = _srId('srBookCos');
+  if (cos) cos.innerHTML = _srBookCosHtml();
   const sel = _srId('srCallLink');
   if (!sel || document.activeElement === sel) return;
   const keep = sel.value;
@@ -493,9 +528,11 @@ function _srWire() {
   body.addEventListener('change', ev => {
     const t = ev.target;
     if (t && t.id === 'srBlocker') _srOneLine(t);
+    if (t && t.id === 'srCallLink' && t.form) delete t.form.dataset.autolink;   // A356 — a link chosen by hand stays
   });
   body.addEventListener('input', ev => {           // the one-line answers live in the report as they are typed; saved on change
     const t = ev.target;
+    if (t && t.form && t.form.id === 'srCallForm' && (t.name === 'company' || t.name === 'person')) _srCallLookup(t.form, t.name);   // A356
     if (t && t.id === 'srBlocker') { SR_UI.state.pm.blocker = t.value.trim(); t.removeAttribute('aria-invalid'); }
   });
 }
@@ -538,7 +575,9 @@ function _srPrefillCall(qno) {
   if (!f || !q) return;
   f.elements.company.value = q.customer || '';
   _srRefreshLinkSelect();
+  _srCallLookup(f, 'company');
   f.elements.link.value = 'quotation|' + qno;
+  delete f.dataset.autolink;
   f.dataset.followup = qno;
   if (f.scrollIntoView) f.scrollIntoView({ block: 'nearest' });
   if (f.elements.person.focus) f.elements.person.focus();
@@ -548,11 +587,15 @@ function _srLogCall(f) {
   if (!company) { f.elements.company.focus(); return; }
   const result = (Array.prototype.find.call(f.elements.result, r => r.checked) || {}).value || 'Reached';
   const link = _srLinkLabel(f.elements.link.value);
-  const line = srNewLine(Object.assign({ type: 'Call', company, person: f.elements.person.value.trim(), note: f.elements.note.value.trim(),
+  const book = srCallLookup(SR_UI.ix, SR_UI.me, company, '');   // A356 — a Client Book company is saved as the book spells it
+  const line = srNewLine(Object.assign({ type: 'Call', company: book.client ? book.client.company : company, person: f.elements.person.value.trim(), note: f.elements.note.value.trim(),
                                          result, nextDate: f.elements.nextDate.value }, link), SR_UI.me.name, _srNowIso());
   SR_UI.state.lines.push(line);
   f.reset();
   delete f.dataset.followup;
+  delete f.dataset.autolink;
+  if (_srId('srBookPeople')) _srId('srBookPeople').innerHTML = '';
+  if (_srId('srCallHint')) _srId('srCallHint').innerHTML = '';
   _srRefresh();
   _srSave();
 }
@@ -628,7 +671,7 @@ function _srLineDialog(type, editId, back) {
       '<label>What happened (one line)<input type="text" class="sr-in" name="note" value="' + _srE(v.note) + '"></label>' +
       '<p class="sr-help">In the trial this line does not change the quotation. When it goes live, Lost closes the quotation and Won waits for its sales order.</p>';
   } else if (t === 'Performance call') {
-    fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" required value="' + _srE(v.company) + '"></label>' +
+    fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" list="srBookCos" required value="' + _srE(v.company) + '"></label>' +
       '<label>Person and position<input type="text" class="sr-in" name="person" value="' + _srE(v.person) + '"></label></div>' +
       pills('result', ['OK', 'Problem'], v.result) +
       '<div class="sr-grid2"><label>DR no.<input type="text" class="sr-in" name="dr" value="' + _srE(v.linkType === 'dr' ? v.linkId : '') + '" placeholder="DR-0207"></label>' +
@@ -636,14 +679,14 @@ function _srLineDialog(type, editId, back) {
       '<label>What happened (one line)<input type="text" class="sr-in" name="note" value="' + _srE(v.note) + '" placeholder="Pump working, next shutdown in Feb"></label>' +
       '<p class="sr-help">A performance call is made 7 days after a delivery.</p>';
   } else if (t === 'Sales order') {
-    fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" required value="' + _srE(v.company) + '"></label>' +
+    fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" list="srBookCos" required value="' + _srE(v.company) + '"></label>' +
       '<label>Client PO no.<input type="text" class="sr-in" name="result" required value="' + _srE(v.result) + '" placeholder="4500-0000"></label></div>' +
       '<div class="sr-grid2"><label>Amount (₱)<input type="text" class="sr-in" inputmode="decimal" name="reason" value="' + _srE(v.reason) + '" placeholder="186400"></label>' +
       '<label>Client PO email<select class="sr-in" name="link"><option value="none|">No email linked</option>' +
         own.email.map(x => '<option value="client_po|' + _srE(x.id) + '"' + (linkVal === 'client_po|' + x.id ? ' selected' : '') + '>' + _srE(x.label) + '</option>').join('') + '</select></label></div>' +
       '<label>What happened (one line)<input type="text" class="sr-in" name="note" value="' + _srE(v.note) + '"></label>';
   } else {
-    fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" required value="' + _srE(v.company) + '"></label>' +
+    fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" list="srBookCos" required value="' + _srE(v.company) + '"></label>' +
       '<label>Person and position<input type="text" class="sr-in" name="person" value="' + _srE(v.person) + '"></label></div>' +
       '<div class="sr-grid2"><label>Result<input type="text" class="sr-in" name="result" value="' + _srE(v.result) + '"></label>' +
       '<label>Next step date<input type="date" class="sr-in" name="nextDate" value="' + _srE(v.nextDate) + '"></label></div>' +

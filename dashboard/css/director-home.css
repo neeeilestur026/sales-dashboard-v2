@@ -323,6 +323,9 @@ body.dh .sr-pill.goal span { border-color:var(--dh-green); color:var(--dh-green)
 body.dh .sr-pill input:focus-visible + span { box-shadow:0 0 0 3px var(--dh-navy-soft); }
 body.dh .sr-formfoot { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; }
 body.dh .sr-help { margin:0; font:400 12px/1.45 var(--dh-text); color:var(--dh-ink-3); }
+body.dh .sr-callhint { color:var(--dh-ink-2); }   /* A356 — what the Client Book has on the company and person typed */
+body.dh .sr-callhint:empty { display:none; }
+body.dh .sr-callhint .sr-sub { color:var(--dh-ink); font-weight:600; }
 body.dh .sr-quick { display:flex; flex-wrap:wrap; gap:6px; }
 body.dh .sr-scroll { overflow-x:auto; }
 body.dh .sr-table { width:100%; border-collapse:collapse; font:400 12.5px/1.45 var(--dh-text); color:var(--dh-ink); }

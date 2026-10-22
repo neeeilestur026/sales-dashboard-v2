@@ -451,6 +451,28 @@ function srLinkOptions(ix, me, day, sent, received) {
   };
 }
 
+/* ── A356 · the call form picks the company and the person from the Client Book ──────────────── */
+
+function _srCo(name) { return _srS(name).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+/** The Client Book's live clients for the call form: the person's own first, then by company. */
+function srBookClients(ix, me) {
+  return ix.book.clients.filter(c => !c.archivedAt && _srS(c.company))
+    .sort((a, b) => (_srSame(b.owner, me.name) - _srSame(a.owner, me.name)) || _srS(a.company).localeCompare(_srS(b.company)));
+}
+/** A contact as the Person field shows it: "Ana Cruz, Purchasing officer". */
+function srContactLabel(p) { return [_srS(p && p.name), _srS(p && p.position)].filter(Boolean).join(', '); }
+/** What the call form knows from what is typed: the Client Book client (its name in any case or punctuation), its
+ *  contact people (the main contact first), the one typed (by name, or name and position), and the link the call takes. */
+function srCallLookup(ix, me, company, person) {
+  const key = _srCo(company), client = key ? srBookClients(ix, me).find(c => _srCo(c.company) === key) || null : null;
+  if (!client) return { client: null, people: [], contact: null, link: null };
+  const people = (client.contacts || []).filter(p => p && (_srS(p.name) || (p.emails || []).length || (p.phones || []).length))
+    .slice().sort((a, b) => (b.primary === true) - (a.primary === true));
+  const typed = _srS(person).toLowerCase();
+  const contact = typed ? people.find(p => srContactLabel(p).toLowerCase() === typed || _srS(p.name).toLowerCase() === typed) || null : null;
+  return { client, people, contact, link: { linkType: 'client', linkId: _srS(client.clientNo) } };
+}
+
 /* ── the week ──────────────────────────────────────────────────────────────────────────────── */
 
 /** Mon–Sun. reports = { 'yyyy-mm-dd': {report, submittedAt} }, emailsByDay = { 'yyyy-mm-dd': [..] | null }. */
@@ -485,6 +507,6 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
                      srPlanned, srDayType, srOpenQuotes, srFollowUps, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
-                     srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
+                     srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays };
 }
