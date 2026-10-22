@@ -70,6 +70,16 @@ class _TTLCache:
 _session_cache = _TTLCache(maxsize=2000, ttl=_SESSION_CACHE_TTL)
 _roster_cache: dict = {}           # { users: [...], _ts }
 
+# A357 — single flight. After a restart (every deploy) the caches are empty, and a page like the director's dashboard
+# fires a dozen secured calls at once: each validated the same token with Code.gs and each loaded the roster, so a
+# dozen identical Apps Script calls queued behind each other and timed out at 30 s ("Read timed out", 22 Oct). Now the
+# first request for a token asks Code.gs and the others wait for its answer; one roster refresh runs at a time, and
+# while it runs everyone else is served the copy already held.
+_VALIDATE_WAIT = 125               # seconds a waiting request gives the one asking Code.gs (two tries, redirect included)
+_inflight_lock = threading.Lock()
+_inflight: dict = {}               # token -> {"event": threading.Event(), "result": dict | None}
+_roster_lock = threading.Lock()
+
 
 def gs_post(payload: dict, timeout: int = 30) -> dict:
     """POST to the production Code.gs deployment; the transport lives in _upstream."""
@@ -81,14 +91,35 @@ def gs_post(payload: dict, timeout: int = 30) -> dict:
 def validate_session(token: str) -> Optional[dict]:
     """Return { username, role } for a valid token, else None.
 
-    Retries once on a TRANSPORT failure so a burst of concurrent calls on a cold cache doesn't
-    spuriously 401. An explicitly invalid token (Code.gs answered and said no) is never retried —
-    the distinguishing signal is whether the reply carries a 'valid' key at all."""
+    A357: concurrent calls for the same token share ONE Code.gs check (see _inflight above)."""
     if not token:
         return None
     cached = _session_cache.get(token)
     if cached:
         return dict(cached)
+    with _inflight_lock:
+        slot = _inflight.get(token)
+        leader = slot is None
+        if leader:
+            slot = {"event": threading.Event(), "result": None}
+            _inflight[token] = slot
+    if not leader:
+        slot["event"].wait(_VALIDATE_WAIT)
+        res = slot["result"]
+        return dict(res) if res else None
+    try:
+        slot["result"] = _validate_upstream(token)
+    finally:
+        with _inflight_lock:
+            _inflight.pop(token, None)
+        slot["event"].set()
+    return dict(slot["result"]) if slot["result"] else None
+
+
+def _validate_upstream(token: str) -> Optional[dict]:
+    """Ask Code.gs. Retries once on a TRANSPORT failure so a cold Apps Script doesn't spuriously 401. An
+    explicitly invalid token (Code.gs answered and said no) is never retried — the distinguishing signal is
+    whether the reply carries a 'valid' key at all."""
     result = gs_post({"action": "validateSession", "token": token})
     if not result.get("success") and "valid" not in result:
         time.sleep(0.5)
@@ -101,7 +132,7 @@ def validate_session(token: str) -> Optional[dict]:
         return None
     session = {"username": username, "role": role}
     _session_cache.set(token, session)
-    return dict(session)
+    return session
 
 
 def invalidate_session(token: str) -> None:
@@ -172,6 +203,22 @@ def get_roster() -> list:
     now = time.time()
     if _roster_cache.get("users") and (now - _roster_cache.get("_ts", 0)) < _ROSTER_CACHE_TTL:
         return _roster_cache["users"]
+    # A357 — one refresh at a time: with a copy in hand the others are served it at once; with none they wait.
+    if _roster_cache.get("users"):
+        if not _roster_lock.acquire(blocking=False):
+            return _roster_cache["users"]
+    else:
+        _roster_lock.acquire()
+    try:
+        now = time.time()
+        if _roster_cache.get("users") and (now - _roster_cache.get("_ts", 0)) < _ROSTER_CACHE_TTL:
+            return _roster_cache["users"]   # refreshed while this request waited
+        return _load_roster(now)
+    finally:
+        _roster_lock.release()
+
+
+def _load_roster(now: float) -> list:
     payload = {"action": "getUsersForBackend", "sharedSecret": INTERNAL_SHARED_SECRET}
     result = gs_post(payload, timeout=60)
 

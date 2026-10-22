@@ -4,9 +4,10 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    # A300: one process with four threads. The tools keep per-user state in process memory, and two
-    # sync workers split a user's requests between two processes that could not see each other.
-    startCommand: gunicorn app:app --workers 1 --threads 4 --worker-class gthread --timeout 120
+    # A300: one process (the tools keep per-user state in process memory, and two sync workers split a
+    # user's requests between two processes that could not see each other). A357: eight threads, not four —
+    # nearly every request waits on Apps Script or the mailbox, and the director's dashboard opens a dozen at once.
+    startCommand: gunicorn app:app --workers 1 --threads 8 --worker-class gthread --timeout 120
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
