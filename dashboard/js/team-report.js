@@ -4,7 +4,13 @@
  * Neil tries them, each report reads the day of the person he picks ("Whose records") and saves what he types under his
  * own name. The numbers are js/team-report-model.js (pure, tested); the tiles are drawn by the sales report's
  * _srTileHtml so the four reports look alike. Saving is the sales report's store with a kind (FlowAPI 179:
- * saveProofReport / submitProofReport / getProofReports); nothing here writes a real record. */
+ * saveProofReport / submitProofReport / getProofReports); nothing here writes a real record.
+ *
+ * A363 (Neil, 22 Oct 2026: the new daily report on each person's own dashboard; the old one is not touched):
+ *   · teamReport(id, role) — the director's dashboard: "Whose report" shows that person's OWN report, read only — their
+ *     records, the lines they typed, their sent mail and whether they submitted at 4:30. Nothing is typed here any more.
+ *   · teamReport(id, role, { own: true }) — the person's own page (my-daily-report.html): their day, saved under their
+ *     name (FlowAPI 184 lets each person save and read only their own report). */
 
 const TR_UI = {};
 let _trSharedP = null;
@@ -23,21 +29,22 @@ function _trDraftDrop(S, day) { try { localStorage.removeItem(_trDraftKey(S, day
 
 /** The reads the three sections share with each other and with the sales report: the roster, and the activity log and
  *  settings with the sales report's exact parameters, so fetchFlow answers them from one read. */
-function _trShared() {
+function _trShared(own) {
   if (_trSharedP) return _trSharedP;
   const today = flowToday();
   _trSharedP = Promise.all([
-    typeof apiGetUsers === 'function' ? apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []) : Promise.resolve([]),
+    own ? Promise.resolve([]) : typeof apiGetUsers === 'function' ? apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []) : Promise.resolve([]),
     fetchFlow('getActivityLog', { from: srAddDays(today, -42), to: today }).then(r => (r && r.success !== false ? r.data || [] : null)).catch(() => null),
     fetchFlow('getFlowSettings').then(r => (r && r.data) || {}).catch(() => ({}))
   ]).then(([roster, activity, settings]) => ({ today, roster, activity, settings }));
   return _trSharedP;
 }
 
-async function teamReport(id, roleKey) {
+async function teamReport(id, roleKey, opts) {
   const el = document.getElementById(id), cfg = TR_ROLES[roleKey];
   if (!el || !cfg) return;
-  const S = TR_UI[roleKey] = { role: roleKey, cfg, el, head: el.querySelector('[data-tr="head"]'), body: el.querySelector('[data-tr="body"]'),
+  const own = !!(opts && opts.own);
+  const S = TR_UI[roleKey] = { role: roleKey, cfg, el, head: el.querySelector('[data-tr="head"]'), body: el.querySelector('[data-tr="body"]'), own, ro: !own, myUsername: '',
     me: '', today: '', day: '', person: '', people: [], saved: {}, state: null, chain: Promise.resolve(), feed: 'all', backend: true, backendMsg: '',
     failed: [], queue: null, unsaved: false, nums: null, shared: null, raw: null, ix: null,
     mail: { state: 'none', emails: [] }, weekMail: {}, weekMailFor: '' };
@@ -45,11 +52,15 @@ async function teamReport(id, roleKey) {
   S.body.innerHTML = '<div class="dh-empty">Reading the day…</div>';
   const s = (typeof getSession === 'function' && getSession()) || {};
   S.me = String(s.name || s.username || '').trim();
-  S.shared = await _trShared();
+  S.myUsername = String(s.username || '');
+  S.shared = await _trShared(own);
   S.today = S.day = S.shared.today;
-  S.people = Array.from(new Set(S.shared.roster.filter(u => String(u.role || '').toLowerCase() === cfg.role).map(_trName).filter(Boolean))).sort();
-  const kept = _trPickGet(roleKey);
-  S.person = S.people.indexOf(kept) >= 0 ? kept : S.people[0] || '';
+  if (own) { S.people = S.me ? [S.me] : []; S.person = S.me; }   // A363 — the person's own day
+  else {
+    S.people = Array.from(new Set(S.shared.roster.filter(u => String(u.role || '').toLowerCase() === cfg.role).map(_trName).filter(Boolean))).sort();
+    const kept = _trPickGet(roleKey);
+    S.person = S.people.indexOf(kept) >= 0 ? kept : S.people[0] || '';
+  }
   await _trLoad(S);
   _trWire(S);
 }
@@ -82,9 +93,14 @@ async function _trLoad(S) {
             clients: got.clients, suppliers: got.suppliers, lgData: got.lgData };
   S.backend = got.saved.ok;
   S.backendMsg = got.saved.ok ? '' : got.saved.message;
-  S.saved = {};
-  (got.saved.data || []).forEach(r => { if (r && r.date && r.kind === S.role && _srSame(r.user, S.me)) S.saved[r.date] = r; });
+  S.savedRows = got.saved.data || [];
+  _trPickSaved(S);
   await _trOpenDay(S, S.day);
+}
+/** A363 — the saved days of the person being read (each person's own report). Again on every "Whose report" change. */
+function _trPickSaved(S) {
+  S.saved = {};
+  (S.savedRows || []).forEach(r => { if (r && r.date && r.kind === S.role && _srSame(r.user, S.person)) S.saved[r.date] = r; });
 }
 
 /** The reads that follow the person and the day: lead gen's counts and follow-ups, and the person's live queue. */
@@ -104,7 +120,7 @@ async function _trPersonLoad(S) {
 }
 
 /* A352 — the person's sent mail for the day (a director may read another login's sent mail; /api/email/today). */
-function _trUsername(S, who) { const u = S.shared.roster.find(x => _trName(x) === who); return (u && u.username) || ''; }
+function _trUsername(S, who) { if (S.own) return S.myUsername; const u = S.shared.roster.find(x => _trName(x) === who); return (u && u.username) || ''; }
 function _trMailRead(S, who, day) {
   const un = _trUsername(S, who);
   if (!un || typeof apiFetchEmailLogToday !== 'function') return Promise.resolve({ state: 'none', emails: [] });
@@ -137,7 +153,7 @@ async function _trQueueLoad(S) {
   const who = S.person, day = S.day;
   S.queue = null;
   if (!who || day !== S.today || typeof flowComputeActions !== 'function') { S.queue = []; return; }
-  const u = S.shared.roster.find(x => _trName(x) === who) || {};
+  const u = S.own ? { username: S.myUsername } : S.shared.roster.find(x => _trName(x) === who) || {};
   let items = [];
   try { items = await flowComputeActions({ role: S.cfg.role, name: who, username: u.username || '' }); } catch (e) { items = []; }
   if (S.person !== who || S.day !== day) return;
@@ -148,7 +164,7 @@ async function _trQueueLoad(S) {
 async function _trOpenDay(S, day) {
   S.day = day;
   if (S.weekMailFor !== S.person) { S.weekMail = {}; S.weekMailFor = S.person; }
-  const saved = S.saved[day], draft = _trDraftGet(S, day);
+  const saved = S.saved[day], draft = S.ro ? null : _trDraftGet(S, day);   // another person's day is never this computer's draft
   const savedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) || 0 : 0;
   S.state = trFill(draft && draft.t > savedAt ? draft.report : saved ? saved.report : null, S.role, S.person);
   S.unsaved = !!(draft && draft.t > savedAt);
@@ -160,6 +176,7 @@ async function _trOpenDay(S, day) {
 /* ── save ─────────────────────────────────────────────────────────────────────────────────────── */
 
 function _trSave(S, opts) {
+  if (S.ro) return S.chain;                                // A363 — another person's report is read, never written
   const day = S.day, o = opts || {};
   S.state.person = S.person;
   const report = JSON.parse(JSON.stringify(S.state));
@@ -170,7 +187,7 @@ function _trSave(S, opts) {
     let r;
     const params = { kind: S.role, date: day, reportJson: JSON.stringify(report), portalJson: JSON.stringify(_trLiveNumbers(S)) };
     if (!S.v179) {
-      if (day === S.day) _trStatus(S, 'Not saved — the FlowAPI update (179) is not pasted yet. Kept on this computer.', 'bad');
+      if (day === S.day) _trStatus(S, 'Not saved — the FlowAPI update (' + (S.own ? '184' : '179') + ') is not pasted yet. Kept on this computer.', 'bad');
       return { success: false, message: 'FlowAPI 179 is needed.' };
     }
     try {
@@ -188,7 +205,7 @@ function _trSave(S, opts) {
     const msg = r && r.message ? r.message : 'The save did not go through.';
     if (r && r.alreadySubmitted && day === S.day) { S.saved[day] = Object.assign({}, S.saved[day] || {}, { submittedAt: r.submittedAt }); _trRefresh(S); }
     if (day === S.day) _trStatus(S, /Unknown action|not a secured action|one of: sales/i.test(msg)
-      ? 'Not saved — the FlowAPI update (179) is not pasted yet. Kept on this computer.' : 'Not saved — ' + msg + ' Kept on this computer.', 'bad');
+      ? 'Not saved — the FlowAPI update (' + (S.own ? '184' : '179') + ') is not pasted yet. Kept on this computer.' : 'Not saved — ' + msg + ' Kept on this computer.', 'bad');
     return r;
   });
   return S.chain;
@@ -201,6 +218,7 @@ function _trStatus(S, text, tone) {
 }
 function _trSetState(S) {
   const saved = S.saved[S.day];
+  if (S.ro) { _trStatus(S, saved && saved.updatedAt ? 'Last saved ' + srClock(saved.updatedAt) : 'Nothing saved for this day', ''); return; }
   if (S.unsaved) _trStatus(S, 'Not saved yet — kept on this computer', 'warn');
   else if (saved && saved.updatedAt) _trStatus(S, 'Saved ' + srClock(saved.updatedAt), 'ok');
   else _trStatus(S, 'Nothing saved for this day yet', '');
@@ -221,9 +239,9 @@ function _trLiveNumbers(S) { const n = S.nums || _trNums(S); return trSnapshot(n
 function _trHeadHtml(S) {
   const opts = S.people.length ? S.people.map(p => '<option' + (p === S.person ? ' selected' : '') + '>' + _trE(p) + '</option>').join('')
     : '<option value="">No ' + _trE(S.cfg.noun.toLowerCase()) + ' login yet</option>';
-  return '<div class="sr-title"><h2>' + _trE(S.cfg.title) + '</h2><span class="sr-chip mine">Trial</span></div>' +
+  return '<div class="sr-title"><h2>' + (S.own ? 'My daily report' : _trE(S.cfg.title)) + '</h2>' + (S.own ? '<span class="sr-who">' + _trE(S.me) + '</span>' : '<span class="sr-chip">Read only</span>') + '</div>' +
     '<div class="dh-actions sr-tools">' +
-      '<label class="tr-pick"><span>Whose records</span><select class="sr-in" data-person aria-label="Whose records this report reads">' + opts + '</select></label>' +
+      (S.own ? '' : '<label class="tr-pick"><span>Whose report</span><select class="sr-in" data-person aria-label="Whose report to read">' + opts + '</select></label>') +
       '<div class="sr-daypick"><button type="button" class="sr-step" data-step="-1" aria-label="Previous day">‹</button>' +
         '<input type="date" class="sr-date" data-date value="' + S.day + '" min="' + srAddDays(S.today, -28) + '" max="' + S.today + '" aria-label="Report date">' +
         '<button type="button" class="sr-step" data-step="1" aria-label="Next day">›</button></div>' +
@@ -232,21 +250,22 @@ function _trHeadHtml(S) {
 }
 function _trBodyHtml(S) {
   const who = _trFirst(S.person), notes = [];
-  if (!S.backend) notes.push('<div class="dh-banner warn">Saving needs the FlowAPI update (version 179). Until it is pasted, what you type is kept on this computer only.' +
+  if (!S.backend) notes.push('<div class="dh-banner warn">' + (S.ro ? 'Each person\'s saved report needs the FlowAPI update (version 184) before it can be read here.' : 'Saving needs the FlowAPI update (version ' + (S.own ? '184' : '179') + '). Until it is pasted, what you type is kept on this computer only.') +
     (S.backendMsg && !/Unknown action|not a secured action|one of: sales/i.test(S.backendMsg) ? ' (' + _trE(S.backendMsg) + ')' : '') + '</div>');
   if (S.failed.length) notes.push('<div class="dh-banner warn">Could not read: ' + _trE(S.failed.join(', ')) + '. The numbers that need them may be short — reload the page.</div>');
   if (!S.person) notes.push('<div class="dh-banner warn">There is no ' + _trE(S.cfg.noun.toLowerCase()) + ' login in the roster, so there are no records to count yet.</div>');
   return notes.join('') +
-    '<p class="sr-trial">Trial — only you can see this report. It reads ' + _trE(S.person || 'nobody') + '\'s records and changes none of them; the lines you type are saved under your name.</p>' +
+    '<p class="sr-trial">' + (S.own ? 'Your new daily report. Only you and the director see it, and your old daily report still works as before. Nothing here changes a real record.'
+      : 'Read only — ' + _trE(S.person || 'nobody') + '\'s own report: their records, the lines they typed, their sent mail and whether they submitted at 4:30.') + '</p>' +
     '<section class="sr-block"><h3>' + (S.day === S.today ? 'Today\'s' : _trE(srDayLong(S.day)) + ' —') + ' numbers</h3>' +
       '<p class="sr-rowlab ok">The portal fills these — ' + _trE(S.person || 'no one') + '\'s records</p><div class="sr-tiles" data-tiles="portal"></div>' +
       (S.cfg.weekly ? '<p class="sr-rowlab ok">This week so far</p><div class="sr-tiles" data-tiles="weekly"></div>' : '') +
       '<p class="sr-rowlab mine">From the typed lines</p><div class="sr-tiles" data-tiles="mine"></div></section>' +
     (S.day === S.today ? '<section class="sr-block"><h3>Waiting on ' + _trE(who) + ' now</h3><p class="dh-meta">' + _trE(who) + '\'s own home-page list, read live.</p><div data-queue></div></section>' : '') +
     (S.cfg.mail ? '<section class="sr-block"><h3>Emails sent — ' + _trE(who) + '\'s mailbox</h3><p class="dh-meta">' + _trE(S.cfg.mail.help) +
-      ' Press a button to correct one; your choice is kept with the report.</p><div data-mail></div></section>' : '') +
-    '<section class="sr-block"><div class="sr-bar"><h3>My log</h3><div class="sr-quick">' +
-      S.cfg.lines.map(x => '<button type="button" class="dh-btn" data-new="' + _trE(x.type) + '">+ ' + _trE(x.type) + '</button>').join('') + '</div></div>' +
+      (S.ro ? '' : ' Press a button to correct one; your choice is kept with the report.') + '</p><div data-mail></div></section>' : '') +
+    '<section class="sr-block"><div class="sr-bar"><h3>' + (S.ro ? _trE(who) + '\'s log' : 'My log') + '</h3>' + (S.ro ? '' : '<div class="sr-quick">' +
+      S.cfg.lines.map(x => '<button type="button" class="dh-btn" data-new="' + _trE(x.type) + '">+ ' + _trE(x.type) + '</button>').join('') + '</div>') + '</div>' +
       '<p class="sr-help">' + _trE(S.cfg.typedNote) + '</p>' +
       '<div class="sr-scroll"><table class="sr-table sr-log"><thead><tr><th scope="col">Time</th><th scope="col">Type</th><th scope="col">What happened</th>' +
         '<th scope="col">Result</th><th scope="col">Link</th><th scope="col"><span class="sr-sr">Change</span></th></tr></thead><tbody data-log></tbody></table></div></section>' +
@@ -318,7 +337,7 @@ function _trMailHtml(S, rows) {
   return '<ul class="sr-feed tr-mail">' + rows.map(r => '<li class="' + (r.counted ? 'on' : '') + '"><span class="tm">' + _trE(r.time || '—') + '</span>' +
     '<span class="x"><b>' + _trE(r.subject || '(no subject)') + '</b><span class="sr-sub">to ' + _trE(r.to) + (r.org ? ' — ' + _trE(r.org) : '') + (r.ref ? ' · ' + _trE(r.ref) : '') + '</span>' +
       '<span class="sr-sub">' + (r.counted ? '<span class="sr-chip ok">' + _trE(cfg.tag) + '</span> ' : '') + _trE(r.marked ? (r.counted ? 'counted by you' : 'not counted, by you') : r.why) + '</span></span>' +
-    (r.id ? '<button type="button" class="sr-mini' + (r.counted ? ' on' : '') + '" data-mailmark="' + _trE(r.id) + '">' + _trE(r.counted ? cfg.none : 'Count as ' + cfg.tag.toLowerCase()) + '</button>' : '<span></span>') + '</li>').join('') + '</ul>';
+    (r.id && !S.ro ? '<button type="button" class="sr-mini' + (r.counted ? ' on' : '') + '" data-mailmark="' + _trE(r.id) + '">' + _trE(r.counted ? cfg.none : 'Count as ' + cfg.tag.toLowerCase()) + '</button>' : '<span></span>') + '</li>').join('') + '</ul>';
 }
 
 /** A line's link: the record's own page when it has one. */
@@ -336,9 +355,9 @@ function _trLogRows(S) {
         (l.voidedAt ? '<span class="sr-sub">Voided ' + _trE(srClock(l.voidedAt)) + ': ' + _trE(l.voidReason) + '</span>' : '') +
         (l.editedAt && !l.voidedAt ? '<span class="sr-sub">Edited ' + _trE(srClock(l.editedAt)) + ': ' + _trE(l.editReason) + '</span>' : '') + '</td>' +
       '<td>' + _trE(l.result || '—') + (l.nextDate ? '<span class="sr-sub">next ' + _trE(l.nextDate) + '</span>' : '') + '</td>' +
-      '<td>' + link + '</td><td class="act">' + (l.voidedAt ? '' : '<button type="button" class="sr-mini" data-edit="' + l.id + '">Edit</button><button type="button" class="sr-mini" data-void="' + l.id + '">Void</button>') + '</td></tr>';
+      '<td>' + link + '</td><td class="act">' + (l.voidedAt || S.ro ? '' : '<button type="button" class="sr-mini" data-edit="' + l.id + '">Edit</button><button type="button" class="sr-mini" data-void="' + l.id + '">Void</button>') + '</td></tr>';
   });
-  return rows.join('') || '<tr><td colspan="6" class="dh-empty">No lines yet. Type each one as it happens; the time is set when you save.</td></tr>';
+  return rows.join('') || '<tr><td colspan="6" class="dh-empty">' + (S.ro ? 'No lines typed on this day.' : 'No lines yet. Type each one as it happens; the time is set when you save.') + '</td></tr>';
 }
 
 function _trRenderFeed(S) {
@@ -363,6 +382,7 @@ function _trPmHtml(S, n, saved) {
     '<dl class="sr-nums">' + nums.map(([l, k]) => '<div><dt>' + _trE(l) + '</dt><dd>' + _trE(val(k)) + '</dd></div>').join('') + '</dl>' +
     (sub ? '<p class="sr-help">These are the numbers as submitted' + (snap && snap.person ? ' (' + _trE(snap.person) + '\'s records)' : '') + '; editing a line now does not change them.' +
            (saved.report && saved.report.pm && saved.report.pm.blocker ? ' Blocker: ' + _trE(saved.report.pm.blocker) : '') + '</p>'
+         : S.ro ? '<p class="sr-help">Not submitted yet — these are the numbers right now.' + (S.state.pm && S.state.pm.blocker ? ' Blocker so far: ' + _trE(S.state.pm.blocker) : '') + '</p>'
          : '<label class="sr-line">Blocker or help needed (one line — or "no blocker")<input type="text" class="sr-in" data-blocker maxlength="200" value="' + _trE(S.state.pm.blocker) + '" placeholder="no blocker"></label>' +
            '<div class="sr-formfoot"><span class="sr-help">Submitting fixes every number on this report for the day.</span><button type="button" class="btn-sm primary" data-submitpm>Submit 4:30 report</button></div>');
 }
@@ -381,7 +401,7 @@ function _trRenderWeek(S) {
   if (S.cfg.mail && S.mail.state !== 'loading') _trWeekMail(S, w.days.filter(d => d <= S.today && S.weekMail[d] === undefined));
 }
 
-/* ── what the director does ───────────────────────────────────────────────────────────────────── */
+/* ── what the person does (A363: on the director's dashboard, only reading) ───────────────────── */
 
 function _trWire(S) {
   if (S.el.dataset.wired) return;
@@ -389,6 +409,7 @@ function _trWire(S) {
   S.el.addEventListener('click', ev => {
     const b = ev.target.closest ? ev.target.closest('button') : null;
     if (!b) return;
+    if (S.ro && !b.hasAttribute('data-step') && !b.hasAttribute('data-rec') && !b.hasAttribute('data-feed')) return;   // A363 — reading, not writing
     if (b.hasAttribute('data-step')) _trStep(S, Number(b.getAttribute('data-step')));
     else if (b.hasAttribute('data-rec')) _trRecordsOpen(S, b.getAttribute('data-rec'), b);
     else if (b.hasAttribute('data-new')) _trLineDialog(S, b.getAttribute('data-new'), null, b);
@@ -401,11 +422,11 @@ function _trWire(S) {
   S.el.addEventListener('change', ev => {
     const t = ev.target;
     if (!t) return;
-    if (t.hasAttribute('data-person')) { S.person = t.value; _trPickPut(S.role, S.person); _trOpenDay(S, S.day); }
+    if (t.hasAttribute('data-person')) { S.person = t.value; _trPickPut(S.role, S.person); _trPickSaved(S); _trOpenDay(S, S.day); }
     else if (t.hasAttribute('data-date')) {
       const d = t.value;
       if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= S.today && d >= srAddDays(S.today, -28)) _trOpenDay(S, d); else t.value = S.day;
-    } else if (t.hasAttribute('data-blocker')) { S.state.pm.blocker = t.value.trim(); _trSave(S); }
+    } else if (t.hasAttribute('data-blocker') && !S.ro) { S.state.pm.blocker = t.value.trim(); _trSave(S); }
   });
   S.el.addEventListener('input', ev => {
     const t = ev.target;

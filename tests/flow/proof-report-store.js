@@ -26,7 +26,7 @@ const PORTAL = JSON.stringify({ followDue: '3', openQuotes: '₱3.8M' });
 sec('1 · the version');
 {
   const c = load(GS, {});
-  ok('getVersion = 183', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 183);
+  ok('getVersion = 184', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 184);
 }
 
 sec('2 · the director saves and reads back');
@@ -49,23 +49,36 @@ sec('2 · the director saves and reads back');
   ok('nothing written to the ActivityLog', !(store.ActivityLog || []).length);
 }
 
-sec('3 · only the director while it is a trial');
+sec('3 · A363: each person their own report; the director reads them all');
 {
   const store = { FlowSettings: [] };
   const c = load(GS, store);
-  const asSales = { actorName: 'Gerald Lucena', actorRole: 'sales', actorUsername: 'gerald' };
+  const asSales = { actorName: 'Gerald Lucena', actorRole: 'sales', actorUsername: 'gerald' }, asKim = { actorName: 'Kim Reyes', actorRole: 'sales', actorUsername: 'kim' };
+  const asAcct = { actorName: 'Rojan Leo Francisco', actorRole: 'accounting', actorUsername: 'acct2' };
   const s = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, asSales));
-  ok('a sales login cannot save', !s.success && /trial/.test(s.message) && !(store.ProofReports || []).length, s);
+  ok('a rep saves their own sales report, under the name Flask stamps', s.success && s.user === 'Gerald Lucena' && s.kind === 'sales' && store.ProofReports.length === 1 && store.ProofReports[0]['User'] === 'Gerald Lucena', s);
+  const wrong = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', kind: 'accounting', reportJson: REPORT }, asSales));
+  ok('  but not another kind', !wrong.success && /Your daily report is the sales one/.test(wrong.message) && store.ProofReports.length === 1, wrong);
   call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, NEIL));
-  ['sales', 'management', 'admin', 'accounting', ''].forEach(role => {
-    const g = call(c, 'getProofReports', { actorName: 'X', actorRole: role });
-    ok('  nor can ' + (role || 'no role') + ' read it', !g.success && !g.data);
+  call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', kind: 'accounting', reportJson: REPORT }, asAcct));
+  const mine = call(c, 'getProofReports', asSales), peek = call(c, 'getProofReports', Object.assign({ user: 'Neil Estur' }, asSales));
+  ok('  and reads only their own — asking for someone else\'s changes nothing', mine.success && mine.data.length === 1 && mine.data[0].user === 'Gerald Lucena' && peek.data.length === 1 && peek.data[0].user === 'Gerald Lucena', [mine, peek]);
+  ok('  another rep reads none of it', call(c, 'getProofReports', asKim).data.length === 0);
+  const acct = call(c, 'getProofReports', Object.assign({ kind: 'accounting' }, asAcct)), acctSales = call(c, 'getProofReports', asAcct);
+  ok('accounting saves and reads its own accounting report, and cannot read the sales ones', acct.success && acct.data.length === 1 && acct.data[0].user === 'Rojan Leo Francisco' &&
+     !acctSales.success && /Your daily report is the accounting one/.test(acctSales.message), [acct, acctSales]);
+  const all = call(c, 'getProofReports', NEIL), one = call(c, 'getProofReports', Object.assign({ user: 'gerald lucena' }, NEIL));
+  ok('the director reads every report of a kind, and can narrow it to one person', all.data.length === 2 && one.data.length === 1 && one.data[0].user === 'Gerald Lucena', [all.data.length, one.data.length]);
+  ['management', 'hr', 'marketing', ''].forEach(role => {
+    const g = call(c, 'getProofReports', { actorName: 'X', actorRole: role }), w = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, { actorName: 'X', actorRole: role }));
+    ok('  ' + (role || 'no role') + ' has no report: no read, no save (no summary for management)', !g.success && !g.data && !w.success);
   });
+  ok('  nothing was written by them', store.ProofReports.length === 3);
   const direct = c._dispatch({ action: 'getProofReports', actorName: 'Neil Estur', actorRole: 'director' });
   ok('without the app\'s secret even the director\'s read is refused (secured)', !JSON.parse(direct.getContent()).success);
-  store.FlowSettings.push({ Key: 'proofReportRoles', Value: 'director, sales', 'Updated By': 'Neil', 'Updated At': '' });
-  const later = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, asSales));
-  ok('when Neil opens it to sales (FlowSettings proofReportRoles), a rep can save their own', later.success && store.ProofReports.some(r => r['User'] === 'Gerald Lucena'), later);
+  store.FlowSettings.push({ Key: 'proofReportRoles', Value: 'director, management', 'Updated By': 'Neil', 'Updated At': '' });
+  const narrowed = call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: REPORT }, asSales)), mg = call(c, 'getProofReports', { actorName: 'M', actorRole: 'management' });
+  ok('FlowSettings proofReportRoles can still narrow it (a rep refused again); naming management gives it no report', !narrowed.success && /trial/.test(narrowed.message) && !mg.success && /no daily report for your role/.test(mg.message), [narrowed, mg]);
 }
 
 sec('4 · what it refuses');
@@ -121,7 +134,8 @@ sec('6 · A348: the 4:30 report is submitted once, its numbers fixed');
   const g = call(c, 'getProofReports', NEIL);
   ok('the read returns the submitted time and the fixed numbers', g.success && g.data[0].submittedAt && g.data[0].snapshot && g.data[0].snapshot.callsLogged === 16, g.data[0]);
   const asSales = call(c, 'submitProofReport', Object.assign({ date: '2026-10-21', reportJson: v2(), snapshotJson: SNAP }, { actorName: 'Gerald Lucena', actorRole: 'sales' }));
-  ok('only the director while it is a trial', !asSales.success && /trial/.test(asSales.message));
+  ok('A363: a rep submits their own 4:30 report; the director\'s stays as it was', asSales.success && store.ProofReports.length === 2 && store.ProofReports[1]['User'] === 'Gerald Lucena' &&
+     store.ProofReports[0]['Snapshot JSON'] === SNAP && store.ProofReports[0]['User'] === 'Neil Estur', asSales);
 }
 
 sec('7 · A348: a day saved by the A347 form is kept, not lost');
@@ -166,7 +180,7 @@ sec('8 · A351: one row per person per day per kind; a blank Kind is the sales r
   ok('an unknown kind is refused, to save and to read', !bad.success && /one of: sales, accounting, leadgen, admin/.test(bad.message) && !badRead.success && store.ProofReports.length === 4, bad);
   const rep2 = call(c, 'saveProofReport', Object.assign({ date: '2026-10-22', kind: 'admin', reportJson: rep('admin', 'x') }, { actorName: 'Ana Admin', actorRole: 'admin' }));
   const read2 = call(c, 'getProofReports', Object.assign({ kind: 'admin' }, { actorName: 'Ana Admin', actorRole: 'admin' }));
-  ok('only the director while it is a trial, for every kind', !rep2.success && /daily reports are in a trial/.test(rep2.message) && !read2.success && store.ProofReports.length === 4, rep2);
+  ok('A363: an admin saves and reads only their own admin report', rep2.success && read2.success && read2.data.length === 1 && read2.data[0].user === 'Ana Admin' && store.ProofReports.length === 5, [rep2, read2]);
   ok('nothing lands in the ActivityLog', !(store.ActivityLog || []).length);
 }
 {

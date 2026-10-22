@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New daily report</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/director.css">
+  <link rel="stylesheet" href="css/daily-report.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="dh dh-myreport">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content dh-main">
+    <!-- A363 — the new daily report on each person's own page (Neil, 22 Oct 2026): the sales report for a rep, the
+         accounting, lead gen or admin report for those roles — the same reports the director tries on his dashboard,
+         here filled in by the person and saved under their name. The old daily report is not touched. One of the two
+         sections below is shown; js/my-daily-report.js decides which. -->
+    <div class="dh-col mdr-col">
+      <header class="mdr-head">
+        <div><h1>New daily report</h1><p>Your day as the portal counts it, and the lines you log. Your old daily report stays as it is.</p></div>
+        <a class="dh-btn" id="mdrOld" href="index.html" hidden>Old daily report</a>
+      </header>
+      <div id="mdrNotice"></div>
+      <section class="dh-glass dh-sr" id="proof" hidden>
+        <div class="dh-head sr-head" id="srHead"></div>
+        <div class="sr-body" id="srBody"><div class="dh-empty">Reading your day…</div></div>
+      </section>
+      <section class="dh-glass dh-sr dh-tr" id="myReport" hidden>
+        <div class="dh-head sr-head" data-tr="head"></div>
+        <div class="sr-body" data-tr="body"><div class="dh-empty">Reading your day…</div></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/itinerary-week.js"></script>
+  <script src="js/sales-report-model.js"></script>
+  <script src="js/sales-report.js"></script>
+  <script src="js/team-report-model.js"></script>
+  <script src="js/team-report.js"></script>
+  <script src="js/my-daily-report.js"></script>
+</body>
+</html>

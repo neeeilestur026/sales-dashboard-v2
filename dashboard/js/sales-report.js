@@ -6,9 +6,15 @@
  *
  * Numbers: js/sales-report-model.js (pure, tested). Saving: saveProofReport / submitProofReport / getProofReports
  * (FlowAPI 177), secured and director-only while it is a trial — nothing here touches the real call log, the client
- * visits or the quotations. Every change is saved as it is made; if a save fails it is kept on this computer. */
+ * visits or the quotations. Every change is saved as it is made; if a save fails it is kept on this computer.
+ *
+ * A363 (Neil, 22 Oct 2026: the new daily report on each person's own dashboard; the old one is not touched). Two places:
+ *   · salesReport(id) — the director's dashboard: his own trial day, or ("Whose report") a rep's own report, READ ONLY —
+ *     what they logged and whether they submitted, their records and sent mail; their received mail stays theirs.
+ *   · salesReport(id, { own: true }) — a rep's own page (my-daily-report.html): their day, saved under their name
+ *     (FlowAPI 184 lets each person save and read only their own report). */
 
-const SR_UI = { me: null, ix: null, day: '', saved: {}, failed: [], backend: true, backendMsg: '', state: null, unsaved: false,
+const SR_UI = { me: null, self: null, own: false, ro: false, people: [], ix: null, day: '', saved: {}, failed: [], backend: true, backendMsg: '', state: null, unsaved: false,
                 sent: null, sentState: '', received: null, receivedState: '', weekEmails: {}, weekOffset: 0, feed: 'all',
                 showVisitForm: false, chain: Promise.resolve(), timer: 0, back: null, nums: null };
 
@@ -25,14 +31,34 @@ function _srDraftDrop(day) { try { localStorage.removeItem(_srDraftKey(day)); } 
 
 /* ── load ─────────────────────────────────────────────────────────────────────────────────────── */
 
-async function salesReport(id) {
+async function salesReport(id, opts) {
   const el = _srId(id);
   if (!el) return;
   const s = (typeof getSession === 'function' && getSession()) || {};
   const name = String(s.name || s.username || '').trim();
-  SR_UI.me = { name, username: String(s.username || ''), first: name.split(/\s+/)[0] || 'You' };
+  SR_UI.self = { name, username: String(s.username || ''), first: name.split(/\s+/)[0] || 'You' };
+  SR_UI.own = !!(opts && opts.own);
+  SR_UI.me = SR_UI.self;
   SR_UI.day = SR_UI.day || flowToday();
+  if (!SR_UI.own && typeof apiGetUsers === 'function') {   // A363 — the reps whose own report the director can read
+    const users = await apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []);
+    SR_UI.people = users.filter(u => String(u.role || '').toLowerCase() === 'sales')
+      .map(u => ({ name: String(u.fullName || u.name || u.username || '').trim(), username: String(u.username || '') })).filter(u => u.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const kept = _srPickGet(), hit = SR_UI.people.find(u => u.name === kept);
+    if (hit) _srPick(hit.name, true);
+  }
   await _srLoad(false);
+}
+/* A363 — whose report the director is reading: his own trial day ('') or a rep's own report, read only. */
+function _srPickGet() { try { return localStorage.getItem('hx_sr_person') || ''; } catch (e) { return ''; } }
+function _srPickPut(v) { try { localStorage.setItem('hx_sr_person', v); } catch (e) {} }
+function _srPick(name, quiet) {
+  const u = SR_UI.people.find(x => x.name === name);
+  SR_UI.me = u ? { name: u.name, username: u.username, first: u.name.split(/\s+/)[0] || u.name } : SR_UI.self;
+  SR_UI.ro = !!u && !_srSame(u.name, SR_UI.self.name);
+  SR_UI.weekEmails = {};
+  if (!quiet) { _srPickPut(u ? u.name : ''); _srLoad(false); }
 }
 
 async function _srLoad(fresh) {
@@ -59,7 +85,7 @@ async function _srLoad(fresh) {
   SR_UI.saved = {};
   SR_UI.backend = mine.ok;
   SR_UI.backendMsg = mine.ok ? '' : mine.message;
-  (mine.data || []).forEach(r => { if (r && r.date && String(r.user || '').toLowerCase() === SR_UI.me.name.toLowerCase()) SR_UI.saved[r.date] = r; });
+  (mine.data || []).forEach(r => { if (r && r.date && String(r.user || '').toLowerCase() === SR_UI.me.name.toLowerCase()) SR_UI.saved[r.date] = r; });   // the person's own
   SR_UI.weekEmails = {};
   _srOpenDay(SR_UI.day);
 }
@@ -70,7 +96,7 @@ function _srOpenDay(day) {
   SR_UI.day = day;
   SR_UI.weekOffset = 0;
   SR_UI.showVisitForm = false;
-  const saved = SR_UI.saved[day], draft = _srDraftGet(day);
+  const saved = SR_UI.saved[day], draft = SR_UI.ro ? null : _srDraftGet(day);   // another person's day is never this computer's draft
   const savedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) || 0 : 0;
   SR_UI.state = srFill(draft && draft.t > savedAt ? draft.report : saved ? saved.report : null);
   SR_UI.unsaved = !!(draft && draft.t > savedAt);
@@ -84,7 +110,7 @@ function _srOpenDay(day) {
 async function _srMail(day) {
   let sent = null, sentState = 'error', received = null, receivedState = 'error';
   try {
-    const r = typeof apiFetchEmailLogToday === 'function' ? await apiFetchEmailLogToday(undefined, day) : null;
+    const r = typeof apiFetchEmailLogToday === 'function' ? await apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, day) : null;
     if (r && r.success !== false && !r.needsSetup) { sent = r.emails || []; sentState = 'ok'; }
     else if (r && r.needsSetup) sentState = 'setup';
   } catch (e) { sentState = 'error'; }
@@ -95,7 +121,8 @@ async function _srMail(day) {
   /* Received mail: the inbox feed (the person's own mailbox, newest first, up to 250 messages and 60 days back),
      narrowed to the day here. TODO: a date-windowed inbox read on the server, so a busy mailbox loses nothing. */
   const back = Math.round((Date.parse(SR_UI.ix.today) - Date.parse(day)) / 86400000) + 1;
-  if (back <= 60 && typeof apiFetchEmailFeed === 'function' && sentState !== 'setup') {
+  if (SR_UI.ro) receivedState = 'private';                 // A363 — a person's inbox is theirs; the director reads their sent mail only
+  else if (back <= 60 && typeof apiFetchEmailFeed === 'function' && sentState !== 'setup') {
     try {
       const r = await apiFetchEmailFeed('inbox', Math.max(1, back));
       if (r && r.success !== false && Array.isArray(r.emails || r.items || r.messages)) { received = r.emails || r.items || r.messages; receivedState = 'ok'; }
@@ -111,6 +138,7 @@ async function _srMail(day) {
 
 /** Save the day as it stands now. Saves run one after another, so two quick changes never cross. */
 function _srSave(opts) {
+  if (SR_UI.ro) return SR_UI.chain;                        // A363 — another person's report is read, never written
   const day = SR_UI.day, o = opts || {};
   const report = JSON.parse(JSON.stringify(SR_UI.state));
   _srDraftPut(day, report);
@@ -143,7 +171,7 @@ function _srSave(opts) {
       _srRefresh();
     }
     if (day === SR_UI.day) _srStatus(/Unknown action|not a secured action/i.test(msg)
-      ? 'Not saved — the FlowAPI update (177) is not pasted yet. Kept on this computer.' : 'Not saved — ' + msg + ' Kept on this computer.', 'bad');
+      ? 'Not saved — the FlowAPI update (' + (SR_UI.own ? '184' : '177') + ') is not pasted yet. Kept on this computer.' : 'Not saved — ' + msg + ' Kept on this computer.', 'bad');
     return r;
   });
   return SR_UI.chain;
@@ -157,6 +185,7 @@ function _srStatus(text, tone) {
 }
 function _srSetState() {
   const saved = SR_UI.saved[SR_UI.day];
+  if (SR_UI.ro) { _srStatus(saved && saved.updatedAt ? 'Last saved ' + srClock(saved.updatedAt) : 'Nothing saved for this day', ''); return; }
   if (SR_UI.unsaved) _srStatus('Not saved yet — kept on this computer', 'warn');
   else if (saved && saved.updatedAt) _srStatus('Saved ' + srClock(saved.updatedAt), 'ok');
   else _srStatus('Nothing saved for this day yet', '');
@@ -178,35 +207,41 @@ function _srRenderDay() {
   const head = _srId('srHead'), body = _srId('srBody'), ix = SR_UI.ix;
   if (!head || !body || !ix) return;
   const day = SR_UI.day, me = SR_UI.me;
+  const ro = SR_UI.ro, dis = ro ? ' disabled' : '';
+  const pick = SR_UI.own || !SR_UI.people.length ? '' : '<label class="tr-pick"><span>Whose report</span><select class="sr-in" id="srWho" aria-label="Whose report to read">' +
+    '<option value="">Me (my trial)</option>' + SR_UI.people.filter(u => !_srSame(u.name, SR_UI.self.name)).map(u => '<option' + (u.name === me.name && ro ? ' selected' : '') + '>' + _srE(u.name) + '</option>').join('') + '</select></label>';
   head.innerHTML =
-    '<div class="sr-title"><h2>Sales Daily Report</h2><span class="sr-who">' + _srE(me.name) + '</span></div>' +
-    '<div class="dh-actions sr-tools">' +
+    '<div class="sr-title"><h2>' + (SR_UI.own ? 'My daily report' : 'Sales Daily Report') + '</h2><span class="sr-who">' + _srE(me.name) + '</span>' + (ro ? '<span class="sr-chip">Read only</span>' : '') + '</div>' +
+    '<div class="dh-actions sr-tools">' + pick +
       '<div class="sr-daypick"><button type="button" class="sr-step" data-step="-1" aria-label="Previous day">‹</button>' +
         '<input type="date" class="sr-date" id="srDate" value="' + day + '" min="' + srAddDays(ix.today, -28) + '" max="' + ix.today + '" aria-label="Report date">' +
         '<button type="button" class="sr-step" data-step="1" aria-label="Next day">›</button></div>' +
-      '<div class="sr-seg" role="group" aria-label="Day type"><button type="button" data-daytype="desk">Desk day</button><button type="button" data-daytype="visit">Visit day</button></div>' +
+      '<div class="sr-seg" role="group" aria-label="Day type"><button type="button" data-daytype="desk"' + dis + '>Desk day</button><button type="button" data-daytype="visit"' + dis + '>Visit day</button></div>' +
       '<span class="sr-state" id="srState" role="status"></span>' +
       '<button type="button" class="dh-btn" data-print>Print / PDF</button></div>' +
     '<div class="sr-chips" id="srChips"></div>';
   const notes = [];
-  if (!SR_UI.backend) notes.push('<div class="dh-banner warn">Saving needs the FlowAPI update (version 177). Until it is pasted, what you log is kept on this computer only.' +
+  if (!SR_UI.backend) notes.push('<div class="dh-banner warn">' + (ro ? 'Saved reports need the FlowAPI update (version 184) before they can be read here.' : 'Saving needs the FlowAPI update (version ' + (SR_UI.own ? '184' : '177') + '). Until it is pasted, what you log is kept on this computer only.') +
     (SR_UI.backendMsg && !/Unknown action|not a secured action/i.test(SR_UI.backendMsg) ? ' (' + _srE(SR_UI.backendMsg) + ')' : '') + '</div>');
   if (SR_UI.failed.length) notes.push('<div class="dh-banner warn">Could not read: ' + _srE(SR_UI.failed.join(', ')) + '. The numbers that need them may be short — reload the page.</div>');
   if (SR_UI.state.legacy) notes.push('<p class="dh-meta">This day was first filled in with the earlier trial form; what you typed there is kept with the report.</p>');
   body.innerHTML = notes.join('') +
-    '<p class="sr-trial">Trial — only you can see this report. Nothing here changes the real call log, visits or quotations.</p>' +
+    '<p class="sr-trial">' + (ro ? 'Read only — ' + _srE(me.name) + '\'s own report: the lines they logged, their 4:30 report, and the portal\'s count of their records and sent mail. Their received mail stays private to them.'
+      : SR_UI.own ? 'Your new daily report. Only you and the director see it, and your old daily report still works as before. Nothing here changes the real call log, visits or quotations.'
+      : 'Trial — only you can see this report. Nothing here changes the real call log, visits or quotations.') + '</p>' +
 
     '<section class="sr-block" aria-labelledby="srNumsH"><h3 id="srNumsH">Today\'s numbers</h3>' +
       '<p class="sr-rowlab ok">The portal fills these</p><div class="sr-tiles" id="srTilesA"></div>' +
       '<p class="sr-rowlab mine">From my log lines</p><div class="sr-tiles" id="srTilesB"></div></section>' +
 
-    '<section class="sr-block sr-two"><div class="sr-col"><h3>Follow-ups due today <span class="sr-count" id="srFuCount"></span></h3><div id="srFu"></div></div>' +
-      '<div class="sr-col"><h3>Log a call — one line, right after</h3>' + _srCallForm() + '</div></section>' +
+    (ro ? '<section class="sr-block"><h3>Follow-ups due today <span class="sr-count" id="srFuCount"></span></h3><div id="srFu"></div></section>'
+        : '<section class="sr-block sr-two"><div class="sr-col"><h3>Follow-ups due today <span class="sr-count" id="srFuCount"></span></h3><div id="srFu"></div></div>' +
+      '<div class="sr-col"><h3>Log a call — one line, right after</h3>' + _srCallForm() + '</div></section>') +
 
-    '<section class="sr-block"><div class="sr-bar"><h3>My log today</h3><div class="sr-quick">' +
+    '<section class="sr-block"><div class="sr-bar"><h3>' + (ro ? _srE(me.first) + '\'s log today' : 'My log today') + '</h3>' + (ro ? '' : '<div class="sr-quick">' +
       '<button type="button" class="dh-btn" data-new="Quote result">+ Quote result</button>' +
       '<button type="button" class="dh-btn" data-new="Performance call">+ Performance call</button>' +
-      '<button type="button" class="dh-btn" data-new="Sales order">+ Sales order</button></div></div>' +
+      '<button type="button" class="dh-btn" data-new="Sales order">+ Sales order</button></div>') + '</div>' +
       '<div class="sr-scroll"><table class="sr-table sr-log"><thead><tr><th scope="col">Time</th><th scope="col">Type</th><th scope="col">Company, person, what happened</th>' +
         '<th scope="col">Result</th><th scope="col">Link</th><th scope="col"><span class="sr-sr">Change</span></th></tr></thead><tbody id="srLog"></tbody></table></div></section>' +
 
@@ -281,7 +316,7 @@ function _srFuHtml(x) {
   return '<li class="' + (x.done ? 'done' : '') + '"><span class="who"><b>' + _srE(x.client) + '</b><span class="sr-sub">' + _srRef(x.ref) + ' · ' + _srE(srMoney(x.value)) + '</span></span>' +
     '<span class="sr-daytag">Day ' + x.step + '</span>' +
     (x.done ? '<span class="sr-called">' + (x.by.kind === 'Call' ? 'Called ✓' : 'Emailed ✓') + (x.by.result ? ' — ' + _srE(x.by.result) : '') + '</span>'
-            : '<button type="button" class="btn-sm primary" data-logcall="' + _srE(x.ref) + '">Log call</button>') + '</li>';
+            : SR_UI.ro ? '<span class="sr-dim">Not yet</span>' : '<button type="button" class="btn-sm primary" data-logcall="' + _srE(x.ref) + '">Log call</button>') + '</li>';
 }
 
 /* the call form: one line, right after the call. A356 — the company and the person can be picked from the Client Book. */
@@ -369,18 +404,18 @@ function _srLogRows() {
     const link = l.linkType && l.linkType !== 'none' && l.linkId
       ? '<span class="sr-link">' + (l.linkType === 'quotation' || l.linkType === 'pr' ? _srRef(l.linkId)
           : l.linkType === 'client' ? '<a href="director-client-book.html?client=' + encodeURIComponent(l.linkId) + '">' + _srE(l.linkLabel || l.linkId) + '</a>' : _srE(l.linkLabel || l.linkId)) + '</span>'
-      : (l.voidedAt ? '—' : '<button type="button" class="sr-nolink" data-addlink="' + l.id + '">No link — add one</button>');
+      : (l.voidedAt ? '—' : SR_UI.ro ? '<span class="sr-dim">No link</span>' : '<button type="button" class="sr-nolink" data-addlink="' + l.id + '">No link — add one</button>');
     return '<tr class="' + (l.voidedAt ? 'void' : '') + '"><td class="tm">' + _srE(srClock(l.loggedAt)) + '</td><td>' + _srE(l.type) + '</td>' +
       '<td><b>' + _srE(l.company || '—') + '</b>' + (l.person ? ' · ' + _srE(l.person) : '') + (l.note ? '<span class="sr-sub">' + _srE(l.note) + '</span>' : '') +
         (l.voidedAt ? '<span class="sr-sub">Voided ' + _srE(srClock(l.voidedAt)) + ': ' + _srE(l.voidReason) + '</span>' : '') +
         (l.editedAt && !l.voidedAt ? '<span class="sr-sub">Edited ' + _srE(srClock(l.editedAt)) + ': ' + _srE(l.editReason) + '</span>' : '') + '</td>' +
       '<td>' + _srE(l.result || '—') + (l.reason ? '<span class="sr-sub">' + _srE(l.reason) + '</span>' : '') + (l.nextDate ? '<span class="sr-sub">next ' + _srE(l.nextDate) + '</span>' : '') + '</td>' +
-      '<td>' + link + '</td><td class="act">' + (l.voidedAt ? '' : '<button type="button" class="sr-mini" data-edit="' + l.id + '">Edit</button><button type="button" class="sr-mini" data-void="' + l.id + '">Void</button>') + '</td></tr>';
+      '<td>' + link + '</td><td class="act">' + (l.voidedAt || SR_UI.ro ? '' : '<button type="button" class="sr-mini" data-edit="' + l.id + '">Edit</button><button type="button" class="sr-mini" data-void="' + l.id + '">Void</button>') + '</td></tr>';
   });
   const grey = srCallLog(SR_UI.ix, SR_UI.me, day).map(c => ({ c, type: 'Call' })).concat(srVisitLog(SR_UI.ix, SR_UI.me, day).map(c => ({ c, type: 'Visit' })))
     .map(({ c, type }) => '<tr class="grey"><td class="tm">' + _srE(c.time || '—') + '</td><td>' + type + '</td><td><b>' + _srE(c.company || '—') + '</b>' + (c.person ? ' · ' + _srE(c.person) : '') +
       (c.note ? '<span class="sr-sub">' + _srE(c.note) + '</span>' : '') + '</td><td>' + _srE(c.result || '—') + '</td><td><span class="sr-tag">' + _srE(c.ref) + ' · in the portal\'s log</span></td><td></td></tr>');
-  return rows.concat(grey).join('') || '<tr><td colspan="6" class="dh-empty">No lines yet today. Log each call, result or visit as one line, right after.</td></tr>';
+  return rows.concat(grey).join('') || '<tr><td colspan="6" class="dh-empty">' + (SR_UI.ro ? 'No lines logged on this day.' : 'No lines yet today. Log each call, result or visit as one line, right after.') + '</td></tr>';
 }
 
 /* client visits: a slim card on a desk day, the visit form on a visit day */
@@ -388,6 +423,7 @@ function _srVisitsHtml(dt) {
   const visits = (SR_UI.state.visits || []).filter(v => flowDate(v.loggedAt) === SR_UI.day);
   const list = visits.length ? '<ul class="sr-visits">' + visits.map(v => '<li><b>' + _srE(v.time || srClock(v.loggedAt)) + ' ' + _srE(v.company) + '</b>' + (v.person ? ' · ' + _srE(v.person) : '') +
     '<span class="sr-sub">' + _srE([v.asked && 'Asked: ' + v.asked, v.result, v.recapSubject && 'Recap: ' + v.recapSubject].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' : '';
+  if (SR_UI.ro) return '<h3>Client visits</h3>' + (list || '<p class="dh-empty">' + (dt.type === 'desk' ? 'A desk day — no visit booked or logged.' : 'No visit logged yet.') + '</p>');   // A363
   if (dt.type === 'desk' && !SR_UI.showVisitForm) {
     return '<div class="sr-desk"><p><b>Client visits</b> — none booked today. A normal desk day. Nothing to fill here.</p>' +
       '<button type="button" class="dh-btn" data-unplanned>Log an unplanned visit</button></div>' + list;
@@ -416,15 +452,18 @@ function _srRenderFeed() {
   document.querySelectorAll('#srBody [data-feed]').forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-feed') === SR_UI.feed)));
   const items = srPortalFeed(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.sent, SR_UI.received).filter(x => SR_UI.feed === 'all' || x.kind === SR_UI.feed);
   const booked = SR_UI.state.bookings || [];
-  const mailNote = SR_UI.sentState === 'loading' ? 'Reading your mailbox…'
-    : SR_UI.sentState === 'setup' ? 'Your mailbox is not connected to the portal, so emails cannot be listed.'
-    : SR_UI.sentState === 'error' ? 'Could not read your sent mail just now.'
+  const whose = SR_UI.ro ? SR_UI.me.first + '\'s' : 'your', Whose = SR_UI.ro ? whose : 'Your';
+  const mailNote = SR_UI.sentState === 'loading' ? 'Reading ' + whose + ' mailbox…'
+    : SR_UI.sentState === 'setup' ? Whose + ' mailbox is not connected to the portal, so emails cannot be listed.'
+    : SR_UI.sentState === 'error' ? 'Could not read ' + whose + ' sent mail just now.'
+    : SR_UI.receivedState === 'private' ? 'Only sent mail is shown; received mail stays private to ' + SR_UI.me.first + '.'
     : SR_UI.receivedState === 'ok' ? '' : SR_UI.receivedState === 'loading' ? 'Reading received mail…'
     : SR_UI.receivedState === 'old' ? 'Received mail is only read for the last 60 days.' : 'Received mail could not be read; only sent mail is shown.';
   box.innerHTML = (items.length ? '<ul class="sr-feed">' + items.map(x => '<li><span class="tm">' + _srE(x.time || '—') + '</span><span class="sr-type t-' + x.kind + '">' +
       (x.kind === 'email' ? 'Email' : x.kind === 'pr' ? 'PR' : x.kind === 'client' ? 'Client' : 'Quotation') + '</span><span class="x">' + (x.ref ? _srRef(x.ref) + ' ' : '') + _srE(x.text) +
       (x.client ? ' · <a href="director-client-book.html?client=' + encodeURIComponent(x.client.no) + '">' + _srE(x.client.company) + '</a>' : '') + '</span>' +   // A358
-      (x.kind === 'email' && x.sent && x.id ? '<button type="button" class="sr-mini' + (booked.indexOf(x.id) >= 0 ? ' on' : '') + '" data-book="' + _srE(x.id) + '">' + (booked.indexOf(x.id) >= 0 ? 'Booking ✓' : 'Mark as a booking') + '</button>' : '<span></span>') +
+      (x.kind === 'email' && x.sent && x.id ? (SR_UI.ro ? (booked.indexOf(x.id) >= 0 ? '<span class="sr-chip ok">Booking</span>' : '<span></span>')
+        : '<button type="button" class="sr-mini' + (booked.indexOf(x.id) >= 0 ? ' on' : '') + '" data-book="' + _srE(x.id) + '">' + (booked.indexOf(x.id) >= 0 ? 'Booking ✓' : 'Mark as a booking') + '</button>') : '<span></span>') +
       '</li>').join('') + '</ul>' : '<p class="dh-empty">Nothing for this filter on this day.</p>') + (mailNote ? '<p class="dh-meta">' + _srE(mailNote) + '</p>' : '');
   const o = srOtherActivity(SR_UI.ix, SR_UI.me, SR_UI.day);
   _srId('srOther').textContent = 'Other portal activity today: Inventory ' + o.inventory + ' · PDFs ' + o.pdfs + ' · Tasks ' + o.tasks + ' (not part of the sales report)';
@@ -440,6 +479,7 @@ function _srPmHtml(n, saved) {
   return '<div class="sr-cardhead"><h3>4:30 report</h3><span class="sr-chip ' + (sub ? 'ok' : '') + '">' + (sub ? 'Submitted ' + _srE(srClock(sub)) : 'Due') + '</span></div>' +
     '<dl class="sr-nums">' + nums.map(([l, k]) => '<div><dt>' + l + '</dt><dd>' + _srE(val(k)) + '</dd></div>').join('') + '</dl>' +
     (sub ? '<p class="sr-help">These are the numbers as submitted; editing a line now does not change them.' + (saved.report && saved.report.pm && saved.report.pm.blocker ? ' Blocker: ' + _srE(saved.report.pm.blocker) : '') + '</p>'
+         : SR_UI.ro ? '<p class="sr-help">Not submitted yet — these are the numbers right now.' + (st.pm && st.pm.blocker ? ' Blocker so far: ' + _srE(st.pm.blocker) : '') + '</p>'
          : '<label class="sr-line">Blocker or help needed (one line — or "no blocker")<input type="text" class="sr-in" id="srBlocker" maxlength="200" value="' + _srE(st.pm.blocker) + '" placeholder="no blocker"></label>' +
            '<div class="sr-formfoot"><span class="sr-help">Submitting fixes every number on this page for the day.</span><button type="button" class="btn-sm primary" data-submitpm>Submit 4:30 report</button></div>');
 }
@@ -475,7 +515,7 @@ async function _srWeekMail(days) {
   if (_srWeekBusy || !days.length || typeof apiFetchEmailLogToday !== 'function' || SR_UI.sentState === 'setup') return;
   _srWeekBusy = true;
   for (let i = 0; i < days.length; i += 3) {
-    await Promise.all(days.slice(i, i + 3).map(d => apiFetchEmailLogToday(undefined, d)
+    await Promise.all(days.slice(i, i + 3).map(d => apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, d)
       .then(r => { SR_UI.weekEmails[d] = r && r.success !== false && !r.needsSetup ? (r.emails || []) : null; })
       .catch(() => { SR_UI.weekEmails[d] = null; })));
   }
@@ -493,10 +533,11 @@ function _srWire() {
       const b = ev.target.closest ? ev.target.closest('button') : null;
       if (!b) return;
       if (b.hasAttribute('data-step')) _srStep(Number(b.getAttribute('data-step')));
-      else if (b.hasAttribute('data-daytype')) _srSetDayType(b.getAttribute('data-daytype'));
+      else if (b.hasAttribute('data-daytype')) { if (!SR_UI.ro) _srSetDayType(b.getAttribute('data-daytype')); }
       else if (b.hasAttribute('data-print')) _srPrint();
     });
     head.addEventListener('change', ev => {
+      if (ev.target && ev.target.id === 'srWho') { _srPick(ev.target.value); return; }   // A363
       if (ev.target && ev.target.id === 'srDate') {
         const d = ev.target.value;
         if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= SR_UI.ix.today && d >= srAddDays(SR_UI.ix.today, -28)) _srOpenDay(d);
@@ -509,6 +550,7 @@ function _srWire() {
   body.addEventListener('click', ev => {
     const b = ev.target.closest ? ev.target.closest('button') : null;
     if (!b) return;
+    if (SR_UI.ro && !b.hasAttribute('data-rec') && !b.hasAttribute('data-feed') && !b.hasAttribute('data-week')) return;   // A363 — reading, not writing
     if (b.hasAttribute('data-rec')) _srRecordsOpen(b.getAttribute('data-rec'), b);
     else if (b.hasAttribute('data-logcall')) _srPrefillCall(b.getAttribute('data-logcall'));
     else if (b.hasAttribute('data-new')) _srLineDialog(b.getAttribute('data-new'), null, b);
@@ -523,6 +565,7 @@ function _srWire() {
   });
   body.addEventListener('submit', ev => {
     ev.preventDefault();
+    if (SR_UI.ro) return;
     if (ev.target.id === 'srCallForm') _srLogCall(ev.target);
     else if (ev.target.id === 'srVisitForm') _srSaveVisit(ev.target);
   });

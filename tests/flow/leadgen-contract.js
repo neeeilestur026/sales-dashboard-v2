@@ -41,7 +41,7 @@ ok('  and no shared skin', !/bento-skin|flow-screen/.test(HTML));
 ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="lg"> — the scope every rule hangs off', /<body class="lg">/.test(HTML));
 const SCRIPTS = (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]);
-eq('script order unchanged', SCRIPTS.join(','), 'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,ledger-nav.js,flow-api.js,leadgen-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js');
+eq('script order unchanged', SCRIPTS.join(','), 'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,new-daily-report-card.js,auth.js,ledger-nav.js,flow-api.js,leadgen-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js');
 eq('exactly one inline <script>', (HTML.match(/<script>/g) || []).length, 1);
 ok('the oversight block keeps its inline handlers (management-flow.js calls them by name)',
    /onclick="mgmtToggleNewsec\('newsec-daily-reports'\)"/.test(HTML) && /onclick="mfTwNav\(-1\)"/.test(HTML) && /onclick="mfTwNav\(0\)"/.test(HTML) && /onclick="mfTwNav\(1\)"/.test(HTML) && /onclick="mfTwPdf\(\)"/.test(HTML));
